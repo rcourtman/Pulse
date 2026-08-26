@@ -261,6 +261,21 @@ consumes realtime projection work. Re-entering an inactive tab must catch up
 from the shared canonical cache rather than replaying every missed delta.
 Hidden tabs continue advancing the raw baseline without reconciling the estate;
 all hidden changes are materialized once when the document becomes visible.
+Active operator scrolling gates realtime resource work harder still: a tick
+arriving mid-gesture queues its delta unapplied, in arrival order, because on
+a large estate even the baseline patch walks the whole resource array. The
+reporting projection and the realtime tick token (`lastUpdate`) defer
+latest-wins alongside — the token is what every downstream realtime consumer
+keys on, so holding it keeps unified projections and workload remaps fully
+quiescent through the gesture. Queued deltas drain in order — at scroll
+idle, before any in-place tick applies, and into the same deferral set the
+hidden-tab path uses — so one batch materializes everything while nothing is
+visually moving. The queue is bounded by a single gesture: hidden tabs keep
+the in-place baseline advance, and a full snapshot supersedes and clears any
+queued deltas along with the deferral set. Alert application stays live
+mid-gesture. This is a scheduling boundary, not a cost reduction — the
+per-tick reconciliation cost itself remains owned by the
+resource-payload-static-metadata gap.
 These rules must be proved against a 50-node fixture and may not be replaced by
 blank-row virtualization or a second page-local polling path.
 

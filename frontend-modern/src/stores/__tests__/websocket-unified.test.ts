@@ -769,6 +769,265 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('defers resource deltas while the operator scrolls and flushes at scroll idle', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              cpu: { current: 10 },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      // A tick arriving mid-gesture must not reconcile the estate.
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 20 } }] },
+        },
+      });
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+
+      // Scrolling continues: the idle recheck re-arms instead of flushing.
+      vi.advanceTimersByTime(200);
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 30 } }] },
+        },
+      });
+      vi.advanceTimersByTime(200);
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+      // The realtime tick token defers too, so downstream consumers keyed on
+      // it stay quiescent through the gesture.
+      expect(store.state.lastUpdate).toBe(100);
+
+      // Gesture idle: both deferred ticks land as one coalesced reconciliation.
+      vi.advanceTimersByTime(600);
+      expect(store.state.resources[0]?.cpu?.current).toBe(30);
+      expect(store.state.lastUpdate).toBe(300);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('holds hidden-tab deferrals through an active scroll and lands them at idle', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('visible');
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              cpu: { current: 10 },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      visibility.mockReturnValue('hidden');
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 20 } }] },
+        },
+      });
+
+      // The tab returns while the operator is already scrolling: the deferred
+      // tick must wait for scroll idle rather than landing mid-gesture.
+      window.dispatchEvent(new Event('scroll'));
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+
+      vi.advanceTimersByTime(600);
+      expect(store.state.resources[0]?.cpu?.current).toBe(20);
+    } finally {
+      dispose();
+      visibility.mockRestore();
+    }
+  });
+
+  it('drains scroll-queued deltas in arrival order before a hidden-tab tick applies', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('visible');
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              cpu: { current: 10 },
+              memory: { used: 1 },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      // Tick A queues mid-scroll with a memory change tick B does not carry.
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 20 }, memory: { used: 5 } }] },
+        },
+      });
+
+      // Tick B arrives hidden and applies in place — A must drain first so the
+      // baseline never sees B's older sibling fields overwrite A's.
+      visibility.mockReturnValue('hidden');
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 30 } }] },
+        },
+      });
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+
+      vi.advanceTimersByTime(600);
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(store.state.resources[0]?.cpu?.current).toBe(30);
+      expect(store.state.resources[0]?.memory?.used).toBe(5);
+    } finally {
+      dispose();
+      visibility.mockRestore();
+    }
+  });
+
+  it('defers the reporting projection during scroll and applies only the latest payload', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [{ id: 'infra-1', name: 'old' }],
+          resources: [],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+      expect(store.state.connectedInfrastructure[0]?.name).toBe('old');
+
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: { lastUpdate: 200, connectedInfrastructure: [{ id: 'infra-1', name: 'mid' }] },
+      });
+      vi.advanceTimersByTime(200);
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: { lastUpdate: 300, connectedInfrastructure: [{ id: 'infra-1', name: 'new' }] },
+      });
+      expect(store.state.connectedInfrastructure[0]?.name).toBe('old');
+
+      vi.advanceTimersByTime(800);
+      expect(store.state.connectedInfrastructure[0]?.name).toBe('new');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('drops scroll-queued deltas when a full snapshot supersedes their baseline', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: {
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              cpu: { current: 10 },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      window.dispatchEvent(new Event('scroll'));
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: { upserts: [{ id: 'vm-1', cpu: { current: 20 } }] },
+        },
+      });
+      expect(store.state.resources[0]?.cpu?.current).toBe(10);
+
+      // A full snapshot replaces the baseline the queued delta referenced.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          resources: [
+            {
+              id: 'vm-1',
+              type: 'vm',
+              name: 'vm-1',
+              status: 'running',
+              cpu: { current: 40 },
+            },
+          ],
+          lastUpdate: 300,
+        },
+      });
+      expect(store.state.resources[0]?.cpu?.current).toBe(40);
+
+      // The idle flush must not resurrect the stale queued delta.
+      vi.advanceTimersByTime(600);
+      expect(store.state.resources[0]?.cpu?.current).toBe(40);
+    } finally {
+      dispose();
+    }
+  });
+
   // Regression: on estates large enough that the full snapshot exceeds the
   // inbound guard (~3100 resources at the ~2.7 KB/resource measured against a
   // real /api/state payload; ~12.8 MB at 5000), the client dropped initialState

@@ -424,6 +424,28 @@ export function createWebSocketStore(url: string) {
   // Per-key change shapes for deferred ids, unioned across the hidden ticks so
   // the resume merge can still take the fast path for metrics-only rows.
   const deferredResourceKeys = new Map<string, readonly string[] | null>();
+  // Resource ticks defer while the operator is actively scrolling, not just
+  // while the tab is hidden: on a large estate even the baseline patch walks
+  // the whole resource array, so a mid-gesture tick blocks the main thread for
+  // hundreds of milliseconds and hitches input. Scroll-gated ticks queue
+  // unapplied in arrival order and land at scroll idle, when nothing is
+  // visually moving. Hidden tabs keep the in-place baseline advance instead:
+  // a tab can stay hidden for hours, and the queue must stay bounded by one
+  // gesture's length.
+  const OPERATOR_SCROLL_ACTIVE_WINDOW_MS = 250;
+  const DEFERRED_FLUSH_RECHECK_MS = 300;
+  const deferredResourceDeltaQueue: { upserts?: unknown; removed?: unknown; order?: unknown }[] =
+    [];
+  // The reporting projection is a whole-array replace, so mid-gesture ticks
+  // keep only the latest payload instead of a queue; reconciling it deep-walks
+  // every entry and is the other main-thread cost a tick pays.
+  let deferredConnectedInfrastructure: ConnectedInfrastructureItem[] | null = null;
+  // lastUpdate is the realtime tick token every downstream consumer keys on
+  // (unified resource projections, workload remaps). It defers with the rest
+  // so a mid-scroll tick triggers no derived recomputation at all.
+  let deferredLastUpdate: number | null = null;
+  let lastOperatorScrollAt = 0;
+  let deferredFlushTimer = 0;
   // Latest capabilityCatalog from the state payload. Broadcast resources carry
   // capabilitiesRef instead of inline capability blobs; ingestion expands the
   // ref back into `capabilities` so consumers keep the inline shape.
@@ -519,6 +541,9 @@ export function createWebSocketStore(url: string) {
     rawServerResources = null;
     deferredResourceIds.clear();
     deferredResourceKeys.clear();
+    deferredResourceDeltaQueue.length = 0;
+    deferredConnectedInfrastructure = null;
+    deferredLastUpdate = null;
     lastFullStateRecoveryAt = 0;
     oversizedSnapshotObserved = false;
     // A recovery request from a retired connection may still settle, but its
@@ -654,32 +679,114 @@ export function createWebSocketStore(url: string) {
     syncContainerCommands(nextResources, changedResourceIds);
   };
 
-  const handleResourceVisibilityChange = () => {
+  const isOperatorScrollActive = () =>
+    Date.now() - lastOperatorScrollAt < OPERATOR_SCROLL_ACTIVE_WINDOW_MS;
+
+  // Deltas queued during an active scroll apply strictly in arrival order.
+  // Draining advances the raw baseline and unions the change shapes into the
+  // deferral set without reconciling, so one merge materializes everything.
+  const applyQueuedResourceDeltas = () => {
+    if (deferredResourceDeltaQueue.length === 0) return;
+    const queued = deferredResourceDeltaQueue.splice(0);
+    if (!rawServerResources) return;
+    for (const delta of queued) {
+      const appliedDelta = applyResourceStateDelta(rawServerResources, delta);
+      appliedDelta.resources.forEach(hydrateSlimResource);
+      rawServerResources = appliedDelta.resources;
+      appliedDelta.changedIds.forEach((id) => {
+        const tickKeys = appliedDelta.changedKeys.get(id) ?? null;
+        deferredResourceKeys.set(
+          id,
+          deferredResourceIds.has(id)
+            ? unionResourceChangedKeys(deferredResourceKeys.get(id), tickKeys)
+            : tickKeys,
+        );
+        deferredResourceIds.add(id);
+      });
+    }
+  };
+
+  const flushDeferredResources = () => {
+    const pendingInfrastructure = deferredConnectedInfrastructure;
+    deferredConnectedInfrastructure = null;
+    const pendingLastUpdate = deferredLastUpdate;
+    deferredLastUpdate = null;
+    if (rawServerResources !== null) {
+      applyQueuedResourceDeltas();
+    }
+    const baseline = rawServerResources;
+    let commitDeferredMerge: (() => void) | undefined;
+    if (baseline !== null && deferredResourceIds.size > 0) {
+      const changedResourceIds = new Set(deferredResourceIds);
+      const changedResourceKeys = new Map(deferredResourceKeys);
+      deferredResourceIds.clear();
+      deferredResourceKeys.clear();
+      const nextResources = mergeCanonicalResourceDeltaSnapshot(
+        baseline,
+        state.resources,
+        changedResourceIds,
+        changedResourceKeys,
+      );
+      commitDeferredMerge = () =>
+        commitResources(nextResources, changedResourceIds, changedResourceKeys);
+    }
+    if (!commitDeferredMerge && !pendingInfrastructure && pendingLastUpdate === null) {
+      return;
+    }
+    batch(() => {
+      if (pendingInfrastructure) {
+        setState('connectedInfrastructure', reconcile(pendingInfrastructure, { key: 'id' }));
+      }
+      commitDeferredMerge?.();
+      if (pendingLastUpdate !== null) {
+        setState('lastUpdate', pendingLastUpdate);
+      }
+    });
+  };
+
+  // Flush deferred ticks once nothing gates them: a hidden document flushes
+  // through the visibilitychange listener, and active scrolling re-arms a
+  // recheck until the gesture goes idle.
+  const scheduleDeferredResourceFlush = () => {
     if (
-      document.visibilityState !== 'visible' ||
-      rawServerResources === null ||
-      deferredResourceIds.size === 0
+      deferredResourceIds.size === 0 &&
+      deferredResourceDeltaQueue.length === 0 &&
+      deferredConnectedInfrastructure === null &&
+      deferredLastUpdate === null
     ) {
       return;
     }
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (!isOperatorScrollActive()) {
+      flushDeferredResources();
+      return;
+    }
+    if (deferredFlushTimer) return;
+    deferredFlushTimer = window.setTimeout(() => {
+      deferredFlushTimer = 0;
+      scheduleDeferredResourceFlush();
+    }, DEFERRED_FLUSH_RECHECK_MS);
+  };
 
-    const changedResourceIds = new Set(deferredResourceIds);
-    const changedResourceKeys = new Map(deferredResourceKeys);
-    deferredResourceIds.clear();
-    deferredResourceKeys.clear();
-    const nextResources = mergeCanonicalResourceDeltaSnapshot(
-      rawServerResources,
-      state.resources,
-      changedResourceIds,
-      changedResourceKeys,
-    );
-    batch(() => commitResources(nextResources, changedResourceIds, changedResourceKeys));
+  const handleResourceVisibilityChange = () => {
+    if (document.visibilityState !== 'visible') return;
+    scheduleDeferredResourceFlush();
+  };
+
+  const handleOperatorScroll = () => {
+    lastOperatorScrollAt = Date.now();
   };
 
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleResourceVisibilityChange, {
       passive: true,
     });
+  }
+  if (typeof window !== 'undefined') {
+    // Capture phase: scroll events do not bubble, so a window-level capture
+    // listener is the only way to observe every scroller (app shell, drawers)
+    // without adding per-surface listeners.
+    window.addEventListener('scroll', handleOperatorScroll, { capture: true, passive: true });
   }
 
   const beginConnection = () => {
@@ -823,10 +930,21 @@ export function createWebSocketStore(url: string) {
               const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
                 ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
                 : [];
-              setState(
-                'connectedInfrastructure',
-                reconcile(connectedInfrastructure, { key: 'id' }),
-              );
+              if (
+                typeof document !== 'undefined' &&
+                document.visibilityState !== 'hidden' &&
+                isOperatorScrollActive()
+              ) {
+                // Latest-wins: a newer payload simply replaces the pending one.
+                deferredConnectedInfrastructure = connectedInfrastructure;
+                scheduleDeferredResourceFlush();
+              } else {
+                deferredConnectedInfrastructure = null;
+                setState(
+                  'connectedInfrastructure',
+                  reconcile(connectedInfrastructure, { key: 'id' }),
+                );
+              }
             }
             if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
             if (message.data.performance !== undefined)
@@ -845,7 +963,11 @@ export function createWebSocketStore(url: string) {
             let changedResourceIds: ReadonlySet<string> | undefined;
             let changedResourceKeys: ResourceChangedKeys | undefined;
             if (message.data.resources !== undefined) {
+              // A full snapshot supersedes every pending deferral, and queued
+              // deltas reference the baseline this snapshot replaces.
               deferredResourceIds.clear();
+              deferredResourceKeys.clear();
+              deferredResourceDeltaQueue.length = 0;
               if (Array.isArray(message.data.resources)) {
                 // Expand capabilitiesRef and synthesize omitted default
                 // policies before the rows feed the baseline clone and the
@@ -880,50 +1002,64 @@ export function createWebSocketStore(url: string) {
               message.data.resourceDelta !== undefined
             ) {
               if (rawServerResources) {
-                const appliedDelta = applyResourceStateDelta(
-                  rawServerResources,
-                  message.data.resourceDelta,
-                );
-                // Patched rows are fresh objects: re-synthesize a nulled-out
-                // default policy and re-expand capabilities when a patch moved
-                // the ref. Unpatched rows no-op.
-                appliedDelta.resources.forEach(hydrateSlimResource);
-                rawServerResources = appliedDelta.resources;
-                changedResourceIds = appliedDelta.changedIds;
-                if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-                  changedResourceIds.forEach((id) => {
-                    const tickKeys = appliedDelta.changedKeys.get(id) ?? null;
-                    deferredResourceKeys.set(
-                      id,
-                      deferredResourceIds.has(id)
-                        ? unionResourceChangedKeys(deferredResourceKeys.get(id), tickKeys)
-                        : tickKeys,
-                    );
-                    deferredResourceIds.add(id);
-                  });
+                if (
+                  typeof document !== 'undefined' &&
+                  document.visibilityState !== 'hidden' &&
+                  (isOperatorScrollActive() || deferredResourceDeltaQueue.length > 0)
+                ) {
+                  // Mid-gesture ticks queue unapplied so they cost nothing
+                  // until scroll idle. A non-empty queue keeps queueing even
+                  // after the gesture ends so deltas never apply out of order.
+                  deferredResourceDeltaQueue.push(message.data.resourceDelta);
+                  scheduleDeferredResourceFlush();
                 } else {
-                  const combinedKeys = appliedDelta.changedKeys;
-                  deferredResourceIds.forEach((id) => {
-                    combinedKeys.set(
-                      id,
-                      combinedKeys.has(id)
-                        ? unionResourceChangedKeys(
-                            combinedKeys.get(id),
-                            deferredResourceKeys.get(id) ?? null,
-                          )
-                        : (deferredResourceKeys.get(id) ?? null),
-                    );
-                  });
-                  changedResourceIds = new Set([...deferredResourceIds, ...changedResourceIds]);
-                  deferredResourceIds.clear();
-                  deferredResourceKeys.clear();
-                  changedResourceKeys = combinedKeys;
-                  nextResources = mergeCanonicalResourceDeltaSnapshot(
+                  // Preserve arrival order before applying this tick in place.
+                  applyQueuedResourceDeltas();
+                  const appliedDelta = applyResourceStateDelta(
                     rawServerResources,
-                    state.resources,
-                    changedResourceIds,
-                    changedResourceKeys,
+                    message.data.resourceDelta,
                   );
+                  // Patched rows are fresh objects: re-synthesize a nulled-out
+                  // default policy and re-expand capabilities when a patch
+                  // moved the ref. Unpatched rows no-op.
+                  appliedDelta.resources.forEach(hydrateSlimResource);
+                  rawServerResources = appliedDelta.resources;
+                  changedResourceIds = appliedDelta.changedIds;
+                  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                    changedResourceIds.forEach((id) => {
+                      const tickKeys = appliedDelta.changedKeys.get(id) ?? null;
+                      deferredResourceKeys.set(
+                        id,
+                        deferredResourceIds.has(id)
+                          ? unionResourceChangedKeys(deferredResourceKeys.get(id), tickKeys)
+                          : tickKeys,
+                      );
+                      deferredResourceIds.add(id);
+                    });
+                  } else {
+                    const combinedKeys = appliedDelta.changedKeys;
+                    deferredResourceIds.forEach((id) => {
+                      combinedKeys.set(
+                        id,
+                        combinedKeys.has(id)
+                          ? unionResourceChangedKeys(
+                              combinedKeys.get(id),
+                              deferredResourceKeys.get(id) ?? null,
+                            )
+                          : (deferredResourceKeys.get(id) ?? null),
+                      );
+                    });
+                    changedResourceIds = new Set([...deferredResourceIds, ...changedResourceIds]);
+                    deferredResourceIds.clear();
+                    deferredResourceKeys.clear();
+                    changedResourceKeys = combinedKeys;
+                    nextResources = mergeCanonicalResourceDeltaSnapshot(
+                      rawServerResources,
+                      state.resources,
+                      changedResourceIds,
+                      changedResourceKeys,
+                    );
+                  }
                 }
               } else {
                 // A delta landed before any full snapshot (e.g. the initial
@@ -977,10 +1113,19 @@ export function createWebSocketStore(url: string) {
 
               // Updated recentlyResolved
             }
-            setState(
-              'lastUpdate',
-              typeof message.data.lastUpdate === 'number' ? message.data.lastUpdate : Date.now(),
-            );
+            const nextLastUpdate =
+              typeof message.data.lastUpdate === 'number' ? message.data.lastUpdate : Date.now();
+            if (
+              typeof document !== 'undefined' &&
+              document.visibilityState !== 'hidden' &&
+              isOperatorScrollActive()
+            ) {
+              deferredLastUpdate = nextLastUpdate;
+              scheduleDeferredResourceFlush();
+            } else {
+              deferredLastUpdate = null;
+              setState('lastUpdate', nextLastUpdate);
+            }
           });
         logger.debug('message', {
           type: message.type,
@@ -1321,9 +1466,14 @@ export function createWebSocketStore(url: string) {
     pendingAckTimeouts.clear();
     if (typeof window !== 'undefined') {
       window.removeEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent);
+      window.removeEventListener('scroll', handleOperatorScroll, { capture: true });
     }
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleResourceVisibilityChange);
+    }
+    if (deferredFlushTimer) {
+      window.clearTimeout(deferredFlushTimer);
+      deferredFlushTimer = 0;
     }
     if (ws) {
       ws.close(1000, 'Component unmounting');
