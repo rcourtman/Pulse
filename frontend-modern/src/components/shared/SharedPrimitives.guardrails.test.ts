@@ -8065,6 +8065,10 @@ describe('shared primitive guardrails', () => {
     expect(progressBarSource).not.toContain('style={');
     expect(frontendIndexCssSource).toContain('.progress-fill-frame');
     expect(frontendIndexCssSource).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(detailSectionModelSource).toContain('export type DetailRowProgress');
+    expect(detailSectionTableSource).toContain('row.progress');
+    expect(detailSectionTableSource).toContain('<ProgressBar');
+    expect(detailSectionTableSource).not.toContain('style={{');
   });
 
   it('keeps animated numeric readouts on the shared reduced-motion primitive', () => {

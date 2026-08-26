@@ -1,31 +1,48 @@
 {
   "version": 1,
-  "base_sha": "954ea1050aa121558b34d364ff484d8a4d482421",
-  "verified_at": "2026-08-26T21:47:28Z",
+  "base_sha": "9ddfc69ec71d8db6b313522f54c2f68db88ec914",
+  "verified_at": "2026-08-26T22:30:00Z",
   "result": "passed",
-  "changed_paths": [],
-  "content_sha256": {},
-  "routes": ["/alerts/notifications"],
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/diskListModel.ts",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
+    "frontend-modern/src/components/shared/ProgressBar.tsx",
+    "frontend-modern/src/components/shared/detailSectionModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "21bf8fd35d7c79f9bceade2addf8a952a10dfac724a90d3f892769d1d3dbdde1",
+    "frontend-modern/src/components/Workloads/diskListModel.ts": "7e446cbc5b6b87abb12af69e4dc5a78ae26258ffbbc8f5f70235924d3d535084",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "eff0236a3d524a041aefe18fa021cc619f61337fb9b80e74bbea07789a90e69e",
+    "frontend-modern/src/components/shared/ProgressBar.tsx": "8fda21a7dd22a1c00557686604dc07d7b69011d690a9618cf480eaf939e61103",
+    "frontend-modern/src/components/shared/detailSectionModel.ts": "42a6f8e70a03303d366efe8f8d490b1bf1bc8bfd6338d0510db35890d19ddeec"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
   "viewports": [
     {
       "width": 1440,
       "height": 900
     },
     {
-      "width": 760,
+      "width": 768,
       "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "mock-mode Alerts Notifications loaded with notification delivery paused and an empty delivery-attempt log",
-    "the append-only alert event log supplied 100 bounded held-notification rows with resource, alert type, policy reason, and recorded message evidence",
-    "the same held-only activity state rendered in the narrow responsive card layout"
+    "multi-filesystem Proxmox guest expanded to its Overview tab on desktop",
+    "same expanded filesystem state in the narrow table layout at tablet width",
+    "same expanded filesystem state at phone width with wrapped detail text"
   ],
   "interactions": [
-    "loaded the current managed mock build at /alerts/notifications and confirmed Recent delivery activity rendered Held rows even though no delivery attempt existed",
-    "confirmed every inspected row exposed its full recorded suppression message while its visible badge, resource/type label, plain-language reason, and relative time remained distinct",
-    "used Refresh delivery status and confirmed the independently loaded held rows updated and remained newest first",
-    "resized from 1440x900 to 760x900 and confirmed the activity header, refresh action, and held rows remained usable without clipping or page-level horizontal overflow",
-    "confirmed the browser console contained no errors across the desktop, refresh, and narrow checks"
+    "expanded checkout-web-373 and confirmed both known filesystems retain percentage, used/total, and type text",
+    "confirmed each filesystem exposes an accessible progress value matching its rendered fill",
+    "resized through 1440x900, 768x900, and 390x844 and confirmed bar alignment, readable wrapping, and zero document-level horizontal overflow",
+    "reloaded the rebased current build and reconfirmed matching progress values plus zero document-level horizontal overflow at desktop and phone widths"
   ]
 }

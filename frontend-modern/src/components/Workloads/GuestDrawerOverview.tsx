@@ -203,7 +203,18 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   [disk.usagePercentLabel, disk.usageText, disk.typeLabel]
                     .filter(Boolean)
                     .join(' · '),
-                  { title: disk.labelTitle, wrap: true },
+                  {
+                    title: disk.labelTitle,
+                    wrap: true,
+                    progress:
+                      disk.progressValue === null
+                        ? undefined
+                        : {
+                            value: disk.progressValue,
+                            fillClass: disk.progressClass,
+                            ariaLabel: `Filesystem ${disk.label} utilization`,
+                          },
+                  },
                 ),
               ),
               makeDetailRow(

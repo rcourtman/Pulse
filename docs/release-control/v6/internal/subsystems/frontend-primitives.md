@@ -1207,6 +1207,11 @@ not a replacement status card, CTA band, or page-local nested card.
    classes, table rendering, and inline close-action chrome must come from
    `detailSectionModel.ts`, `DetailSectionTable`, and `InlineDetailPanel`
    instead of local `DetailField` grids or provider-named reusable primitives.
+   A compact detail row may carry optional bounded progress metadata, but the
+   shared `DetailSectionTable` must render that metadata through the CSP-safe
+   `ProgressBar` while preserving the row's textual value as the primary
+   operator-readable fact. Feature surfaces must omit the metadata when the
+   measurement is unavailable rather than presenting an empty bar as 0%.
    Resource-detail drawer byte labels, integer labels, and count pluralization
    are part of that same primitive family: provider drawer models choose the
    fields and domain labels, but numeric detail values must route through
@@ -3751,6 +3756,11 @@ rows, and use a bounded local label column with left-aligned values so the
 layout has no ragged fixed-width island, stranded full-width final card, or
 full-drawer scan distance. The responsive presentation stays owned by the shared primitive;
 provider drawers must not fork their own desktop card renderers. Monitoring
+Optional detail-row progress is also owned by that shared presentation: the
+value text remains visible, `DetailSectionTable` composes `ProgressBar` for the
+bounded visual fill and accessible value, and unknown measurements render no
+bar. Provider drawers must not add inline width styles or local progress
+geometry to their section rows.
 mode, lifecycle, notes, maintenance,
 automatic-action policy, saved access configuration, and action audit belong
 to a dedicated `Manage` tab and must not render inside Overview. Guest, node,

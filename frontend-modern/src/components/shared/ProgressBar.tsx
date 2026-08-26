@@ -4,6 +4,7 @@ interface ProgressBarProps {
   value: number;
   class?: string;
   fillClass?: string;
+  ariaLabel?: string;
   label?: JSX.Element;
   overlays?: JSX.Element;
   onMouseEnter?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
@@ -21,6 +22,11 @@ export const ProgressBar: Component<ProgressBarProps> = (props) => {
   return (
     <div
       class={`relative w-full overflow-hidden rounded bg-surface-hover ${props.class ?? ''}`}
+      role={props.ariaLabel ? 'progressbar' : undefined}
+      aria-label={props.ariaLabel}
+      aria-valuemin={props.ariaLabel ? 0 : undefined}
+      aria-valuemax={props.ariaLabel ? 100 : undefined}
+      aria-valuenow={props.ariaLabel ? width() : undefined}
       onMouseEnter={props.onMouseEnter}
       onMouseLeave={props.onMouseLeave}
     >

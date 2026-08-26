@@ -15,6 +15,7 @@ export interface WorkloadsDiskPresentation {
   label: string;
   labelTitle?: string;
   progressClass: string;
+  progressValue: number | null;
   progressWidth: string;
   typeLabel: string;
   usageText: string;
@@ -65,6 +66,11 @@ export const getWorkloadsDiskProgressClass = (
   thresholds?: MetricDisplayThresholds | null,
 ): string => getMetricColorClass(getWorkloadsDiskUsagePercent(disk), 'disk', thresholds);
 
+export const getWorkloadsDiskProgressValue = (disk: Disk): number | null =>
+  hasWorkloadsDiskCapacity(disk) && !isWorkloadsDiskUsageUnknown(disk)
+    ? getWorkloadsDiskUsagePercent(disk)
+    : null;
+
 export const getWorkloadsDiskProgressWidth = (disk: Disk): string =>
   isWorkloadsDiskUsageUnknown(disk)
     ? '0%'
@@ -84,6 +90,7 @@ export const buildWorkloadsDiskPresentation = (
     label,
     labelTitle: getWorkloadsDiskLabelTitle(label),
     progressClass: getWorkloadsDiskProgressClass(disk, thresholds),
+    progressValue: getWorkloadsDiskProgressValue(disk),
     progressWidth: getWorkloadsDiskProgressWidth(disk),
     typeLabel: getWorkloadsDiskTypeLabel(disk),
     usageText: getWorkloadsDiskUsageText(disk),

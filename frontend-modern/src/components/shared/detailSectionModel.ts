@@ -2,12 +2,19 @@ import { formatBytes } from '@/utils/format';
 
 export type DetailValueTone = 'default' | 'accent' | 'success' | 'warning' | 'danger' | 'muted';
 
+export type DetailRowProgress = {
+  value: number;
+  fillClass?: string;
+  ariaLabel: string;
+};
+
 export type DetailRow = {
   label: string;
   value: string;
   title?: string;
   tone?: DetailValueTone;
   wrap?: boolean;
+  progress?: DetailRowProgress;
 };
 
 export type DetailSection = {
@@ -18,7 +25,7 @@ export type DetailSection = {
 export const makeDetailRow = (
   label: string,
   value?: string | null,
-  options: Pick<DetailRow, 'title' | 'tone' | 'wrap'> = {},
+  options: Pick<DetailRow, 'title' | 'tone' | 'wrap' | 'progress'> = {},
 ): DetailRow | null => {
   const trimmed = value?.trim();
   if (!trimmed || trimmed === '-') return null;

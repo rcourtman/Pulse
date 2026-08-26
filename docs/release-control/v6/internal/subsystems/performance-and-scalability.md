@@ -754,6 +754,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     30-day, or other fixed color cutoffs are forbidden because they can
     contradict both user policy and the table beside the drawer.
 12. Extend workload disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Workloads/diskListModel.ts` and `frontend-modern/src/components/Workloads/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Workloads/DiskList.tsx`
+    Workload drawer filesystem rows must consume the same canonical disk
+    presentation. Known utilization may supply bounded progress metadata to
+    the shared detail-row primitive while retaining percentage, capacity, and
+    type text; unknown usage must omit the bar instead of fabricating 0%.
     Disk rows carrying the poller's negative unknown-usage sentinel
     (config-only LXC mounts, #1477) must be excluded from usage math, summary
     percents, and bar/mini-slot rendering in `stackedDiskBarModel.ts`, and
@@ -2062,6 +2066,11 @@ compaction, table rendering, and tone classes must compose
 instead of workload-local card frames or detail loops. Non-technical secondary
 cards still compose `InfoCardFrame` where a framed interactive surface is
 genuinely required.
+Filesystem rows preserve their compact percentage, used/total, and type text
+and supplement known utilization with the threshold-colored progress metadata
+derived by `diskListModel.ts`. `GuestDrawerOverview.tsx` passes that metadata
+to the shared detail-row primitive; it does not parse display strings, create
+local bar geometry, or render a bar for the negative unknown-usage sentinel.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
 boundary for collapse: Workloads owns which inline row is selected and the
 close handler, while

@@ -101,6 +101,39 @@ describe('DetailSectionTable', () => {
     expect(screen.getByText('Warning').closest('td')).toHaveClass('lg:text-left');
   });
 
+  it('renders optional row progress without replacing its compact text value', () => {
+    const { container } = render(() => (
+      <DetailSectionTable
+        sections={[
+          {
+            label: 'Filesystems',
+            rows: [
+              {
+                label: '/',
+                value: '50% · 5.00 GB/10.0 GB · ROOTFS',
+                progress: {
+                  value: 50,
+                  fillClass: 'bg-emerald-500',
+                  ariaLabel: 'Filesystem / utilization',
+                },
+              },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText('50% · 5.00 GB/10.0 GB · ROOTFS')).toBeInTheDocument();
+    const progress = screen.getByRole('progressbar', { name: 'Filesystem / utilization' });
+    expect(progress).toHaveAttribute('aria-valuemin', '0');
+    expect(progress).toHaveAttribute('aria-valuemax', '100');
+    expect(progress).toHaveAttribute('aria-valuenow', '50');
+    expect(progress).toHaveClass('h-1.5');
+    const fill = container.querySelector('[data-progress-fill="true"]');
+    expect(fill).toHaveAttribute('width', '50');
+    expect(fill?.firstElementChild).toHaveClass('bg-emerald-500');
+  });
+
   it('balances five desktop sections across three- and two-card rows', () => {
     const { container } = render(() => (
       <DetailSectionTable

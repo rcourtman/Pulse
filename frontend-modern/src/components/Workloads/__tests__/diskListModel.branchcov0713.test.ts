@@ -8,6 +8,7 @@ import {
   getWorkloadsDiskLabel,
   getWorkloadsDiskLabelTitle,
   getWorkloadsDiskProgressClass,
+  getWorkloadsDiskProgressValue,
   getWorkloadsDiskProgressWidth,
   getWorkloadsDiskTypeLabel,
   getWorkloadsDiskUsagePercent,
@@ -186,6 +187,20 @@ describe('diskListModel (branch coverage 0713)', () => {
     });
   });
 
+  describe('getWorkloadsDiskProgressValue', () => {
+    it('returns the numeric usage percent when live capacity and usage are available', () => {
+      expect(getWorkloadsDiskProgressValue(makeDisk({ used: 25, total: 100 }))).toBe(25);
+    });
+
+    it('returns null when the disk has no capacity', () => {
+      expect(getWorkloadsDiskProgressValue(makeDisk({ total: 0 }))).toBeNull();
+    });
+
+    it('returns null for the negative unknown-usage sentinel', () => {
+      expect(getWorkloadsDiskProgressValue(makeDisk({ usage: -1 }))).toBeNull();
+    });
+  });
+
   describe('getWorkloadsDiskTypeLabel', () => {
     it('uppercases a lowercase type string', () => {
       expect(getWorkloadsDiskTypeLabel(makeDisk({ type: 'ext4' }))).toBe('EXT4');
@@ -219,6 +234,7 @@ describe('diskListModel (branch coverage 0713)', () => {
         label: '/data',
         labelTitle: '/data',
         progressClass: NORMAL_CLASS,
+        progressValue: 25,
         progressWidth: '25%',
         typeLabel: 'EXT4',
         usageText: '25.0 B/100 B',
@@ -242,6 +258,7 @@ describe('diskListModel (branch coverage 0713)', () => {
         label: 'Unknown',
         labelTitle: undefined,
         progressClass: NORMAL_CLASS,
+        progressValue: 25,
         progressWidth: '25%',
         typeLabel: 'XFS',
         // formatBytes(50) = '50.0 B', formatBytes(200) = '200 B'.
@@ -264,6 +281,7 @@ describe('diskListModel (branch coverage 0713)', () => {
         label: '/foo',
         labelTitle: '/foo',
         progressClass: NORMAL_CLASS,
+        progressValue: null,
         progressWidth: '0%',
         typeLabel: 'EXT4',
         usageText: 'Usage unavailable',

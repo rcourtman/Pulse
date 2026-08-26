@@ -998,6 +998,25 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('Filesystems')).toBeInTheDocument();
       expect(technicalDetails().getByText('/')).toBeInTheDocument();
       expect(technicalDetails().getByText(/50% · 5\.00 GB\/10\.0 GB/)).toBeInTheDocument();
+      const progress = technicalDetails().getByRole('progressbar', {
+        name: 'Filesystem / utilization',
+      });
+      expect(progress).toHaveAttribute('aria-valuenow', '50');
+      expect(progress.querySelector('[data-progress-fill="true"]')).toHaveAttribute('width', '50');
+    });
+
+    it('does not render a misleading progress bar when filesystem usage is unavailable', () => {
+      const disks: Disk[] = [
+        { total: 10737418240, used: 0, usage: -1, mountpoint: '/mnt/config-only' },
+      ];
+      render(() => <GuestDrawer guest={makeGuest({ disks })} onClose={vi.fn()} />);
+
+      expect(technicalDetails().getByText('— · ?/10.0 GB')).toBeInTheDocument();
+      expect(
+        technicalDetails().queryByRole('progressbar', {
+          name: 'Filesystem /mnt/config-only utilization',
+        }),
+      ).not.toBeInTheDocument();
     });
 
     it('hides Filesystems card when disks is empty', () => {

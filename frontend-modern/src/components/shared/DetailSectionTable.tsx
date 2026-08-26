@@ -1,5 +1,6 @@
 import { For, type Component, type JSX } from 'solid-js';
 import { ObjectDrawerHeader } from './ObjectDrawerHeader';
+import { ProgressBar } from './ProgressBar';
 import { Table, TableBody, TableCell, TableHead, TableRow } from './Table';
 import type { DetailSection, DetailValueTone } from './detailSectionModel';
 
@@ -11,6 +12,7 @@ export {
   formatDetailIntegerValue,
   makeDetailRow,
   type DetailRow,
+  type DetailRowProgress,
   type DetailSection,
   type DetailValueTone,
 } from './detailSectionModel';
@@ -75,6 +77,14 @@ export const DetailSectionTable: Component<{
                     >
                       {row.value}
                     </span>
+                    {row.progress ? (
+                      <ProgressBar
+                        value={row.progress.value}
+                        fillClass={row.progress.fillClass}
+                        ariaLabel={row.progress.ariaLabel}
+                        class="mt-1 h-1.5"
+                      />
+                    ) : null}
                   </TableCell>
                 </TableRow>
               )}
