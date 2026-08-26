@@ -4600,6 +4600,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/agent_flushbuffer_test.go",
                 "internal/hostagent/agent_metrics_test.go",
                 "internal/hostagent/agent_new_test.go",
+                "internal/hostagent/availability_test.go",
                 "internal/hostagent/command_client_test.go",
                 "internal/hostagent/commands_deploy_test.go",
                 "internal/hostagent/commands_host_update_test.go",

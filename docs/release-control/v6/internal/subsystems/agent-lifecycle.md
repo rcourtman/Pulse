@@ -5898,6 +5898,19 @@ path. Delivery queues, authentication failures, and persisted host-report
 buffers are destination-scoped; failure of one destination cannot block or
 replay reports to another.
 
+Assigned availability-probe observations use the same primary-report delivery
+boundary. Concurrent probe completions must allocate their monotonic sequence
+and append to the pending queue in one ordered critical section; the queue must
+never contain a newer sequence before an older one. A report snapshot records
+the last included sequence as its delivery high-water mark. A successful
+primary acknowledgement removes only observations at or below that mark, while
+observations completed after the snapshot remain queued for the next report;
+failed or buffered delivery retains the whole unacknowledged batch. This keeps
+multi-target probe concurrency from stranding already-delivered observations
+or discarding observations that the primary never received. The scheduler and
+concurrent-enqueue coverage in `internal/hostagent/availability_test.go` pins
+the ordering and acknowledgement contract.
+
 Observer configuration is explicit, versioned, and file-backed. It contains no
 raw token values and resolves each token from a separate private absolute-path
 file. Proxmox registration is also destination-scoped: the primary retains its

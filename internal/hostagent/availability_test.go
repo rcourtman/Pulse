@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -309,6 +310,32 @@ func TestAvailabilityModuleQueueDropsOldestBeyondCapacity(t *testing.T) {
 	}
 	if got := results[len(results)-1].CheckedAt; !got.Equal(time.Unix(availabilityPendingCapacity+49, 0).UTC()) {
 		t.Fatalf("newest retained result = %v", got)
+	}
+}
+
+func TestAvailabilityModuleConcurrentEnqueuePreservesSequenceOrder(t *testing.T) {
+	module := testProbeModule(t, nil)
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for i := 0; i < availabilityPendingCapacity*4; i++ {
+		workers.Add(1)
+		go func(id int) {
+			defer workers.Done()
+			<-start
+			module.enqueue(agentshost.AvailabilityProbeResult{TargetID: fmt.Sprintf("target-%d", id)})
+		}(i)
+	}
+	close(start)
+	workers.Wait()
+
+	items := module.pending.Items()
+	if len(items) != availabilityPendingCapacity {
+		t.Fatalf("queued results = %d, want capacity %d", len(items), availabilityPendingCapacity)
+	}
+	for i := 1; i < len(items); i++ {
+		if items[i].sequence <= items[i-1].sequence {
+			t.Fatalf("queue sequence is not increasing at %d: %d followed %d", i, items[i].sequence, items[i-1].sequence)
+		}
 	}
 }
 

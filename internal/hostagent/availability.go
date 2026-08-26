@@ -281,9 +281,9 @@ func (m *availabilityProbeModule) runProbe(ctx context.Context, target config.Av
 // earliest observations rather than unbounded memory.
 func (m *availabilityProbeModule) enqueue(result agentshost.AvailabilityProbeResult) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.sequence++
 	pending := pendingAvailabilityResult{sequence: m.sequence, result: result}
-	m.mu.Unlock()
 	m.pending.Push(pending)
 }
 
