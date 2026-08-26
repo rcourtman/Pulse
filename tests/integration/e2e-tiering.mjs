@@ -63,6 +63,7 @@ export const PROBATION_SPECS = [
   '**/59-workloads-column-layout.spec.ts',
   '**/62-storage-growth-column.spec.ts',
   '**/64-workloads-proxmox-refresh-stability.spec.ts',
+  '**/65-offline-proxmox-node-visibility.spec.ts',
   '**/68-infrastructure-onboarding.spec.ts',
   '**/68-platform-pages-shell.spec.ts',
   '**/70-self-hosted-manual-activation-success.spec.ts',
