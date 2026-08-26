@@ -18,10 +18,10 @@ async function openProxmoxBackups(page: Page) {
   await sections.getByRole("link", { name: "Backups", exact: true }).click();
   await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
   // The route commits before the Proxmox snapshot finishes loading. CI can
-  // take longer than the default locator timeout while all E2E shards share
-  // the runner, so wait for the destination surface rather than the URL alone.
+  // take more than a minute while all E2E shards share the runner, so wait for
+  // the destination surface rather than the URL alone.
   await expect(page.getByText("Backups per day").first()).toBeVisible({
-    timeout: 60_000,
+    timeout: 120_000,
   });
   await expect(
     page.getByRole("group", { name: "Activity range" }),
