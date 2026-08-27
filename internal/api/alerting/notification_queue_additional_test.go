@@ -145,8 +145,13 @@ func TestNotificationQueueHandlers_BulkTerminalFailureRecovery(t *testing.T) {
 		}
 	}
 
-	if err := queue.UpdateStatus("notif-bulk", notifications.QueueStatusDLQ, "still unavailable"); err != nil {
-		t.Fatalf("mark retried notification DLQ: %v", err)
+	// Use a distinct terminal delivery for dismissal. The retry above is now
+	// pending and the real background worker is entitled to deliver it at any
+	// time; forcing that in-flight row back to DLQ makes this handler test race
+	// the queue processor instead of testing the dismissal contract.
+	enqueueDLQNotification(t, queue, "notif-dismiss")
+	if err := queue.UpdateStatus("notif-dismiss", notifications.QueueStatusDLQ, "still unavailable"); err != nil {
+		t.Fatalf("mark dismiss notification DLQ: %v", err)
 	}
 	assertNotificationDeliveryAlertActive(t, handler.monitor)
 	req = httptest.NewRequest(http.MethodPost, "/api/notifications/terminal-failures/dismiss", nil)
