@@ -37,6 +37,17 @@ train as a small number of user-recognizable themes. Stable notes must synthesiz
 the final product outcomes instead of concatenating RC notes or enumerating the
 underlying commits.
 
+Release-note synthesis is model-led. The harness supplies the comparison range,
+read-only repository and GitHub tools, one unbounded factual investigation, one
+independent draft that cannot see the investigation, and a final model that
+receives both. The models decide what to inspect, what matters, and how to tell
+the release story. The harness owns only the factual release boundary, public
+format, safety constraints, and optional per-pass traces. The canonical
+release-body validator runs afterward, and one constrained repair pass may
+correct formatting without changing the selected meaning. Public bullets stay
+individually bounded for readability, but the harness does not impose an item
+count that would choose which otherwise-valid user outcomes must disappear.
+
 Customer-facing notes use one outcome list for features and fixes. Each visible
 change is described once under `What's improved`; a parallel `Fixes` section is
 forbidden for packets from `v6.4.0-rc.6` onward because it encourages the same

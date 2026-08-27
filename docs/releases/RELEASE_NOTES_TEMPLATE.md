@@ -10,18 +10,24 @@ what feels better or works now, not how it was implemented.
 - **Short outcome** — Include fixes here as outcomes rather than repeating
   them in a second section.
 
-Use up to six meaningful improvements for a normal RC or minor release. A
-narrow patch may use fewer rather than padding the notes with internal work.
-Each user-visible change belongs in this list exactly once. Prefer observable
-behavior over component names, group related implementation work into one
-user-recognizable theme, and use plain language.
+Use a concise set of meaningful improvements. A narrow patch may use fewer
+rather than padding the notes with internal work. Each user-visible change
+belongs in this list exactly once. Prefer observable behavior over component
+names, group related implementation work into one user-recognizable theme, and
+use plain language. Each complete bullet, including Markdown links, must be no
+more than 260 characters.
 
 For an RC, cover only changes since the immediately preceding RC (or the
 previous stable release for RC1). Do not repeat improvements already announced
 in an earlier RC. For a stable GA release, cover the complete release train
 since the previous stable release and boil the full commit range down to a few
 themes that explain what users will experience differently. Do not concatenate
-the RC notes or attempt to list every commit.
+the RC notes or attempt to list every commit. The generator supplies the range,
+read-only repository and GitHub tools, an unbounded factual investigation, an
+independent draft that cannot see that investigation, and a final model that
+receives both. The models decide what to inspect, what matters, and how to tell
+the release story; the harness owns the release boundary, public format, safety
+constraints, and optional per-pass traces.
 
 Do not add a separate `Fixes` section. That shape encourages the same change to
 be described twice as both an improvement and a fix.

@@ -311,6 +311,22 @@ Pulse is faster and more predictable in larger environments.
         ):
             render_release_body.validate_release_notes_shape(notes, "6.4.0")
 
+    def test_customer_story_is_not_forced_into_a_fixed_item_count(self) -> None:
+        bullets = "\n".join(
+            f"- **Useful outcome {index}** — Users can understand change {index}."
+            for index in range(1, 8)
+        )
+        notes = f"""# Pulse v6.4.0 Release Notes
+
+Pulse has a concise set of improvements across the product.
+
+## What's improved
+
+{bullets}
+"""
+
+        render_release_body.validate_release_notes_shape(notes, "6.4.0")
+
     def test_canonical_template_keeps_machine_process_out_of_customer_notes(self) -> None:
         template = (
             _REPO_ROOT / "docs/releases/RELEASE_NOTES_TEMPLATE.md"
@@ -320,6 +336,12 @@ Pulse is faster and more predictable in larger environments.
         self.assertIn("## Before you upgrade", template)
         self.assertIn("For an RC, cover only changes since the immediately preceding RC", template)
         self.assertIn("For a stable GA release", template)
+        self.assertIn("an unbounded factual investigation", template)
+        self.assertIn("independent draft", template)
+        self.assertIn("The models decide what to", template)
+        self.assertIn("what matters, and how to tell", template)
+        self.assertIn("the release story", template)
+        self.assertIn("more than 260 characters", template)
         self.assertIn("Do not add a separate `Fixes` section", template)
         self.assertNotIn("\n## Fixes\n", template)
         self.assertIn("pipeline appends the `Install` and `Roll back` sections", template)

@@ -3110,6 +3110,25 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	if err != nil {
 		t.Fatalf("resolve release-note generator path: %v", err)
 	}
+	generatorContent, err := os.ReadFile(generator)
+	if err != nil {
+		t.Fatalf("read release-note generator: %v", err)
+	}
+	for _, required := range []string{
+		"Researching the complete release range",
+		"It has no public length or item",
+		"Drafting an independent customer release story",
+		"Running an independent improvement pass",
+		"make any changes you judge warranted",
+		"RELEASE_NOTES_TRACE_DIR",
+		"validate-notes-file /dev/stdin",
+		"260 characters or fewer",
+		"requesting one constrained revision",
+	} {
+		if !strings.Contains(string(generatorContent), required) {
+			t.Fatalf("release-note generator missing stable synthesis contract %q", required)
+		}
+	}
 	resolve := func(version string) string {
 		t.Helper()
 		cmd := exec.Command("bash", generator, "--resolve-base", version)

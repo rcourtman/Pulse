@@ -56,7 +56,6 @@ _ISSUE_REFERENCE_RE = re.compile(
 )
 _MAX_HIGHLIGHT_ITEMS = 3
 _MAX_HIGHLIGHT_LENGTH = 140
-_MAX_CUSTOMER_IMPROVEMENT_ITEMS = 6
 _MAX_CUSTOMER_FIX_ITEMS = 12
 _MAX_CUSTOMER_ITEM_LENGTH = 260
 _MAX_CUSTOMER_SUMMARY_LENGTH = 600
@@ -263,10 +262,9 @@ def _validate_customer_facing_release_notes(text: str, version: str) -> None:
         _section_lines(text, headings[improvements_key]),
         "What's improved",
     )
-    if not improvements or len(improvements) > _MAX_CUSTOMER_IMPROVEMENT_ITEMS:
+    if not improvements:
         raise ReleaseBodyIntegrityError(
-            "What's improved must contain between 1 and "
-            f"{_MAX_CUSTOMER_IMPROVEMENT_ITEMS} bullets"
+            "What's improved must contain at least one bullet"
         )
     for item in improvements:
         if len(item) > _MAX_CUSTOMER_ITEM_LENGTH:
