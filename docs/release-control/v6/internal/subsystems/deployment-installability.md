@@ -47,6 +47,9 @@ release-body validator runs afterward, and one constrained repair pass may
 correct formatting without changing the selected meaning. Public bullets stay
 individually bounded for readability, but the harness does not impose an item
 count that would choose which otherwise-valid user outcomes must disappear.
+New customer release notes use plain punctuation and fail validation when they
+contain a semicolon or em dash. Already-published packets remain historical
+artifacts and retain the punctuation with which they were released.
 
 Customer-facing notes use one outcome list for features and fixes. Each visible
 change is described once under `What's improved`; a parallel `Fixes` section is

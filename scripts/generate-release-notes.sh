@@ -131,10 +131,10 @@ read -r -d '' NOTE_FORMAT <<EOF || true
 
 ## What's improved
 
-- **[Short outcome]** — [Where users notice it and why it matters.]
+- **[Short outcome]** - [Where users notice it and why it matters.]
 
 [Use a concise set of meaningful bullets. Each full bullet, including Markdown
-links, must be 260 characters or fewer.]
+links, must be 260 characters or fewer. Use no semicolon or em dash characters.]
 
 ## Before you upgrade
 

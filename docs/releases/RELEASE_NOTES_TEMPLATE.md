@@ -5,9 +5,9 @@ what feels better or works now, not how it was implemented.
 
 ## What's improved
 
-- **Short outcome** — Explain where users notice it and why it matters.
-- **Short outcome** — Keep each item concrete and independently useful.
-- **Short outcome** — Include fixes here as outcomes rather than repeating
+- **Short outcome** - Explain where users notice it and why it matters.
+- **Short outcome** - Keep each item concrete and independently useful.
+- **Short outcome** - Include fixes here as outcomes rather than repeating
   them in a second section.
 
 Use a concise set of meaningful improvements. A narrow patch may use fewer
@@ -15,7 +15,8 @@ rather than padding the notes with internal work. Each user-visible change
 belongs in this list exactly once. Prefer observable behavior over component
 names, group related implementation work into one user-recognizable theme, and
 use plain language. Each complete bullet, including Markdown links, must be no
-more than 260 characters.
+more than 260 characters. New release notes must not contain semicolons or em
+dashes.
 
 For an RC, cover only changes since the immediately preceding RC (or the
 previous stable release for RC1). Do not repeat improvements already announced
@@ -26,7 +27,7 @@ the RC notes or attempt to list every commit. The generator supplies the range,
 read-only repository and GitHub tools, an unbounded factual investigation, an
 independent draft that cannot see that investigation, and a final model that
 receives both. The models decide what to inspect, what matters, and how to tell
-the release story; the harness owns the release boundary, public format, safety
+the release story. The harness owns the release boundary, public format, safety
 constraints, and optional per-pass traces.
 
 Do not add a separate `Fixes` section. That shape encourages the same change to

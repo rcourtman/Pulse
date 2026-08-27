@@ -183,6 +183,19 @@ def _requires_single_change_list(version: str) -> bool:
     return rc_match is None or int(rc_match.group(1)) >= 6
 
 
+def _requires_plain_release_punctuation(version: str) -> bool:
+    """Apply the punctuation rule after the already-published v6.4 RC packets."""
+
+    normalized = version.lower().removeprefix("v")
+    core = _release_core(normalized)
+    if core is None or core < (6, 4, 0):
+        return False
+    if core > (6, 4, 0):
+        return True
+    rc_match = re.fullmatch(r"6\.4\.0-rc\.(\d+)", normalized)
+    return rc_match is None or int(rc_match.group(1)) >= 7
+
+
 def _section_lines(text: str, heading_index: int) -> list[str]:
     lines = _normalize_newlines(text).splitlines()
     section: list[str] = []
@@ -215,6 +228,12 @@ def _validate_customer_facing_release_notes(text: str, version: str) -> None:
     """Enforce concise public notes without release-control implementation prose."""
 
     lines = _normalize_newlines(text).strip().splitlines()
+    if _requires_plain_release_punctuation(version) and any(
+        character in text for character in (";", "—")
+    ):
+        raise ReleaseBodyIntegrityError(
+            "customer-facing release notes must not contain semicolons or em dashes"
+        )
     first_section_index = next(
         (index for index, line in enumerate(lines) if re.fullmatch(r"##[ \t]+\S.*", line)),
         None,

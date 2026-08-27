@@ -3123,6 +3123,8 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		"RELEASE_NOTES_TRACE_DIR",
 		"validate-notes-file /dev/stdin",
 		"260 characters or fewer",
+		"Use no semicolon or em dash characters",
+		"- **[Short outcome]** - [Where users notice it and why it matters.]",
 		"requesting one constrained revision",
 	} {
 		if !strings.Contains(string(generatorContent), required) {

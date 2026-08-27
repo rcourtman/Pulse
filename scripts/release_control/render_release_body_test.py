@@ -286,7 +286,7 @@ Pulse is faster and more predictable in larger environments.
 
 ## What's improved
 
-- **Safer releases** — Every immutable candidate now crosses an exact-SHA gate.
+- **Safer releases** - Every immutable candidate now crosses an exact-SHA gate.
 """
 
         with self.assertRaisesRegex(
@@ -313,7 +313,7 @@ Pulse is faster and more predictable in larger environments.
 
     def test_customer_story_is_not_forced_into_a_fixed_item_count(self) -> None:
         bullets = "\n".join(
-            f"- **Useful outcome {index}** — Users can understand change {index}."
+            f"- **Useful outcome {index}** - Users can understand change {index}."
             for index in range(1, 8)
         )
         notes = f"""# Pulse v6.4.0 Release Notes
@@ -326,6 +326,52 @@ Pulse has a concise set of improvements across the product.
 """
 
         render_release_body.validate_release_notes_shape(notes, "6.4.0")
+
+    def test_new_release_notes_reject_semicolons(self) -> None:
+        notes = """# Pulse v6.4.0 Release Notes
+
+Pulse is faster; pages are steadier.
+
+## What's improved
+
+- **Faster pages** - Tables stay responsive as estates grow.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "semicolons or em dashes",
+        ):
+            render_release_body.validate_release_notes_shape(notes, "6.4.0")
+
+    def test_new_release_notes_reject_em_dashes(self) -> None:
+        notes = """# Pulse v6.4.0-rc.7 Release Notes
+
+Pulse is faster and pages are steadier.
+
+## What's improved
+
+- **Faster pages** — Tables stay responsive as estates grow.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "semicolons or em dashes",
+        ):
+            render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.7")
+
+    def test_punctuation_rule_grandfathers_published_v640_rc_packets(self) -> None:
+        self.assertFalse(
+            render_release_body._requires_plain_release_punctuation("6.4.0-rc.6")
+        )
+        self.assertTrue(
+            render_release_body._requires_plain_release_punctuation("6.4.0-rc.7")
+        )
+        self.assertTrue(
+            render_release_body._requires_plain_release_punctuation("6.4.0")
+        )
+        self.assertTrue(
+            render_release_body._requires_plain_release_punctuation("6.4.1")
+        )
 
     def test_canonical_template_keeps_machine_process_out_of_customer_notes(self) -> None:
         template = (
@@ -342,6 +388,10 @@ Pulse has a concise set of improvements across the product.
         self.assertIn("what matters, and how to tell", template)
         self.assertIn("the release story", template)
         self.assertIn("more than 260 characters", template)
+        self.assertIn("must not contain semicolons or em", template)
+        self.assertIn("dashes", template)
+        self.assertNotIn(";", template)
+        self.assertNotIn("—", template)
         self.assertIn("Do not add a separate `Fixes` section", template)
         self.assertNotIn("\n## Fixes\n", template)
         self.assertIn("pipeline appends the `Install` and `Roll back` sections", template)
