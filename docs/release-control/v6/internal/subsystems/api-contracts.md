@@ -4488,6 +4488,15 @@ not manufacture escalation, notification, analysis, command, or runbook
 events. Richer canonical events replace equivalent snapshot fallbacks when
 available. A genuinely unknown identifier/occurrence may still return `null`;
 an Alerts-page row with its canonical identifier and start time must not.
+When mock mode is enabled, that same transport contract resolves displayed
+mock alert occurrences from the canonical mock fixture graph before consulting
+the production incident store. Every mock history row therefore returns a
+non-empty lifecycle timeline, `resource_id` lists the same incidents newest
+first with the requested positive limit, and incident notes persist on that
+fixture graph for its lifetime. Mock reads and writes must keep the production
+JSON shape and validation rules; they must not mix persisted real incidents
+into a mock resource timeline or require a production incident store to make a
+fixture-owned workflow function.
 
 Per-alert snooze is a monitoring-write mutation over canonical alert identity.
 `POST /api/alerts/snooze` accepts `alertIdentifier` and an RFC 3339 `until`,

@@ -515,6 +515,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 35b. `internal/mock/availability_fixtures.go`
 35c. `internal/mock/recovery_points.go`
 35d. `internal/mock/integration.go`
+35e. `internal/mock/alert_incidents.go`
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
@@ -1931,6 +1932,15 @@ enumerated backup artifact must never mint protected posture. The
 `TestCuratedDemoProtectionStoriesProduceRepresentativePostures` proof in
 `internal/mock/demo_scenarios_test.go` evaluates those fixtures through the
 production posture engine.
+Mock alert history and incident timelines belong to the same fixture authority.
+`internal/mock/alert_incidents.go` enriches every displayed mock alert row with
+one occurrence-qualified incident whose resource identity, acknowledgement
+state, lifecycle status, and ordered events agree with that row. Historical
+fixtures close with a resolution event, active fixtures remain open, and
+representative investigation and runbook events exercise the richer timeline
+surface. Alert-level reads, resource-level incident lists, and graph-lifetime
+notes must all query or mutate that same fixture instance; a mock history row
+must never expose a Timeline control backed by a missing incident.
 Mock fixture defaults in `internal/mock/generator.go` (the `DefaultConfig`
 constant) are also part of that mock-runtime contract. The Proxmox default is
 an intentionally large public-demo estate so platform-first pages exercise

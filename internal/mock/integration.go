@@ -1,14 +1,17 @@
 package mock
 
 import (
+	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -558,6 +561,104 @@ func GetMockAlertHistory(limit int) []models.Alert {
 		return append([]models.Alert(nil), mockGraph.AlertHistory[:limit]...)
 	}
 	return append([]models.Alert(nil), mockGraph.AlertHistory...)
+}
+
+// GetMockAlertIncidentTimeline returns the occurrence-qualified incident
+// fixture for a mock alert. Callers receive a defensive copy so UI filtering
+// and note rendering cannot mutate the canonical fixture graph.
+func GetMockAlertIncidentTimeline(alertIdentifier string, startedAt time.Time) *memory.Incident {
+	if !IsMockEnabled() || strings.TrimSpace(alertIdentifier) == "" {
+		return nil
+	}
+
+	dataMu.RLock()
+	defer dataMu.RUnlock()
+	for _, incident := range mockGraph.AlertIncidents {
+		if incident == nil || incident.AlertIdentifier != alertIdentifier {
+			continue
+		}
+		if !startedAt.IsZero() {
+			delta := incident.OpenedAt.Sub(startedAt)
+			if delta < 0 {
+				delta = -delta
+			}
+			if delta > mockIncidentStartTolerance {
+				continue
+			}
+		}
+		return cloneMockIncident(incident)
+	}
+	return nil
+}
+
+// GetMockAlertIncidentsForResource returns newest-first incident fixtures for
+// the resource-level timeline panel.
+func GetMockAlertIncidentsForResource(resourceID string, limit int) []*memory.Incident {
+	if !IsMockEnabled() || strings.TrimSpace(resourceID) == "" {
+		return []*memory.Incident{}
+	}
+
+	dataMu.RLock()
+	matches := make([]*memory.Incident, 0)
+	for _, incident := range mockGraph.AlertIncidents {
+		if incident != nil && incident.ResourceID == resourceID {
+			matches = append(matches, cloneMockIncident(incident))
+		}
+	}
+	dataMu.RUnlock()
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].OpenedAt.After(matches[j].OpenedAt)
+	})
+	if limit > 0 && len(matches) > limit {
+		matches = matches[:limit]
+	}
+	return matches
+}
+
+// AddMockAlertIncidentNote persists a note for the lifetime of the current
+// mock fixture graph so the demo note workflow behaves like the real timeline.
+func AddMockAlertIncidentNote(alertIdentifier, incidentID, note, user string) bool {
+	if !IsMockEnabled() || strings.TrimSpace(note) == "" {
+		return false
+	}
+
+	dataMu.Lock()
+	defer dataMu.Unlock()
+	for _, incident := range mockGraph.AlertIncidents {
+		if incident == nil {
+			continue
+		}
+		if incidentID != "" && incident.ID != incidentID {
+			continue
+		}
+		if incidentID == "" && incident.AlertIdentifier != alertIdentifier {
+			continue
+		}
+		noteAt := time.Now().UTC()
+		if noteAt.Before(incident.OpenedAt) {
+			noteAt = incident.OpenedAt
+		}
+		summary := "Note added"
+		if strings.TrimSpace(user) != "" {
+			summary = "Note added by " + strings.TrimSpace(user)
+		}
+		incident.Events = append(incident.Events, memory.IncidentEvent{
+			ID:        fmt.Sprintf("mock-event-note-%s-%d", incident.AlertIdentifier, len(incident.Events)+1),
+			Type:      memory.IncidentEventNote,
+			Timestamp: noteAt,
+			Summary:   summary,
+			Details: map[string]interface{}{
+				"note": strings.TrimSpace(note),
+				"user": strings.TrimSpace(user),
+			},
+		})
+		sort.SliceStable(incident.Events, func(i, j int) bool {
+			return incident.Events[i].Timestamp.Before(incident.Events[j].Timestamp)
+		})
+		fixtureDataVersion.Add(1)
+		return true
+	}
+	return false
 }
 
 func cloneState(state models.StateSnapshot) models.StateSnapshot {

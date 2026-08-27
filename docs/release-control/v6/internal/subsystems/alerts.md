@@ -1726,6 +1726,11 @@ Assistant are now owned by the Alerts incident handoff model and carry only
 sanitized incident facts plus event summaries into both the visible drawer
 briefing and the backend model-only handoff context; raw command and output
 details stay in the incident timeline or approval surface.
+The shared hook may expose Timeline for a displayed mock alert because mock
+mode now guarantees an occurrence-qualified incident through the same typed
+API. A mock fixture missing that incident is a broken alert read-model contract,
+not an empty-state case for the frontend to disguise; genuine unknown real
+occurrences may still render the existing no-timeline state.
 
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`

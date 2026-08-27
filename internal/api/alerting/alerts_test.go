@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	pulsemock "github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
@@ -764,6 +766,62 @@ func TestGetAlertIncidentTimeline_ListExportsCanonicalAlertIdentifier(t *testing
 	assert.Equal(t, "canonical:a1", incidents[0]["alertIdentifier"])
 }
 
+func TestMockAlertIncidentTimelineSupportsAlertResourceAndNoteWorkflows(t *testing.T) {
+	previous := pulsemock.IsMockEnabled()
+	if err := pulsemock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock fixtures: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := pulsemock.SetEnabled(previous); err != nil {
+			t.Errorf("restore mock fixtures: %v", err)
+		}
+	})
+
+	history := pulsemock.GetMockAlertHistory(1)
+	if len(history) != 1 {
+		t.Fatalf("mock alert history returned %d rows, want 1", len(history))
+	}
+	alert := history[0]
+
+	mockMonitor := new(MockAlertMonitor)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+	alertURL := "/api/alerts/incidents?alertIdentifier=" + url.QueryEscape(alert.ID) + "&started_at=" + url.QueryEscape(alert.StartTime.Format(time.RFC3339))
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, httptest.NewRequest(http.MethodGet, alertURL, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("mock alert timeline status = %d, body = %q", w.Code, w.Body.String())
+	}
+	var timeline incidentView
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&timeline))
+	assert.Equal(t, alert.ID, timeline.AlertIdentifier)
+	assert.NotEmpty(t, timeline.Events)
+
+	resourceURL := "/api/alerts/incidents?resource_id=" + url.QueryEscape(alert.ResourceID) + "&limit=5"
+	w = httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, httptest.NewRequest(http.MethodGet, resourceURL, nil))
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resourceTimeline []incidentView
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&resourceTimeline))
+	assert.NotEmpty(t, resourceTimeline)
+
+	noteBody := fmt.Sprintf(`{"alertIdentifier":%q,"note":"Checking the demo timeline","user":"operator"}`, alert.ID)
+	w = httptest.NewRecorder()
+	h.SaveAlertIncidentNote(w, httptest.NewRequest(http.MethodPost, "/api/alerts/incidents/note", strings.NewReader(noteBody)))
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, httptest.NewRequest(http.MethodGet, alertURL, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("updated mock alert timeline status = %d, body = %q", w.Code, w.Body.String())
+	}
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&timeline))
+	if len(timeline.Events) == 0 {
+		t.Fatal("updated mock alert timeline has no events")
+	}
+	assert.Equal(t, memory.IncidentEventNote, timeline.Events[len(timeline.Events)-1].Type)
+	assert.Equal(t, "Checking the demo timeline", timeline.Events[len(timeline.Events)-1].Details["note"])
+}
+
 func TestGetAlertIncidentTimeline_ProjectsCanonicalLifecycleAndRemediation(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
@@ -1247,6 +1305,16 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		mockMonitor2.On("GetIncidentStore").Return(nil)
 		h2 := NewAlertHandlers(nil, mockMonitor2, nil)
 		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		h2.SaveAlertIncidentNote(w, req)
+		assert.Equal(t, 400, w.Code)
+	})
+
+	t.Run("SaveAlertIncidentNote_ValidBodyNoStore", func(t *testing.T) {
+		mockMonitor2 := new(MockAlertMonitor)
+		mockMonitor2.On("GetIncidentStore").Return(nil)
+		h2 := NewAlertHandlers(nil, mockMonitor2, nil)
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier":"a1","note":"investigating"}`))
 		w := httptest.NewRecorder()
 		h2.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 503, w.Code)

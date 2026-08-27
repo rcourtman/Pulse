@@ -793,12 +793,6 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		return
 	}
 
-	store := h.getMonitor(r.Context()).GetIncidentStore()
-	if store == nil {
-		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	query := r.URL.Query()
 	alertID := strings.TrimSpace(query.Get("alertIdentifier"))
 	resourceID := strings.TrimSpace(query.Get("resource_id"))
@@ -827,6 +821,18 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			}
 			startedAt = parsed
 		}
+		if mockIncident := mock.GetMockAlertIncidentTimeline(alertID, startedAt); mockIncident != nil {
+			if err := utils.WriteJSONResponse(w, exportIncident(mockIncident)); err != nil {
+				log.Error().Err(err).Msg("Failed to write mock incident timeline response")
+			}
+			return
+		}
+
+		store := h.getMonitor(r.Context()).GetIncidentStore()
+		if store == nil {
+			http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
+			return
+		}
 
 		var incident *memory.Incident
 		if !startedAt.IsZero() {
@@ -848,6 +854,18 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 	if resourceID != "" {
 		if len(resourceID) > 500 {
 			http.Error(w, "Invalid resource ID", http.StatusBadRequest)
+			return
+		}
+		if mock.IsMockEnabled() {
+			incidents := mock.GetMockAlertIncidentsForResource(resourceID, limit)
+			if err := utils.WriteJSONResponse(w, exportIncidents(incidents)); err != nil {
+				log.Error().Err(err).Msg("Failed to write mock incident list response")
+			}
+			return
+		}
+		store := h.getMonitor(r.Context()).GetIncidentStore()
+		if store == nil {
+			http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		incidents := store.ListIncidentsByResource(resourceID, limit)
@@ -912,12 +930,6 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	store := h.getMonitor(r.Context()).GetIncidentStore()
-	if store == nil {
-		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req struct {
 		AlertIdentifier string `json:"alertIdentifier"`
@@ -947,6 +959,18 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	}
 	if req.Note == "" {
 		http.Error(w, "note is required", http.StatusBadRequest)
+		return
+	}
+	if mock.AddMockAlertIncidentNote(alertIdentifier, req.IncidentID, req.Note, req.User) {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{"success": true}); err != nil {
+			log.Error().Err(err).Msg("Failed to write mock incident note response")
+		}
+		return
+	}
+
+	store := h.getMonitor(r.Context()).GetIncidentStore()
+	if store == nil {
+		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
