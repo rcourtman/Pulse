@@ -51,10 +51,10 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 
 	m.mu.RLock()
 	enabled := m.config.Enabled
-	disableAllStorage := m.config.DisableAllStorage
-	disableAllKubernetes := m.config.DisableAllKubernetes
-	disableAllTrueNAS := m.config.DisableAllTrueNAS
-	disableAllVMware := m.config.DisableAllVMware
+	disableAllStorage, _ := m.alertPolicyTypeSwitchesNoLock("storage")
+	disableAllKubernetes, _ := m.alertPolicyTypeSwitchesNoLock("k8s-node")
+	disableAllTrueNAS, _ := m.alertPolicyTypeSwitchesNoLock("truenas-system")
+	disableAllVMware, _ := m.alertPolicyTypeSwitchesNoLock("vmware-host")
 	overrides := m.config.Overrides
 	m.mu.RUnlock()
 

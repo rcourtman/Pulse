@@ -249,13 +249,7 @@ func (m *Manager) resolveGuestThresholdOverride(base ThresholdConfig, guest any,
 // resolveResourceThresholds builds the effective thresholds for a resource type and ID.
 // Callers must hold m.mu when reading config through this helper.
 func (m *Manager) resolveResourceThresholds(typeKey, resourceID string) ThresholdConfig {
-	if isGuestThresholdResourceType(typeKey) {
-		return m.resolveGuestThresholdOverride(m.defaultThresholdsForResourceType(typeKey), nil, resourceID)
-	}
-	if typeKey == "storage" {
-		return m.resolveStorageThresholdOverride(m.defaultThresholdsForResourceType(typeKey), resourceID, nil)
-	}
-	return m.resolveThresholdOverride(m.defaultThresholdsForResourceType(typeKey), resourceID)
+	return m.effectiveAlertPolicyNoLock(alertPolicyQuery{TypeKey: typeKey, ResourceID: resourceID}).Thresholds
 }
 
 // evaluateUnifiedMetrics runs the common metric dispatch path for unified resources.

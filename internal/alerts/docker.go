@@ -259,7 +259,7 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
-	disableAllDockerHosts := m.config.DisableAllDockerHosts
+	disableAllDockerHosts, _ := m.alertPolicyTypeSwitchesNoLock("docker-host")
 	ignoredPrefixes := append([]string(nil), m.config.DockerIgnoredContainerPrefixes...)
 	m.mu.RUnlock()
 	if !alertsEnabled {
@@ -310,7 +310,7 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 
 func (m *Manager) evaluateDockerContainer(host models.DockerHost, container models.DockerContainer, resourceID string) {
 	m.mu.RLock()
-	disableAllContainers := m.config.DisableAllDockerContainers
+	disableAllContainers, _ := m.alertPolicyTypeSwitchesNoLock("app-container")
 	m.mu.RUnlock()
 	if disableAllContainers {
 		return
@@ -475,7 +475,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 
 func (m *Manager) evaluateDockerService(host models.DockerHost, service models.DockerService, resourceID string) {
 	m.mu.RLock()
-	disableAllServices := m.config.DisableAllDockerServices
+	disableAllServices, _ := m.alertPolicyTypeSwitchesNoLock("docker-service")
 	warnPct := m.config.DockerDefaults.ServiceWarnGapPct
 	critPct := m.config.DockerDefaults.ServiceCritGapPct
 	overrideConfig, hasOverride := m.config.Overrides[resourceID]
@@ -694,7 +694,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 		m.mu.RUnlock()
 		return
 	}
-	disableDockerHostsOffline := m.config.DisableAllDockerHostsOffline
+	_, disableDockerHostsOffline := m.alertPolicyTypeSwitchesNoLock("docker-host")
 	m.mu.RUnlock()
 
 	resourceID := fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID))
@@ -1280,7 +1280,7 @@ func (m *Manager) shouldResolveDockerContainerUpdateAlertLocked(alert *Alert) bo
 		return false
 	}
 
-	if m.config.DisableAllDockerContainers || m.config.DockerDefaults.UpdateAlertDelayHours < 0 {
+	if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("app-container"); allDisabled || m.config.DockerDefaults.UpdateAlertDelayHours < 0 {
 		m.clearDockerContainerUpdateStateLocked(alert)
 		return true
 	}

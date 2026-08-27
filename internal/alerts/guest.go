@@ -90,8 +90,7 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 func (m *Manager) CheckGuest(guest any, instanceName string) {
 	m.mu.RLock()
 	enabled := m.config.Enabled
-	disableAllGuests := m.config.DisableAllGuests
-	disableAllGuestsOffline := m.config.DisableAllGuestsOffline
+	disableAllGuests, disableAllGuestsOffline := m.alertPolicyTypeSwitchesNoLock("vm")
 	m.mu.RUnlock()
 
 	if !enabled {

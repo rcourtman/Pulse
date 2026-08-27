@@ -21,7 +21,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		return
 	}
 	resourceIDs := storageAlertResourceIDs(storage)
-	if m.config.DisableAllStorage {
+	if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("storage"); allDisabled {
 		m.mu.RUnlock()
 		// Clear any existing storage alerts when all storage alerts are disabled
 		m.mu.Lock()

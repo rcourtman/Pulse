@@ -89,7 +89,7 @@ func (m *Manager) SyncExternalProbes(snapshots []ExternalProbeSnapshot) {
 func (m *Manager) checkExternalProbe(snapshot ExternalProbeSnapshot) {
 	m.mu.RLock()
 	enabled := m.config.Enabled
-	disabled := m.config.DisableAllAgentsOffline
+	_, disabled := m.alertPolicyTypeSwitchesNoLock("agent")
 	thresholds := m.resolveHostThresholdsNoLock(snapshot.AgentID, "", "", "")
 	m.mu.RUnlock()
 	if !enabled || disabled || thresholds.Disabled || thresholds.DisableConnectivity {

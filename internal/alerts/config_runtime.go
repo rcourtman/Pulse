@@ -154,7 +154,17 @@ func normalizeOverrides(overrides map[string]ThresholdConfig) {
 // applyGlobalOfflineSettingsLocked clears tracking and active alerts for globally disabled offline detectors.
 // Caller must hold m.mu.
 func (m *Manager) applyGlobalOfflineSettingsLocked() {
-	if m.config.DisableAllNodesOffline {
+	_, nodesOfflineDisabled := m.alertPolicyTypeSwitchesNoLock("node")
+	_, pbsOfflineDisabled := m.alertPolicyTypeSwitchesNoLock("pbs")
+	_, guestsOfflineDisabled := m.alertPolicyTypeSwitchesNoLock("vm")
+	_, dockerHostsOfflineDisabled := m.alertPolicyTypeSwitchesNoLock("docker-host")
+	containersDisabled, _ := m.alertPolicyTypeSwitchesNoLock("app-container")
+	servicesDisabled, _ := m.alertPolicyTypeSwitchesNoLock("docker-service")
+	kubernetesDisabled, _ := m.alertPolicyTypeSwitchesNoLock("k8s-node")
+	truenasDisabled, _ := m.alertPolicyTypeSwitchesNoLock("truenas-system")
+	vmwareDisabled, _ := m.alertPolicyTypeSwitchesNoLock("vmware-host")
+
+	if nodesOfflineDisabled {
 		var nodeAlerts []string
 		for storageKey, alert := range m.activeAlerts {
 			if alert == nil {
@@ -172,7 +182,7 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		}
 	}
 
-	if m.config.DisableAllPBSOffline {
+	if pbsOfflineDisabled {
 		var pbsAlerts []string
 		for storageKey, alert := range m.activeAlerts {
 			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) {
@@ -186,7 +196,7 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		}
 	}
 
-	if m.config.DisableAllGuestsOffline {
+	if guestsOfflineDisabled {
 		var guestAlerts []string
 		for storageKey, alert := range m.activeAlerts {
 			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindPoweredState) {
@@ -198,7 +208,7 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		}
 	}
 
-	if m.config.DisableAllDockerHostsOffline {
+	if dockerHostsOfflineDisabled {
 		var hostAlerts []string
 		for storageKey, alert := range m.activeAlerts {
 			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) {
@@ -212,7 +222,7 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		}
 	}
 
-	if m.config.DisableAllDockerContainers {
+	if containersDisabled {
 		var containerAlerts []string
 		for storageKey, alert := range m.activeAlerts {
 			id := effectiveAlertID(alert, storageKey)
@@ -227,12 +237,12 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		m.dockerUpdateFirstSeen = make(map[string]time.Time)
 		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
 	}
-	if m.config.DockerDefaults.UpdateAlertDelayHours < 0 && !m.config.DisableAllDockerContainers {
+	if m.config.DockerDefaults.UpdateAlertDelayHours < 0 && !containersDisabled {
 		m.clearDockerContainerUpdateAlertsLocked()
 		m.dockerUpdateFirstSeen = make(map[string]time.Time)
 		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
 	}
-	if m.config.DisableAllDockerServices {
+	if servicesDisabled {
 		var serviceAlerts []string
 		for storageKey, alert := range m.activeAlerts {
 			id := effectiveAlertID(alert, storageKey)
@@ -245,7 +255,7 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		}
 	}
 
-	if m.config.DisableAllKubernetes || m.config.DisableAllTrueNAS || m.config.DisableAllVMware {
+	if kubernetesDisabled || truenasDisabled || vmwareDisabled {
 		var platformAlerts []string
 		for storageKey, alert := range m.activeAlerts {
 			primaryType := alertPrimaryResourceType(alert)
@@ -253,11 +263,11 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 				continue
 			}
 			switch {
-			case m.config.DisableAllKubernetes && isUnifiedKubernetesAlertType(primaryType):
+			case kubernetesDisabled && isUnifiedKubernetesAlertType(primaryType):
 				platformAlerts = append(platformAlerts, effectiveAlertID(alert, storageKey))
-			case m.config.DisableAllTrueNAS && isUnifiedTrueNASAlertType(primaryType):
+			case truenasDisabled && isUnifiedTrueNASAlertType(primaryType):
 				platformAlerts = append(platformAlerts, effectiveAlertID(alert, storageKey))
-			case m.config.DisableAllVMware && isUnifiedVMwareAlertType(primaryType):
+			case vmwareDisabled && isUnifiedVMwareAlertType(primaryType):
 				platformAlerts = append(platformAlerts, effectiveAlertID(alert, storageKey))
 			}
 		}
@@ -381,7 +391,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		}
 
 		if alert.Type == "queue-depth" || alert.Type == "queue-deferred" || alert.Type == "queue-hold" || alert.Type == "message-age" {
-			if m.config.DisableAllPMG {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("pmg"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
@@ -404,7 +414,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 
 		isAgentResource := alertResourceTypeKeysContain(resourceTypeKeys, "agent")
 		if !handledModernPlatformType && isAgentResource {
-			if m.config.DisableAllAgents {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("agent"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
@@ -426,14 +436,14 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		}
 
 		if resourceTypeMeta == "docker-host" {
-			if m.config.DisableAllDockerHosts {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("docker-host"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
 			continue
 		}
 		if resourceTypeMeta == "app-container" {
-			if m.config.DisableAllDockerContainers {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("app-container"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
@@ -473,7 +483,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		isNodeResource := primaryResourceType == "" || primaryResourceType == "node"
 		isStorageResource := alertResourceTypeKeysContain(resourceTypeKeys, "storage")
 		if threshold == nil && !handledModernPlatformType && isNodeResource && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
-			if m.config.DisableAllNodes {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("node"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
@@ -484,7 +494,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
 		} else if threshold == nil && !handledModernPlatformType && (isStorageResource || alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
-			if m.config.DisableAllStorage {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("storage"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
@@ -495,7 +505,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
 		} else if threshold == nil && !handledModernPlatformType && (resourceTypeMeta == "pbs" || alert.Instance == "PBS") {
-			if m.config.DisableAllPBS {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("pbs"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
@@ -508,7 +518,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		}
 
 		if threshold == nil && !handledModernPlatformType {
-			if m.config.DisableAllGuests {
+			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("vm"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}

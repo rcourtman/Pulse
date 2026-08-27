@@ -24,7 +24,7 @@ func (m *Manager) CheckNode(node models.Node) {
 		m.mu.RUnlock()
 		return
 	}
-	if m.config.DisableAllNodes {
+	if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("node"); allDisabled {
 		m.mu.RUnlock()
 		// Clear any existing node alerts when all node alerts are disabled
 		m.mu.Lock()
@@ -53,7 +53,7 @@ func (m *Manager) CheckNode(node models.Node) {
 		m.mu.Unlock()
 		return
 	}
-	disableNodesOffline := m.config.DisableAllNodesOffline
+	_, disableNodesOffline := m.alertPolicyTypeSwitchesNoLock("node")
 	thresholds := m.resolveResourceThresholds("node", node.ID)
 	m.mu.RUnlock()
 

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rs/zerolog/log"
 )
 
 // evaluateFilterCondition evaluates a single filter condition against a guest
@@ -211,37 +210,5 @@ func (m *Manager) evaluateFilterStack(guest any, stack FilterStack) bool {
 // getGuestThresholds returns the appropriate thresholds for a guest
 // Priority: Guest-specific overrides > Custom rules (by priority) > Global defaults
 func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig {
-	thresholds := cloneThresholdConfig(m.config.GuestDefaults)
-
-	// Check custom rules (sorted by priority, highest first)
-	var applicableRule *CustomAlertRule
-	highestPriority := -1
-
-	for i := range m.config.CustomRules {
-		rule := &m.config.CustomRules[i]
-		if !rule.Enabled {
-			continue
-		}
-
-		// Check if this rule applies to the guest
-		if m.evaluateFilterStack(guest, rule.FilterConditions) {
-			if rule.Priority > highestPriority {
-				applicableRule = rule
-				highestPriority = rule.Priority
-			}
-		}
-	}
-
-	// Apply custom rule thresholds if found
-	if applicableRule != nil {
-		thresholds = m.applyThresholdOverride(thresholds, applicableRule.Thresholds)
-
-		log.Debug().
-			Str("guest", guestID).
-			Str("rule", applicableRule.Name).
-			Int("priority", applicableRule.Priority).
-			Msg("Applied custom alert rule")
-	}
-
-	return m.resolveGuestThresholdOverride(thresholds, guest, guestID)
+	return m.effectiveAlertPolicyNoLock(alertPolicyQuery{TypeKey: "vm", ResourceID: guestID, Guest: guest}).Thresholds
 }

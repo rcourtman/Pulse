@@ -229,7 +229,7 @@ func (m *Manager) CheckHost(host models.Host) {
 
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
-	disableAllAgents := m.config.DisableAllAgents
+	disableAllAgents, _ := m.alertPolicyTypeSwitchesNoLock("agent")
 	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
 	// An explicit disk temperature override (host or inherited linked-resource)
 	// beats the per-type defaults in DiskTempByType.
@@ -648,7 +648,7 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
-	disableAllAgents := m.config.DisableAllAgents
+	disableAllAgents, _ := m.alertPolicyTypeSwitchesNoLock("agent")
 	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
 	m.mu.RUnlock()
 	if !alertsEnabled || disableAllAgents || thresholds.Disabled {
@@ -726,7 +726,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		m.mu.RUnlock()
 		return
 	}
-	disableHostsOffline := m.config.DisableAllAgentsOffline
+	_, disableHostsOffline := m.alertPolicyTypeSwitchesNoLock("agent")
 	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
 	m.mu.RUnlock()
 

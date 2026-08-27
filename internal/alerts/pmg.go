@@ -74,7 +74,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 		m.mu.RUnlock()
 		return
 	}
-	if m.config.DisableAllPMG {
+	if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("pmg"); allDisabled {
 		m.mu.RUnlock()
 		// Clear any existing PMG alerts when all PMG alerts are disabled.
 		m.mu.Lock()
@@ -86,7 +86,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 
 	// Check if there's an override for this PMG instance
 	override, hasOverride := m.config.Overrides[pmg.ID]
-	disablePMGOffline := m.config.DisableAllPMGOffline
+	_, disablePMGOffline := m.alertPolicyTypeSwitchesNoLock("pmg")
 	pmgDefaults := m.config.PMGDefaults
 	m.mu.RUnlock()
 

@@ -97,31 +97,19 @@ func (m *Manager) connectionDegradedPolicyDisabledNoLock(resourceID, policyResou
 	thresholdType := ""
 	switch connectionType {
 	case ConnectionTypePVE:
-		if m.config.DisableAllNodes || m.config.DisableAllNodesOffline {
-			return true
-		}
 		thresholdType = "node"
 	case ConnectionTypePBS:
-		if m.config.DisableAllPBS || m.config.DisableAllPBSOffline {
-			return true
-		}
 		thresholdType = "pbs"
 	case ConnectionTypePMG:
-		if m.config.DisableAllPMG || m.config.DisableAllPMGOffline {
-			return true
-		}
 		thresholdType = "pmg"
 	case ConnectionTypeVMware:
-		if m.config.DisableAllVMware {
-			return true
-		}
 		thresholdType = "vmware-host"
 	case ConnectionTypeTrueNAS:
-		if m.config.DisableAllTrueNAS {
-			return true
-		}
 		thresholdType = "truenas-system"
 	default:
+		return true
+	}
+	if allDisabled, offlineDisabled := m.alertPolicyTypeSwitchesNoLock(thresholdType); allDisabled || offlineDisabled {
 		return true
 	}
 

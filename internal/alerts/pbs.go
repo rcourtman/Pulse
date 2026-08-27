@@ -33,7 +33,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		m.mu.RUnlock()
 		return
 	}
-	if m.config.DisableAllPBS {
+	if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("pbs"); allDisabled {
 		m.mu.RUnlock()
 		// Clear any existing PBS alerts when all PBS alerts are disabled
 		m.mu.Lock()
@@ -67,7 +67,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	}
 
 	thresholds := m.resolveResourceThresholds("pbs", pbs.ID)
-	disablePBSOffline := m.config.DisableAllPBSOffline
+	_, disablePBSOffline := m.alertPolicyTypeSwitchesNoLock("pbs")
 	m.mu.RUnlock()
 
 	// Check override disable BEFORE offline detection to prevent spurious notifications
