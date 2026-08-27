@@ -23,6 +23,7 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
+import { getNormalizedIdentityLookupVariants } from '@/utils/resourceIdentity';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
@@ -102,6 +103,79 @@ function usageToneClass(pct: number | undefined): string {
   return 'text-base-content';
 }
 
+const identityValues = (resource: Resource): Array<string | undefined> => [
+  resource.canonicalIdentity?.hostname,
+  resource.canonicalIdentity?.platformId,
+  resource.identity?.hostname,
+  ...(resource.identity?.ips ?? []),
+  resource.agent?.hostname,
+  resource.pbs?.hostname,
+  resource.pbs?.instanceId,
+  resource.platformId,
+  resource.name,
+  resource.displayName,
+];
+
+const identityTokens = (resource: Resource): Set<string> =>
+  new Set(identityValues(resource).flatMap((value) => getNormalizedIdentityLookupVariants(value)));
+
+const stringValues = (...candidates: unknown[]): string[] =>
+  candidates.flatMap((candidate) =>
+    Array.isArray(candidate)
+      ? candidate.filter((value): value is string => typeof value === 'string')
+      : [],
+  );
+
+const uniquelyCorrelatedAgent = (
+  server: Resource,
+  candidates: readonly Resource[],
+): Resource | undefined => {
+  const serverTokens = identityTokens(server);
+  if (serverTokens.size === 0) return undefined;
+  const matches = candidates.filter((candidate) => {
+    if (candidate.type !== 'agent') return false;
+    for (const token of identityTokens(candidate)) {
+      if (serverTokens.has(token)) return true;
+    }
+    return false;
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+};
+
+const mergePBSAgentPresentation = (server: Resource, agent: Resource): Resource => {
+  const serverPlatform = server.platformData ?? {};
+  const agentPlatform = agent.platformData ?? {};
+  const sources = Array.from(
+    new Set([
+      ...stringValues(server.sources, serverPlatform.sources),
+      ...stringValues(agent.sources, agentPlatform.sources),
+    ]),
+  );
+  return {
+    ...server,
+    sourceType: 'hybrid',
+    sources,
+    cpu: agent.cpu ?? server.cpu,
+    memory: agent.memory ?? server.memory,
+    disk: agent.disk ?? server.disk,
+    network: agent.network ?? server.network,
+    diskIO: agent.diskIO ?? server.diskIO,
+    temperature: agent.temperature ?? server.temperature,
+    uptime: agent.uptime ?? server.uptime,
+    agent: agent.agent ?? agentPlatform.agent ?? server.agent,
+    metricsTarget: agent.metricsTarget ?? server.metricsTarget,
+    discoveryTarget: agent.discoveryTarget ?? server.discoveryTarget,
+    lastSeen: Math.max(server.lastSeen, agent.lastSeen),
+    platformData: {
+      ...agentPlatform,
+      ...serverPlatform,
+      sources,
+      agent: agent.agent ?? agentPlatform.agent ?? serverPlatform.agent,
+      pbs: server.pbs ?? serverPlatform.pbs,
+    },
+  };
+};
+
 export function buildBackupServerRows(
   servers: readonly Resource[],
   backups: readonly PBSBackup[] = [],
@@ -123,6 +197,10 @@ export function buildBackupServerRows(
   // datastore renders as a phantom offline "server" row.
   const sortedServers = servers
     .filter((resource) => resource.type === 'pbs')
+    .map((server) => {
+      const agent = uniquelyCorrelatedAgent(server, servers);
+      return agent ? mergePBSAgentPresentation(server, agent) : server;
+    })
     .slice()
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   for (const server of sortedServers) {
