@@ -552,6 +552,15 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupServersTableSource).not.toContain(directUptimeCall);
   });
 
+  it('routes PBS server expansion through the canonical resource drawer', () => {
+    expect(proxmoxBackupServersTableSource).toContain('PlatformResourceDetailTableRow');
+    expect(proxmoxBackupServersTableSource).toContain('resource={row.resource}');
+    expect(proxmoxBackupServersTableSource).toContain('initialShowHostDetails');
+    expect(proxmoxBackupServersTableSource).not.toContain(
+      '<span class="font-medium text-base-content">Server:</span>',
+    );
+  });
+
   it('keeps backup coverage fed by Proxmox VM/LXC guests when Overview demotes app containers', () => {
     expect(proxmoxPageSurfaceSource).toContain(
       'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',

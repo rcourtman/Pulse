@@ -480,6 +480,14 @@ summary row. Compact layouts must not stack those secondary facts beneath the
 resource name and make the row taller: keep essential identity inline when no
 detail disclosure exists, and otherwise preserve supporting context in its
 existing column, the row's accessible title, or the expanded detail content.
+The Backup servers summary owns PBS reachability and datastore capacity, but
+its row expansion is the canonical unified-resource drawer, not a second
+storage-local detail model. A PBS resource merged with a Pulse Agent keeps the
+PBS service evidence and exposes the agent's system, hardware, network, disk,
+thermal, history, and management context through that shared drawer. Bare-metal
+PBS hosts therefore remain fully inspectable after leaving the standalone
+Machines surface, while storage/recovery does not duplicate agent telemetry or
+invent a competing provider drawer hierarchy.
 The Proxmox backup view selector follows the same ownership split:
 storage/recovery owns the chronological-versus-coverage view values and backup
 semantics, while the visible segmented selector shell must compose the

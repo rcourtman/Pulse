@@ -159,6 +159,13 @@ provider tables must not add a second mobile chevron. Operator overrides remain
 in the shared `Manage` tab and use the explicit compact density of `FormSelect`
 and `FormTextarea`, keeping form labels, help relationships, touch targets, and
 control chrome canonical without expanding the low-frequency management surface.
+When the summary row already owns a canonical unified `Resource`, its expanded
+content composes `PlatformResourceDetailTableRow` instead of rebuilding a
+provider-local fact grid. This keeps Overview, History, Manage, accessibility,
+focus restoration, and responsive drawer behavior on one primitive. Proxmox
+Backup Server rows follow this rule and request the shared host-details
+disclosure open initially so a merged agent's system, hardware, network, disk,
+and thermal facts remain discoverable from the PBS surface.
 
 
 Presentation helpers that mirror a server-side classification must name the

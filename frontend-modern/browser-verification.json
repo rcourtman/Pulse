@@ -1,23 +1,15 @@
 {
   "version": 1,
-  "base_sha": "ee35d178b5c7dad09877c20bf20acd2aba8f0b51",
-  "verified_at": "2026-08-26T22:53:00Z",
+  "base_sha": "325ff793c88c193431b76a9ae8c25d375504a3cd",
+  "verified_at": "2026-08-27T00:41:31Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
-    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx"
-  ],
-  "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "b323df464d7d42fea5b38f553afce74cf3d56c4459199f95a45fc4d48ef17084",
-    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx": "e7fbdac65fe0ec225bdf898eac4bad112cdbd490322d37861677faf4be6ae74e"
-  },
-  "routes": [
-    "/settings/infrastructure?add=docker"
-  ],
+  "changed_paths": [],
+  "content_sha256": {},
+  "routes": ["/proxmox/backups"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 720
     },
     {
       "width": 390,
@@ -25,15 +17,16 @@
     }
   ],
   "states": [
-    "Docker agent installer immediately after manually generating an install token",
-    "token-only reveal reopened from the generated-token confirmation",
-    "token-only reveal at phone width"
+    "mock-mode Proxmox Backups loaded with standalone PBS server and datastore rows",
+    "the backup-vault PBS row expanded into the canonical resource detail drawer",
+    "Platform details expanded to expose provider context and PBS service context",
+    "the canonical PBS detail drawer collapsed back to its originating row control"
   ],
   "interactions": [
-    "generated a fresh Docker agent install token and confirmed the token-only dialog opened automatically",
-    "confirmed the dialog exposes the token value and Copy token action without an install command",
-    "dismissed the token dialog and reopened it with Show token only without minting another credential",
-    "confirmed the token wraps, the copy action spans the mobile card, and the page has no horizontal overflow at 390x844",
-    "confirmed the built frontend produced no browser console errors during the verified flows"
+    "expanded backup-vault from the Backup servers table and confirmed Overview, History, and Manage sections were available",
+    "expanded Platform details and confirmed provider context and PBS service context remained available in the shared drawer",
+    "collapsed the drawer and confirmed keyboard focus returned to the matching backup-vault expansion control",
+    "repeated the expand, Platform details, and collapse flow at 390x844 and confirmed document and body scroll widths remained equal to the 390px viewport",
+    "confirmed the browser console contained no errors during the final desktop and phone verification flows"
   ]
 }
