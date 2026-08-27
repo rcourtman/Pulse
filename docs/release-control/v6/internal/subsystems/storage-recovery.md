@@ -5604,9 +5604,14 @@ lifecycle contracts.
 The shared Docker / Podman action executor performs its post-mutation daemon
 observation through a separately request-bound typed protocol. It may project
 independent `ActionResultV2` evidence only when the observer and executor trust
-domains differ. That evidence verifies the bounded container action; it is not
-backup success, restore verification, recovery freshness, or storage health,
-and storage/recovery consumers must not reinterpret it as any of those facts.
+domains differ. Start and restart verification additionally requires the
+version-2 observer to report `healthy`, or `none` when the daemon confirms that
+the container has no health check. Running state with missing, `starting`, or
+`unhealthy` health remains inconclusive, as does a legacy version-1 observer;
+the executor must not repeat the mutation while waiting for health evidence.
+That evidence verifies only the bounded container action. It is not backup
+success, restore verification, recovery freshness, or storage health, and
+storage/recovery consumers must not reinterpret it as any of those facts.
 
 ### Retained storage observations preserve freshness truth
 

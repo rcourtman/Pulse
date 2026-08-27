@@ -1241,6 +1241,25 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_accepts_docker_action_api_proofs(self) -> None:
+        result = lookup_paths(["internal/api/docker_container_action_executor.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        matches = {
+            match["subsystem"]: match["verification_requirement"]
+            for match in result["files"][0]["matches"]
+        }
+        requirement = matches["api-contracts"]
+        self.assertEqual(requirement["id"], "backend-payload-contracts")
+        self.assertIn(
+            "internal/api/docker_container_action_executor_test.go",
+            requirement["exact_files"],
+        )
+        self.assertIn(
+            "internal/api/docker_container_action_result_test.go",
+            requirement["exact_files"],
+        )
+
     def test_lookup_paths_selects_dedicated_patrol_autopilot_proof(self) -> None:
         result = lookup_paths(
             [
