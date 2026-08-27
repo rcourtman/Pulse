@@ -43,8 +43,12 @@ install() {
         exit 1
     fi
 
-    # Make wrapper executable
-    chmod +x "${SCRIPT_DIR}/dev-launchd-wrapper.sh"
+    # Preserve read-only/shared checkouts when Git already supplied the
+    # executable bit. Some development hosts allow group content writes but
+    # reserve mode changes for the file owner.
+    if [[ ! -x "${SCRIPT_DIR}/dev-launchd-wrapper.sh" ]]; then
+        chmod +x "${SCRIPT_DIR}/dev-launchd-wrapper.sh"
+    fi
 
     # Create log directory
     mkdir -p "${LOG_DIR}"

@@ -500,7 +500,7 @@ test_launchd_wrapper_uses_managed_supervisor() {
 }
 
 test_launchd_setup_advertises_managed_runtime_controls() {
-  local test_dir fake_bin output
+  local test_dir fake_bin output chmod_calls
   test_dir="$(mktemp -d)"
   temp_dirs+=("${test_dir}")
   fake_bin="${test_dir}/bin"
@@ -528,12 +528,27 @@ esac
 EOF
   chmod +x "${fake_bin}/launchctl"
 
+  cat > "${fake_bin}/chmod" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${CHMOD_LOG}"
+if [[ "$*" == *"dev-launchd-wrapper.sh"* ]]; then
+  echo "setup attempted to mutate executable wrapper permissions" >&2
+  exit 97
+fi
+exec /bin/chmod "$@"
+EOF
+  chmod +x "${fake_bin}/chmod"
+
   output="$(
     PATH="${fake_bin}:$PATH" \
     HOME="${test_dir}/home" \
+    CHMOD_LOG="${test_dir}/chmod.log" \
     "${DEV_LAUNCHD_SETUP}" install
   )"
+  chmod_calls="$(cat "${test_dir}/chmod.log")"
 
+  assert_not_contains "launchd setup leaves an executable tracked wrapper untouched" "${chmod_calls}" "dev-launchd-wrapper.sh"
   assert_contains "launchd setup shows browser entrypoint" "${output}" "http://127.0.0.1:5173"
   assert_contains "launchd setup shows managed start command" "${output}" "npm run dev"
   assert_contains "launchd setup shows managed restart command" "${output}" "npm run dev:restart"
