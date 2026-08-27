@@ -1218,6 +1218,14 @@ not a replacement status card, CTA band, or page-local nested card.
    `bg-surface p-3 shadow-sm` frame must be composed through
    `InfoCardFrame`, `getInfoCardFrameClass`, or `INFO_CARD_FRAME_CLASS` rather
    than copied as a page-local class string.
+   Compact label/value facts inside those frames belong to
+   `InfoCardKeyValueRow`. The shared row preserves endpoint alignment on
+   phones, then switches to a fixed 7rem label track with the value immediately
+   adjacent and left aligned on wider viewports. Consumers may opt into the
+   `sm` transition when their own card grid already splits at that breakpoint;
+   otherwise the shared `lg` transition is canonical. Feature surfaces own the
+   labels, values, wrapping, and selection behavior, but must not restore
+   drawer-width `justify-between` rows on desktop.
    Read-only metadata chips belong to `MetadataBadge` and domain wrappers over
    it. Organization role and share-status chips must use
    `OrganizationRoleBadge` and `OrganizationShareStatusBadge`, so role/status

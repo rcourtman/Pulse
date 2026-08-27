@@ -258,6 +258,12 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(hostDetails.getByText('Debian GNU/Linux 13')).toBeInTheDocument();
     expect(hostDetails.getByText('eno1')).toBeInTheDocument();
     expect(hostDetails.getByText('192.0.2.10')).toBeInTheDocument();
+    expect(hostDetails.getByText('Hostname').parentElement).toHaveClass(
+      'justify-between',
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(hostDetails.getByText('pbs-bare-metal')).toHaveClass('text-right', 'lg:text-left');
   });
 
   it('renders PMG card with compact summary and queue/mail breakdown sections', () => {

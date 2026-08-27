@@ -1,6 +1,11 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
-import { InfoCardFrame, getInfoCardFrameClass } from './InfoCardFrame';
+import {
+  InfoCardFrame,
+  InfoCardKeyValueRow,
+  getInfoCardFrameClass,
+  getInfoCardKeyValueRowClass,
+} from './InfoCardFrame';
 
 describe('InfoCardFrame', () => {
   afterEach(() => {
@@ -42,5 +47,34 @@ describe('InfoCardFrame', () => {
   it('exposes the shared class model for presentation constants', () => {
     expect(getInfoCardFrameClass({ class: 'text-center' })).toContain('text-center');
     expect(getInfoCardFrameClass()).toContain('bg-surface');
+  });
+
+  it('keeps values condensed on mobile and adjacent to a fixed label track on desktop', () => {
+    render(() => (
+      <InfoCardKeyValueRow
+        data-testid="row"
+        label="Hostname"
+        value="apollo-114"
+        valueTitle="Full hostname"
+      />
+    ));
+
+    const row = screen.getByTestId('row');
+    const value = screen.getByText('apollo-114');
+
+    expect(row).toHaveClass('justify-between');
+    expect(row).toHaveClass('lg:grid');
+    expect(row).toHaveClass('lg:grid-cols-[7rem_minmax(0,1fr)]');
+    expect(value).toHaveClass('text-right');
+    expect(value).toHaveClass('lg:text-left');
+    expect(value).toHaveAttribute('title', 'Full hostname');
+  });
+
+  it('can align values from the small breakpoint for compact split-card layouts', () => {
+    expect(getInfoCardKeyValueRowClass({ desktopAt: 'sm' })).toContain('sm:grid');
+    expect(getInfoCardKeyValueRowClass({ desktopAt: 'sm' })).toContain(
+      'sm:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(getInfoCardKeyValueRowClass({ desktopAt: 'sm' })).not.toContain('lg:grid');
   });
 });

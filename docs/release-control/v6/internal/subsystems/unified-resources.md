@@ -1324,6 +1324,11 @@ is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
 `ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
 `InfoCardFrame` for that shell instead of restoring local card-frame
 classes.
+Machine and host overview cards that render compact system, hardware, disk,
+and temperature facts must also compose the frontend-primitives
+`InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
+desktop rows use the shared fixed label track so labels and values remain
+visually adjacent instead of spanning the full drawer width.
 Curated technical inventory follows the shared compact-row contract instead
 of the secondary-card contract. Docker-host drawers must project system,
 runtime, memory, storage, and telemetry facts through

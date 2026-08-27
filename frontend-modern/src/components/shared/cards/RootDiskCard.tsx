@@ -1,6 +1,6 @@
 import { Component } from 'solid-js';
 import { Node } from '@/types/api';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { formatBytes } from '@/utils/format';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 
@@ -26,12 +26,12 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
         Root Disk
       </div>
       <div class="mb-3">
-        <div class="flex justify-between text-[10px] mb-1">
-          <span class="text-muted">Usage</span>
-          <span class="text-base-content">
-            {formatBytes(diskStats().used)} / {formatBytes(diskStats().total)}
-          </span>
-        </div>
+        <InfoCardKeyValueRow
+          class="mb-1 text-[10px]"
+          label="Usage"
+          value={`${formatBytes(diskStats().used)} / ${formatBytes(diskStats().total)}`}
+          valueClass="font-normal"
+        />
         <StackedDiskBar
           aggregateDisk={{
             total: diskStats().total,

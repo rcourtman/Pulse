@@ -2,7 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import { Disk } from '@/types/api';
 import { formatBytes, type NormalizedDisk } from '@/utils/format';
 import { getMetricColorRgba, getMetricTextColorClass } from '@/utils/metricThresholds';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 
 interface DisksCardProps {
@@ -37,14 +37,12 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
       <Show when={aggregateDisk()}>
         {(aggregate) => (
           <div class="mb-3 space-y-1.5 border-b border-border pb-3" data-testid="disks-card-total">
-            <div class="flex justify-between gap-2 text-[10px]">
-              <span class="text-muted">Total Usage</span>
-              <span
-                class={`font-medium ${getMetricTextColorClass(aggregateUsagePercent(), 'disk')}`}
-              >
-                {formatBytes(aggregate().used)} / {formatBytes(aggregate().total)}
-              </span>
-            </div>
+            <InfoCardKeyValueRow
+              class="text-[10px]"
+              label="Total Usage"
+              value={`${formatBytes(aggregate().used)} / ${formatBytes(aggregate().total)}`}
+              valueClass={getMetricTextColorClass(aggregateUsagePercent(), 'disk')}
+            />
             <StackedDiskBar disks={props.disks} aggregateDisk={aggregate()} mode="aggregate" />
           </div>
         )}
@@ -59,18 +57,21 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
             const textColor = getMetricTextColorClass(usagePercent, 'disk');
             return (
               <div class="text-[10px]">
-                <div class="flex justify-between mb-0.5">
-                  <span class="text-muted truncate max-w-[100px]" title={disk.mountpoint}>
-                    {disk.mountpoint}
-                  </span>
-                  <span class="flex items-center gap-1.5">
-                    <span class={`font-medium ${textColor}`}>{usagePercent.toFixed(0)}%</span>
-                    <span class="text-muted">·</span>
-                    <span class="text-muted">
-                      {formatBytes(used)} / {formatBytes(total)}
+                <InfoCardKeyValueRow
+                  class="mb-0.5 text-[10px]"
+                  label={disk.mountpoint}
+                  labelClass="truncate"
+                  labelTitle={disk.mountpoint}
+                  value={
+                    <span class="flex items-center gap-1.5">
+                      <span class={`font-medium ${textColor}`}>{usagePercent.toFixed(0)}%</span>
+                      <span class="text-muted">·</span>
+                      <span class="text-muted">
+                        {formatBytes(used)} / {formatBytes(total)}
+                      </span>
                     </span>
-                  </span>
-                </div>
+                  }
+                />
                 <div class="h-1.5 w-full rounded-full bg-surface-hover overflow-hidden">
                   <div
                     class="h-full rounded-full transition-all duration-500"

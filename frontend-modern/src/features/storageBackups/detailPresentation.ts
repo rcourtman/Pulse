@@ -26,7 +26,6 @@ export const STORAGE_DETAIL_ROOT_GRID_CLASS = 'grid gap-4 md:grid-cols-2';
 export const STORAGE_DETAIL_HEADER_ROW_CLASS = 'flex items-center justify-between mb-2';
 export const STORAGE_DETAIL_LINKED_DISKS_LIST_CLASS = 'space-y-1';
 
-export const STORAGE_DETAIL_KEY_VALUE_ROW_CLASS = 'flex justify-between';
 export const STORAGE_DETAIL_KEY_CLASS = 'text-muted';
 export const STORAGE_DETAIL_VALUE_CLASS = 'text-base-content font-medium';
 

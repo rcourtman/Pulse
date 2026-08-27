@@ -3315,9 +3315,11 @@ report inside the row expansion so degraded pools name the failing device and
 running scrub/resilver without re-promoting per-device noise into table rows.
 The pool detail key/value rows span the full Configuration card below the
 small-screen breakpoint, then return to the two-column desktop grid. Labels
-stay fixed while long node, content, and provider values wrap inside a
-right-aligned value region, so narrow row expansions never concatenate one
-field with the next or overflow the drawer.
+stay fixed while long node, content, and provider values wrap. Phones retain
+the compact endpoint alignment, while the desktop grid uses the shared 7rem
+label track and places each left-aligned value immediately beside its label,
+so wide drawers remain easy to scan and narrow row expansions never
+concatenate one field with the next or overflow the drawer.
 The pools table must not double-list Ceph-backed storage. Cluster-internal
 pool rows synthesized from Ceph cluster telemetry (`models.StorageFromCephPool`:
 type `ceph` homed on the `cluster` pseudo-node) are consolidated into the PVE

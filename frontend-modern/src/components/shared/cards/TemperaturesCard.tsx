@@ -1,5 +1,5 @@
 import { Component, For } from 'solid-js';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 
 interface TemperatureRow {
   label: string;
@@ -23,15 +23,12 @@ export const TemperaturesCard: Component<TemperaturesCardProps> = (props) => {
       <div class="space-y-1.5 text-[11px]">
         <For each={props.rows}>
           {(row) => (
-            <div class="flex items-center justify-between gap-2 min-w-0">
-              <span class="text-muted shrink-0">{row.label}</span>
-              <span
-                class="font-medium text-base-content truncate"
-                title={row.valueTitle || row.value}
-              >
-                {row.value}
-              </span>
-            </div>
+            <InfoCardKeyValueRow
+              label={row.label}
+              value={row.value}
+              valueClass="truncate"
+              valueTitle={row.valueTitle || row.value}
+            />
           )}
         </For>
       </div>

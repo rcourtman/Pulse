@@ -1204,6 +1204,9 @@ describe('shared primitive guardrails', () => {
     expect(infoCardFrameSource).toContain('INFO_CARD_FRAME_CLASS');
     expect(infoCardFrameSource).toContain(retiredFrameClass);
     expect(infoCardFrameSource).toContain('getInfoCardFrameClass');
+    expect(infoCardFrameSource).toContain('INFO_CARD_KEY_VALUE_ROW_CLASS');
+    expect(infoCardFrameSource).toContain('getInfoCardKeyValueRowClass');
+    expect(infoCardFrameSource).toContain("desktopAt?: 'sm' | 'lg'");
 
     for (const consumerPath of expectedConsumers) {
       const source = readFrontendSource(consumerPath);
@@ -1217,6 +1220,19 @@ describe('shared primitive guardrails', () => {
     expect(readFrontendSource('src/features/storageBackups/detailPresentation.ts')).toContain(
       'INFO_CARD_FRAME_CLASS',
     );
+
+    for (const consumerPath of [
+      'src/components/Storage/StorageDetailKeyValueRow.tsx',
+      'src/components/shared/cards/DisksCard.tsx',
+      'src/components/shared/cards/HardwareCard.tsx',
+      'src/components/shared/cards/RootDiskCard.tsx',
+      'src/components/shared/cards/SystemInfoCard.tsx',
+      'src/components/shared/cards/TemperaturesCard.tsx',
+    ]) {
+      const source = readFrontendSource(consumerPath);
+      expect(source).toContain('InfoCardKeyValueRow');
+      expect(source).not.toContain('flex items-center justify-between');
+    }
   });
 
   it('keeps shared subtabs as one primitive and leaves shell styling to owning surfaces', () => {

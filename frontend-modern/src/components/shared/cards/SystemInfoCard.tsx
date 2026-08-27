@@ -1,6 +1,6 @@
 import { Component, Show } from 'solid-js';
 import type { Agent, Node } from '@/types/api';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { formatUptime } from '@/utils/format';
 
 type SystemInfoCardProps = { variant: 'node'; node: Node } | { variant: 'agent'; agent: Agent };
@@ -14,29 +14,26 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
           System
         </div>
         <div class="space-y-1.5 text-[11px]">
-          <div class="flex items-center justify-between gap-2 min-w-0">
-            <span class="text-muted shrink-0">Node</span>
-            <span class="font-medium text-base-content select-all truncate" title={node.name}>
-              {node.name}
-            </span>
-          </div>
-          <div class="flex items-center justify-between gap-2 min-w-0">
-            <span class="text-muted shrink-0">Version</span>
-            <span class="font-medium text-base-content truncate" title={node.pveVersion}>
-              {node.pveVersion}
-            </span>
-          </div>
-          <div class="flex items-center justify-between gap-2 min-w-0">
-            <span class="text-muted shrink-0">Kernel</span>
-            <span class="font-medium text-base-content truncate" title={node.kernelVersion}>
-              {node.kernelVersion}
-            </span>
-          </div>
+          <InfoCardKeyValueRow
+            label="Node"
+            value={node.name}
+            valueClass="select-all truncate"
+            valueTitle={node.name}
+          />
+          <InfoCardKeyValueRow
+            label="Version"
+            value={node.pveVersion}
+            valueClass="truncate"
+            valueTitle={node.pveVersion}
+          />
+          <InfoCardKeyValueRow
+            label="Kernel"
+            value={node.kernelVersion}
+            valueClass="truncate"
+            valueTitle={node.kernelVersion}
+          />
           <Show when={node.uptime}>
-            <div class="flex items-center justify-between">
-              <span class="text-muted">Uptime</span>
-              <span class="font-medium text-base-content">{formatUptime(node.uptime!)}</span>
-            </div>
+            <InfoCardKeyValueRow label="Uptime" value={formatUptime(node.uptime!)} />
           </Show>
         </div>
       </InfoCardFrame>
@@ -50,47 +47,35 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
         System
       </div>
       <div class="space-y-1.5 text-[11px]">
-        <div class="flex items-center justify-between gap-2 min-w-0">
-          <span class="text-muted shrink-0">Hostname</span>
-          <span
-            class="font-medium text-base-content select-all truncate"
-            title={agentInfo.hostname}
-          >
-            {agentInfo.hostname}
-          </span>
-        </div>
-        <div class="flex items-center justify-between gap-2 min-w-0">
-          <span class="text-muted shrink-0">OS</span>
-          <span
-            class="font-medium text-base-content truncate"
-            title={
-              agentInfo.osName
-                ? `${agentInfo.osName}${agentInfo.osVersion ? ` ${agentInfo.osVersion}` : ''}`
-                : agentInfo.platform || 'Unknown'
-            }
-          >
-            {agentInfo.osName
+        <InfoCardKeyValueRow
+          label="Hostname"
+          value={agentInfo.hostname}
+          valueClass="select-all truncate"
+          valueTitle={agentInfo.hostname}
+        />
+        <InfoCardKeyValueRow
+          label="OS"
+          value={
+            agentInfo.osName
               ? `${agentInfo.osName}${agentInfo.osVersion ? ` ${agentInfo.osVersion}` : ''}`
-              : agentInfo.platform || 'Unknown'}
-          </span>
-        </div>
-        <div class="flex items-center justify-between gap-2 min-w-0">
-          <span class="text-muted shrink-0">Kernel</span>
-          <span class="font-medium text-base-content truncate" title={agentInfo.kernelVersion}>
-            {agentInfo.kernelVersion}
-          </span>
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="text-muted">Architecture</span>
-          <span class="font-medium text-base-content">{agentInfo.architecture}</span>
-        </div>
+              : agentInfo.platform || 'Unknown'
+          }
+          valueClass="truncate"
+          valueTitle={
+            agentInfo.osName
+              ? `${agentInfo.osName}${agentInfo.osVersion ? ` ${agentInfo.osVersion}` : ''}`
+              : agentInfo.platform || 'Unknown'
+          }
+        />
+        <InfoCardKeyValueRow
+          label="Kernel"
+          value={agentInfo.kernelVersion}
+          valueClass="truncate"
+          valueTitle={agentInfo.kernelVersion}
+        />
+        <InfoCardKeyValueRow label="Architecture" value={agentInfo.architecture} />
         <Show when={agentInfo.uptimeSeconds}>
-          <div class="flex items-center justify-between">
-            <span class="text-muted">Uptime</span>
-            <span class="font-medium text-base-content">
-              {formatUptime(agentInfo.uptimeSeconds!)}
-            </span>
-          </div>
+          <InfoCardKeyValueRow label="Uptime" value={formatUptime(agentInfo.uptimeSeconds!)} />
         </Show>
       </div>
     </InfoCardFrame>

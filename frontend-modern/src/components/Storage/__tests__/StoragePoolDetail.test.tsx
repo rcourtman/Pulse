@@ -138,7 +138,7 @@ describe('StoragePoolDetail', () => {
     );
   });
 
-  it('stacks key-value rows on narrow drawers and wraps long values', () => {
+  it('keeps the mobile split row and moves desktop values beside a fixed label track', () => {
     render(() => (
       <table>
         <tbody>
@@ -154,11 +154,20 @@ describe('StoragePoolDetail', () => {
     ));
 
     const nodeLabel = screen.getByText('Node');
-    expect(nodeLabel.parentElement).toHaveClass('col-span-2', 'sm:col-span-1', 'min-w-0', 'gap-3');
+    expect(nodeLabel.parentElement).toHaveClass(
+      'col-span-2',
+      'sm:col-span-1',
+      'min-w-0',
+      'gap-3',
+      'justify-between',
+      'sm:grid',
+      'sm:grid-cols-[7rem_minmax(0,1fr)]',
+    );
     expect(screen.getByText('London Edge Standalone')).toHaveClass(
       'min-w-0',
       'break-words',
       'text-right',
+      'sm:text-left',
     );
   });
 

@@ -1620,7 +1620,8 @@ describe('frontend resource type boundaries', () => {
     expect(storageDetailPresentationSource).toContain(
       'export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS',
     );
-    expect(storageDetailKeyValueRowSource).toContain('STORAGE_DETAIL_KEY_VALUE_ROW_CLASS');
+    expect(storageDetailKeyValueRowSource).toContain('InfoCardKeyValueRow');
+    expect(storageDetailKeyValueRowSource).toContain('desktopAt="sm"');
     expect(storageDetailMetricCardSource).toContain('STORAGE_DETAIL_CARD_CLASS');
     expect(storagePoolDetailSource).toContain('<tr class={STORAGE_DETAIL_ROW_CLASS}>');
     expect(storagePoolDetailSource).not.toContain('border-t border-border');
