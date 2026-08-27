@@ -32,3 +32,20 @@ func ExternalProbePushNotification(
 	}
 	return relay.NewExternalProbeUnavailableNotification(alert.ID), true
 }
+
+// CanonicalAlertPushNotification projects every dispatched alert into a
+// privacy-safe mobile notification. External-probe outages retain their
+// purpose-built attention signal; every other alert uses the canonical alert
+// identity and severity without exposing infrastructure details.
+func CanonicalAlertPushNotification(
+	alert *alerts.Alert,
+	hasProbeAssignments func(string) bool,
+) relay.PushNotificationPayload {
+	if notification, specialized := ExternalProbePushNotification(alert, hasProbeAssignments); specialized {
+		return notification
+	}
+	if alert == nil {
+		return relay.PushNotificationPayload{}
+	}
+	return relay.NewAlertFiredNotification(alert.ID, string(alert.Level))
+}

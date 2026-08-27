@@ -3,6 +3,8 @@ import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI } from '@/api/notifications';
+import { RelayAPI } from '@/api/relay';
+import { hasFeature } from '@/stores/license';
 import { getAlertDestinationsConfigLoadError } from '@/utils/alertDestinationsPresentation';
 import { logger } from '@/utils/logger';
 
@@ -27,6 +29,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     createDefaultAppriseConfig(),
   );
   const [deadManPingUrl, setDeadManPingUrl] = createSignal('');
+  const [pushMinimumSeverity, setPushMinimumSeverity] = createSignal<'all' | 'critical'>('all');
 
   let reloadVersion = 0;
   let lastActiveTab: AlertTab | null = null;
@@ -36,6 +39,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setEmailConfig(createDefaultEmailConfig());
     setAppriseConfig(createDefaultAppriseConfig());
     setDeadManPingUrl('');
+    setPushMinimumSeverity('all');
   };
 
   const loadDestinations = async (options: { indicateLoading?: boolean } = {}) => {
@@ -50,13 +54,14 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
       NotificationsAPI.getEmailConfig(),
       NotificationsAPI.getAppriseConfig(),
       AlertsAPI.getDeadManConfig(),
+      hasFeature('relay') ? RelayAPI.getConfig() : Promise.resolve(null),
     ]);
 
     if (thisVersion !== reloadVersion) {
       return;
     }
 
-    const [emailResult, appriseResult, deadManResult] = results;
+    const [emailResult, appriseResult, deadManResult, relayResult] = results;
 
     if (emailResult.status === 'fulfilled') {
       setEmailConfig(normalizeEmailConfigFromAPI(emailResult.value));
@@ -68,6 +73,12 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
 
     if (deadManResult.status === 'fulfilled') {
       setDeadManPingUrl(deadManResult.value.pingUrl || '');
+    }
+
+    if (relayResult.status === 'fulfilled' && relayResult.value) {
+      setPushMinimumSeverity(
+        relayResult.value.alert_minimum_severity === 'critical' ? 'critical' : 'all',
+      );
     }
 
     const failures = results.filter(
@@ -97,6 +108,10 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
 
     await AlertsAPI.updateDeadManConfig(deadManPingUrl());
 
+    if (hasFeature('relay')) {
+      await RelayAPI.updateConfig({ alert_minimum_severity: pushMinimumSeverity() });
+    }
+
     setAppriseConfig(normalizeAppriseConfig(updatedApprise));
   };
 
@@ -121,6 +136,8 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setAppriseConfig,
     deadManPingUrl,
     setDeadManPingUrl,
+    pushMinimumSeverity,
+    setPushMinimumSeverity,
     resetDestinations,
     loadDestinations,
     saveDestinations,

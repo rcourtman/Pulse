@@ -2848,3 +2848,15 @@ poll context and cluster failover boundary, adds no goroutine or frontend
 request, and a failed read retains the previous bounded slice.
 `internal/monitoring/node_memory_sources_test.go` pins both failure continuity
 and the within-window no-call path.
+
+### Mobile alert severity routing stays off persistence hot paths
+
+The router loads the persisted Relay alert-severity floor when it constructs or
+refreshes the Relay client and caches the normalized value under the same
+`relayMu` boundary. Dispatching an incident performs one in-memory eligibility
+comparison before the existing asynchronous push call; it does not read system
+settings, open storage, enumerate paired devices, add a poll, or create a new
+goroutine per destination. Updating Relay settings atomically replaces the
+cached client and floor, so the next incident observes the new policy without
+turning alert fan-out into configuration I/O. The hosted Relay runtime tests
+pin persistence and cache replacement together.

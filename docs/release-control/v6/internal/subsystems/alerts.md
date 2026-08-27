@@ -442,10 +442,11 @@ transition references recovery evidence separate from its trigger evidence.
     `frontend-modern/src/utils/alertDestinationsPresentation.ts`. The
     destinations surface presents mobile push (Pulse Mobile paired through
     Relay) alongside email, Apprise, and webhooks so phone delivery is
-    discoverable where alert routing is configured. It stays a pointer
-    surface: it routes setup to the canonical `/settings/system-relay` Remote
-    Access panel rather than duplicating relay pairing state or relay API
-    calls, and when the `relay` feature is absent it gates through the shared
+    discoverable where alert routing is configured. It may read and update the
+    Relay destination's alert minimum severity, but routes pairing and
+    connectivity setup to the canonical `/settings/system-relay` Remote Access
+    panel rather than duplicating Relay runtime state. When the `relay` feature
+    is absent it gates through the shared
     `FeatureGateSection` and upgrade-navigation contract, rendering no upgrade
     call-to-action when prompt suppression applies.
 11. Add or change system-scoped alerts through
@@ -926,6 +927,10 @@ labels become `key:value` tags (or `key` for empty values), host-agent tags
 remain literal, and unified resources forward their canonical `Tags`. The
 alerts surface owns this producer metadata and routing UX; destination
 matching, persistence, and receipt-aware delivery remain notifications-owned.
+The same editor exposes a minimum-severity policy for email, Apprise, each
+webhook, and Relay mobile push. The alerts surface owns the coherent routing UX;
+notifications owns provider filtering and recovery receipts, while Relay owns
+privacy-safe mobile projection and persisted mobile routing policy.
 The alert manager callback layer now also has to stay fan-out-safe. Monitor
 delivery, the unified alert bridge, and Patrol-adjacent AI listeners must
 compose through additive fired/resolved subscriptions instead of overwriting a

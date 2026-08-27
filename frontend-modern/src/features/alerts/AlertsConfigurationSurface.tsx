@@ -214,6 +214,8 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
           deadManPingUrl={state.deadManPingUrl}
           setDeadManPingUrl={state.setDeadManPingUrl}
+          pushMinimumSeverity={state.pushMinimumSeverity}
+          setPushMinimumSeverity={state.setPushMinimumSeverity}
           emailConfig={state.emailConfig}
           setEmailConfig={state.setEmailConfig}
           appriseConfig={state.appriseConfig}

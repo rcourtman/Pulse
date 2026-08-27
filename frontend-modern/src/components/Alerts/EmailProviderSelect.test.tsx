@@ -234,7 +234,7 @@ describe('EmailProviderSelect', () => {
       expect(screen.getByText('Gmail (smtp.gmail.com:587)')).toBeInTheDocument();
     });
 
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    const select = screen.getByRole('combobox', { name: 'Email provider' }) as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'Gmail' } });
 
     expect(onChangeMock).toHaveBeenCalledWith(
@@ -261,7 +261,7 @@ describe('EmailProviderSelect', () => {
       expect(screen.getByText('SendGrid (smtp.sendgrid.net:587)')).toBeInTheDocument();
     });
 
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    const select = screen.getByRole('combobox', { name: 'Email provider' }) as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'SendGrid' } });
 
     expect(onChangeMock).toHaveBeenCalledWith(
@@ -285,7 +285,7 @@ describe('EmailProviderSelect', () => {
       expect(screen.getByText('Gmail (smtp.gmail.com:587)')).toBeInTheDocument();
     });
 
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    const select = screen.getByRole('combobox', { name: 'Email provider' }) as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'Gmail' } });
 
     expect(onChangeMock).toHaveBeenCalledWith(
@@ -309,7 +309,7 @@ describe('EmailProviderSelect', () => {
       expect(screen.getByText('Gmail (smtp.gmail.com:587)')).toBeInTheDocument();
     });
 
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    const select = screen.getByRole('combobox', { name: 'Email provider' }) as HTMLSelectElement;
     fireEvent.change(select, { target: { value: '' } });
 
     expect(onChangeMock).toHaveBeenCalledWith(

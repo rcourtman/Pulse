@@ -4,6 +4,7 @@ export interface RelayConfig {
   enabled: boolean;
   server_url: string;
   identity_fingerprint?: string;
+  alert_minimum_severity?: 'all' | 'critical';
 }
 
 export interface RelayStatus {
@@ -21,7 +22,7 @@ export class RelayAPI {
   }
 
   static async updateConfig(
-    update: Partial<Pick<RelayConfig, 'enabled' | 'server_url'>>,
+    update: Partial<Pick<RelayConfig, 'enabled' | 'server_url' | 'alert_minimum_severity'>>,
   ): Promise<void> {
     await apiFetchJSON(this.baseUrl, {
       method: 'PUT',

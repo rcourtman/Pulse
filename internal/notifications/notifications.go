@@ -343,6 +343,7 @@ func copyWebhookConfig(webhook WebhookConfig) WebhookConfig {
 func NormalizeWebhookConfig(webhook WebhookConfig) WebhookConfig {
 	normalized := webhook
 	normalized.TagFilter = normalizeNotificationTagFilter(normalized.TagFilter)
+	normalized.MinimumSeverity = normalizeNotificationMinimumSeverity(normalized.MinimumSeverity)
 	if len(normalized.TagFilter) == 0 {
 		normalized.TagMode = ""
 	} else {
@@ -477,6 +478,7 @@ func notificationQueueBucketsForJob(job notificationDeliveryJob, now time.Time) 
 // NormalizeAppriseConfig cleans and normalizes Apprise configuration values.
 func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	normalized := cfg
+	normalized.MinimumSeverity = normalizeNotificationMinimumSeverity(normalized.MinimumSeverity)
 
 	mode := strings.ToLower(strings.TrimSpace(string(normalized.Mode)))
 	switch mode {
@@ -563,35 +565,37 @@ type Alert interface {
 
 // EmailConfig holds email notification settings
 type EmailConfig struct {
-	Enabled   bool     `json:"enabled"`
-	Provider  string   `json:"provider"` // Email provider name (Gmail, SendGrid, etc.)
-	SMTPHost  string   `json:"server"`   // Changed from smtpHost to server for frontend consistency
-	SMTPPort  int      `json:"port"`     // Changed from smtpPort to port for frontend consistency
-	Username  string   `json:"username"`
-	Password  string   `json:"password"`
-	From      string   `json:"from"`
-	To        []string `json:"to"`
-	TLS       bool     `json:"tls"`
-	StartTLS  bool     `json:"startTLS"`  // STARTTLS support
-	RateLimit int      `json:"rateLimit"` // Max emails per minute (0 = default 60)
-	TagFilter []string `json:"tagFilter,omitempty"`
-	TagMode   string   `json:"tagFilterMode,omitempty"` // "all" (default) or "any"
+	Enabled         bool     `json:"enabled"`
+	Provider        string   `json:"provider"` // Email provider name (Gmail, SendGrid, etc.)
+	SMTPHost        string   `json:"server"`   // Changed from smtpHost to server for frontend consistency
+	SMTPPort        int      `json:"port"`     // Changed from smtpPort to port for frontend consistency
+	Username        string   `json:"username"`
+	Password        string   `json:"password"`
+	From            string   `json:"from"`
+	To              []string `json:"to"`
+	TLS             bool     `json:"tls"`
+	StartTLS        bool     `json:"startTLS"`  // STARTTLS support
+	RateLimit       int      `json:"rateLimit"` // Max emails per minute (0 = default 60)
+	TagFilter       []string `json:"tagFilter,omitempty"`
+	TagMode         string   `json:"tagFilterMode,omitempty"`   // "all" (default) or "any"
+	MinimumSeverity string   `json:"minimumSeverity,omitempty"` // "all" (default), "warning", or "critical"
 }
 
 // WebhookConfig holds webhook settings
 type WebhookConfig struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	Method       string            `json:"method"`
-	Headers      map[string]string `json:"headers"`
-	Enabled      bool              `json:"enabled"`
-	Service      string            `json:"service"`  // discord, slack, teams, etc.
-	Template     string            `json:"template"` // Custom payload template
-	CustomFields map[string]string `json:"customFields,omitempty"`
-	Mention      string            `json:"mention,omitempty"` // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
-	TagFilter    []string          `json:"tagFilter,omitempty"`
-	TagMode      string            `json:"tagFilterMode,omitempty"` // "all" (default) or "any"
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	URL             string            `json:"url"`
+	Method          string            `json:"method"`
+	Headers         map[string]string `json:"headers"`
+	Enabled         bool              `json:"enabled"`
+	Service         string            `json:"service"`  // discord, slack, teams, etc.
+	Template        string            `json:"template"` // Custom payload template
+	CustomFields    map[string]string `json:"customFields,omitempty"`
+	Mention         string            `json:"mention,omitempty"` // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
+	TagFilter       []string          `json:"tagFilter,omitempty"`
+	TagMode         string            `json:"tagFilterMode,omitempty"`   // "all" (default) or "any"
+	MinimumSeverity string            `json:"minimumSeverity,omitempty"` // "all" (default), "warning", or "critical"
 	// SigningSecret enables HMAC-SHA256 signing of outbound deliveries.
 	// When set, requests carry X-Pulse-Timestamp and X-Pulse-Signature
 	// (v1=hex(hmac_sha256(secret, timestamp + "." + body))) so receivers
@@ -614,16 +618,17 @@ const (
 
 // AppriseConfig holds Apprise notification settings.
 type AppriseConfig struct {
-	Enabled        bool        `json:"enabled"`
-	Mode           AppriseMode `json:"mode,omitempty"`
-	Targets        []string    `json:"targets"`
-	CLIPath        string      `json:"cliPath,omitempty"`
-	TimeoutSeconds int         `json:"timeoutSeconds,omitempty"`
-	ServerURL      string      `json:"serverUrl,omitempty"`
-	ConfigKey      string      `json:"configKey,omitempty"`
-	APIKey         string      `json:"apiKey,omitempty"`
-	APIKeyHeader   string      `json:"apiKeyHeader,omitempty"`
-	SkipTLSVerify  bool        `json:"skipTlsVerify,omitempty"`
+	Enabled         bool        `json:"enabled"`
+	Mode            AppriseMode `json:"mode,omitempty"`
+	Targets         []string    `json:"targets"`
+	CLIPath         string      `json:"cliPath,omitempty"`
+	TimeoutSeconds  int         `json:"timeoutSeconds,omitempty"`
+	ServerURL       string      `json:"serverUrl,omitempty"`
+	ConfigKey       string      `json:"configKey,omitempty"`
+	APIKey          string      `json:"apiKey,omitempty"`
+	APIKeyHeader    string      `json:"apiKeyHeader,omitempty"`
+	SkipTLSVerify   bool        `json:"skipTlsVerify,omitempty"`
+	MinimumSeverity string      `json:"minimumSeverity,omitempty"` // "all" (default), "warning", or "critical"
 }
 
 func normalizeEmailConfig(cfg EmailConfig) EmailConfig {
@@ -633,6 +638,7 @@ func normalizeEmailConfig(cfg EmailConfig) EmailConfig {
 	normalized.Username = strings.TrimSpace(normalized.Username)
 	normalized.From = strings.TrimSpace(normalized.From)
 	normalized.TagFilter = normalizeNotificationTagFilter(normalized.TagFilter)
+	normalized.MinimumSeverity = normalizeNotificationMinimumSeverity(normalized.MinimumSeverity)
 	if len(normalized.TagFilter) == 0 {
 		normalized.TagMode = ""
 	} else {
@@ -1557,7 +1563,7 @@ func buildNotificationDeliveryJobsForTarget(
 
 	jobs := make([]notificationDeliveryJob, 0, 2+len(webhooks))
 	if emailConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetEmail) {
-		routedAlerts := routeNotificationAlerts(alertsToSend, emailConfig.TagFilter, emailConfig.TagMode, event)
+		routedAlerts := routeNotificationAlerts(alertsToSend, emailConfig.TagFilter, emailConfig.TagMode, emailConfig.MinimumSeverity, event)
 		if len(routedAlerts) > 0 {
 			emailCopy := emailConfig
 			jobs = append(jobs, notificationDeliveryJob{
@@ -1574,7 +1580,7 @@ func buildNotificationDeliveryJobsForTarget(
 			if !webhook.Enabled {
 				continue
 			}
-			routedAlerts := routeNotificationAlerts(alertsToSend, webhook.TagFilter, webhook.TagMode, event)
+			routedAlerts := routeNotificationAlerts(alertsToSend, webhook.TagFilter, webhook.TagMode, webhook.MinimumSeverity, event)
 			if len(routedAlerts) > 0 {
 				webhookCopy := webhook
 				jobs = append(jobs, notificationDeliveryJob{
@@ -1588,14 +1594,17 @@ func buildNotificationDeliveryJobsForTarget(
 		}
 	}
 	if appriseConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetApprise) {
-		appriseCopy := appriseConfig
-		jobs = append(jobs, notificationDeliveryJob{
-			Type:          "apprise",
-			Event:         event,
-			Alerts:        alertsToSend,
-			ResolvedAt:    resolvedAt,
-			AppriseConfig: &appriseCopy,
-		})
+		routedAlerts := routeNotificationAlerts(alertsToSend, nil, "", appriseConfig.MinimumSeverity, event)
+		if len(routedAlerts) > 0 {
+			appriseCopy := appriseConfig
+			jobs = append(jobs, notificationDeliveryJob{
+				Type:          "apprise",
+				Event:         event,
+				Alerts:        routedAlerts,
+				ResolvedAt:    resolvedAt,
+				AppriseConfig: &appriseCopy,
+			})
+		}
 	}
 	return jobs
 }

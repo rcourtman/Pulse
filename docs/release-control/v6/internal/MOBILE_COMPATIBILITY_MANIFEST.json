@@ -46,6 +46,7 @@
     "types": [
       { "value": "patrol_finding", "go_symbol": "PushTypePatrolFinding" },
       { "value": "patrol_critical", "go_symbol": "PushTypePatrolCritical" },
+      { "value": "alert_fired", "go_symbol": "PushTypeAlertFired" },
       { "value": "external_probe_offline", "go_symbol": "PushTypeExternalProbeOffline" },
       { "value": "approval_request", "go_symbol": "PushTypeApprovalRequest" },
       { "value": "fix_completed", "go_symbol": "PushTypeFixCompleted" }

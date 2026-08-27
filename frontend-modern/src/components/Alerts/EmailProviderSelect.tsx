@@ -39,6 +39,7 @@ import {
 import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TagInput } from '@/components/shared/TagInput';
+import { DestinationSeveritySelect } from './DestinationSeveritySelect';
 
 interface EmailProviderSelectProps extends EmailProviderSelectStateProps {
   config: UIEmailConfig;
@@ -61,6 +62,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
     maxRetries: `${fieldIdPrefix}-max-retries`,
     retryDelay: `${fieldIdPrefix}-retry-delay`,
     tagMode: `${fieldIdPrefix}-tag-mode`,
+    minimumSeverity: `${fieldIdPrefix}-minimum-severity`,
   };
   const instructionBoxClass =
     'mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200';
@@ -237,6 +239,15 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         textareaBaseClass={controlClass('px-2 py-1.5 font-mono leading-snug')}
         placeholder={getAlertEmailRecipientsPlaceholder(props.config.from)}
       />
+
+      <div class="space-y-2 border-t border-border pt-3">
+        <DestinationSeveritySelect
+          id={fieldIds.minimumSeverity}
+          value={props.config.minimumSeverity ?? 'all'}
+          compact
+          onChange={(minimumSeverity) => props.onChange({ ...props.config, minimumSeverity })}
+        />
+      </div>
 
       <div class="space-y-2 border-t border-border pt-3">
         <div>

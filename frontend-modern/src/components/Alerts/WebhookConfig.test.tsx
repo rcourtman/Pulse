@@ -831,7 +831,7 @@ describe('WebhookConfig', () => {
     expect(screen.getByText(/Discord →/)).toBeInTheDocument();
 
     // Verify template method is applied — the select should now show POST (Discord template method)
-    const methodSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const methodSelect = screen.getByRole('combobox', { name: 'HTTP method' }) as HTMLSelectElement;
     expect(methodSelect.value).toBe('POST');
 
     // Verify template name was applied to form since name was empty
@@ -1042,7 +1042,7 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('+ Add Webhook'));
 
-    const methodSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const methodSelect = screen.getByRole('combobox', { name: 'HTTP method' }) as HTMLSelectElement;
     expect(methodSelect.value).toBe('POST');
 
     fireEvent.change(methodSelect, { target: { value: 'PUT' } });

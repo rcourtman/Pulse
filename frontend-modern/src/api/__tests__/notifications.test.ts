@@ -27,6 +27,7 @@ describe('NotificationsAPI', () => {
       tls: false,
       startTLS: false,
       rateLimit: 0,
+      minimumSeverity: 'all',
     } as any);
 
     const config = await NotificationsAPI.getEmailConfig();
@@ -44,6 +45,7 @@ describe('NotificationsAPI', () => {
       tls: false,
       startTLS: false,
       rateLimit: 0,
+      minimumSeverity: 'all',
     });
   });
 
@@ -76,6 +78,7 @@ describe('NotificationsAPI', () => {
       tls: false,
       startTLS: false,
       rateLimit: undefined,
+      minimumSeverity: 'all',
     });
   });
 

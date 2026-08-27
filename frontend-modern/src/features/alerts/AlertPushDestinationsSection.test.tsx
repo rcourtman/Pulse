@@ -1,10 +1,11 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AlertPushDestinationsSection } from './AlertPushDestinationsSection';
 import {
   ALERT_DESTINATIONS_PUSH_GATE_MESSAGE,
+  ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP,
   ALERT_DESTINATIONS_PUSH_READY_MESSAGE,
   ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL,
 } from '@/utils/alertDestinationsPresentation';
@@ -29,11 +30,14 @@ describe('AlertPushDestinationsSection', () => {
   });
 
   it('points licensed installs at Remote Access settings', () => {
+    const onMinimumSeverityChange = vi.fn();
     renderWithRouter(() => (
       <AlertPushDestinationsSection
         relayLicensed={true}
         showUpgradePrompts={true}
         upgradeDestination={upgradeDestination}
+        minimumSeverity="critical"
+        onMinimumSeverityChange={onMinimumSeverityChange}
       />
     ));
 
@@ -42,6 +46,12 @@ describe('AlertPushDestinationsSection', () => {
       name: `${ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL} →`,
     });
     expect(link).toHaveAttribute('href', '/settings/system-relay');
+
+    const severity = screen.getByRole('combobox', { name: 'Minimum alert severity' });
+    expect(severity).toHaveValue('critical');
+    fireEvent.change(severity, { target: { value: 'all' } });
+    expect(onMinimumSeverityChange).toHaveBeenCalledWith('all');
+    expect(screen.getByText(ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP)).toBeInTheDocument();
   });
 
   it('shows the Relay upgrade gate to unlicensed installs', () => {

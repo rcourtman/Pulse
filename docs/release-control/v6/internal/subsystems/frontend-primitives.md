@@ -6670,3 +6670,16 @@ panel-local Show/Hide control. Status badges use shared theme tokens, error and
 unavailable states remain textually distinct, and the four-part status grid
 collapses without horizontal overflow at phone widths. This pattern is the
 required primitive composition for future secret-bearing destination panels.
+
+### Alert destinations share one severity-policy primitive
+
+Email, webhook, Apprise, and entitled mobile-push panels compose the
+feature-owned `DestinationSeveritySelect` rather than implementing separate
+labels, option vocabularies, or responsive layouts. The control builds on the
+shared `FormSelect` primitive, exposes one associated label, and uses the same
+`All alerts` / `Critical alerts only` presentation at desktop and phone widths.
+Destination-specific help may explain transport semantics—mobile copy states
+its privacy and current-state boundary—but it must not redefine the policy.
+Alert feature state owns persistence and entitlement gating; the primitive
+owns presentation only. `alertDestinationsPresentation.test.ts` pins the
+shared vocabulary and the distinct mobile guidance.

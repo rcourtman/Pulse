@@ -1,33 +1,60 @@
 {
   "version": 1,
-  "base_sha": "ce555ee09d7cef30a2d784c18c629272aef9ab22",
-  "verified_at": "2026-08-27T17:11:50Z",
+  "base_sha": "3d4c43162a2e05e86b486fc7ff24a677bf73036d",
+  "verified_at": "2026-08-27T17:51:27Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/resourceOperatorState.ts",
-    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
-    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx"
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/api/relay.ts",
+    "frontend-modern/src/components/Alerts/DestinationSeveritySelect.tsx",
+    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx",
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx",
+    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx",
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts",
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/alertDestinationsModel.ts",
+    "frontend-modern/src/features/alerts/helpers.ts",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/types.ts",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/resourceOperatorState.ts": "edbbb0253d63fba3f8c893edb4c911948883c88ba1ee61ecdac453853d370de4",
-    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "9b45eb2a826c6db7fb7a47ec3dcc341c1ed47109228d83ed085788e647c69012",
-    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx": "fc2e4d010d80419e9532c49cddd9df954672c2d4a3b5de9d3336fd483562a4ad"
+    "frontend-modern/src/api/notifications.ts": "faf71397a60ad8cbabf70f9dfc891ad969efb34a455f9787c7d219400e822743",
+    "frontend-modern/src/api/relay.ts": "13b9b2cf5d7455b0e1a685db85ce50aff73a10071c8029348535acb3560f394f",
+    "frontend-modern/src/components/Alerts/DestinationSeveritySelect.tsx": "c7eb4c2b93c3090deccf7a7add952d37f762b802ed69e6c0d1021976af03b4d5",
+    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx": "6df0e0966111f68cf353cc7385b3eaac152480613ad51e587d1c574bd218cbc1",
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "c2e07aae1a8fb6080cf07ff12ee373f67809dbf966f21c2713135570cd142f2a",
+    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx": "ee5df9481e03cf77388f45e7b6c2f4d97b2c4de4a50c2717a2e9dd215c12381c",
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "29f9d17c646b059454d3a7f71578c63317a341970b6302911e9d964595d94a28",
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx": "26f04c0eb96ac7632b01ab7a6fd2fd676309ce28ea37a90df3f1350b405e3e62",
+    "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx": "079e71faeef74b1d56ded4a345a28447629fd1742942f355ce4d9c9a4941f52c",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "7f4f91966cd0638a6867e983875ab5170984d3e245ecc6ea7a28018f1fc7ecda",
+    "frontend-modern/src/features/alerts/alertDestinationsModel.ts": "cb289cc948d1f4f86e8e4a93618c32d545e8d7a7bbfdf45ab1c9f14325609f38",
+    "frontend-modern/src/features/alerts/helpers.ts": "6421ea5377ee3dc11226dd917e6dddc98f285ab1c324cc5e583fd49c3e56cc73",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "991f1076a75ff64e62fd02dd0f8cbfcd4e46bb865eb115ce6efbdf477201be27",
+    "frontend-modern/src/features/alerts/types.ts": "d25caaaf62e354247fac70c9278b27b6db82380f8914949ddf5fb7cd296e501d",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "36a89bd5cbde02cf9e263734911468b15591927c170cb5287cb0f1354f325e20",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "48870de79c4e803bbcff3456d3da1d8af06f4eb3d6d7cbb68c714aca64d1f443",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "4e3fd6d4799bb86df65a2fde5b73e62b9cc65bcebc66d3d3d142d678fa0bac7a"
   },
-  "routes": ["/alerts/overview", "/proxmox/overview"],
+  "routes": ["/alerts/notifications"],
   "viewports": [
     { "width": 1280, "height": 800 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "active Alerts overview with the per-alert Monitoring policy action",
-    "newly discovered resource with no explicit operator-state record",
-    "resource Manage drawer with the maintenance scheduler open in recurring mode",
-    "recurring schedule with weekday, Europe/London timezone, and descendant scope selected"
+    "notifications-paused install with email, Apprise, webhook, watchdog, mobile push, and delivery-evidence sections",
+    "unlicensed Relay install with the mobile push upgrade gate",
+    "email and Apprise destinations using backwards-compatible all-alert routing"
   ],
   "interactions": [
-    "opened an alert Monitoring action and confirmed the canonical policy choices render without changing saved state",
-    "opened a resource with no saved operator state and confirmed the lookup completes without a failed response or console error",
-    "opened Manage, switched the maintenance scheduler from One time to Recurring, and exercised weekday, timezone, and descendant-scope controls without saving",
-    "verified the full scheduler at 1280x800 and 390x844 with no horizontal overflow, interaction console errors, or failed interaction responses"
+    "opened Alerts Notifications from the alert navigation and confirmed two accessible minimum-severity selectors render",
+    "verified All alerts and Critical alerts only options plus occurrence-aware recovery guidance for email and Apprise",
+    "verified the unlicensed mobile push gate remains coherent and no Relay control is presented without entitlement",
+    "verified the route at 1280x800 and 390x844 with no browser console errors"
   ]
 }

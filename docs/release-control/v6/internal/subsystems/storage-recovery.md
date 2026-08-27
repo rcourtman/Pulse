@@ -5655,3 +5655,17 @@ no backup, restore, retention, snapshot, or recovery authority; they prevent a
 successful enrollment response from describing credential state that a restart
 would undo. Their success and forced-write-failure proofs live in
 `internal/api/deploy_handlers_test.go`.
+
+### Destination severity policy preserves notification recovery identity
+
+Email, webhook, Apprise, and Relay minimum-severity floors persist through
+their existing configuration records; they create no backup, snapshot,
+restore, retention, or storage-action authority. Filtering occurs before a
+firing delivery is enqueued. A resolution is instead governed by the durable
+per-occurrence destination receipt, so a destination that received the firing
+event receives its recovery even if tags or severity policy changed in the
+meantime, while a destination that was filtered out does not receive an
+orphaned recovery. The canonical occurrence and receipt remain notification
+queue identities; the alert ID carried by a mobile push is navigation state,
+not a new persistence or recovery key. Restart and retry semantics therefore
+remain owned by the existing notification queue and config persistence paths.

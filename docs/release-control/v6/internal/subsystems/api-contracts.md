@@ -132,13 +132,18 @@ and must not suppress the endpoint from type filters, totals, REST reloads, or
 websocket snapshots. Plural machine projections use `availabilityChecks`; the
 singular `availability` field remains only a compatibility projection.
 
-The API-owned Relay adapter may translate a canonical external-probe outage
-into the governed Pulse Mobile push contract only after alert identity is
-established. The push carries the stable alert ID and the generated
-`external_probe_offline` type with the existing `view_alert` action; it carries
-no infrastructure name, target, address, error text, or arbitrary alert
-metadata. A host-offline alert is eligible only when that host currently owns
-an enabled external-probe assignment.
+The API-owned Relay adapter projects every canonical alert that reaches the
+fired-dispatch callback into the governed Pulse Mobile push contract, subject
+to the Relay destination's persisted all-alert or critical-only floor. An
+ordinary alert carries the stable alert ID, generated `alert_fired` type,
+canonical severity, and existing `view_alert` action. A canonical
+external-probe outage retains the generated `external_probe_offline` type; a
+host-offline alert is eligible for that specialized type only when the host
+currently owns an enabled external-probe assignment. Both projections carry no
+infrastructure name, target, address, error text, or arbitrary alert metadata.
+`GET` and `PUT /api/settings/relay` expose `alert_minimum_severity` without
+exposing Relay secrets, and mixed persisted state normalizes to all-alert
+delivery unless critical-only was selected explicitly.
 
 `POST /api/agent-install-command` accepts an optional `insecure` boolean for
 Proxmox installer generation. When true, the returned command uses insecure

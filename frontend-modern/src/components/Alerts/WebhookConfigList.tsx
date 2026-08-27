@@ -11,6 +11,7 @@ import {
   getAlertWebhookToggleAllLabel,
   getAlertWebhookToggleLabel,
 } from '@/utils/alertWebhookPresentation';
+import { getAlertDestinationSeverityLabel } from '@/utils/alertDestinationsPresentation';
 
 interface WebhookConfigListProps {
   webhooks: Webhook[];
@@ -74,6 +75,11 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               </span>
               <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                 {webhook.method}
+              </span>
+              <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
+                {getAlertDestinationSeverityLabel(
+                  webhook.minimumSeverity === 'critical' ? 'critical' : 'all',
+                )}
               </span>
               <For each={webhook.tagFilter ?? []}>
                 {(tag) => (

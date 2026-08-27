@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationsAPI } from '@/api/notifications';
 import { AlertsAPI } from '@/api/alerts';
+import { RelayAPI } from '@/api/relay';
+import { hasFeature } from '@/stores/license';
 
 import { useAlertDestinationsState } from '../useAlertDestinationsState';
 
@@ -23,6 +25,17 @@ vi.mock('@/api/alerts', () => ({
   },
 }));
 
+vi.mock('@/api/relay', () => ({
+  RelayAPI: {
+    getConfig: vi.fn(),
+    updateConfig: vi.fn(),
+  },
+}));
+
+vi.mock('@/stores/license', () => ({
+  hasFeature: vi.fn(),
+}));
+
 vi.mock('@/utils/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -37,6 +50,10 @@ describe('useAlertDestinationsState', () => {
     vi.mocked(NotificationsAPI.updateAppriseConfig).mockReset();
     vi.mocked(AlertsAPI.getDeadManConfig).mockReset();
     vi.mocked(AlertsAPI.updateDeadManConfig).mockReset();
+    vi.mocked(RelayAPI.getConfig).mockReset();
+    vi.mocked(RelayAPI.updateConfig).mockReset();
+    vi.mocked(hasFeature).mockReset();
+    vi.mocked(hasFeature).mockReturnValue(true);
   });
 
   it('owns alert destinations reload and save behavior separately from alert policy config', async () => {
@@ -53,6 +70,7 @@ describe('useAlertDestinationsState', () => {
       to: ['alerts@example.com'],
       tls: true,
       startTLS: true,
+      minimumSeverity: 'critical',
     } as any);
     vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({
       enabled: true,
@@ -60,6 +78,7 @@ describe('useAlertDestinationsState', () => {
       targets: ['mailto://ops@example.com'],
       cliPath: '/usr/local/bin/apprise',
       timeoutSeconds: 20,
+      minimumSeverity: 'critical',
     } as any);
     vi.mocked(NotificationsAPI.updateEmailConfig).mockResolvedValue(undefined as any);
     vi.mocked(NotificationsAPI.updateAppriseConfig).mockResolvedValue({
@@ -81,6 +100,12 @@ describe('useAlertDestinationsState', () => {
       success: true,
       configured: true,
     });
+    vi.mocked(RelayAPI.getConfig).mockResolvedValue({
+      enabled: true,
+      server_url: 'wss://relay.example.test',
+      alert_minimum_severity: 'critical',
+    });
+    vi.mocked(RelayAPI.updateConfig).mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useAlertDestinationsState({ activeTab }));
 
@@ -88,9 +113,13 @@ describe('useAlertDestinationsState', () => {
     expect(NotificationsAPI.getEmailConfig).toHaveBeenCalledTimes(1);
     expect(NotificationsAPI.getAppriseConfig).toHaveBeenCalledTimes(1);
     expect(AlertsAPI.getDeadManConfig).toHaveBeenCalledTimes(1);
+    expect(RelayAPI.getConfig).toHaveBeenCalledTimes(1);
     expect(result.emailConfig().server).toBe('smtp.example.com');
+    expect(result.emailConfig().minimumSeverity).toBe('critical');
     expect(result.appriseConfig().targetsText).toContain('mailto://ops@example.com');
+    expect(result.appriseConfig().minimumSeverity).toBe('critical');
     expect(result.deadManPingUrl()).toBe('***REDACTED***');
+    expect(result.pushMinimumSeverity()).toBe('critical');
 
     setActiveTab('destinations');
     await Promise.resolve();
@@ -98,6 +127,7 @@ describe('useAlertDestinationsState', () => {
     expect(NotificationsAPI.getEmailConfig).toHaveBeenCalledTimes(2);
     expect(NotificationsAPI.getAppriseConfig).toHaveBeenCalledTimes(2);
     expect(AlertsAPI.getDeadManConfig).toHaveBeenCalledTimes(2);
+    expect(RelayAPI.getConfig).toHaveBeenCalledTimes(2);
 
     setActiveTab('overview');
     await Promise.resolve();
@@ -113,6 +143,7 @@ describe('useAlertDestinationsState', () => {
       targetsText: 'https://notify.internal',
     });
     result.setDeadManPingUrl('https://watchdog.example.test/ping/replacement-token');
+    result.setPushMinimumSeverity('all');
 
     await result.saveDestinations();
 
@@ -129,6 +160,7 @@ describe('useAlertDestinationsState', () => {
     expect(AlertsAPI.updateDeadManConfig).toHaveBeenCalledWith(
       'https://watchdog.example.test/ping/replacement-token',
     );
+    expect(RelayAPI.updateConfig).toHaveBeenCalledWith({ alert_minimum_severity: 'all' });
     expect(result.appriseConfig().mode).toBe('http');
     expect(result.appriseConfig().serverUrl).toBe('https://apprise.example.test');
 
@@ -137,5 +169,6 @@ describe('useAlertDestinationsState', () => {
     expect(result.emailConfig().enabled).toBe(false);
     expect(result.appriseConfig().enabled).toBe(false);
     expect(result.deadManPingUrl()).toBe('');
+    expect(result.pushMinimumSeverity()).toBe('all');
   });
 });

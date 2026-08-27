@@ -11,6 +11,23 @@ const (
 	notificationTagModeAny = "any"
 )
 
+const (
+	notificationMinimumSeverityAll      = "all"
+	notificationMinimumSeverityWarning  = "warning"
+	notificationMinimumSeverityCritical = "critical"
+)
+
+func normalizeNotificationMinimumSeverity(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case notificationMinimumSeverityWarning:
+		return notificationMinimumSeverityWarning
+	case notificationMinimumSeverityCritical:
+		return notificationMinimumSeverityCritical
+	default:
+		return notificationMinimumSeverityAll
+	}
+}
+
 func normalizeNotificationTagMode(raw string) string {
 	if strings.EqualFold(strings.TrimSpace(raw), notificationTagModeAny) {
 		return notificationTagModeAny
@@ -108,22 +125,43 @@ func notificationAlertMatchesTags(alert *alerts.Alert, filter []string, mode str
 	return true
 }
 
+func notificationAlertMeetsMinimumSeverity(alert *alerts.Alert, minimumSeverity string) bool {
+	switch normalizeNotificationMinimumSeverity(minimumSeverity) {
+	case notificationMinimumSeverityAll:
+		return true
+	case notificationMinimumSeverityWarning:
+		return alert != nil && (alert.Level == alerts.AlertLevelWarning || alert.Level == alerts.AlertLevelCritical)
+	case notificationMinimumSeverityCritical:
+		return alert != nil && alert.Level == alerts.AlertLevelCritical
+	default:
+		return false
+	}
+}
+
 func routeNotificationAlerts(
 	alertList []*alerts.Alert,
 	filter []string,
 	mode string,
+	minimumSeverity string,
 	event notificationEvent,
 ) []*alerts.Alert {
 	// Resolutions are routed by delivery receipts later in the pipeline.
-	// Reapplying a mutable tag filter here could suppress the clear after tags
-	// changed between firing and recovery.
-	if event == eventResolved || len(normalizeNotificationTagFilter(filter)) == 0 {
+	// Reapplying mutable tag or severity policy here could suppress the clear
+	// after destination routing changed between firing and recovery.
+	if event == eventResolved {
+		return alertList
+	}
+
+	normalizedFilter := normalizeNotificationTagFilter(filter)
+	normalizedMinimumSeverity := normalizeNotificationMinimumSeverity(minimumSeverity)
+	if len(normalizedFilter) == 0 && normalizedMinimumSeverity == notificationMinimumSeverityAll {
 		return alertList
 	}
 
 	routed := make([]*alerts.Alert, 0, len(alertList))
 	for _, alert := range alertList {
-		if notificationAlertMatchesTags(alert, filter, mode) {
+		if notificationAlertMatchesTags(alert, normalizedFilter, mode) &&
+			notificationAlertMeetsMinimumSeverity(alert, normalizedMinimumSeverity) {
 			routed = append(routed, alert)
 		}
 	}

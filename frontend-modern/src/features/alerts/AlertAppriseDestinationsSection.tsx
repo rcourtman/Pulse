@@ -6,6 +6,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formControl, formField, formHelpText, labelClass } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
+import { DestinationSeveritySelect } from '@/components/Alerts/DestinationSeveritySelect';
 import type { UIAppriseConfig } from './types';
 import {
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
@@ -62,6 +63,7 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
     apiKeyHeader: `${fieldIdPrefix}-api-key-header`,
     skipTlsVerify: `${fieldIdPrefix}-skip-tls-verify`,
     timeout: `${fieldIdPrefix}-timeout`,
+    minimumSeverity: `${fieldIdPrefix}-minimum-severity`,
   };
 
   return (
@@ -126,6 +128,15 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
             props.setHasUnsavedChanges(true);
           }}
           help={getAlertDestinationsAppriseTargetsHelp(props.config.mode)}
+        />
+
+        <DestinationSeveritySelect
+          id={fieldIds.minimumSeverity}
+          value={props.config.minimumSeverity ?? 'all'}
+          onChange={(minimumSeverity) => {
+            props.updateApprise({ minimumSeverity });
+            props.setHasUnsavedChanges(true);
+          }}
         />
 
         <Show when={props.config.mode === 'cli'}>

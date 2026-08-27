@@ -195,9 +195,10 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 
 	// Parse strict subset to check for presence of fields
 	var presenceCheck struct {
-		RateLimit *int      `json:"rateLimit"`
-		TagFilter *[]string `json:"tagFilter"`
-		TagMode   *string   `json:"tagFilterMode"`
+		RateLimit       *int      `json:"rateLimit"`
+		TagFilter       *[]string `json:"tagFilter"`
+		TagMode         *string   `json:"tagFilterMode"`
+		MinimumSeverity *string   `json:"minimumSeverity"`
 	}
 	if err := json.Unmarshal(body, &presenceCheck); err != nil {
 		// Non-fatal, just means we can't do presence check
@@ -226,6 +227,9 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	}
 	if presenceCheck.TagMode == nil {
 		config.TagMode = existingConfig.TagMode
+	}
+	if presenceCheck.MinimumSeverity == nil {
+		config.MinimumSeverity = existingConfig.MinimumSeverity
 	}
 
 	log.Info().
@@ -289,12 +293,19 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	var presenceCheck struct {
+		MinimumSeverity *string `json:"minimumSeverity"`
+	}
+	_ = json.Unmarshal(body, &presenceCheck)
+	existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
 
 	// An empty API key means "keep the saved key": responses never include the
 	// stored value, so the settings form cannot round-trip it.
 	if config.APIKey == "" {
-		existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
 		config.APIKey = existingConfig.APIKey
+	}
+	if presenceCheck.MinimumSeverity == nil {
+		config.MinimumSeverity = existingConfig.MinimumSeverity
 	}
 
 	log.Info().
@@ -372,6 +383,7 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 			whMap["tagFilter"] = append([]string(nil), webhook.TagFilter...)
 			whMap["tagFilterMode"] = webhook.TagMode
 		}
+		whMap["minimumSeverity"] = webhook.MinimumSeverity
 
 		// Signal that a signing secret is configured without revealing it
 		if webhook.SigningSecret != "" {
@@ -433,6 +445,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	responseData["customFields"] = webhook.CustomFields
 	responseData["tagFilter"] = webhook.TagFilter
 	responseData["tagFilterMode"] = webhook.TagMode
+	responseData["minimumSeverity"] = webhook.MinimumSeverity
 
 	if err := utils.WriteJSONResponse(w, responseData); err != nil {
 		log.Error().Err(err).Msg("Failed to write webhook creation response")
@@ -467,8 +480,9 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var routingPresence struct {
-		TagFilter *[]string `json:"tagFilter"`
-		TagMode   *string   `json:"tagFilterMode"`
+		TagFilter       *[]string `json:"tagFilter"`
+		TagMode         *string   `json:"tagFilterMode"`
+		MinimumSeverity *string   `json:"minimumSeverity"`
 	}
 	_ = json.Unmarshal(bodyBytes, &routingPresence)
 	webhook = notifications.NormalizeWebhookConfig(webhook)
@@ -483,6 +497,9 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 			}
 			if routingPresence.TagMode == nil {
 				webhook.TagMode = existing.TagMode
+			}
+			if routingPresence.MinimumSeverity == nil {
+				webhook.MinimumSeverity = existing.MinimumSeverity
 			}
 			// Preserve headers if incoming contains redacted values
 			if len(webhook.Headers) > 0 && len(existing.Headers) > 0 {
@@ -546,6 +563,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	responseData["customFields"] = webhook.CustomFields
 	responseData["tagFilter"] = webhook.TagFilter
 	responseData["tagFilterMode"] = webhook.TagMode
+	responseData["minimumSeverity"] = webhook.MinimumSeverity
 
 	if err := utils.WriteJSONResponse(w, responseData); err != nil {
 		log.Error().Err(err).Str("webhookID", webhookID).Msg("Failed to write webhook update response")

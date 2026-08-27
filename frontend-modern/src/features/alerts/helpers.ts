@@ -86,6 +86,7 @@ export const createDefaultAppriseConfig = (): UIAppriseConfig => ({
   apiKeyHeader: 'X-API-KEY',
   skipTlsVerify: false,
   hasApiKey: false,
+  minimumSeverity: 'all',
 });
 
 export const createDefaultEmailConfig = (): UIEmailConfig => ({
@@ -105,6 +106,7 @@ export const createDefaultEmailConfig = (): UIEmailConfig => ({
   rateLimit: 60,
   tagFilter: [],
   tagFilterMode: 'all',
+  minimumSeverity: 'all',
 });
 
 export const readStringValue = (value: unknown, fallback = ''): string =>
@@ -139,6 +141,7 @@ export const normalizeEmailConfigFromAPI = (
     rateLimit: readNumberValue(value?.rateLimit, defaults.rateLimit),
     tagFilter: readStringArrayValue(value?.tagFilter),
     tagFilterMode: value?.tagFilterMode === 'any' ? 'any' : 'all',
+    minimumSeverity: value?.minimumSeverity === 'critical' ? 'critical' : 'all',
   };
 };
 

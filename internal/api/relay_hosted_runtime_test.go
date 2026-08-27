@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -164,6 +166,35 @@ func TestLoadRelayConfigForRuntime_DoesNotOverrideExplicitDisabledRelayConfig(t 
 	}
 	if cfg.InstanceSecret == instanceHost {
 		t.Fatalf("expected explicit config to avoid hosted auto-bootstrap secret %q", instanceHost)
+	}
+}
+
+func TestUpdateRelayConfigPersistsAndCachesAlertSeverityPolicy(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	if err := persistence.SaveRelayConfig(*relay.DefaultConfig()); err != nil {
+		t.Fatalf("SaveRelayConfig() error = %v", err)
+	}
+	router := &Router{persistence: persistence}
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/relay", strings.NewReader(`{"alert_minimum_severity":"critical"}`))
+	rec := httptest.NewRecorder()
+
+	router.handleUpdateRelayConfig(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	persisted, err := persistence.LoadRelayConfig()
+	if err != nil {
+		t.Fatalf("LoadRelayConfig() error = %v", err)
+	}
+	if persisted.AlertMinimumSeverity != relay.AlertMinimumSeverityCritical {
+		t.Fatalf("persisted alert severity = %q, want critical", persisted.AlertMinimumSeverity)
+	}
+	router.relayMu.RLock()
+	cached := router.relayAlertMinimumSeverity
+	router.relayMu.RUnlock()
+	if cached != relay.AlertMinimumSeverityCritical {
+		t.Fatalf("cached alert severity = %q, want critical", cached)
 	}
 }
 

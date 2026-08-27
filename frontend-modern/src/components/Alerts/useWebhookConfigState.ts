@@ -41,6 +41,7 @@ const createDefaultFormData = (): WebhookConfigFormData => ({
   mention: '',
   tagFilter: [],
   tagFilterMode: 'all',
+  minimumSeverity: 'all',
 });
 
 const buildMapFromInputs = (
@@ -184,6 +185,7 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
       mention: webhook.mention || '',
       tagFilter: webhook.tagFilter ?? [],
       tagFilterMode: webhook.tagFilterMode === 'any' ? 'any' : 'all',
+      minimumSeverity: webhook.minimumSeverity === 'critical' ? 'critical' : 'all',
     });
 
     const headers = webhook.headers || {};
@@ -269,6 +271,7 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
       mention: data.mention,
       tagFilter: data.tagFilter ?? [],
       tagFilterMode: data.tagFilterMode === 'any' ? 'any' : 'all',
+      minimumSeverity: data.minimumSeverity === 'critical' ? 'critical' : 'all',
     });
     resetForm();
   };

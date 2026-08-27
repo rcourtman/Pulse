@@ -48,6 +48,7 @@ import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TagInput } from '@/components/shared/TagInput';
 
 import type { CustomFieldInput, HeaderInput, WebhookConfigFormData } from './useWebhookConfigState';
+import { DestinationSeveritySelect } from './DestinationSeveritySelect';
 
 type SetterLike<T> = (value: T | ((prev: T) => T)) => T;
 
@@ -166,6 +167,17 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           or <code class="font-mono text-[11px] text-muted">{ALERT_WEBHOOK_URL_HELP_QUERY}</code> to
           keep dynamic values URL-safe.
         </p>
+      </div>
+
+      <div class="space-y-2 border-t border-border pt-3">
+        <DestinationSeveritySelect
+          id="alert-webhook-minimum-severity"
+          value={props.formData().minimumSeverity ?? 'all'}
+          compact
+          onChange={(minimumSeverity) =>
+            props.setFormData((prev) => ({ ...prev, minimumSeverity }))
+          }
+        />
       </div>
 
       <div class="space-y-2 border-t border-border pt-3">

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALERT_DESTINATION_ALL_SEVERITIES_LABEL,
+  ALERT_DESTINATION_CRITICAL_ONLY_LABEL,
+  ALERT_DESTINATION_MINIMUM_SEVERITY_HELP,
+  ALERT_DESTINATION_MINIMUM_SEVERITY_LABEL,
   getAlertDestinationsDeliveryPausedActionLabel,
   getAlertDestinationsDeliveryPausedDescription,
   getAlertDestinationsDeliveryPausedTitle,
@@ -9,6 +13,7 @@ import {
   ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION,
   ALERT_DESTINATIONS_PUSH_PANEL_TITLE,
   ALERT_DESTINATIONS_PUSH_READY_MESSAGE,
+  ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP,
   ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL,
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
   ALERT_DESTINATIONS_APPRISE_ENABLE_FOR_TEST_ERROR,
@@ -49,6 +54,7 @@ import {
   getAlertDestinationsDeliveryRetryLabel,
   getAlertDestinationsEmailTestFailure,
   getAlertDestinationsEmailTestSuccess,
+  getAlertDestinationSeverityLabel,
   getAlertDestinationsLoadErrorBanner,
   getAlertDestinationsRetryLabel,
   getAlertDestinationsStatusLabel,
@@ -122,6 +128,17 @@ describe('alertDestinationsPresentation', () => {
     expect(getAlertDestinationsAppriseTestFailure()).toBe('Unable to send the test notification.');
   });
 
+  it('uses one explicit severity policy vocabulary across destinations', () => {
+    expect(ALERT_DESTINATION_MINIMUM_SEVERITY_LABEL).toBe('Minimum alert severity');
+    expect(ALERT_DESTINATION_ALL_SEVERITIES_LABEL).toBe('All alerts');
+    expect(ALERT_DESTINATION_CRITICAL_ONLY_LABEL).toBe('Critical alerts only');
+    expect(getAlertDestinationSeverityLabel('all')).toBe('All alerts');
+    expect(getAlertDestinationSeverityLabel('critical')).toBe('Critical alerts only');
+    expect(ALERT_DESTINATION_MINIMUM_SEVERITY_HELP).toContain(
+      'Recoveries follow the destination that received the original alert',
+    );
+  });
+
   it('returns canonical mobile push destination copy', () => {
     expect(ALERT_DESTINATIONS_PUSH_PANEL_TITLE).toBe('Mobile push notifications');
     expect(ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION).toBe(
@@ -129,6 +146,10 @@ describe('alertDestinationsPresentation', () => {
     );
     expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('Pulse Mobile devices paired');
     expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('Remote Access settings');
+    expect(ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP).toContain('Push copy stays private');
+    expect(ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP).toContain(
+      'Open Pulse Mobile for current alert state',
+    );
     expect(ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL).toBe('Open Remote Access settings');
     expect(ALERT_DESTINATIONS_PUSH_GATE_TITLE).toBe('Get alerts on your phone');
     expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('Pulse Mobile app');

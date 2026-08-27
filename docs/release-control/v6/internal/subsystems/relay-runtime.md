@@ -26,11 +26,15 @@ warning, approval, and fix-result notifications. The relay protocol preserves
 each boolean so server-side delivery can enforce the paired device's choices;
 legacy clients omit the entire preferences object and remain wire-compatible.
 
-The generated mobile push vocabulary includes
-`external_probe_offline` for a Pulse instance that is still connected while
-one of its assigned external probes stops reporting. Desktop Relay sends only
-generic copy, the canonical alert ID, and the existing `view_alert` action;
-resource names, addresses, targets, and probe errors remain inside Pulse.
+The generated mobile push vocabulary includes `alert_fired` for ordinary
+canonical alerts and `external_probe_offline` for a Pulse instance that is
+still connected while one of its assigned external probes stops reporting.
+Desktop Relay sends only generic severity-aware copy, the canonical alert ID,
+and the existing `view_alert` action; resource names, addresses, targets,
+messages, metadata, and probe errors remain inside Pulse. The persisted Relay
+destination policy defaults to all alerts and may be set to critical-only;
+runtime dispatch reads the cached live policy rather than loading persisted
+configuration for each alert.
 Relay's independent whole-instance disconnect notification remains the sole
 dark-site signal and must not be conflated with this per-agent alert.
 
@@ -68,7 +72,7 @@ dark-site signal and must not be conflated with this per-agent alert.
 
 1. Add or change desktop relay reconnect, registration, drain, proxy-stream, or encrypted channel behavior through `internal/relay/`
 2. Add or change relay control payload schemas, including mobile-visible push notification metadata, through `internal/relay/protocol.go`
-3. Add or change persisted relay enablement, server URL, or reconnect-safe default loading through `internal/config/persistence_relay.go`
+3. Add or change persisted relay enablement, server URL, alert severity routing, or reconnect-safe default loading through `internal/config/persistence_relay.go`
    `LoadRelayConfig` must apply environment-variable overrides
    (`PULSE_RELAY_ENABLED`, `PULSE_RELAY_SERVER`) on top of the file-loaded
    or default-fallback `relay.Config` via `relay.ApplyEnvOverrides`. The

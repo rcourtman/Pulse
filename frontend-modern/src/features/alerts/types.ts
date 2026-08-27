@@ -155,6 +155,7 @@ export interface UIEmailConfig {
   rateLimit: number;
   tagFilter?: string[];
   tagFilterMode?: 'all' | 'any';
+  minimumSeverity?: 'all' | 'critical';
 }
 
 export interface UIAppriseConfig {
@@ -169,6 +170,7 @@ export interface UIAppriseConfig {
   apiKeyHeader: string;
   skipTlsVerify: boolean;
   hasApiKey: boolean;
+  minimumSeverity?: 'all' | 'critical';
 }
 
 export interface QuietHoursConfig {

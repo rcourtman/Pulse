@@ -117,6 +117,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 2)', () => {
         to: ['ops@example.com'],
         tls: false,
         startTLS: false,
+        minimumSeverity: 'all',
       });
     });
 

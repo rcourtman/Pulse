@@ -102,6 +102,35 @@ func NewExternalProbeUnavailableNotification(alertID string) PushNotificationPay
 	}
 }
 
+// NewAlertFiredNotification creates a privacy-safe mobile projection of a
+// canonical alert. Infrastructure identity and message text remain inside
+// Pulse; the alert ID is enough for an authenticated mobile client to open the
+// owning incident surface and fetch current detail.
+func NewAlertFiredNotification(alertID, severity string) PushNotificationPayload {
+	severity = strings.ToLower(strings.TrimSpace(severity))
+	if severity != AlertMinimumSeverityCritical {
+		severity = "warning"
+	}
+	priority := PushPriorityNormal
+	title := "Pulse warning"
+	body := "Pulse detected a warning alert. Open Pulse for details."
+	if severity == AlertMinimumSeverityCritical {
+		priority = PushPriorityHigh
+		title = "Critical Pulse alert"
+		body = "Pulse detected a critical alert. Open Pulse for details."
+	}
+	return PushNotificationPayload{
+		Type:       PushTypeAlertFired,
+		Priority:   priority,
+		Title:      title,
+		Body:       body,
+		ActionType: PushActionViewAlert,
+		ActionID:   strings.TrimSpace(alertID),
+		Category:   "alert",
+		Severity:   severity,
+	}
+}
+
 // NewApprovalRequestNotification creates a push notification for a fix needing approval.
 func NewApprovalRequestNotification(approvalID, findingTitle, riskLevel string) PushNotificationPayload {
 	body := "A proposed fix requires your approval"

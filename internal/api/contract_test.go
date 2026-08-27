@@ -9876,7 +9876,8 @@ func TestContract_HostedRelayConfigResponseJSONSnapshot(t *testing.T) {
 		"enabled":true,
 		"server_url":"%s",
 		"identity_public_key":"%s",
-		"identity_fingerprint":"%s"
+		"identity_fingerprint":"%s",
+		"alert_minimum_severity":"all"
 	}`, relay.DefaultServerURL, cfg.IdentityPublicKey, cfg.IdentityFingerprint)
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)

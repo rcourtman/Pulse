@@ -120,6 +120,49 @@ func TestNewExternalProbeUnavailableNotification(t *testing.T) {
 	}
 }
 
+func TestNewAlertFiredNotification(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		severity string
+		priority string
+		title    string
+	}{
+		{name: "warning", severity: "warning", priority: PushPriorityNormal, title: "Pulse warning"},
+		{name: "critical", severity: "critical", priority: PushPriorityHigh, title: "Critical Pulse alert"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := NewAlertFiredNotification(" alert-123 ", tc.severity)
+			if n.Type != PushTypeAlertFired || n.Priority != tc.priority || n.Title != tc.title {
+				t.Fatalf("notification posture = %#v", n)
+			}
+			if n.ActionType != PushActionViewAlert || n.ActionID != "alert-123" {
+				t.Fatalf("notification must open the canonical alert: %#v", n)
+			}
+			if n.Category != "alert" || n.Severity != tc.severity {
+				t.Fatalf("notification routing metadata = %#v", n)
+			}
+			if strings.Contains(n.Title+n.Body, "alert-123") {
+				t.Fatalf("notification exposed alert identity in lock-screen copy: %#v", n)
+			}
+		})
+	}
+}
+
+func TestAlertMinimumSeverityRouting(t *testing.T) {
+	if !AlertMeetsMinimumSeverity("warning", AlertMinimumSeverityAll) {
+		t.Fatal("all-alert policy excluded a warning")
+	}
+	if AlertMeetsMinimumSeverity("warning", AlertMinimumSeverityCritical) {
+		t.Fatal("critical-only policy included a warning")
+	}
+	if !AlertMeetsMinimumSeverity(" CRITICAL ", AlertMinimumSeverityCritical) {
+		t.Fatal("critical-only policy excluded a normalized critical alert")
+	}
+	if NormalizeAlertMinimumSeverity("unexpected") != AlertMinimumSeverityAll {
+		t.Fatal("invalid persisted policy did not fail open to backwards-compatible all-alert delivery")
+	}
+}
+
 func TestNewApprovalRequestNotification(t *testing.T) {
 	t.Run("with risk level", func(t *testing.T) {
 		n := NewApprovalRequestNotification("approval-789", "Fix disk space", "high")

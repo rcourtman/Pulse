@@ -403,21 +403,27 @@ received that exact firing occurrence. Successful recovery delivery deletes
 the receipt; persistent receipts survive restart and are retention-bounded.
 Receipt read failure suppresses recovery rather than inventing prior delivery.
 
-### Resource-tag destination routing
+### Destination alert routing
 
 Email and every enabled alert webhook may define a normalized resource-tag
 filter and an `all` or `any` match mode. Empty filters preserve global
 delivery. Matching is exact after trimming and case folding, and grouped
 firing alerts are filtered independently for each destination; Apprise remains
-global. Tags may arrive through the canonical `tags`, `resourceTags`,
+global by resource tag. Tags may arrive through the canonical `tags`, `resourceTags`,
 `hostTags`, or `serviceTags` alert metadata keys.
 
-Resolved delivery deliberately bypasses current tag matching and is filtered
-by occurrence-bound delivery receipts instead. This guarantees that a
+Email, every enabled alert webhook, and Apprise may also define a normalized
+minimum severity of `all`, `warning`, or `critical`. Omitted or unknown values
+preserve backwards-compatible all-alert delivery. Grouped firing alerts are
+filtered independently per destination, after both tag and severity policy are
+applied, so one incident batch may produce different destination payloads.
+
+Resolved delivery deliberately bypasses current tag and severity matching and
+is filtered by occurrence-bound delivery receipts instead. This guarantees that a
 destination which received a firing occurrence can receive its recovery even
-if resource tags change. Configuration copies must isolate filter slices,
-mixed-version updates must preserve omitted routing fields, and explicit empty
-filters must remain the supported clear operation.
+if resource tags or destination policy change. Configuration copies must
+isolate filter slices, mixed-version updates must preserve omitted routing
+fields, and explicit empty filters must remain the supported clear operation.
 
 Cooldown state is published only after firing receipts are recorded. Persistent
 workers atomically claim a still-pending row after taking per-alert delivery

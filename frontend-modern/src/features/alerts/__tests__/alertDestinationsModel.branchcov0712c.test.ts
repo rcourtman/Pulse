@@ -144,7 +144,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
   // the value-level toStrictEqual checks in the sibling suite.
   // -----------------------------------------------------------------------
   describe('payload contract — exact key set', () => {
-    it('emits exactly the 11 EmailConfig keys in declaration order and omits replyTo/maxRetries/retryDelay/rateLimit', () => {
+    it('emits exactly the EmailConfig keys in declaration order and omits replyTo/maxRetries/retryDelay/rateLimit', () => {
       const result = buildEmailConfigPayload(
         makeUIEmailConfig({
           replyTo: 'reply@example.com',
@@ -164,6 +164,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
         'to',
         'tls',
         'startTLS',
+        'minimumSeverity',
       ]);
       expect(result).not.toHaveProperty('replyTo');
       expect(result).not.toHaveProperty('maxRetries');

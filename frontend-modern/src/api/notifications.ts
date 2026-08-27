@@ -42,6 +42,8 @@ export interface WebhookTemplate {
   };
 }
 
+export type NotificationMinimumSeverity = 'all' | 'critical';
+
 export interface EmailConfig {
   enabled: boolean;
   provider: string;
@@ -56,6 +58,7 @@ export interface EmailConfig {
   rateLimit?: number;
   tagFilter?: string[];
   tagFilterMode?: 'all' | 'any';
+  minimumSeverity?: NotificationMinimumSeverity;
 }
 
 export interface Webhook {
@@ -71,6 +74,7 @@ export interface Webhook {
   mention?: string; // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
   tagFilter?: string[];
   tagFilterMode?: 'all' | 'any';
+  minimumSeverity?: NotificationMinimumSeverity;
 }
 
 export interface AppriseConfig {
@@ -84,6 +88,7 @@ export interface AppriseConfig {
   apiKey?: string;
   apiKeyHeader?: string;
   skipTlsVerify?: boolean;
+  minimumSeverity?: NotificationMinimumSeverity;
   // Responses never include the stored apiKey; this reports whether one is saved.
   hasApiKey?: boolean;
 }
@@ -413,6 +418,7 @@ export class NotificationsAPI {
     if (typeof backendConfig.tagFilterMode === 'string') {
       config.tagFilterMode = backendConfig.tagFilterMode === 'any' ? 'any' : 'all';
     }
+    config.minimumSeverity = backendConfig.minimumSeverity === 'critical' ? 'critical' : 'all';
     return config;
   }
 
@@ -440,6 +446,9 @@ export class NotificationsAPI {
     }
     if (config.tagFilterMode !== undefined) {
       backendConfig.tagFilterMode = config.tagFilterMode === 'any' ? 'any' : 'all';
+    }
+    if (config.minimumSeverity !== undefined) {
+      backendConfig.minimumSeverity = config.minimumSeverity === 'critical' ? 'critical' : 'all';
     }
 
     return apiFetchJSON(`${this.baseUrl}/email`, {

@@ -148,30 +148,31 @@ type Router struct {
 	serverVersion                   string
 	projectRoot                     string
 	// Cached system settings to avoid loading from disk on every request
-	settingsMu               sync.RWMutex
-	cachedAllowEmbedding     bool
-	cachedAllowedOrigins     string
-	publicURLMu              sync.Mutex
-	publicURLDetected        bool
-	bootstrapTokenHash       string
-	bootstrapTokenPath       string
-	checksumMu               sync.RWMutex
-	checksumCache            map[string]checksumCacheEntry
-	installScriptClient      *http.Client
-	relayMu                  sync.RWMutex
-	relayClient              relayRuntimeClient
-	relayCancel              context.CancelFunc
-	lifecycleCtx             context.Context
-	lifecycleCancel          context.CancelFunc
-	lifecycleWG              sync.WaitGroup
-	backgroundWorkersOnce    sync.Once
-	hostedMode               bool
-	stripeWebhookHandlers    *StripeWebhookHandlers
-	patrolLifecycleMu        sync.Mutex
-	startedPatrolOrgs        map[string]bool
-	actionRecoveryMu         sync.Mutex
-	aiAutoFixEndpoints       extensions.AIAutoFixEndpoints
-	aiAlertAnalysisEndpoints extensions.AIAlertAnalysisEndpoints
+	settingsMu                sync.RWMutex
+	cachedAllowEmbedding      bool
+	cachedAllowedOrigins      string
+	publicURLMu               sync.Mutex
+	publicURLDetected         bool
+	bootstrapTokenHash        string
+	bootstrapTokenPath        string
+	checksumMu                sync.RWMutex
+	checksumCache             map[string]checksumCacheEntry
+	installScriptClient       *http.Client
+	relayMu                   sync.RWMutex
+	relayClient               relayRuntimeClient
+	relayCancel               context.CancelFunc
+	relayAlertMinimumSeverity string
+	lifecycleCtx              context.Context
+	lifecycleCancel           context.CancelFunc
+	lifecycleWG               sync.WaitGroup
+	backgroundWorkersOnce     sync.Once
+	hostedMode                bool
+	stripeWebhookHandlers     *StripeWebhookHandlers
+	patrolLifecycleMu         sync.Mutex
+	startedPatrolOrgs         map[string]bool
+	actionRecoveryMu          sync.Mutex
+	aiAutoFixEndpoints        extensions.AIAutoFixEndpoints
+	aiAlertAnalysisEndpoints  extensions.AIAlertAnalysisEndpoints
 
 	// Per-router perf state: keeps caches and singleflight groups isolated
 	// between tests and prevents cross-tenant cache pollution.
@@ -970,25 +971,30 @@ func (r *Router) setupRoutes() {
 		// If the whole instance is offline, Relay's independent disconnect
 		// timer supplies the complementary dark-site notification.
 		r.monitor.SetAlertPushCallback(func(alert *alerts.Alert) {
-			notification, ok := externalProbePushNotification(
-				alert,
-				r.monitor.HasExternalProbeAssignments,
-			)
-			if !ok {
+			if alert == nil {
 				return
 			}
 			r.relayMu.RLock()
 			client := r.relayClient
+			minimumSeverity := r.relayAlertMinimumSeverity
 			r.relayMu.RUnlock()
 			if client == nil {
 				return
 			}
+			if !relay.AlertMeetsMinimumSeverity(string(alert.Level), minimumSeverity) {
+				log.Debug().Str("alertID", alert.ID).Str("level", string(alert.Level)).Msg("Alert excluded from mobile push by destination severity policy")
+				return
+			}
+			notification := canonicalAlertPushNotification(
+				alert,
+				r.monitor.HasExternalProbeAssignments,
+			)
 			if err := client.SendPushNotification(notification); err != nil {
 				log.Warn().
 					Err(err).
 					Str("alertID", notification.ActionID).
 					Str("type", notification.Type).
-					Msg("External probe push notification send failed")
+					Msg("Alert push notification send failed")
 			}
 		})
 	}
@@ -3787,6 +3793,9 @@ func (r *Router) StartRelay(ctx context.Context) {
 		log.Error().Err(err).Msg("Failed to load relay config")
 		return
 	}
+	r.relayMu.Lock()
+	r.relayAlertMinimumSeverity = relay.NormalizeAlertMinimumSeverity(cfg.AlertMinimumSeverity)
+	r.relayMu.Unlock()
 	if !cfg.Enabled {
 		log.Debug().Msg("Relay not enabled, skipping")
 		return
@@ -3871,15 +3880,17 @@ func (r *Router) handleGetRelayConfig(w http.ResponseWriter, req *http.Request) 
 
 	// Omit the instance secret and private key from the response
 	resp := struct {
-		Enabled             bool   `json:"enabled"`
-		ServerURL           string `json:"server_url"`
-		IdentityPublicKey   string `json:"identity_public_key,omitempty"`
-		IdentityFingerprint string `json:"identity_fingerprint,omitempty"`
+		Enabled              bool   `json:"enabled"`
+		ServerURL            string `json:"server_url"`
+		IdentityPublicKey    string `json:"identity_public_key,omitempty"`
+		IdentityFingerprint  string `json:"identity_fingerprint,omitempty"`
+		AlertMinimumSeverity string `json:"alert_minimum_severity"`
 	}{
-		Enabled:             cfg.Enabled,
-		ServerURL:           cfg.ServerURL,
-		IdentityPublicKey:   cfg.IdentityPublicKey,
-		IdentityFingerprint: cfg.IdentityFingerprint,
+		Enabled:              cfg.Enabled,
+		ServerURL:            cfg.ServerURL,
+		IdentityPublicKey:    cfg.IdentityPublicKey,
+		IdentityFingerprint:  cfg.IdentityFingerprint,
+		AlertMinimumSeverity: relay.NormalizeAlertMinimumSeverity(cfg.AlertMinimumSeverity),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -3888,9 +3899,10 @@ func (r *Router) handleGetRelayConfig(w http.ResponseWriter, req *http.Request) 
 
 func (r *Router) handleUpdateRelayConfig(w http.ResponseWriter, req *http.Request) {
 	var update struct {
-		Enabled        *bool   `json:"enabled"`
-		ServerURL      *string `json:"server_url"`
-		InstanceSecret *string `json:"instance_secret"`
+		Enabled              *bool   `json:"enabled"`
+		ServerURL            *string `json:"server_url"`
+		InstanceSecret       *string `json:"instance_secret"`
+		AlertMinimumSeverity *string `json:"alert_minimum_severity"`
 	}
 	if err := json.NewDecoder(req.Body).Decode(&update); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -3914,6 +3926,9 @@ func (r *Router) handleUpdateRelayConfig(w http.ResponseWriter, req *http.Reques
 	if update.InstanceSecret != nil {
 		cfg.InstanceSecret = *update.InstanceSecret
 	}
+	if update.AlertMinimumSeverity != nil {
+		cfg.AlertMinimumSeverity = relay.NormalizeAlertMinimumSeverity(*update.AlertMinimumSeverity)
+	}
 
 	// Generate a full identity keypair on first enable, or repair a partial
 	// identity so the running client can sign mobile key exchanges.
@@ -3935,6 +3950,9 @@ func (r *Router) handleUpdateRelayConfig(w http.ResponseWriter, req *http.Reques
 		http.Error(w, "failed to save relay config", http.StatusInternalServerError)
 		return
 	}
+	r.relayMu.Lock()
+	r.relayAlertMinimumSeverity = relay.NormalizeAlertMinimumSeverity(cfg.AlertMinimumSeverity)
+	r.relayMu.Unlock()
 
 	// Restart relay client if any connection-relevant field changed.
 	// Also restart when identity keypair was just generated so the running

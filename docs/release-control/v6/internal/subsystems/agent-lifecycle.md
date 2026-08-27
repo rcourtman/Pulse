@@ -6693,3 +6693,16 @@ prior live inventory. `TestHandleEnroll_Success`,
 `TestMintBootstrapTokenForTarget_RollsBackWhenPersistenceFails` in
 `internal/api/deploy_handlers_test.go` pin the durable replacement and rollback
 paths.
+
+### Alert push routing does not create an agent lifecycle channel
+
+The shared API router may classify an external-probe outage for specialized
+mobile copy and may publish an ordinary dispatched incident through Relay, but
+that path carries only the canonical alert identity, severity, and private
+operator-facing copy. It cannot enroll, assign, link, update, command, revoke,
+remove, or re-enroll an agent. External-probe assignment remains an
+alerts-owned classification input rather than a second agent identity, and a
+mobile notification action resolves to the existing alert detail route rather
+than an agent lifecycle operation. The ordinary-alert and probe-specific
+payload proofs in `internal/api/alerting/external_probe_notifications_test.go`
+pin this boundary.

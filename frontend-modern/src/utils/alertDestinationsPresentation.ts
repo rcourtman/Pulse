@@ -7,6 +7,11 @@ export const ALERT_DESTINATIONS_RETRY_LABEL = 'Retry';
 export const ALERT_DESTINATIONS_RETRYING_LABEL = 'Retrying…';
 export const ALERT_DESTINATIONS_ENABLED_LABEL = 'Enabled';
 export const ALERT_DESTINATIONS_DISABLED_LABEL = 'Disabled';
+export const ALERT_DESTINATION_MINIMUM_SEVERITY_LABEL = 'Minimum alert severity';
+export const ALERT_DESTINATION_MINIMUM_SEVERITY_HELP =
+  'Choose whether this destination receives every alert or only critical incidents. Recoveries follow the destination that received the original alert.';
+export const ALERT_DESTINATION_ALL_SEVERITIES_LABEL = 'All alerts';
+export const ALERT_DESTINATION_CRITICAL_ONLY_LABEL = 'Critical alerts only';
 export const ALERT_DESTINATIONS_EMAIL_PANEL_TITLE = 'Email notifications';
 export const ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION =
   'Configure SMTP delivery for alert emails.';
@@ -71,6 +76,8 @@ export const ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION =
   'Deliver alerts to your phone through the Pulse Mobile app.';
 export const ALERT_DESTINATIONS_PUSH_READY_MESSAGE =
   'Alerts are pushed to Pulse Mobile devices paired with this instance. Manage pairing and connectivity in Remote Access settings.';
+export const ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP =
+  'Choose whether phones receive warning and critical pushes or critical pushes only. Push copy stays private. Open Pulse Mobile for current alert state.';
 export const ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL = 'Open Remote Access settings';
 export const ALERT_DESTINATIONS_PUSH_GATE_TITLE = 'Get alerts on your phone';
 export const ALERT_DESTINATIONS_PUSH_GATE_MESSAGE =
@@ -102,6 +109,12 @@ export function getAlertDestinationsRetryLabel(isRetrying: boolean) {
 
 export function getAlertDestinationsStatusLabel(enabled: boolean) {
   return enabled ? ALERT_DESTINATIONS_ENABLED_LABEL : ALERT_DESTINATIONS_DISABLED_LABEL;
+}
+
+export function getAlertDestinationSeverityLabel(minimumSeverity: 'all' | 'critical') {
+  return minimumSeverity === 'critical'
+    ? ALERT_DESTINATION_CRITICAL_ONLY_LABEL
+    : ALERT_DESTINATION_ALL_SEVERITIES_LABEL;
 }
 
 export function getAlertDestinationsAppriseTestLabel(isTesting: boolean) {

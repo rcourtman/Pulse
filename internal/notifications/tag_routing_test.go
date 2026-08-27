@@ -86,10 +86,67 @@ func TestResolvedTagRoutingDefersToDeliveryReceipts(t *testing.T) {
 		[]*alerts.Alert{alert},
 		[]string{"customer:alpha"},
 		notificationTagModeAll,
+		notificationMinimumSeverityAll,
 		eventResolved,
 	)
 	if len(routed) != 1 {
 		t.Fatal("resolution must reach the receipt filter even after tags change")
+	}
+}
+
+func TestBuildNotificationDeliveryJobsRoutesGroupedAlertsByDestinationSeverity(t *testing.T) {
+	warning := &alerts.Alert{ID: "warning", Level: alerts.AlertLevelWarning, StartTime: time.Unix(1_700_000_000, 0)}
+	critical := &alerts.Alert{ID: "critical", Level: alerts.AlertLevelCritical, StartTime: time.Unix(1_700_000_001, 0)}
+
+	jobs := buildNotificationDeliveryJobs(
+		EmailConfig{Enabled: true, MinimumSeverity: notificationMinimumSeverityCritical},
+		[]WebhookConfig{
+			{ID: "all", Enabled: true, MinimumSeverity: notificationMinimumSeverityAll},
+			{ID: "critical", Enabled: true, MinimumSeverity: notificationMinimumSeverityCritical},
+		},
+		AppriseConfig{Enabled: true, Mode: AppriseModeHTTP, ServerURL: "https://apprise.example.test", MinimumSeverity: notificationMinimumSeverityCritical},
+		[]*alerts.Alert{warning, critical},
+		eventAlert,
+		time.Time{},
+	)
+
+	if len(jobs) != 4 {
+		t.Fatalf("jobs = %d, want email, two webhooks, and Apprise", len(jobs))
+	}
+	want := [][]string{{"critical"}, {"warning", "critical"}, {"critical"}, {"critical"}}
+	for index, expected := range want {
+		if got := alertIDs(jobs[index].Alerts); !reflect.DeepEqual(got, expected) {
+			t.Fatalf("job %d alerts = %v, want %v", index, got, expected)
+		}
+	}
+}
+
+func TestResolvedSeverityRoutingDefersToOccurrenceReceipts(t *testing.T) {
+	warning := &alerts.Alert{ID: "warning", Level: alerts.AlertLevelWarning}
+	routed := routeNotificationAlerts(
+		[]*alerts.Alert{warning},
+		nil,
+		"",
+		notificationMinimumSeverityCritical,
+		eventResolved,
+	)
+	if len(routed) != 1 {
+		t.Fatal("resolution must reach the receipt filter after minimum severity changes")
+	}
+}
+
+func TestNotificationMinimumSeverityNormalizationAndMatching(t *testing.T) {
+	if got := normalizeNotificationMinimumSeverity(" CRITICAL "); got != notificationMinimumSeverityCritical {
+		t.Fatalf("normalized severity = %q, want critical", got)
+	}
+	if got := normalizeNotificationMinimumSeverity("unexpected"); got != notificationMinimumSeverityAll {
+		t.Fatalf("unknown severity = %q, want all", got)
+	}
+	if notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: alerts.AlertLevelWarning}, notificationMinimumSeverityCritical) {
+		t.Fatal("warning alert unexpectedly met critical-only floor")
+	}
+	if !notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: alerts.AlertLevelCritical}, notificationMinimumSeverityCritical) {
+		t.Fatal("critical alert did not meet critical-only floor")
 	}
 }
 
@@ -104,6 +161,9 @@ func TestNotificationTagConfigNormalizationAndCopies(t *testing.T) {
 	if email.TagMode != notificationTagModeAll {
 		t.Fatalf("normalized email mode = %q, want all", email.TagMode)
 	}
+	if email.MinimumSeverity != notificationMinimumSeverityAll {
+		t.Fatalf("normalized email minimum severity = %q, want all", email.MinimumSeverity)
+	}
 
 	webhook := NormalizeWebhookConfig(WebhookConfig{
 		TagFilter: []string{" prod ", "PROD", "customer:beta"},
@@ -114,6 +174,9 @@ func TestNotificationTagConfigNormalizationAndCopies(t *testing.T) {
 	}
 	if webhook.TagMode != notificationTagModeAny {
 		t.Fatalf("normalized webhook mode = %q, want any", webhook.TagMode)
+	}
+	if webhook.MinimumSeverity != notificationMinimumSeverityAll {
+		t.Fatalf("normalized webhook minimum severity = %q, want all", webhook.MinimumSeverity)
 	}
 	if got := NormalizeWebhookConfig(WebhookConfig{TagMode: notificationTagModeAny}); got.TagMode != "" {
 		t.Fatalf("unfiltered webhook mode = %q, want empty for legacy compatibility", got.TagMode)

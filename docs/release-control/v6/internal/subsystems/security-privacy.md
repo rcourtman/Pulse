@@ -2368,3 +2368,18 @@ primary-token projection, returns an error, and discloses no runtime secret;
 failed bootstrap minting likewise returns no credential material. The success,
 replay, and forced-write-failure paths are exercised in
 `internal/api/deploy_handlers_test.go`.
+
+### Mobile alert notifications are private by construction
+
+Ordinary warning and critical alert pushes contain a generic severity-aware
+title and private prompt to open Pulse Mobile; lock-screen payloads do not
+include hostnames, resource names, addresses, metric values, thresholds,
+provider identifiers, probe targets, or notification credentials. The action
+carries only the canonical alert ID required to open the authenticated alert
+surface, where current state is re-read rather than trusted from stale push
+copy. External-probe outages retain their existing private specialized
+message. Relay configuration responses expose the normalized alert-severity
+floor but never the Relay private key, and omitted or invalid floors fail open
+to `all` rather than silently suppressing warnings. Payload-shape and config
+normalization proofs live in `internal/relay/push_test.go` and
+`internal/api/relay_hosted_runtime_test.go`.

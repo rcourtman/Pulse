@@ -33,3 +33,10 @@ func externalProbePushNotification(
 ) (relay.PushNotificationPayload, bool) {
 	return alertingapi.ExternalProbePushNotification(alert, hasProbeAssignments)
 }
+
+func canonicalAlertPushNotification(
+	alert *alerts.Alert,
+	hasProbeAssignments func(string) bool,
+) relay.PushNotificationPayload {
+	return alertingapi.CanonicalAlertPushNotification(alert, hasProbeAssignments)
+}

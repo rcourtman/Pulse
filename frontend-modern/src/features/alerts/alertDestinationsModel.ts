@@ -21,6 +21,7 @@ export function normalizeAppriseConfig(
     apiKeyHeader: config?.apiKeyHeader || 'X-API-KEY',
     skipTlsVerify: Boolean(config?.skipTlsVerify),
     hasApiKey: Boolean(config?.hasApiKey || config?.apiKey),
+    minimumSeverity: config?.minimumSeverity === 'critical' ? 'critical' : 'all',
   };
 }
 
@@ -43,6 +44,7 @@ export function buildEmailConfigPayload(config: UIEmailConfig): EmailConfig {
   if (config.tagFilterMode !== undefined) {
     payload.tagFilterMode = config.tagFilterMode === 'any' ? 'any' : 'all';
   }
+  payload.minimumSeverity = config.minimumSeverity === 'critical' ? 'critical' : 'all';
   return payload;
 }
 
@@ -58,6 +60,7 @@ export function buildAppriseConfigPayload(config: UIAppriseConfig): AppriseConfi
     apiKey: config.apiKey,
     apiKeyHeader: config.apiKeyHeader,
     skipTlsVerify: config.skipTlsVerify,
+    minimumSeverity: config.minimumSeverity === 'critical' ? 'critical' : 'all',
   } as AppriseConfig;
 }
 

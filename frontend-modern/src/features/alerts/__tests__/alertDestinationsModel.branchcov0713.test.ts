@@ -324,6 +324,7 @@ describe('normalizeAppriseConfig — branch coverage (0713)', () => {
       apiKeyHeader: 'X-API-KEY',
       skipTlsVerify: false,
       hasApiKey: false,
+      minimumSeverity: 'all',
     };
 
     it('returns the exact default shape for null input', () => {
@@ -543,7 +544,7 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
   // catches UI-only fields (targetsText) leaking into the API payload.
   // -----------------------------------------------------------------------
   describe('payload contract — exact key set', () => {
-    it('emits exactly the 10 AppriseConfig keys and omits targetsText', () => {
+    it('emits exactly the AppriseConfig keys and omits targetsText', () => {
       const result = buildAppriseConfigPayload(
         makeUIAppriseConfig({
           enabled: true,
@@ -569,6 +570,7 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
         'apiKey',
         'apiKeyHeader',
         'skipTlsVerify',
+        'minimumSeverity',
       ]);
       expect(result).not.toHaveProperty('targetsText');
     });
@@ -599,6 +601,7 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
         apiKey: fakeKey,
         apiKeyHeader: 'X-API-KEY',
         skipTlsVerify: true,
+        minimumSeverity: 'all',
       });
     });
   });
@@ -647,6 +650,7 @@ describe('buildEmailConfigPayload — branch coverage additions (0713)', () => {
         to: ['alerts@example.com'],
         tls: true,
         startTLS: true,
+        minimumSeverity: 'all',
       });
     });
   });

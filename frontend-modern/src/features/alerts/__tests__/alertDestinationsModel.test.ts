@@ -15,6 +15,7 @@ describe('alertDestinationsModel', () => {
         targets: ['https://notify.example.test'],
         serverUrl: 'https://apprise.example.test',
         timeoutSeconds: 30,
+        minimumSeverity: 'critical',
       }),
     ).toEqual(
       expect.objectContaining({
@@ -23,6 +24,7 @@ describe('alertDestinationsModel', () => {
         targetsText: 'https://notify.example.test',
         serverUrl: 'https://apprise.example.test',
         timeoutSeconds: 30,
+        minimumSeverity: 'critical',
       }),
     );
   });
@@ -69,11 +71,13 @@ describe('alertDestinationsModel', () => {
         rateLimit: 0,
         tagFilter: [],
         tagFilterMode: 'any',
+        minimumSeverity: 'critical',
       }),
     ).toEqual(
       expect.objectContaining({
         tagFilter: [],
         tagFilterMode: 'any',
+        minimumSeverity: 'critical',
       }),
     );
   });
@@ -95,11 +99,13 @@ describe('alertDestinationsModel', () => {
         maxRetries: 3,
         retryDelay: 60,
         rateLimit: 0,
+        minimumSeverity: 'critical',
       }),
     ).toEqual(
       expect.objectContaining({
         server: 'smtp.internal',
         to: ['alerts@example.com'],
+        minimumSeverity: 'critical',
       }),
     );
 
@@ -116,12 +122,14 @@ describe('alertDestinationsModel', () => {
         apiKeyHeader: 'X-API-KEY',
         skipTlsVerify: false,
         hasApiKey: false,
+        minimumSeverity: 'critical',
       }),
     ).toEqual(
       expect.objectContaining({
         mode: 'http',
         targets: ['https://notify.internal'],
         serverUrl: 'https://apprise.internal',
+        minimumSeverity: 'critical',
       }),
     );
   });

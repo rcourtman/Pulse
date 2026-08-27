@@ -1087,6 +1087,7 @@ describe('normalizeEmailConfigFromAPI', () => {
       rateLimit: 0,
       tagFilter: [],
       tagFilterMode: 'all',
+      minimumSeverity: 'all',
     });
   });
 
@@ -1124,6 +1125,7 @@ describe('normalizeEmailConfigFromAPI', () => {
       rateLimit: 60,
       tagFilter: [],
       tagFilterMode: 'all',
+      minimumSeverity: 'all',
     });
   });
 });

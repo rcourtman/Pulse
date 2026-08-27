@@ -1,6 +1,7 @@
 package alerting
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -62,5 +63,49 @@ func TestExternalProbePushNotificationSelectsAssignedHostOffline(t *testing.T) {
 
 	if got, ok := ExternalProbePushNotification(alert, func(string) bool { return false }); ok {
 		t.Fatalf("ordinary host-offline alert produced external probe push %#v", got)
+	}
+}
+
+func TestCanonicalAlertPushNotificationCoversOrdinaryAlerts(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		level    alerts.AlertLevel
+		priority string
+	}{
+		{name: "warning", level: alerts.AlertLevelWarning, priority: relay.PushPriorityNormal},
+		{name: "critical", level: alerts.AlertLevelCritical, priority: relay.PushPriorityHigh},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			notification := CanonicalAlertPushNotification(&alerts.Alert{
+				ID:           " alert-ordinary ",
+				Level:        tc.level,
+				ResourceName: "private-cluster-node-1",
+				Message:      "10.0.0.7 exceeded its threshold",
+			}, nil)
+			if notification.Type != relay.PushTypeAlertFired || notification.Priority != tc.priority {
+				t.Fatalf("notification = %#v, want ordinary alert push with priority %q", notification, tc.priority)
+			}
+			if notification.ActionType != relay.PushActionViewAlert || notification.ActionID != "alert-ordinary" {
+				t.Fatalf("notification does not route to canonical alert: %#v", notification)
+			}
+			if strings.Contains(notification.Title+notification.Body, "private-cluster") ||
+				strings.Contains(notification.Title+notification.Body, "10.0.0.7") {
+				t.Fatalf("notification leaked infrastructure detail: %#v", notification)
+			}
+		})
+	}
+}
+
+func TestCanonicalAlertPushNotificationRetainsProbeSpecificSignal(t *testing.T) {
+	notification := CanonicalAlertPushNotification(&alerts.Alert{
+		ID:    "probe-alert",
+		Level: alerts.AlertLevelWarning,
+		Metadata: map[string]interface{}{
+			"incidentCode":   alerts.ExternalProbeUnavailableIncidentCode,
+			"incidentSource": alerts.ExternalProbeIncidentSource,
+		},
+	}, nil)
+	if notification.Type != relay.PushTypeExternalProbeOffline {
+		t.Fatalf("notification = %#v, want specialized probe-loss signal", notification)
 	}
 }

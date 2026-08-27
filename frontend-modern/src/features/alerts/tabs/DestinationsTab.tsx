@@ -26,6 +26,8 @@ export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
   setEmailConfig: (config: ReturnType<AlertDestinationsTabStateProps['emailConfig']>) => void;
   deadManPingUrl: () => string;
   setDeadManPingUrl: (value: string) => void;
+  pushMinimumSeverity: () => 'all' | 'critical';
+  setPushMinimumSeverity: (value: 'all' | 'critical') => void;
 }
 
 export function DestinationsTab(props: DestinationsTabProps) {
@@ -133,6 +135,11 @@ export function DestinationsTab(props: DestinationsTabProps) {
           relayLicensed={hasFeature('relay')}
           showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
           upgradeDestination={getUpgradeActionDestination('relay')}
+          minimumSeverity={props.pushMinimumSeverity()}
+          onMinimumSeverityChange={(minimumSeverity) => {
+            props.setPushMinimumSeverity(minimumSeverity);
+            props.setHasUnsavedChanges(true);
+          }}
         />
 
         <AlertDeliveryLogCard
