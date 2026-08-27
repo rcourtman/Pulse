@@ -1,3 +1,5 @@
+import { getAlertSeverityBadgeClass } from '@/utils/alertSeverityPresentation';
+
 export type AlertIncidentLevel = 'warning' | 'critical' | string | null | undefined;
 export type AlertIncidentStatus = 'open' | 'acknowledged' | 'resolved' | 'unknown';
 
@@ -29,7 +31,6 @@ export const ALERT_RESOURCE_INCIDENT_NOTE_SAVE_FAILURE = 'Failed to save inciden
 export const ALERT_RESOURCE_INCIDENT_VIEW_TITLE = 'View incidents for this resource';
 
 const ALERT_INCIDENT_STATUS_BASE = 'px-2 py-0.5 rounded';
-const ALERT_INCIDENT_LEVEL_BASE = 'px-2 py-0.5 rounded';
 const ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE =
   'px-2 py-0.5 rounded border text-[10px] transition-colors';
 
@@ -71,11 +72,7 @@ export function getAlertIncidentStatusPresentation(
 }
 
 export function getAlertIncidentLevelBadgeClass(level: AlertIncidentLevel): string {
-  if (level === 'critical') {
-    return `${ALERT_INCIDENT_LEVEL_BASE} bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300`;
-  }
-
-  return `${ALERT_INCIDENT_LEVEL_BASE} bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300`;
+  return getAlertSeverityBadgeClass(String(level ?? 'warning'));
 }
 
 export function getAlertHistoryStatusPresentation(

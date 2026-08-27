@@ -242,13 +242,15 @@ export function useGuestRowState(props: GuestRowProps) {
     () => hasUnacknowledgedAlert() || hasAcknowledgedOnlyAlert(),
   );
 
-  const alertAccentTone = createMemo<'critical' | 'warning' | 'acknowledged' | undefined>(() => {
-    if (!showAlertHighlight()) return undefined;
-    if (hasUnacknowledgedAlert()) {
-      return props.alertStyles?.severity === 'critical' ? 'critical' : 'warning';
-    }
-    return 'acknowledged';
-  });
+  const alertAccentTone = createMemo<'critical' | 'warning' | 'info' | 'acknowledged' | undefined>(
+    () => {
+      if (!showAlertHighlight()) return undefined;
+      if (hasUnacknowledgedAlert()) {
+        return props.alertStyles?.severity ?? 'warning';
+      }
+      return 'acknowledged';
+    },
+  );
 
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative group cursor-pointer';
@@ -261,7 +263,9 @@ export function useGuestRowState(props: GuestRowProps) {
     const alertBg = hasUnacknowledgedAlert()
       ? props.alertStyles?.severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950'
-        : 'bg-yellow-50 dark:bg-yellow-950'
+        : props.alertStyles?.severity === 'info'
+          ? 'bg-blue-50 dark:bg-blue-950'
+          : 'bg-yellow-50 dark:bg-yellow-950'
       : '';
     const defaultHover = hasUnacknowledgedAlert() ? '' : 'hover:bg-surface-hover';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';

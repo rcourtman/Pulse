@@ -426,6 +426,8 @@ func alertLevelFromCanonicalSeverity(level alertspecs.AlertSeverity) (AlertLevel
 		return AlertLevelCritical, true
 	case alertspecs.AlertSeverityWarning:
 		return AlertLevelWarning, true
+	case alertspecs.AlertSeverityInfo:
+		return AlertLevelInfo, true
 	default:
 		return "", false
 	}

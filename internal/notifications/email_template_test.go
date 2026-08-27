@@ -607,6 +607,21 @@ func TestEmailTemplate(t *testing.T) {
 			subjectContains:     "Warning",
 		},
 		{
+			name: "informational alert remains informational",
+			alerts: []*alerts.Alert{
+				{
+					ID:           "alert-info",
+					Level:        alerts.AlertLevelInfo,
+					Type:         "system_update",
+					ResourceName: "pulse-host",
+					StartTime:    time.Now(),
+				},
+			},
+			isSingle:            true,
+			expectSingleSubject: true,
+			subjectContains:     "Info",
+		},
+		{
 			name: "multiple critical alerts only uses grouped template",
 			alerts: []*alerts.Alert{
 				{
@@ -702,6 +717,34 @@ func TestEmailTemplate(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGroupedEmailTemplatePreservesInformationalSeverity(t *testing.T) {
+	t.Parallel()
+
+	alertList := []*alerts.Alert{
+		{ID: "info", Level: alerts.AlertLevelInfo, ResourceName: "host", Type: "system_update", StartTime: time.Now()},
+		{ID: "warning", Level: alerts.AlertLevelWarning, ResourceName: "vm", Type: "cpu", StartTime: time.Now()},
+	}
+	subject, htmlBody, textBody := EmailTemplate(alertList, false)
+
+	if !strings.Contains(subject, "1 Warning, 1 Info alerts") {
+		t.Fatalf("subject = %q, want both represented severities", subject)
+	}
+	if !strings.Contains(htmlBody, ">Info<") || !strings.Contains(textBody, "Info: 1") {
+		t.Fatalf("grouped template did not expose informational summary: subject=%q text=%q", subject, textBody)
+	}
+}
+
+func TestEmailTemplateFailsUnknownSeveritySafeToWarning(t *testing.T) {
+	t.Parallel()
+
+	alert := &alerts.Alert{ID: "unknown", Level: "unexpected", ResourceName: "host", Type: "system", StartTime: time.Now()}
+	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+
+	if !strings.Contains(subject, "Warning") || !strings.Contains(htmlBody, "warning Alert") || !strings.Contains(textBody, "WARNING ALERT") {
+		t.Fatalf("unknown severity did not fail safe to warning: subject=%q text=%q", subject, textBody)
 	}
 }
 

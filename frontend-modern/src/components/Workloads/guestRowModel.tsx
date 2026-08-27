@@ -97,7 +97,7 @@ export interface GuestRowProps {
     badgeClass: string;
     hasAlert: boolean;
     alertCount: number;
-    severity: 'critical' | 'warning' | null;
+    severity: 'critical' | 'warning' | 'info' | null;
     hasPoweredOffAlert?: boolean;
     hasNonPoweredOffAlert?: boolean;
     hasUnacknowledgedAlert?: boolean;

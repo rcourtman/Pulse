@@ -65,6 +65,12 @@ export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
           tone: 'warning',
           count: severityCount('warning'),
         },
+        {
+          value: 'info',
+          label: 'Info',
+          leading: filterChipStatusDot('bg-blue-500'),
+          count: severityCount('info'),
+        },
       ],
     },
   ];

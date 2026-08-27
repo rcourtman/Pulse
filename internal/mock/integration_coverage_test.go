@@ -556,6 +556,11 @@ func TestMockAlertHistoryMatchesProductionLifecycleContract(t *testing.T) {
 		t.Fatal("mock history is empty")
 	}
 	for index, alert := range history {
+		switch alert.Level {
+		case "info", "warning", "critical":
+		default:
+			t.Fatalf("mock history row %q has non-canonical severity %q", alert.ID, alert.Level)
+		}
 		if strings.HasPrefix(alert.ID, "active-") {
 			t.Fatalf("mock history contains synthetic open row %q", alert.ID)
 		}

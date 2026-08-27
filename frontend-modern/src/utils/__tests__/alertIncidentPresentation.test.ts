@@ -74,8 +74,9 @@ describe('alertIncidentPresentation', () => {
 
   it('returns canonical incident level badge classes', () => {
     expect(getAlertIncidentLevelBadgeClass('critical')).toContain('bg-red-100');
-    expect(getAlertIncidentLevelBadgeClass('warning')).toContain('bg-yellow-100');
-    expect(getAlertIncidentLevelBadgeClass(undefined)).toContain('bg-yellow-100');
+    expect(getAlertIncidentLevelBadgeClass('warning')).toContain('bg-amber-100');
+    expect(getAlertIncidentLevelBadgeClass('info')).toContain('bg-blue-100');
+    expect(getAlertIncidentLevelBadgeClass(undefined)).toContain('bg-amber-100');
   });
 
   it('returns canonical alert history status presentation', () => {

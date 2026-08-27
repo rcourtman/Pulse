@@ -1,6 +1,11 @@
 import type { AppriseConfig, EmailConfig } from '@/api/notifications';
 
-import { formatAppriseTargets, normalizeEmailConfigFromAPI, parseAppriseTargets } from './helpers';
+import {
+  formatAppriseTargets,
+  normalizeEmailConfigFromAPI,
+  normalizeNotificationMinimumSeverity,
+  parseAppriseTargets,
+} from './helpers';
 import type { UIAppriseConfig, UIEmailConfig } from './types';
 
 export function normalizeAppriseConfig(
@@ -21,7 +26,7 @@ export function normalizeAppriseConfig(
     apiKeyHeader: config?.apiKeyHeader || 'X-API-KEY',
     skipTlsVerify: Boolean(config?.skipTlsVerify),
     hasApiKey: Boolean(config?.hasApiKey || config?.apiKey),
-    minimumSeverity: config?.minimumSeverity === 'critical' ? 'critical' : 'all',
+    minimumSeverity: normalizeNotificationMinimumSeverity(config?.minimumSeverity),
   };
 }
 
@@ -44,7 +49,7 @@ export function buildEmailConfigPayload(config: UIEmailConfig): EmailConfig {
   if (config.tagFilterMode !== undefined) {
     payload.tagFilterMode = config.tagFilterMode === 'any' ? 'any' : 'all';
   }
-  payload.minimumSeverity = config.minimumSeverity === 'critical' ? 'critical' : 'all';
+  payload.minimumSeverity = normalizeNotificationMinimumSeverity(config.minimumSeverity);
   return payload;
 }
 
@@ -60,7 +65,7 @@ export function buildAppriseConfigPayload(config: UIAppriseConfig): AppriseConfi
     apiKey: config.apiKey,
     apiKeyHeader: config.apiKeyHeader,
     skipTlsVerify: config.skipTlsVerify,
-    minimumSeverity: config.minimumSeverity === 'critical' ? 'critical' : 'all',
+    minimumSeverity: normalizeNotificationMinimumSeverity(config.minimumSeverity),
   } as AppriseConfig;
 }
 

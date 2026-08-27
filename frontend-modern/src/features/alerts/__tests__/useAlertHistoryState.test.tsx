@@ -175,6 +175,7 @@ describe('useAlertHistoryState', () => {
       makeEntry('alert-1', 'critical', 'db-01'),
       makeEntry('alert-2', 'warning', 'db-01'),
       makeEntry('alert-3', 'warning', 'web-01'),
+      makeEntry('alert-4', 'info', 'control-01'),
     ] as any);
 
     const { result } = renderHook(() =>
@@ -185,9 +186,10 @@ describe('useAlertHistoryState', () => {
       }),
     );
 
-    await waitFor(() => expect(result.countForSeverity('all')).toBe(3));
+    await waitFor(() => expect(result.countForSeverity('all')).toBe(4));
     expect(result.countForSeverity('critical')).toBe(1);
     expect(result.countForSeverity('warning')).toBe(2);
+    expect(result.countForSeverity('info')).toBe(1);
 
     // Counts ignore the selected severity (each chip shows what its own
     // selection would render) but follow the search term.
@@ -196,6 +198,23 @@ describe('useAlertHistoryState', () => {
     result.setSearchTerm('db-01');
     await waitFor(() => expect(result.countForSeverity('warning')).toBe(1));
     expect(result.countForSeverity('all')).toBe(2);
+  });
+
+  it('restores the informational severity filter from the canonical URL', async () => {
+    const [activeAlerts] = createSignal({});
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValue([] as any);
+    setMockLocation('?severity=info');
+
+    const { result } = renderHook(() =>
+      useAlertHistoryState({
+        activeAlerts,
+        getResource: () => undefined,
+        allResources: () => [],
+      }),
+    );
+
+    await waitFor(() => expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(1));
+    expect(result.severityFilter()).toBe('info');
   });
 
   it('clears search, period, and severity in one route write', async () => {

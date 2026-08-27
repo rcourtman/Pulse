@@ -584,6 +584,32 @@ func TestGetAlertHistory(t *testing.T) {
 	assert.Len(t, resp, 1)
 }
 
+func TestGetAlertHistoryFiltersInformationalSeverity(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	history := []alerts.Alert{
+		{ID: "info", Level: alerts.AlertLevelInfo},
+		{ID: "warning", Level: alerts.AlertLevelWarning},
+		{ID: "critical", Level: alerts.AlertLevelCritical},
+	}
+	mockManager.On("GetAlertHistory", 10).Return(history).Once()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/history?limit=10&severity=info", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertHistory(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response []alerts.Alert
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	if assert.Len(t, response, 1) {
+		assert.Equal(t, "info", response[0].ID)
+	}
+	mockManager.AssertExpectations(t)
+}
+
 func TestClearAlertHistory(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)

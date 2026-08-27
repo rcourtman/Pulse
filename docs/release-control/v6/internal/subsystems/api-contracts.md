@@ -72,6 +72,15 @@ The same live update applies all four `schedule.grouping` fields atomically.
 When grouping is disabled, pending and subsequent alerts are delivered
 individually; the API boundary must not reduce that setting to the window or
 grouping-key fields while silently ignoring `enabled`.
+`GET /api/alerts/history` accepts the canonical severity facet values `info`,
+`warning`, and `critical` (plus omitted/`all` for no severity filter) and
+returns only matching rows after the time and resource filters. Alert payloads
+use the same closed three-level vocabulary; legacy `error` data is normalized
+to `critical` before it crosses the API boundary. Notification configuration
+round-trips destination minimum severity as `all`, `warning`, or `critical`.
+The Relay adapter has a deliberately narrower persisted floor of `all` or
+`critical`, but an all-alert mobile payload still preserves canonical `info`
+severity rather than rewriting it as warning.
 `POST /api/notifications/terminal-failures/retry` and
 `POST /api/notifications/terminal-failures/dismiss` are admin,
 `settings:write` operator actions. Their strict response is

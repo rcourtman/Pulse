@@ -108,16 +108,19 @@ func NewExternalProbeUnavailableNotification(alertID string) PushNotificationPay
 // owning incident surface and fetch current detail.
 func NewAlertFiredNotification(alertID, severity string) PushNotificationPayload {
 	severity = strings.ToLower(strings.TrimSpace(severity))
-	if severity != AlertMinimumSeverityCritical {
+	if severity != "info" && severity != AlertMinimumSeverityCritical {
 		severity = "warning"
 	}
 	priority := PushPriorityNormal
-	title := "Pulse warning"
-	body := "Pulse detected a warning alert. Open Pulse for details."
+	title := "Pulse information"
+	body := "Pulse recorded an informational alert. Open Pulse for details."
 	if severity == AlertMinimumSeverityCritical {
 		priority = PushPriorityHigh
 		title = "Critical Pulse alert"
 		body = "Pulse detected a critical alert. Open Pulse for details."
+	} else if severity == "warning" {
+		title = "Pulse warning"
+		body = "Pulse detected a warning alert. Open Pulse for details."
 	}
 	return PushNotificationPayload{
 		Type:       PushTypeAlertFired,

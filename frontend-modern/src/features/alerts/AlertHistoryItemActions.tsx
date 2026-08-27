@@ -64,7 +64,7 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
           alert={{
             id: props.alert.id,
             type: props.alert.rawAlertType || props.alert.title,
-            level: props.alert.severity as 'warning' | 'critical',
+            level: props.alert.severity as 'info' | 'warning' | 'critical',
             resourceId: props.alert.resourceId || '',
             resourceName: props.alert.resourceName,
             node: props.alert.node || '',

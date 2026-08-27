@@ -128,6 +128,7 @@ func TestNewAlertFiredNotification(t *testing.T) {
 		title    string
 	}{
 		{name: "warning", severity: "warning", priority: PushPriorityNormal, title: "Pulse warning"},
+		{name: "info", severity: "info", priority: PushPriorityNormal, title: "Pulse information"},
 		{name: "critical", severity: "critical", priority: PushPriorityHigh, title: "Critical Pulse alert"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -149,6 +150,9 @@ func TestNewAlertFiredNotification(t *testing.T) {
 }
 
 func TestAlertMinimumSeverityRouting(t *testing.T) {
+	if !AlertMeetsMinimumSeverity("info", AlertMinimumSeverityAll) {
+		t.Fatal("all-alert policy excluded an informational alert")
+	}
 	if !AlertMeetsMinimumSeverity("warning", AlertMinimumSeverityAll) {
 		t.Fatal("all-alert policy excluded a warning")
 	}

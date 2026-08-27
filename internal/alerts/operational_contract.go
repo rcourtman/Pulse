@@ -551,6 +551,8 @@ func operationalSeverityForAlert(alert *Alert) operationaltrust.OperationalSever
 		return operationaltrust.SeverityCritical
 	case AlertLevelWarning:
 		return operationaltrust.SeverityWarning
+	case AlertLevelInfo:
+		return operationaltrust.SeverityInfo
 	default:
 		return operationaltrust.SeverityUnknown
 	}

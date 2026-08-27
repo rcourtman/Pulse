@@ -1300,7 +1300,7 @@ export interface Stats {
 export interface Alert {
   id: string;
   type: string;
-  level: 'warning' | 'critical';
+  level: 'info' | 'warning' | 'critical';
   resourceId: string;
   canonicalSpecId?: string;
   canonicalKind?: string;
@@ -1355,7 +1355,7 @@ export interface AlertDeliveryDiagnosis {
   reason: string;
   message: string;
   alertType: string;
-  level: 'warning' | 'critical';
+  level: 'info' | 'warning' | 'critical';
   resourceId?: string;
   resourceName?: string;
   node?: string;

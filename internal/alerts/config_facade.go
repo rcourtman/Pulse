@@ -33,6 +33,7 @@ type AlertIntentRule = alertconfig.AlertIntentRule
 type AlertIntentPolicyDocument = alertconfig.AlertIntentPolicyDocument
 
 const (
+	AlertLevelInfo                        = alertconfig.AlertLevelInfo
 	AlertLevelWarning                     = alertconfig.AlertLevelWarning
 	AlertLevelCritical                    = alertconfig.AlertLevelCritical
 	ActivationPending                     = alertconfig.ActivationPending
@@ -99,6 +100,10 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 
 func NormalizePoweredOffSeverity(level AlertLevel) AlertLevel {
 	return alertconfig.NormalizePoweredOffSeverity(level)
+}
+
+func NormalizeAlertLevel(level AlertLevel) AlertLevel {
+	return alertconfig.NormalizeAlertLevel(level)
 }
 
 func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {

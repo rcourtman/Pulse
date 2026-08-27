@@ -5,6 +5,10 @@ import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButt
 import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel';
 import type { Alert } from '@/types/api';
 import {
+  formatAlertSeverityLabel,
+  getAlertSeverityBadgeClass,
+} from '@/utils/alertSeverityPresentation';
+import {
   getAlertOverviewAcknowledgedBadgeClass,
   getAlertOverviewAcknowledgedBadgeLabel,
   getAlertOverviewCardPresentation,
@@ -129,16 +133,8 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               </A>
               <span class="text-xs text-muted">({alertTypeDisplayLabel(props.alert.type)})</span>
               <Show when={!props.alert.acknowledged}>
-                <span
-                  class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                  classList={{
-                    'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300':
-                      props.alert.level === 'critical',
-                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300':
-                      props.alert.level !== 'critical',
-                  }}
-                >
-                  {props.alert.level === 'critical' ? 'Critical' : 'Warning'}
+                <span class={getAlertSeverityBadgeClass(props.alert.level)}>
+                  {formatAlertSeverityLabel(props.alert.level)}
                 </span>
               </Show>
               <Show when={props.alert.node}>

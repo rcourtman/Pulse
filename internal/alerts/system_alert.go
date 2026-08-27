@@ -92,10 +92,7 @@ func (m *Manager) RaiseSystemAlert(input SystemAlertInput) bool {
 		return false
 	}
 	alertID := SystemAlertID(alertType)
-	level := input.Level
-	if level == "" {
-		level = AlertLevelWarning
-	}
+	level := NormalizeAlertLevel(input.Level)
 
 	m.mu.Lock()
 

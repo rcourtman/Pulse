@@ -126,13 +126,17 @@ func notificationAlertMatchesTags(alert *alerts.Alert, filter []string, mode str
 }
 
 func notificationAlertMeetsMinimumSeverity(alert *alerts.Alert, minimumSeverity string) bool {
+	if alert == nil {
+		return false
+	}
+	level := alerts.NormalizeAlertLevel(alert.Level)
 	switch normalizeNotificationMinimumSeverity(minimumSeverity) {
 	case notificationMinimumSeverityAll:
 		return true
 	case notificationMinimumSeverityWarning:
-		return alert != nil && (alert.Level == alerts.AlertLevelWarning || alert.Level == alerts.AlertLevelCritical)
+		return level == alerts.AlertLevelWarning || level == alerts.AlertLevelCritical
 	case notificationMinimumSeverityCritical:
-		return alert != nil && alert.Level == alerts.AlertLevelCritical
+		return level == alerts.AlertLevelCritical
 	default:
 		return false
 	}

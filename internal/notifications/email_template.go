@@ -75,9 +75,14 @@ func EmailTemplate(alertList []*alerts.Alert, isSingle bool) (subject, htmlBody,
 }
 
 func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody string) {
-	levelColor := "#ff6b6b"
-	levelBg := "#fee"
-	if alert.Level == "warning" {
+	level := alerts.NormalizeAlertLevel(alert.Level)
+	levelColor := "#3b82f6"
+	levelBg := "#eff6ff"
+	switch level {
+	case alerts.AlertLevelCritical:
+		levelColor = "#ff6b6b"
+		levelBg = "#fee"
+	case alerts.AlertLevelWarning:
 		levelColor = "#ffd93d"
 		levelBg = "#fffaeb"
 	}
@@ -85,9 +90,9 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 	alertType := alertTypeDisplay(alert.Type)
 
 	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
-		titleCase(string(alert.Level)), alertType, alert.ResourceName)
+		titleCase(string(level)), alertType, alert.ResourceName)
 
-	escapedLevel := html.EscapeString(string(alert.Level))
+	escapedLevel := html.EscapeString(string(level))
 	escapedResourceName := html.EscapeString(alert.ResourceName)
 	escapedMessage := html.EscapeString(alert.Message)
 	escapedCurrentValue := html.EscapeString(formatMetricValue(alert.Type, alert.Value))
@@ -230,7 +235,7 @@ Details:
 
 This is an automated notification from Pulse Monitoring.
 View alerts and configure settings in your Pulse dashboard.`,
-			strings.ToUpper(string(alert.Level)),
+			strings.ToUpper(string(level)),
 			alert.ResourceName,
 			alert.ResourceName,
 			alert.ResourceID,
@@ -261,7 +266,7 @@ Details:
 
 This is an automated notification from Pulse Monitoring.
 View alerts and configure settings in your Pulse dashboard.`,
-		strings.ToUpper(string(alert.Level)),
+		strings.ToUpper(string(level)),
 		alert.ResourceName,
 		alert.ResourceName,
 		alert.ResourceID,
@@ -281,39 +286,53 @@ View alerts and configure settings in your Pulse dashboard.`,
 func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBody string) {
 	critical := 0
 	warning := 0
+	info := 0
 	patrolFindings := 0
 	for _, alert := range alertList {
-		if alert.Level == "critical" {
+		switch alerts.NormalizeAlertLevel(alert.Level) {
+		case alerts.AlertLevelCritical:
 			critical++
-		} else {
+		case alerts.AlertLevelWarning:
 			warning++
+		case alerts.AlertLevelInfo:
+			info++
 		}
 		if isPatrolFindingAlert(alert) {
 			patrolFindings++
 		}
 	}
 
-	// Subject line
-	if critical > 0 && warning > 0 {
-		subject = fmt.Sprintf("[Pulse Alert] %d Critical, %d Warning alerts", critical, warning)
-	} else if critical > 0 {
-		subject = fmt.Sprintf("[Pulse Alert] %d Critical alert%s", critical, pluralize(critical))
-	} else {
-		subject = fmt.Sprintf("[Pulse Alert] %d Warning alert%s", warning, pluralize(warning))
+	// Subject line preserves every severity represented in the group. Treating
+	// informational alerts as warnings here would undo destination severity
+	// routing at the final user-visible boundary.
+	severityParts := make([]string, 0, 3)
+	if critical > 0 {
+		severityParts = append(severityParts, fmt.Sprintf("%d Critical", critical))
 	}
+	if warning > 0 {
+		severityParts = append(severityParts, fmt.Sprintf("%d Warning", warning))
+	}
+	if info > 0 {
+		severityParts = append(severityParts, fmt.Sprintf("%d Info", info))
+	}
+	subject = fmt.Sprintf("[Pulse Alert] %s alert%s", strings.Join(severityParts, ", "), pluralize(len(alertList)))
 
 	// Build alert rows
 	var alertRows strings.Builder
 	for _, alert := range alertList {
-		levelColor := "#ff6b6b"
-		if alert.Level == "warning" {
+		level := alerts.NormalizeAlertLevel(alert.Level)
+		levelColor := "#3b82f6"
+		switch level {
+		case alerts.AlertLevelCritical:
+			levelColor = "#ff6b6b"
+		case alerts.AlertLevelWarning:
 			levelColor = "#ffd93d"
 		}
 
 		escapedResourceName := html.EscapeString(alert.ResourceName)
 		escapedType := html.EscapeString(alert.Type)
 		escapedNode := html.EscapeString(alertNodeDisplay(alert))
-		escapedLevel := html.EscapeString(string(alert.Level))
+		escapedLevel := html.EscapeString(string(level))
 		escapedValue := html.EscapeString(formatMetricValue(alert.Type, alert.Value))
 		escapedThreshold := html.EscapeString(formatMetricThreshold(alert.Type, alert.Threshold))
 		escapedDuration := html.EscapeString(formatDuration(time.Since(alert.StartTime)))
@@ -385,6 +404,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
         .summary-count { font-size: 32px; font-weight: 500; }
         .critical-count { color: #ff6b6b; }
         .warning-count { color: #ffd93d; }
+		.info-count { color: #3b82f6; }
         .summary-label { color: #666; font-size: 14px; margin-top: 5px; }
         .alerts-table { width: 100%%; margin-top: 20px; border-collapse: collapse; }
         .alerts-table th { text-align: left; padding: 12px; border-bottom: 2px solid #e9ecef; color: #666; font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -427,6 +447,14 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                     </div>`, warning)
 	}
 
+	if info > 0 {
+		htmlBody += fmt.Sprintf(`
+                    <div class="summary-item">
+                        <div class="summary-count info-count">%d</div>
+                        <div class="summary-label">Info</div>
+                    </div>`, info)
+	}
+
 	htmlBody += fmt.Sprintf(`
                 </div>
             </div>
@@ -462,12 +490,16 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 	if warning > 0 {
 		textBuilder.WriteString(fmt.Sprintf("Warning: %d\n", warning))
 	}
+	if info > 0 {
+		textBuilder.WriteString(fmt.Sprintf("Info: %d\n", info))
+	}
 	textBuilder.WriteString("\nAlert Details:\n")
 	textBuilder.WriteString("─────────────────────────────────────────────────────────────\n")
 
 	for i, alert := range alertList {
+		level := alerts.NormalizeAlertLevel(alert.Level)
 		textBuilder.WriteString(fmt.Sprintf("\n%d. %s (%s)\n", i+1, alert.ResourceName, alert.ResourceID))
-		textBuilder.WriteString(fmt.Sprintf("   Level: %s | Type: %s\n", strings.ToUpper(string(alert.Level)), alert.Type))
+		textBuilder.WriteString(fmt.Sprintf("   Level: %s | Type: %s\n", strings.ToUpper(string(level)), alert.Type))
 		if !isPatrolFindingAlert(alert) {
 			textBuilder.WriteString(fmt.Sprintf("   Value: %s (Threshold: %s)\n", formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold)))
 		}

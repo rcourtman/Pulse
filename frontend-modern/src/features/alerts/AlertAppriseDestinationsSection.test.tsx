@@ -48,6 +48,9 @@ describe('AlertAppriseDestinationsSection', () => {
     expect(screen.getByRole('textbox', { name: 'Delivery targets' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'CLI path' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: 'Timeout (seconds)' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'Warnings and critical alerts' }),
+    ).toBeInTheDocument();
   });
 
   it('associates visible labels with HTTP mode fields', () => {

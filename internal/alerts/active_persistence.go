@@ -251,6 +251,7 @@ func (m *Manager) restoreActiveAlertSnapshots(alerts []*Alert, source string, re
 		if alert == nil {
 			continue
 		}
+		alert.Level = NormalizeAlertLevel(alert.Level)
 
 		// Migrate legacy guest alert IDs (instance-node-VMID -> instance-VMID).
 		isGuestAlert := strings.Contains(alert.Type, "cpu") || strings.Contains(alert.Type, "memory") ||

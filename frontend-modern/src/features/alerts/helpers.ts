@@ -130,6 +130,10 @@ export const readNumberValue = (value: unknown, fallback: number): number =>
 export const readStringArrayValue = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 
+export const normalizeNotificationMinimumSeverity = (
+  value: unknown,
+): 'all' | 'warning' | 'critical' => (value === 'critical' || value === 'warning' ? value : 'all');
+
 export const normalizeEmailConfigFromAPI = (
   value: Partial<EmailConfig> | null | undefined,
 ): UIEmailConfig => {
@@ -150,7 +154,7 @@ export const normalizeEmailConfigFromAPI = (
     rateLimit: readNumberValue(value?.rateLimit, defaults.rateLimit),
     tagFilter: readStringArrayValue(value?.tagFilter),
     tagFilterMode: value?.tagFilterMode === 'any' ? 'any' : 'all',
-    minimumSeverity: value?.minimumSeverity === 'critical' ? 'critical' : 'all',
+    minimumSeverity: normalizeNotificationMinimumSeverity(value?.minimumSeverity),
   };
 };
 

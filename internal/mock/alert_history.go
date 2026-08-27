@@ -43,7 +43,7 @@ func buildAlertHistoryAt(nodes []models.Node, vms []models.VM, containers []mode
 		},
 		{
 			alertType: "connectivity",
-			level:     "error",
+			level:     "critical",
 			messages: []string{
 				"Node offline",
 				"Connection lost",

@@ -6,7 +6,7 @@ import { alertTypeDisplayLabel, unifiedTypeToAlertDisplayType } from './helpers'
 export const MS_PER_HOUR = 60 * 60 * 1000;
 
 export type AlertHistoryRange = '24h' | '7d' | '30d' | 'all';
-export type AlertSeverityFilter = 'all' | 'warning' | 'critical';
+export type AlertSeverityFilter = 'all' | 'info' | 'warning' | 'critical';
 
 export interface HistoryItem {
   id: string;

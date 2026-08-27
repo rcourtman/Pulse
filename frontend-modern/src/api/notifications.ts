@@ -42,7 +42,7 @@ export interface WebhookTemplate {
   };
 }
 
-export type NotificationMinimumSeverity = 'all' | 'critical';
+export type NotificationMinimumSeverity = 'all' | 'warning' | 'critical';
 
 export interface EmailConfig {
   enabled: boolean;

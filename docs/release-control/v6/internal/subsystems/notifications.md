@@ -417,6 +417,20 @@ minimum severity of `all`, `warning`, or `critical`. Omitted or unknown values
 preserve backwards-compatible all-alert delivery. Grouped firing alerts are
 filtered independently per destination, after both tag and severity policy are
 applied, so one incident batch may produce different destination payloads.
+The meanings are exact: `all` accepts info, warning, and critical; `warning`
+accepts warning and critical but excludes info; `critical` accepts only
+critical. API normalization, frontend editing, and persisted configuration
+must round-trip the warning floor rather than reducing it to all-alert
+delivery.
+
+The delivered payload must preserve the selected alerts' canonical severity.
+Single and grouped email subjects, summary counts, alert rows, and plain-text
+fallbacks represent Info separately from Warning. ntfy derives the highest
+severity in a group without promoting an all-info group: informational
+delivery uses the `INFO` title prefix, default priority, and
+`information_source` tag; warning and critical retain their higher attention
+postures. Destination filtering is not complete if the final template relabels
+or visually promotes the alert.
 
 Resolved delivery deliberately bypasses current tag and severity matching and
 is filtered by occurrence-bound delivery receipts instead. This guarantees that a

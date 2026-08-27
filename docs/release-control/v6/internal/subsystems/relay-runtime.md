@@ -35,6 +35,12 @@ messages, metadata, and probe errors remain inside Pulse. The persisted Relay
 destination policy defaults to all alerts and may be set to critical-only;
 runtime dispatch reads the cached live policy rather than loading persisted
 configuration for each alert.
+All-alert routing includes canonical informational alerts. Their mobile
+projection preserves severity `info`, normal priority, and generic
+informational lock-screen copy; it must not promote them to warning. Relay's
+persisted minimum-severity vocabulary intentionally remains `all` or
+`critical`, while warning and critical payloads retain their existing normal
+and high attention postures respectively.
 Relay's independent whole-instance disconnect notification remains the sole
 dark-site signal and must not be conflated with this per-agent alert.
 

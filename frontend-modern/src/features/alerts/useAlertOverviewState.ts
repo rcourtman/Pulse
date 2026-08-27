@@ -122,7 +122,8 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
         if (a.acknowledged !== b.acknowledged) {
           return a.acknowledged ? 1 : -1;
         }
-        const severityRank = (level: string) => (level === 'critical' ? 0 : 1);
+        const severityRank = (level: string) =>
+          level === 'critical' ? 0 : level === 'warning' ? 1 : 2;
         const severityDiff = severityRank(a.level) - severityRank(b.level);
         if (severityDiff !== 0) return severityDiff;
         const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();

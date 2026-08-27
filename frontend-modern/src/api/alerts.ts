@@ -15,7 +15,7 @@ export class AlertsAPI {
     offset?: number;
     startTime?: string;
     endTime?: string;
-    severity?: 'warning' | 'critical' | 'all';
+    severity?: 'info' | 'warning' | 'critical' | 'all';
     resourceId?: string;
   }): Promise<Alert[]> {
     const queryParams = new URLSearchParams();

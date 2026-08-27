@@ -10,9 +10,26 @@ import (
 type AlertLevel string
 
 const (
+	AlertLevelInfo     AlertLevel = "info"
 	AlertLevelWarning  AlertLevel = "warning"
 	AlertLevelCritical AlertLevel = "critical"
 )
+
+// NormalizeAlertLevel keeps the alert severity vocabulary stable at every
+// persistence and API boundary. "error" is the only supported legacy alias:
+// older mock/history payloads used it for connectivity failures, whose live
+// alert equivalent is critical. Unknown values retain the historical warning
+// fallback instead of accidentally becoming informational.
+func NormalizeAlertLevel(level AlertLevel) AlertLevel {
+	switch strings.ToLower(strings.TrimSpace(string(level))) {
+	case string(AlertLevelInfo):
+		return AlertLevelInfo
+	case string(AlertLevelCritical), "error":
+		return AlertLevelCritical
+	default:
+		return AlertLevelWarning
+	}
+}
 
 // ActivationState represents the alert notification activation state
 type ActivationState string

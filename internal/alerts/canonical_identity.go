@@ -365,6 +365,7 @@ func cloneAlertForOutput(alert *Alert) *Alert {
 		return nil
 	}
 	clone := alert.Clone()
+	clone.Level = NormalizeAlertLevel(clone.Level)
 	backfillCanonicalIdentity(clone)
 	publicID := exportedAlertID(clone, clone.ID)
 	clone.ID = publicID

@@ -9,8 +9,9 @@ export const ALERT_DESTINATIONS_ENABLED_LABEL = 'Enabled';
 export const ALERT_DESTINATIONS_DISABLED_LABEL = 'Disabled';
 export const ALERT_DESTINATION_MINIMUM_SEVERITY_LABEL = 'Minimum alert severity';
 export const ALERT_DESTINATION_MINIMUM_SEVERITY_HELP =
-  'Choose whether this destination receives every alert or only critical incidents. Recoveries follow the destination that received the original alert.';
+  'Choose whether this destination receives informational alerts, warnings and critical incidents, or critical incidents only. Recoveries follow the destination that received the original alert.';
 export const ALERT_DESTINATION_ALL_SEVERITIES_LABEL = 'All alerts';
+export const ALERT_DESTINATION_WARNING_AND_CRITICAL_LABEL = 'Warnings and critical alerts';
 export const ALERT_DESTINATION_CRITICAL_ONLY_LABEL = 'Critical alerts only';
 export const ALERT_DESTINATIONS_EMAIL_PANEL_TITLE = 'Email notifications';
 export const ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION =
@@ -111,10 +112,10 @@ export function getAlertDestinationsStatusLabel(enabled: boolean) {
   return enabled ? ALERT_DESTINATIONS_ENABLED_LABEL : ALERT_DESTINATIONS_DISABLED_LABEL;
 }
 
-export function getAlertDestinationSeverityLabel(minimumSeverity: 'all' | 'critical') {
-  return minimumSeverity === 'critical'
-    ? ALERT_DESTINATION_CRITICAL_ONLY_LABEL
-    : ALERT_DESTINATION_ALL_SEVERITIES_LABEL;
+export function getAlertDestinationSeverityLabel(minimumSeverity: 'all' | 'warning' | 'critical') {
+  if (minimumSeverity === 'critical') return ALERT_DESTINATION_CRITICAL_ONLY_LABEL;
+  if (minimumSeverity === 'warning') return ALERT_DESTINATION_WARNING_AND_CRITICAL_LABEL;
+  return ALERT_DESTINATION_ALL_SEVERITIES_LABEL;
 }
 
 export function getAlertDestinationsAppriseTestLabel(isTesting: boolean) {

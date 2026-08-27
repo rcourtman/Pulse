@@ -47,7 +47,10 @@ export function AlertPushDestinationsSection(props: AlertPushDestinationsSection
           <DestinationSeveritySelect
             id="alert-push-minimum-severity"
             value={props.minimumSeverity ?? 'all'}
-            onChange={(value) => props.onMinimumSeverityChange?.(value)}
+            includeWarning={false}
+            onChange={(value) =>
+              props.onMinimumSeverityChange?.(value === 'warning' ? 'all' : value)
+            }
             help={ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP}
           />
           <a

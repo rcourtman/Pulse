@@ -686,7 +686,7 @@ func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) 
 	switch severity {
 	case "", "all":
 		severity = ""
-	case "warning", "critical":
+	case "info", "warning", "critical":
 	default:
 		log.Warn().Str("severity", severity).Msg("Invalid severity filter, ignoring")
 		severity = ""

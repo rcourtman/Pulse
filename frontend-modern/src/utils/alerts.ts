@@ -7,7 +7,7 @@ const noAlertStyles = {
   badgeClass: '',
   hasAlert: false,
   alertCount: 0,
-  severity: null as 'critical' | 'warning' | null,
+  severity: null as 'critical' | 'warning' | 'info' | null,
   hasPoweredOffAlert: false,
   hasNonPoweredOffAlert: false,
   hasUnacknowledgedAlert: false,
@@ -40,14 +40,15 @@ export const getAlertStyles = (
   const unacknowledgedAlerts = alertsForResource.filter((alert) => !alert.acknowledged);
   const acknowledgedAlerts = alertsForResource.filter((alert) => alert.acknowledged);
 
-  let highestSeverity: 'critical' | 'warning' | null = null;
+  let highestSeverity: 'critical' | 'warning' | 'info' | null = null;
   let hasPoweredOffAlert = false;
   let hasNonPoweredOffAlert = false;
 
   unacknowledgedAlerts.forEach((alert) => {
     if (
       alert.level === 'critical' ||
-      (alert.level === 'warning' && highestSeverity !== 'critical')
+      (alert.level === 'warning' && highestSeverity !== 'critical') ||
+      (alert.level === 'info' && highestSeverity === null)
     ) {
       highestSeverity = alert.level;
     }
@@ -91,6 +92,23 @@ export const getAlertStyles = (
       hasAlert,
       alertCount,
       severity: 'warning' as const,
+      hasPoweredOffAlert,
+      hasNonPoweredOffAlert,
+      hasUnacknowledgedAlert,
+      unacknowledgedCount,
+      acknowledgedCount,
+      hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
+    };
+  }
+
+  if (highestSeverity === 'info') {
+    return {
+      rowClass: 'bg-blue-50 dark:bg-blue-950 border-l-4 border-blue-500 dark:border-blue-400',
+      indicatorClass: 'bg-blue-500',
+      badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      hasAlert,
+      alertCount,
+      severity: 'info' as const,
       hasPoweredOffAlert,
       hasNonPoweredOffAlert,
       hasUnacknowledgedAlert,

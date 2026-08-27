@@ -52,7 +52,7 @@ const parsePeriod = (raw: string | null | undefined): AlertHistoryRange =>
   raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : DEFAULT_TIME_FILTER;
 
 const parseSeverity = (raw: string | null | undefined): AlertSeverityFilter =>
-  raw === 'warning' || raw === 'critical' ? raw : DEFAULT_SEVERITY_FILTER;
+  raw === 'info' || raw === 'warning' || raw === 'critical' ? raw : DEFAULT_SEVERITY_FILTER;
 
 export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const location = useLocation();

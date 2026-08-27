@@ -2514,7 +2514,7 @@ func withNtfyAlertHeaders(webhook WebhookConfig, alertList []*alerts.Alert) Webh
 		webhook.Headers = make(map[string]string)
 	}
 
-	level := alerts.AlertLevelWarning
+	level := alerts.AlertLevelInfo
 	var primary *alerts.Alert
 	for _, alert := range alertList {
 		if alert == nil {
@@ -2523,19 +2523,27 @@ func withNtfyAlertHeaders(webhook WebhookConfig, alertList []*alerts.Alert) Webh
 		if primary == nil {
 			primary = alert
 		}
-		if alert.Level == alerts.AlertLevelCritical {
+		alertLevel := alerts.NormalizeAlertLevel(alert.Level)
+		if alertLevel == alerts.AlertLevelCritical {
 			level = alerts.AlertLevelCritical
 			break
 		}
+		if alertLevel == alerts.AlertLevelWarning {
+			level = alerts.AlertLevelWarning
+		}
 	}
 
-	levelLabel := "WARNING"
-	priority := "high"
-	severityTag := "warning"
+	levelLabel := "INFO"
+	priority := "default"
+	severityTag := "information_source"
 	if level == alerts.AlertLevelCritical {
 		levelLabel = "CRITICAL"
 		priority = "urgent"
 		severityTag = "rotating_light"
+	} else if level == alerts.AlertLevelWarning {
+		levelLabel = "WARNING"
+		priority = "high"
+		severityTag = "warning"
 	}
 
 	titleSubject := fmt.Sprintf("%d alerts", len(alertList))

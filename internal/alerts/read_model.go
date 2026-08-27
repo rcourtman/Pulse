@@ -77,8 +77,10 @@ func alertSeveritySortRank(alert Alert) int {
 		return 2
 	case AlertLevelWarning:
 		return 1
-	default:
+	case AlertLevelInfo:
 		return 0
+	default:
+		return -1
 	}
 }
 

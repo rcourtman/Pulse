@@ -4,7 +4,7 @@ import type { StorageRecord } from './models';
 export type StorageAlertRowState = {
   hasAlert: boolean;
   alertCount: number;
-  severity: 'critical' | 'warning' | null;
+  severity: 'critical' | 'warning' | 'info' | null;
   hasUnacknowledgedAlert: boolean;
   unacknowledgedCount: number;
   acknowledgedCount: number;
@@ -37,9 +37,10 @@ export const asStorageAlertRecord = (value: unknown): Record<string, Alert> => {
   return value as Record<string, Alert>;
 };
 
-const severityWeight = (value: 'critical' | 'warning' | null): number => {
-  if (value === 'critical') return 2;
-  if (value === 'warning') return 1;
+const severityWeight = (value: 'critical' | 'warning' | 'info' | null): number => {
+  if (value === 'critical') return 3;
+  if (value === 'warning') return 2;
+  if (value === 'info') return 1;
   return 0;
 };
 

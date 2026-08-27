@@ -49,6 +49,9 @@ describe('AlertPushDestinationsSection', () => {
 
     const severity = screen.getByRole('combobox', { name: 'Minimum alert severity' });
     expect(severity).toHaveValue('critical');
+    expect(
+      screen.queryByRole('option', { name: 'Warnings and critical alerts' }),
+    ).not.toBeInTheDocument();
     fireEvent.change(severity, { target: { value: 'all' } });
     expect(onMinimumSeverityChange).toHaveBeenCalledWith('all');
     expect(screen.getByText(ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP)).toBeInTheDocument();

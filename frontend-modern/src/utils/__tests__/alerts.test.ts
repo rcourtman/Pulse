@@ -85,6 +85,19 @@ describe('getAlertStyles', () => {
     });
   });
 
+  describe('informational alerts', () => {
+    it('uses a distinct low-urgency blue resource treatment', () => {
+      const alerts = createActiveAlerts(createAlert({ level: 'info' }));
+      const result = getAlertStyles('resource-1', alerts, true);
+
+      expect(result.hasAlert).toBe(true);
+      expect(result.severity).toBe('info');
+      expect(result.rowClass).toContain('bg-blue-50');
+      expect(result.indicatorClass).toContain('bg-blue-500');
+      expect(result.badgeClass).toContain('bg-blue-100');
+    });
+  });
+
   it('matches alert styles through any canonical resource identity candidate', () => {
     const alerts = createActiveAlerts(
       createAlert({ resourceId: 'provider-source-id', level: 'critical' }),

@@ -25,7 +25,7 @@ func TestBuildAlertIncidentFixturesCreatesCompleteLifecycleData(t *testing.T) {
 		{
 			ID:           "active-complete-lifecycle",
 			Type:         "connectivity",
-			Level:        "error",
+			Level:        "critical",
 			ResourceID:   "node-1",
 			ResourceName: "pve-1",
 			StartTime:    now.Add(-90 * time.Second),
@@ -80,7 +80,7 @@ func TestMockAlertIncidentQueriesAndNotesShareCanonicalFixture(t *testing.T) {
 	now := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
 	history := []models.Alert{
 		{ID: "hist-resource-new", Type: "threshold", Level: "warning", ResourceID: "vm-101", StartTime: now.Add(-10 * time.Minute)},
-		{ID: "hist-resource-old", Type: "backup", Level: "error", ResourceID: "vm-101", StartTime: now.Add(-2 * time.Hour)},
+		{ID: "hist-resource-old", Type: "backup", Level: "critical", ResourceID: "vm-101", StartTime: now.Add(-2 * time.Hour)},
 	}
 	enriched, incidents := buildAlertIncidentFixtures(history, now)
 

@@ -140,31 +140,31 @@ describe('getAlertIncidentStatusPresentation — switch branch coverage', () => 
 describe('getAlertIncidentLevelBadgeClass — branch coverage', () => {
   it('returns the critical palette for level === "critical"', () => {
     expect(getAlertIncidentLevelBadgeClass('critical')).toBe(
-      'px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
     );
   });
 
-  it('falls back to the warning palette for the canonical "warning" level', () => {
+  it('returns the warning palette for the canonical "warning" level', () => {
     expect(getAlertIncidentLevelBadgeClass('warning')).toBe(
-      'px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
     );
   });
 
   it('falls back to the warning palette for a null level', () => {
     expect(getAlertIncidentLevelBadgeClass(null)).toBe(
-      'px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
     );
   });
 
   it('falls back to the warning palette for an undefined level', () => {
     expect(getAlertIncidentLevelBadgeClass(undefined)).toBe(
-      'px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
     );
   });
 
-  it('falls back to the warning palette for any non-"critical" string', () => {
+  it('returns the informational palette for info', () => {
     expect(getAlertIncidentLevelBadgeClass('info')).toBe(
-      'px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
     );
   });
 });

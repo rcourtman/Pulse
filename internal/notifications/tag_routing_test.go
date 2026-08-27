@@ -95,6 +95,7 @@ func TestResolvedTagRoutingDefersToDeliveryReceipts(t *testing.T) {
 }
 
 func TestBuildNotificationDeliveryJobsRoutesGroupedAlertsByDestinationSeverity(t *testing.T) {
+	info := &alerts.Alert{ID: "info", Level: alerts.AlertLevelInfo, StartTime: time.Unix(1_699_999_999, 0)}
 	warning := &alerts.Alert{ID: "warning", Level: alerts.AlertLevelWarning, StartTime: time.Unix(1_700_000_000, 0)}
 	critical := &alerts.Alert{ID: "critical", Level: alerts.AlertLevelCritical, StartTime: time.Unix(1_700_000_001, 0)}
 
@@ -102,18 +103,19 @@ func TestBuildNotificationDeliveryJobsRoutesGroupedAlertsByDestinationSeverity(t
 		EmailConfig{Enabled: true, MinimumSeverity: notificationMinimumSeverityCritical},
 		[]WebhookConfig{
 			{ID: "all", Enabled: true, MinimumSeverity: notificationMinimumSeverityAll},
+			{ID: "warning", Enabled: true, MinimumSeverity: notificationMinimumSeverityWarning},
 			{ID: "critical", Enabled: true, MinimumSeverity: notificationMinimumSeverityCritical},
 		},
 		AppriseConfig{Enabled: true, Mode: AppriseModeHTTP, ServerURL: "https://apprise.example.test", MinimumSeverity: notificationMinimumSeverityCritical},
-		[]*alerts.Alert{warning, critical},
+		[]*alerts.Alert{info, warning, critical},
 		eventAlert,
 		time.Time{},
 	)
 
-	if len(jobs) != 4 {
-		t.Fatalf("jobs = %d, want email, two webhooks, and Apprise", len(jobs))
+	if len(jobs) != 5 {
+		t.Fatalf("jobs = %d, want email, three webhooks, and Apprise", len(jobs))
 	}
-	want := [][]string{{"critical"}, {"warning", "critical"}, {"critical"}, {"critical"}}
+	want := [][]string{{"critical"}, {"info", "warning", "critical"}, {"warning", "critical"}, {"critical"}, {"critical"}}
 	for index, expected := range want {
 		if got := alertIDs(jobs[index].Alerts); !reflect.DeepEqual(got, expected) {
 			t.Fatalf("job %d alerts = %v, want %v", index, got, expected)
@@ -171,6 +173,9 @@ func TestResolvedSeverityRoutingDefersToOccurrenceReceipts(t *testing.T) {
 }
 
 func TestNotificationMinimumSeverityNormalizationAndMatching(t *testing.T) {
+	if got := normalizeNotificationMinimumSeverity(" WARNING "); got != notificationMinimumSeverityWarning {
+		t.Fatalf("normalized severity = %q, want warning", got)
+	}
 	if got := normalizeNotificationMinimumSeverity(" CRITICAL "); got != notificationMinimumSeverityCritical {
 		t.Fatalf("normalized severity = %q, want critical", got)
 	}
@@ -182,6 +187,24 @@ func TestNotificationMinimumSeverityNormalizationAndMatching(t *testing.T) {
 	}
 	if !notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: alerts.AlertLevelCritical}, notificationMinimumSeverityCritical) {
 		t.Fatal("critical alert did not meet critical-only floor")
+	}
+	if !notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: alerts.AlertLevelInfo}, notificationMinimumSeverityAll) {
+		t.Fatal("all-alert floor excluded an informational alert")
+	}
+	if notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: alerts.AlertLevelInfo}, notificationMinimumSeverityWarning) {
+		t.Fatal("warning floor included an informational alert")
+	}
+	if !notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: alerts.AlertLevelWarning}, notificationMinimumSeverityWarning) {
+		t.Fatal("warning floor excluded a warning alert")
+	}
+	if !notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: alerts.AlertLevelCritical}, notificationMinimumSeverityWarning) {
+		t.Fatal("warning floor excluded a critical alert")
+	}
+	if !notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: "error"}, notificationMinimumSeverityCritical) {
+		t.Fatal("critical floor excluded the supported legacy error alias")
+	}
+	if notificationAlertMeetsMinimumSeverity(&alerts.Alert{Level: "unexpected"}, notificationMinimumSeverityCritical) {
+		t.Fatal("unknown alert severity was promoted to critical")
 	}
 }
 
@@ -223,6 +246,25 @@ func TestNotificationTagConfigNormalizationAndCopies(t *testing.T) {
 	webhookCopy.TagFilter[0] = "mutated"
 	if email.TagFilter[0] == "mutated" || webhook.TagFilter[0] == "mutated" {
 		t.Fatal("notification config copies must isolate tag-filter slices")
+	}
+}
+
+func TestNtfyHeadersPreserveInformationalSeverity(t *testing.T) {
+	webhook := withNtfyAlertHeaders(WebhookConfig{}, []*alerts.Alert{{
+		ID:           "info",
+		Level:        alerts.AlertLevelInfo,
+		ResourceName: "pulse-host",
+		Type:         "system_update",
+	}})
+
+	if got := webhook.Headers["Title"]; got != "INFO: pulse-host" {
+		t.Fatalf("ntfy title = %q, want informational title", got)
+	}
+	if got := webhook.Headers["Priority"]; got != "default" {
+		t.Fatalf("ntfy priority = %q, want default", got)
+	}
+	if got := webhook.Headers["Tags"]; got != "information_source,pulse,system_update" {
+		t.Fatalf("ntfy tags = %q, want informational routing tags", got)
 	}
 }
 

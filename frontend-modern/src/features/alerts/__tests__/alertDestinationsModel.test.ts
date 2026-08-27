@@ -133,4 +133,28 @@ describe('alertDestinationsModel', () => {
       }),
     );
   });
+
+  it('preserves the warning floor through email and Apprise round trips', () => {
+    expect(
+      buildEmailConfigPayload({
+        enabled: true,
+        provider: 'smtp',
+        server: 'smtp.internal',
+        port: 587,
+        username: '',
+        password: '',
+        from: 'pulse@example.com',
+        to: ['alerts@example.com'],
+        tls: true,
+        startTLS: true,
+        replyTo: '',
+        maxRetries: 3,
+        retryDelay: 60,
+        rateLimit: 0,
+        minimumSeverity: 'warning',
+      }).minimumSeverity,
+    ).toBe('warning');
+
+    expect(normalizeAppriseConfig({ minimumSeverity: 'warning' }).minimumSeverity).toBe('warning');
+  });
 });

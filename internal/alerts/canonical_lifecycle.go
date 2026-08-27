@@ -263,6 +263,8 @@ func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	switch level {
 	case AlertLevelCritical:
 		return alertspecs.AlertSeverityCritical
+	case AlertLevelInfo:
+		return alertspecs.AlertSeverityInfo
 	default:
 		return alertspecs.AlertSeverityWarning
 	}

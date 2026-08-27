@@ -610,6 +610,17 @@ result. These counts follow the shared Inventory totals visibility preference;
 the Period facet remains uncounted because it selects the fetched time scope
 rather than filtering the already-fetched rows.
 
+Alert severity is one closed, end-to-end vocabulary: `info`, `warning`, and
+`critical`. Alert creation, restored active state, history projection,
+incidents, operational-trust projections, API responses, sorting, resource
+highlighting, overview cards, badges, and history filters must preserve those
+three meanings. The legacy history value `error` normalizes to `critical`;
+empty or unknown runtime values fail safe to `warning` and must never become
+low-urgency information accidentally. Informational alerts use the shared blue
+presentation and sort below warnings, while the history facet exposes a real
+Info option whose count and filtered rows use the same predicate as every
+other severity.
+
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
 only in the day group header, which scrolls out of sight, and a hardcoded
@@ -986,6 +997,11 @@ The same editor exposes a minimum-severity policy for email, Apprise, each
 webhook, and Relay mobile push. The alerts surface owns the coherent routing UX;
 notifications owns provider filtering and recovery receipts, while Relay owns
 privacy-safe mobile projection and persisted mobile routing policy.
+Email and Apprise expose all three destination choices: all alerts, warnings
+and critical alerts, or critical alerts only. Relay deliberately exposes its
+smaller persisted policy of all alerts or critical alerts only; hiding the
+warning option there is protocol honesty, not permission to collapse a stored
+warning floor on notification-owned destinations.
 The alert manager callback layer now also has to stay fan-out-safe. Monitor
 delivery, the unified alert bridge, and Patrol-adjacent AI listeners must
 compose through additive fired/resolved subscriptions instead of overwriting a
