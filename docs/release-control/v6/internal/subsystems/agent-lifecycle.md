@@ -6706,3 +6706,14 @@ mobile notification action resolves to the existing alert detail route rather
 than an agent lifecycle operation. The ordinary-alert and probe-specific
 payload proofs in `internal/api/alerting/external_probe_notifications_test.go`
 pin this boundary.
+
+### Destination configuration failure cannot alter agent authority
+
+Notification destination API writes persist their complete configuration
+before publishing it to the live manager and return `500` without runtime
+mutation when persistence fails. This ordering may retain or reject email,
+webhook, or Apprise delivery state, but it cannot enroll, revoke, command,
+relink, or otherwise mutate an agent. The serialized write boundary in
+`internal/api/alerting/notifications.go` therefore prevents an uncommitted
+notification change from being mistaken for an agent lifecycle transition;
+its failure coverage lives in `internal/api/alerting/notifications_test.go`.

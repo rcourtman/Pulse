@@ -5669,3 +5669,18 @@ orphaned recovery. The canonical occurrence and receipt remain notification
 queue identities; the alert ID carried by a mobile push is navigation state,
 not a new persistence or recovery key. Restart and retry semantics therefore
 remain owned by the existing notification queue and config persistence paths.
+
+### Destination runtime state follows durable configuration
+
+Email, Apprise, and webhook API mutations now commit their encrypted
+configuration before changing the live notification manager. Forced write
+failure returns `500` and leaves runtime routing unchanged; webhook handlers
+serialize the snapshot, candidate write, and publication sequence. This avoids
+restart divergence and prevents an uncommitted disable request from cancelling
+queued delivery. If the in-memory webhook publication unexpectedly fails after
+the durable candidate is written, the handler attempts to restore the prior
+inventory and reports failure rather than claiming success. These semantics add
+no backup or restore authority; they make the existing configuration file the
+explicit commit boundary. Persistence-failure proofs live in
+`internal/api/alerting/notifications_test.go` with API ordering pinned by
+`internal/api/contract_test.go`.

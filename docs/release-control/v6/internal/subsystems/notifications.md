@@ -459,3 +459,16 @@ are bounded text POSTs containing Pulse health and UTC timing only—never alert
 content, infrastructure names, destination credentials, or tenant data. This
 watchdog path is deliberately independent of notification queue activation,
 quiet hours, grouping, and escalation routing.
+
+### Destination configuration publishes only committed state
+
+Email, Apprise, and webhook create, update, and delete handlers treat encrypted
+configuration persistence as the publication boundary. They serialize
+destination writes, build complete webhook candidate inventories, persist the
+candidate first, and only then update the live notification manager. A failed
+write returns `500` and leaves the live destination inventory unchanged, so an
+operator cannot receive success for routing state that a restart would undo or
+have queued delivery cancelled by an uncommitted disable action. The forced
+failure paths are pinned in
+`internal/api/alerting/notifications_test.go`; the API ordering proof lives in
+`internal/api/contract_test.go`.

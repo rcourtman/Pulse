@@ -52,7 +52,6 @@ func TestContract_WebhookSigningSecretMaskedAndPreserved(t *testing.T) {
 	mockManager.On("UpdateWebhook", "wh-signed", tmock.MatchedBy(func(w notifications.WebhookConfig) bool {
 		return w.SigningSecret == "stored-secret"
 	})).Return(nil).Once()
-	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
 	mockPersistence.On("SaveWebhooks", tmock.Anything).Return(nil).Once()
 
 	update := stored

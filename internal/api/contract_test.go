@@ -24487,3 +24487,49 @@ func TestContract_NodeTestTelemetryRecordsOnlyAfterTargetValidation(t *testing.T
 		}
 	}
 }
+
+func TestContract_NotificationDestinationWritesPublishOnlyAfterPersistence(t *testing.T) {
+	source, err := os.ReadFile(filepath.Clean("alerting/notifications.go"))
+	if err != nil {
+		t.Fatalf("read notification handlers: %v", err)
+	}
+	handlers := string(source)
+
+	for _, tc := range []struct {
+		name        string
+		function    string
+		persistCall string
+		publishCall string
+	}{
+		{name: "email", function: "UpdateEmailConfig", persistCall: "SaveEmailConfig(config)", publishCall: "manager.SetEmailConfig(config)"},
+		{name: "apprise", function: "UpdateAppriseConfig", persistCall: "SaveAppriseConfig(config)", publishCall: "manager.SetAppriseConfig(config)"},
+		{name: "webhook create", function: "CreateWebhook", persistCall: "SaveWebhooks(webhooks)", publishCall: "manager.AddWebhook(webhook)"},
+		{name: "webhook update", function: "UpdateWebhook", persistCall: "SaveWebhooks(candidateWebhooks)", publishCall: "manager.UpdateWebhook(webhookID, webhook)"},
+		{name: "webhook delete", function: "DeleteWebhook", persistCall: "SaveWebhooks(candidateWebhooks)", publishCall: "manager.DeleteWebhook(webhookID)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			marker := "func (h *NotificationHandlers) " + tc.function + "("
+			start := strings.Index(handlers, marker)
+			if start < 0 {
+				t.Fatalf("%s not found", tc.function)
+			}
+			body := handlers[start:]
+			if end := strings.Index(body[1:], "\nfunc "); end >= 0 {
+				body = body[:end+1]
+			}
+
+			persistAt := strings.Index(body, tc.persistCall)
+			publishAt := strings.Index(body, tc.publishCall)
+			if persistAt < 0 || publishAt < 0 {
+				t.Fatalf("%s missing persistence/publication boundary: persist=%d publish=%d", tc.function, persistAt, publishAt)
+			}
+			if persistAt > publishAt {
+				t.Fatalf("%s publishes live destination state before persistence", tc.function)
+			}
+			failurePath := body[persistAt:publishAt]
+			if !strings.Contains(failurePath, "http.StatusInternalServerError") || !strings.Contains(failurePath, "return") {
+				t.Fatalf("%s does not stop publication after persistence failure", tc.function)
+			}
+		})
+	}
+}

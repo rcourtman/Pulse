@@ -9996,3 +9996,18 @@ when persistence fails. `TestHandleEnroll_Success`,
 `TestMintBootstrapTokenForTarget_RollsBackWhenPersistenceFails` in
 `internal/api/deploy_handlers_test.go` prove the persisted success state and
 both failed-commit responses.
+
+### Notification destination writes report committed truth
+
+`PUT /api/notifications/email`, `PUT /api/notifications/apprise`, and webhook
+create, update, and delete routes publish destination changes only after the
+complete encrypted configuration write succeeds. A persistence failure returns
+`500` with a generic configuration-save error and does not mutate the live
+notification manager. Webhook writes are serialized around the inventory
+snapshot so concurrent API requests cannot build candidates from the same
+stale list. Update or delete publication failure after a committed write
+attempts to restore the prior durable inventory and returns `500`; it is never
+reported as success. Handler failure proofs live in
+`internal/api/alerting/notifications_test.go`, and
+`TestContract_NotificationDestinationWritesPublishOnlyAfterPersistence` pins
+the API publication ordering.

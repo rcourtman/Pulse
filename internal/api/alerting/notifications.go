@@ -70,6 +70,7 @@ type NotificationMonitor interface {
 // NotificationHandlers handles notification-related HTTP endpoints
 type NotificationHandlers struct {
 	stateMu        sync.RWMutex
+	configMu       sync.Mutex
 	mtMonitor      *monitoring.MultiTenantMonitor
 	defaultMonitor NotificationMonitor
 	readState      unifiedresources.ReadState
@@ -179,6 +180,9 @@ func (h *NotificationHandlers) GetEmailConfig(w http.ResponseWriter, r *http.Req
 
 // UpdateEmailConfig updates the email configuration
 func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.Request) {
+	h.configMu.Lock()
+	defer h.configMu.Unlock()
+
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
@@ -211,7 +215,9 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
-	existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
+	monitor := h.getMonitor(r.Context())
+	manager := monitor.GetNotificationManager()
+	existingConfig := manager.GetEmailConfig()
 
 	// If password is empty, preserve the existing password
 	if config.Password == "" {
@@ -241,13 +247,15 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		Int("rateLimit", config.RateLimit).
 		Msg("Parsed email config")
 
-	h.getMonitor(r.Context()).GetNotificationManager().SetEmailConfig(config)
-
-	// Save to persistent storage
-	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveEmailConfig(config); err != nil {
-		// Log error but don't fail the request
+	// Durable state is the publication boundary. Applying the live config first
+	// can cancel queued deliveries or change routing even when the update cannot
+	// survive a restart.
+	if err := monitor.GetConfigPersistence().SaveEmailConfig(config); err != nil {
 		log.Error().Err(err).Msg("Failed to save email configuration")
+		http.Error(w, "failed to save email configuration", http.StatusInternalServerError)
+		return
 	}
+	manager.SetEmailConfig(config)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
@@ -279,6 +287,9 @@ func (h *NotificationHandlers) GetAppriseConfig(w http.ResponseWriter, r *http.R
 
 // UpdateAppriseConfig updates the Apprise configuration.
 func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *http.Request) {
+	h.configMu.Lock()
+	defer h.configMu.Unlock()
+
 	// Limit request body to 64KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
@@ -297,7 +308,9 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 		MinimumSeverity *string `json:"minimumSeverity"`
 	}
 	_ = json.Unmarshal(body, &presenceCheck)
-	existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
+	monitor := h.getMonitor(r.Context())
+	manager := monitor.GetNotificationManager()
+	existingConfig := manager.GetAppriseConfig()
 
 	// An empty API key means "keep the saved key": responses never include the
 	// stored value, so the settings form cannot round-trip it.
@@ -321,13 +334,14 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 		Int("timeoutSeconds", config.TimeoutSeconds).
 		Msg("Parsed Apprise configuration update")
 
-	h.getMonitor(r.Context()).GetNotificationManager().SetAppriseConfig(config)
-
-	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAppriseConfig(config); err != nil {
+	if err := monitor.GetConfigPersistence().SaveAppriseConfig(config); err != nil {
 		log.Error().Err(err).Msg("Failed to save Apprise configuration")
+		http.Error(w, "failed to save Apprise configuration", http.StatusInternalServerError)
+		return
 	}
+	manager.SetAppriseConfig(config)
 
-	normalized := h.getMonitor(r.Context()).GetNotificationManager().GetAppriseConfig()
+	normalized := manager.GetAppriseConfig()
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(redactAppriseConfig(normalized)); err != nil {
@@ -399,6 +413,9 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 
 // CreateWebhook creates a new webhook
 func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Request) {
+	h.configMu.Lock()
+	defer h.configMu.Unlock()
+
 	// Limit request body to 64KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
@@ -416,8 +433,11 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	webhook = notifications.NormalizeWebhookConfig(webhook)
 
+	monitor := h.getMonitor(r.Context())
+	manager := monitor.GetNotificationManager()
+
 	// Validate webhook URL
-	if err := h.getMonitor(r.Context()).GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
+	if err := manager.ValidateWebhookURL(webhook.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -427,13 +447,15 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		webhook.ID = utils.GenerateID("webhook")
 	}
 
-	h.getMonitor(r.Context()).GetNotificationManager().AddWebhook(webhook)
-
-	// Save webhooks to persistent storage with all fields
-	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
-	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
+	// Persist the complete candidate inventory before exposing the destination
+	// to live alert delivery.
+	webhooks := append(manager.GetWebhooks(), webhook)
+	if err := monitor.GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
 		log.Error().Err(err).Msg("Failed to save webhooks")
+		http.Error(w, "failed to save webhook configuration", http.StatusInternalServerError)
+		return
 	}
+	manager.AddWebhook(webhook)
 
 	// Return the full webhook data including any extra fields like 'service'
 	var responseData map[string]interface{}
@@ -454,6 +476,9 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 
 // UpdateWebhook updates an existing webhook
 func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
+	h.configMu.Lock()
+	defer h.configMu.Unlock()
+
 	// Extract webhook ID from URL path
 	// Path is like /api/notifications/webhooks/{id} after routing
 	path := strings.TrimPrefix(r.URL.Path, "/api/notifications/webhooks/")
@@ -487,11 +512,16 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	_ = json.Unmarshal(bodyBytes, &routingPresence)
 	webhook = notifications.NormalizeWebhookConfig(webhook)
 
+	monitor := h.getMonitor(r.Context())
+	manager := monitor.GetNotificationManager()
+
 	// Preserve original headers/customFields if the incoming values are redacted
 	// This happens when the frontend sends back masked values from GetWebhooks
-	existingWebhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
+	existingWebhooks := manager.GetWebhooks()
+	found := false
 	for _, existing := range existingWebhooks {
 		if existing.ID == webhookID {
+			found = true
 			if routingPresence.TagFilter == nil {
 				webhook.TagFilter = existing.TagFilter
 			}
@@ -534,23 +564,40 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 			break
 		}
 	}
+	if !found {
+		http.Error(w, fmt.Sprintf("webhook not found: %s", webhookID), http.StatusNotFound)
+		return
+	}
 
 	// Validate webhook URL
-	if err := h.getMonitor(r.Context()).GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
+	if err := manager.ValidateWebhookURL(webhook.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	webhook.ID = webhookID
-	if err := h.getMonitor(r.Context()).GetNotificationManager().UpdateWebhook(webhookID, webhook); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+	candidateWebhooks := make([]notifications.WebhookConfig, len(existingWebhooks))
+	copy(candidateWebhooks, existingWebhooks)
+	for i := range candidateWebhooks {
+		if candidateWebhooks[i].ID == webhookID {
+			candidateWebhooks[i] = webhook
+			break
+		}
+	}
+	if err := monitor.GetConfigPersistence().SaveWebhooks(candidateWebhooks); err != nil {
+		log.Error().Err(err).Msg("Failed to save webhooks")
+		http.Error(w, "failed to save webhook configuration", http.StatusInternalServerError)
 		return
 	}
-
-	// Save webhooks to persistent storage
-	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
-	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
-		log.Error().Err(err).Msg("Failed to save webhooks")
+	if err := manager.UpdateWebhook(webhookID, webhook); err != nil {
+		// The handler serializes destination writes, so this indicates an
+		// out-of-band mutation. Restore the prior durable inventory rather than
+		// leave restart-time state ahead of the live manager.
+		if rollbackErr := monitor.GetConfigPersistence().SaveWebhooks(existingWebhooks); rollbackErr != nil {
+			log.Error().Err(rollbackErr).Msg("Failed to roll back webhook configuration")
+		}
+		http.Error(w, "failed to publish webhook configuration", http.StatusInternalServerError)
+		return
 	}
 
 	// Return the full webhook data including any extra fields like 'service'
@@ -572,6 +619,9 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 
 // DeleteWebhook deletes a webhook
 func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
+	h.configMu.Lock()
+	defer h.configMu.Unlock()
+
 	// Extract webhook ID from URL path
 	// Path is like /api/notifications/webhooks/{id} after routing
 	path := strings.TrimPrefix(r.URL.Path, "/api/notifications/webhooks/")
@@ -582,15 +632,34 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).GetNotificationManager().DeleteWebhook(webhookID); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+	monitor := h.getMonitor(r.Context())
+	manager := monitor.GetNotificationManager()
+	existingWebhooks := manager.GetWebhooks()
+	candidateWebhooks := make([]notifications.WebhookConfig, 0, len(existingWebhooks))
+	found := false
+	for _, webhook := range existingWebhooks {
+		if webhook.ID == webhookID {
+			found = true
+			continue
+		}
+		candidateWebhooks = append(candidateWebhooks, webhook)
+	}
+	if !found {
+		http.Error(w, fmt.Sprintf("webhook not found: %s", webhookID), http.StatusNotFound)
 		return
 	}
 
-	// Save webhooks to persistent storage
-	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
-	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
+	if err := monitor.GetConfigPersistence().SaveWebhooks(candidateWebhooks); err != nil {
 		log.Error().Err(err).Msg("Failed to save webhooks")
+		http.Error(w, "failed to save webhook configuration", http.StatusInternalServerError)
+		return
+	}
+	if err := manager.DeleteWebhook(webhookID); err != nil {
+		if rollbackErr := monitor.GetConfigPersistence().SaveWebhooks(existingWebhooks); rollbackErr != nil {
+			log.Error().Err(rollbackErr).Msg("Failed to roll back webhook configuration")
+		}
+		http.Error(w, "failed to publish webhook configuration", http.StatusInternalServerError)
+		return
 	}
 
 	if err := utils.WriteJSONResponse(w, map[string]string{"status": "success"}); err != nil {

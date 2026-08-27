@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -411,19 +412,6 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 400, w.Code)
 	})
 
-	t.Run("UpdateEmailConfig_SaveError", func(t *testing.T) {
-		cfg := notifications.EmailConfig{Enabled: true}
-		mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
-		mockManager.On("SetEmailConfig", mock.Anything).Return().Once()
-		mockPersistence.On("SaveEmailConfig", mock.Anything).Return(fmt.Errorf("save error")).Once()
-
-		body, _ := json.Marshal(cfg)
-		req := httptest.NewRequest("PUT", "/api/notifications/email", bytes.NewReader(body))
-		w := httptest.NewRecorder()
-		h.UpdateEmailConfig(w, req)
-		assert.Equal(t, 200, w.Code) // Matches implementation: logs error but returns success
-	})
-
 	t.Run("GetWebhooks", func(t *testing.T) {
 		webhooks := []notifications.WebhookConfig{
 			{
@@ -590,7 +578,6 @@ func TestNotificationHandlers(t *testing.T) {
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 		mockManager.On("ValidateWebhookURL", mock.Anything).Return(nil).Once()
 		mockManager.On("UpdateWebhook", "wh1", mock.Anything).Return(nil).Once()
-		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{webhook}).Once()
 		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 
 		body, _ := json.Marshal(webhook)
@@ -621,7 +608,6 @@ func TestNotificationHandlers(t *testing.T) {
 				) && cfg.TagMode == "any" && cfg.MinimumSeverity == "critical"
 			}),
 		).Return(nil).Once()
-		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{existing}).Once()
 		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 
 		req := httptest.NewRequest(
@@ -642,7 +628,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 	t.Run("DeleteWebhook", func(t *testing.T) {
 		mockManager.On("DeleteWebhook", "wh1").Return(nil).Once()
-		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 
 		req := httptest.NewRequest("DELETE", "/api/notifications/webhooks/wh1", nil)
@@ -725,12 +711,11 @@ func TestNotificationHandlers(t *testing.T) {
 				mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 				mockManager.On("ValidateWebhookURL", mock.Anything).Return(nil).Once()
 				mockManager.On("UpdateWebhook", "wh1", mock.Anything).Return(nil).Once()
-				mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 				mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 			}},
 			{"DELETE", "/api/notifications/webhooks/wh1", func() {
 				mockManager.On("DeleteWebhook", "wh1").Return(nil).Once()
-				mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+				mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 				mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 			}},
 			{"GET", "/api/notifications/webhook-templates", func() {}},
@@ -944,7 +929,6 @@ func TestNotificationHandlers(t *testing.T) {
 		mockManager.On("UpdateWebhook", "wh1", mock.MatchedBy(func(w notifications.WebhookConfig) bool {
 			return w.Headers["Auth"] == "secret" && w.CustomFields["Key"] == "value"
 		})).Return(nil).Once()
-		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{updated}).Once()
 		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 
 		body, _ := json.Marshal(updated)
@@ -976,7 +960,6 @@ func TestNotificationHandlers(t *testing.T) {
 				w.CustomFields["app_token"] == "" &&
 				w.CustomFields["user_token"] == ""
 		})).Return(nil).Once()
-		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{existing}).Once()
 		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 
 		body, _ := json.Marshal(map[string]interface{}{
@@ -1028,6 +1011,100 @@ func TestNotificationHandlers(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.TestWebhook(w, req)
 		assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+	})
+}
+
+func TestNotificationConfigPersistenceFailureDoesNotPublishRuntimeState(t *testing.T) {
+	newHandlers := func() (*NotificationHandlers, *MockNotificationManager, *MockNotificationConfigPersistence) {
+		monitor := new(MockNotificationMonitor)
+		manager := new(MockNotificationManager)
+		persistence := new(MockNotificationConfigPersistence)
+		monitor.On("GetNotificationManager").Return(manager)
+		monitor.On("GetConfigPersistence").Return(persistence)
+		return NewNotificationHandlers(nil, monitor), manager, persistence
+	}
+
+	t.Run("email", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		manager.On("GetEmailConfig").Return(notifications.EmailConfig{Enabled: true}).Once()
+		persistence.On("SaveEmailConfig", mock.MatchedBy(func(cfg notifications.EmailConfig) bool {
+			return !cfg.Enabled
+		})).Return(errors.New("storage unavailable")).Once()
+
+		req := httptest.NewRequest(http.MethodPut, "/api/notifications/email", strings.NewReader(`{"enabled":false}`))
+		rec := httptest.NewRecorder()
+		h.UpdateEmailConfig(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		manager.AssertNotCalled(t, "SetEmailConfig", mock.Anything)
+		persistence.AssertExpectations(t)
+	})
+
+	t.Run("apprise", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		manager.On("GetAppriseConfig").Return(notifications.AppriseConfig{Enabled: true}).Once()
+		persistence.On("SaveAppriseConfig", mock.MatchedBy(func(cfg notifications.AppriseConfig) bool {
+			return !cfg.Enabled
+		})).Return(errors.New("storage unavailable")).Once()
+
+		req := httptest.NewRequest(http.MethodPut, "/api/notifications/apprise", strings.NewReader(`{"enabled":false}`))
+		rec := httptest.NewRecorder()
+		h.UpdateAppriseConfig(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		manager.AssertNotCalled(t, "SetAppriseConfig", mock.Anything)
+		persistence.AssertExpectations(t)
+	})
+
+	t.Run("webhook create", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		manager.On("ValidateWebhookURL", "https://example.com/new").Return(nil).Once()
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "existing"}}).Once()
+		persistence.On("SaveWebhooks", mock.MatchedBy(func(webhooks []notifications.WebhookConfig) bool {
+			return len(webhooks) == 2 && webhooks[1].Name == "new"
+		})).Return(errors.New("storage unavailable")).Once()
+
+		req := httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks", strings.NewReader(`{"name":"new","url":"https://example.com/new"}`))
+		rec := httptest.NewRecorder()
+		h.CreateWebhook(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		manager.AssertNotCalled(t, "AddWebhook", mock.Anything)
+		persistence.AssertExpectations(t)
+	})
+
+	t.Run("webhook update", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		existing := notifications.WebhookConfig{ID: "wh1", Name: "old", URL: "https://example.com/hook"}
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{existing}).Once()
+		manager.On("ValidateWebhookURL", existing.URL).Return(nil).Once()
+		persistence.On("SaveWebhooks", mock.MatchedBy(func(webhooks []notifications.WebhookConfig) bool {
+			return len(webhooks) == 1 && webhooks[0].Name == "new"
+		})).Return(errors.New("storage unavailable")).Once()
+
+		req := httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/wh1", strings.NewReader(`{"name":"new","url":"https://example.com/hook"}`))
+		rec := httptest.NewRecorder()
+		h.UpdateWebhook(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		manager.AssertNotCalled(t, "UpdateWebhook", mock.Anything, mock.Anything)
+		persistence.AssertExpectations(t)
+	})
+
+	t.Run("webhook delete", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
+		persistence.On("SaveWebhooks", mock.MatchedBy(func(webhooks []notifications.WebhookConfig) bool {
+			return len(webhooks) == 0
+		})).Return(errors.New("storage unavailable")).Once()
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/notifications/webhooks/wh1", nil)
+		rec := httptest.NewRecorder()
+		h.DeleteWebhook(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		manager.AssertNotCalled(t, "DeleteWebhook", mock.Anything)
+		persistence.AssertExpectations(t)
 	})
 }
 
@@ -1218,7 +1295,6 @@ func TestNotificationHandlersWebhookSigningSecretLifecycle(t *testing.T) {
 		mockManager.On("UpdateWebhook", "wh-signed", mock.MatchedBy(func(w notifications.WebhookConfig) bool {
 			return w.SigningSecret == "stored-secret"
 		})).Return(nil).Once()
-		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
 		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
 
 		update := stored
