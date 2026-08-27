@@ -1,25 +1,21 @@
 {
   "version": 1,
-  "base_sha": "1e75423116984e67ca92a8904f913e5e6a194324",
-  "verified_at": "2026-08-27T13:41:54Z",
+  "base_sha": "699143b7b8411ad671af9ba60c74aa7f87d57758",
+  "verified_at": "2026-08-27T14:13:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
-    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx": "2f32d34e7bfedd2e052cf20075a4eb711d114ee5715c13a108f6b3666f29ad91",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "d5179ae59605d318f522483b13e5925fd7a6890a066b129eaf769d42b334d2d4",
-    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "cc763cdadc2f48e47437cfddf61ebbd5723e74a6a89f3640da013b63f6598cdb",
-    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "fc2822b803ab1c250811e8a374c7cba94ae1f4b08130acf48ba6b98cea3f0a5c"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "58fe2feaf93d6f37d0fd2811c829ada884941bf7de77d8d386f723d97ce32c33",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "67a7463ba44627ef48423bdcaf689153fe0d3d75c0b3b0aeeeeb6def953fe92c"
   },
-  "routes": ["/alerts/overview", "/alerts/history"],
+  "routes": ["/proxmox/overview"],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 390,
@@ -27,18 +23,14 @@
     }
   ],
   "states": [
-    "restored active alert visible while notification delivery is pending review",
-    "canonical incident API returns the occurrence-specific fired event for the active alert",
-    "expanded Overview timeline renders incident status, fired event, filters, timestamp, and note editor",
-    "legacy JSON history imported once into SQLite and retained across backend restart",
-    "history clear tombstone removes retired history while preserving the active alert overlay"
+    "mock-backed Proxmox Overview with PVE nodes, standalone PBS service rows, and guests",
+    "Overview PBS health table omits backup artifact counts while retaining service and datastore health",
+    "expanded canonical PBS resource detail exposes its History tab at desktop and narrow widths"
   ],
   "interactions": [
-    "opened Alerts Overview at 1280x720 and expanded the active alert timeline",
-    "confirmed the Timeline control requested the canonical alert identifier and occurrence start time exactly once",
-    "confirmed the rendered fired event replaced the unavailable-timeline state while delivery remained paused",
-    "reloaded Alerts Overview at 390x844, expanded the same timeline, and confirmed no horizontal overflow",
-    "restarted the managed real backend twice and confirmed history import, clear tombstone, and active-overlay continuity",
-    "confirmed the five-test alert operator and real-backend qualification suite passed with no product errors"
+    "opened Proxmox Overview at 1280x800 and confirmed the PBS table is positioned between Nodes and Guests",
+    "expanded the first PBS row with its detail toggle and confirmed the shared resource detail and History tab",
+    "reloaded at 390x844, expanded the first PBS row through the whole-row interaction, and confirmed the same History tab",
+    "confirmed the narrow document scroll width did not exceed its client width"
   ]
 }

@@ -531,7 +531,11 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           inventoryCountsVisible={props.inventoryCountsVisible}
         />
       </section>
-      <ProxmoxBackupServersTable servers={currentModel().pbs} layoutWidth={overviewWidth.width} />
+      <ProxmoxBackupServersTable
+        servers={currentModel().pbs}
+        showBackupCounts={false}
+        layoutWidth={overviewWidth.width}
+      />
       <section
         id="proxmox-guests-section"
         aria-label="Guests"

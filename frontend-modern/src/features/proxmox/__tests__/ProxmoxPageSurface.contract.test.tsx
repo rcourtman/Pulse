@@ -357,7 +357,10 @@ describe('ProxmoxPageSurface contract', () => {
 
     expect(screen.getByTestId('backup-servers-table')).toHaveAttribute('data-rows', '2');
     expect(mockBackupServersTableProps).toHaveBeenCalledWith(
-      expect.objectContaining({ servers: [pbsServer, pbsAgent] }),
+      expect.objectContaining({
+        servers: [pbsServer, pbsAgent],
+        showBackupCounts: false,
+      }),
     );
   });
 
@@ -440,6 +443,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxPageSurfaceSource).toContain("phoneViewport\n      ? ['storage']");
     expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
     expect(proxmoxPageSurfaceSource).toContain('servers={currentModel().pbs}');
+    expect(proxmoxPageSurfaceSource).toContain('showBackupCounts={false}');
   });
 
   it('places workload controls beside the workload table they affect', () => {

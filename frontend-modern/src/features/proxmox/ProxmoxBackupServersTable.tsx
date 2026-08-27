@@ -245,6 +245,7 @@ export function buildBackupServerRows(
 export function ProxmoxBackupServersTable(props: {
   servers: readonly Resource[];
   backups?: readonly PBSBackup[];
+  showBackupCounts?: boolean;
   emptyIcon?: JSX.Element;
   layoutWidth?: Accessor<number | null | undefined>;
 }) {
@@ -256,7 +257,11 @@ export function ProxmoxBackupServersTable(props: {
       ? getBackupServerLayoutForContainer(width)
       : 'full';
   });
-  const visibleColumns = createMemo(() => getBackupServerColumns(layoutMode()));
+  const visibleColumns = createMemo(() =>
+    getBackupServerColumns(layoutMode()).filter(
+      (column) => props.showBackupCounts !== false || column.id !== 'backups',
+    ),
+  );
   const detail = createPlatformResourceDetailState({ idPrefix: 'proxmox-backup-server-detail' });
   const columnVisible = (column: BackupServerColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
