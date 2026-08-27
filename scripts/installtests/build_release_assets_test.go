@@ -889,6 +889,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"## Known issues",
 		"Durable alert lifecycles",
 		"Better notification control",
+		"informational events remain distinct from warnings",
 		"Earlier capacity warnings",
 		"Host disk policies",
 		"External availability monitoring",
@@ -909,9 +910,11 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Rolling-window metric evaluation supports sustained CPU and memory policies",
 		"Predictive storage-capacity alerts estimate exhaustion risk",
 		"Per-alert snooze, recurring scoped maintenance, destination severity routing",
+		"Informational alerts now retain an explicit `info` severity through configuration, persistence, API responses, filtering, notification routing, and display.",
 		"The append-only event log is the authority for alert history and active lifecycle reconstruction",
 		"Alert hydration no longer exposes a false all-clear state",
 		"Docker lifecycle results distinguish command acceptance from independently observed post-action state",
+		"Email, ntfy, and mobile push presentation preserve informational priority instead of elevating non-warning events to warning treatment.",
 		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
 		"Mobile decision: `existing-mobile-build-compatible`",
 		"Published iOS build 12 and Android versionCode 9 already route `action_type=view_alert`",
@@ -960,7 +963,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
-		"The changes since `v"+comparisonVersion+"` add the canonical `alert_fired` mobile push type, but preserve the existing `view_alert` navigation action and all route, request/response, pairing, and authorization contracts.",
+		"add the canonical `alert_fired` mobile push type, but preserve the existing `view_alert` navigation action and all route, request/response, pairing, and authorization contracts.",
 		"Published Pulse Mobile iOS build 12 and Android versionCode 9 already route `action_type=view_alert`, so the server cut is classified `existing-mobile-build-compatible`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 	)
@@ -3096,11 +3099,11 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	commit("stable 6.3.2 hotfix")
 	runGit("tag", "v6.3.2")
 	runGit("checkout", "main")
-	for rc := 1; rc <= 6; rc++ {
+	for rc := 1; rc <= 7; rc++ {
 		commit("release candidate " + strconv.Itoa(rc))
 		runGit("tag", "v6.4.0-rc."+strconv.Itoa(rc))
 	}
-	commit("release candidate 7 changes")
+	commit("release candidate 8 changes")
 
 	generator, err := filepath.Abs(repoFile("scripts", "generate-release-notes.sh"))
 	if err != nil {
@@ -3138,8 +3141,8 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		return strings.TrimSpace(string(output))
 	}
 
-	if got := resolve("6.4.0-rc.7"); got != "v6.4.0-rc.6" {
-		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.6", got)
+	if got := resolve("6.4.0-rc.8"); got != "v6.4.0-rc.7" {
+		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.7", got)
 	}
 	if got := resolve("6.4.0-rc.1"); got != "v6.3.2" {
 		t.Fatalf("RC1 comparison base = %q, want v6.3.2", got)
@@ -3148,13 +3151,13 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		t.Fatalf("GA comparison base = %q, want v6.3.2", got)
 	}
 
-	cmd := exec.Command("bash", generator, "6.4.0-rc.7", "v6.4.0-rc.5")
+	cmd := exec.Command("bash", generator, "6.4.0-rc.8", "v6.4.0-rc.6")
 	cmd.Dir = repo
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("generator accepted a comparison tag older than the immediately preceding RC")
 	}
-	if !strings.Contains(string(output), "expected 'v6.4.0-rc.6'") {
+	if !strings.Contains(string(output), "expected 'v6.4.0-rc.7'") {
 		t.Fatalf("unexpected comparison-range rejection:\n%s", output)
 	}
 }
