@@ -1811,27 +1811,31 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.6` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.7` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.6` release version. It follows
-`v6.4.0-rc.5` on the published `v6.4.0` candidate line. This prerelease keeps
+Helm chart release metadata to the same `6.4.0-rc.7` release version. It follows
+`v6.4.0-rc.6` on the published `v6.4.0` candidate line. This prerelease keeps
 `rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
-install pointers or stable semver aliases. The candidate restores complete
-merged host detail on the standalone PBS surface; prevents `pct df` lock
-contention and shared-deadline starvation from dropping later LXC filesystem
-reports; detects SMART UDMA CRC counter growth; resolves alert configuration
-through one declarative policy fold; removes the superseded transition-tracking
-maps; bounds alert-event query allocation by the effective result limit; and
-advances the release toolchain to Go 1.26.7. The changes since
-`v6.4.0-rc.5` do not
-require a Pulse Mobile client change and preserve
-the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
-server cut is classified `no-mobile-impact`; no companion upload or public
-mobile-store rollout is part of this candidate. The canonical mobile
-compatibility projection and route/method/scope, request/response, pairing, and
-push checks passed against Pulse Mobile revision
-`57353a83eb950d1102c90074aa8fe67e1559685b`, iOS build 12, and Android build 9.
+install pointers or stable semver aliases. The candidate makes the append-only
+event log authoritative for alert history and active-state reconstruction;
+adds per-alert snooze, recurring scoped maintenance, destination severity
+routing, repeatable escalation schedules, and external dead-man monitoring;
+adds rolling-window metric policy and predictive storage-capacity alerts;
+makes host SMART policy configurable without duplicating Proxmox disk risk;
+converges infrastructure detail presentation; and strengthens independently
+verified Docker actions plus atomic deployment enrollment and credential
+persistence. The changes since `v6.4.0-rc.6` add the canonical `alert_fired`
+mobile push type, but preserve the existing `view_alert` navigation action and
+all route, request/response, pairing, and authorization contracts. Published
+Pulse Mobile iOS build 12 and Android versionCode 9 already route
+`action_type=view_alert`, so the server cut is classified
+`existing-mobile-build-compatible`; no companion upload or public mobile-store
+rollout is part of this candidate. Published candidate source revision
+`763e95138b840bae795ad6ca5affe930cfd0ef80` contains that navigation behavior,
+and Pulse Mobile revision `471d158e7bca7348a2cd8e7e36b8b44f343934bb`
+synchronizes the generated compatibility inventory with no required runtime
+navigation change.
 The prerelease Windows path
 retains exact-SHA, checksum, and detached-signature verification without
 Authenticode. Stable `v6.4.0` also skips SignPath under the standing unavailable
@@ -1841,10 +1845,15 @@ only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
 restores it.
 
+The preceding `v6.4.0-rc.6` cut published from exact source SHA
+`8fde82b8a24229fffb628732d10fc320be643099`. Its tag and versioned artifacts
+remain immutable; `v6.4.0-rc.7` supersedes it without moving stable install
+pointers or stable semver aliases from `v6.3.2`.
+
 The preceding `v6.4.0-rc.5` cut published from exact source SHA
 `3b21d4c257a5e140af05af0973ce6cb1f1effc4d`. Its tag and versioned artifacts
-remain immutable; `v6.4.0-rc.6` supersedes it without moving stable install
-pointers or stable semver aliases from `v6.3.2`.
+remain immutable; later `v6.4.0` prereleases supersede it without moving stable
+install pointers or stable semver aliases from `v6.3.2`.
 
 The preceding `v6.4.0-rc.4` cut published from exact source SHA
 `8fb7b3764183168f93140d83e2b18b4e953b6cd8`. Its tag and versioned artifacts
@@ -2293,8 +2302,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.6` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.6` until the next
+For the active prerelease `v6.4.0-rc.7` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.7` until the next
 governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a

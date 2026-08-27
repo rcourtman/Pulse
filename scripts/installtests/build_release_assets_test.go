@@ -887,40 +887,35 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"## What's improved",
 		"## Before you upgrade",
 		"## Known issues",
-		"Complete standalone PBS details",
-		"Complete LXC filesystem coverage",
-		"Earlier disk-cabling warnings",
-		"More predictable alerts",
-		"Safer alert-history queries",
-		"Pulse Mobile does not consume the changed PBS browser detail or alert evaluation internals",
+		"Durable alert lifecycles",
+		"Better notification control",
+		"Earlier capacity warnings",
+		"Host disk policies",
+		"External availability monitoring",
+		"Clearer infrastructure details",
+		"Safer governed actions",
+		"Existing Pulse Mobile iOS build 12 and Android versionCode 9 remain compatible",
+		"The new `alert_fired` push uses the already-supported `view_alert` action",
 		"not Authenticode-signed",
 		"Unknown Publisher warning",
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
-	for _, issueURL := range []string{
-		"https://github.com/rcourtman/Pulse/issues/1723",
-		"https://github.com/rcourtman/Pulse/issues/1477",
-		"https://github.com/rcourtman/Pulse/issues/1776",
-	} {
-		assertFileContainsExactlyOnce(t, releaseNotesPath, issueURL)
-		assertFileContainsExactlyOnce(t, changelogPath, issueURL)
-	}
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: exact-SHA single-build release candidate from `main`",
 		"This changelog describes the changes since `v"+comparisonVersion+"`",
-		"SMART UDMA CRC counter growth now raises a disk-health warning",
-		"Alert configuration resolves through one declarative policy fold",
-		"Legacy transition-tracking maps have been removed",
-		"Standalone PBS rows open the canonical resource drawer",
-		"Proxmox LXC filesystem collection uses host-namespace `statfs`",
-		"Alert-event queries allocate from the bounded effective result limit",
-		"Release builds use Go 1.26.7",
+		"Rolling-window metric evaluation supports sustained CPU and memory policies",
+		"Predictive storage-capacity alerts estimate exhaustion risk",
+		"Per-alert snooze, recurring scoped maintenance, destination severity routing",
+		"The append-only event log is the authority for alert history and active lifecycle reconstruction",
+		"Alert hydration no longer exposes a false all-clear state",
+		"Docker lifecycle results distinguish command acceptance from independently observed post-action state",
 		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
-		"Mobile decision: `no-mobile-impact`",
-		"no companion build or public store rollout is required",
+		"Mobile decision: `existing-mobile-build-compatible`",
+		"Published iOS build 12 and Android versionCode 9 already route `action_type=view_alert`",
+		"no companion upload is required",
 	)
 	if version == "6.3.0-rc.6" {
 		assertFileContainsAllNormalized(t, releaseNotesPath,
@@ -965,7 +960,8 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
-		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
+		"The changes since `v"+comparisonVersion+"` add the canonical `alert_fired` mobile push type, but preserve the existing `view_alert` navigation action and all route, request/response, pairing, and authorization contracts.",
+		"Published Pulse Mobile iOS build 12 and Android versionCode 9 already route `action_type=view_alert`, so the server cut is classified `existing-mobile-build-compatible`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 	)
 }
@@ -3100,11 +3096,11 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	commit("stable 6.3.2 hotfix")
 	runGit("tag", "v6.3.2")
 	runGit("checkout", "main")
-	for rc := 1; rc <= 5; rc++ {
+	for rc := 1; rc <= 6; rc++ {
 		commit("release candidate " + strconv.Itoa(rc))
 		runGit("tag", "v6.4.0-rc."+strconv.Itoa(rc))
 	}
-	commit("release candidate 6 changes")
+	commit("release candidate 7 changes")
 
 	generator, err := filepath.Abs(repoFile("scripts", "generate-release-notes.sh"))
 	if err != nil {
@@ -3142,8 +3138,8 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		return strings.TrimSpace(string(output))
 	}
 
-	if got := resolve("6.4.0-rc.6"); got != "v6.4.0-rc.5" {
-		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.5", got)
+	if got := resolve("6.4.0-rc.7"); got != "v6.4.0-rc.6" {
+		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.6", got)
 	}
 	if got := resolve("6.4.0-rc.1"); got != "v6.3.2" {
 		t.Fatalf("RC1 comparison base = %q, want v6.3.2", got)
@@ -3152,13 +3148,13 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		t.Fatalf("GA comparison base = %q, want v6.3.2", got)
 	}
 
-	cmd := exec.Command("bash", generator, "6.4.0-rc.6", "v6.4.0-rc.4")
+	cmd := exec.Command("bash", generator, "6.4.0-rc.7", "v6.4.0-rc.5")
 	cmd.Dir = repo
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("generator accepted a comparison tag older than the immediately preceding RC")
 	}
-	if !strings.Contains(string(output), "expected 'v6.4.0-rc.5'") {
+	if !strings.Contains(string(output), "expected 'v6.4.0-rc.6'") {
 		t.Fatalf("unexpected comparison-range rejection:\n%s", output)
 	}
 }

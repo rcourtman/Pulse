@@ -147,6 +147,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.4.0-rc.4", want: "6.3.2"},
 		{version: "6.4.0-rc.5", want: "6.3.2"},
 		{version: "6.4.0-rc.6", want: "6.3.2"},
+		{version: "6.4.0-rc.7", want: "6.3.2"},
 	}
 
 	for _, test := range tests {
@@ -378,7 +379,8 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		comparisonLine,
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"The changes since `v"+comparisonVersion+"` do not require a Pulse Mobile client change and preserve the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the server cut is classified `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.",
+		"The changes since `v"+comparisonVersion+"` add the canonical `alert_fired` mobile push type, but preserve the existing `view_alert` navigation action and all route, request/response, pairing, and authorization contracts.",
+		"Published Pulse Mobile iOS build 12 and Android versionCode 9 already route `action_type=view_alert`, so the server cut is classified `existing-mobile-build-compatible`; no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
