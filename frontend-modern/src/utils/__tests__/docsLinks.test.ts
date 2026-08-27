@@ -131,6 +131,22 @@ describe('docsLinks', () => {
     }
   });
 
+  it('ships the per-alert snooze and resume API contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    expect(apiReference).toContain('`POST /api/alerts/snooze`');
+    expect(apiReference).toContain('`POST /api/alerts/unsnooze`');
+    expect(apiReference).toContain(
+      'pauses delivery and escalation for up to 30 days while monitoring continues',
+    );
+    expect(apiReference).toContain('resumes normal policy without resolving the incident');
+  });
+
   it('ships the readable SSO identity and user deprovisioning contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const rbacGuide = readFileSync(path.join(repoRoot, 'docs', 'RBAC.md'), 'utf8');

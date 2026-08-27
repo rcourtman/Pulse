@@ -67,6 +67,10 @@ func parseResourceChangeKinds(values []string) ([]ChangeKind, error) {
 			parsed = append(parsed, ChangeAlertAcknowledged)
 		case string(ChangeAlertUnacknowledged):
 			parsed = append(parsed, ChangeAlertUnacknowledged)
+		case string(ChangeAlertSnoozed):
+			parsed = append(parsed, ChangeAlertSnoozed)
+		case string(ChangeAlertUnsnoozed):
+			parsed = append(parsed, ChangeAlertUnsnoozed)
 		case string(ChangeAlertResolved):
 			parsed = append(parsed, ChangeAlertResolved)
 		case string(ChangeCommandExecuted):

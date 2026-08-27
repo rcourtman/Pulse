@@ -412,6 +412,11 @@ the `white_label` branding entitlement.
    security/privacy terminology and destination confidentiality. Pausing
    delivery changes no authorization, tenant boundary, destination secret, or
    active-alert evidence access rule.
+   Per-alert snooze and resume remain authenticated `monitoring:write`
+   operations. Their canonical lifecycle projection may retain the authenticated
+   actor and exact expiry needed for auditability, but must not copy destination
+   credentials, recipient details, alert evidence, or other tenant-private
+   notification configuration into the resource or incident timeline.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
    The adoption report excludes mock-fixture-fleet-signature rows (120×N
    Kubernetes pods with 7×N VMware hosts, the `internal/mock` template) from

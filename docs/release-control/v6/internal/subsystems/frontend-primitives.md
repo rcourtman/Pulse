@@ -406,6 +406,12 @@ wizard shell, or page-local preview renderer for monitored-system impact.
 Frontend localization is a shared primitive boundary. Locale support must flow
 through typed message catalogs with an English fallback and explicit seed
 locale coverage rather than page-local string switches.
+Alert snooze and resume copy follows that same boundary: action labels, bounded
+duration presets, monitoring-continuity wording, exact-expiry presentation,
+failure feedback, and timeline labels must stay in the typed English, German,
+and Spanish catalogs. The product surface may format the chosen instant in the
+viewer locale, but must not duplicate those lifecycle strings inside the alert
+card or dialog component.
 
 Date and number formatting is part of that boundary and is separate from the
 message catalog. Every `toLocaleString`, `toLocaleDateString`,

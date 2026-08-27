@@ -115,6 +115,21 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 		Details:    map[string]string{"user": "admin"},
 	})
 	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+		Type:       eventlog.TypeSnoozed,
+		OccurredAt: ackAt.Add(2 * time.Minute),
+		Alert:      alert,
+		Details: map[string]string{
+			"actor": "admin",
+			"until": ackAt.Add(2 * time.Hour).Format(time.RFC3339),
+		},
+	})
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+		Type:       eventlog.TypeUnsnoozed,
+		OccurredAt: ackAt.Add(3 * time.Minute),
+		Alert:      alert,
+		Details:    map[string]string{"actor": "admin"},
+	})
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
 		Type:       eventlog.TypeUnacknowledged,
 		OccurredAt: ackAt.Add(time.Minute),
 		Alert:      alert,
@@ -125,11 +140,13 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRecentChanges: %v", err)
 	}
-	if len(changes) != 3 {
-		t.Fatalf("expected 3 canonical changes, got %d", len(changes))
+	if len(changes) != 5 {
+		t.Fatalf("expected 5 canonical changes, got %d", len(changes))
 	}
 	wantKinds := []unifiedresources.ChangeKind{
 		unifiedresources.ChangeAlertUnacknowledged,
+		unifiedresources.ChangeAlertUnsnoozed,
+		unifiedresources.ChangeAlertSnoozed,
 		unifiedresources.ChangeAlertAcknowledged,
 		unifiedresources.ChangeAlertFired,
 	}
@@ -138,10 +155,10 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 			t.Fatalf("changes[%d].Kind = %q, want %q", idx, changes[idx].Kind, want)
 		}
 	}
-	if got := changes[2].Metadata["alert_identifier"]; got != "alert-canonical-1" {
+	if got := changes[4].Metadata["alert_identifier"]; got != "alert-canonical-1" {
 		t.Fatalf("alert_identifier = %#v, want alert-canonical-1", got)
 	}
-	if got := changes[2].Metadata["incidentCategory"]; got != "health" {
+	if got := changes[4].Metadata["incidentCategory"]; got != "health" {
 		t.Fatalf("incidentCategory = %#v, want health", got)
 	}
 	if got := changes[2].Metadata["vmwareConnectionId"]; got != "vc-1" {

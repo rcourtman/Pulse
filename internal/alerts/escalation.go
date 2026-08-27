@@ -3,6 +3,7 @@ package alerts
 import (
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rs/zerolog/log"
 )
 
@@ -27,6 +28,7 @@ func (m *Manager) escalationChecker() {
 
 // checkEscalations checks all active alerts for escalation
 func (m *Manager) checkEscalations() {
+	m.expireOperationalSuppressions()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -40,14 +42,26 @@ func (m *Manager) checkEscalations() {
 		return
 	}
 
-	now := time.Now()
+	now := m.policyNow()
 	for _, alert := range m.activeAlerts {
 		// Skip acknowledged alerts
 		if alert.Acknowledged {
 			continue
 		}
+		if _, snoozed := alertSnoozeUntil(alert, now); snoozed {
+			continue
+		}
 
 		// Check each escalation level
+		escalationBaseline := alert.StartTime
+		if transition := alert.LatestTransition; transition != nil &&
+			transition.Cause == operationaltrust.TransitionSuppressionExpired &&
+			transition.At.After(escalationBaseline) {
+			// Snoozed escalation levels are deliberately skipped, not replayed in
+			// a burst. After resume, the remaining escalation schedule starts
+			// from the explicit resume transition while incident age is preserved.
+			escalationBaseline = transition.At
+		}
 		for i, level := range m.config.Schedule.Escalation.Levels {
 			// Skip if we've already escalated to this level
 			if alert.LastEscalation >= i+1 {
@@ -55,7 +69,7 @@ func (m *Manager) checkEscalations() {
 			}
 
 			// Check if it's time to escalate
-			escalateTime := alert.StartTime.Add(time.Duration(level.After) * time.Minute)
+			escalateTime := escalationBaseline.Add(time.Duration(level.After) * time.Minute)
 			if now.After(escalateTime) {
 				// Update alert escalation state
 				alert.LastEscalation = i + 1

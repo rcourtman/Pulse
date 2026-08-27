@@ -317,6 +317,9 @@ func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
 	}
 
 	actor := event.Details["user"]
+	if strings.TrimSpace(actor) == "" {
+		actor = event.Details["actor"]
+	}
 	timelineAlert := alert
 	if alerts.IsSystemAlert(alert) && strings.TrimSpace(alert.ResourceID) == "" {
 		timelineAlert = alert.Clone()
@@ -346,6 +349,17 @@ func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
 			m.incidentStore.RecordAlertUnacknowledged(timelineAlert, actor)
 		}
 		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertUnacknowledged, event.OccurredAt, actor)
+	case eventlog.TypeSnoozed:
+		timelineAlert = timelineAlert.Clone()
+		if timelineAlert.Metadata == nil {
+			timelineAlert.Metadata = make(map[string]any)
+		}
+		if until := strings.TrimSpace(event.Details["until"]); until != "" {
+			timelineAlert.Metadata["snoozedUntil"] = until
+		}
+		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertSnoozed, event.OccurredAt, actor)
+	case eventlog.TypeUnsnoozed:
+		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertUnsnoozed, event.OccurredAt, actor)
 	case eventlog.TypeResolved:
 		if m.incidentStore != nil {
 			m.incidentStore.RecordAlertResolved(timelineAlert, event.OccurredAt)

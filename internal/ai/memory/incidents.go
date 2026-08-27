@@ -29,6 +29,8 @@ const (
 	IncidentEventAlertFired          IncidentEventType = "alert_fired"
 	IncidentEventAlertAcknowledged   IncidentEventType = "alert_acknowledged"
 	IncidentEventAlertUnacknowledged IncidentEventType = "alert_unacknowledged"
+	IncidentEventAlertSnoozed        IncidentEventType = "alert_snoozed"
+	IncidentEventAlertUnsnoozed      IncidentEventType = "alert_unsnoozed"
 	IncidentEventAlertResolved       IncidentEventType = "alert_resolved"
 	IncidentEventAnalysis            IncidentEventType = "ai_analysis"
 	IncidentEventCommand             IncidentEventType = "command"
@@ -990,7 +992,8 @@ func incidentEventFromResourceChange(change unifiedresources.ResourceChange) (In
 	details := cloneIncidentEventDetails(change.Metadata)
 	if user := strings.TrimSpace(change.Actor); user != "" {
 		switch eventType {
-		case IncidentEventAlertAcknowledged, IncidentEventAlertUnacknowledged:
+		case IncidentEventAlertAcknowledged, IncidentEventAlertUnacknowledged,
+			IncidentEventAlertSnoozed, IncidentEventAlertUnsnoozed:
 			details["user"] = user
 		}
 	}
@@ -1012,6 +1015,10 @@ func incidentEventTypeFromChangeKind(kind unifiedresources.ChangeKind) (Incident
 		return IncidentEventAlertAcknowledged, true
 	case unifiedresources.ChangeAlertUnacknowledged:
 		return IncidentEventAlertUnacknowledged, true
+	case unifiedresources.ChangeAlertSnoozed:
+		return IncidentEventAlertSnoozed, true
+	case unifiedresources.ChangeAlertUnsnoozed:
+		return IncidentEventAlertUnsnoozed, true
 	case unifiedresources.ChangeAlertResolved:
 		return IncidentEventAlertResolved, true
 	case unifiedresources.ChangeCommandExecuted:
@@ -1042,6 +1049,10 @@ func incidentEventSummaryFromChange(change unifiedresources.ResourceChange, even
 		return "Alert acknowledged"
 	case IncidentEventAlertUnacknowledged:
 		return "Alert unacknowledged"
+	case IncidentEventAlertSnoozed:
+		return "Alert snoozed"
+	case IncidentEventAlertUnsnoozed:
+		return "Alert notifications resumed"
 	case IncidentEventAlertResolved:
 		return "Alert resolved"
 	default:
@@ -1124,6 +1135,8 @@ func isCanonicalProjectedIncidentEventType(eventType IncidentEventType) bool {
 	case IncidentEventAlertFired,
 		IncidentEventAlertAcknowledged,
 		IncidentEventAlertUnacknowledged,
+		IncidentEventAlertSnoozed,
+		IncidentEventAlertUnsnoozed,
 		IncidentEventAlertResolved,
 		IncidentEventCommand,
 		IncidentEventRunbook:

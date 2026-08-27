@@ -1,48 +1,53 @@
 {
   "version": 1,
-  "base_sha": "f6773f262a7ace6418fc3ab6f890307290a3de99",
-  "verified_at": "2026-08-27T15:02:27Z",
+  "base_sha": "553592d2bd59d7983bb988700576ba2d2a3a945c",
+  "verified_at": "2026-08-27T16:12:00Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/api/alerts.ts",
-    "frontend-modern/src/types/alerts.ts",
-    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx",
-    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
-    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts"
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/AlertSnoozeAction.tsx",
+    "frontend-modern/src/features/alerts/types.ts",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/features/alerts/useAlertSnoozeState.ts",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts",
+    "frontend-modern/src/utils/resourceChangePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/alerts.ts": "0158e753c8d590e62551069458659ff95eee07bb48f5fb95d43f395cae3d5b48",
-    "frontend-modern/src/types/alerts.ts": "1b63d2b690ad43267a23271f0d3244fcb8a51ceaab85b9266182f8033c242495",
-    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "4f7e355bfaa025b2645e74ec43a81489d3709fa5aae6c44c86d33c3946ae03c7",
-    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "6ec0e78c6383ce62a1f55b1adac341d6cae0667e4a052ee276cc4a6c68015bf3",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "0f70dd5cbf6cb962fe2474d3932b7e79c7d868ea3aad97280aae8d03a1b3c4fa",
-    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "28fd0ab1312e2d599bad73dc8a269aebc9de2a8a85e91b188c8566fb68586dbb",
-    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "0d81fabff6da2f2d044f74d60c69f02a17989d241015ac7d134bd6840a8db34d"
+    "frontend-modern/src/api/alerts.ts": "bfd0ee6c8076e0f75308578d11c33c519340b17a23c604037fe8536d3d54f2be",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "662d6f7b47418e1c80cf916f5ac818159a545d3f7716e908491a55e042be2873",
+    "frontend-modern/src/features/alerts/AlertSnoozeAction.tsx": "339db07fb2b236f970dd3f79bd81517b82281a2871149fec7f4d5df0c8a17842",
+    "frontend-modern/src/features/alerts/types.ts": "e57351b3e8c56a3d15c7c486b8b8049f3bb7181fc30479fa398ede489aea6816",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "02b5eae728ede490710d5ba334537193c89bfe9e25a8df26aa574f03b80936ad",
+    "frontend-modern/src/features/alerts/useAlertSnoozeState.ts": "5857a30196c2bd8156dfbace5d0d006f348f5d7eb1ef4720108eb1f43f2118e2",
+    "frontend-modern/src/i18n/messages.de.ts": "652fefe6547386203ea749febd518d12d0a9538d112485bd87f8bfee5218d95c",
+    "frontend-modern/src/i18n/messages.es.ts": "21adb4aff365b5f588fa48b9390dc4524a4954decc63ad366d492212f13c2dbc",
+    "frontend-modern/src/i18n/messages.ts": "2979a81f676e50499302a89e7adb4a2b6c618258debf1d4ea09a67f9c153a7e8",
+    "frontend-modern/src/types/resource.ts": "81d378c5923075dbdbf983083a896b28db11da894814904725456c508854cd10",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "82cf34fd090e39b51545c8cc90abf7fb1edfb5fbec3d23cbbe79e2d7fd02752f",
+    "frontend-modern/src/utils/resourceChangePresentation.ts": "b7ddcd8401da17c264ad5804d93187b733faa2668f81df1fb81098f773235d17"
   },
-  "routes": ["/alerts/notifications"],
+  "routes": ["/alerts/overview"],
   "viewports": [
-    {
-      "width": 1280,
-      "height": 800
-    },
-    {
-      "width": 390,
-      "height": 844
-    }
+    { "width": 1280, "height": 800 },
+    { "width": 390, "height": 844 }
   ],
   "states": [
-    "unconfigured external watchdog with one-minute heartbeat and three-minute grace guidance",
-    "configured external watchdog with credential-masked replacement placeholder and explicit removal control",
-    "unreachable external watchdog with delivery-failure status, monitoring progress, and sanitized error",
-    "removed external watchdog returning atomically to the unconfigured state"
+    "active unacknowledged incident with Snooze action",
+    "preset snooze dialog with one-hour, two-hour, eight-hour, tomorrow-morning, and seven-day holds",
+    "snoozed incident with exact local expiry, Resume action, and suppressed delivery diagnosis",
+    "resumed incident with normal actions restored",
+    "expanded incident timeline containing Snoozed and Resumed lifecycle events"
   ],
   "interactions": [
-    "opened Alerts Notifications and confirmed the external watchdog panel is part of the destination workflow",
-    "entered a healthchecks-compatible URL, toggled reveal and conceal, saved, reloaded, and confirmed the credential was replaced by a masked placeholder",
-    "confirmed an unreachable watchdog reports delivery failure without exposing its URL or token",
-    "verified the panel layout and status grid at 390x844 with no horizontal control overflow",
-    "removed the destination, saved, reloaded, and confirmed Not configured state, normal placeholder, and no browser errors"
+    "opened Alerts Overview and confirmed every eligible active incident exposes Snooze beside acknowledgement and Timeline",
+    "opened the preset dialog and confirmed its monitoring-continues contract and bounded duration choices",
+    "snoozed a live local incident and confirmed the exact expiry, Resume action, toast, and durable timeline event",
+    "resumed the incident and confirmed the open timeline refreshed immediately with Alert notifications resumed",
+    "verified the dialog and alert workflow at 390x844 with readable copy and no horizontal control overflow"
   ]
 }

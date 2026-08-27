@@ -634,8 +634,10 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 - `POST /api/alerts/incidents/note`
 - `POST /api/alerts/bulk/acknowledge`
 - `POST /api/alerts/bulk/clear`
-- `POST /api/alerts/acknowledge` (body: `{ "id": "alert-id" }`)
-- `POST /api/alerts/unacknowledge` (body: `{ "id": "alert-id" }`)
+- `POST /api/alerts/acknowledge` (body: `{ "alertIdentifier": "alert-id" }`)
+- `POST /api/alerts/unacknowledge` (body: `{ "alertIdentifier": "alert-id" }`)
+- `POST /api/alerts/snooze` (body: `{ "alertIdentifier": "alert-id", "until": "RFC3339 timestamp" }`; pauses delivery and escalation for up to 30 days while monitoring continues)
+- `POST /api/alerts/unsnooze` (body: `{ "alertIdentifier": "alert-id" }`; resumes normal policy without resolving the incident)
 - `POST /api/alerts/clear` (body: `{ "id": "alert-id" }`)
 
 ---

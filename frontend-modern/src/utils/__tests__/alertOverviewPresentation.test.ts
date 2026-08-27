@@ -46,7 +46,15 @@ import {
   getAlertOverviewPrimaryActionClass,
   getAlertOverviewPrimaryActionLabel,
   getAlertOverviewRestoredNotification,
+  getAlertOverviewResumeLabel,
   getAlertOverviewSecondaryActionClass,
+  getAlertOverviewSnoozeDescription,
+  getAlertOverviewSnoozeFailureNotification,
+  getAlertOverviewSnoozeLabel,
+  getAlertOverviewSnoozeOptionLabel,
+  getAlertOverviewSnoozedUntilLabel,
+  getAlertOverviewSnoozedNotification,
+  getAlertOverviewResumedNotification,
   getAlertOverviewStartedAtLabel,
   getAlertOverviewStartedAtClass,
   getAlertOverviewStatsLabels,
@@ -108,6 +116,27 @@ describe('alertOverviewPresentation', () => {
       acknowledged: 'Acknowledged',
       workloadOverrides: 'Workload Overrides',
     });
+  });
+
+  it('presents snooze as a bounded delivery hold while monitoring continues', () => {
+    expect(getAlertOverviewSnoozeLabel()).toBe('Snooze');
+    expect(getAlertOverviewResumeLabel()).toBe('Resume');
+    expect(getAlertOverviewSnoozeDescription()).toBe(
+      'Pause notifications and escalation for this incident. Monitoring continues and resolution is still detected.',
+    );
+    expect(getAlertOverviewSnoozeOptionLabel('oneHour')).toBe('For 1 hour');
+    expect(getAlertOverviewSnoozeOptionLabel('tomorrowMorning')).toBe('Until tomorrow at 9:00');
+    expect(getAlertOverviewSnoozedUntilLabel('27/08/2026, 17:00')).toBe(
+      'Snoozed until 27/08/2026, 17:00',
+    );
+    expect(getAlertOverviewSnoozedNotification('27/08/2026, 17:00')).toBe(
+      'Alert snoozed until 27/08/2026, 17:00',
+    );
+    expect(getAlertOverviewResumedNotification()).toBe('Alert notifications resumed');
+    expect(getAlertOverviewSnoozeFailureNotification(false)).toBe('Failed to snooze alert');
+    expect(getAlertOverviewSnoozeFailureNotification(true)).toBe(
+      'Failed to resume alert notifications',
+    );
   });
 
   it('returns canonical alert history search and empty-state copy', () => {

@@ -524,7 +524,9 @@ func operationalStateForAlert(alert *Alert) operationaltrust.OperationalState {
 		if suppression.ExpiresAt == nil || suppression.ExpiresAt.After(time.Now()) {
 			return operationaltrust.OperationalSuppressed
 		}
-		alert.OperationalRecord.Suppression = nil
+		// Expiry is a lifecycle transition owned by the manager timer. Reads
+		// must not silently mutate the canonical record or erase its audit trail.
+		return operationaltrust.OperationalSuppressed
 	}
 	if alert.OperationalRecord != nil {
 		switch alert.OperationalRecord.State {

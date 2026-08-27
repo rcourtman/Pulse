@@ -136,6 +136,19 @@ func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
 		AlertValue:      alert.Value,
 		AlertThreshold:  alert.Threshold,
 	})
+	snoozedAt := alert.StartTime.Add(2 * time.Minute)
+	snoozedUntil := snoozedAt.Add(time.Hour).Format(time.RFC3339)
+	snoozed := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertSnoozed, snoozedAt, "operator@example.com", unifiedresources.AlertTimelineChange{
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		AlertLevel:      string(alert.Level),
+		AlertMetadata:   map[string]any{"snoozedUntil": snoozedUntil},
+	})
+	unsnoozed := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertUnsnoozed, snoozedAt.Add(time.Minute), "operator@example.com", unifiedresources.AlertTimelineChange{
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		AlertLevel:      string(alert.Level),
+	})
 	runbook := unifiedresources.BuildRunbookExecutionChange(alert.ResourceID, alert.ID, "agent:pulse-patrol", "rb-1", "Restart service", "resolved", true, "Recovered", nil)
 	resolvedAt := alert.StartTime.Add(5 * time.Minute)
 	resolved := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertResolved, resolvedAt, "", unifiedresources.AlertTimelineChange{
@@ -144,7 +157,7 @@ func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
 		AlertLevel:      string(alert.Level),
 		AlertMessage:    "CPU normalized",
 	})
-	for _, change := range []*unifiedresources.ResourceChange{fired, runbook, resolved} {
+	for _, change := range []*unifiedresources.ResourceChange{fired, snoozed, unsnoozed, runbook, resolved} {
 		if err := canonicalStore.RecordChange(*change); err != nil {
 			t.Fatalf("RecordChange(%s): %v", change.ID, err)
 		}
@@ -160,12 +173,18 @@ func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
 
 	foundAnalysis := false
 	foundRunbook := false
+	foundSnoozed := false
+	foundUnsnoozed := false
 	for _, event := range timeline.Events {
 		switch event.Type {
 		case IncidentEventAnalysis:
 			foundAnalysis = true
 		case IncidentEventRunbook:
 			foundRunbook = true
+		case IncidentEventAlertSnoozed:
+			foundSnoozed = event.Details["user"] == "operator@example.com" && event.Details["snoozedUntil"] == snoozedUntil
+		case IncidentEventAlertUnsnoozed:
+			foundUnsnoozed = event.Details["user"] == "operator@example.com"
 		}
 	}
 	if !foundAnalysis {
@@ -173,6 +192,9 @@ func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
 	}
 	if !foundRunbook {
 		t.Fatal("expected runbook event to be projected from canonical history")
+	}
+	if !foundSnoozed || !foundUnsnoozed {
+		t.Fatalf("expected snooze lifecycle with actor and expiry, snoozed=%v unsnoozed=%v", foundSnoozed, foundUnsnoozed)
 	}
 }
 

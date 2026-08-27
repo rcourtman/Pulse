@@ -4461,6 +4461,18 @@ window as its delivery-attempt log, with an explicit bounded limit. That event
 request runs independently of `GET /api/notifications/delivery-log`; failure
 of either API must not recast the other response as empty or unavailable.
 
+Per-alert snooze is a monitoring-write mutation over canonical alert identity.
+`POST /api/alerts/snooze` accepts `alertIdentifier` and an RFC 3339 `until`,
+rejects missing, past, or more-than-30-day expiries, and returns the normalized
+UTC expiry. `POST /api/alerts/unsnooze` accepts the same canonical identifier.
+Both routes require `monitoring:write`, synchronize and broadcast active alert
+state, and return `404` for an unknown occurrence. They pause or resume delivery
+policy only; neither route resolves, clears, or changes detector truth.
+The durable lifecycle events also project to canonical resource-change kinds
+`alert_snoozed` and `alert_unsnoozed`, which typed clients must retain in
+resource history and incident-timeline filters rather than collapsing into an
+unknown generic event.
+
 The generated PVE setup-script temperature wrapper is part of the API contract
 for legacy SSH sensor collection. Discovery uses non-opening `smartctl --scan`
 and merges typed scan targets with `lsblk` transport evidence. Direct Linux

@@ -27,6 +27,8 @@ const (
 	ChangeAlertFired          ChangeKind = "alert_fired"
 	ChangeAlertAcknowledged   ChangeKind = "alert_acknowledged"
 	ChangeAlertUnacknowledged ChangeKind = "alert_unacknowledged"
+	ChangeAlertSnoozed        ChangeKind = "alert_snoozed"
+	ChangeAlertUnsnoozed      ChangeKind = "alert_unsnoozed"
 	ChangeAlertResolved       ChangeKind = "alert_resolved"
 	ChangeCommandExecuted     ChangeKind = "command_executed"
 	ChangeRunbookExecuted     ChangeKind = "runbook_executed"

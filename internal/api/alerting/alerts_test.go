@@ -112,6 +112,14 @@ func (m *MockAlertManager) AcknowledgeAlert(id, user string) error {
 	return args.Error(0)
 }
 
+func (m *MockAlertManager) SnoozeAlert(id, user string, until time.Time) error {
+	return m.Called(id, user, until).Error(0)
+}
+
+func (m *MockAlertManager) UnsnoozeAlert(id, user string) error {
+	return m.Called(id, user).Error(0)
+}
+
 func (m *MockAlertManager) ClearAlert(id string) bool {
 	args := m.Called(id)
 	return args.Bool(0)
@@ -984,6 +992,45 @@ func TestUnacknowledgeAlertByBody_CanonicalIdentifierSuccess(t *testing.T) {
 	h.UnacknowledgeAlertByBody(w, req)
 
 	assert.Equal(t, 200, w.Code)
+}
+
+func TestSnoozeAlertByBody_Success(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+	until := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Second)
+	mockManager.On("SnoozeAlert", "canonical:a1", "operator@example.com", until).Return(nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/snooze", strings.NewReader(fmt.Sprintf(`{"alertIdentifier":"canonical:a1","until":%q}`, until.Format(time.RFC3339))))
+	w := httptest.NewRecorder()
+	w.Header().Set("X-Authenticated-User", "operator@example.com")
+	h.SnoozeAlertByBody(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockManager.AssertExpectations(t)
+}
+
+func TestSnoozeAlertByBody_RejectsInvalidExpiry(t *testing.T) {
+	h := NewAlertHandlers(nil, new(MockAlertMonitor), nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/snooze", strings.NewReader(`{"alertIdentifier":"a1","until":"not-a-time"}`))
+	w := httptest.NewRecorder()
+	h.SnoozeAlertByBody(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestUnsnoozeAlertByBody_Success(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	mockManager.On("UnsnoozeAlert", "a1", "operator@example.com").Return(nil)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/unsnooze", strings.NewReader(`{"alertIdentifier":"a1"}`))
+	w := httptest.NewRecorder()
+	w.Header().Set("X-Authenticated-User", "operator@example.com")
+	h.UnsnoozeAlertByBody(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockManager.AssertExpectations(t)
 }
 
 func TestClearAlertByBody_Success(t *testing.T) {

@@ -507,6 +507,11 @@ The authenticated `GET /api/updates/release-notes` projection follows the same
 server-only boundary: it reads the exact published notes for the running Pulse
 server release and must not be used as agent version, enrollment, update
 availability, or fleet rollout evidence.
+The alerts-owned `POST /api/alerts/snooze` and
+`POST /api/alerts/unsnooze` handlers share `internal/api/` routing only. They
+pause and resume notification and escalation policy for one existing incident;
+they grant no agent enrollment, liveness, command, update, removal, or
+fleet-control authority, and agent lifecycle state must not key off them.
 Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control

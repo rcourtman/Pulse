@@ -168,6 +168,10 @@ func alertChangeReason(kind ChangeKind, alert AlertTimelineChange) string {
 			return fmt.Sprintf("Alert unacknowledged: %s", message)
 		}
 		return "Alert unacknowledged"
+	case ChangeAlertSnoozed:
+		return "Alert snoozed"
+	case ChangeAlertUnsnoozed:
+		return "Alert notifications resumed"
 	case ChangeAlertResolved:
 		if message != "" {
 			return fmt.Sprintf("Alert resolved: %s", message)

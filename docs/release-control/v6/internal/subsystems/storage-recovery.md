@@ -5582,6 +5582,11 @@ delivery outcomes and the delivery gate state only; they add no storage,
 backup, snapshot, restore, retention, cleanup, or recovery capability, write
 nothing, and leave storage and recovery state, evidence freshness,
 persistence, and admission contracts unchanged.
+The alerts-owned per-incident snooze and resume routes share the same boundary:
+they pause and restore notification and escalation policy while monitoring and
+resolution detection continue. A snooze is not a recovery point, backup hold,
+retention override, restore admission, or storage-action approval, and its
+expiry must not be interpreted as recovery evidence.
 
 ### Docker command-session identity recovery does not grant storage authority
 

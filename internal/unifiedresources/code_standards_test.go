@@ -1583,6 +1583,20 @@ func TestResourceChangePresentationUsesCanonicalLabels(t *testing.T) {
 	}
 }
 
+func TestAlertSnoozeChangeKindsRemainCanonical(t *testing.T) {
+	filters, err := ParseResourceChangeFilters([]string{"alert_snoozed,alert_unsnoozed"}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []ChangeKind{ChangeAlertSnoozed, ChangeAlertUnsnoozed}
+	if !reflect.DeepEqual(filters.Kinds, want) {
+		t.Fatalf("snooze filters = %#v, want %#v", filters.Kinds, want)
+	}
+	if ChangeKindLabel(ChangeAlertSnoozed) != "Alert snoozed" || ChangeKindLabel(ChangeAlertUnsnoozed) != "Alert resumed" {
+		t.Fatalf("snooze labels = %q, %q", ChangeKindLabel(ChangeAlertSnoozed), ChangeKindLabel(ChangeAlertUnsnoozed))
+	}
+}
+
 func TestResourceRelationshipContextUsesCanonicalRelationshipPresentation(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "ai", "service.go"))
 	if err != nil {

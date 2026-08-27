@@ -244,6 +244,8 @@ export type ResourceChangeKind =
   | 'alert_fired'
   | 'alert_acknowledged'
   | 'alert_unacknowledged'
+  | 'alert_snoozed'
+  | 'alert_unsnoozed'
   | 'alert_resolved'
   | 'command_executed'
   | 'runbook_executed';

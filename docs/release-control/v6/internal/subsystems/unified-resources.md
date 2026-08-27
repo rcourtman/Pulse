@@ -3103,8 +3103,12 @@ another capability.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,
-`alert_resolved`, `command_executed`, and `runbook_executed` are part of the
-canonical history contract, not optional AI-local annotations. Alert-scoped
+`alert_snoozed`, `alert_unsnoozed`, `alert_resolved`, `command_executed`, and
+`runbook_executed` are part of the canonical history contract, not optional
+AI-local annotations. Snooze and resume projections must preserve the actor
+and exact suppression expiry when present; they pause delivery and escalation
+without acknowledging, resolving, or replacing the underlying incident.
+Alert-scoped
 incident memory may still project those events for one investigation thread,
 but the durable source of truth for resource-affecting alert lifecycle and
 remediation activity now belongs to unified-resource history keyed by

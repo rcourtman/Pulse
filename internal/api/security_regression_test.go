@@ -1939,6 +1939,8 @@ func TestAlertMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/alerts/bulk/clear", body: `{}`},
 		{method: http.MethodPost, path: "/api/alerts/acknowledge", body: `{}`},
 		{method: http.MethodPost, path: "/api/alerts/unacknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/snooze", body: `{}`},
+		{method: http.MethodPost, path: "/api/alerts/unsnooze", body: `{}`},
 		{method: http.MethodPost, path: "/api/alerts/clear", body: `{}`},
 		{method: http.MethodPost, path: "/api/alerts/incidents/note", body: `{}`},
 	}

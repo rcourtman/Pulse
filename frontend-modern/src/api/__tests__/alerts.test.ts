@@ -249,4 +249,27 @@ describe('AlertsAPI', () => {
       expect(result).toEqual({ success: true, results: [] });
     });
   });
+
+  describe('incident snooze', () => {
+    it('snoozes and resumes by canonical alert identifier', async () => {
+      vi.mocked(apiFetchJSON)
+        .mockResolvedValueOnce({ success: true, snoozedUntil: '2026-08-27T14:00:00Z' })
+        .mockResolvedValueOnce({ success: true });
+
+      await AlertsAPI.snooze('cpu:vm/100', '2026-08-27T14:00:00Z');
+      await AlertsAPI.unsnooze('cpu:vm/100');
+
+      expect(apiFetchJSON).toHaveBeenNthCalledWith(1, '/api/alerts/snooze', {
+        method: 'POST',
+        body: JSON.stringify({
+          alertIdentifier: 'cpu:vm/100',
+          until: '2026-08-27T14:00:00Z',
+        }),
+      });
+      expect(apiFetchJSON).toHaveBeenNthCalledWith(2, '/api/alerts/unsnooze', {
+        method: 'POST',
+        body: JSON.stringify({ alertIdentifier: 'cpu:vm/100' }),
+      });
+    });
+  });
 });

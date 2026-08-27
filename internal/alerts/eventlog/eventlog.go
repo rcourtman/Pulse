@@ -35,6 +35,8 @@ const (
 	TypeResolved               = "resolved"
 	TypeAcknowledged           = "acknowledged"
 	TypeUnacknowledged         = "unacknowledged"
+	TypeSnoozed                = "snoozed"
+	TypeUnsnoozed              = "unsnoozed"
 	TypeEscalated              = "escalated"
 	TypeFlappingDetected       = "flapping_detected"
 	TypeNotificationDispatched = "notification_dispatched"
@@ -69,7 +71,8 @@ type Event struct {
 	Details      map[string]string `json:"details,omitempty"`
 	// Snapshot is the full alert state at the moment of the event, recorded
 	// for lifecycle transitions (fired, refired, resolved, acknowledged,
-	// unacknowledged) so alert history can be projected from the log alone.
+	// unacknowledged, snoozed, unsnoozed) so alert history can be projected
+	// from the log alone.
 	Snapshot json.RawMessage `json:"snapshot,omitempty"`
 }
 

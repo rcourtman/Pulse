@@ -15,6 +15,8 @@ import {
   getAlertOverviewStartedAtLabel,
   getAlertOverviewStartedAtClass,
   getAlertOverviewTimelineActionLabel,
+  getAlertOverviewSnoozedUntilLabel,
+  getAlertOverviewSnoozeLabel,
 } from '@/utils/alertOverviewPresentation';
 
 import { alertTypeDisplayLabel } from './helpers';
@@ -23,6 +25,8 @@ import { getCanonicalAlertId } from './identity';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import type { AlertOverviewState } from './useAlertOverviewState';
 import { ResourceMonitoringPolicyAction } from './ResourceMonitoringPolicyAction';
+import { AlertSnoozeAction } from './AlertSnoozeAction';
+import { isAlertSnoozed } from './useAlertSnoozeState';
 
 interface AlertOverviewAlertCardProps {
   alert: Alert;
@@ -32,11 +36,14 @@ interface AlertOverviewAlertCardProps {
 
 export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   const alertKey = () => getCanonicalAlertId(props.alert);
+  const processing = () =>
+    props.state.processingAlerts().has(alertKey()) ||
+    props.state.snoozeProcessingAlerts().has(alertKey());
   const alertCardPresentation = () =>
     getAlertOverviewCardPresentation(
       props.alert.level ?? 'warning',
       props.alert.acknowledged,
-      props.state.processingAlerts().has(alertKey()),
+      processing(),
     );
 
   const deliveryDiagnosis = () => props.state.deliveryDiagnoses()[alertKey()];
@@ -144,6 +151,11 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                   {getAlertOverviewAcknowledgedBadgeLabel()}
                 </span>
               </Show>
+              <Show when={isAlertSnoozed(props.alert)}>
+                <span class="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                  {getAlertOverviewSnoozeLabel()}
+                </span>
+              </Show>
             </div>
             <p class="text-sm text-base-content mt-1 break-words">{props.alert.message}</p>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
@@ -170,13 +182,27 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                   {deliveryStatusLine()?.label}
                 </span>
               </Show>
+              <Show
+                when={
+                  isAlertSnoozed(props.alert) &&
+                  props.alert.operationalRecord?.suppression?.expiresAt
+                }
+              >
+                <span class="text-xs text-blue-600 dark:text-blue-400">
+                  {getAlertOverviewSnoozedUntilLabel(
+                    new Date(
+                      props.alert.operationalRecord!.suppression!.expiresAt!,
+                    ).toLocaleString(),
+                  )}
+                </span>
+              </Show>
             </div>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
           <button
             class={getAlertOverviewPrimaryActionClass(props.alert.acknowledged)}
-            disabled={props.state.processingAlerts().has(alertKey())}
+            disabled={processing()}
             onClick={async (e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -185,9 +211,16 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
           >
             {getAlertOverviewPrimaryActionLabel({
               acknowledged: props.alert.acknowledged,
-              processing: props.state.processingAlerts().has(alertKey()),
+              processing: processing(),
             })}
           </button>
+          <Show when={!props.alert.acknowledged || isAlertSnoozed(props.alert)}>
+            <AlertSnoozeAction
+              alert={props.alert}
+              state={props.state}
+              timelineState={props.timelineState}
+            />
+          </Show>
           <button
             class={getAlertOverviewSecondaryActionClass()}
             onClick={() => {

@@ -19,6 +19,8 @@ export const RESOURCE_CHANGE_KIND_ORDER: ResourceChangeKind[] = [
   'alert_fired',
   'alert_acknowledged',
   'alert_unacknowledged',
+  'alert_snoozed',
+  'alert_unsnoozed',
   'alert_resolved',
   'command_executed',
   'runbook_executed',
@@ -77,6 +79,16 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
     label: 'Alert unacknowledged',
     plural: 'Alerts unacknowledged',
     className: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+  },
+  alert_snoozed: {
+    label: 'Alert snoozed',
+    plural: 'Alerts snoozed',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+  },
+  alert_unsnoozed: {
+    label: 'Alert resumed',
+    plural: 'Alerts resumed',
+    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
   },
   alert_resolved: {
     label: 'Alert resolved',
@@ -238,6 +250,10 @@ export function formatResourceChangeKind(kind: ResourceChange['kind']): string {
       return 'Alert acknowledged';
     case 'alert_unacknowledged':
       return 'Alert unacknowledged';
+    case 'alert_snoozed':
+      return 'Alert snoozed';
+    case 'alert_unsnoozed':
+      return 'Alert resumed';
     case 'alert_resolved':
       return 'Alert resolved';
     case 'command_executed':

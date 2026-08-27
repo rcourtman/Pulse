@@ -90,6 +90,8 @@ func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error 
 		eventlog.TypeResolved,
 		eventlog.TypeAcknowledged,
 		eventlog.TypeUnacknowledged,
+		eventlog.TypeSnoozed,
+		eventlog.TypeUnsnoozed,
 	}}, func(event eventlog.Event) error {
 		if len(event.Snapshot) == 0 {
 			return nil
@@ -206,7 +208,8 @@ func cloneStringMap(input map[string]string) map[string]string {
 func eventCarriesAlertSnapshot(eventType string) bool {
 	switch eventType {
 	case eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeResolved,
-		eventlog.TypeAcknowledged, eventlog.TypeUnacknowledged, eventlog.TypeEscalated:
+		eventlog.TypeAcknowledged, eventlog.TypeUnacknowledged, eventlog.TypeSnoozed,
+		eventlog.TypeUnsnoozed, eventlog.TypeEscalated:
 		return true
 	default:
 		return false

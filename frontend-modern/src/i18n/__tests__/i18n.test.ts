@@ -102,6 +102,19 @@ describe('i18n foundation', () => {
     }
   });
 
+  it('localizes the alert snooze lifecycle across every supported locale', () => {
+    expect(t('alerts.overview.action.snooze', undefined, 'en')).toBe('Snooze');
+    expect(t('alerts.overview.action.snooze', undefined, 'de')).toBe('Zurueckstellen');
+    expect(t('alerts.overview.action.snooze', undefined, 'es')).toBe('Posponer');
+    expect(t('alerts.overview.action.resume', undefined, 'de')).toBe('Fortsetzen');
+    expect(t('alerts.overview.action.resume', undefined, 'es')).toBe('Reanudar');
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(t('alerts.overview.snooze.description', undefined, locale)).toBeTruthy();
+      expect(t('alerts.timeline.event.alertSnoozed', undefined, locale)).toBeTruthy();
+      expect(t('alerts.timeline.event.alertUnsnoozed', undefined, locale)).toBeTruthy();
+    }
+  });
+
   it('captures the first and next localization waves without enabling unsupported locales', () => {
     expect(FIRST_LOCALIZATION_LOCALES).toEqual(['de', 'es']);
     expect(NEXT_LOCALIZATION_LOCALES).toEqual(['fr', 'pt-BR', 'ja', 'zh-Hans', 'ko']);

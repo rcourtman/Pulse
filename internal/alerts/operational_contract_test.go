@@ -76,6 +76,29 @@ func TestEnsureOperationalContractBackfillsLegacyAlertHonestly(t *testing.T) {
 	}
 }
 
+func TestIndefiniteOperationalSuppressionRemainsDeliverySafe(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Now().UTC()
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = ActivationActive
+	m.UpdateConfig(cfg)
+	alert := &Alert{ID: "maintenance:vm/100", CanonicalState: "maintenance:vm/100", CanonicalSpecID: "maintenance", Type: "maintenance", Level: AlertLevelWarning, ResourceID: "vm/100", ResourceName: "vm-100", StartTime: now, LastSeen: now}
+	m.mu.Lock()
+	m.setActiveAlertNoLock(alert.ID, alert)
+	m.mu.Unlock()
+	if err := m.SuppressOperationalAlert(alert.ID, "operator@example.com", "maintenance", nil); err != nil {
+		t.Fatal(err)
+	}
+	if m.dispatchAlert(activeAlert(t, m, alert.ID), false) {
+		t.Fatal("indefinitely suppressed alert was dispatched")
+	}
+	diagnosis, ok := m.DiagnoseAlertDelivery(alert.ID)
+	if !ok || diagnosis.Reason != AlertDeliveryReasonSnoozed || diagnosis.SuppressedUntil != nil {
+		t.Fatalf("diagnosis = %+v, exists=%v", diagnosis, ok)
+	}
+}
+
 func TestEnsureOperationalContractUsesCanonicalIncidentAction(t *testing.T) {
 	now := time.Date(2026, 7, 19, 1, 0, 0, 0, time.UTC)
 	alert := &Alert{

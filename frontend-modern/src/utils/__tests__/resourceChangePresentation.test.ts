@@ -17,6 +17,8 @@ describe('resourceChangePresentation utils', () => {
     expect(formatResourceChangeKind('metric_anomaly')).toBe('Metric anomaly');
     expect(formatResourceChangeKind('relationship_change')).toBe('Relationship change');
     expect(formatResourceChangeKind('alert_fired')).toBe('Alert fired');
+    expect(formatResourceChangeKind('alert_snoozed')).toBe('Alert snoozed');
+    expect(formatResourceChangeKind('alert_unsnoozed')).toBe('Alert resumed');
     expect(formatResourceChangeKind('runbook_executed')).toBe('Runbook executed');
   });
 
@@ -65,6 +67,14 @@ describe('resourceChangePresentation utils', () => {
     expect(getResourceChangeKindPresentation('alert_resolved')).toMatchObject({
       label: 'Alert resolved',
       plural: 'Alerts resolved',
+    });
+    expect(getResourceChangeKindPresentation('alert_snoozed')).toMatchObject({
+      label: 'Alert snoozed',
+      plural: 'Alerts snoozed',
+    });
+    expect(getResourceChangeKindPresentation('alert_unsnoozed')).toMatchObject({
+      label: 'Alert resumed',
+      plural: 'Alerts resumed',
     });
     expect(getResourceChangeSourceTypePresentation('platform_event')).toMatchObject({
       label: 'Platform event',

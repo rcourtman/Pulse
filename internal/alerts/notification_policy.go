@@ -29,6 +29,7 @@ const (
 
 	AlertDeliveryReasonReady                 = "ready"
 	AlertDeliveryReasonAcknowledged          = "acknowledged"
+	AlertDeliveryReasonSnoozed               = "snoozed"
 	AlertDeliveryReasonNotificationsDisabled = "notifications_disabled"
 	AlertDeliveryReasonNotificationsInactive = "notifications_inactive"
 	AlertDeliveryReasonSuppressionWindow     = "suppression_window"
@@ -170,6 +171,16 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			Msg("Alert notification suppressed - already acknowledged")
 		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
 			AlertDeliveryReasonAcknowledged, "Notification suppressed: alert is acknowledged.", nil)
+		return false
+	}
+	if until, snoozed := alertSnoozeUntil(alert, m.policyNow()); snoozed {
+		details := map[string]string(nil)
+		if until != nil {
+			details = map[string]string{"until": until.Format(time.RFC3339Nano)}
+		}
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonSnoozed, "Notification suppressed: alert is snoozed.",
+			details)
 		return false
 	}
 
@@ -566,6 +577,10 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if _, snoozed := alertSnoozeUntil(alert, m.policyNow()); snoozed {
+		clearQuietHoursNotificationReplay(alert)
+		return true
+	}
 
 	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
 		clearQuietHoursNotificationReplay(alert)
@@ -612,6 +627,11 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 			Str("alertID", alert.ID).
 			Str("type", alert.Type).
 			Msg("Recovery notification suppressed for acknowledged alert")
+		return true
+	}
+	if _, snoozed := alertSnoozeUntil(alert, m.policyNow()); snoozed {
+		clearQuietHoursNotificationReplay(alert)
+		log.Debug().Str("alertID", alert.ID).Msg("Recovery notification suppressed for snoozed alert")
 		return true
 	}
 	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
@@ -765,6 +785,15 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 	switch {
 	case alert.Acknowledged:
 		diagnosis.setSuppressed(AlertDeliveryReasonAcknowledged, "Alert is acknowledged, so firing notifications are suppressed.")
+	case func() bool {
+		until, snoozed := alertSnoozeUntil(alert, now)
+		if !snoozed {
+			return false
+		}
+		diagnosis.SuppressedUntil = until
+		diagnosis.setSuppressed(AlertDeliveryReasonSnoozed, "Alert is snoozed, so notifications and escalations are paused until the selected time.")
+		return true
+	}():
 	case !m.config.Enabled:
 		diagnosis.setSuppressed(AlertDeliveryReasonNotificationsDisabled, "Alert notifications are disabled in the alert configuration.")
 	case m.config.ActivationState != ActivationActive:

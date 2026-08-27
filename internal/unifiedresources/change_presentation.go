@@ -46,6 +46,10 @@ func ChangeKindLabel(kind ChangeKind) string {
 		return "Alert acknowledged"
 	case ChangeAlertUnacknowledged:
 		return "Alert unacknowledged"
+	case ChangeAlertSnoozed:
+		return "Alert snoozed"
+	case ChangeAlertUnsnoozed:
+		return "Alert resumed"
 	case ChangeAlertResolved:
 		return "Alert resolved"
 	case ChangeCommandExecuted:

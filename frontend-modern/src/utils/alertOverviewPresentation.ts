@@ -147,6 +147,52 @@ export function getAlertOverviewTimelineActionLabel(isExpanded: boolean): string
     : t('alerts.overview.action.timeline');
 }
 
+export function getAlertOverviewSnoozeLabel(): string {
+  return t('alerts.overview.action.snooze');
+}
+
+export function getAlertOverviewResumeLabel(): string {
+  return t('alerts.overview.action.resume');
+}
+
+export function getAlertOverviewCancelLabel(): string {
+  return t('alerts.overview.action.cancel');
+}
+
+export function getAlertOverviewSnoozeTitle(): string {
+  return t('alerts.overview.snooze.title');
+}
+
+export function getAlertOverviewSnoozeDescription(): string {
+  return t('alerts.overview.snooze.description');
+}
+
+export function getAlertOverviewSnoozeOptionLabel(
+  preset: 'oneHour' | 'twoHours' | 'eightHours' | 'tomorrowMorning' | 'sevenDays',
+): string {
+  return t(`alerts.overview.snooze.option.${preset}`);
+}
+
+export function getAlertOverviewSnoozedUntilLabel(until: string): string {
+  return t('alerts.overview.snoozedUntil', { until });
+}
+
+export function getAlertOverviewSnoozedNotification(until: string): string {
+  return t('alerts.overview.notification.snoozed', { until });
+}
+
+export function getAlertOverviewResumedNotification(): string {
+  return t('alerts.overview.notification.resumed');
+}
+
+export function getAlertOverviewSnoozeFailureNotification(resuming: boolean): string {
+  return t(
+    resuming
+      ? 'alerts.overview.notification.resumeFailed'
+      : 'alerts.overview.notification.snoozeFailed',
+  );
+}
+
 export function getAlertOverviewRestoredNotification(): string {
   return t('alerts.overview.notification.restored');
 }
@@ -211,6 +257,10 @@ export function getAlertTimelineEventTypeLabel(type: string): string {
       return t('alerts.timeline.event.alertAcknowledged');
     case 'alert_unacknowledged':
       return t('alerts.timeline.event.alertUnacknowledged');
+    case 'alert_snoozed':
+      return t('alerts.timeline.event.alertSnoozed');
+    case 'alert_unsnoozed':
+      return t('alerts.timeline.event.alertUnsnoozed');
     case 'alert_resolved':
       return t('alerts.timeline.event.alertResolved');
     case 'ai_analysis':

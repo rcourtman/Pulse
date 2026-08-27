@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
@@ -368,6 +369,30 @@ func TestAlertsEndpoints(t *testing.T) {
 		// Should be 404 because alert doesn't exist, but that proves the handler code ran
 		if res.StatusCode != http.StatusNotFound && res.StatusCode != http.StatusOK {
 			t.Errorf("status code = %d, want 404 or 200", res.StatusCode)
+		}
+	})
+
+	t.Run("SnoozeAndUnsnoozeAlert", func(t *testing.T) {
+		until := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
+		for _, request := range []struct {
+			path string
+			body map[string]string
+		}{
+			{path: "snooze", body: map[string]string{"alertIdentifier": "missing-alert", "until": until}},
+			{path: "unsnooze", body: map[string]string{"alertIdentifier": "missing-alert"}},
+		} {
+			jsonBody, err := json.Marshal(request.body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, err := http.Post(srv.server.URL+"/api/alerts/"+request.path, "application/json", bytes.NewReader(jsonBody))
+			if err != nil {
+				t.Fatalf("%s request failed: %v", request.path, err)
+			}
+			res.Body.Close()
+			if res.StatusCode != http.StatusNotFound {
+				t.Fatalf("%s status = %d, want %d", request.path, res.StatusCode, http.StatusNotFound)
+			}
 		}
 	})
 

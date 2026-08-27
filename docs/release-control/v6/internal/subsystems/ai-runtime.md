@@ -6240,6 +6240,11 @@ for those events now belongs to canonical `ResourceChange` kinds such as
 `command_executed` and `runbook_executed`, keyed by canonical resource ID and
 linked back to the alert through metadata instead of being stored only in AI
 memory.
+Alert snooze and resume entries follow the same projection rule: AI incident
+memory may present `alert_snoozed` and `alert_unsnoozed` for operator context,
+including actor and exact expiry metadata, but it must read them from canonical
+resource history. Those events pause and restore alert operations; they do not
+infer acknowledgement, resolution, or a new incident identity.
 The patrol-local `memory.ChangeDetector.GetChangesSummary` path now also
 delegates to the shared memory recent-change presentation helper, so any
 future fallback summary entry point inherits the same heading, resource

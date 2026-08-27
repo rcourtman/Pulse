@@ -1919,6 +1919,18 @@ remains inspectable. Expiry or explicit unsuppression returns the record to its
 detector-owned state; it never resolves it. Only fresh sufficient recovery
 evidence may enter resolving, and only detector recovery may resolve.
 
+Per-alert snooze is the customer-facing bounded suppression contract, not a
+page-local timer. `SnoozeAlert` writes the same canonical operational record,
+requires a future expiry no more than 30 days away, and appends a durable
+`snoozed` lifecycle snapshot. While active, notification dispatch, recovery
+delivery, delivery diagnosis, and escalation all consult that one record.
+Expiry runs as an explicit `unsnoozed` transition and restores `acknowledged`
+or `open` according to the underlying alert without resolving the incident.
+Skipped escalation levels are not replayed in a burst: the remaining schedule
+resumes from the unsnooze transition while the incident's original start time
+and duration remain intact. The alerts overview exposes preset bounded holds,
+the exact local expiry, and an explicit Resume action over this API-owned state.
+
 ### Canonical threshold-override succession
 
 Alert threshold overrides are persisted under the current canonical resource

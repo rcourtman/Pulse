@@ -39,6 +39,8 @@ type AlertManager interface {
 	ClearAlertHistory() error
 	UnacknowledgeAlert(id string) error
 	AcknowledgeAlert(id, user string) error
+	SnoozeAlert(id, user string, until time.Time) error
+	UnsnoozeAlert(id, user string) error
 	ClearAlert(id string) bool
 	GetAlertHistory(limit int) []alerts.Alert
 	GetAlertHistorySince(since time.Time, limit int) []alerts.Alert
@@ -1026,6 +1028,11 @@ type alertIdentifierRequest struct {
 	AlertIdentifier string `json:"alertIdentifier"`
 }
 
+type snoozeAlertRequest struct {
+	AlertIdentifier string    `json:"alertIdentifier"`
+	Until           time.Time `json:"until"`
+}
+
 func (r alertIdentifierRequest) identifier() string {
 	return strings.TrimSpace(r.AlertIdentifier)
 }
@@ -1138,6 +1145,78 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 		go func() {
 			h.broadcastStateForContext(ctx)
 		}()
+	}
+}
+
+// SnoozeAlertByBody pauses this occurrence's notifications and escalations.
+// POST /api/alerts/snooze with {"alertIdentifier":"alert-id","until":"RFC3339"}
+func (h *AlertHandlers) SnoozeAlertByBody(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	var req snoozeAlertRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	alertID := strings.TrimSpace(req.AlertIdentifier)
+	if alertID == "" || !validateAlertIdentifier(alertID) || req.Until.IsZero() {
+		http.Error(w, "Valid alert identifier and snooze expiry are required", http.StatusBadRequest)
+		return
+	}
+	user := w.Header().Get("X-Authenticated-User")
+	if user == "" {
+		user = "unknown"
+	}
+	if err := h.getMonitor(r.Context()).GetAlertManager().SnoozeAlert(alertID, user, req.Until); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, alerts.ErrAlertNotFound) {
+			status = http.StatusNotFound
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	h.getMonitor(r.Context()).SyncAlertState()
+	if err := utils.WriteJSONResponse(w, map[string]any{"success": true, "snoozedUntil": req.Until.UTC()}); err != nil {
+		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write snooze response")
+	}
+	if h.wsHub != nil {
+		ctx := r.Context()
+		go h.broadcastStateForContext(ctx)
+	}
+}
+
+// UnsnoozeAlertByBody resumes normal policy without resolving the alert.
+func (h *AlertHandlers) UnsnoozeAlertByBody(w http.ResponseWriter, r *http.Request) {
+	var req alertIdentifierRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	alertID := req.identifier()
+	if alertID == "" || !validateAlertIdentifier(alertID) {
+		http.Error(w, "Valid alert identifier is required", http.StatusBadRequest)
+		return
+	}
+	user := w.Header().Get("X-Authenticated-User")
+	if user == "" {
+		user = "unknown"
+	}
+	if err := h.getMonitor(r.Context()).GetAlertManager().UnsnoozeAlert(alertID, user); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, alerts.ErrAlertNotFound) {
+			status = http.StatusNotFound
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	h.getMonitor(r.Context()).SyncAlertState()
+	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
+		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write unsnooze response")
+	}
+	if h.wsHub != nil {
+		ctx := r.Context()
+		go h.broadcastStateForContext(ctx)
 	}
 }
 
@@ -1420,6 +1499,16 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.UnacknowledgeAlertByBody(w, r)
+	case path == "snooze" && r.Method == http.MethodPost:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.SnoozeAlertByBody(w, r)
+	case path == "unsnooze" && r.Method == http.MethodPost:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.UnsnoozeAlertByBody(w, r)
 	case path == "clear" && r.Method == http.MethodPost:
 		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
 			return

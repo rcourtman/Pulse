@@ -2075,8 +2075,12 @@ live monitoring updates and historical inspection stay aligned.
 That same ownership now includes the resource-history projection of canonical
 alert-lifecycle facts. The alerts-owned SQLite event log is the lifecycle source
 of truth; monitoring consumes its delivery-independent lifecycle seam and
-materializes fired, acknowledged, unacknowledged, and resolved breadcrumbs in
-the unified-resource change store. Projection IDs derive deterministically from
+materializes fired, acknowledged, unacknowledged, snoozed, unsnoozed, and
+resolved breadcrumbs in the unified-resource change store. Snooze projections
+carry their actor and exact expiry so timelines explain both who paused
+operations and when automatic delivery and escalation will resume; neither
+transition changes acknowledgement, resolution, or incident identity.
+Projection IDs derive deterministically from
 alert identity, canonical resource, transition kind, and occurrence time, so
 restart repair and duplicate consumer delivery are idempotent. Notification
 activation, quiet hours, grouping, throttling, and destination health may never

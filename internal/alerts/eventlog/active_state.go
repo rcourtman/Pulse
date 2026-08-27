@@ -264,7 +264,7 @@ func projectLifecycleActiveState(tx *sql.Tx, event Event) error {
 		return nil
 	}
 	switch event.Type {
-	case TypeFired, TypeRefired, TypeAcknowledged, TypeUnacknowledged, TypeEscalated:
+	case TypeFired, TypeRefired, TypeAcknowledged, TypeUnacknowledged, TypeSnoozed, TypeUnsnoozed, TypeEscalated:
 		snapshot, err := activeSnapshotFromEvent(event)
 		if err != nil {
 			return err

@@ -109,6 +109,23 @@ export class AlertsAPI {
     });
   }
 
+  static async snooze(
+    alertIdentifier: string,
+    until: string,
+  ): Promise<{ success: boolean; snoozedUntil: string }> {
+    return apiFetchJSON(`${this.baseUrl}/snooze`, {
+      method: 'POST',
+      body: JSON.stringify({ alertIdentifier, until }),
+    });
+  }
+
+  static async unsnooze(alertIdentifier: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/unsnooze`, {
+      method: 'POST',
+      body: JSON.stringify({ alertIdentifier }),
+    });
+  }
+
   // Alert configuration methods
   static async getConfig(): Promise<AlertConfig> {
     return apiFetchJSON(`${this.baseUrl}/config`) as Promise<AlertConfig>;

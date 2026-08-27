@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rs/zerolog/log"
@@ -224,7 +225,7 @@ func (m *Manager) SuppressOperationalAlert(
 		return fmt.Errorf("suppression reason is required")
 	}
 
-	now := time.Now().UTC()
+	now := m.policyNow().UTC()
 	if expiresAt != nil {
 		value := expiresAt.UTC()
 		if !value.After(now) {
@@ -269,7 +270,14 @@ func (m *Manager) SuppressOperationalAlert(
 		alert.OperationalRecord.EvidenceIDs,
 	)
 	m.setActiveAlertNoLock(key, alert)
+	alertCopy := alert.Clone()
 	m.mu.Unlock()
+	details := map[string]string{"actor": actor}
+	if expiresAt != nil {
+		details["until"] = expiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	m.recordAlertEvent(eventlog.TypeSnoozed, alertCopy, alertID, reason,
+		"Alert notifications and escalations snoozed.", details)
 	m.saveActiveAlertsAsync("operational suppression")
 	return nil
 }
@@ -277,16 +285,103 @@ func (m *Manager) SuppressOperationalAlert(
 // UnsuppressOperationalAlert returns a suppressed record to the detector-owned
 // active state. It does not resolve or erase the underlying alert.
 func (m *Manager) UnsuppressOperationalAlert(alertID string) error {
-	return m.updateExplicitOperationalState(
-		alertID,
-		operationaltrust.OperationalOpen,
-		operationaltrust.TransitionSuppressionExpired,
-		"suppression_removed",
-		nil,
-		func(record *operationaltrust.OperationalRecord) {
-			record.Suppression = nil
-		},
-	)
+	return m.unsuppressOperationalAlert(alertID, "suppression_removed", "system")
+}
+
+// SnoozeAlert is the user-facing, bounded alert hold. It deliberately reuses
+// the canonical operational suppression record so every surface observes one
+// lifecycle state rather than a UI-only timer.
+func (m *Manager) SnoozeAlert(alertID, actor string, until time.Time) error {
+	now := m.policyNow().UTC()
+	until = until.UTC()
+	if !until.After(now) {
+		return fmt.Errorf("snooze expiry must be in the future")
+	}
+	if until.After(now.Add(30 * 24 * time.Hour)) {
+		return fmt.Errorf("snooze expiry cannot be more than 30 days away")
+	}
+	return m.SuppressOperationalAlert(alertID, actor, "user_snooze", &until)
+}
+
+// UnsnoozeAlert resumes normal delivery policy without resolving the finding.
+func (m *Manager) UnsnoozeAlert(alertID, actor string) error {
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		return fmt.Errorf("unsnooze actor is required")
+	}
+	return m.unsuppressOperationalAlert(alertID, "user_resumed", actor)
+}
+
+func (m *Manager) unsuppressOperationalAlert(alertID, reason, actor string) error {
+	now := m.policyNow().UTC()
+	m.mu.Lock()
+	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
+	if !exists {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
+	alert, ok := m.getActiveAlertNoLock(key)
+	if !ok || alert == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
+	ensureOperationalContract(alert, now)
+	if alert.OperationalRecord == nil || alert.OperationalRecord.State != operationaltrust.OperationalSuppressed {
+		m.mu.Unlock()
+		return nil
+	}
+	from := alert.OperationalRecord.State
+	to := operationaltrust.OperationalOpen
+	if alert.Acknowledged {
+		to = operationaltrust.OperationalAcknowledged
+	}
+	alert.OperationalRecord.State = to
+	alert.OperationalRecord.StateChangedAt = now
+	alert.OperationalRecord.Suppression = nil
+	appendExplicitOperationalTransition(alert, from, to, now,
+		operationaltrust.TransitionSuppressionExpired, reason, alert.OperationalRecord.EvidenceIDs)
+	m.setActiveAlertNoLock(key, alert)
+	alertCopy := alert.Clone()
+	m.mu.Unlock()
+	m.recordAlertEvent(eventlog.TypeUnsnoozed, alertCopy, alertID, reason,
+		"Alert snooze ended; normal delivery policy resumed.", map[string]string{"actor": actor})
+	m.saveActiveAlertsAsync("operational unsuppression")
+	return nil
+}
+
+func alertSnoozeUntil(alert *Alert, now time.Time) (*time.Time, bool) {
+	if alert == nil || alert.OperationalRecord == nil ||
+		alert.OperationalRecord.State != operationaltrust.OperationalSuppressed ||
+		alert.OperationalRecord.Suppression == nil {
+		return nil, false
+	}
+	if alert.OperationalRecord.Suppression.ExpiresAt == nil {
+		return nil, true
+	}
+	until := alert.OperationalRecord.Suppression.ExpiresAt.UTC()
+	if !until.After(now) {
+		return &until, false
+	}
+	return &until, true
+}
+
+// expireOperationalSuppressions makes time-based lifecycle changes explicit
+// and durable. Reads never silently mutate an expired suppression.
+func (m *Manager) expireOperationalSuppressions() {
+	now := m.policyNow().UTC()
+	m.mu.RLock()
+	ids := make([]string, 0)
+	for key, alert := range m.activeAlerts {
+		if until, active := alertSnoozeUntil(alert, now); until != nil && !active {
+			ids = append(ids, effectiveAlertID(alert, key))
+		}
+	}
+	m.mu.RUnlock()
+	for _, id := range ids {
+		if err := m.unsuppressOperationalAlert(id, "snooze_expired", "system"); err != nil {
+			log.Warn().Err(err).Str("alertID", id).Msg("failed to expire alert snooze")
+		}
+	}
 }
 
 // MarkOperationalCollectionStale preserves an open finding when its source is

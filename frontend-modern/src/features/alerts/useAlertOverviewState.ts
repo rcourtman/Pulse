@@ -5,6 +5,7 @@ import { AlertsAPI } from '@/api/alerts';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 import type { Override } from './types';
 import { useAlertAcknowledgementState } from './useAlertAcknowledgementState';
+import { useAlertSnoozeState } from './useAlertSnoozeState';
 
 export interface AlertGroup {
   key: string;
@@ -33,7 +34,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
   const tickInterval = setInterval(() => setTick(Date.now()), 60_000);
   const activeAlerts = createMemo(() => Object.values(props.activeAlerts()));
   const {
-    effectiveAlerts,
+    effectiveAlerts: acknowledgedAlerts,
     unacknowledgedAlerts,
     processingAlerts,
     bulkAckProcessing,
@@ -45,6 +46,12 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     updateAlert: props.updateAlert,
     allowRestore: true,
   });
+  const {
+    effectiveAlerts,
+    processing: snoozeProcessingAlerts,
+    handleSnooze,
+    handleUnsnooze,
+  } = useAlertSnoozeState({ alerts: acknowledgedAlerts, updateAlert: props.updateAlert });
 
   onCleanup(() => {
     clearInterval(tickInterval);
@@ -149,12 +156,15 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     groupedAlerts,
     unacknowledgedAlerts,
     processingAlerts,
+    snoozeProcessingAlerts,
     bulkAckProcessing,
     deliveryDiagnoses,
     refreshDeliveryDiagnoses,
     handleAlertAcknowledgement,
     handleBulkAcknowledge,
     handleGroupAcknowledge,
+    handleSnooze,
+    handleUnsnooze,
   };
 }
 

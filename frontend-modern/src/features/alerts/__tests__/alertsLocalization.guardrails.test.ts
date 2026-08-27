@@ -4,6 +4,7 @@ import activeAlertsSectionSource from '@/features/alerts/AlertOverviewActiveAler
 import alertCardSource from '@/features/alerts/AlertOverviewAlertCard.tsx?raw';
 import statsCardsSource from '@/features/alerts/AlertOverviewStatsCards.tsx?raw';
 import acknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
+import snoozeActionSource from '@/features/alerts/AlertSnoozeAction.tsx?raw';
 import incidentFiltersSource from '@/components/Alerts/IncidentEventFilters.tsx?raw';
 import incidentTimelineSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
 import investigateButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
@@ -15,6 +16,7 @@ const migratedAlertsSurfaceSources = [
   alertCardSource,
   statsCardsSource,
   acknowledgementStateSource,
+  snoozeActionSource,
   incidentFiltersSource,
   incidentTimelineSource,
   investigateButtonSource,
@@ -56,6 +58,9 @@ const migratedAlertsOverviewCopy = [
   'Filter events:',
   'Incident note',
   'Save Note',
+  'Snooze this alert',
+  'Pause notifications and escalation',
+  'Until tomorrow at 9:00',
 ] as const;
 
 describe('alerts overview localization guardrails', () => {

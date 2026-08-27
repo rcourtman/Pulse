@@ -51,6 +51,8 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 			eventlog.TypeResolved,
 			eventlog.TypeAcknowledged,
 			eventlog.TypeUnacknowledged,
+			eventlog.TypeSnoozed,
+			eventlog.TypeUnsnoozed,
 			eventlog.TypeEscalated,
 			eventlog.TypeHistoryImported,
 			eventlog.TypeHistoryCleared,
