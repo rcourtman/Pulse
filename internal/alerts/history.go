@@ -57,6 +57,9 @@ type HistoryManager struct {
 	saveTicker   *time.Ticker
 	workerWG     sync.WaitGroup
 	callbacks    []AlertCallback // Called when alerts are added
+	// storageRetired marks the JSON files migrated into the event log:
+	// in-memory history continues, disk writes stop.
+	storageRetired bool
 }
 
 func historyIdentityKey(alert *Alert) string {
@@ -233,6 +236,53 @@ func mergeHistoryAlertSnapshots(existing, incoming Alert) Alert {
 		merged.AckUser = existing.AckUser
 	}
 	return merged
+}
+
+// SnapshotEntries returns a copy of every history entry, oldest first, for
+// the one-time migration into the event log.
+func (hm *HistoryManager) SnapshotEntries() []HistoryEntry {
+	hm.mu.RLock()
+	defer hm.mu.RUnlock()
+	entries := make([]HistoryEntry, 0, len(hm.history))
+	for _, entry := range hm.history {
+		entries = append(entries, HistoryEntry{Alert: *entry.Alert.Clone(), Timestamp: entry.Timestamp})
+	}
+	return entries
+}
+
+// RetireStorage renames the JSON history files out of the load path after a
+// successful migration into the event log, and stops further disk writes.
+// The in-memory entries stay available as the fallback read model for the
+// rest of the process lifetime.
+func (hm *HistoryManager) RetireStorage() error {
+	hm.saveMu.Lock()
+	defer hm.saveMu.Unlock()
+	hm.mu.Lock()
+	hm.storageRetired = true
+	hm.mu.Unlock()
+	for _, path := range []string{hm.historyFile, hm.backupFile} {
+		if path == "" {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		if err := os.Rename(path, path+".imported"); err != nil {
+			return fmt.Errorf("retire history file %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+// StorageFileExists reports whether the JSON history file is still present —
+// the self-describing marker that the legacy history has not been migrated
+// into the event log yet.
+func (hm *HistoryManager) StorageFileExists() bool {
+	if hm.historyFile == "" {
+		return false
+	}
+	_, err := os.Stat(hm.historyFile)
+	return err == nil
 }
 
 // UpdateAlertLastSeen updates the LastSeen timestamp on the most recent
@@ -463,6 +513,12 @@ func (hm *HistoryManager) saveHistory() error {
 
 // saveHistoryWithRetry saves history with exponential backoff retry
 func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
+	hm.mu.RLock()
+	retired := hm.storageRetired
+	hm.mu.RUnlock()
+	if retired {
+		return nil
+	}
 	if maxRetries < 1 {
 		maxRetries = 1
 	}

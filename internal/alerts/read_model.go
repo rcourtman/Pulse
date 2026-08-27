@@ -3,6 +3,7 @@ package alerts
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"sort"
 	"strconv"
 	"strings"
@@ -330,8 +331,14 @@ func (m *Manager) GetResolvedAlert(alertID string) *ResolvedAlert {
 	return result
 }
 
-// GetAlertHistory returns alert history
+// GetAlertHistory returns alert history. With an event log enabled the
+// list is projected from the log's lifecycle snapshots (the authority);
+// the in-memory JSON-loaded history is the fallback for managers without
+// a log.
 func (m *Manager) GetAlertHistory(limit int) []Alert {
+	if projected, ok := m.AlertHistoryFromEvents(time.Time{}, limit); ok {
+		return projected
+	}
 	return m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(m.historyManager.GetAllHistory(limit)))
 }
 
@@ -341,6 +348,9 @@ func (m *Manager) GetAlertHistorySince(since time.Time, limit int) []Alert {
 		return m.GetAlertHistory(limit)
 	}
 
+	if projected, ok := m.AlertHistoryFromEvents(since, limit); ok {
+		return projected
+	}
 	return m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(m.historyManager.GetHistory(since, limit)))
 }
 
@@ -355,8 +365,19 @@ func (m *Manager) applyCurrentNodeDisplayNames(alerts []Alert) []Alert {
 	return alerts
 }
 
-// ClearAlertHistory clears all alert history
+// ClearAlertHistory clears all alert history. The event log stays
+// append-only: the clear is a tombstone event, and the projection ignores
+// lifecycle events that precede it.
 func (m *Manager) ClearAlertHistory() error {
+	if store := m.eventLogStore(); store != nil {
+		if err := store.ImportEvents([]eventlog.Event{{
+			Type:    eventlog.TypeHistoryCleared,
+			AlertID: "history",
+			Message: "Alert history cleared by the user.",
+		}}); err != nil {
+			return err
+		}
+	}
 	return m.historyManager.ClearAllHistory()
 }
 

@@ -44,6 +44,14 @@ const (
 	// live manager on an alert's state — the always-on parity signal
 	// (docs/ALERT_ENGINE_EVOLUTION.md, Phase 1).
 	TypeShadowDivergence = "shadow_divergence"
+	// TypeHistoryImported carries one legacy JSON-history entry migrated
+	// into the log when the log becomes the history authority. Its
+	// snapshot is the entry's final state.
+	TypeHistoryImported = "history_imported"
+	// TypeHistoryCleared is the user's clear-history action. The log stays
+	// append-only; the history projection ignores lifecycle events that
+	// precede the newest tombstone.
+	TypeHistoryCleared = "history_cleared"
 )
 
 // Event is one immutable alert event.
@@ -237,6 +245,21 @@ func (s *Store) Append(event Event) {
 	default:
 		s.dropped.Add(1)
 	}
+}
+
+// ImportEvents writes events synchronously, bypassing the droppable append
+// buffer. It exists for the one-time legacy-history migration, where losing
+// an entry to a full buffer would silently lose user data.
+func (s *Store) ImportEvents(events []Event) error {
+	if s == nil {
+		return fmt.Errorf("event log is not enabled")
+	}
+	for i := range events {
+		if events[i].OccurredAt.IsZero() {
+			events[i].OccurredAt = time.Now()
+		}
+	}
+	return s.insertBatch(events)
 }
 
 // Dropped reports how many events were discarded because the append buffer

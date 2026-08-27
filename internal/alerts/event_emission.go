@@ -31,6 +31,7 @@ func (m *Manager) EnableEventLog() {
 		return
 	}
 	m.SetEventLog(store)
+	m.importLegacyHistoryIntoEventLog(store)
 }
 
 // SetEventLog installs an event log store. Passing nil disables recording.

@@ -46,6 +46,8 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 			eventlog.TypeAcknowledged,
 			eventlog.TypeUnacknowledged,
 			eventlog.TypeEscalated,
+			eventlog.TypeHistoryImported,
+			eventlog.TypeHistoryCleared,
 		},
 		Since: since,
 		Limit: 1000,
@@ -60,6 +62,13 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 	order := make([]string, 0, len(events))
 	for i := len(events) - 1; i >= 0; i-- {
 		event := events[i]
+		if event.Type == eventlog.TypeHistoryCleared {
+			// The user cleared history: everything before the tombstone
+			// leaves the projection. The log itself stays append-only.
+			occurrences = make(map[string]*historyOccurrence)
+			order = order[:0]
+			continue
+		}
 		if len(event.Snapshot) == 0 {
 			continue
 		}

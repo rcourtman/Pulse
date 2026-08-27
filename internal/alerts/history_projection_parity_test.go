@@ -31,7 +31,10 @@ func newHistoryParityManager(t *testing.T) *Manager {
 // the fields the history API exposes.
 func assertHistoryParity(t *testing.T, m *Manager) {
 	t.Helper()
-	legacy := m.GetAlertHistory(0)
+	// Read the JSON-backed side directly: GetAlertHistory itself now
+	// returns the projection, so going through it would compare the
+	// projection with itself.
+	legacy := m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(m.historyManager.GetAllHistory(0)))
 	projected, ok := m.AlertHistoryFromEvents(time.Time{}, 0)
 	if !ok {
 		t.Fatal("projection unavailable despite an enabled event log")
