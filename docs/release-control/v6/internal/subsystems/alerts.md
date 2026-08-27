@@ -1086,7 +1086,20 @@ SQLite-backed store under the alerts data directory; ephemeral managers record
 nothing unless a store is installed explicitly. Resolution, acknowledgement,
 unacknowledgement, escalation, flapping detection, dispatch, quiet-hours
 deferral, and suppression append immutable events without changing lifecycle
-or delivery behavior. Snapshot-bearing lifecycle transitions commit
+or delivery behavior. Suppression and deferral are recorded as outcome
+episodes: the first decision is immutable, identical reevaluations of that
+unchanged outcome append no duplicate row, and a changed reason, details,
+resource presentation, intervening lifecycle/dispatch event, or later return
+to that outcome opens a new episode. Lifecycle, escalation, and dispatch
+events are never coalesced. This keeps delivery activity explanatory instead
+of poll-frequency-shaped, prevents unchanged reevaluations from crowding a
+real outcome change out of the non-blocking diagnostic buffer, and bounds
+diagnostic growth without erasing a meaningful decision transition. A failed
+write forgets its admission key so a recovered store can accept the outcome
+again. Reads apply the same episode projection to
+redundant diagnostic rows written by older versions, so upgraded installations
+become readable immediately without rewriting their immutable event records.
+Snapshot-bearing lifecycle transitions commit
 synchronously before downstream lifecycle projections run; they never share
 the droppable diagnostic buffer because alert history is reconstructed from
 them. High-volume notification decisions remain non-blocking and fail-open for
