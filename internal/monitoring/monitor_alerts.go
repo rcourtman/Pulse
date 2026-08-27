@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -629,10 +630,23 @@ func (m *Monitor) checkMockAlerts() {
 	// against mock data.
 	log.Debug().Int("dockerHostCount", len(state.DockerHosts)).Msg("checking docker alerts")
 	for _, dockerHost := range state.DockerHosts {
-		m.alertManager.CheckDockerHost(dockerHost)
+		m.checkMockDockerHostAlerts(dockerHost)
 	}
 
 	// Cache the latest alert snapshots directly in the mock data so the API can serve
 	// mock state without needing to grab the alert manager lock again.
 	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
+}
+
+// checkMockDockerHostAlerts preserves the same evidence boundary as live
+// agent monitoring. An explicitly offline fixture is missing fresh container
+// telemetry; its last container states must not be reinterpreted as a fresh
+// batch of independent exits. The host connectivity lifecycle owns that
+// outage and clears child alerts once the offline confirmation floor is met.
+func (m *Monitor) checkMockDockerHostAlerts(host models.DockerHost) {
+	if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+		m.alertManager.HandleDockerHostOffline(host)
+		return
+	}
+	m.alertManager.CheckDockerHost(host)
 }

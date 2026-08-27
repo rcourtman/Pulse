@@ -456,6 +456,13 @@ on this path: agent ingest is not gated on `PULSE_MOCK_KEEP_REAL_POLLING`, and
 the read state is mock-substituted either way, so injecting real hosts would
 only graft them onto fixture data.
 
+Mock alert evaluation preserves the live Docker connectivity boundary. An
+explicitly offline Docker fixture routes through `HandleDockerHostOffline`, not
+the fresh-report `CheckDockerHost` path. Its last container states are unknown
+supporting inventory rather than a new batch of independent exits, so the
+confirmed host incident clears child alerts instead of producing one alert per
+container.
+
 Host and container-runtime disk collection supports an explicit include list
 for filesystems hidden by Pulse's automatic virtual/container filtering. The
 include list is bounded to that automatic filter; explicit disk exclusions
