@@ -4531,12 +4531,21 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.installOperatorIntentResolver(store)
 	log.Info().Msg("resource store set for polling optimization")
 
+	timelineAttached := false
 	if incidentStore != nil {
 		if timelineStore, ok := store.(memory.IncidentTimelineStore); ok {
 			incidentStore.SetResourceTimelineStore(timelineStore)
+			timelineAttached = true
 		} else {
 			incidentStore.SetResourceTimelineStore(nil)
 		}
+	}
+	if timelineAttached {
+		// NewMonitor replays before the API-owned durable resource store is
+		// attached. Replay again at the canonical boundary so restart repair
+		// reaches resource history as well as the incident fallback cache.
+		m.replayAlertLifecycleProjections()
+		m.reconcileActiveAlertTimelines()
 	}
 
 	// Immediately backfill the store from current state so ReadState

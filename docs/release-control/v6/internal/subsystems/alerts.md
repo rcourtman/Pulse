@@ -1132,12 +1132,29 @@ that canonical stream. It runs for lifecycle transitions regardless of
 activation, quiet hours, grouping, rate limits, or destination state; delivery
 callbacks remain policy-controlled consumers. Monitoring uses this seam to
 materialize canonical resource-history breadcrumbs and incident shells. On
-startup it replays durable lifecycle transitions oldest first, then
-idempotently reconciles restored active alerts that predate the event store.
-This repairs resolved as well as active incident timelines without replaying
-any delivery side effect, and ensures an alert already visible in Overview
-cannot keep returning an unavailable timeline merely because its notification
-was held.
+startup it replays durable lifecycle transitions and migrated legacy-history
+snapshots oldest first, then idempotently reconciles restored active alerts
+that predate the event store. Because monitor construction precedes attachment
+of the API-owned durable unified-resource store, that attachment repeats the
+same idempotent replay so canonical resource history is repaired as well as the
+incident fallback cache. A migrated final snapshot expands only facts it
+actually carries: the occurrence start, saved acknowledgement, and known end;
+it does not invent delivery, escalation, analysis, or remediation events.
+The incident store retains those snapshot events as a fallback only when the
+canonical resource timeline lacks the equivalent event, so a partial durable
+projection cannot erase the occurrence start while complete canonical history
+still wins. The occurrence-qualified incident API performs the same repair
+from the active/history read model when retention or an older migration left a
+shell absent or empty. This repairs resolved as well as active incident
+timelines without replaying any delivery side effect, and ensures an alert
+already visible in Overview or History cannot keep returning an unavailable
+timeline merely because its notification was held or it predates the event
+store. Occurrence lookup allows only one second of start-time precision drift;
+it must not merge recurring or flapping incidents merely because they share an
+alert identifier and started within the same former ten-minute window.
+Snapshot events stored at equal timestamp precision order by lifecycle meaning,
+with detection first and resolution last, rather than by generated event ID;
+a malformed legacy end before its own start clamps to the start boundary.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved

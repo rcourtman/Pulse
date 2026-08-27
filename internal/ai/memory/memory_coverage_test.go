@@ -448,22 +448,26 @@ func TestIncidentStore_Timelines_EmptyAndZeroTime(t *testing.T) {
 	if timeline == nil || timeline.AlertIdentifier != alert.ID {
 		t.Fatalf("expected timeline for zero start time")
 	}
-	timeline = store.GetTimelineByAlertAt(alert.ID, alert.StartTime.Add(5*time.Minute))
+	timeline = store.GetTimelineByAlertAt(alert.ID, alert.StartTime.Add(500*time.Millisecond))
 	if timeline == nil || timeline.AlertIdentifier != alert.ID {
-		t.Fatalf("expected timeline for later start time")
+		t.Fatalf("expected timeline within timestamp precision tolerance")
+	}
+	if timeline = store.GetTimelineByAlertAt(alert.ID, alert.StartTime.Add(5*time.Minute)); timeline != nil {
+		t.Fatalf("expected no timeline for a distinct nearby occurrence")
 	}
 }
 
 func TestIncidentStore_GetTimelineByAlertAt_SkipsMismatched(t *testing.T) {
+	openedAt := time.Now().Add(-5 * time.Minute)
 	store := &IncidentStore{
 		incidents: []*incidentShell{
 			nil,
 			{ID: "inc-a", AlertIdentifier: "alert-a", OpenedAt: time.Now().Add(-10 * time.Minute)},
-			{ID: "inc-b", AlertIdentifier: "alert-b", OpenedAt: time.Now().Add(-5 * time.Minute)},
+			{ID: "inc-b", AlertIdentifier: "alert-b", OpenedAt: openedAt},
 		},
 	}
 
-	timeline := store.GetTimelineByAlertAt("alert-b", time.Now())
+	timeline := store.GetTimelineByAlertAt("alert-b", openedAt)
 	if timeline == nil || timeline.AlertIdentifier != "alert-b" {
 		t.Fatalf("expected timeline for alert-b")
 	}

@@ -669,6 +669,73 @@ func TestGetAlertIncidentTimeline_AcceptsCamelCaseAlertIdentifierQuery(t *testin
 	assert.Equal(t, "canonical:a1", incident["alertIdentifier"])
 }
 
+func TestGetAlertIncidentTimeline_RepairsActiveAlertWithoutIncidentShell(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	incidentStore.SetResourceTimelineStore(unifiedresources.NewMemoryStore())
+	startedAt := time.Now().UTC().Add(-5 * time.Minute).Truncate(time.Second)
+	alert := alerts.Alert{
+		ID:           "active-without-timeline",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-active",
+		ResourceName: "Active VM",
+		StartTime:    startedAt,
+		LastSeen:     startedAt.Add(4 * time.Minute),
+	}
+	mockMonitor.On("GetIncidentStore").Return(incidentStore)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockManager.On("GetActiveAlerts").Return([]alerts.Alert{alert})
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alertIdentifier=active-without-timeline&started_at="+startedAt.Format(time.RFC3339), nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var incident incidentView
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&incident))
+	assert.Equal(t, memory.IncidentStatusOpen, incident.Status)
+	assert.Len(t, incident.Events, 1)
+	assert.Equal(t, memory.IncidentEventAlertFired, incident.Events[0].Type)
+}
+
+func TestGetAlertIncidentTimeline_RepairsResolvedHistoryOccurrence(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	incidentStore.SetResourceTimelineStore(unifiedresources.NewMemoryStore())
+	startedAt := time.Now().UTC().Add(-20 * time.Minute).Truncate(time.Second)
+	resolvedAt := startedAt.Add(10 * time.Minute)
+	alert := alerts.Alert{
+		ID:           "history-without-timeline",
+		Type:         "memory",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "resource-history",
+		ResourceName: "Historical VM",
+		StartTime:    startedAt,
+		LastSeen:     resolvedAt,
+	}
+	mockMonitor.On("GetIncidentStore").Return(incidentStore)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockManager.On("GetActiveAlerts").Return([]alerts.Alert{})
+	mockManager.On("GetAlertHistory", 0).Return([]alerts.Alert{alert})
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alertIdentifier=history-without-timeline&started_at="+startedAt.Format(time.RFC3339), nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var incident incidentView
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&incident))
+	assert.Equal(t, memory.IncidentStatusResolved, incident.Status)
+	assert.Len(t, incident.Events, 2)
+	assert.Equal(t, memory.IncidentEventAlertFired, incident.Events[0].Type)
+	assert.Equal(t, memory.IncidentEventAlertResolved, incident.Events[1].Type)
+}
+
 func TestGetAlertIncidentTimeline_ListExportsCanonicalAlertIdentifier(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})

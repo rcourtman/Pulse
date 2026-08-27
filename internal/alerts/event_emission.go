@@ -73,9 +73,12 @@ func (m *Manager) AlertEvents(filter eventlog.Filter) ([]eventlog.Event, error) 
 	return store.Query(filter)
 }
 
-// ReplayLifecycleEvents visits every durable lifecycle transition oldest
-// first. It is the projection-repair seam for consumers such as incident and
-// resource timelines: delivery callbacks are deliberately not involved.
+// ReplayLifecycleEvents visits every durable lifecycle transition and migrated
+// history snapshot oldest first. It is the projection-repair seam for
+// consumers such as incident and resource timelines: delivery callbacks are
+// deliberately not involved. Migrated snapshots carry a final occurrence
+// state rather than a transition; consumers must expand only the facts present
+// in that snapshot.
 func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error {
 	if m == nil || visit == nil {
 		return nil
@@ -92,6 +95,7 @@ func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error 
 		eventlog.TypeUnacknowledged,
 		eventlog.TypeSnoozed,
 		eventlog.TypeUnsnoozed,
+		eventlog.TypeHistoryImported,
 	}}, func(event eventlog.Event) error {
 		if len(event.Snapshot) == 0 {
 			return nil

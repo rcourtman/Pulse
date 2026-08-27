@@ -104,6 +104,141 @@ func TestIncidentStore_RecordTimeline(t *testing.T) {
 	}
 }
 
+func TestIncidentStore_EnsureAlertOccurrenceBuildsSnapshotFallback(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{
+		MaxIncidents:         10,
+		MaxEventsPerIncident: 10,
+		MaxAgeDays:           30,
+	})
+	// An attached canonical store with no matching history reproduces the
+	// migration gap that previously returned an empty timeline.
+	store.SetResourceTimelineStore(unifiedresources.NewMemoryStore())
+
+	startedAt := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)
+	ackAt := startedAt.Add(2 * time.Minute)
+	resolvedAt := startedAt.Add(7 * time.Minute)
+	alert := &alerts.Alert{
+		ID:           "legacy-alert-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "legacy-resource-1",
+		ResourceName: "Legacy VM",
+		StartTime:    startedAt,
+		LastSeen:     resolvedAt,
+		Acknowledged: true,
+		AckTime:      &ackAt,
+		AckUser:      "operator",
+	}
+
+	first := store.EnsureAlertOccurrence(alert, &resolvedAt)
+	second := store.EnsureAlertOccurrence(alert, &resolvedAt)
+	if first == nil || second == nil {
+		t.Fatal("snapshot repair returned no incident")
+	}
+	if second.Status != IncidentStatusResolved || !second.Acknowledged {
+		t.Fatalf("snapshot state = status %q acknowledged %v", second.Status, second.Acknowledged)
+	}
+	if len(second.Events) != 3 {
+		t.Fatalf("snapshot events = %d, want fired, acknowledged, and resolved", len(second.Events))
+	}
+	for index, want := range []IncidentEventType{
+		IncidentEventAlertFired,
+		IncidentEventAlertAcknowledged,
+		IncidentEventAlertResolved,
+	} {
+		if second.Events[index].Type != want {
+			t.Fatalf("event[%d] = %q, want %q", index, second.Events[index].Type, want)
+		}
+	}
+}
+
+func TestIncidentStore_SnapshotFallbackCompletesPartialCanonicalTimeline(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{MaxIncidents: 10, MaxEventsPerIncident: 10, MaxAgeDays: 30})
+	canonicalStore := unifiedresources.NewMemoryStore()
+	store.SetResourceTimelineStore(canonicalStore)
+
+	startedAt := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)
+	alert := &alerts.Alert{
+		ID:           "partial-alert-1",
+		Type:         "memory",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "partial-resource-1",
+		ResourceName: "Partial VM",
+		StartTime:    startedAt,
+	}
+	store.EnsureAlertOccurrence(alert, nil)
+	ackChange := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertAcknowledged, startedAt.Add(time.Minute), "operator", unifiedresources.AlertTimelineChange{
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		AlertLevel:      string(alert.Level),
+	})
+	if ackChange == nil {
+		t.Fatal("expected acknowledgement change")
+	}
+	if err := canonicalStore.RecordChange(*ackChange); err != nil {
+		t.Fatalf("record canonical acknowledgement: %v", err)
+	}
+
+	timeline := store.GetTimelineByAlertAt(alert.ID, startedAt)
+	if timeline == nil || len(timeline.Events) != 2 {
+		t.Fatalf("partial canonical timeline = %#v, want snapshot fired plus canonical acknowledgement", timeline)
+	}
+	if timeline.Events[0].Type != IncidentEventAlertFired || timeline.Events[1].Type != IncidentEventAlertAcknowledged {
+		t.Fatalf("partial canonical event types = %#v", timeline.Events)
+	}
+}
+
+func TestIncidentStore_EnsureAlertOccurrencePreservesRequestedHistoryBeyondCountCache(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{MaxIncidents: 1, MaxEventsPerIncident: 10, MaxAgeDays: 30})
+	store.SetResourceTimelineStore(unifiedresources.NewMemoryStore())
+
+	newer := &alerts.Alert{
+		ID:           "newer-alert",
+		Type:         "cpu",
+		ResourceID:   "newer-resource",
+		ResourceName: "Newer VM",
+		StartTime:    time.Now().UTC().Add(-time.Hour),
+	}
+	store.EnsureAlertOccurrence(newer, nil)
+
+	olderResolvedAt := time.Now().UTC().Add(-24 * time.Hour)
+	older := &alerts.Alert{
+		ID:           "older-alert",
+		Type:         "memory",
+		ResourceID:   "older-resource",
+		ResourceName: "Older VM",
+		StartTime:    olderResolvedAt.Add(-time.Hour),
+		LastSeen:     olderResolvedAt,
+	}
+	timeline := store.EnsureAlertOccurrence(older, &olderResolvedAt)
+	if timeline == nil || timeline.AlertIdentifier != older.ID {
+		t.Fatalf("requested history occurrence was evicted during repair: %#v", timeline)
+	}
+	if len(store.incidents) != 1 || store.incidents[0].AlertIdentifier != older.ID {
+		t.Fatalf("bounded cache did not preserve requested occurrence: %#v", store.incidents)
+	}
+}
+
+func TestIncidentStore_EqualTimestampLifecycleKeepsResolvedState(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{MaxIncidents: 10, MaxEventsPerIncident: 10, MaxAgeDays: 30})
+	startedAt := time.Now().UTC().Truncate(time.Second)
+	alert := &alerts.Alert{
+		ID:           "same-time-alert",
+		Type:         "connection",
+		ResourceID:   "same-time-resource",
+		ResourceName: "Same-time resource",
+		StartTime:    startedAt,
+		LastSeen:     startedAt,
+	}
+	timeline := store.EnsureAlertOccurrence(alert, &startedAt)
+	if timeline == nil || timeline.Status != IncidentStatusResolved {
+		t.Fatalf("equal-timestamp lifecycle state = %#v, want resolved", timeline)
+	}
+	if len(timeline.Events) != 2 || timeline.Events[0].Type != IncidentEventAlertFired || timeline.Events[1].Type != IncidentEventAlertResolved {
+		t.Fatalf("equal-timestamp event order = %#v", timeline.Events)
+	}
+}
+
 func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{
 		MaxIncidents:         10,

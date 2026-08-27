@@ -286,8 +286,9 @@ const (
 	defaultIncidentMaxEvents     = 120
 	defaultIncidentMaxAgeDays    = 90
 	maxIncidentFileSize          = 20 * 1024 * 1024 // 20MB
-	incidentStartMatchTolerance  = 10 * time.Minute
+	incidentStartMatchTolerance  = time.Second
 	projectedIncidentChangeLimit = 256
+	incidentSnapshotSource       = "alert_history_snapshot"
 )
 
 // IncidentTimelineStore exposes the canonical resource timeline used to derive
@@ -448,6 +449,70 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 
 	s.trimLocked()
 	s.saveAsync()
+}
+
+// EnsureAlertOccurrence materializes the minimum honest timeline carried by
+// an alert snapshot. It is the read-repair boundary for active alerts and
+// legacy history entries that predate the canonical resource timeline. When
+// canonical events exist, projectIncident replaces these snapshot-derived
+// lifecycle breadcrumbs with the durable projection.
+func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) *Incident {
+	if s == nil || alert == nil || strings.TrimSpace(alert.ID) == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	shell := s.findIncidentByAlertAtLocked(alert.ID, alert.StartTime)
+	changed := false
+	if shell == nil {
+		shell = newIncidentShellFromAlert(alert)
+		s.incidents = append(s.incidents, shell)
+		changed = true
+	} else {
+		updateIncidentShellFromAlert(shell, alert)
+	}
+
+	if !hasIncidentEventType(shell.Events, IncidentEventAlertFired) {
+		s.addEventAtLocked(shell, IncidentEventAlertFired, shell.OpenedAt, formatAlertSummary(alert), map[string]interface{}{
+			"type":              alert.Type,
+			"level":             string(alert.Level),
+			"value":             alert.Value,
+			"threshold":         alert.Threshold,
+			"projection_source": incidentSnapshotSource,
+		})
+		changed = true
+	}
+
+	if alert.Acknowledged && !hasIncidentEventType(shell.Events, IncidentEventAlertAcknowledged) {
+		ackAt := shell.OpenedAt
+		if alert.AckTime != nil && !alert.AckTime.IsZero() {
+			ackAt = *alert.AckTime
+		}
+		s.addEventAtLocked(shell, IncidentEventAlertAcknowledged, ackAt, "Alert acknowledged", map[string]interface{}{
+			"user":              strings.TrimSpace(alert.AckUser),
+			"projection_source": incidentSnapshotSource,
+		})
+		changed = true
+	}
+
+	if resolvedAt != nil && !resolvedAt.IsZero() {
+		shell.OccurrenceClosedAt = cloneTime(*resolvedAt)
+		if !hasIncidentEventType(shell.Events, IncidentEventAlertResolved) {
+			s.addEventAtLocked(shell, IncidentEventAlertResolved, *resolvedAt, "Alert resolved", map[string]interface{}{
+				"resolved_at":       resolvedAt.Format(time.RFC3339),
+				"projection_source": incidentSnapshotSource,
+			})
+			changed = true
+		}
+	}
+
+	if changed {
+		s.trimLockedPreserving(shell)
+		s.saveAsync()
+	}
+	s.mu.Unlock()
+
+	return s.GetTimelineByAlertAt(alert.ID, alert.StartTime)
 }
 
 // RecordAnalysis adds an AI analysis event to the incident for an alert.
@@ -623,6 +688,30 @@ func (s *IncidentStore) GetTimelineByAlertAt(alertIdentifier string, startedAt t
 	}
 
 	s.mu.RLock()
+	best, bestDelta := s.findClosestIncidentByAlertAtLocked(alertIdentifier, startedAt)
+	best = cloneIncidentShell(best)
+	timelineStore := s.resourceTimelineStore
+	maxAge := s.maxAge
+	s.mu.RUnlock()
+
+	if best == nil || bestDelta > incidentStartMatchTolerance {
+		return s.projectIncidentFromCanonical(alertIdentifier, startedAt, timelineStore, maxAge)
+	}
+	return s.projectIncident(incidentFromShell(best), timelineStore)
+}
+
+func (s *IncidentStore) findIncidentByAlertAtLocked(alertIdentifier string, startedAt time.Time) *incidentShell {
+	if startedAt.IsZero() {
+		return s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
+	}
+	best, delta := s.findClosestIncidentByAlertAtLocked(alertIdentifier, startedAt)
+	if best == nil || delta > incidentStartMatchTolerance {
+		return nil
+	}
+	return best
+}
+
+func (s *IncidentStore) findClosestIncidentByAlertAtLocked(alertIdentifier string, startedAt time.Time) (*incidentShell, time.Duration) {
 	var best *incidentShell
 	var bestDelta time.Duration
 	for _, incident := range s.incidents {
@@ -638,14 +727,7 @@ func (s *IncidentStore) GetTimelineByAlertAt(alertIdentifier string, startedAt t
 			bestDelta = delta
 		}
 	}
-	timelineStore := s.resourceTimelineStore
-	maxAge := s.maxAge
-	s.mu.RUnlock()
-
-	if best == nil || bestDelta > incidentStartMatchTolerance {
-		return s.projectIncidentFromCanonical(alertIdentifier, startedAt, timelineStore, maxAge)
-	}
-	return s.projectIncident(incidentFromShell(cloneIncidentShell(best)), timelineStore)
+	return best, bestDelta
 }
 
 // ListIncidentsByResource returns recent incidents for a resource.
@@ -826,14 +908,16 @@ func (s *IncidentStore) projectIncident(incident *Incident, timelineStore Incide
 	filtered := make([]IncidentEvent, 0, len(projected.Events)+len(projectedEvents))
 	for _, event := range projected.Events {
 		if isCanonicalProjectedIncidentEventType(event.Type) {
-			continue
+			if !isSnapshotProjectionEvent(event) || hasIncidentEventType(projectedEvents, event.Type) {
+				continue
+			}
 		}
 		filtered = append(filtered, cloneIncidentEvent(event))
 	}
 	filtered = append(filtered, projectedEvents...)
 	sortIncidentEvents(filtered)
 	projected.Events = filtered
-	applyProjectedIncidentState(projected, projectedEvents)
+	applyProjectedIncidentState(projected, filtered)
 	return projected
 }
 
@@ -1146,13 +1230,37 @@ func isCanonicalProjectedIncidentEventType(eventType IncidentEventType) bool {
 	}
 }
 
+func isSnapshotProjectionEvent(event IncidentEvent) bool {
+	if event.Details == nil {
+		return false
+	}
+	source, ok := event.Details["projection_source"].(string)
+	return ok && source == incidentSnapshotSource
+}
+
 func sortIncidentEvents(events []IncidentEvent) {
 	sort.Slice(events, func(i, j int) bool {
 		if events[i].Timestamp.Equal(events[j].Timestamp) {
+			iRank := incidentEventTimestampRank(events[i].Type)
+			jRank := incidentEventTimestampRank(events[j].Type)
+			if iRank != jRank {
+				return iRank < jRank
+			}
 			return events[i].ID < events[j].ID
 		}
 		return events[i].Timestamp.Before(events[j].Timestamp)
 	})
+}
+
+func incidentEventTimestampRank(eventType IncidentEventType) int {
+	switch eventType {
+	case IncidentEventAlertFired:
+		return 0
+	case IncidentEventAlertResolved:
+		return 2
+	default:
+		return 1
+	}
 }
 
 func cloneIncidentEvent(event IncidentEvent) IncidentEvent {
@@ -1320,6 +1428,53 @@ func (s *IncidentStore) trimLocked() {
 		if len(s.incidents) > s.maxIncidents {
 			s.incidents = s.incidents[len(s.incidents)-s.maxIncidents:]
 		}
+	}
+}
+
+// trimLockedPreserving applies the ordinary retention policy while keeping the
+// occurrence currently being read-repaired. This lets a user open an older
+// retained alert-history row even when the bounded incident cache is already
+// full; another least-recent occurrence becomes repairable on demand instead.
+func (s *IncidentStore) trimLockedPreserving(protected *incidentShell) {
+	s.trimLocked()
+	if protected == nil {
+		return
+	}
+	for _, shell := range s.incidents {
+		if shell == protected {
+			return
+		}
+	}
+
+	if s.maxAge > 0 {
+		compareTime := protected.OpenedAt
+		if closedAt := incidentOccurrenceClosedAt(protected); closedAt != nil {
+			compareTime = *closedAt
+		}
+		if compareTime.Before(time.Now().Add(-s.maxAge)) {
+			return
+		}
+	}
+
+	s.incidents = append(s.incidents, protected)
+	if s.maxIncidents <= 0 || len(s.incidents) <= s.maxIncidents {
+		return
+	}
+	sort.Slice(s.incidents, func(i, j int) bool {
+		return s.incidents[i].OpenedAt.Before(s.incidents[j].OpenedAt)
+	})
+	for len(s.incidents) > s.maxIncidents {
+		removeAt := -1
+		for index, shell := range s.incidents {
+			if shell != protected {
+				removeAt = index
+				break
+			}
+		}
+		if removeAt < 0 {
+			break
+		}
+		s.incidents = append(s.incidents[:removeAt], s.incidents[removeAt+1:]...)
 	}
 }
 
