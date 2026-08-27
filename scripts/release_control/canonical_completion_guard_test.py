@@ -1,6 +1,7 @@
 import io
 import os
 import subprocess
+import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -3744,6 +3745,74 @@ class ReleaseCycleArtifactGuardTest(unittest.TestCase):
             required[contract_path]["touched_runtime_files"],
             ["scripts/install-docker.sh"],
         )
+
+
+class DevPrepushScriptTest(unittest.TestCase):
+    def test_checks_every_commit_with_its_contract_neutral_trailer(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            (repo / "scripts" / "release_control").mkdir(parents=True)
+            (repo / "scripts" / "dev-prepush.sh").write_text(
+                (REPO_ROOT / "scripts" / "dev-prepush.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (repo / "scripts" / "release_control" / "canonical_completion_guard.py").write_text(
+                """#!/usr/bin/env python3
+import os
+import sys
+
+files = ",".join(line.strip() for line in sys.stdin if line.strip())
+with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
+    reason = os.environ.get("PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT", "").strip()
+    log.write(f"{reason}\\t{files}\\n")
+""",
+                encoding="utf-8",
+            )
+
+            def git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args],
+                    cwd=repo,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+            git("init", "-q", "-b", "main")
+            git("config", "user.name", "Pulse Test")
+            git("config", "user.email", "pulse-test@example.invalid")
+            git("add", "scripts")
+            git("commit", "-q", "-m", "base")
+            git("tag", "base")
+
+            (repo / "first.txt").write_text("first\n", encoding="utf-8")
+            git("add", "first.txt")
+            git(
+                "commit",
+                "-q",
+                "-m",
+                "first change\n\nContract-Neutral: dependency-only test",
+            )
+            (repo / "second.txt").write_text("second\n", encoding="utf-8")
+            git("add", "second.txt")
+            git("commit", "-q", "-m", "second change")
+
+            guard_log = repo / "guard.log"
+            env = os.environ.copy()
+            env["PULSE_TEST_GUARD_LOG"] = str(guard_log)
+            result = subprocess.run(
+                ["bash", "scripts/dev-prepush.sh", "base"],
+                cwd=repo,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(
+                guard_log.read_text(encoding="utf-8").splitlines(),
+                ["dependency-only test\tfirst.txt", "\tsecond.txt"],
+            )
 
 
 if __name__ == "__main__":

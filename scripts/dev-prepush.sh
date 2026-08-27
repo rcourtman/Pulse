@@ -43,14 +43,28 @@ fi
 CHANGED=$(git diff --name-only "$BASE"...HEAD)
 CHANGED_GO=$(printf '%s\n' "$CHANGED" | grep -E '\.go$' || true)
 
-step "Canonical completion guard (HEAD commit, CI mode)"
-if [ "$AHEAD" -gt 1 ]; then
-  echo "Note: $AHEAD commits ahead; the guard is checked for HEAD only here, CI checks each commit."
-fi
-if ! git diff --name-only HEAD~1 HEAD | \
-  python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin --diff-base HEAD~1; then
-  fail "canonical completion guard"
-fi
+step "Canonical completion guard (per commit, CI mode)"
+while IFS= read -r commit; do
+  if [ -z "$commit" ]; then
+    continue
+  fi
+  if ! git rev-parse --verify --quiet "${commit}^" >/dev/null; then
+    echo "Skipping root commit $commit (no parent to diff against)."
+    continue
+  fi
+
+  # Match canonical-governance.yml exactly: the prepare-commit-msg hook
+  # persists an intentional local bypass as a trailer, so recover that
+  # reason when validating already-created commits before push.
+  reason=$(git log -1 --format='%(trailers:key=Contract-Neutral,valueonly,separator=; )' "$commit" | tr '\n' ' ')
+  echo "Checking $commit"
+  if ! git diff-tree --no-commit-id --name-only -r "$commit" | \
+    PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="$reason" \
+      python3 scripts/release_control/canonical_completion_guard.py \
+        --files-from-stdin --diff-base "${commit}^"; then
+    fail "canonical completion guard @ $commit"
+  fi
+done < <(git rev-list --reverse --no-merges "$BASE"..HEAD)
 
 if printf '%s\n' "$CHANGED" | grep -q 'docs/release-control/v6/internal/subsystems/registry.json'; then
   step "Registry snapshot tests (registry.json changed)"
