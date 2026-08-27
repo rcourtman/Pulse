@@ -1,32 +1,27 @@
 {
   "version": 1,
-  "base_sha": "4b9abd4eca5a1399a2386814d98eeadded198e45",
-  "verified_at": "2026-08-27T20:10:44Z",
+  "base_sha": "1878245cdb1cde95f626cbe8cc95fa1e76c93155",
+  "verified_at": "2026-08-27T20:55:57Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx": "50839ded7dc62cbc3a9fb11fc5fc575acd1997ec9a4b0d7331fba22f0afb0ab4",
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "241e5f93f444b3838b80c05f6b4f78c4788931c760d01dc63f54ee5d4ee5270a",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "26faeb83e422b1d928385ce836e86a701ce544aa936b8de5bb38caee845bcb4d"
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "0f77405c3ece3b1d507e48ca0b7057a076fead8c1503a2c94cc4161594585c6c"
   },
-  "routes": ["/proxmox/mail", "/standalone/machines", "/docker/overview", "/actions"],
+  "routes": ["/alerts/thresholds/proxmox"],
   "viewports": [
-    { "width": 1920, "height": 800 },
+    { "width": 1920, "height": 900 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "mail-gateway-eu expanded with inbound disposition statistics visible",
-    "Apollo-114 and auth-service-01 management drawers inspected for Discovery and action-audit availability",
-    "Actions open and history views inspected for seeded action records"
+    "default CPU evaluation windows with the all-workload fallback visible",
+    "all-workload override set to 15 minutes with VM and application-container inheritance visible",
+    "narrow platform-overrides disclosure expanded with the same inheritance state"
   ],
   "interactions": [
-    "expanded mail-gateway-eu and confirmed Greylist, RBL, and average-process values remain adjacent to their labels on desktop",
-    "confirmed the three inbound statistic rows span the mobile card cleanly at 390px without overlap",
-    "repeated the PMG desktop check after the mobile span correction",
-    "inspected machine and Docker host drawers plus Actions history; the demo does not seed resource-level Discovery facts or action-audit drawer rows, so those responsive states are covered by rendered component tests"
+    "set All workloads to a 15 minute average and confirmed Virtual machines and Application containers changed to Inherit (15 minutes)",
+    "expanded Platform overrides at 390px and confirmed the workload controls remain readable without horizontal overflow",
+    "discarded the unsaved mock-runtime change after verification and confirmed the browser console contained no errors"
   ]
 }

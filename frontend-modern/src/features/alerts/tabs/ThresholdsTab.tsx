@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import {
@@ -24,21 +24,41 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
   };
 
   const evaluationProfiles = [
-    { key: 'all', label: 'All resources' },
-    { key: 'vm', label: 'Virtual machines' },
-    { key: 'app-container', label: 'Application containers' },
-    { key: 'node', label: 'Infrastructure nodes' },
-    { key: 'agent', label: 'Pulse agents' },
-    { key: 'k8s-node', label: 'Kubernetes nodes' },
-    { key: 'truenas-system', label: 'TrueNAS systems' },
-    { key: 'vmware-host', label: 'VMware hosts' },
-    { key: 'pbs', label: 'Proxmox Backup Servers' },
+    { key: 'all', label: 'All resources', inheritsFrom: [] },
+    { key: 'guest', label: 'All workloads', inheritsFrom: ['all'] },
+    { key: 'vm', label: 'Virtual machines', inheritsFrom: ['guest', 'all'] },
+    {
+      key: 'app-container',
+      label: 'Application containers',
+      inheritsFrom: ['guest', 'all'],
+    },
+    { key: 'node', label: 'Infrastructure nodes', inheritsFrom: ['all'] },
+    { key: 'agent', label: 'Pulse agents', inheritsFrom: ['node', 'all'] },
+    { key: 'k8s-node', label: 'Kubernetes nodes', inheritsFrom: ['node', 'all'] },
+    {
+      key: 'truenas-system',
+      label: 'TrueNAS systems',
+      inheritsFrom: ['agent', 'node', 'all'],
+    },
+    {
+      key: 'vmware-host',
+      label: 'VMware hosts',
+      inheritsFrom: ['agent', 'node', 'all'],
+    },
+    { key: 'pbs', label: 'Proxmox Backup Servers', inheritsFrom: ['node', 'all'] },
   ] as const;
-  const globalCPUWindow = createMemo(() => props.metricEvaluationWindows?.().all?.cpu ?? 300);
   const evaluationLabel = (seconds: number) => {
     if (seconds === 0) return 'Current value';
     if (seconds < 60) return `${seconds} seconds`;
     return `${seconds / 60} minute${seconds === 60 ? '' : 's'}`;
+  };
+  const inheritedCPUWindow = (profile: (typeof evaluationProfiles)[number]) => {
+    const windows = props.metricEvaluationWindows?.() ?? {};
+    for (const parent of profile.inheritsFrom) {
+      const configured = windows[parent]?.cpu;
+      if (configured !== undefined) return configured;
+    }
+    return 300;
   };
   const updateCPUWindow = (profile: string, rawValue: string) => {
     if (!props.setMetricEvaluationWindows) return;
@@ -76,7 +96,9 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
           onInput={(event) => updateCPUWindow(profile.key, event.currentTarget.value)}
         >
           <Show when={profile.key !== 'all'}>
-            <option value="inherit">Inherit ({evaluationLabel(globalCPUWindow())})</option>
+            <option value="inherit">
+              Inherit ({evaluationLabel(inheritedCPUWindow(profile))})
+            </option>
           </Show>
           <option value="0">Current value</option>
           <option value="60">1 minute average</option>

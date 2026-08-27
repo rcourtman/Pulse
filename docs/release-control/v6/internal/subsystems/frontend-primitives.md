@@ -511,8 +511,12 @@ absorb those persistence or validation rules into shared form/table chrome
 The alerts-owned threshold surface also owns rolling metric evaluation
 configuration. `ThresholdsTab` presents the understandable policy (current
 value or a named rolling duration) rather than a query language, with one
-global CPU rule and sparse platform overrides that visibly inherit it. The
-configuration snapshot and payload models must round-trip explicit zero and
+global CPU rule, a canonical all-workload fallback, and sparse platform
+overrides that visibly inherit the effective parent. The select options and
+inherit labels must mirror the runtime hierarchy: VMs and application
+containers inherit `guest`, agent-backed systems inherit `node`, and every
+chain terminates at `all`. The configuration snapshot and payload models must
+round-trip explicit zero and
 resource-specific maps without flattening inheritance. Copy must explain that
 incomplete history holds incident state instead of firing or recovering, and
 the control must remain usable at desktop and narrow viewports through shared

@@ -212,8 +212,12 @@ their existing platform thresholds and disable policy.
 Rolling metric evaluation is alert policy over monitoring-owned history, not a
 second incident family. `metricEvaluationWindows` stores seconds by canonical
 resource type and metric, with an explicit zero meaning current-value
-evaluation and platform-specific entries inheriting the `all` rule. CPU seeds a
-five-minute default; only CPU and burst-prone disk/network rate metrics may use
+evaluation. The Thresholds surface exposes both the global `all` rule and the
+canonical `guest` workload fallback; concrete workloads inherit through the
+same runtime chain (`vm` and `app-container` through `guest`, host-like agents
+through `node`, then `all`) and must label the effective parent duration rather
+than always presenting the global value. CPU seeds a five-minute default; only
+CPU and burst-prone disk/network rate metrics may use
 rolling averages, while memory, capacity, and temperature remain instantaneous
 evidence boundaries. A window requires at least three samples, at least 80%
 temporal coverage, and no gap larger than the bounded cadence allowance. Weak,
