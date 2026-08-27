@@ -20746,6 +20746,48 @@ func TestCheckHostAlertsWhenSMARTCRCCountIncreases(t *testing.T) {
 	}
 }
 
+func TestCheckHostUsesConfiguredSMARTCounterThresholds(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	config := m.GetConfig()
+	pendingThreshold := int64(3)
+	crcDelta := int64(2)
+	config.AgentDefaults.SMARTPending = &pendingThreshold
+	config.AgentDefaults.SMARTCRCErrorDelta = &crcDelta
+	m.UpdateConfig(config)
+
+	pending := int64(2)
+	crcErrors := int64(10)
+	host := models.Host{
+		ID: "tuned-smart-host",
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sda",
+			Health: "PASSED",
+			Attributes: &models.SMARTAttributes{
+				PendingSectors: &pending,
+				UDMACRCErrors:  &crcErrors,
+			},
+		}}},
+	}
+	alertKey := buildCanonicalStateID("agent:tuned-smart-host/disk:sda", "agent:tuned-smart-host/disk:sda-disk-health")
+
+	m.CheckHost(host)
+	crcErrors = 11
+	m.CheckHost(host)
+	if testHasActiveAlert(t, m, alertKey) {
+		t.Fatal("values below configured SMART thresholds must not alert")
+	}
+
+	pending = 3
+	crcErrors = 12
+	m.CheckHost(host)
+	alert := testRequireActiveAlert(t, m, alertKey)
+	codes, ok := alert.Metadata["riskCodes"].([]string)
+	if !ok || !reflect.DeepEqual(codes, []string{"pending_sectors"}) {
+		t.Fatalf("riskCodes = %#v, want pending_sectors at configured boundary", alert.Metadata["riskCodes"])
+	}
+}
+
 func TestCheckHostSMARTCRCCounterResetEstablishesNewBaseline(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

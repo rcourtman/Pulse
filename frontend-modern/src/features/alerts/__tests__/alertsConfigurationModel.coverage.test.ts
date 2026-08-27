@@ -39,6 +39,21 @@ describe('createHysteresisThreshold (via buildAlertsConfigurationPayload)', () =
     expect(alertConfig?.guestDefaults?.diskRead).toEqual({ trigger: 6, clear: 1 });
   });
 
+  it('persists SMART rules as discrete agent defaults', () => {
+    const snapshot = createDefaultAlertsConfigurationSnapshot();
+    snapshot.agentDefaults.smartHealthFailure = 0;
+    snapshot.agentDefaults.smartPending = 4;
+    snapshot.agentDefaults.smartCrcErrorDelta = 2;
+    snapshot.agentDefaults.smartLifeWarning = 18;
+
+    const { alertConfig } = buildFromSnapshot(snapshot);
+
+    expect(alertConfig?.agentDefaults?.smartHealthFailure).toBe(0);
+    expect(alertConfig?.agentDefaults?.smartPending).toBe(4);
+    expect(alertConfig?.agentDefaults?.smartCrcErrorDelta).toBe(2);
+    expect(alertConfig?.agentDefaults?.smartLifeWarning).toBe(18);
+  });
+
   it('applies the threshold factory to each diskTempByType entry', () => {
     const snapshot = createDefaultAlertsConfigurationSnapshot();
     snapshot.diskTempByType = { hot: 7, sub: 2 };

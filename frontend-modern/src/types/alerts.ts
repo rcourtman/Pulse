@@ -15,6 +15,16 @@ export interface AlertThresholds {
   networkOut?: HysteresisThreshold;
   temperature?: HysteresisThreshold;
   diskTemperature?: HysteresisThreshold;
+  smartHealthFailure?: number;
+  smartReallocated?: number;
+  smartPending?: number;
+  smartUncorrectable?: number;
+  smartMediaErrors?: number;
+  smartCrcErrorDelta?: number;
+  smartLifeWarning?: number;
+  smartLifeCritical?: number;
+  smartSpareWarning?: number;
+  smartSpareCritical?: number;
   usage?: HysteresisThreshold;
   disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
   poweredOffSeverity?: 'warning' | 'critical';

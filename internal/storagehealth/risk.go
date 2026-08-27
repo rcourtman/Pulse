@@ -28,6 +28,35 @@ type Assessment struct {
 	Reasons []Reason  `json:"reasons,omitempty"`
 }
 
+// SMARTThresholds controls the discrete health evidence that becomes a disk
+// risk. Counter values at zero disable that rule; the endurance percentages
+// use the same convention. Temperature remains a separate metric threshold.
+type SMARTThresholds struct {
+	HealthFailure        bool
+	ReallocatedSectors   int64
+	PendingSectors       int64
+	OfflineUncorrectable int64
+	MediaErrors          int64
+	LifeWarning          int
+	LifeCritical         int
+	AvailableSpareWarn   int
+	AvailableSpareCrit   int
+}
+
+func DefaultSMARTThresholds() SMARTThresholds {
+	return SMARTThresholds{
+		HealthFailure:        true,
+		ReallocatedSectors:   1,
+		PendingSectors:       1,
+		OfflineUncorrectable: 1,
+		MediaErrors:          1,
+		LifeWarning:          10,
+		LifeCritical:         5,
+		AvailableSpareWarn:   20,
+		AvailableSpareCrit:   10,
+	}
+}
+
 type Sample struct {
 	Model                string
 	Health               string
@@ -60,6 +89,10 @@ func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 }
 
 func AssessHostSMARTDisk(disk models.HostDiskSMART) Assessment {
+	return AssessHostSMARTDiskWithThresholds(disk, DefaultSMARTThresholds())
+}
+
+func AssessHostSMARTDiskWithThresholds(disk models.HostDiskSMART, thresholds SMARTThresholds) Assessment {
 	sample := Sample{
 		Model:       disk.Model,
 		Health:      disk.Health,
@@ -67,7 +100,7 @@ func AssessHostSMARTDisk(disk models.HostDiskSMART) Assessment {
 		Wearout:     -1,
 	}
 	applySMARTAttributes(&sample, disk.Attributes)
-	return AssessSample(sample)
+	return AssessSampleWithThresholds(sample, thresholds)
 }
 
 func applySMARTAttributes(sample *Sample, attrs *models.SMARTAttributes) {
@@ -115,6 +148,10 @@ func applySMARTAttributes(sample *Sample, attrs *models.SMARTAttributes) {
 }
 
 func AssessSample(sample Sample) Assessment {
+	return AssessSampleWithThresholds(sample, DefaultSMARTThresholds())
+}
+
+func AssessSampleWithThresholds(sample Sample, thresholds SMARTThresholds) Assessment {
 	assessment := Assessment{Level: RiskHealthy}
 	addReason := func(code string, severity RiskLevel, summary string) {
 		if summary == "" {
@@ -131,31 +168,33 @@ func AssessSample(sample Sample) Assessment {
 	}
 
 	normalizedHealth := normalizeHealth(sample.Health)
-	if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" && !HasKnownFirmwareBug(sample.Model) {
+	if thresholds.HealthFailure && normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" && !HasKnownFirmwareBug(sample.Model) {
 		addReason("health_status", RiskCritical, fmt.Sprintf("Disk reports health status %s", normalizedHealth))
 	}
-	if sample.PendingSectors > 0 {
+	if thresholds.PendingSectors > 0 && sample.PendingSectors >= thresholds.PendingSectors {
 		addReason("pending_sectors", RiskCritical, fmt.Sprintf("Pending sectors detected (%d)", sample.PendingSectors))
 	}
-	if sample.OfflineUncorrectable > 0 {
+	if thresholds.OfflineUncorrectable > 0 && sample.OfflineUncorrectable >= thresholds.OfflineUncorrectable {
 		addReason("offline_uncorrectable", RiskCritical, fmt.Sprintf("Offline uncorrectable sectors detected (%d)", sample.OfflineUncorrectable))
 	}
-	if sample.MediaErrors > 0 {
+	if thresholds.MediaErrors > 0 && sample.MediaErrors >= thresholds.MediaErrors {
 		addReason("media_errors", RiskCritical, fmt.Sprintf("Media errors detected (%d)", sample.MediaErrors))
 	}
-	if (sample.WearoutKnown || sample.Wearout > 0) && sample.Wearout >= 0 && sample.Wearout <= 5 {
+	if thresholds.LifeCritical > 0 && (sample.WearoutKnown || sample.Wearout > 0) && sample.Wearout >= 0 && sample.Wearout <= thresholds.LifeCritical {
 		addReason("wearout_low", RiskCritical, fmt.Sprintf("SSD life remaining is %d%%", sample.Wearout))
-	} else if sample.Wearout > 5 && sample.Wearout < 10 {
+	} else if thresholds.LifeWarning > 0 && sample.Wearout > thresholds.LifeCritical && sample.Wearout < thresholds.LifeWarning {
 		addReason("wearout_low", RiskWarning, fmt.Sprintf("SSD life remaining is %d%%", sample.Wearout))
 	}
-	if (sample.AvailableSpareKnown || sample.AvailableSpare > 0) && sample.AvailableSpare <= 10 {
+	if thresholds.AvailableSpareCrit > 0 && (sample.AvailableSpareKnown || sample.AvailableSpare > 0) && sample.AvailableSpare <= thresholds.AvailableSpareCrit {
 		addReason("nvme_available_spare_low", RiskCritical, fmt.Sprintf("NVMe available spare is %d%%", sample.AvailableSpare))
-	} else if sample.AvailableSpare > 0 && sample.AvailableSpare < 20 {
+	} else if thresholds.AvailableSpareWarn > 0 && sample.AvailableSpare > thresholds.AvailableSpareCrit && sample.AvailableSpare < thresholds.AvailableSpareWarn {
 		addReason("nvme_available_spare_low", RiskWarning, fmt.Sprintf("NVMe available spare is %d%%", sample.AvailableSpare))
 	}
-	if sample.PercentageUsed >= 95 {
+	percentageCritical := thresholds.LifeCritical > 0 && sample.PercentageUsed >= 100-thresholds.LifeCritical
+	percentageWarning := thresholds.LifeWarning > 0 && sample.PercentageUsed >= 100-thresholds.LifeWarning
+	if percentageCritical {
 		addReason("nvme_percentage_used_high", RiskCritical, fmt.Sprintf("NVMe endurance used is %d%%", sample.PercentageUsed))
-	} else if sample.PercentageUsed >= 90 {
+	} else if percentageWarning {
 		addReason("nvme_percentage_used_high", RiskWarning, fmt.Sprintf("NVMe endurance used is %d%%", sample.PercentageUsed))
 	}
 	if sample.Temperature >= 70 {
@@ -163,7 +202,7 @@ func AssessSample(sample Sample) Assessment {
 	} else if sample.Temperature >= 60 {
 		addReason("temperature_high", RiskWarning, fmt.Sprintf("Disk temperature is %dC", sample.Temperature))
 	}
-	if sample.ReallocatedSectors > 0 {
+	if thresholds.ReallocatedSectors > 0 && sample.ReallocatedSectors >= thresholds.ReallocatedSectors {
 		addReason("reallocated_sectors", RiskWarning, fmt.Sprintf("Reallocated sectors detected (%d)", sample.ReallocatedSectors))
 	}
 	if sample.UDMACRCErrors > 0 {

@@ -22,6 +22,35 @@ func TestAssessSample_HealthyDisk(t *testing.T) {
 	}
 }
 
+func TestAssessSampleWithThresholdsTunesAndDisablesSMARTRules(t *testing.T) {
+	thresholds := DefaultSMARTThresholds()
+	thresholds.HealthFailure = false
+	thresholds.PendingSectors = 3
+	thresholds.MediaErrors = 0
+	thresholds.LifeWarning = 20
+	thresholds.LifeCritical = 10
+
+	assessment := AssessSampleWithThresholds(Sample{
+		Health:         "FAILED",
+		PendingSectors: 2,
+		MediaErrors:    50,
+		Wearout:        15,
+		WearoutKnown:   true,
+	}, thresholds)
+
+	if assessment.Level != RiskWarning {
+		t.Fatalf("Level = %q, want warning from configured life threshold", assessment.Level)
+	}
+	if len(assessment.Reasons) != 1 || assessment.Reasons[0].Code != "wearout_low" {
+		t.Fatalf("Reasons = %+v, want only wearout_low", assessment.Reasons)
+	}
+
+	assessment = AssessSampleWithThresholds(Sample{PendingSectors: 3}, thresholds)
+	if assessment.Level != RiskCritical || len(assessment.Reasons) != 1 || assessment.Reasons[0].Code != "pending_sectors" {
+		t.Fatalf("threshold boundary did not trigger: %+v", assessment)
+	}
+}
+
 func TestAssessSample_FailedHealthStatus(t *testing.T) {
 	assessment := AssessSample(Sample{
 		Health: "FAILED",

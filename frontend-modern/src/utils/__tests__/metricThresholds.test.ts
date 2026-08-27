@@ -13,6 +13,7 @@ import {
   type MetricType,
 } from '@/utils/metricThresholds';
 import {
+  FACTORY_AGENT_DEFAULTS,
   FACTORY_KUBERNETES_DEFAULTS,
   FACTORY_SNAPSHOT_DEFAULTS,
   FACTORY_TRUENAS_DEFAULTS,
@@ -449,6 +450,21 @@ describe('metricThresholds', () => {
         diskWrite: -1,
         networkIn: -1,
         networkOut: -1,
+      });
+    });
+
+    it('keeps SMART display defaults aligned with host alert evaluation', () => {
+      expect(FACTORY_AGENT_DEFAULTS).toMatchObject({
+        smartHealthFailure: 1,
+        smartReallocated: 1,
+        smartPending: 1,
+        smartUncorrectable: 1,
+        smartMediaErrors: 1,
+        smartCrcErrorDelta: 1,
+        smartLifeWarning: 10,
+        smartLifeCritical: 5,
+        smartSpareWarning: 20,
+        smartSpareCritical: 10,
       });
     });
   });

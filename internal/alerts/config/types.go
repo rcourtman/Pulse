@@ -50,9 +50,19 @@ type ThresholdConfig struct {
 	DiskWrite           *HysteresisThreshold `json:"diskWrite,omitempty"`
 	NetworkIn           *HysteresisThreshold `json:"networkIn,omitempty"`
 	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
-	Usage               *HysteresisThreshold `json:"usage,omitempty"`           // For storage devices
-	Temperature         *HysteresisThreshold `json:"temperature,omitempty"`     // For node CPU temperature
-	DiskTemperature     *HysteresisThreshold `json:"diskTemperature,omitempty"` // For host SMART temperatures
+	Usage               *HysteresisThreshold `json:"usage,omitempty"`              // For storage devices
+	Temperature         *HysteresisThreshold `json:"temperature,omitempty"`        // For node CPU temperature
+	DiskTemperature     *HysteresisThreshold `json:"diskTemperature,omitempty"`    // For host SMART temperatures
+	SMARTHealthFailure  *int                 `json:"smartHealthFailure,omitempty"` // 1 alerts on failed SMART health, 0 disables
+	SMARTReallocated    *int64               `json:"smartReallocated,omitempty"`   // Reallocated-sector count; 0 disables
+	SMARTPending        *int64               `json:"smartPending,omitempty"`       // Pending-sector count; 0 disables
+	SMARTUncorrectable  *int64               `json:"smartUncorrectable,omitempty"` // Offline-uncorrectable count; 0 disables
+	SMARTMediaErrors    *int64               `json:"smartMediaErrors,omitempty"`   // Media-error count; 0 disables
+	SMARTCRCErrorDelta  *int64               `json:"smartCrcErrorDelta,omitempty"` // Increase between reports; 0 disables
+	SMARTLifeWarning    *int                 `json:"smartLifeWarning,omitempty"`   // Remaining-life warning percentage; 0 disables
+	SMARTLifeCritical   *int                 `json:"smartLifeCritical,omitempty"`  // Remaining-life critical percentage; 0 disables
+	SMARTSpareWarning   *int                 `json:"smartSpareWarning,omitempty"`  // NVMe spare warning percentage; 0 disables
+	SMARTSpareCritical  *int                 `json:"smartSpareCritical,omitempty"` // NVMe spare critical percentage; 0 disables
 	Backup              *BackupAlertConfig   `json:"backup,omitempty"`
 	Snapshot            *SnapshotAlertConfig `json:"snapshot,omitempty"`
 	Note                *string              `json:"note,omitempty"`

@@ -191,6 +191,18 @@ page, platform navigation, the resource drawer and the alerts threshold sections
 all read it. Selecting by bare `type === 'agent'` collapses that distinction and
 puts the same machine on two surfaces that do not share an identity.
 
+The Machines threshold tab owns one responsive SMART rules card ahead of the
+resource groups. It composes the existing threshold tab layout and native
+accessible checkbox/number controls rather than creating a second settings
+shell. Failed-health is presented as a toggle; sector, media, CRC-growth,
+remaining-life, and spare policies are integer inputs; percentage inputs are
+bounded to 0..100; and the card states that zero disables an individual numeric
+rule. Every edit uses the canonical agent-default setter and dirty-state path,
+so the shared save/discard bar owns persistence on desktop and narrow layouts.
+The single-column narrow layout must keep labels, help, values, percent suffixes,
+and the full scroll journey inside the app scroll shell without horizontal
+overflow.
+
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`

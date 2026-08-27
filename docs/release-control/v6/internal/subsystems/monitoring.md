@@ -386,6 +386,16 @@ also preserve the unreported sentinel rather than collapsing an absent facet
 onto the struct zero value, because `0` is a real reading meaning no endurance
 remains.
 
+Storage health assessment accepts an explicit SMART policy from alerting for
+agent-only host disks while retaining the factory-policy entry points for all
+other consumers. The policy controls failed-health, sector, media-error,
+remaining-life, spare, and reallocated-sector classification; a zero threshold
+disables only that rule. It must not alter collection truth, device identity,
+the wearout evidence predicate, or the separate temperature classification.
+This separation keeps provider physical-disk risk deterministic while allowing
+the alert subsystem to apply resolved per-host settings without forking SMART
+parsing or risk reason codes.
+
 Discovery suppression for configured connections is a fail-closed obligation,
 not a best-effort optimisation. Every configured PVE, PBS and PMG host is
 resolved into the discovery IP blocklist so the scanner never fingerprints a

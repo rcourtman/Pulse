@@ -1,11 +1,23 @@
 {
   "version": 1,
-  "base_sha": "118c90d1f0df2ff007a3494e25139f019a38137d",
-  "verified_at": "2026-08-27T11:18:00Z",
+  "base_sha": "3d91709ebad0332858e4615d72daf8e424ab42a8",
+  "verified_at": "2026-08-27T12:19:53Z",
   "result": "passed",
-  "changed_paths": [],
-  "content_sha256": {},
-  "routes": ["/proxmox/backups"],
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableSMARTDefaultsCard.tsx",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/types/alerts.ts",
+    "frontend-modern/src/utils/alertThresholdDefaults.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx": "89646984deb982699d3359953ab85a2ceae15830465ccf20b5603f5a426e3193",
+    "frontend-modern/src/components/Alerts/ThresholdsTableSMARTDefaultsCard.tsx": "c1bd1947dbcbab5806e11fa905271039131cebb0a736642e73fd3652f63e6b66",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "2100da1f350cbbea386f1ae669a655d213ea710f1636eb94fe80c6d47d29313d",
+    "frontend-modern/src/types/alerts.ts": "cc8b88ec5d8de87dbb69116114e9cd889347972b59dd81bec081096ab791c693",
+    "frontend-modern/src/utils/alertThresholdDefaults.ts": "6ea4a3f99c8bd27a4fcca98f67c866d06a0f5d3e3211550a58447688cb61352a"
+  },
+  "routes": ["/alerts/thresholds/systems"],
   "viewports": [
     {
       "width": 1440,
@@ -17,17 +29,17 @@
     }
   ],
   "states": [
-    "mock-mode Proxmox Backups loaded with standalone PBS service and correlated Agent host resources",
-    "backup-vault expanded into the canonical resource detail row with PBS service identity and Agent metrics target",
-    "History rendered stored utilization, network, disk, and thermal samples instead of Collecting History",
-    "History range changed from 24 hours to 7 days and retained populated charts",
-    "backup-vault collapsed back to the originating summary row"
+    "Machines thresholds loaded with the backward-compatible SMART factory rules",
+    "failed-health disabled with pending sectors set to 4, life warning set to 15 percent, and NVMe spare critical disabled at 0",
+    "edited SMART rules persisted after Save Changes and a full route reload",
+    "factory SMART values restored and saved from the narrow layout",
+    "complete single-column SMART card inspected through the app scroll shell at 390x844"
   ],
   "interactions": [
-    "opened backup-vault from the Backup servers table and selected the shared History tab at 1440x1000",
-    "confirmed the desktop drawer showed populated Agent-backed charts and the document and body scroll widths matched the viewport",
-    "repeated the whole-row touch expansion and History flow at 390x844, selected the 7 day range, and confirmed every chart card remained contained",
-    "collapsed the phone detail through the originating backup-vault row and confirmed focus returned to that row",
-    "confirmed the browser console contained no errors during the final desktop and phone verification flows"
+    "opened Alerts, selected Thresholds, and selected the Machines platform tab at 1440x1000",
+    "toggled failed-health, edited counter and percentage rules including an explicit 0 disable value, and saved through the shared dirty-state bar",
+    "reloaded /alerts/thresholds/systems and confirmed every edited value persisted",
+    "scrolled the complete SMART rules card at 390x844, confirmed scroll width matched client width, restored factory values, and saved from the narrow layout",
+    "confirmed labels, help text, controls, percentage suffixes, focusable save actions, and the browser console remained free of errors"
   ]
 }

@@ -439,6 +439,25 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
       diskTemperature:
         getTriggerValue(config.agentDefaults.diskTemperature) ??
         FACTORY_AGENT_DEFAULTS.diskTemperature,
+      smartHealthFailure:
+        config.agentDefaults.smartHealthFailure ?? FACTORY_AGENT_DEFAULTS.smartHealthFailure,
+      smartReallocated:
+        config.agentDefaults.smartReallocated ?? FACTORY_AGENT_DEFAULTS.smartReallocated,
+      smartPending: config.agentDefaults.smartPending ?? FACTORY_AGENT_DEFAULTS.smartPending,
+      smartUncorrectable:
+        config.agentDefaults.smartUncorrectable ?? FACTORY_AGENT_DEFAULTS.smartUncorrectable,
+      smartMediaErrors:
+        config.agentDefaults.smartMediaErrors ?? FACTORY_AGENT_DEFAULTS.smartMediaErrors,
+      smartCrcErrorDelta:
+        config.agentDefaults.smartCrcErrorDelta ?? FACTORY_AGENT_DEFAULTS.smartCrcErrorDelta,
+      smartLifeWarning:
+        config.agentDefaults.smartLifeWarning ?? FACTORY_AGENT_DEFAULTS.smartLifeWarning,
+      smartLifeCritical:
+        config.agentDefaults.smartLifeCritical ?? FACTORY_AGENT_DEFAULTS.smartLifeCritical,
+      smartSpareWarning:
+        config.agentDefaults.smartSpareWarning ?? FACTORY_AGENT_DEFAULTS.smartSpareWarning,
+      smartSpareCritical:
+        config.agentDefaults.smartSpareCritical ?? FACTORY_AGENT_DEFAULTS.smartSpareCritical,
     };
   }
 
@@ -770,6 +789,16 @@ export function buildAlertsConfigurationPayload({
         memory: createHysteresisThreshold(snapshot.agentDefaults.memory),
         disk: createHysteresisThreshold(snapshot.agentDefaults.disk),
         diskTemperature: createHysteresisThreshold(snapshot.agentDefaults.diskTemperature),
+        smartHealthFailure: snapshot.agentDefaults.smartHealthFailure,
+        smartReallocated: snapshot.agentDefaults.smartReallocated,
+        smartPending: snapshot.agentDefaults.smartPending,
+        smartUncorrectable: snapshot.agentDefaults.smartUncorrectable,
+        smartMediaErrors: snapshot.agentDefaults.smartMediaErrors,
+        smartCrcErrorDelta: snapshot.agentDefaults.smartCrcErrorDelta,
+        smartLifeWarning: snapshot.agentDefaults.smartLifeWarning,
+        smartLifeCritical: snapshot.agentDefaults.smartLifeCritical,
+        smartSpareWarning: snapshot.agentDefaults.smartSpareWarning,
+        smartSpareCritical: snapshot.agentDefaults.smartSpareCritical,
       },
       diskTempByType: Object.fromEntries(
         Object.entries(snapshot.diskTempByType).map(([key, trigger]) => [

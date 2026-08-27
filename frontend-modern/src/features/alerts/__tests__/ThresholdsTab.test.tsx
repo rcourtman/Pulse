@@ -83,7 +83,14 @@ const buildProps = (): ThresholdsTabProps =>
       networkOut: -1,
     }),
     setVMwareDefaults: vi.fn(),
-    agentDefaults: () => ({ cpu: 80 }),
+    agentDefaults: () => ({
+      cpu: 80,
+      smartHealthFailure: 1,
+      smartPending: 4,
+      smartCrcErrorDelta: 2,
+      smartLifeWarning: 15,
+      smartSpareCritical: 0,
+    }),
     setAgentDefaults: vi.fn(),
     dockerDefaults: () => ({
       cpu: 80,
@@ -156,7 +163,14 @@ const buildProps = (): ThresholdsTabProps =>
       networkIn: -1,
       networkOut: -1,
     },
-    factoryAgentDefaults: { cpu: 80 },
+    factoryAgentDefaults: {
+      cpu: 80,
+      smartHealthFailure: 1,
+      smartPending: 1,
+      smartCrcErrorDelta: 1,
+      smartLifeWarning: 10,
+      smartSpareCritical: 10,
+    },
     factoryDockerDefaults: {
       cpu: 80,
       memory: 85,
@@ -290,6 +304,18 @@ describe('ThresholdsTab', () => {
     expect(props.containerRuntimes).toEqual([]);
     expect(typeof props.guestDefaults).toBe('object');
     expect(typeof props.dockerDefaults).toBe('object');
+    expect(props.agentDefaults).toMatchObject({
+      smartHealthFailure: 1,
+      smartPending: 4,
+      smartCrcErrorDelta: 2,
+      smartLifeWarning: 15,
+      smartSpareCritical: 0,
+    });
+    expect(props.factoryAgentDefaults).toMatchObject({
+      smartPending: 1,
+      smartLifeWarning: 10,
+      smartSpareCritical: 10,
+    });
   });
 
   it('routes a resource-row delay action into the canonical intent policy panel', async () => {

@@ -23,10 +23,20 @@ func defaultAlertConfig() AlertConfig {
 			Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75}, // Warning at 80°C, clear at 75°C
 		},
 		AgentDefaults: ThresholdConfig{
-			CPU:             &HysteresisThreshold{Trigger: 80, Clear: 75},
-			Memory:          &HysteresisThreshold{Trigger: 85, Clear: 80},
-			Disk:            &HysteresisThreshold{Trigger: 90, Clear: 85},
-			DiskTemperature: &HysteresisThreshold{Trigger: 55, Clear: 50},
+			CPU:                &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory:             &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Disk:               &HysteresisThreshold{Trigger: 90, Clear: 85},
+			DiskTemperature:    &HysteresisThreshold{Trigger: 55, Clear: 50},
+			SMARTHealthFailure: defaultIntPtr(1),
+			SMARTReallocated:   defaultInt64Ptr(1),
+			SMARTPending:       defaultInt64Ptr(1),
+			SMARTUncorrectable: defaultInt64Ptr(1),
+			SMARTMediaErrors:   defaultInt64Ptr(1),
+			SMARTCRCErrorDelta: defaultInt64Ptr(1),
+			SMARTLifeWarning:   defaultIntPtr(10),
+			SMARTLifeCritical:  defaultIntPtr(5),
+			SMARTSpareWarning:  defaultIntPtr(20),
+			SMARTSpareCritical: defaultIntPtr(10),
 		},
 		DockerDefaults: DockerThresholdConfig{
 			CPU:                     HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -191,3 +201,7 @@ func defaultAlertConfig() AlertConfig {
 		FlappingCooldownMinutes: 15,   // 15 minute cooldown
 	}
 }
+
+func defaultIntPtr(value int) *int { return &value }
+
+func defaultInt64Ptr(value int64) *int64 { return &value }

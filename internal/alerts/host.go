@@ -393,7 +393,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
 			if host.LinkedNodeID == "" {
 				seenDisks[diskResourceID] = struct{}{}
-				m.syncHostSMARTDiskRiskAlerts(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata)
+				m.syncHostSMARTDiskRiskAlerts(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, thresholds)
 				continue
 			}
 			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-health", nil)
@@ -1141,9 +1141,20 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 	}
 }
 
-func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}) {
-	assessment := storagehealth.AssessHostSMARTDisk(disk)
-	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk)...)
+func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, thresholds ThresholdConfig) {
+	smartThresholds := storagehealth.SMARTThresholds{
+		HealthFailure:        intValue(thresholds.SMARTHealthFailure) > 0,
+		ReallocatedSectors:   int64Value(thresholds.SMARTReallocated),
+		PendingSectors:       int64Value(thresholds.SMARTPending),
+		OfflineUncorrectable: int64Value(thresholds.SMARTUncorrectable),
+		MediaErrors:          int64Value(thresholds.SMARTMediaErrors),
+		LifeWarning:          intValue(thresholds.SMARTLifeWarning),
+		LifeCritical:         intValue(thresholds.SMARTLifeCritical),
+		AvailableSpareWarn:   intValue(thresholds.SMARTSpareWarning),
+		AvailableSpareCrit:   intValue(thresholds.SMARTSpareCritical),
+	}
+	assessment := storagehealth.AssessHostSMARTDiskWithThresholds(disk, smartThresholds)
+	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, int64Value(thresholds.SMARTCRCErrorDelta))...)
 	healthReasons, wearReasons := splitSMARTAlertReasons(assessment.Reasons)
 
 	m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
@@ -1154,7 +1165,7 @@ func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.Host
 // alertable health reason without warning on an old, non-zero counter at first
 // observation. A stable value clears the transient growth reason on the next
 // report, while the alert and notification histories retain the event.
-func (m *Manager) hostSMARTCounterGrowthReasons(resourceID string, disk models.HostDiskSMART) []storagehealth.Reason {
+func (m *Manager) hostSMARTCounterGrowthReasons(resourceID string, disk models.HostDiskSMART, minimumDelta int64) []storagehealth.Reason {
 	if disk.Attributes == nil || disk.Attributes.UDMACRCErrors == nil {
 		return nil
 	}
@@ -1173,7 +1184,7 @@ func (m *Manager) hostSMARTCounterGrowthReasons(resourceID string, disk models.H
 	}
 	m.mu.Unlock()
 
-	if !observed || current <= previous.UDMACRCErrors {
+	if !observed || minimumDelta <= 0 || current-previous.UDMACRCErrors < minimumDelta {
 		return nil
 	}
 
@@ -1182,6 +1193,20 @@ func (m *Manager) hostSMARTCounterGrowthReasons(resourceID string, disk models.H
 		Severity: storagehealth.RiskWarning,
 		Summary:  fmt.Sprintf("UDMA CRC error count increased from %d to %d", previous.UDMACRCErrors, current),
 	}}
+}
+
+func intValue(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func int64Value(value *int64) int64 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func splitSMARTAlertReasons(reasons []storagehealth.Reason) ([]storagehealth.Reason, []storagehealth.Reason) {

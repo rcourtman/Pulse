@@ -123,6 +123,16 @@ describe('alertThresholdDefaults', () => {
         memory: 85,
         disk: 90,
         diskTemperature: 55,
+        smartHealthFailure: 1,
+        smartReallocated: 1,
+        smartPending: 1,
+        smartUncorrectable: 1,
+        smartMediaErrors: 1,
+        smartCrcErrorDelta: 1,
+        smartLifeWarning: 10,
+        smartLifeCritical: 5,
+        smartSpareWarning: 20,
+        smartSpareCritical: 10,
       });
     });
   });

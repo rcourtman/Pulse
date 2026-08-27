@@ -433,7 +433,7 @@ describe('readAlertsConfigurationSnapshot — vmwareDefaults full extraction', (
 });
 
 describe('readAlertsConfigurationSnapshot — agentDefaults full extraction', () => {
-  it('extracts all four metric trigger values', () => {
+  it('extracts metric triggers and SMART rules', () => {
     const snapshot = readAlertsConfigurationSnapshot(
       cfg({
         agentDefaults: {
@@ -441,6 +441,11 @@ describe('readAlertsConfigurationSnapshot — agentDefaults full extraction', ()
           memory: { trigger: 77, clear: 72 },
           disk: { trigger: 82, clear: 77 },
           diskTemperature: { trigger: 60, clear: 55 },
+          smartHealthFailure: 0,
+          smartPending: 4,
+          smartCrcErrorDelta: 3,
+          smartLifeWarning: 20,
+          smartLifeCritical: 8,
         },
       }),
     );
@@ -448,6 +453,11 @@ describe('readAlertsConfigurationSnapshot — agentDefaults full extraction', ()
     expect(snapshot.agentDefaults.memory).toBe(77);
     expect(snapshot.agentDefaults.disk).toBe(82);
     expect(snapshot.agentDefaults.diskTemperature).toBe(60);
+    expect(snapshot.agentDefaults.smartHealthFailure).toBe(0);
+    expect(snapshot.agentDefaults.smartPending).toBe(4);
+    expect(snapshot.agentDefaults.smartCrcErrorDelta).toBe(3);
+    expect(snapshot.agentDefaults.smartLifeWarning).toBe(20);
+    expect(snapshot.agentDefaults.smartLifeCritical).toBe(8);
   });
 });
 

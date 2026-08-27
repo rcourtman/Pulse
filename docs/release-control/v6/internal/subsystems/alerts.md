@@ -118,6 +118,22 @@ provider-backed disk surface rather than creating a duplicate host alert.
 `internal/alerts/alerts_test.go` pin the baseline, growth, reset, recovery, and
 retention boundaries.
 
+Host SMART alert policy is configured through the resolved agent threshold
+chain, not embedded inside the disk evaluator. Missing SMART rule fields seed
+the backward-compatible policy: failed health is enabled; reallocated,
+pending, uncorrectable, media-error, and CRC-growth counters trigger at one;
+remaining-life warning/critical thresholds are 10/5 percent; and NVMe spare
+warning/critical thresholds are 20/10 percent. An explicit zero disables that
+individual rule and must survive normalization, cloning, persistence, and
+per-machine override resolution. Counter rules trigger when current evidence
+reaches the configured value, while the CRC rule applies the configured
+minimum increase to two successive reports. Endurance and spare values remain
+evidence-aware, and invalid percentage inputs clamp to 0..100 with critical no
+higher than its warning boundary. The Machines threshold surface must
+round-trip every rule without changing these defaults. Linked Proxmox host
+agents continue to defer risk alert ownership even when their resolved SMART
+policy differs.
+
 Threshold sections are keyed by override identity, not by resource type. The
 Virtualization Hosts section reads and writes overrides on the bare resource id,
 while the Machines section resolves through the agent-derived identity

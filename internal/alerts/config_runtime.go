@@ -641,6 +641,22 @@ func cloneStringPtr(value *string) *string {
 	return &v
 }
 
+func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
+func cloneInt64(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
 func cloneSnapshotConfig(cfg *SnapshotAlertConfig) *SnapshotAlertConfig {
 	if cfg == nil {
 		return nil
@@ -675,6 +691,16 @@ func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
 	clone.NetworkOut = cloneThreshold(cfg.NetworkOut)
 	clone.Temperature = cloneThreshold(cfg.Temperature)
 	clone.DiskTemperature = cloneThreshold(cfg.DiskTemperature)
+	clone.SMARTHealthFailure = cloneInt(cfg.SMARTHealthFailure)
+	clone.SMARTReallocated = cloneInt64(cfg.SMARTReallocated)
+	clone.SMARTPending = cloneInt64(cfg.SMARTPending)
+	clone.SMARTUncorrectable = cloneInt64(cfg.SMARTUncorrectable)
+	clone.SMARTMediaErrors = cloneInt64(cfg.SMARTMediaErrors)
+	clone.SMARTCRCErrorDelta = cloneInt64(cfg.SMARTCRCErrorDelta)
+	clone.SMARTLifeWarning = cloneInt(cfg.SMARTLifeWarning)
+	clone.SMARTLifeCritical = cloneInt(cfg.SMARTLifeCritical)
+	clone.SMARTSpareWarning = cloneInt(cfg.SMARTSpareWarning)
+	clone.SMARTSpareCritical = cloneInt(cfg.SMARTSpareCritical)
 	clone.Usage = cloneThreshold(cfg.Usage)
 	clone.Backup = cloneBackupConfig(cfg.Backup)
 	clone.Snapshot = cloneSnapshotConfig(cfg.Snapshot)
@@ -727,6 +753,36 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 	}
 	if override.DiskTemperature != nil {
 		result.DiskTemperature = ensureHysteresisThreshold(cloneThreshold(override.DiskTemperature))
+	}
+	if override.SMARTHealthFailure != nil {
+		result.SMARTHealthFailure = cloneInt(override.SMARTHealthFailure)
+	}
+	if override.SMARTReallocated != nil {
+		result.SMARTReallocated = cloneInt64(override.SMARTReallocated)
+	}
+	if override.SMARTPending != nil {
+		result.SMARTPending = cloneInt64(override.SMARTPending)
+	}
+	if override.SMARTUncorrectable != nil {
+		result.SMARTUncorrectable = cloneInt64(override.SMARTUncorrectable)
+	}
+	if override.SMARTMediaErrors != nil {
+		result.SMARTMediaErrors = cloneInt64(override.SMARTMediaErrors)
+	}
+	if override.SMARTCRCErrorDelta != nil {
+		result.SMARTCRCErrorDelta = cloneInt64(override.SMARTCRCErrorDelta)
+	}
+	if override.SMARTLifeWarning != nil {
+		result.SMARTLifeWarning = cloneInt(override.SMARTLifeWarning)
+	}
+	if override.SMARTLifeCritical != nil {
+		result.SMARTLifeCritical = cloneInt(override.SMARTLifeCritical)
+	}
+	if override.SMARTSpareWarning != nil {
+		result.SMARTSpareWarning = cloneInt(override.SMARTSpareWarning)
+	}
+	if override.SMARTSpareCritical != nil {
+		result.SMARTSpareCritical = cloneInt(override.SMARTSpareCritical)
 	}
 	if override.Usage != nil {
 		result.Usage = ensureHysteresisThreshold(cloneThreshold(override.Usage))

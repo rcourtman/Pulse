@@ -344,10 +344,56 @@ func NormalizeAgentDefaults(config *AlertConfig) {
 		}
 	}
 	EnsureValidHysteresis(config.AgentDefaults.DiskTemperature, "agent.diskTemperature")
+	normalizeSMARTDefaults(&config.AgentDefaults)
 
 	NormalizeDiskFillByType(config)
 	NormalizeDiskTempByType(config)
 }
+
+func normalizeSMARTDefaults(config *ThresholdConfig) {
+	if config.SMARTHealthFailure == nil {
+		config.SMARTHealthFailure = smartIntPtr(1)
+	} else if *config.SMARTHealthFailure != 0 {
+		*config.SMARTHealthFailure = 1
+	}
+	config.SMARTReallocated = normalizeNonNegativeInt64(config.SMARTReallocated, 1)
+	config.SMARTPending = normalizeNonNegativeInt64(config.SMARTPending, 1)
+	config.SMARTUncorrectable = normalizeNonNegativeInt64(config.SMARTUncorrectable, 1)
+	config.SMARTMediaErrors = normalizeNonNegativeInt64(config.SMARTMediaErrors, 1)
+	config.SMARTCRCErrorDelta = normalizeNonNegativeInt64(config.SMARTCRCErrorDelta, 1)
+	config.SMARTLifeWarning = normalizePercentage(config.SMARTLifeWarning, 10)
+	config.SMARTLifeCritical = normalizePercentage(config.SMARTLifeCritical, 5)
+	config.SMARTSpareWarning = normalizePercentage(config.SMARTSpareWarning, 20)
+	config.SMARTSpareCritical = normalizePercentage(config.SMARTSpareCritical, 10)
+
+	if *config.SMARTLifeWarning > 0 && *config.SMARTLifeCritical > *config.SMARTLifeWarning {
+		*config.SMARTLifeCritical = *config.SMARTLifeWarning
+	}
+	if *config.SMARTSpareWarning > 0 && *config.SMARTSpareCritical > *config.SMARTSpareWarning {
+		*config.SMARTSpareCritical = *config.SMARTSpareWarning
+	}
+}
+
+func normalizeNonNegativeInt64(value *int64, fallback int64) *int64 {
+	if value == nil || *value < 0 {
+		return smartInt64Ptr(fallback)
+	}
+	return value
+}
+
+func normalizePercentage(value *int, fallback int) *int {
+	if value == nil || *value < 0 {
+		return smartIntPtr(fallback)
+	}
+	if *value > 100 {
+		*value = 100
+	}
+	return value
+}
+
+func smartIntPtr(value int) *int { return &value }
+
+func smartInt64Ptr(value int64) *int64 { return &value }
 
 func normalizeThresholdPointer(
 	current *HysteresisThreshold,
