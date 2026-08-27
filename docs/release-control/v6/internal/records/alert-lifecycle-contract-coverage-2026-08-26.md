@@ -157,3 +157,27 @@ deletion, Phase 3 engine-side rule model. Open follow-ons recorded in the
 plan doc: event-log-as-sole-history-authority (retires the JSON snapshot
 file), the unified-incidents reconciler emitting reducer-shaped events at
 that boundary, and the demand-gated rules-first UI.
+
+Post-plan hardening (2026-08-27): the lifecycle contract suite landed as a
+release gate (3049da030) — engine contracts for config-save silence,
+resolve-exactly-once, ack-halts-escalation, and suppressed recovery, plus
+grouped-rendering contracts proving every delivery surface names all N
+grouped alerts and that a cancelled-before-delivery firing holds its
+recovery. Building the suite surfaced that dispatch bookkeeping only runs
+when callbacks are installed (test-harness nuance, not a defect) and that
+acknowledgement by an alert's internal legacy ID does not resolve — the
+exported canonical ID is the working surface (evidence for
+alert-identity-config-migration).
+
+The event log then became the history authority (871f2348b, 2dc2b7275,
+fbbdb929d): lifecycle events carry full alert snapshots, history is
+projected from the log with the JSON entries imported once and the files
+retired to *.imported, clears are append-only tombstones, and the
+reconciler and system-alert families now record fired events. Parity work
+surfaced and fixed one real defect: the JSON history never propagated
+acknowledgement onto its rows, so the History view showed acknowledged
+alerts as unacknowledged for their entire active life.
+
+Registered follow-on: alert-identity-config-migration (the versioned
+migration of persisted override keys and ack records to canonical
+identity, after which the alias layers can be deleted).

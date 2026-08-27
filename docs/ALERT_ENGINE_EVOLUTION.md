@@ -133,7 +133,26 @@ Status (2026-08-27): the tracking maps are deleted; the check bodies'
 imperative transition bulk is replaced by the reducer core (what remains
 of them is evidence assembly for the spec evaluator); suppression
 decisions emit typed, reasoned events through the Phase 0 log; policy
-reads go through the Phase 3 fold. The history-file retirement stays
-conditional on the event log becoming the sole history authority — a
-follow-on, alongside the unified-incidents reconciler emitting
-reducer-shaped events at that same boundary.
+reads go through the Phase 3 fold.
+
+Post-plan hardening (2026-08-27, same-day follow-through):
+
+- **The lifecycle contract suite is a release gate.** Engine contracts
+  (config-save silence, resolve-exactly-once, ack halts escalation,
+  acknowledged recovery suppressed) in
+  `internal/alerts/lifecycle_contract_test.go`; grouped-rendering
+  contracts (N grouped ⇒ N rendered on email, apprise, and every
+  webhook service template; cancel-before-delivery holds the recovery)
+  in `internal/notifications/grouped_rendering_contract_test.go`.
+- **The event log is the alert history authority.** Lifecycle events
+  carry full alert snapshots; history is projected from the log
+  (`history_projection.go`), the legacy JSON entries migrate in once
+  and the files retire to `*.imported`, clears are append-only
+  tombstones, and every alert family — reconciler and system alerts
+  included — records its fired event. The JSON snapshot history file is
+  retired. Parity with the JSON model is pinned by
+  `history_projection_parity_test.go`.
+- **The identity/config migration is registered, not rushed:** governed
+  coverage gap `alert-identity-config-migration` records why the alias
+  layers persist until a versioned migration rewrites persisted
+  override keys and ack records to canonical identity.

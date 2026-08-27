@@ -9820,10 +9820,57 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "alert-identity-config-migration",
+      "summary": "Persisted alert state (threshold override keys, ack records, active-alert IDs) still carries legacy identity forms bridged at read time by alias layers (thresholdOverrideForResourceNoLock registry translation, lookupGuestOverride's three-key fallback, storageThresholdLookupIDs, testAlertEquivalentIDs' ~8 equivalent forms). The Phase 3 policy fold contains the bridging behind one resolution surface, but the alias code must be maintained until an explicit, versioned config migration rewrites persisted keys to canonical identity. Deliberately deferred from the 2026-08 evolution work: rewriting user override keys requires the live resource registry for translation and carries the #1738 failure mode in reverse (silently orphaning overrides), so it needs its own migration design, dry-run tooling, and test round rather than landing mid-RC.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-08-27",
+      "lane_ids": [
+        "L6",
+        "L13"
+      ],
+      "subsystem_ids": [
+        "alerts"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/ALERT_ENGINE_EVOLUTION.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/alert_policy.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/guest_override_identity.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "claude-alert-reducer-coverage-gap-alert-lifecycle-contract-coverage",
+      "agent_id": "claude-alert-reducer",
+      "summary": "Lifecycle contract suite: end-to-end contracts through notification rendering as release gate",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-08-27T08:00:19Z",
+      "heartbeat_at": "2026-08-27T08:00:19Z",
+      "expires_at": "2026-08-27T14:00:19Z",
+      "work_item": {
+        "kind": "coverage-gap",
+        "id": "alert-lifecycle-contract-coverage"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
