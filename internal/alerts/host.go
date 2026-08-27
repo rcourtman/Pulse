@@ -15,6 +15,11 @@ import (
 
 const HostOfflineAlertType = "host-offline"
 
+type smartCounterSnapshot struct {
+	UDMACRCErrors int64
+	LastObserved  time.Time
+}
+
 func hostResourceID(hostID string) string {
 	trimmed := strings.TrimSpace(hostID)
 	if trimmed == "" {
@@ -1138,10 +1143,45 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 
 func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}) {
 	assessment := storagehealth.AssessHostSMARTDisk(disk)
+	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk)...)
 	healthReasons, wearReasons := splitSMARTAlertReasons(assessment.Reasons)
 
 	m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
 	m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-wearout", wearReasons)
+}
+
+// hostSMARTCounterGrowthReasons turns a newly increased SMART counter into an
+// alertable health reason without warning on an old, non-zero counter at first
+// observation. A stable value clears the transient growth reason on the next
+// report, while the alert and notification histories retain the event.
+func (m *Manager) hostSMARTCounterGrowthReasons(resourceID string, disk models.HostDiskSMART) []storagehealth.Reason {
+	if disk.Attributes == nil || disk.Attributes.UDMACRCErrors == nil {
+		return nil
+	}
+
+	current := *disk.Attributes.UDMACRCErrors
+	if current < 0 {
+		return nil
+	}
+
+	observedAt := m.now()
+	m.mu.Lock()
+	previous, observed := m.smartCounterSnapshots[resourceID]
+	m.smartCounterSnapshots[resourceID] = smartCounterSnapshot{
+		UDMACRCErrors: current,
+		LastObserved:  observedAt,
+	}
+	m.mu.Unlock()
+
+	if !observed || current <= previous.UDMACRCErrors {
+		return nil
+	}
+
+	return []storagehealth.Reason{{
+		Code:     "crc_errors_increased",
+		Severity: storagehealth.RiskWarning,
+		Summary:  fmt.Sprintf("UDMA CRC error count increased from %d to %d", previous.UDMACRCErrors, current),
+	}}
 }
 
 func splitSMARTAlertReasons(reasons []storagehealth.Reason) ([]storagehealth.Reason, []storagehealth.Reason) {
@@ -1172,6 +1212,7 @@ var (
 		"offline_uncorrectable",
 		"media_errors",
 		"reallocated_sectors",
+		"crc_errors_increased",
 	}
 	smartWearoutAssessmentCodes = []string{
 		"wearout_low",

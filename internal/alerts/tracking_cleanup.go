@@ -82,6 +82,13 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
+	for resourceID, snapshot := range m.smartCounterSnapshots {
+		if snapshot.LastObserved.IsZero() || now.Sub(snapshot.LastObserved) > staleThreshold {
+			delete(m.smartCounterSnapshots, resourceID)
+			cleaned++
+		}
+	}
+
 	rateLimitThreshold := RateLimitCleanupWindow
 	for resourceID, times := range m.alertRateLimit {
 		var recent []time.Time

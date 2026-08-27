@@ -77,6 +77,10 @@ type Manager struct {
 	dockerUpdateFirstSeenByIdentity map[string]time.Time
 	// PMG quarantine growth tracking
 	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
+	// SMART counter snapshots let alert evaluation distinguish historical
+	// counters from new disk errors. They are keyed by the canonical disk
+	// resource ID and intentionally retain only the latest observation.
+	smartCounterSnapshots map[string]smartCounterSnapshot
 	// PMG anomaly detection tracking
 	pmgAnomalyTrackers map[string]*pmgAnomalyTracker // Track mail metrics for anomaly detection per PMG instance
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
@@ -188,6 +192,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		dockerUpdateFirstSeen:           make(map[string]time.Time),
 		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
 		pmgQuarantineHistory:            make(map[string][]pmgQuarantineSnapshot),
+		smartCounterSnapshots:           make(map[string]smartCounterSnapshot),
 		pmgAnomalyTrackers:              make(map[string]*pmgAnomalyTracker),
 		ackState:                        make(map[string]ackRecord),
 		ackStateByCanonical:             make(map[string]ackRecord),

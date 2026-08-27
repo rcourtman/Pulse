@@ -202,6 +202,15 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 
+	for resourceID, snapshot := range m.smartCounterSnapshots {
+		if snapshot.LastObserved.IsZero() || now.Sub(snapshot.LastObserved) > staleTrackerAge {
+			delete(m.smartCounterSnapshots, resourceID)
+			log.Debug().
+				Str("resourceID", resourceID).
+				Msg("Cleaned up stale SMART counter snapshot")
+		}
+	}
+
 	m.mu.Unlock()
 
 	for _, alert := range autoAcked {
@@ -314,7 +323,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 // ClearActiveAlerts removes all active and pending alerts, resetting the manager state.
 func (m *Manager) ClearActiveAlerts() {
 	m.mu.Lock()
-	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 {
+	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 && len(m.smartCounterSnapshots) == 0 {
 		m.mu.Unlock()
 		return
 	}
@@ -329,6 +338,7 @@ func (m *Manager) ClearActiveAlerts() {
 	m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 	m.dockerUpdateFirstSeen = make(map[string]time.Time)
 	m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
+	m.smartCounterSnapshots = make(map[string]smartCounterSnapshot)
 	m.ackState = make(map[string]ackRecord)
 	m.ackStateByCanonical = make(map[string]ackRecord)
 	m.mu.Unlock()
