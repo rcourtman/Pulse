@@ -67,10 +67,11 @@ func keepRealPollingInMockMode() bool {
 // alerts raised against real infrastructure are restored from disk and served
 // beside fixture data until something clears them.
 func alertManagerRestoreOptions() []alerts.ManagerOption {
+	options := []alerts.ManagerOption{alerts.WithDurableAlertStore()}
 	if mock.IsMockEnabled() {
-		return []alerts.ManagerOption{alerts.WithoutPersistedAlertRestore()}
+		options = append(options, alerts.WithoutPersistedAlertRestore())
 	}
-	return nil
+	return options
 }
 
 // newProxmoxClientFunc is a variable that holds the function to create a new Proxmox client.
@@ -1758,7 +1759,6 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 	m.hydrateRemovedHostAgents(time.Now().UTC())
 	m.alertManager.SetBackupIntentContextResolver(m.resolveBackupIntentContext)
-	m.alertManager.EnableEventLog()
 	m.alertManager.EnableShadowFeed()
 	m.registerBuiltInPollProviders()
 	m.buildInstanceInfoCache(cfg)

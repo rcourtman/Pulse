@@ -112,6 +112,14 @@ type Manager struct {
 	// absent or has been durably imported. Reads keep using JSON while migration
 	// is incomplete or the event store reports a write failure.
 	eventHistoryAuthoritative atomic.Bool
+	// activeStateAuthoritative is true only when events.db owns restart state.
+	// active-alerts.json remains an atomic recovery mirror, never a competing
+	// source while the SQLite projection is healthy.
+	activeStateAuthoritative atomic.Bool
+	skipPersistedRestore     bool
+	activeRecoveryReadable   atomic.Bool
+	activeRecoveryWriteBlock atomic.Bool
+	restoredAlertEpoch       atomic.Uint64
 
 	// Shadow-mode reducer feed (Phase 1 capstone). Nil until
 	// EnableShadowFeed; all access is under m.mu.
@@ -144,6 +152,7 @@ type ManagerOption func(*managerOptions)
 
 type managerOptions struct {
 	skipPersistedAlertRestore bool
+	enableDurableAlertStore   bool
 }
 
 // WithoutPersistedAlertRestore starts the manager with an empty active-alert
@@ -155,6 +164,16 @@ type managerOptions struct {
 func WithoutPersistedAlertRestore() ManagerOption {
 	return func(opts *managerOptions) {
 		opts.skipPersistedAlertRestore = true
+	}
+}
+
+// WithDurableAlertStore enables the SQLite lifecycle/event store during
+// construction, before escalation and periodic persistence workers start.
+// Production managers use this so restart authority is settled before any
+// alert can be evaluated, escalated, or delivered.
+func WithDurableAlertStore() ManagerOption {
+	return func(opts *managerOptions) {
+		opts.enableDurableAlertStore = true
 	}
 }
 
@@ -208,6 +227,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,
 		config:                          defaultAlertConfig(),
+		skipPersistedRestore:            opts.skipPersistedAlertRestore,
 	}
 	intentClockEpoch := time.Now()
 	m.intentClock = func() time.Duration {
@@ -220,10 +240,9 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 	} else if err := m.LoadActiveAlerts(); err != nil {
 		log.Error().Err(err).Msg("failed to load active alerts")
 	}
-
-	// Seed the authoritative reducer core from restored alerts so a restart
-	// resumes firing incidents instead of re-running their confirmations.
-	m.seedReducerCoreNoLock()
+	if opts.enableDurableAlertStore {
+		m.EnableEventLog()
+	}
 
 	// Start background workers.
 	m.workerWG.Add(3)

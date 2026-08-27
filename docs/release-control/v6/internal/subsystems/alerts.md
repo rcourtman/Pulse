@@ -286,6 +286,8 @@ default construction path still restores.
 79. `internal/alerts/eventlog/eventlog.go`
 80. `internal/alerts/history_projection.go`
 81. `internal/alerts/history_migration.go`
+82. `internal/alerts/active_state_bootstrap.go`
+83. `internal/alerts/eventlog/active_state.go`
 
 ## Shared Boundaries
 
@@ -949,6 +951,33 @@ That file owns active-alert save/load, secure active-alert storage leaves,
 startup restoration and legacy active-alert ID migration, and periodic active
 alert persistence; persistence changes should extend that owner rather than
 adding save/load logic back to the central Manager file.
+Persistent managers establish the SQLite alert store during construction,
+before escalation, periodic persistence, shadow evaluation, or monitoring can
+act on restored state. `alert_active_state` is the restart authority and is
+independent of event retention, so a still-active occurrence never disappears
+because it predates the 90-day history window. Fired, refired, acknowledged,
+unacknowledged, escalated, and resolved lifecycle transitions update that
+projection in the same transaction as their immutable lifecycle event. A
+resolution matches alert identity plus occurrence start time so a delayed old
+resolution cannot delete a newer occurrence that reused the canonical ID.
+Full checkpoints capture mutable fields such as `LastSeen`, `LastNotified`, and
+escalation state with revision compare-and-swap; a checkpoint that raced a
+lifecycle transition retries instead of overwriting it. SQLite uses full
+synchronous durability for this authority, and the recovery mirror fsyncs its
+temporary file plus a platform-native durable rename barrier (parent-directory
+sync on Unix and write-through replacement on Windows), so the contract covers
+host power loss rather than only orderly process restart.
+`active-alerts.json` remains an atomic recovery mirror, not a competing healthy
+read authority. A new or recreated database imports the readable mirror. A
+failed SQLite checkpoint writes a durable degraded marker, and the next startup
+uses the mirror once to repair SQLite before clearing that marker. Without a
+degraded marker, an initialized SQLite projection wins over a stale mirror.
+An unreadable or malformed mirror is write-blocked and preserved for manual
+recovery even when healthy SQLite can continue serving current state; startup
+must never silently replace a recoverable source with an empty snapshot.
+Acknowledgement and incident age are never implicit resolution evidence:
+restart restores long-running and long-acknowledged occurrences until fresh
+healthy evidence or an explicit operator action resolves them.
 Tracking-map cleanup now lives in `internal/alerts/tracking_cleanup.go`. That
 file owns stale flapping, suppression, pending-alert, offline-confirmation,
 Docker tracking, rate-limit, recent-alert, acknowledgement, and stale active

@@ -18990,7 +18990,7 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 	})
 
-	t.Run("skips old alerts", func(t *testing.T) {
+	t.Run("restores long-running alerts until fresh evidence resolves them", func(t *testing.T) {
 		m := newTestManager(t)
 
 		// Create an old alert (>24 hours)
@@ -19026,12 +19026,12 @@ func TestLoadActiveAlerts(t *testing.T) {
 		_, exists := testLookupActiveAlert(t, m, "old-alert")
 		m.mu.RUnlock()
 
-		if exists {
-			t.Error("old alert (>24h) should be skipped during load")
+		if !exists {
+			t.Error("long-running alert should remain active across restart")
 		}
 	})
 
-	t.Run("skips old acknowledged alerts", func(t *testing.T) {
+	t.Run("restores long-running acknowledged alerts", func(t *testing.T) {
 		m := newTestManager(t)
 
 		// Create an alert acknowledged >1 hour ago
@@ -19072,8 +19072,8 @@ func TestLoadActiveAlerts(t *testing.T) {
 		ackRecord, ackExists := m.ackState["old-ack-alert"]
 		m.mu.RUnlock()
 
-		if exists {
-			t.Error("old acknowledged alert (>1h) should be skipped from activeAlerts")
+		if !exists {
+			t.Error("acknowledgement must not make an unresolved alert disappear after restart")
 		}
 
 		// But ackState should be preserved so the alert doesn't retrigger if it reappears

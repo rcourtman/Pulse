@@ -32,6 +32,7 @@ func (m *Manager) EnableEventLog() {
 	}
 	m.SetEventLog(store)
 	m.eventHistoryAuthoritative.Store(m.importLegacyHistoryIntoEventLog(store))
+	m.activeStateAuthoritative.Store(m.bootstrapActiveState(store))
 }
 
 // SetEventLog installs an event log store. Passing nil disables recording.
@@ -149,6 +150,7 @@ func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reas
 		if eventCarriesAlertSnapshot(eventType) {
 			if err := store.AppendDurable(event); err != nil {
 				m.eventHistoryAuthoritative.Store(false)
+				m.markActiveStateDegraded(err)
 				log.Error().Err(err).
 					Str("alertID", event.AlertID).
 					Str("eventType", eventType).

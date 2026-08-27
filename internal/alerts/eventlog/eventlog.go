@@ -120,7 +120,10 @@ func sqliteDSN(path string) string {
 		"_pragma": []string{
 			"busy_timeout(30000)",
 			"journal_mode(WAL)",
-			"synchronous(NORMAL)",
+			// Lifecycle transactions are restart authority, not disposable
+			// telemetry. FULL keeps committed events and their active-state
+			// projection durable across host power loss as well as process exit.
+			"synchronous(FULL)",
 			"cache_size(-16000)",
 		},
 	}.Encode()
@@ -197,6 +200,16 @@ func (s *Store) initSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_alert_events_alert ON alert_events(alert_id, occurred_at);
 		CREATE INDEX IF NOT EXISTS idx_alert_events_time ON alert_events(occurred_at);
 		CREATE INDEX IF NOT EXISTS idx_alert_events_type ON alert_events(event_type, occurred_at);
+		CREATE TABLE IF NOT EXISTS alert_active_state (
+			alert_id TEXT PRIMARY KEY,
+			occurrence_started_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			snapshot TEXT NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS alert_store_meta (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		);
 	`)
 	if err != nil {
 		return err
@@ -433,6 +446,10 @@ func (s *Store) insertBatch(batch []Event) error {
 		if insertErr != nil {
 			_ = tx.Rollback()
 			return insertErr
+		}
+		if err := projectLifecycleActiveState(tx, event); err != nil {
+			_ = tx.Rollback()
+			return err
 		}
 	}
 	return tx.Commit()
