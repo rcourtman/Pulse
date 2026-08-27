@@ -1,6 +1,8 @@
 package eventlog
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -111,6 +113,75 @@ func TestQueryOversizedLimitDoesNotControlAllocation(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].AlertID != "a1" {
 		t.Fatalf("events = %+v, want the one stored event", events)
+	}
+}
+
+func TestWalkOldestTraversesBeyondQueryLimitInBoundedPages(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Now().Add(-time.Hour).UTC()
+	batch := make([]Event, 0, maxQueryLimit+205)
+	for i := 0; i < maxQueryLimit+205; i++ {
+		batch = append(batch, Event{
+			// Keep every row on the same timestamp to prove the ID tie-breaker
+			// crosses a page boundary without skipping or repeating rows.
+			OccurredAt: base,
+			Type:       TypeResolved,
+			AlertID:    fmt.Sprintf("walk-%04d", i),
+		})
+	}
+	if err := store.ImportEvents(batch); err != nil {
+		t.Fatalf("import walk fixtures: %v", err)
+	}
+
+	visited := make([]string, 0, len(batch))
+	if err := store.WalkOldest(Filter{Types: []string{TypeResolved}}, func(event Event) error {
+		visited = append(visited, event.AlertID)
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	if len(visited) != len(batch) {
+		t.Fatalf("visited %d events, want %d", len(visited), len(batch))
+	}
+	if visited[0] != "walk-0000" || visited[len(visited)-1] != "walk-1204" {
+		t.Fatalf("walk order = %q ... %q, want oldest through newest", visited[0], visited[len(visited)-1])
+	}
+}
+
+func TestImportEventsDeduplicatesLegacyHistoryRetriesOnly(t *testing.T) {
+	store := newTestStore(t)
+	occurred := time.Now().UTC()
+	legacy := Event{
+		OccurredAt: occurred,
+		Type:       TypeHistoryImported,
+		AlertID:    "legacy-alert",
+		Snapshot:   json.RawMessage(`{"id":"legacy-alert","startTime":"2026-08-27T08:00:00Z"}`),
+	}
+	if err := store.ImportEvents([]Event{legacy}); err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+	if err := store.ImportEvents([]Event{legacy}); err != nil {
+		t.Fatalf("retry import: %v", err)
+	}
+
+	imported, err := store.Query(Filter{Types: []string{TypeHistoryImported}, Limit: 10})
+	if err != nil {
+		t.Fatalf("query imported events: %v", err)
+	}
+	if len(imported) != 1 {
+		t.Fatalf("legacy import retry produced %d events, want 1", len(imported))
+	}
+
+	clear := Event{OccurredAt: occurred, Type: TypeHistoryCleared, AlertID: "history"}
+	if err := store.ImportEvents([]Event{clear, clear}); err != nil {
+		t.Fatalf("import ordinary events: %v", err)
+	}
+	cleared, err := store.Query(Filter{Types: []string{TypeHistoryCleared}, Limit: 10})
+	if err != nil {
+		t.Fatalf("query clear events: %v", err)
+	}
+	if len(cleared) != 2 {
+		t.Fatalf("ordinary synchronous imports were deduplicated: got %d, want 2", len(cleared))
 	}
 }
 

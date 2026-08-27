@@ -995,6 +995,11 @@ that caller value: a request-provided limit is a row-count preference, never a
 memory-allocation hint. This remains defense in depth even when an authenticated
 API handler validates the query parameter, because non-HTTP manager callers use
 the same store boundary.
+Alert-history reconstruction is the explicit exception to a single bounded
+query: it walks every matching lifecycle event oldest-first through bounded
+keyset pages, releasing the SQLite rows between pages. The public/API query cap
+therefore remains intact while a noisy installation with more than 1,000
+lifecycle events in the requested window cannot silently lose older history.
 Lifecycle events now carry a full alert snapshot and
 `internal/alerts/history_projection.go` can fold those snapshots into one
 history row per occurrence. Existing pre-snapshot SQLite stores upgrade in
@@ -1008,14 +1013,21 @@ latest projected snapshot so acknowledgement and current values do not become
 stale.
 `internal/alerts/history_migration.go` imports every legacy JSON entry through
 the event log's synchronous, non-droppable import path before renaming the
-fixed history and backup files to their `.imported` backups. The source file's
-presence is the idempotent retry marker: an import failure leaves JSON history
-authoritative for the next attempt, while a successful import retires further
-JSON writes. Clearing history appends a `history_cleared` tombstone rather than
-deleting log rows; the projection ignores earlier lifecycle events but overlays
-still-active alerts as current state. Unified-incident and system-alert
-activation must emit snapshot-bearing fired events so their projected history
-does not begin at acknowledgement or resolution.
+fixed history and backup files to their `.imported` backups. The primary or
+backup source's presence keeps migration active until both leaves retire.
+Imported events are retry-idempotent by immutable alert ID, occurrence time,
+and snapshot, so a committed SQLite transaction followed by a failed or
+partial file rename cannot duplicate history on the next startup. An import
+failure leaves JSON history authoritative for the next attempt. An unreadable
+or malformed source, or any entry that cannot produce an identified complete
+snapshot, blocks both retirement and further JSON writes so startup cannot
+silently replace recoverable user history with an empty file. Successful
+retirement stops further JSON writes. Clearing history appends a
+`history_cleared` tombstone rather than deleting log rows; the projection
+ignores earlier lifecycle events but overlays still-active alerts as current
+state. Unified-incident and system-alert activation must emit snapshot-bearing
+fired events so their projected history does not begin at acknowledgement or
+resolution.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved

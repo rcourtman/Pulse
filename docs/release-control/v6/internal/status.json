@@ -9765,35 +9765,6 @@
       ]
     },
     {
-      "id": "alert-engine-suppression-observability",
-      "summary": "Alert notification suppression decisions (cooldown, quiet hours, flapping, grouping, rate limit, activation state) lacked operator-visible evidence, so held notifications read as breakage and lifecycle regressions (#1682, #1683, #1553, #1693) could ship without an end-to-end contract gate. Phase 0 of docs/ALERT_ENGINE_EVOLUTION.md now supplies the Alerts Overview delivery-diagnosis projection and an additive SQLite event log/API for notification decisions and the safe lifecycle seams. The remaining gap is the deliberately deferred firing event plus convergence of history and delivery projections onto that log before the later reducer phases.",
-      "owner": "project-owner",
-      "status": "triaged",
-      "recorded_at": "2026-08-26",
-      "lane_ids": [
-        "L6",
-        "L13"
-      ],
-      "subsystem_ids": [
-        "alerts",
-        "notifications"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "coverage_impact": 5,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/ALERT_ENGINE_EVOLUTION.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/alert-engine-suppression-observability-2026-08-26.md",
-          "kind": "file"
-        }
-      ]
-    },
-    {
       "id": "alert-lifecycle-contract-coverage",
       "summary": "Alert transition semantics (hysteresis, sustained-for delays, severity derivation, confirmations) have no deterministic engine-independent contract harness, so transition-core regressions ship undetected (#1682, #1683, #1553, #1693, #1724) and cross-family drift is invisible. Resolution is Phase 1 of docs/ALERT_ENGINE_EVOLUTION.md: a pure characterization reducer (internal/alerts/reducer) plus a parity harness driving reducer and manager through identical sequences; the first metric-family slice already surfaced and fixed a silent stale-resolve defect in checkMetric.",
       "owner": "project-owner",

@@ -2,10 +2,11 @@ package alerts
 
 // One-time migration of the legacy JSON alert history into the event log
 // (docs/ALERT_ENGINE_EVOLUTION.md — the log becomes the sole history
-// authority). The JSON file's continued presence is the migration marker:
-// import runs when the file exists, and a successful import renames it to
-// *.imported, so the migration is idempotent and the original data survives
-// as a backup.
+// authority). Either JSON leaf's continued presence is the migration marker:
+// import runs while the primary or backup exists, and successful retirement
+// renames them to *.imported. The event-log import itself is idempotent, so a
+// database commit followed by a rename failure can retry without duplicating
+// user history.
 
 import (
 	"encoding/json"
@@ -17,12 +18,19 @@ import (
 // importLegacyHistoryIntoEventLog migrates the loaded JSON history entries
 // into the event log as history_imported events and retires the JSON files.
 // A failed import leaves the files in place so the next startup retries;
-// history reads fall back to the in-memory entries either way.
+// history reads fall back to the in-memory entries either way. A retirement
+// failure also retries safely because history_imported events are inserted by
+// immutable event identity.
 func (m *Manager) importLegacyHistoryIntoEventLog(store *eventlog.Store) {
 	if m == nil || store == nil || m.historyManager == nil {
 		return
 	}
 	if !m.historyManager.StorageFileExists() {
+		return
+	}
+	if err := m.historyManager.StorageLoadError(); err != nil {
+		log.Error().Err(err).
+			Msg("legacy alert history import deferred; source could not be loaded and remains untouched")
 		return
 	}
 
@@ -32,11 +40,15 @@ func (m *Manager) importLegacyHistoryIntoEventLog(store *eventlog.Store) {
 		entry := &entries[i]
 		exported := cloneAlertForOutput(&entry.Alert)
 		if exported == nil || exported.ID == "" {
-			continue
+			log.Error().Int("entry", i).
+				Msg("legacy alert history import deferred; entry has no alert identity")
+			return
 		}
 		snapshot, err := json.Marshal(exported)
 		if err != nil {
-			continue
+			log.Error().Err(err).Int("entry", i).
+				Msg("legacy alert history import deferred; entry snapshot could not be encoded")
+			return
 		}
 		occurredAt := entry.Timestamp
 		if entry.Alert.LastSeen.After(occurredAt) {

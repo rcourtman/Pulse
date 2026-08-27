@@ -38,7 +38,14 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 		return nil, false
 	}
 	store.Flush()
-	events, err := store.Query(eventlog.Filter{
+
+	// Fold oldest to newest through the store's bounded-page walker. The
+	// ordinary Query API intentionally caps responses at 1,000 rows, which is
+	// appropriate for callers but not for reconstructing a complete history
+	// window on a noisy installation.
+	occurrences := make(map[string]*historyOccurrence)
+	order := make([]string, 0)
+	err := store.WalkOldest(eventlog.Filter{
 		Types: []string{
 			eventlog.TypeFired,
 			eventlog.TypeRefired,
@@ -50,31 +57,20 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 			eventlog.TypeHistoryCleared,
 		},
 		Since: since,
-		Limit: 1000,
-	})
-	if err != nil {
-		return nil, false
-	}
-
-	// Query returns newest first; fold oldest first so later events
-	// supersede earlier snapshots of the same occurrence.
-	occurrences := make(map[string]*historyOccurrence)
-	order := make([]string, 0, len(events))
-	for i := len(events) - 1; i >= 0; i-- {
-		event := events[i]
+	}, func(event eventlog.Event) error {
 		if event.Type == eventlog.TypeHistoryCleared {
 			// The user cleared history: everything before the tombstone
 			// leaves the projection. The log itself stays append-only.
 			occurrences = make(map[string]*historyOccurrence)
 			order = order[:0]
-			continue
+			return nil
 		}
 		if len(event.Snapshot) == 0 {
-			continue
+			return nil
 		}
 		var snapshot Alert
 		if err := json.Unmarshal(event.Snapshot, &snapshot); err != nil {
-			continue
+			return nil
 		}
 		key := historyOccurrenceKey(event.AlertID, &snapshot)
 		occ, exists := occurrences[key]
@@ -97,6 +93,10 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 		} else {
 			occ.resolved = false
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, false
 	}
 
 	// Overlay the live active alerts: an occurrence still firing shows its

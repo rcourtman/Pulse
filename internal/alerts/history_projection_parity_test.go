@@ -8,6 +8,8 @@ package alerts
 // a history-manager defect, which is then fixed first.
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -148,4 +150,63 @@ func TestHistoryProjectionParitySecondOccurrence(t *testing.T) {
 
 	contractRaiseGuestCPUAlert(t, m, "hp-vm-7", 97)
 	assertHistoryParity(t, m)
+}
+
+func TestHistoryProjectionWalksEveryLifecycleEventBeyondQueryCap(t *testing.T) {
+	m := newTestManager(t)
+	store, err := eventlog.OpenInMemory()
+	if err != nil {
+		t.Fatalf("open in-memory event log: %v", err)
+	}
+	m.SetEventLog(store)
+	t.Cleanup(func() { m.SetEventLog(nil) })
+
+	const occurrenceCount = 1205
+	base := time.Now().Add(-occurrenceCount * time.Second).UTC()
+	events := make([]eventlog.Event, 0, occurrenceCount)
+	for i := 0; i < occurrenceCount; i++ {
+		occurredAt := base.Add(time.Duration(i) * time.Second)
+		id := fmt.Sprintf("history-cap-%04d", i)
+		snapshot, marshalErr := json.Marshal(Alert{
+			ID:           id,
+			Type:         "cpu",
+			Level:        AlertLevelWarning,
+			ResourceID:   id,
+			ResourceName: id,
+			StartTime:    occurredAt,
+			LastSeen:     occurredAt,
+		})
+		if marshalErr != nil {
+			t.Fatalf("marshal fixture %d: %v", i, marshalErr)
+		}
+		events = append(events, eventlog.Event{
+			OccurredAt: occurredAt,
+			Type:       eventlog.TypeHistoryImported,
+			AlertID:    id,
+			Snapshot:   snapshot,
+		})
+	}
+	if err := store.ImportEvents(events); err != nil {
+		t.Fatalf("import history fixtures: %v", err)
+	}
+
+	projected, ok := m.AlertHistoryFromEvents(time.Time{}, 0)
+	if !ok {
+		t.Fatal("projection unavailable")
+	}
+	if len(projected) != occurrenceCount {
+		t.Fatalf("projection returned %d occurrences, want %d", len(projected), occurrenceCount)
+	}
+	if projected[0].ID != "history-cap-1204" || projected[len(projected)-1].ID != "history-cap-0000" {
+		t.Fatalf("projection order = %q ... %q, want newest through oldest",
+			projected[0].ID, projected[len(projected)-1].ID)
+	}
+
+	limited, ok := m.AlertHistoryFromEvents(time.Time{}, 25)
+	if !ok || len(limited) != 25 {
+		t.Fatalf("limited projection = %d entries, ok=%v; want 25, true", len(limited), ok)
+	}
+	if limited[0].ID != "history-cap-1204" || limited[24].ID != "history-cap-1180" {
+		t.Fatalf("limited projection order = %q ... %q", limited[0].ID, limited[24].ID)
+	}
 }

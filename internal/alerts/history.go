@@ -60,6 +60,10 @@ type HistoryManager struct {
 	// storageRetired marks the JSON files migrated into the event log:
 	// in-memory history continues, disk writes stop.
 	storageRetired bool
+	// storageLoadErr keeps an unreadable or malformed legacy source from being
+	// overwritten or retired as an empty history before an operator can recover
+	// it. It is immutable after construction.
+	storageLoadErr error
 }
 
 func historyIdentityKey(alert *Alert) string {
@@ -115,8 +119,9 @@ func NewHistoryManager(dataDir string) *HistoryManager {
 	}
 
 	// Load existing history
-	if err := hm.loadHistory(); err != nil {
-		log.Error().Err(err).Msg("failed to load alert history")
+	hm.storageLoadErr = hm.loadHistory()
+	if hm.storageLoadErr != nil {
+		log.Error().Err(hm.storageLoadErr).Msg("failed to load alert history")
 	}
 
 	// Start periodic save routine
@@ -274,15 +279,29 @@ func (hm *HistoryManager) RetireStorage() error {
 	return nil
 }
 
-// StorageFileExists reports whether the JSON history file is still present —
-// the self-describing marker that the legacy history has not been migrated
-// into the event log yet.
+// StorageFileExists reports whether either JSON history source is still
+// present. The backup can be the only surviving retry source after an
+// interrupted save or partial retirement, so it must keep migration active
+// until both fixed legacy leaves have retired.
 func (hm *HistoryManager) StorageFileExists() bool {
-	if hm.historyFile == "" {
-		return false
+	for _, path := range []string{hm.historyFile, hm.backupFile} {
+		if path == "" {
+			continue
+		}
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
 	}
-	_, err := os.Stat(hm.historyFile)
-	return err == nil
+	return false
+}
+
+// StorageLoadError reports why a present legacy source could not be loaded.
+// Migration and periodic persistence must leave that source untouched.
+func (hm *HistoryManager) StorageLoadError() error {
+	if hm == nil {
+		return nil
+	}
+	return hm.storageLoadErr
 }
 
 // UpdateAlertLastSeen updates the LastSeen timestamp on the most recent
@@ -466,28 +485,32 @@ func (hm *HistoryManager) GetAllHistory(limit int) []Alert {
 // loadHistory loads history from disk
 func (hm *HistoryManager) loadHistory() error {
 	// Try loading from main file first
-	data, err := readLimitedRegularFile(hm.historyFile, maxAlertHistoryFileSizeBytes)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Warn().Err(err).Str("file", hm.historyFile).Msg("Failed to read history file")
+	data, mainErr := readLimitedRegularFile(hm.historyFile, maxAlertHistoryFileSizeBytes)
+	if mainErr != nil {
+		if !os.IsNotExist(mainErr) {
+			log.Warn().Err(mainErr).Str("file", hm.historyFile).Msg("Failed to read history file")
 		}
 
 		// Try backup file
-		data, err = readLimitedRegularFile(hm.backupFile, maxAlertHistoryFileSizeBytes)
-		if err != nil {
-			if os.IsNotExist(err) {
-				// Both files don't exist - this is normal on first startup
+		var backupErr error
+		data, backupErr = readLimitedRegularFile(hm.backupFile, maxAlertHistoryFileSizeBytes)
+		if backupErr != nil {
+			if os.IsNotExist(backupErr) && os.IsNotExist(mainErr) {
+				// Both files don't exist - this is normal on first startup.
 				log.Debug().Msg("No alert history files found, starting fresh")
 				return nil
 			}
-			if os.IsPermission(err) {
+			if os.IsPermission(backupErr) {
 				log.Warn().
-					Err(err).
+					Err(backupErr).
 					Str("file", hm.backupFile).
 					Msg("Permission denied reading backup history file - check file ownership")
-				return nil
 			}
-			return fmt.Errorf("failed to read history backup file %q: %w", hm.backupFile, err)
+			if !os.IsNotExist(mainErr) {
+				return fmt.Errorf("failed to read history file %q (%v); failed to read history backup file %q: %w",
+					hm.historyFile, mainErr, hm.backupFile, backupErr)
+			}
+			return fmt.Errorf("failed to read history backup file %q: %w", hm.backupFile, backupErr)
 		}
 		log.Info().Msg("loaded alert history from backup file")
 	}
@@ -518,6 +541,9 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	hm.mu.RUnlock()
 	if retired {
 		return nil
+	}
+	if hm.storageLoadErr != nil {
+		return fmt.Errorf("alert history storage remains read-only after load failure: %w", hm.storageLoadErr)
 	}
 	if maxRetries < 1 {
 		maxRetries = 1

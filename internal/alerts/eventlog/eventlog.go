@@ -328,6 +328,27 @@ func (s *Store) insertBatch(batch []Event) error {
 		return err
 	}
 	defer stmt.Close()
+	var importStmt *sql.Stmt
+	for _, event := range batch {
+		if event.Type != TypeHistoryImported {
+			continue
+		}
+		importStmt, err = tx.Prepare(`
+			INSERT INTO alert_events
+				(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot)
+			SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			WHERE NOT EXISTS (
+				SELECT 1 FROM alert_events
+				WHERE event_type = ? AND alert_id = ? AND occurred_at = ? AND snapshot = ?
+			)
+		`)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		defer importStmt.Close()
+		break
+	}
 	for _, event := range batch {
 		details := ""
 		if len(event.Details) > 0 {
@@ -336,8 +357,10 @@ func (s *Store) insertBatch(batch []Event) error {
 				details = string(encoded)
 			}
 		}
-		if _, err := stmt.Exec(
-			event.OccurredAt.UTC().Format(time.RFC3339Nano),
+		occurredAt := event.OccurredAt.UTC().Format(time.RFC3339Nano)
+		snapshot := string(event.Snapshot)
+		args := []any{
+			occurredAt,
 			event.Type,
 			event.AlertID,
 			event.ResourceID,
@@ -347,10 +370,22 @@ func (s *Store) insertBatch(batch []Event) error {
 			event.Reason,
 			event.Message,
 			details,
-			string(event.Snapshot),
-		); err != nil {
+			snapshot,
+		}
+		var insertErr error
+		if event.Type == TypeHistoryImported {
+			_, insertErr = importStmt.Exec(append(args,
+				TypeHistoryImported,
+				event.AlertID,
+				occurredAt,
+				snapshot,
+			)...)
+		} else {
+			_, insertErr = stmt.Exec(args...)
+		}
+		if insertErr != nil {
 			_ = tx.Rollback()
-			return err
+			return insertErr
 		}
 	}
 	return tx.Commit()
@@ -386,6 +421,111 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		return nil, nil
 	}
 
+	where, args := eventFilterWhere(filter)
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = defaultQueryLimit
+	}
+	if limit > maxQueryLimit {
+		limit = maxQueryLimit
+	}
+
+	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events"
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY occurred_at DESC, id DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query alert event log: %w", err)
+	}
+	defer rows.Close()
+
+	// Do not use the request-derived limit as an allocation hint. The SQL
+	// query is capped above, but keeping the result slice allocation independent
+	// of caller input makes that memory-safety boundary explicit and prevents a
+	// future query refactor from turning an oversized limit into an eager
+	// allocation.
+	return scanEventRows(rows, defaultQueryLimit)
+}
+
+// WalkOldest visits every matching event oldest first. It uses bounded keyset
+// pages so a complete history projection is not truncated by Query's public
+// safety cap and does not hold the store's single database connection for the
+// full scan. A positive filter Limit caps the total visits; zero walks all
+// matching rows.
+func (s *Store) WalkOldest(filter Filter, visit func(Event) error) error {
+	if s == nil {
+		return nil
+	}
+	if visit == nil {
+		return fmt.Errorf("event visitor is required")
+	}
+
+	baseWhere, baseArgs := eventFilterWhere(filter)
+	visited := 0
+	cursorOccurredAt := ""
+	var cursorID int64
+
+	for {
+		pageLimit := maxQueryLimit
+		if filter.Limit > 0 {
+			remaining := filter.Limit - visited
+			if remaining <= 0 {
+				return nil
+			}
+			if remaining < pageLimit {
+				pageLimit = remaining
+			}
+		}
+
+		where := append([]string(nil), baseWhere...)
+		args := append([]any(nil), baseArgs...)
+		if cursorOccurredAt != "" {
+			where = append(where, "(occurred_at > ? OR (occurred_at = ? AND id > ?))")
+			args = append(args, cursorOccurredAt, cursorOccurredAt, cursorID)
+		}
+
+		query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events"
+		if len(where) > 0 {
+			query += " WHERE " + strings.Join(where, " AND ")
+		}
+		query += " ORDER BY occurred_at ASC, id ASC LIMIT ?"
+		args = append(args, pageLimit)
+
+		rows, err := s.db.Query(query, args...)
+		if err != nil {
+			return fmt.Errorf("walk alert event log: %w", err)
+		}
+		page, scanErr := scanEventRows(rows, pageLimit)
+		closeErr := rows.Close()
+		if scanErr != nil {
+			return scanErr
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close alert event page: %w", closeErr)
+		}
+
+		for _, event := range page {
+			if err := visit(event); err != nil {
+				return err
+			}
+			visited++
+		}
+		if len(page) < pageLimit {
+			return nil
+		}
+
+		last := page[len(page)-1]
+		cursorOccurredAt = last.OccurredAt.UTC().Format(time.RFC3339Nano)
+		cursorID = last.ID
+	}
+}
+
+func eventFilterWhere(filter Filter) ([]string, []any) {
 	where := make([]string, 0, 4)
 	args := make([]any, 0, 6)
 	if trimmed := strings.TrimSpace(filter.AlertID); trimmed != "" {
@@ -414,34 +554,14 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		where = append(where, "occurred_at <= ?")
 		args = append(args, filter.Until.UTC().Format(time.RFC3339Nano))
 	}
+	return where, args
+}
 
-	limit := filter.Limit
-	if limit <= 0 {
-		limit = defaultQueryLimit
+func scanEventRows(rows *sql.Rows, capacity int) ([]Event, error) {
+	if capacity < 0 || capacity > maxQueryLimit {
+		capacity = maxQueryLimit
 	}
-	if limit > maxQueryLimit {
-		limit = maxQueryLimit
-	}
-
-	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events"
-	if len(where) > 0 {
-		query += " WHERE " + strings.Join(where, " AND ")
-	}
-	query += " ORDER BY occurred_at DESC, id DESC LIMIT ?"
-	args = append(args, limit)
-
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query alert event log: %w", err)
-	}
-	defer rows.Close()
-
-	// Do not use the request-derived limit as an allocation hint. The SQL
-	// query is capped above, but keeping the result slice allocation independent
-	// of caller input makes that memory-safety boundary explicit and prevents a
-	// future query refactor from turning an oversized limit into an eager
-	// allocation.
-	events := make([]Event, 0, defaultQueryLimit)
+	events := make([]Event, 0, capacity)
 	for rows.Next() {
 		var event Event
 		var occurredAt, details, snapshot string

@@ -1014,10 +1014,11 @@ func TestLoadHistory_PermissionError(t *testing.T) {
 	}
 	defer func() { _ = os.Chmod(hm.backupFile, 0644) }()
 
-	// loadHistory should return nil (continue without history) for permission errors on backup
+	// An unreadable backup is still user data. Loading must fail closed so
+	// startup cannot overwrite or retire it as an empty history.
 	err := hm.loadHistory()
-	if err != nil {
-		t.Errorf("loadHistory should not return error for permission issues on backup file, got: %v", err)
+	if err == nil {
+		t.Fatal("loadHistory should return an error for an unreadable backup")
 	}
 }
 

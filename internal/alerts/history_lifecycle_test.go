@@ -25,6 +25,24 @@ func TestLoadHistory_BackupReadErrorReturnsError(t *testing.T) {
 	}
 }
 
+func TestLoadHistory_MainReadErrorWithoutBackupReturnsError(t *testing.T) {
+	hm := newTestHistoryManager(t)
+
+	// A present but unreadable primary is not equivalent to a clean first run
+	// merely because no backup exists.
+	if err := os.Mkdir(hm.historyFile, 0755); err != nil {
+		t.Fatalf("failed to create primary directory: %v", err)
+	}
+
+	err := hm.loadHistory()
+	if err == nil {
+		t.Fatal("loadHistory should fail when the primary cannot be read and no backup exists")
+	}
+	if !strings.Contains(err.Error(), "failed to read history file") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestClearAllHistory_ReturnsJoinedErrorsWhenFilesAreDirectories(t *testing.T) {
 	hm := newTestHistoryManager(t)
 	hm.history = []HistoryEntry{
