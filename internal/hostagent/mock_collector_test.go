@@ -44,7 +44,15 @@ type mockCollector struct {
 		name string,
 		arg ...string,
 	) (string, error)
-	lookPathFn func(file string) (string, error)
+	lookPathFn        func(file string) (string, error)
+	filesystemUsageFn func(path string) (hostFilesystemUsage, error)
+}
+
+func (m *mockCollector) FilesystemUsage(path string) (hostFilesystemUsage, error) {
+	if m.filesystemUsageFn != nil {
+		return m.filesystemUsageFn(path)
+	}
+	return hostFilesystemUsage{}, os.ErrNotExist
 }
 
 func (m *mockCollector) HostInfo(ctx context.Context) (*gohost.InfoStat, error) {

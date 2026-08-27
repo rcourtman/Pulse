@@ -96,6 +96,230 @@ mp0    tank:subvol-100-disk-0        1.0T 512.0G 512.0G 50.0 /srv/data
 	}
 }
 
+// Regression for the #1477 follow-up: pct df costs over a second per guest,
+// so serial pct df inside one shared budget starved every container after the
+// first handful. With a resolvable init PID the collector must answer from
+// statfs through /proc/<pid>/root and never spawn pct df.
+func TestCollectProxmoxLXCFilesystemsPrefersProcStatfsOverPctDF(t *testing.T) {
+	const pctPath = "/usr/sbin/pct"
+	const lxcInfoPath = "/usr/bin/lxc-info"
+	listOutput := fmt.Sprintf(
+		"%-10s %-10s %-12s %-20s\n%-10d %-10s %-12s %-20s\n%-10d %-10s %-12s %-20s\n",
+		"VMID", "Status", "Lock", "Name",
+		100, "running", "", "web",
+		101, "running", "", "db",
+	)
+	configs := map[string]string{
+		"/etc/pve/lxc/100.conf": `arch: amd64
+hostname: web
+rootfs: local-lvm:vm-100-disk-0,size=8G
+mp0: tank:subvol-100-disk-0,mp=/srv/data,size=1T
+mp1: tank:subvol-100-disk-1,mp=/mnt/missing,size=10G
+
+[snap1]
+mp2: tank:snap-only,mp=/snap-only,size=5G
+`,
+		"/etc/pve/lxc/101.conf": "rootfs: local-lvm:vm-101-disk-0,size=4G\n",
+	}
+	usageByPath := map[string]hostFilesystemUsage{
+		"/proc/4242/root":          {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
+		"/proc/4242/root/srv":      {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
+		"/proc/4242/root/srv/data": {TotalBytes: 1 << 40, UsedBytes: 512 << 30, AvailBytes: 512 << 30, Device: 12},
+		// mp1 is configured but not mounted in the running container, so the
+		// path resolves to the rootfs device and must be dropped, not reported
+		// with the parent's numbers.
+		"/proc/4242/root/mnt":         {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
+		"/proc/4242/root/mnt/missing": {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
+		"/proc/5252/root":             {TotalBytes: 4 << 30, UsedBytes: 1 << 30, AvailBytes: 3 << 30, Device: 21},
+	}
+	collector := &mockCollector{
+		goos: "linux",
+		lookPathFn: func(file string) (string, error) {
+			switch file {
+			case "pct":
+				return pctPath, nil
+			case "lxc-info":
+				return lxcInfoPath, nil
+			}
+			return "", os.ErrNotExist
+		},
+		readFileFn: func(name string) ([]byte, error) {
+			config, ok := configs[name]
+			if !ok {
+				return nil, os.ErrNotExist
+			}
+			return []byte(config), nil
+		},
+		filesystemUsageFn: func(path string) (hostFilesystemUsage, error) {
+			usage, ok := usageByPath[path]
+			if !ok {
+				t.Fatalf("unexpected statfs path %q", path)
+			}
+			return usage, nil
+		},
+		commandCombinedOutputLimitedFn: func(
+			_ context.Context,
+			_ int,
+			name string,
+			args ...string,
+		) (string, error) {
+			joined := strings.Join(args, " ")
+			switch {
+			case name == pctPath && joined == "list":
+				return listOutput, nil
+			case name == pctPath:
+				t.Fatalf("pct df must not run when the statfs path resolves: %v", args)
+				return "", nil
+			case name == lxcInfoPath && joined == "-n 100 -p":
+				return "PID:            4242\n", nil
+			case name == lxcInfoPath && joined == "-n 101 -p":
+				return "PID:            5252\n", nil
+			default:
+				t.Fatalf("unexpected command: %s %v", name, args)
+				return "", nil
+			}
+		},
+	}
+	agent := &Agent{logger: zerolog.Nop(), collector: collector}
+
+	got := agent.collectProxmoxLXCFilesystems(context.Background())
+	if got == nil || len(got.Containers) != 2 {
+		t.Fatalf("inventory = %+v", got)
+	}
+	web := got.Containers[0]
+	if web.VMID != 100 || len(web.Disks) != 2 {
+		t.Fatalf("web container = %+v", web)
+	}
+	root := web.Disks[0]
+	if root.Mountpoint != "/" || root.Type != "rootfs" || root.Device != "local-lvm:vm-100-disk-0" ||
+		root.TotalBytes != 8<<30 || root.UsedBytes != 2<<30 || root.FreeBytes != 6<<30 || root.Usage != 25 {
+		t.Fatalf("root disk = %+v", root)
+	}
+	data := web.Disks[1]
+	if data.Mountpoint != "/srv/data" || data.Type != "mp0" || data.Device != "tank:subvol-100-disk-0" ||
+		data.TotalBytes != 1<<40 || data.Usage != 50 {
+		t.Fatalf("data disk = %+v", data)
+	}
+	db := got.Containers[1]
+	if db.VMID != 101 || len(db.Disks) != 1 || db.Disks[0].Mountpoint != "/" {
+		t.Fatalf("db container = %+v", db)
+	}
+}
+
+func TestCollectProxmoxLXCFilesystemsFallsBackToPctDFPerContainer(t *testing.T) {
+	const pctPath = "/usr/sbin/pct"
+	const lxcInfoPath = "/usr/bin/lxc-info"
+	listOutput := fmt.Sprintf(
+		"%-10s %-10s %-12s %-20s\n%-10d %-10s %-12s %-20s\n%-10d %-10s %-12s %-20s\n",
+		"VMID", "Status", "Lock", "Name",
+		100, "running", "", "web",
+		102, "running", "", "legacy",
+	)
+	var dfQueries []string
+	collector := &mockCollector{
+		goos: "linux",
+		lookPathFn: func(file string) (string, error) {
+			switch file {
+			case "pct":
+				return pctPath, nil
+			case "lxc-info":
+				return lxcInfoPath, nil
+			}
+			return "", os.ErrNotExist
+		},
+		readFileFn: func(name string) ([]byte, error) {
+			if name == "/etc/pve/lxc/100.conf" {
+				return []byte("rootfs: local-lvm:vm-100-disk-0,size=8G\n"), nil
+			}
+			// 102's config is unreadable, so only that container may fall
+			// back to pct df.
+			return nil, os.ErrPermission
+		},
+		filesystemUsageFn: func(path string) (hostFilesystemUsage, error) {
+			if path != "/proc/4242/root" {
+				t.Fatalf("unexpected statfs path %q", path)
+			}
+			return hostFilesystemUsage{TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11}, nil
+		},
+		commandCombinedOutputLimitedFn: func(
+			_ context.Context,
+			_ int,
+			name string,
+			args ...string,
+		) (string, error) {
+			joined := strings.Join(args, " ")
+			switch {
+			case name == pctPath && joined == "list":
+				return listOutput, nil
+			case name == lxcInfoPath && joined == "-n 100 -p":
+				return "PID: 4242\n", nil
+			case name == pctPath && joined == "df 102":
+				dfQueries = append(dfQueries, joined)
+				return `MP     Volume                         Size   Used  Avail Use% Path
+rootfs local-lvm:vm-102-disk-0       8.0G   2.0G   6.0G 25.0 /
+`, nil
+			default:
+				t.Fatalf("unexpected command: %s %v", name, args)
+				return "", nil
+			}
+		},
+	}
+	agent := &Agent{logger: zerolog.Nop(), collector: collector}
+
+	got := agent.collectProxmoxLXCFilesystems(context.Background())
+	if got == nil || len(got.Containers) != 2 {
+		t.Fatalf("inventory = %+v", got)
+	}
+	if len(dfQueries) != 1 || dfQueries[0] != "df 102" {
+		t.Fatalf("df queries = %v, want exactly one for the fallback container", dfQueries)
+	}
+	if got.Containers[0].VMID != 100 || got.Containers[1].VMID != 102 {
+		t.Fatalf("containers = %+v", got.Containers)
+	}
+}
+
+func TestParseProxmoxLXCConfigMountsStopsAtSectionsAndValidates(t *testing.T) {
+	mounts := parseProxmoxLXCConfigMounts(`# comment
+arch: amd64
+rootfs: local-lvm:vm-100-disk-0,size=8G
+mp0: tank:subvol-100-disk-0,mp=/srv/data,size=1T
+mp1: /host/bind,mp=/shared
+mp2: tank:no-mountpoint,size=5G
+mp3: tank:bad-path,mp=relative,size=5G
+mp4: tank:dupe,mp=/srv/data,size=5G
+unused0: tank:vm-100-disk-9
+[snap1]
+mp5: tank:snap-only,mp=/snap-only,size=5G
+`)
+	if len(mounts) != 3 {
+		t.Fatalf("mounts = %+v", mounts)
+	}
+	if mounts[0].Key != "rootfs" || mounts[0].Path != "/" || mounts[0].Volume != "local-lvm:vm-100-disk-0" {
+		t.Fatalf("rootfs mount = %+v", mounts[0])
+	}
+	if mounts[1].Key != "mp0" || mounts[1].Path != "/srv/data" {
+		t.Fatalf("mp0 mount = %+v", mounts[1])
+	}
+	if mounts[2].Key != "mp1" || mounts[2].Path != "/shared" || mounts[2].Volume != "/host/bind" {
+		t.Fatalf("bind mount = %+v", mounts[2])
+	}
+}
+
+func TestParseLXCInfoPID(t *testing.T) {
+	if pid, err := parseLXCInfoPID("Name:  100\nPID:            4242\n"); err != nil || pid != 4242 {
+		t.Fatalf("pid = %d, err = %v", pid, err)
+	}
+	if _, err := parseLXCInfoPID("PID: 1\n"); err == nil {
+		t.Fatal("expected init pid rejection")
+	}
+	if _, err := parseLXCInfoPID("PID: nope\n"); err == nil {
+		t.Fatal("expected invalid pid error")
+	}
+	if _, err := parseLXCInfoPID("Name: 100\n"); err == nil {
+		t.Fatal("expected missing pid error")
+	}
+}
+
 func TestParseProxmoxLXCFilesystemsValidatesAndBoundsInput(t *testing.T) {
 	list := fmt.Sprintf(
 		"%-10s %-10s %-12s %-20s\n%-10d %-10s %-12s %-20s\n%-10d %-10s %-12s %-20s\n",
