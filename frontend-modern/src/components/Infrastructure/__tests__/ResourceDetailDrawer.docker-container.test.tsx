@@ -260,14 +260,14 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     expect(within(section).getByText('Image')).toBeInTheDocument();
     expect(within(section).getByText('ghcr.io/example/edge-web:2026.05')).toBeInTheDocument();
     expect(within(section).getByText('Image update')).toBeInTheDocument();
-    expect(within(section).getByText('Available')).toHaveClass('text-sky-700');
+    expect(within(section).getByText('Available').closest('td')).toHaveClass('text-cyan-700');
     expect(within(section).getByText('Current digest')).toBeInTheDocument();
     expect(within(section).getByText('sha256:current-digest')).toBeInTheDocument();
     expect(within(section).getByText('Target digest')).toBeInTheDocument();
     expect(within(section).getByText('sha256:target-digest')).toBeInTheDocument();
     expect(within(section).queryByText('Release information')).not.toBeInTheDocument();
     expect(within(section).getByText('Restarts')).toBeInTheDocument();
-    expect(within(section).getByText('7')).toHaveClass('text-red-600');
+    expect(within(section).getByText('7').closest('td')).toHaveClass('text-rose-700');
     expect(within(section).getByText('Created')).toBeInTheDocument();
     expect(within(section).getByText('Started')).toBeInTheDocument();
     expect(within(section).getByText('Finished')).toBeInTheDocument();
