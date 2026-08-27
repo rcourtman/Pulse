@@ -1,3 +1,4 @@
+import type { JSX } from 'solid-js';
 import { formatBytes } from '@/utils/format';
 
 export type DetailValueTone = 'default' | 'accent' | 'success' | 'warning' | 'danger' | 'muted';
@@ -11,6 +12,8 @@ export type DetailRowProgress = {
 export type DetailRow = {
   label: string;
   value: string;
+  valueContent?: JSX.Element;
+  valueClass?: string;
   title?: string;
   tone?: DetailValueTone;
   wrap?: boolean;
@@ -20,12 +23,16 @@ export type DetailRow = {
 export type DetailSection = {
   label: string;
   rows: DetailRow[];
+  testId?: string;
 };
 
 export const makeDetailRow = (
   label: string,
   value?: string | null,
-  options: Pick<DetailRow, 'title' | 'tone' | 'wrap' | 'progress'> = {},
+  options: Pick<
+    DetailRow,
+    'title' | 'tone' | 'wrap' | 'progress' | 'valueContent' | 'valueClass'
+  > = {},
 ): DetailRow | null => {
   const trimmed = value?.trim();
   if (!trimmed || trimmed === '-') return null;

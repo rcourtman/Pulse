@@ -1,12 +1,19 @@
-import { For, Show } from 'solid-js';
-import type { Component } from 'solid-js';
+import { For, Show, type Component, type JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
+import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
+import {
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailRow,
+  type DetailSection,
+} from '@/components/shared/detailSectionModel';
 import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 import { formatInteger } from './resourceDetailMappers';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
-import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 
 interface ResourceSummaryPresentationProps {
   resource: Resource;
@@ -16,10 +23,6 @@ interface ResourceSummaryPresentationProps {
   dataTestId?: string;
 }
 
-// Docker / Podman containers carry runtime facts (image, restart count,
-// created-at, compose membership, labels) that no generic summary row
-// surfaces. v5 rendered all of these in the container drawer; the unified
-// payload still ships them on resource.docker.
 const dockerContainerMeta = (resource: Resource): NonNullable<Resource['docker']> | null => {
   if (resource.type !== 'app-container') return null;
   const docker = resource.docker;
@@ -61,450 +64,241 @@ const dockerTimestampMillis = (value: string | undefined): number | null => {
 const dockerByteTotal = (value: number | undefined): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 
-const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['docker']> }> = (
-  props,
-) => {
-  const labels = () => props.docker.labels ?? {};
-  const labelEntries = () => Object.entries(labels());
-  const createdAt = () => dockerTimestampMillis(props.docker.createdAt);
-  const startedAt = () => dockerTimestampMillis(props.docker.startedAt);
-  const finishedAt = () => dockerTimestampMillis(props.docker.finishedAt);
-  const podman = () => props.docker.podman;
-  const podmanPodName = () => trimmedDockerValue(podman()?.podName);
-  const podmanPodId = () => trimmedDockerValue(podman()?.podId);
-  const composeProject = () =>
-    trimmedDockerValue(podman()?.composeProject) || composeLabelValue(labels(), 'project');
-  const composeService = () =>
-    trimmedDockerValue(podman()?.composeService) || composeLabelValue(labels(), 'service');
-  const autoUpdatePolicy = () => trimmedDockerValue(podman()?.autoUpdatePolicy);
-  const userNamespace = () => trimmedDockerValue(podman()?.userNamespace);
-  const blockReadBytes = () => dockerByteTotal(props.docker.blockIo?.readBytes);
-  const blockWriteBytes = () => dockerByteTotal(props.docker.blockIo?.writeBytes);
-  const restartCount = () => props.docker.restartCount;
-  const updateStatus = () => props.docker.updateStatus;
-  const imageRegistryLink = () =>
-    updateStatus()?.updateAvailable ? getDockerImageRegistryLink(props.docker.image) : null;
-  const updateState = () => {
-    const update = updateStatus();
-    if (!update) return '';
-    if (isContainerUpdatePinned(update)) return 'Pinned digest';
-    if (trimmedDockerValue(update.error)) return 'Check failed';
-    return update.updateAvailable ? 'Available' : 'Current';
-  };
+const richRow = (
+  label: string,
+  value: string,
+  valueContent: JSX.Element,
+  options: Pick<DetailRow, 'title' | 'tone' | 'wrap' | 'valueClass'> = {},
+): DetailRow => ({ label, value, valueContent, ...options });
 
-  return (
-    <tbody
-      data-testid="resource-docker-container-section"
-      class="divide-y divide-border border-t border-border"
-    >
-      <tr class="bg-surface-alt">
-        <th
-          colspan="2"
-          class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-        >
-          Container
-        </th>
-      </tr>
-      <Show when={(props.docker.image || '').trim()}>
-        <tr>
-          <td class="w-[38%] px-2 py-1 text-muted">Image</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content" title={props.docker.image}>
-            <span class="block truncate">{props.docker.image}</span>
-          </td>
-        </tr>
-      </Show>
-      <Show when={updateState()}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Image update</td>
-          <td
-            class={`px-2 py-1 text-right font-medium ${
-              updateStatus()?.updateAvailable
-                ? 'text-sky-700 dark:text-sky-300'
-                : updateStatus()?.error
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-base-content'
-            }`}
-            title={updateStatus()?.error}
+const dockerSection = (docker: NonNullable<Resource['docker']>): DetailSection => {
+  const labels = docker.labels ?? {};
+  const labelEntries = Object.entries(labels);
+  const createdAt = dockerTimestampMillis(docker.createdAt);
+  const startedAt = dockerTimestampMillis(docker.startedAt);
+  const finishedAt = dockerTimestampMillis(docker.finishedAt);
+  const podmanPodName = trimmedDockerValue(docker.podman?.podName);
+  const podmanPodId = trimmedDockerValue(docker.podman?.podId);
+  const composeProject =
+    trimmedDockerValue(docker.podman?.composeProject) || composeLabelValue(labels, 'project');
+  const composeService =
+    trimmedDockerValue(docker.podman?.composeService) || composeLabelValue(labels, 'service');
+  const autoUpdatePolicy = trimmedDockerValue(docker.podman?.autoUpdatePolicy);
+  const userNamespace = trimmedDockerValue(docker.podman?.userNamespace);
+  const blockReadBytes = dockerByteTotal(docker.blockIo?.readBytes);
+  const blockWriteBytes = dockerByteTotal(docker.blockIo?.writeBytes);
+  const update = docker.updateStatus;
+  const updateState = update
+    ? isContainerUpdatePinned(update)
+      ? 'Pinned digest'
+      : trimmedDockerValue(update.error)
+        ? 'Check failed'
+        : update.updateAvailable
+          ? 'Available'
+          : 'Current'
+    : '';
+  const image = trimmedDockerValue(docker.image);
+  const imageRegistryLink = update?.updateAvailable
+    ? getDockerImageRegistryLink(docker.image)
+    : null;
+
+  const rows = compactDetailRows([
+    makeDetailRow('Image', image, { title: image }),
+    makeDetailRow('Image update', updateState, {
+      title: update?.error,
+      tone: update?.updateAvailable ? 'accent' : update?.error ? 'danger' : 'default',
+    }),
+    makeDetailRow('Current digest', trimmedDockerValue(update?.currentDigest), {
+      valueClass: 'break-all font-mono text-[10px]',
+      wrap: true,
+    }),
+    makeDetailRow('Target digest', trimmedDockerValue(update?.latestDigest), {
+      valueClass: 'break-all font-mono text-[10px]',
+      wrap: true,
+    }),
+    imageRegistryLink
+      ? richRow(
+          'Release information',
+          imageRegistryLink.label,
+          <a
+            href={imageRegistryLink.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-sky-700 hover:underline dark:text-sky-300"
           >
-            {updateState()}
-          </td>
-        </tr>
-      </Show>
-      <Show when={trimmedDockerValue(updateStatus()?.currentDigest)}>
-        {(digest) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Current digest</td>
-            <td
-              class="break-all px-2 py-1 text-right font-mono text-[10px] font-medium text-base-content"
-              title={digest()}
-            >
-              {digest()}
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={trimmedDockerValue(updateStatus()?.latestDigest)}>
-        {(digest) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Target digest</td>
-            <td
-              class="break-all px-2 py-1 text-right font-mono text-[10px] font-medium text-base-content"
-              title={digest()}
-            >
-              {digest()}
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={imageRegistryLink()}>
-        {(link) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Release information</td>
-            <td class="px-2 py-1 text-right font-medium">
-              <a
-                href={link().href}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-sky-700 hover:underline dark:text-sky-300"
-              >
-                {link().label}
-              </a>
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={typeof restartCount() === 'number'}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Restarts</td>
-          <td
-            class={`px-2 py-1 text-right font-medium ${
-              (restartCount() ?? 0) > 5 ? 'text-red-600 dark:text-red-400' : 'text-base-content'
-            }`}
-          >
-            {formatInteger(restartCount())}
-          </td>
-        </tr>
-      </Show>
-      <Show when={createdAt()}>
-        {(created) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Created</td>
-            <td
-              class="px-2 py-1 text-right font-medium text-base-content"
-              title={new Date(created()).toLocaleString()}
-            >
-              {formatRelativeTime(created())}
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={startedAt()}>
-        {(started) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Started</td>
-            <td
-              class="px-2 py-1 text-right font-medium text-base-content"
-              title={new Date(started()).toLocaleString()}
-            >
-              {formatRelativeTime(started())}
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={finishedAt()}>
-        {(finished) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Finished</td>
-            <td
-              class="px-2 py-1 text-right font-medium text-base-content"
-              title={new Date(finished()).toLocaleString()}
-            >
-              {formatRelativeTime(finished())}
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={podmanPodName()}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Podman pod</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content" title={podmanPodName()}>
-            <span class="block truncate">{podmanPodName()}</span>
-          </td>
-        </tr>
-      </Show>
-      <Show when={podmanPodId()}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Podman pod ID</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content" title={podmanPodId()}>
-            <span class="block truncate">{podmanPodId()}</span>
-          </td>
-        </tr>
-      </Show>
-      <Show when={typeof podman()?.infra === 'boolean'}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Podman infra</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content">
-            {podman()?.infra ? 'Yes' : 'No'}
-          </td>
-        </tr>
-      </Show>
-      <Show when={composeProject()}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Compose project</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content">{composeProject()}</td>
-        </tr>
-      </Show>
-      <Show when={composeService()}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Compose service</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content">{composeService()}</td>
-        </tr>
-      </Show>
-      <Show when={autoUpdatePolicy()}>
-        <tr>
-          <td class="px-2 py-1 text-muted">Auto-update</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content">{autoUpdatePolicy()}</td>
-        </tr>
-      </Show>
-      <Show when={userNamespace()}>
-        <tr>
-          <td class="px-2 py-1 text-muted">User namespace</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content" title={userNamespace()}>
-            <span class="block truncate">{userNamespace()}</span>
-          </td>
-        </tr>
-      </Show>
-      <Show when={blockReadBytes()}>
-        {(readBytes) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Block I/O read</td>
-            <td class="px-2 py-1 text-right font-medium text-base-content">
-              {formatBytes(readBytes())}
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={blockWriteBytes()}>
-        {(writeBytes) => (
-          <tr>
-            <td class="px-2 py-1 text-muted">Block I/O write</td>
-            <td class="px-2 py-1 text-right font-medium text-base-content">
-              {formatBytes(writeBytes())}
-            </td>
-          </tr>
-        )}
-      </Show>
-      <Show when={labelEntries().length > 0}>
-        <tr>
-          <td class="px-2 py-1 align-top text-muted">Labels</td>
-          <td class="px-2 py-1">
-            <div class="flex flex-wrap justify-end gap-1">
-              <For each={labelEntries()}>
-                {([key, value]) => (
+            {imageRegistryLink.label}
+          </a>,
+        )
+      : null,
+    typeof docker.restartCount === 'number'
+      ? makeDetailRow('Restarts', formatInteger(docker.restartCount), {
+          tone: docker.restartCount > 5 ? 'danger' : 'default',
+        })
+      : null,
+    createdAt
+      ? makeDetailRow('Created', formatRelativeTime(createdAt), {
+          title: new Date(createdAt).toLocaleString(),
+        })
+      : null,
+    startedAt
+      ? makeDetailRow('Started', formatRelativeTime(startedAt), {
+          title: new Date(startedAt).toLocaleString(),
+        })
+      : null,
+    finishedAt
+      ? makeDetailRow('Finished', formatRelativeTime(finishedAt), {
+          title: new Date(finishedAt).toLocaleString(),
+        })
+      : null,
+    makeDetailRow('Podman pod', podmanPodName),
+    makeDetailRow('Podman pod ID', podmanPodId),
+    typeof docker.podman?.infra === 'boolean'
+      ? makeDetailRow('Podman infra', docker.podman.infra ? 'Yes' : 'No')
+      : null,
+    makeDetailRow('Compose project', composeProject),
+    makeDetailRow('Compose service', composeService),
+    makeDetailRow('Auto-update', autoUpdatePolicy),
+    makeDetailRow('User namespace', userNamespace),
+    blockReadBytes !== null ? makeDetailRow('Block I/O read', formatBytes(blockReadBytes)) : null,
+    blockWriteBytes !== null
+      ? makeDetailRow('Block I/O write', formatBytes(blockWriteBytes))
+      : null,
+    labelEntries.length > 0
+      ? richRow(
+          'Labels',
+          labelEntries.map(([key, value]) => (value ? `${key}: ${value}` : key)).join(', '),
+          <div class="flex flex-wrap gap-1">
+            <For each={labelEntries}>
+              {([key, value]) => (
+                <span
+                  class="inline-flex max-w-full items-center truncate rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                  title={value ? `${key}: ${value}` : key}
+                >
+                  {key}
+                  <Show when={value}>: {value}</Show>
+                </span>
+              )}
+            </For>
+          </div>,
+          { wrap: true },
+        )
+      : null,
+  ]);
+
+  return { label: 'Container', rows, testId: 'resource-docker-container-section' };
+};
+
+export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationProps> = (props) => {
+  const sections = (): DetailSection[] => {
+    const docker = dockerContainerMeta(props.resource);
+    const identityRows = compactDetailRows([
+      ...props.drawer.primaryIdentityRows().map((row) => makeDetailRow(row.label, row.value)),
+      props.showPlatformId ? makeDetailRow('Platform ID', props.resource.platformId) : null,
+      props.drawer.identityIpValues().length > 0
+        ? richRow(
+            'IP Addresses',
+            props.drawer.identityIpValues().join(', '),
+            <div class="flex flex-wrap gap-1">
+              <For each={props.drawer.identityIpValues()}>
+                {(ip) => (
                   <span
-                    class="inline-flex max-w-full items-center truncate rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                    title={value ? `${key}: ${value}` : key}
+                    class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                    title={ip}
                   >
-                    {key}
-                    <Show when={value}>: {value}</Show>
+                    {ip}
                   </span>
                 )}
               </For>
-            </div>
-          </td>
-        </tr>
-      </Show>
-    </tbody>
+            </div>,
+          )
+        : null,
+      props.resource.tags?.length
+        ? richRow(
+            'Tags',
+            props.resource.tags.join(', '),
+            <TagBadges tags={props.resource.tags} maxVisible={6} />,
+          )
+        : null,
+      props.drawer.identityAliasValues().length > 0
+        ? richRow(
+            'Aliases',
+            props.drawer.identityAliasValues().join(', '),
+            <div class="flex flex-wrap gap-1">
+              <For each={props.drawer.aliasPreviewValues()}>
+                {(value) => (
+                  <span
+                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                    title={value}
+                  >
+                    {value}
+                  </span>
+                )}
+              </For>
+              <Show when={props.drawer.hasAliasOverflow()}>
+                <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                  +
+                  {props.drawer.identityAliasValues().length -
+                    props.drawer.aliasPreviewValues().length}
+                </span>
+              </Show>
+            </div>,
+          )
+        : null,
+      !props.drawer.identityCardHasRichData()
+        ? makeDetailRow('Metadata', 'No identity metadata yet.', { tone: 'muted' })
+        : null,
+    ]);
+
+    return compactDetailSections([
+      props.content !== 'technical'
+        ? {
+            label: 'Operator context',
+            testId: 'resource-current-state-section',
+            rows: compactDetailRows([
+              props.drawer.sourceSummary()
+                ? makeDetailRow('Pulse coverage', props.drawer.sourceSummary()?.label, {
+                    title: props.drawer.sourceSummary()?.title,
+                    valueClass: props.drawer.sourceSummary()?.className,
+                  })
+                : null,
+              makeDetailRow('Primary IP', props.drawer.identityIpValues()[0]),
+            ]),
+          }
+        : null,
+      props.content !== 'overview'
+        ? {
+            label: 'Runtime context',
+            testId: 'resource-runtime-context-section',
+            rows: compactDetailRows([
+              makeDetailRow('Observed state', props.resource.status || 'unknown', {
+                valueClass: 'capitalize',
+              }),
+              props.resource.uptime
+                ? makeDetailRow('Uptime', formatUptime(props.resource.uptime))
+                : null,
+              props.resource.lastSeen
+                ? makeDetailRow('Last seen', props.drawer.lastSeen() || '—', {
+                    title: props.drawer.lastSeenAbsolute(),
+                  })
+                : null,
+            ]),
+          }
+        : null,
+      props.content !== 'overview' && docker ? dockerSection(docker) : null,
+      props.content !== 'overview'
+        ? {
+            label: 'Identity',
+            testId: 'resource-identity-section',
+            rows: identityRows,
+          }
+        : null,
+    ]);
+  };
+
+  return (
+    <DetailSectionTable
+      sections={sections()}
+      dataTestId={props.dataTestId ?? 'resource-summary-section'}
+    />
   );
 };
-
-export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationProps> = (props) => (
-  <div
-    data-testid={props.dataTestId ?? 'resource-summary-section'}
-    class="overflow-hidden rounded border border-border bg-surface"
-  >
-    <table class="w-full table-fixed text-[11px]">
-      <Show
-        when={
-          props.content !== 'technical' &&
-          Boolean(props.drawer.sourceSummary() || props.drawer.identityIpValues()[0])
-        }
-      >
-        <tbody data-testid="resource-current-state-section" class="divide-y divide-border">
-          <tr class="bg-surface-alt">
-            <th
-              colspan="2"
-              class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-            >
-              Operator context
-            </th>
-          </tr>
-          <Show when={props.drawer.sourceSummary()}>
-            {(source) => (
-              <tr>
-                <td class="w-[38%] px-2 py-1 text-muted">Pulse coverage</td>
-                <td
-                  class={`px-2 py-1 text-right font-medium ${source().className}`}
-                  title={source().title}
-                >
-                  {source().label}
-                </td>
-              </tr>
-            )}
-          </Show>
-          <Show when={props.drawer.identityIpValues()[0]}>
-            {(ip) => (
-              <tr>
-                <td class="w-[38%] px-2 py-1 text-muted">Primary IP</td>
-                <td class="px-2 py-1 text-right font-medium text-base-content" title={ip()}>
-                  <span class="block truncate">{ip()}</span>
-                </td>
-              </tr>
-            )}
-          </Show>
-        </tbody>
-      </Show>
-      <Show when={props.content !== 'overview'}>
-        <tbody
-          data-testid="resource-runtime-context-section"
-          class="divide-y divide-border border-t border-border"
-        >
-          <tr class="bg-surface-alt">
-            <th
-              colspan="2"
-              class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-            >
-              Runtime context
-            </th>
-          </tr>
-          <tr>
-            <td class="w-[38%] px-2 py-1 text-muted">Observed state</td>
-            <td class="px-2 py-1 text-right font-medium capitalize text-base-content">
-              {props.resource.status || 'unknown'}
-            </td>
-          </tr>
-          <Show when={props.resource.uptime}>
-            <tr>
-              <td class="px-2 py-1 text-muted">Uptime</td>
-              <td class="px-2 py-1 text-right font-medium text-base-content">
-                {formatUptime(props.resource.uptime ?? 0)}
-              </td>
-            </tr>
-          </Show>
-          <Show when={props.resource.lastSeen}>
-            <tr>
-              <td class="px-2 py-1 text-muted">Last seen</td>
-              <td
-                class="px-2 py-1 text-right font-medium text-base-content"
-                title={props.drawer.lastSeenAbsolute()}
-              >
-                {props.drawer.lastSeen() || '—'}
-              </td>
-            </tr>
-          </Show>
-        </tbody>
-      </Show>
-      <Show when={props.content !== 'overview' && dockerContainerMeta(props.resource)}>
-        {(docker) => <DockerContainerSummarySection docker={docker()} />}
-      </Show>
-      <Show when={props.content !== 'overview'}>
-        <tbody
-          data-testid="resource-identity-section"
-          class="divide-y divide-border border-t border-border"
-        >
-          <tr class="bg-surface-alt">
-            <th
-              colspan="2"
-              class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
-            >
-              Identity
-            </th>
-          </tr>
-          <For each={props.drawer.primaryIdentityRows()}>
-            {(row) => (
-              <tr>
-                <td class="w-[38%] px-2 py-1 text-muted">{row.label}</td>
-                <td class="px-2 py-1 text-right font-medium text-base-content" title={row.value}>
-                  <span class="block truncate">{row.value}</span>
-                </td>
-              </tr>
-            )}
-          </For>
-          <Show when={props.showPlatformId}>
-            <tr>
-              <td class="w-[38%] px-2 py-1 text-muted">Platform ID</td>
-              <td
-                class="px-2 py-1 text-right font-medium text-base-content"
-                title={props.resource.platformId}
-              >
-                <span class="block truncate">{props.resource.platformId}</span>
-              </td>
-            </tr>
-          </Show>
-          <Show when={props.drawer.identityIpValues().length > 0}>
-            <tr>
-              <td class="px-2 py-1 align-top text-muted">IP Addresses</td>
-              <td class="px-2 py-1">
-                <div class="flex flex-wrap justify-end gap-1">
-                  <For each={props.drawer.identityIpValues()}>
-                    {(ip) => (
-                      <span
-                        class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                        title={ip}
-                      >
-                        {ip}
-                      </span>
-                    )}
-                  </For>
-                </div>
-              </td>
-            </tr>
-          </Show>
-          <Show when={props.resource.tags && props.resource.tags.length > 0}>
-            <tr>
-              <td class="px-2 py-1 align-top text-muted">Tags</td>
-              <td class="px-2 py-1">
-                <div class="flex justify-end">
-                  <TagBadges tags={props.resource.tags} maxVisible={6} />
-                </div>
-              </td>
-            </tr>
-          </Show>
-          <Show when={props.drawer.identityAliasValues().length > 0}>
-            <tr>
-              <td class="px-2 py-1 align-top text-muted">Aliases</td>
-              <td class="px-2 py-1">
-                <div class="flex flex-wrap justify-end gap-1">
-                  <For each={props.drawer.aliasPreviewValues()}>
-                    {(value) => (
-                      <span
-                        class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                        title={value}
-                      >
-                        {value}
-                      </span>
-                    )}
-                  </For>
-                  <Show when={props.drawer.hasAliasOverflow()}>
-                    <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
-                      +
-                      {props.drawer.identityAliasValues().length -
-                        props.drawer.aliasPreviewValues().length}
-                    </span>
-                  </Show>
-                </div>
-              </td>
-            </tr>
-          </Show>
-          <Show when={!props.drawer.identityCardHasRichData()}>
-            <tr>
-              <td colspan="2" class="px-2 py-1 text-muted">
-                No identity metadata yet.
-              </td>
-            </tr>
-          </Show>
-        </tbody>
-      </Show>
-    </table>
-  </div>
-);

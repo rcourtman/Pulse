@@ -1,53 +1,30 @@
 {
   "version": 1,
-  "base_sha": "553592d2bd59d7983bb988700576ba2d2a3a945c",
-  "verified_at": "2026-08-27T16:12:00Z",
+  "base_sha": "d48e70da152525471c1d1ee3364c92c76b4d06af",
+  "verified_at": "2026-08-27T17:00:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/alerts.ts",
-    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
-    "frontend-modern/src/features/alerts/AlertSnoozeAction.tsx",
-    "frontend-modern/src/features/alerts/types.ts",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
-    "frontend-modern/src/features/alerts/useAlertSnoozeState.ts",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/types/resource.ts",
-    "frontend-modern/src/utils/alertOverviewPresentation.ts",
-    "frontend-modern/src/utils/resourceChangePresentation.ts"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
+    "frontend-modern/src/components/shared/detailSectionModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/alerts.ts": "bfd0ee6c8076e0f75308578d11c33c519340b17a23c604037fe8536d3d54f2be",
-    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "662d6f7b47418e1c80cf916f5ac818159a545d3f7716e908491a55e042be2873",
-    "frontend-modern/src/features/alerts/AlertSnoozeAction.tsx": "339db07fb2b236f970dd3f79bd81517b82281a2871149fec7f4d5df0c8a17842",
-    "frontend-modern/src/features/alerts/types.ts": "e57351b3e8c56a3d15c7c486b8b8049f3bb7181fc30479fa398ede489aea6816",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "02b5eae728ede490710d5ba334537193c89bfe9e25a8df26aa574f03b80936ad",
-    "frontend-modern/src/features/alerts/useAlertSnoozeState.ts": "5857a30196c2bd8156dfbace5d0d006f348f5d7eb1ef4720108eb1f43f2118e2",
-    "frontend-modern/src/i18n/messages.de.ts": "652fefe6547386203ea749febd518d12d0a9538d112485bd87f8bfee5218d95c",
-    "frontend-modern/src/i18n/messages.es.ts": "21adb4aff365b5f588fa48b9390dc4524a4954decc63ad366d492212f13c2dbc",
-    "frontend-modern/src/i18n/messages.ts": "2979a81f676e50499302a89e7adb4a2b6c618258debf1d4ea09a67f9c153a7e8",
-    "frontend-modern/src/types/resource.ts": "81d378c5923075dbdbf983083a896b28db11da894814904725456c508854cd10",
-    "frontend-modern/src/utils/alertOverviewPresentation.ts": "82cf34fd090e39b51545c8cc90abf7fb1edfb5fbec3d23cbbe79e2d7fd02752f",
-    "frontend-modern/src/utils/resourceChangePresentation.ts": "b7ddcd8401da17c264ad5804d93187b733faa2668f81df1fb81098f773235d17"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "438dd4e834e576911bcf06d8849f832bb59e9349ff6476a3b437b356ecdf3d1a",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "5b2592463049e3b1740fa8c63cabb09529a83bd1cd64509c57b473d3b05dc35a",
+    "frontend-modern/src/components/shared/detailSectionModel.ts": "da27583092cad09d50ea03c4308f7841bd2475e8c6539527142da06a78d9722f"
   },
-  "routes": ["/alerts/overview"],
+  "routes": ["/proxmox/overview"],
   "viewports": [
-    { "width": 1280, "height": 800 },
+    { "width": 1920, "height": 800 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "active unacknowledged incident with Snooze action",
-    "preset snooze dialog with one-hour, two-hour, eight-hour, tomorrow-morning, and seven-day holds",
-    "snoozed incident with exact local expiry, Resume action, and suppressed delivery diagnosis",
-    "resumed incident with normal actions restored",
-    "expanded incident timeline containing Snoozed and Resumed lifecycle events"
+    "expanded backup-vault backup-server resource drawer with Overview selected",
+    "runtime context and identity sections with rich alias values"
   ],
   "interactions": [
-    "opened Alerts Overview and confirmed every eligible active incident exposes Snooze beside acknowledgement and Timeline",
-    "opened the preset dialog and confirmed its monitoring-continues contract and bounded duration choices",
-    "snoozed a live local incident and confirmed the exact expiry, Resume action, toast, and durable timeline event",
-    "resumed the incident and confirmed the open timeline refreshed immediately with Alert notifications resumed",
-    "verified the dialog and alert workflow at 390x844 with readable copy and no horizontal control overflow"
+    "expanded the first backup-vault row and confirmed two aligned equal-height desktop cards with a local 7rem label column",
+    "confirmed the same sections retain compact native table rows at 390x844 with zero document horizontal overflow",
+    "reloaded the final implementation and confirmed no new browser console errors"
   ]
 }

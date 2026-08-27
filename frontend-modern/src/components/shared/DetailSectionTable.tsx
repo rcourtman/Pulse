@@ -34,8 +34,10 @@ const detailSectionDesktopBasisClass = (sectionCount: number): string =>
 export const DetailSectionTable: Component<{
   sections: DetailSection[];
   class?: string;
+  dataTestId?: string;
 }> = (props) => (
   <div
+    data-testid={props.dataTestId}
     class={`${props.class ?? 'overflow-hidden rounded border border-border bg-surface'} lg:overflow-visible lg:border-0 lg:bg-transparent`}
   >
     <Table
@@ -45,6 +47,7 @@ export const DetailSectionTable: Component<{
       <For each={props.sections}>
         {(section) => (
           <TableBody
+            data-testid={section.testId}
             class={`divide-y divide-border lg:flex lg:min-w-[16rem] lg:flex-1 lg:flex-col lg:overflow-hidden lg:rounded lg:border lg:border-border lg:bg-surface lg:p-3 lg:shadow-sm lg:divide-y-0 ${detailSectionDesktopBasisClass(props.sections.length)}`}
           >
             <TableRow class="bg-surface-alt lg:mb-1 lg:block lg:bg-transparent lg:hover:bg-transparent">
@@ -64,19 +67,21 @@ export const DetailSectionTable: Component<{
                   <TableCell
                     class={`px-2 py-1 text-right align-top font-medium lg:min-w-0 lg:px-0 lg:py-0 lg:text-left ${detailValueToneClass(
                       row.tone,
-                    )}`}
+                    )} ${row.valueClass ?? ''}`}
                     title={row.title ?? row.value}
                   >
-                    <span
-                      title={row.title ?? row.value}
-                      class={
-                        row.wrap
-                          ? 'block whitespace-normal break-words text-left leading-snug'
-                          : 'block truncate'
-                      }
-                    >
-                      {row.value}
-                    </span>
+                    {row.valueContent ?? (
+                      <span
+                        title={row.title ?? row.value}
+                        class={
+                          row.wrap
+                            ? 'block whitespace-normal break-words text-left leading-snug'
+                            : 'block truncate'
+                        }
+                      >
+                        {row.value}
+                      </span>
+                    )}
                     {row.progress ? (
                       <ProgressBar
                         value={row.progress.value}

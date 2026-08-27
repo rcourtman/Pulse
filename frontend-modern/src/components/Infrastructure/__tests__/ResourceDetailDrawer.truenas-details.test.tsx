@@ -250,7 +250,7 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     expect(getByTestId('resource-technical-summary-section').querySelector('table')).toBeTruthy();
     expect(() => getByTestId('resource-current-state-section')).toThrow();
     expect(getByTestId('resource-identity-section').tagName).toBe('TBODY');
-    expect(summary.querySelector('[class*="shadow-sm"]')).toBeNull();
+    expect(summary.querySelector('[class*="shadow-sm"]')).not.toBeNull();
     expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
     const trueNASSection = getByTestId('resource-truenas-details-section');
     expect(

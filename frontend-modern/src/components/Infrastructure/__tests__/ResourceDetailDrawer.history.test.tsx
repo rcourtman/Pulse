@@ -182,6 +182,8 @@ describe('ResourceDetailDrawer change history section', () => {
       "from './ResourceInvestigationContextTables'",
     );
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailSummarySource).toContain("from '@/components/shared/DetailSectionTable'");
+    expect(resourceDetailSummarySource).not.toContain('<table');
     expect(resourceInvestigationContextSource).toContain('<table');
     expect(resourceInvestigationContextSource).toContain('RESOURCE_SAFE_SUMMARY_LABEL');
     expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');

@@ -101,6 +101,38 @@ describe('DetailSectionTable', () => {
     expect(screen.getByText('Warning').closest('td')).toHaveClass('lg:text-left');
   });
 
+  it('preserves section test hooks and rich value content inside the shared layout', () => {
+    render(() => (
+      <DetailSectionTable
+        dataTestId="resource-summary"
+        sections={[
+          {
+            label: 'Container',
+            testId: 'resource-container-section',
+            rows: [
+              {
+                label: 'Release information',
+                value: 'View release',
+                valueClass: 'font-mono',
+                valueContent: <a href="https://example.test/release">View release</a>,
+              },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByTestId('resource-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-container-section').tagName).toBe('TBODY');
+    expect(screen.getByRole('link', { name: 'View release' })).toHaveAttribute(
+      'href',
+      'https://example.test/release',
+    );
+    expect(screen.getByRole('link', { name: 'View release' }).closest('td')).toHaveClass(
+      'font-mono',
+    );
+  });
+
   it('renders optional row progress without replacing its compact text value', () => {
     const { container } = render(() => (
       <DetailSectionTable
