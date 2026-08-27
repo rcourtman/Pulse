@@ -61,29 +61,30 @@ var hostStorageCleanupFingerprintPattern = regexp.MustCompile(`^sha256:[a-f0-9]{
 
 // Server manages WebSocket connections from agents
 type Server struct {
-	mu                               sync.RWMutex
-	agents                           map[string]*agentConn                           // organizationID + agentID -> connection
-	pendingReqs                      map[string]chan CommandResultPayload            // scoped request key -> response channel
-	pendingHostStorageCleanups       map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
-	pendingHostUpdates               map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
-	pendingDockerContainerLifecycles map[string]chan DockerContainerLifecycleResultPayload
-	pendingDockerContainerUpdates    map[string]chan DockerContainerUpdateResultPayload
-	pendingActionPreflights          map[string]chan ActionPreflightResultPayload
-	pendingHostOperations            map[string]pendingHostOperation // scoped request key -> exact typed APT operation/query identity
-	pendingOperationQueries          map[string]pendingOperationQuery
-	deploySubs                       map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
-	admitToken                       AgentRegistrationValidator
-	validateSession                  AgentSessionValidator
-	commandPolicy                    *CommandPolicy
-	ipConnCounts                     map[string]int
-	maxConnsPerIP                    int
-	shutdown                         chan struct{}
-	shutdownOnce                     sync.Once
-	pingInterval                     time.Duration
-	commandAuthorizationVerifier     func(CommandAuthorizationRequest) error
-	newCommandApprovalGrant          func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
-	now                              func() time.Time
-	agentRegisteredNotifier          func(AgentAdmission)
+	mu                                 sync.RWMutex
+	agents                             map[string]*agentConn                           // organizationID + agentID -> connection
+	pendingReqs                        map[string]chan CommandResultPayload            // scoped request key -> response channel
+	pendingHostStorageCleanups         map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
+	pendingHostUpdates                 map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
+	pendingDockerContainerLifecycles   map[string]chan DockerContainerLifecycleResultPayload
+	pendingDockerContainerUpdates      map[string]chan DockerContainerUpdateResultPayload
+	pendingDockerContainerObservations map[string]chan DockerContainerObservationResultPayload
+	pendingActionPreflights            map[string]chan ActionPreflightResultPayload
+	pendingHostOperations              map[string]pendingHostOperation // scoped request key -> exact typed APT operation/query identity
+	pendingOperationQueries            map[string]pendingOperationQuery
+	deploySubs                         map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
+	admitToken                         AgentRegistrationValidator
+	validateSession                    AgentSessionValidator
+	commandPolicy                      *CommandPolicy
+	ipConnCounts                       map[string]int
+	maxConnsPerIP                      int
+	shutdown                           chan struct{}
+	shutdownOnce                       sync.Once
+	pingInterval                       time.Duration
+	commandAuthorizationVerifier       func(CommandAuthorizationRequest) error
+	newCommandApprovalGrant            func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
+	now                                func() time.Time
+	agentRegisteredNotifier            func(AgentAdmission)
 }
 
 const defaultOrganizationID = "default"
@@ -190,25 +191,26 @@ func NewServerWithAdmissionValidator(admit AgentRegistrationValidator, validateS
 	}
 
 	return &Server{
-		agents:                           make(map[string]*agentConn),
-		pendingReqs:                      make(map[string]chan CommandResultPayload),
-		pendingHostStorageCleanups:       make(map[string]chan HostStorageCleanupResultPayload),
-		pendingHostUpdates:               make(map[string]chan HostUpdateResultPayload),
-		pendingDockerContainerLifecycles: make(map[string]chan DockerContainerLifecycleResultPayload),
-		pendingDockerContainerUpdates:    make(map[string]chan DockerContainerUpdateResultPayload),
-		pendingActionPreflights:          make(map[string]chan ActionPreflightResultPayload),
-		pendingHostOperations:            make(map[string]pendingHostOperation),
-		pendingOperationQueries:          make(map[string]pendingOperationQuery),
-		deploySubs:                       make(map[string]chan DeployProgressPayload),
-		admitToken:                       admit,
-		validateSession:                  validateSession,
-		commandPolicy:                    DefaultPolicy(),
-		ipConnCounts:                     make(map[string]int),
-		maxConnsPerIP:                    defaultMaxWebSocketConnectionsPerIP,
-		shutdown:                         make(chan struct{}),
-		pingInterval:                     defaultPingInterval,
-		newCommandApprovalGrant:          NewCommandApprovalGrant,
-		now:                              time.Now,
+		agents:                             make(map[string]*agentConn),
+		pendingReqs:                        make(map[string]chan CommandResultPayload),
+		pendingHostStorageCleanups:         make(map[string]chan HostStorageCleanupResultPayload),
+		pendingHostUpdates:                 make(map[string]chan HostUpdateResultPayload),
+		pendingDockerContainerLifecycles:   make(map[string]chan DockerContainerLifecycleResultPayload),
+		pendingDockerContainerUpdates:      make(map[string]chan DockerContainerUpdateResultPayload),
+		pendingDockerContainerObservations: make(map[string]chan DockerContainerObservationResultPayload),
+		pendingActionPreflights:            make(map[string]chan ActionPreflightResultPayload),
+		pendingHostOperations:              make(map[string]pendingHostOperation),
+		pendingOperationQueries:            make(map[string]pendingOperationQuery),
+		deploySubs:                         make(map[string]chan DeployProgressPayload),
+		admitToken:                         admit,
+		validateSession:                    validateSession,
+		commandPolicy:                      DefaultPolicy(),
+		ipConnCounts:                       make(map[string]int),
+		maxConnsPerIP:                      defaultMaxWebSocketConnectionsPerIP,
+		shutdown:                           make(chan struct{}),
+		pingInterval:                       defaultPingInterval,
+		newCommandApprovalGrant:            NewCommandApprovalGrant,
+		now:                                time.Now,
 	}
 }
 
@@ -967,16 +969,17 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ac := &agentConn{
 		conn: conn,
 		agent: ConnectedAgent{
-			OrganizationID:          admission.OrganizationID,
-			TokenID:                 admission.TokenID,
-			AgentID:                 admission.AgentID,
-			Hostname:                admission.Hostname,
-			Version:                 reg.Version,
-			Platform:                reg.Platform,
-			Tags:                    reg.Tags,
-			ConnectedAt:             time.Now(),
-			OperationReceiptVersion: reg.OperationReceiptVersion,
-			ActionPreflightVersion:  reg.ActionPreflightVersion,
+			OrganizationID:           admission.OrganizationID,
+			TokenID:                  admission.TokenID,
+			AgentID:                  admission.AgentID,
+			Hostname:                 admission.Hostname,
+			Version:                  reg.Version,
+			Platform:                 reg.Platform,
+			Tags:                     reg.Tags,
+			ConnectedAt:              time.Now(),
+			OperationReceiptVersion:  reg.OperationReceiptVersion,
+			ActionPreflightVersion:   reg.ActionPreflightVersion,
+			DockerObservationVersion: reg.DockerObservationVersion,
 		},
 		admission:        admission,
 		sessionKey:       agentSessionKey(admission.OrganizationID, admission.AgentID),
@@ -1261,6 +1264,23 @@ func (s *Server) readLoop(ac *agentConn) {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Action preflight result channel full, dropping")
+				}
+			}
+
+		case MsgTypeDockerContainerObserveResult:
+			result, decodeErr := DecodeDockerContainerObservationResultPayload(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid docker container observation result")
+				continue
+			}
+			s.mu.RLock()
+			ch, ok := s.pendingDockerContainerObservations[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
+			s.mu.RUnlock()
+			if ok {
+				select {
+				case ch <- result:
+				default:
+					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Docker observation result channel full, dropping")
 				}
 			}
 
@@ -1888,6 +1908,76 @@ func (s *Server) PreflightAction(ctx context.Context, agentID string, req Action
 		return nil, ctx.Err()
 	case <-ac.done:
 		return nil, fmt.Errorf("agent %s disconnected before action preflight result", agentID)
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
+	}
+}
+
+// ObserveDockerContainer asks the current Unified Agent for a fresh read-only
+// Docker/Podman daemon observation. It is a separate request from the mutation
+// receipt and carries no dispatch authority.
+func (s *Server) ObserveDockerContainer(ctx context.Context, agentID string, req DockerContainerObservationPayload) (*DockerContainerObservationResultPayload, error) {
+	if s == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	if strings.TrimSpace(req.RequestID) == "" {
+		req.RequestID = uuid.NewString()
+	}
+	if err := BindDockerContainerObservationPayload(&req); err != nil {
+		return nil, err
+	}
+	if err := ValidateDockerContainerObservationPayload(&req); err != nil {
+		return nil, err
+	}
+	ac, ok := s.connectionForContext(ctx, agentID)
+	if !ok {
+		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if ac.agent.DockerObservationVersion != DockerContainerObservationProtocolVersion {
+		return nil, fmt.Errorf("agent does not support docker observation protocol")
+	}
+	ch := make(chan DockerContainerObservationResultPayload, 1)
+	key := pendingRequestKey(connectionSessionKey(ac), req.RequestID)
+	s.mu.Lock()
+	if _, exists := s.pendingDockerContainerObservations[key]; exists {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("docker observation request %q is already pending", req.RequestID)
+	}
+	s.pendingDockerContainerObservations[key] = ch
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingDockerContainerObservations, key)
+		s.mu.Unlock()
+	}()
+	msg, err := NewMessage(MsgTypeDockerContainerObserve, req.RequestID, req)
+	if err != nil {
+		return nil, err
+	}
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to send docker observation request: %w", err)
+	}
+	timer := time.NewTimer(20 * time.Second)
+	defer timer.Stop()
+	select {
+	case result := <-ch:
+		if err := ValidateDockerContainerObservationResultForRequest(req, result, s.currentTime()); err != nil {
+			return nil, fmt.Errorf("docker observation result validation failed: %w", err)
+		}
+		return &result, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("docker observation timed out")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-ac.done:
+		return nil, fmt.Errorf("agent %s disconnected before docker observation result", agentID)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}

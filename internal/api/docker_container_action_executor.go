@@ -34,7 +34,34 @@ type dockerContainerPostconditionObservation struct {
 }
 
 type dockerContainerPostconditionObserver interface {
-	ObserveDockerContainer(context.Context, string, string) (dockerContainerPostconditionObservation, error)
+	ObserveDockerContainer(context.Context, string, string, string, string) (dockerContainerPostconditionObservation, error)
+}
+
+type dockerContainerObservationCommander interface {
+	ObserveDockerContainer(context.Context, string, agentexec.DockerContainerObservationPayload) (*agentexec.DockerContainerObservationResultPayload, error)
+}
+
+type agentDockerContainerPostconditionObserver struct {
+	commander dockerContainerObservationCommander
+}
+
+func (o agentDockerContainerPostconditionObserver) ObserveDockerContainer(ctx context.Context, actionID, agentID, runtime, containerID string) (dockerContainerPostconditionObservation, error) {
+	result, err := o.commander.ObserveDockerContainer(ctx, agentID, agentexec.DockerContainerObservationPayload{
+		ActionID: actionID, Runtime: runtime, ContainerID: containerID,
+	})
+	if err != nil {
+		return dockerContainerPostconditionObservation{}, err
+	}
+	if result == nil {
+		return dockerContainerPostconditionObservation{}, fmt.Errorf("docker daemon observation unavailable")
+	}
+	if !result.Observed {
+		return dockerContainerPostconditionObservation{}, fmt.Errorf("docker daemon observation unavailable: %s", strings.TrimSpace(result.ReasonCode))
+	}
+	return dockerContainerPostconditionObservation{
+		ObserverID: "docker-daemon:" + agentID, TrustDomain: "docker-daemon:" + agentID,
+		Method: "typed_docker_daemon_observation", Snapshot: result.Snapshot, ReceivedAt: time.Now().UTC(),
+	}, nil
 }
 
 type dockerContainerLifecycleAgentCommander interface {
@@ -106,7 +133,11 @@ func newDockerContainerActionExecutor(resources *ResourceHandlers, agents action
 	if resources == nil || agents == nil {
 		return nil
 	}
-	return dockerContainerActionExecutor{resources: resources, agents: agents}
+	executor := dockerContainerActionExecutor{resources: resources, agents: agents}
+	if commander, ok := agents.(dockerContainerObservationCommander); ok {
+		executor.observer = agentDockerContainerPostconditionObserver{commander: commander}
+	}
+	return executor
 }
 
 func (e dockerContainerActionExecutor) ActionHandlerNames() []string {
@@ -183,7 +214,7 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	}
 	var independent *dockerContainerPostconditionObservation
 	if e.observer != nil {
-		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, req.ContainerID); observeErr == nil {
+		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, agentID, runtime, req.ContainerID); observeErr == nil {
 			independent = &observation
 		}
 	}
@@ -231,7 +262,7 @@ func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.
 	}
 	var independent *dockerContainerPostconditionObservation
 	if e.observer != nil && result.NewContainerID != "" {
-		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, result.NewContainerID); observeErr == nil {
+		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, agentID, runtime, result.NewContainerID); observeErr == nil {
 			independent = &observation
 		}
 	}
@@ -287,7 +318,7 @@ func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Conte
 		}
 		var independent *dockerContainerPostconditionObservation
 		if e.observer != nil && result.NewContainerID != "" {
-			if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, result.NewContainerID); observeErr == nil {
+			if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, attempt.AgentID, e.dockerObservationRuntime(ctx, record), result.NewContainerID); observeErr == nil {
 				independent = &observation
 			}
 		}
@@ -305,7 +336,7 @@ func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Conte
 	req := agentexec.DockerContainerLifecyclePayload{RequestID: attempt.ID, ActionID: record.ID, Operation: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, Runtime: "docker", ContainerID: result.ContainerID, ExpectedState: result.Before.State, ExpectedStartedAt: result.Before.StartedAt}
 	var independent *dockerContainerPostconditionObservation
 	if e.observer != nil {
-		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, result.ContainerID); observeErr == nil {
+		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, attempt.AgentID, e.dockerObservationRuntime(ctx, record), result.ContainerID); observeErr == nil {
 			independent = &observation
 		}
 	}
@@ -315,6 +346,22 @@ func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Conte
 	}
 	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: receivedAt}
 	return execution, receipt, true, nil
+}
+
+func (e dockerContainerActionExecutor) dockerObservationRuntime(ctx context.Context, record unified.ActionAuditRecord) string {
+	if e.resources != nil {
+		if registry, err := e.resources.buildRegistry(GetOrgID(ctx)); err == nil {
+			if resource, ok := registry.Get(record.Request.ResourceID); ok && resource != nil {
+				if runtime, runtimeErr := dockerContainerRuntime(*resource); runtimeErr == nil {
+					return runtime
+				}
+			}
+		}
+	}
+	// Older durable attempts did not retain runtime separately. Docker is the
+	// compatibility default; a Podman target with no current resource fails
+	// the observation safely and retains agent-attested truth.
+	return "docker"
 }
 
 func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {

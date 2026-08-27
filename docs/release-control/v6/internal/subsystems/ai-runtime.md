@@ -7258,6 +7258,17 @@ and terminal push copy stays explicitly inconclusive. This keeps legacy
 single-outcome consumers conservative while `ActionDisposition.ActionResultV2`
 retains both truth axes and the evidence source.
 
+The production Docker/Podman Patrol action path now supplies the independent
+postcondition that this rule requires. After a successful typed lifecycle or
+update receipt, the API executor performs a separate action-bound daemon
+observation through the versioned read-only Unified Agent protocol. Only a
+fresh, identity-matched daemon snapshot from the distinct daemon observer
+trust domain can project to `fix_verified`; unsupported older agents,
+inspection failure, stale facts, or mismatched identities remain
+`fix_verification_unknown`. The mutation receipt's own same-agent readback
+continues to project only `agent_attested` evidence, so adding the production
+observer does not loosen the verification rule.
+
 ### Proxmox guest lifecycle Patrol detector floor
 
 `internal/ai/findings_proxmox_lifecycle.go` owns the deterministic production

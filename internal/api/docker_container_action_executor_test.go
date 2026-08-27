@@ -37,6 +37,23 @@ type scopedFakeDockerActionAgentCommander struct {
 	lastOrg     string
 }
 
+type observingDockerActionAgentCommander struct {
+	*fakeDockerActionAgentCommander
+	observations []agentexec.DockerContainerObservationPayload
+}
+
+func (f *observingDockerActionAgentCommander) ObserveDockerContainer(_ context.Context, _ string, req agentexec.DockerContainerObservationPayload) (*agentexec.DockerContainerObservationResultPayload, error) {
+	if err := agentexec.BindDockerContainerObservationPayload(&req); err != nil {
+		return nil, err
+	}
+	f.observations = append(f.observations, req)
+	return &agentexec.DockerContainerObservationResultPayload{
+		RequestID: req.RequestID, ActionID: req.ActionID, ProtocolVersion: req.ProtocolVersion, RequestDigest: req.RequestDigest,
+		Observed: true,
+		Snapshot: agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, StartedAt: time.Now().UTC(), ObservedAt: time.Now().UTC()},
+	}, nil
+}
+
 func (f *scopedFakeDockerActionAgentCommander) IsAgentConnectedForOrganization(organizationID, agentID string) bool {
 	f.lastOrg = organizationID
 	return f.IsAgentConnected(agentID)
@@ -218,6 +235,35 @@ func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *
 	}
 	if agents.typedCalls[0].RequestID != "act_container.dispatch.1" {
 		t.Fatalf("dispatch request identity = %q", agents.typedCalls[0].RequestID)
+	}
+}
+
+func TestDockerContainerActionExecutorUsesProductionDaemonObservationForIndependentTruth(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{dockerContainerActionResource("app-container:api", "docker", "running", now)},
+	})
+	agents := &observingDockerActionAgentCommander{fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{}}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	if executor.observer == nil {
+		t.Fatal("production constructor did not wire the typed daemon observer")
+	}
+	record := dockerContainerActionRecord("act_container", "app-container:api", "restart")
+	result, err := executor.ExecuteAction(dockerActionDispatchContext(t, executor, record), record)
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if len(agents.observations) != 1 || agents.observations[0].ActionID != record.ID {
+		t.Fatalf("observations=%#v", agents.observations)
+	}
+	truth := result.ActionResultV2
+	if truth == nil || truth.Execution.Status != unified.ActionExecutionSucceeded || truth.Verification.Status != unified.ActionVerificationConfirmed || truth.Verification.EvidenceClass != unified.ActionEvidenceIndependent {
+		t.Fatalf("canonical truth=%#v", truth)
+	}
+	if len(truth.Verification.Evidence) != 1 || truth.Verification.Evidence[0].ObserverTrustDomain == truth.Verification.Evidence[0].ExecutorTrustDomain {
+		t.Fatalf("verification evidence=%#v", truth.Verification.Evidence)
 	}
 }
 

@@ -1671,6 +1671,16 @@ the intentionally sparse public response.
    It may render only the strict redacted projection produced by the matching
    managed-runtime run and must reject missing or mismatched proposal, action,
    attempt, receipt, finding, and evidence identities.
+   Unified Agent registration separately advertises the versioned, read-only
+   Docker observation protocol. `docker_container_observe` is not an action,
+   preflight grant, or durable operation: it accepts only an action-bound
+   digest, runtime enum, and immutable container ID, invokes the fixed local
+   Docker/Podman lifecycle inspector, and returns either one bounded snapshot
+   or a typed inconclusive reason. It must never enter the operation receipt
+   store, execute a mutation, accept command text, or infer action truth. The
+   server validates freshness and correlation and owns all evidence-class and
+   verification projection. Older agents advertise version zero and therefore
+   fail closed without receiving an unsupported request.
    RG-06 has a separate mutation harness at
    `scripts/intelligence_lab/patrol_autonomy_colima.py` and
    `internal/api/patrol_autonomy_colima_real_lab_test.go`. It must run from a

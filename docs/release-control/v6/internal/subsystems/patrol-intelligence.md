@@ -2400,6 +2400,16 @@ not-attempted or inconclusive verification remains verification unknown. A
 successful execution never overwrites contradictory verification. Task 11
 still owns browser wording and proof for the distinct terminal states.
 
+Docker/Podman Patrol remediation must have a production post-action observer,
+not only a qualification-lab injection. The canonical action executor issues a
+separate versioned, action-bound daemon observation after the typed mutation
+receipt. Only fresh independent daemon evidence may advance the originating
+investigation and finding to `fix_verified`; older agents, observation errors,
+stale snapshots, digest or subject mismatch, and same-agent receipt evidence
+remain verification unknown. This closes the prior structural dead end where
+an unhealthy-container restart could execute in production but the executor
+had no observer capable of satisfying Patrol's verified-outcome contract.
+
 Patrol now consumes the server-derived effective Autopilot mode. Requested
 `full` is admitted only with a current persisted human acknowledgement and
 exact activation for the same actor credential and organization; legacy
