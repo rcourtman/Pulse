@@ -9856,21 +9856,7 @@
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "claude-alert-reducer-coverage-gap-alert-lifecycle-contract-coverage",
-      "agent_id": "claude-alert-reducer",
-      "summary": "Lifecycle contract suite: end-to-end contracts through notification rendering as release gate",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-27T08:00:19Z",
-      "heartbeat_at": "2026-08-27T08:00:19Z",
-      "expires_at": "2026-08-27T14:00:19Z",
-      "work_item": {
-        "kind": "coverage-gap",
-        "id": "alert-lifecycle-contract-coverage"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
