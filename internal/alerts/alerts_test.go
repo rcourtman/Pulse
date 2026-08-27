@@ -50,6 +50,16 @@ func TestAlertEventLogDoesNotInventFiringFromActiveStorage(t *testing.T) {
 	}
 }
 
+func TestAlertEventLogBoundsRequestDerivedLimit(t *testing.T) {
+	manager := newEventLogManager(t)
+	manager.recordAlertEvent(eventlog.TypeResolved, nil, "bounded-event", "resolved", "resolved", nil)
+
+	events := queryAlertEvents(t, manager, eventlog.Filter{Limit: math.MaxInt})
+	if len(events) != 1 || events[0].AlertID != "bounded-event" {
+		t.Fatalf("oversized-limit query = %+v, want the bounded event", events)
+	}
+}
+
 func TestGuestAlertIncludesTagsForNotificationRouting(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

@@ -376,7 +376,12 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 	}
 	defer rows.Close()
 
-	events := make([]Event, 0, limit)
+	// Do not use the request-derived limit as an allocation hint. The SQL
+	// query is capped above, but keeping the result slice allocation independent
+	// of caller input makes that memory-safety boundary explicit and prevents a
+	// future query refactor from turning an oversized limit into an eager
+	// allocation.
+	events := make([]Event, 0, defaultQueryLimit)
 	for rows.Next() {
 		var event Event
 		var occurredAt, details string

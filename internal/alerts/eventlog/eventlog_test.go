@@ -1,6 +1,7 @@
 package eventlog
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -96,6 +97,20 @@ func TestQueryLimitCaps(t *testing.T) {
 	}
 	if len(events) != 3 {
 		t.Fatalf("len(events) = %d, want 3", len(events))
+	}
+}
+
+func TestQueryOversizedLimitDoesNotControlAllocation(t *testing.T) {
+	store := newTestStore(t)
+	store.Append(Event{OccurredAt: time.Now(), Type: TypeResolved, AlertID: "a1"})
+	store.Flush()
+
+	events, err := store.Query(Filter{Limit: math.MaxInt})
+	if err != nil {
+		t.Fatalf("query with oversized limit: %v", err)
+	}
+	if len(events) != 1 || events[0].AlertID != "a1" {
+		t.Fatalf("events = %+v, want the one stored event", events)
 	}
 }
 

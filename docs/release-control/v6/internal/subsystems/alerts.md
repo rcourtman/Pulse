@@ -959,6 +959,12 @@ shared metric activation records one fired event when its pending incident
 becomes firing. Repeated firing observations and persisted-alert restore must
 not append another activation event, and the active-alert storage funnel must
 never invent one.
+Event-log reads accept a caller limit but normalize it to the store's bounded
+maximum before it reaches SQLite. Result-slice allocation is independent of
+that caller value: a request-provided limit is a row-count preference, never a
+memory-allocation hint. This remains defense in depth even when an authenticated
+API handler validates the query parameter, because non-HTTP manager callers use
+the same store boundary.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved
