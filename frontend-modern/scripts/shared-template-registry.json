@@ -466,6 +466,7 @@
         { "path": "src/components/shared/cards/RootDiskCard.tsx" },
         { "path": "src/components/shared/cards/SystemInfoCard.tsx" },
         { "path": "src/components/shared/cards/TemperaturesCard.tsx" },
+        { "path": "src/components/Workloads/AvailabilityProbeSuggestionCard.tsx" },
         { "path": "src/components/Workloads/DrawerDiskListCard.tsx" },
         { "path": "src/features/docker/DockerHostDrawerOverview.tsx" },
         { "path": "src/features/storageBackups/detailPresentation.ts" }

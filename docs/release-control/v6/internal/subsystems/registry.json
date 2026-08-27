@@ -4899,6 +4899,7 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
+        "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx",
         "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
         "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
@@ -5185,8 +5186,21 @@
               "frontend-modern/src/utils/__tests__/reportingResourceTypes.test.ts"
             ]
           },
-          {
-            "id": "workload-presentation-helpers",
+      {
+        "id": "compact-info-card-consumers",
+        "label": "compact information card consumer proof",
+        "match_prefixes": [],
+        "match_files": [
+          "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx"
+        ],
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
+        ]
+      },
+      {
+        "id": "workload-presentation-helpers",
             "label": "workload presentation helper proof",
             "match_prefixes": [],
             "match_files": [

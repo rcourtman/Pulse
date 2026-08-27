@@ -113,6 +113,12 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(serviceDetails.queryByText('Connection')).toBeNull();
     expect(serviceDetails.getAllByText('State').length).toBeGreaterThan(0);
     expect(serviceDetails.getAllByText('pbs-main.local').length).toBeGreaterThan(0);
+    expect(serviceDetails.getByText('State').parentElement).toHaveClass(
+      'justify-between',
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(serviceDetails.getByText('Healthy')).toHaveClass('text-right', 'lg:text-left');
     expect(queryByText('Backup summary')).toBeNull();
     expect(queryByText('Job breakdown')).toBeNull();
     expect(queryByText('Types')).toBeNull();
@@ -307,6 +313,12 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(serviceDetails.queryByText('Connection')).toBeNull();
     expect(serviceDetails.getAllByText('State').length).toBeGreaterThan(0);
     expect(serviceDetails.getAllByText('pmg-main.local').length).toBeGreaterThan(0);
+    expect(serviceDetails.getByText('State').parentElement).toHaveClass(
+      'justify-between',
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(serviceDetails.getByText('Healthy')).toHaveClass('text-right', 'lg:text-left');
     expect(queryByText('Mail flow summary')).toBeNull();
     expect(queryByText('Queue breakdown')).toBeNull();
     expect(queryByText('Mail processing')).toBeNull();
@@ -384,6 +396,11 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('18 containers · 4 updates')).toBeInTheDocument();
     fireEvent.click(getByRole('button', { name: 'Show service' }));
     expect(getByText('Docker runtime')).toBeInTheDocument();
+    expect(getByText('Containers').parentElement).toHaveClass(
+      'justify-between',
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
     expect(queryByText('Container Updates')).toBeNull();
     expect(queryByText('Check now')).toBeNull();
     expect(queryByText('Show update controls')).toBeNull();
