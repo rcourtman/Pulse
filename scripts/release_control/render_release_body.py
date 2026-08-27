@@ -170,6 +170,20 @@ def _requires_customer_facing_standard(version: str) -> bool:
     return core is not None and core >= _CUSTOMER_FORMAT_MINIMUM
 
 
+def _requires_single_change_list(version: str) -> bool:
+    """Return whether fixes must be folded into the one customer outcome list."""
+
+    normalized = version.lower().removeprefix("v")
+    core = _release_core(normalized)
+    if core is None or core < (6, 4, 0):
+        return False
+    if core > (6, 4, 0):
+        return True
+
+    rc_match = re.fullmatch(r"6\.4\.0-rc\.(\d+)", normalized)
+    return rc_match is None or int(rc_match.group(1)) >= 6
+
+
 def _section_lines(text: str, heading_index: int) -> list[str]:
     lines = _normalize_newlines(text).splitlines()
     section: list[str] = []
@@ -198,7 +212,7 @@ def _flat_bullet_items(lines: list[str], section_name: str) -> list[str]:
     return items
 
 
-def _validate_customer_facing_release_notes(text: str) -> None:
+def _validate_customer_facing_release_notes(text: str, version: str) -> None:
     """Enforce concise public notes without release-control implementation prose."""
 
     lines = _normalize_newlines(text).strip().splitlines()
@@ -265,6 +279,11 @@ def _validate_customer_facing_release_notes(text: str) -> None:
             )
 
     if "fixes" in headings:
+        if _requires_single_change_list(version):
+            raise ReleaseBodyIntegrityError(
+                "customer-facing release notes must describe features and fixes once "
+                "in What's improved instead of adding a separate Fixes section"
+            )
         fixes = _flat_bullet_items(_section_lines(text, headings["fixes"]), "Fixes")
         if not fixes or len(fixes) > _MAX_CUSTOMER_FIX_ITEMS:
             raise ReleaseBodyIntegrityError(
@@ -314,7 +333,7 @@ def validate_release_notes_shape(raw_text: str, version: str) -> None:
 
     _highlight_items(text)
     if _requires_customer_facing_standard(version):
-        _validate_customer_facing_release_notes(text)
+        _validate_customer_facing_release_notes(text, version)
 
 
 def strip_validation_status_block(text: str) -> str:

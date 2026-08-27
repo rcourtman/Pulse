@@ -156,10 +156,7 @@ else
   echo ""
   if [[ ! $REPLY =~ ^[Nn]$ ]]; then
       echo "Generating release notes..."
-      # Try to find previous tag for better context
-      PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-      
-      if ./scripts/generate-release-notes.sh "$VERSION" "$PREV_TAG" > "$NOTES_FILE"; then
+      if ./scripts/generate-release-notes.sh "$VERSION" > "$NOTES_FILE"; then
           echo "Release notes generated at ${NOTES_FILE}"
           echo ""
           # Show first few lines

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -884,18 +885,26 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	assertFileContainsAllNormalized(t, releaseNotesPath,
 		"# Pulse v"+version+" Release Notes",
 		"## What's improved",
-		"## Fixes",
 		"## Before you upgrade",
 		"## Known issues",
 		"Complete standalone PBS details",
 		"Complete LXC filesystem coverage",
 		"Earlier disk-cabling warnings",
-		"Alert policy is resolved consistently",
-		"Alert-event queries now allocate",
+		"More predictable alerts",
+		"Safer alert-history queries",
 		"Pulse Mobile does not consume the changed PBS browser detail or alert evaluation internals",
 		"not Authenticode-signed",
 		"Unknown Publisher warning",
 	)
+	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
+	for _, issueURL := range []string{
+		"https://github.com/rcourtman/Pulse/issues/1723",
+		"https://github.com/rcourtman/Pulse/issues/1477",
+		"https://github.com/rcourtman/Pulse/issues/1776",
+	} {
+		assertFileContainsExactlyOnce(t, releaseNotesPath, issueURL)
+		assertFileContainsExactlyOnce(t, changelogPath, issueURL)
+	}
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
@@ -3065,6 +3074,74 @@ func assertFileContainsAll(t *testing.T, path string, required ...string) {
 	}
 }
 
+func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing.T) {
+	repo := t.TempDir()
+	runGit := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	commit := func(message string) {
+		t.Helper()
+		runGit("commit", "--allow-empty", "--no-gpg-sign", "-m", message)
+	}
+
+	runGit("init", "-b", "main")
+	runGit("config", "user.name", "Pulse Release Test")
+	runGit("config", "user.email", "release-test@example.invalid")
+	commit("stable 6.3.1")
+	runGit("tag", "v6.3.1")
+	runGit("checkout", "-b", "release-v6.3.2")
+	commit("stable 6.3.2 hotfix")
+	runGit("tag", "v6.3.2")
+	runGit("checkout", "main")
+	for rc := 1; rc <= 5; rc++ {
+		commit("release candidate " + strconv.Itoa(rc))
+		runGit("tag", "v6.4.0-rc."+strconv.Itoa(rc))
+	}
+	commit("release candidate 6 changes")
+
+	generator, err := filepath.Abs(repoFile("scripts", "generate-release-notes.sh"))
+	if err != nil {
+		t.Fatalf("resolve release-note generator path: %v", err)
+	}
+	resolve := func(version string) string {
+		t.Helper()
+		cmd := exec.Command("bash", generator, "--resolve-base", version)
+		cmd.Dir = repo
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("resolve comparison base for %s: %v\n%s", version, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+
+	if got := resolve("6.4.0-rc.6"); got != "v6.4.0-rc.5" {
+		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.5", got)
+	}
+	if got := resolve("6.4.0-rc.1"); got != "v6.3.2" {
+		t.Fatalf("RC1 comparison base = %q, want v6.3.2", got)
+	}
+	if got := resolve("6.4.0"); got != "v6.3.2" {
+		t.Fatalf("GA comparison base = %q, want v6.3.2", got)
+	}
+
+	cmd := exec.Command("bash", generator, "6.4.0-rc.6", "v6.4.0-rc.4")
+	cmd.Dir = repo
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("generator accepted a comparison tag older than the immediately preceding RC")
+	}
+	if !strings.Contains(string(output), "expected 'v6.4.0-rc.5'") {
+		t.Fatalf("unexpected comparison-range rejection:\n%s", output)
+	}
+}
+
 func assertFileContainsAllNormalized(t *testing.T, path string, required ...string) {
 	t.Helper()
 	content, err := os.ReadFile(path)
@@ -3075,6 +3152,34 @@ func assertFileContainsAllNormalized(t *testing.T, path string, required ...stri
 	for _, needle := range required {
 		if !strings.Contains(s, normalizedInstallTestWhitespace(needle)) {
 			t.Fatalf("%s missing required normalized substring: %s", path, needle)
+		}
+	}
+}
+
+func assertFileDoesNotContain(t *testing.T, path string, forbidden ...string) {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	s := string(content)
+	for _, needle := range forbidden {
+		if strings.Contains(s, needle) {
+			t.Fatalf("%s contains forbidden substring: %s", path, needle)
+		}
+	}
+}
+
+func assertFileContainsExactlyOnce(t *testing.T, path string, required ...string) {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	s := string(content)
+	for _, needle := range required {
+		if count := strings.Count(s, needle); count != 1 {
+			t.Fatalf("%s contains %q %d times, want exactly once", path, needle, count)
 		}
 	}
 }

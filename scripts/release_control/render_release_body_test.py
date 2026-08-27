@@ -190,7 +190,7 @@ class RenderReleaseBodyTest(unittest.TestCase):
         render_release_body.validate_release_notes_shape(notes, "6.2.1")
 
     def test_future_release_notes_require_customer_facing_structure(self) -> None:
-        notes = """# Pulse v6.4.0-rc.2 Release Notes
+        notes = """# Pulse v6.4.0-rc.6 Release Notes
 
 Pulse is faster and more predictable in larger environments.
 
@@ -198,17 +198,34 @@ Pulse is faster and more predictable in larger environments.
 
 - **Faster infrastructure views** — Tables stay responsive as estates grow.
 - **Lighter realtime updates** — Pages do less work when resources change.
-
-## Fixes
-
-- Saved API keys are no longer returned to the browser.
+- **Safer API key handling** — Saved API keys are no longer returned to the browser.
 
 ## Before you upgrade
 
 No manual migration is required.
 """
 
-        render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.2")
+        render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.6")
+
+    def test_current_release_notes_reject_a_second_fixes_list(self) -> None:
+        notes = """# Pulse v6.4.0-rc.6 Release Notes
+
+Pulse is faster and more predictable in larger environments.
+
+## What's improved
+
+- **Faster infrastructure views** — Tables stay responsive as estates grow.
+
+## Fixes
+
+- Infrastructure tables no longer stall in larger estates.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "features and fixes once",
+        ):
+            render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.6")
 
     def test_customer_facing_standard_exempts_only_the_already_cut_rc1(self) -> None:
         self.assertFalse(
@@ -300,9 +317,11 @@ Pulse is faster and more predictable in larger environments.
         ).read_text(encoding="utf-8")
 
         self.assertIn("## What's improved", template)
-        self.assertIn("## Fixes", template)
         self.assertIn("## Before you upgrade", template)
-        self.assertIn("four to six meaningful improvements", template)
+        self.assertIn("For an RC, cover only changes since the immediately preceding RC", template)
+        self.assertIn("For a stable GA release", template)
+        self.assertIn("Do not add a separate `Fixes` section", template)
+        self.assertNotIn("\n## Fixes\n", template)
         self.assertIn("pipeline appends the `Install` and `Roll back` sections", template)
         self.assertNotIn("## Release Qualification", template)
         self.assertNotIn("## Promotion Metadata", template)

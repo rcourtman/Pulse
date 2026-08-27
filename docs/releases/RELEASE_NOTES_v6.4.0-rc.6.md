@@ -1,23 +1,14 @@
 # Pulse v6.4.0-rc.6 Release Notes
 
-`v6.4.0-rc.6` is a release candidate for the next v6 minor release. It restores complete hardware detail for standalone Proxmox Backup Server hosts, prevents large LXC estates from losing filesystem usage, warns when SMART CRC counters grow, and completes the alert engine's policy consolidation.
+`v6.4.0-rc.6` focuses on more complete host data and earlier hardware-fault detection, while making alert behavior more predictable ahead of the stable release.
 
 ## What's improved
 
-- **Complete standalone PBS details** — Backup-server rows now open the full resource drawer with system, hardware, network, disk, thermal, service, history, and management information when a Pulse Agent source is available.
-- **Complete LXC filesystem coverage** — Host agents read LXC mount usage through `/proc`, avoiding `pct df` lock contention that could leave later containers without filesystem data on larger hosts.
-- **Earlier disk-cabling warnings** — Pulse establishes a SMART UDMA CRC baseline and raises a disk-health warning when the counter grows, helping expose link or cabling faults that a current-state health check can miss.
-- **More consistent alerts** — Alert policy is resolved consistently through one declarative path, with the superseded transition-tracking maps removed.
-- **Current release toolchain** — Release builds use Go 1.26.7 and its current security fixes.
-
-## Fixes
-
-- Standalone PBS hosts no longer lose their agent-reported hardware details when they are represented on the Proxmox backup surface ([#1723](https://github.com/rcourtman/Pulse/issues/1723)).
-- LXC filesystem collection now uses host-namespace `statfs` with a bounded per-container fallback, preventing shared-budget starvation on larger hosts ([#1477](https://github.com/rcourtman/Pulse/issues/1477)).
-- SMART UDMA CRC growth now creates a warning, treats a counter reset or disk replacement as a new baseline, and resolves the active growth event after a stable sample ([#1776](https://github.com/rcourtman/Pulse/issues/1776)).
-- Alert configuration values, built-in defaults, and enabled state now use one policy fold across resource families instead of parallel resolution paths.
-- Alert-event queries now allocate from the bounded effective result limit rather than an untrusted requested limit.
-- Legacy alert transition state has been removed after the reducer cutover, eliminating a second mutable source of lifecycle truth.
+- **Complete standalone PBS details** — Standalone PBS entries retain agent-reported system, hardware, network, disk, thermal, service, history, and management details in the full drawer ([#1723](https://github.com/rcourtman/Pulse/issues/1723)).
+- **Complete LXC filesystem coverage** — Filesystem usage continues to populate across larger LXC hosts instead of later containers being left without mount data when earlier collection is slow ([#1477](https://github.com/rcourtman/Pulse/issues/1477)).
+- **Earlier disk-cabling warnings** — SMART UDMA CRC growth now raises a warning, resets its baseline after a counter reset or disk replacement, and clears the active event after a stable sample ([#1776](https://github.com/rcourtman/Pulse/issues/1776)).
+- **More predictable alerts** — Enabled state, configured values, delays, and built-in defaults now follow the same policy path across resource types, with the superseded lifecycle state removed.
+- **Safer alert-history queries** — Oversized requested result limits are bounded before memory is reserved, preventing the request from driving an unnecessarily large allocation.
 
 ## Before you upgrade
 

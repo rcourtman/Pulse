@@ -7,18 +7,24 @@ what feels better or works now, not how it was implemented.
 
 - **Short outcome** — Explain where users notice it and why it matters.
 - **Short outcome** — Keep each item concrete and independently useful.
-- **Short outcome** — Prefer observable behavior over component names.
-- **Short outcome** — Use plain language and avoid implementation detail.
+- **Short outcome** — Include fixes here as outcomes rather than repeating
+  them in a second section.
 
-Use four to six meaningful improvements for a normal RC or minor release. A
+Use up to six meaningful improvements for a normal RC or minor release. A
 narrow patch may use fewer rather than padding the notes with internal work.
+Each user-visible change belongs in this list exactly once. Prefer observable
+behavior over component names, group related implementation work into one
+user-recognizable theme, and use plain language.
 
-## Fixes
+For an RC, cover only changes since the immediately preceding RC (or the
+previous stable release for RC1). Do not repeat improvements already announced
+in an earlier RC. For a stable GA release, cover the complete release train
+since the previous stable release and boil the full commit range down to a few
+themes that explain what users will experience differently. Do not concatenate
+the RC notes or attempt to list every commit.
 
-- State a visible problem that no longer happens.
-- Name the affected page, workflow, integration, or platform when useful.
-
-Omit this section only when there are genuinely no user-facing fixes.
+Do not add a separate `Fixes` section. That shape encourages the same change to
+be described twice as both an improvement and a fix.
 
 ## Before you upgrade
 

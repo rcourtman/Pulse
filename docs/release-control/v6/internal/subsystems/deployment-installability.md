@@ -29,6 +29,21 @@ The next-candidate release notes and changelog must also describe newly stable
 integration fields when external receivers need them to consume the release;
 packet proof keeps the customer-facing summary and detailed changelog aligned.
 
+Release-note comparison ranges are channel-specific. Each RC compares against
+the immediately preceding RC on the same version line, with RC1 comparing
+against the previous stable release. A stable GA release compares against the
+previous stable release, not the final RC, so it can retell the complete release
+train as a small number of user-recognizable themes. Stable notes must synthesize
+the final product outcomes instead of concatenating RC notes or enumerating the
+underlying commits.
+
+Customer-facing notes use one outcome list for features and fixes. Each visible
+change is described once under `What's improved`; a parallel `Fixes` section is
+forbidden for packets from `v6.4.0-rc.6` onward because it encourages the same
+change to be restated with slightly different implementation detail. Internal
+toolchain and architecture work stays in the detailed changelog unless it
+changes something users can recognize or act on.
+
 Provider-hosted MSP deploy artifacts must package the provider control plane as
 a least-privilege Docker provisioner. The packaged compose/setup path must avoid
 whole-host and Docker-data read mounts, expose storage admission only through
