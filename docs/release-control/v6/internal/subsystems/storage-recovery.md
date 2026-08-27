@@ -5700,3 +5700,13 @@ no backup or restore authority; they make the existing configuration file the
 explicit commit boundary. Persistence-failure proofs live in
 `internal/api/alerting/notifications_test.go` with API ordering pinned by
 `internal/api/contract_test.go`.
+
+### Mock alert incident notes are not recovery records
+
+The shared `internal/api/alerting/alerts.go` transport now reads and annotates
+mock alert incidents on `internal/mock/fixture_graph.go` when mock mode is
+active. That graph-lifetime state is demo history only: it is not backup
+inventory, a recovery point, restore evidence, retention state, or durable
+storage metadata. Mock notes must not be written to the production incident
+store or survive a fixture-graph rebuild, and real-mode incident persistence
+remains unchanged. The mock API and fixture tests pin that isolation.

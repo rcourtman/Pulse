@@ -2860,3 +2860,17 @@ goroutine per destination. Updating Relay settings atomically replaces the
 cached client and floor, so the next incident observes the new policy without
 turning alert fan-out into configuration I/O. The hosted Relay runtime tests
 pin persistence and cache replacement together.
+
+### Mock alert timelines reuse the canonical fixture graph
+
+Mock alert incidents are built once with the canonical fixture graph and read
+under its existing lock. An occurrence lookup is a bounded scan of that
+in-memory fixture slice; a resource lookup performs one scan, clones only the
+matching incidents, sorts them newest-first, and applies the requested limit
+before transport. Reads add no persistence access, provider request, polling
+loop, or per-row frontend fetch. Notes mutate the matching in-memory fixture
+under the same graph lock and advance the fixture data version without
+rebuilding the estate. `internal/mock/alert_incidents_test.go` proves bounded
+resource results and defensive-copy isolation, while
+`internal/api/alerting/alerts_test.go` proves that mock transport does not need
+the production incident store.

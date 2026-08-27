@@ -2998,6 +2998,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/alertIntentPolicies.test.ts",
+              "internal/api/alerting/alerts_test.go",
               "internal/api/alerting/deadman_handlers_test.go",
               "internal/api/alerts_endpoints_test.go"
             ]
@@ -6735,6 +6736,7 @@
             "exact_files": [
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts",
+              "internal/mock/alert_incidents_test.go",
               "internal/mock/integration_coverage_test.go",
               "internal/mock/platform_fixtures_test.go"
             ]

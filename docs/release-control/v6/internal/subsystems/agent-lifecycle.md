@@ -6737,3 +6737,15 @@ relink, or otherwise mutate an agent. The serialized write boundary in
 `internal/api/alerting/notifications.go` therefore prevents an uncommitted
 notification change from being mistaken for an agent lifecycle transition;
 its failure coverage lives in `internal/api/alerting/notifications_test.go`.
+
+### Mock alert timelines remain outside agent lifecycle authority
+
+The shared `internal/api/alerting/alerts.go` boundary may resolve fixture-owned
+alert incidents and notes from `internal/mock/fixture_graph.go` while mock mode
+is active. Those records are alert-history presentation state only: creating,
+listing, or annotating a mock incident cannot enroll, identify, link, command,
+update, revoke, remove, or re-enroll an agent. The graph must not synthesize an
+agent report or mutate the live agent inventory to make a mock timeline
+complete. `internal/api/alerting/alerts_test.go` and
+`internal/mock/alert_incidents_test.go` pin the transport and fixture sides of
+this separation.
