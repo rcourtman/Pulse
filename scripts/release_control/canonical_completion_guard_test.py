@@ -27,7 +27,7 @@ from canonical_completion_guard import (
     stdin_files,
     subsystem_matches_path,
 )
-from repo_file_io import canonical_workspace_repos_root
+from repo_file_io import canonical_workspace_repos_root, strip_local_git_env
 
 WORKSPACE_REPOS_ROOT = canonical_workspace_repos_root(REPO_ROOT)
 
@@ -3780,6 +3780,7 @@ with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
                     check=True,
                     capture_output=True,
                     text=True,
+                    env=strip_local_git_env(os.environ.copy()),
                 )
 
             git("init", "-q", "-b", "main")
@@ -3802,7 +3803,7 @@ with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
             git("commit", "-q", "-m", "second change")
 
             guard_log = repo / "guard.log"
-            env = os.environ.copy()
+            env = strip_local_git_env(os.environ.copy())
             env["PULSE_TEST_GUARD_LOG"] = str(guard_log)
             result = subprocess.run(
                 ["bash", "scripts/dev-prepush.sh", "base"],
