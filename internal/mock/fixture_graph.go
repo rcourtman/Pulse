@@ -50,7 +50,7 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 func cloneFixtureGraph(in FixtureGraph) FixtureGraph {
 	return FixtureGraph{
 		State:                cloneState(in.State),
-		AlertHistory:         append([]models.Alert(nil), in.AlertHistory...),
+		AlertHistory:         cloneMockAlerts(in.AlertHistory),
 		AlertIncidents:       cloneMockIncidents(in.AlertIncidents),
 		PlatformFixtures:     clonePlatformFixtures(in.PlatformFixtures),
 		AvailabilityFixtures: cloneAvailabilityFixtures(in.AvailabilityFixtures),
@@ -141,6 +141,7 @@ func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []mo
 			Value:        alert.Value,
 			Threshold:    alert.Threshold,
 			StartTime:    alert.StartTime,
+			LastSeen:     cloneMockTime(alert.LastSeen),
 			Acknowledged: alert.Acknowledged,
 			// GetActiveAlerts returns deep clones, so the map is already private.
 			Metadata: alert.Metadata,

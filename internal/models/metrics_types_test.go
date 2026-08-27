@@ -19,6 +19,25 @@ func TestMetricPoint_ZeroValue(t *testing.T) {
 	}
 }
 
+func TestAlertLastSeenWireContract(t *testing.T) {
+	withoutLastSeen, err := json.Marshal(Alert{ID: "alert-1"})
+	if err != nil {
+		t.Fatalf("marshal alert without lastSeen: %v", err)
+	}
+	if strings.Contains(string(withoutLastSeen), "lastSeen") {
+		t.Fatalf("payload = %s, absent lastSeen must be omitted", withoutLastSeen)
+	}
+
+	resolvedAt := time.Date(2026, time.August, 27, 12, 15, 0, 0, time.UTC)
+	withLastSeen, err := json.Marshal(Alert{ID: "alert-1", LastSeen: &resolvedAt})
+	if err != nil {
+		t.Fatalf("marshal alert with lastSeen: %v", err)
+	}
+	if !strings.Contains(string(withLastSeen), `"lastSeen":"2026-08-27T12:15:00Z"`) {
+		t.Fatalf("payload = %s, want canonical RFC3339 lastSeen", withLastSeen)
+	}
+}
+
 func TestNodeNetworkInterfacesNormalizeCollections(t *testing.T) {
 	node := Node{NetworkInterfaces: []HostNetworkInterface{{Name: "vmbr0"}}}.NormalizeCollections()
 	if node.NetworkInterfaces == nil || node.NetworkInterfaces[0].Addresses == nil {

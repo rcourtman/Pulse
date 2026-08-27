@@ -558,9 +558,9 @@ func GetMockAlertHistory(limit int) []models.Alert {
 	defer dataMu.RUnlock()
 
 	if limit > 0 && limit < len(mockGraph.AlertHistory) {
-		return append([]models.Alert(nil), mockGraph.AlertHistory[:limit]...)
+		return cloneMockAlerts(mockGraph.AlertHistory[:limit])
 	}
-	return append([]models.Alert(nil), mockGraph.AlertHistory...)
+	return cloneMockAlerts(mockGraph.AlertHistory)
 }
 
 // GetMockAlertIncidentTimeline returns the occurrence-qualified incident

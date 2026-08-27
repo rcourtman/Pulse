@@ -3,6 +3,7 @@ package mock
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -153,50 +154,13 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 		}
 	}
 
-	// Add some recent unresolved alerts (last 2 hours)
-	for i := 0; i < 3; i++ {
-		alertType := alertTypes[rand.Intn(len(alertTypes))]
-
-		var resourceName, resourceID, node string
-		if len(nodes) > 0 {
-			selectedNode := nodes[rand.Intn(len(nodes))]
-			resourceName = selectedNode.Name
-			resourceID = selectedNode.ID
-			node = selectedNode.Name
-		}
-
-		startTime := now.Add(-time.Duration(rand.Intn(120)) * time.Minute)
-
-		msg := alertType.messages[rand.Intn(len(alertType.messages))]
-		if alertType.alertType == "threshold" {
-			value := rand.Intn(30) + 70
-			msg = fmt.Sprintf(msg, value)
-		}
-
-		alert := models.Alert{
-			ID:           fmt.Sprintf("active-%d-%d", i, rand.Intn(10000)),
-			Type:         alertType.alertType,
-			Level:        alertType.level,
-			ResourceID:   resourceID,
-			ResourceName: resourceName,
-			Node:         node,
-			Message:      msg,
-			StartTime:    startTime,
-			Acknowledged: false,
-		}
-		if resourceName != "" {
-			alert.Metadata = map[string]interface{}{"resourceType": "node"}
-		}
-
-		if alertType.alertType == "threshold" {
-			value := float64(rand.Intn(30) + 70)
-			threshold := float64(rand.Intn(20) + 60)
-			alert.Value = value
-			alert.Threshold = threshold
-		}
-
-		history = append(history, alert)
-	}
+	// The live history endpoint is newest-first. Active alerts are supplied by
+	// the live alert snapshot and merged by the UI, so this fixture contains
+	// only closed occurrences; inventing unrelated open rows makes their
+	// history status contradict the active-alert source of truth.
+	sort.SliceStable(history, func(i, j int) bool {
+		return history[i].StartTime.After(history[j].StartTime)
+	})
 
 	return history
 }

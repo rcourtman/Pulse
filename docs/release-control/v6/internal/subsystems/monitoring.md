@@ -516,6 +516,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 35c. `internal/mock/recovery_points.go`
 35d. `internal/mock/integration.go`
 35e. `internal/mock/alert_incidents.go`
+35f. `internal/mock/alert_history.go`
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
@@ -1941,6 +1942,12 @@ representative investigation and runbook events exercise the richer timeline
 surface. Alert-level reads, resource-level incident lists, and graph-lifetime
 notes must all query or mutate that same fixture instance; a mock history row
 must never expose a Timeline control backed by a missing incident.
+`internal/mock/alert_history.go` is the canonical history fixture generator and
+must mirror the live history read contract: rows are newest-first, closed rows
+carry the same resolution timestamp as their incident in `lastSeen`, and live
+alerts come from the active-alert snapshot rather than unrelated synthetic open
+history rows. History duration, status, and Timeline therefore remain three
+projections of one occurrence instead of contradicting each other in demo mode.
 Mock fixture defaults in `internal/mock/generator.go` (the `DefaultConfig`
 constant) are also part of that mock-runtime contract. The Proxmox default is
 an intentionally large public-demo estate so platform-first pages exercise

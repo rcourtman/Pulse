@@ -201,6 +201,12 @@ start a goroutine, timer, or notification lifecycle per target.
 21. `internal/mock/fixture_graph.go` shared with `monitoring`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.
 22. `internal/mock/generator.go` shared with `monitoring`: mock metric generation is both monitoring-owned runtime data and a protected large-estate demo update hot path.
 23. `internal/mock/integration.go` shared with `monitoring`: the mock runtime scheduler is both monitoring-owned sampling infrastructure and a protected large-estate demo cadence boundary.
+    Alert-history lifecycle enrichment remains graph-build work, not sampler-tick
+    work. History access must apply its requested limit before cloning rows, and
+    cloning optional lifecycle timestamps must stay linear in the returned
+    slice rather than rebuilding or walking the full mock estate. This keeps
+    history/timeline consistency from adding cost to the protected realtime
+    update path.
 
 Large-estate realtime updates must be sparse end to end. The public 50-node,
 900-guest demo advances node-scoped metrics through ten bounded cohorts on the

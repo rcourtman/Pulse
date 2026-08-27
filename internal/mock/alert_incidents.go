@@ -18,7 +18,7 @@ const mockIncidentStartTolerance = time.Second
 // mode exercises acknowledgement, investigation, remediation, and resolution
 // rather than presenting timeline controls backed by no data.
 func buildAlertIncidentFixtures(history []models.Alert, now time.Time) ([]models.Alert, []*memory.Incident) {
-	enriched := append([]models.Alert(nil), history...)
+	enriched := cloneMockAlerts(history)
 	incidents := make([]*memory.Incident, 0, len(enriched))
 	for index := range enriched {
 		alert := &enriched[index]
@@ -48,6 +48,11 @@ func buildAlertIncidentFixtures(history []models.Alert, now time.Time) ([]models
 			alert.Acknowledged = true
 			alert.AckTime = cloneMockTime(ackAt)
 			alert.AckUser = "demo-operator"
+		}
+		if active {
+			alert.LastSeen = cloneMockTime(now)
+		} else {
+			alert.LastSeen = cloneMockTime(resolvedAt)
 		}
 
 		incident := &memory.Incident{
@@ -199,6 +204,22 @@ func cloneMockIncidents(incidents []*memory.Incident) []*memory.Incident {
 	for _, incident := range incidents {
 		if clone := cloneMockIncident(incident); clone != nil {
 			cloned = append(cloned, clone)
+		}
+	}
+	return cloned
+}
+
+func cloneMockAlerts(alerts []models.Alert) []models.Alert {
+	cloned := make([]models.Alert, len(alerts))
+	for index, alert := range alerts {
+		cloned[index] = alert
+		cloned[index].LastSeen = cloneMockTimePtr(alert.LastSeen)
+		cloned[index].AckTime = cloneMockTimePtr(alert.AckTime)
+		if alert.Metadata != nil {
+			cloned[index].Metadata = make(map[string]interface{}, len(alert.Metadata))
+			for key, value := range alert.Metadata {
+				cloned[index].Metadata[key] = value
+			}
 		}
 	}
 	return cloned

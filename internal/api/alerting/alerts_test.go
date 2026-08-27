@@ -782,6 +782,9 @@ func TestMockAlertIncidentTimelineSupportsAlertResourceAndNoteWorkflows(t *testi
 		t.Fatalf("mock alert history returned %d rows, want 1", len(history))
 	}
 	alert := history[0]
+	if alert.LastSeen == nil {
+		t.Fatalf("mock history row %q has no resolution timestamp", alert.ID)
+	}
 
 	mockMonitor := new(MockAlertMonitor)
 	h := NewAlertHandlers(nil, mockMonitor, nil)
@@ -795,6 +798,9 @@ func TestMockAlertIncidentTimelineSupportsAlertResourceAndNoteWorkflows(t *testi
 	assert.NoError(t, json.NewDecoder(w.Body).Decode(&timeline))
 	assert.Equal(t, alert.ID, timeline.AlertIdentifier)
 	assert.NotEmpty(t, timeline.Events)
+	if timeline.Status != memory.IncidentStatusResolved || timeline.ClosedAt == nil || !timeline.ClosedAt.Equal(*alert.LastSeen) {
+		t.Fatalf("mock timeline status = %q, closedAt = %v, history lastSeen = %v", timeline.Status, timeline.ClosedAt, alert.LastSeen)
+	}
 
 	resourceURL := "/api/alerts/incidents?resource_id=" + url.QueryEscape(alert.ResourceID) + "&limit=5"
 	w = httptest.NewRecorder()

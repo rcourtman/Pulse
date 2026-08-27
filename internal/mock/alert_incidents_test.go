@@ -51,10 +51,16 @@ func TestBuildAlertIncidentFixturesCreatesCompleteLifecycleData(t *testing.T) {
 	if resolved.ResourceType != "vm" {
 		t.Fatalf("resource type = %q, want vm", resolved.ResourceType)
 	}
+	if enriched[0].LastSeen == nil || resolved.ClosedAt == nil || !enriched[0].LastSeen.Equal(*resolved.ClosedAt) {
+		t.Fatalf("historical row lastSeen = %v, closedAt = %v; want one resolution time", enriched[0].LastSeen, resolved.ClosedAt)
+	}
 
 	active := incidents[1]
 	if active.Status != memory.IncidentStatusOpen || active.ClosedAt != nil {
 		t.Fatalf("active incident status = %q, closedAt = %v; want open lifecycle", active.Status, active.ClosedAt)
+	}
+	if enriched[1].LastSeen == nil || !enriched[1].LastSeen.Equal(now) {
+		t.Fatalf("active row lastSeen = %v, want fixture observation time %v", enriched[1].LastSeen, now)
 	}
 	for _, event := range active.Events {
 		if event.Timestamp.After(now) {

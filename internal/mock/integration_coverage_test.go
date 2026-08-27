@@ -2,6 +2,7 @@ package mock
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -446,6 +447,7 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 	resetMockIntegrationState(t)
 
 	start := time.Now().Add(-2 * time.Minute).Truncate(time.Second)
+	activeLastSeen := start.Add(time.Minute)
 	resolvedTime := time.Now().Add(-1 * time.Minute).Truncate(time.Second)
 	active := []alerts.Alert{
 		{
@@ -460,6 +462,7 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 			Value:        97,
 			Threshold:    90,
 			StartTime:    start,
+			LastSeen:     activeLastSeen,
 			Acknowledged: true,
 		},
 	}
@@ -486,6 +489,10 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 		dataMu.RUnlock()
 		t.Fatalf("unexpected converted active alert snapshot: %+v", snapshot)
 	}
+	if snapshot.LastSeen == nil || !snapshot.LastSeen.Equal(activeLastSeen) {
+		dataMu.RUnlock()
+		t.Fatalf("active alert lastSeen = %v, want %v", snapshot.LastSeen, activeLastSeen)
+	}
 	if len(mockGraph.State.RecentlyResolved) != 1 || mockGraph.State.RecentlyResolved[0].ID != "r-1" {
 		dataMu.RUnlock()
 		t.Fatalf("unexpected resolved snapshot data: %+v", mockGraph.State.RecentlyResolved)
@@ -507,7 +514,8 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 	dataMu.RUnlock()
 
 	dataMu.Lock()
-	mockGraph.AlertHistory = []models.Alert{{ID: "h-1"}, {ID: "h-2"}, {ID: "h-3"}}
+	lastSeen := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
+	mockGraph.AlertHistory = []models.Alert{{ID: "h-1", LastSeen: &lastSeen}, {ID: "h-2"}, {ID: "h-3"}}
 	dataMu.Unlock()
 
 	enabled.Store(false)
@@ -524,10 +532,47 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 		t.Fatalf("expected full history result, got %d", len(all))
 	}
 	all[0].ID = "changed"
+	*all[0].LastSeen = all[0].LastSeen.Add(time.Hour)
 
 	dataMu.RLock()
 	defer dataMu.RUnlock()
 	if mockGraph.AlertHistory[0].ID != "h-1" {
 		t.Fatalf("expected history accessor to return defensive copies")
+	}
+	if !mockGraph.AlertHistory[0].LastSeen.Equal(lastSeen) {
+		t.Fatalf("history accessor exposed lastSeen pointer: %v", mockGraph.AlertHistory[0].LastSeen)
+	}
+}
+
+func TestMockAlertHistoryMatchesProductionLifecycleContract(t *testing.T) {
+	history := buildAlertHistory(
+		[]models.Node{{ID: "node-1", Name: "pve-1"}},
+		[]models.VM{{ID: "vm-1", Name: "database", Node: "pve-1"}},
+		[]models.Container{{ID: "ct-1", Name: "worker", Node: "pve-1"}},
+	)
+	if len(history) == 0 {
+		t.Fatal("mock history is empty")
+	}
+	for index, alert := range history {
+		if strings.HasPrefix(alert.ID, "active-") {
+			t.Fatalf("mock history contains synthetic open row %q", alert.ID)
+		}
+		if index > 0 && alert.StartTime.After(history[index-1].StartTime) {
+			t.Fatalf("mock history is not newest-first at %d: %v after %v", index, alert.StartTime, history[index-1].StartTime)
+		}
+	}
+
+	now := time.Now()
+	enriched, incidents := buildAlertIncidentFixtures(history, now)
+	if len(enriched) != len(incidents) {
+		t.Fatalf("enriched history rows = %d, incidents = %d", len(enriched), len(incidents))
+	}
+	for index, incident := range incidents {
+		if incident.Status != "resolved" || incident.ClosedAt == nil {
+			t.Fatalf("history incident %q status = %q, closedAt = %v", incident.ID, incident.Status, incident.ClosedAt)
+		}
+		if enriched[index].LastSeen == nil || !enriched[index].LastSeen.Equal(*incident.ClosedAt) {
+			t.Fatalf("history row %q lastSeen = %v, closedAt = %v", enriched[index].ID, enriched[index].LastSeen, incident.ClosedAt)
+		}
 	}
 }
