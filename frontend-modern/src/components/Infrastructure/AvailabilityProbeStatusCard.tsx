@@ -2,7 +2,7 @@ import { For, Show, createMemo } from 'solid-js';
 import { Activity, AlertCircle, Check } from 'lucide-solid';
 
 import type { ResourceAvailabilityMeta } from '@/types/resource';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import {
   getAvailabilityProbeMethodLabel,
   getAvailabilityProbeEndpointLabel,
@@ -129,130 +129,111 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
         </span>
       </div>
       <div class="space-y-1.5 text-[11px]">
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-muted">Latency</span>
-          <Show
-            when={isUp() && latency()}
-            fallback={<span class="text-red-600 dark:text-red-400 font-medium">—</span>}
-          >
-            <span
-              class="font-medium"
-              classList={{
-                'text-emerald-600 dark:text-emerald-400': !isStale(),
-                'text-amber-600 dark:text-amber-300': isStale(),
-              }}
+        <InfoCardKeyValueRow
+          label="Latency"
+          value={
+            <Show
+              when={isUp() && latency()}
+              fallback={<span class="text-red-600 dark:text-red-400">—</span>}
             >
-              {latency()}
-            </span>
-          </Show>
-        </div>
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-muted">Method</span>
-          <span class="font-medium text-base-content" title={targetAddr()}>
-            {method()}
-          </span>
-        </div>
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-muted">Target</span>
-          <span class="font-medium text-base-content truncate ml-2" title={targetAddr()}>
-            {targetAddr()}
-          </span>
-        </div>
+              <span
+                classList={{
+                  'text-emerald-600 dark:text-emerald-400': !isStale(),
+                  'text-amber-600 dark:text-amber-300': isStale(),
+                }}
+              >
+                {latency()}
+              </span>
+            </Show>
+          }
+        />
+        <InfoCardKeyValueRow label="Method" value={method()} valueTitle={targetAddr()} />
+        <InfoCardKeyValueRow
+          label="Target"
+          value={targetAddr()}
+          valueClass="truncate"
+          valueTitle={targetAddr()}
+        />
         <Show when={lastChecked()}>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-muted">Checked</span>
-            <span class="text-base-content/70">{lastChecked()}</span>
-          </div>
+          <InfoCardKeyValueRow
+            label="Checked"
+            value={lastChecked()}
+            valueClass="text-base-content/70"
+          />
         </Show>
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-muted">Freshness</span>
-          <span
-            class="font-medium"
-            classList={{
-              'text-amber-600 dark:text-amber-300': presentation()?.freshnessLabel === 'stale',
-              'text-base-content': presentation()?.freshnessLabel !== 'stale',
-            }}
-          >
-            {presentation()?.freshnessLabel ?? 'freshness unknown'}
-          </span>
-        </div>
+        <InfoCardKeyValueRow
+          label="Freshness"
+          value={presentation()?.freshnessLabel ?? 'freshness unknown'}
+          valueClass={
+            presentation()?.freshnessLabel === 'stale' ? 'text-amber-600 dark:text-amber-300' : ''
+          }
+        />
         <Show when={presentation()?.correlationLabel}>
           {(label) => (
-            <div class="flex items-start justify-between gap-2">
-              <span class="text-muted">Resource</span>
-              <span class="text-right text-amber-600 dark:text-amber-300">{label()}</span>
-            </div>
+            <InfoCardKeyValueRow
+              label="Resource"
+              value={label()}
+              valueClass="text-amber-600 dark:text-amber-300"
+            />
           )}
         </Show>
         <Show when={certificate()}>
           {(cert) => (
             <div class="mt-1.5 space-y-1.5 border-t border-base-200 pt-1.5">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">Certificate</span>
-                <span
-                  class="font-medium"
-                  classList={{
-                    'text-emerald-600 dark:text-emerald-300': certificateTrust().tone === 'success',
-                    'text-red-600 dark:text-red-300': certificateTrust().tone === 'danger',
-                    'text-base-content': certificateTrust().tone === 'neutral',
-                  }}
-                  title={cert().trustError || undefined}
-                >
-                  {certificateTrust().label}
-                </span>
-              </div>
+              <InfoCardKeyValueRow
+                label="Certificate"
+                value={certificateTrust().label}
+                valueClass={
+                  certificateTrust().tone === 'success'
+                    ? 'text-emerald-600 dark:text-emerald-300'
+                    : certificateTrust().tone === 'danger'
+                      ? 'text-red-600 dark:text-red-300'
+                      : ''
+                }
+                valueTitle={cert().trustError || undefined}
+              />
               <Show when={cert().subject}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Subject</span>
-                  <span class="ml-2 truncate font-medium text-base-content" title={cert().subject}>
-                    {cert().subject}
-                  </span>
-                </div>
+                <InfoCardKeyValueRow
+                  label="Subject"
+                  value={cert().subject}
+                  valueClass="truncate"
+                  valueTitle={cert().subject}
+                />
               </Show>
               <Show when={certificateExpiry()}>
                 {(expiry) => (
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Expires</span>
-                    <span
-                      class="font-medium text-base-content"
-                      title={`Warning window: ${props.availability.certificateExpiryWarningDays ?? 30} days`}
-                    >
-                      {expiry()}
-                    </span>
-                  </div>
+                  <InfoCardKeyValueRow
+                    label="Expires"
+                    value={expiry()}
+                    valueTitle={`Warning window: ${props.availability.certificateExpiryWarningDays ?? 30} days`}
+                  />
                 )}
               </Show>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">Hostname</span>
-                <span
-                  class="font-medium"
-                  classList={{
-                    'text-emerald-600 dark:text-emerald-300': cert().hostnameValid,
-                    'text-red-600 dark:text-red-300': !cert().hostnameValid,
-                  }}
-                >
-                  {cert().hostnameValid ? 'Matches' : 'Mismatch'}
-                </span>
-              </div>
+              <InfoCardKeyValueRow
+                label="Hostname"
+                value={cert().hostnameValid ? 'Matches' : 'Mismatch'}
+                valueClass={
+                  cert().hostnameValid
+                    ? 'text-emerald-600 dark:text-emerald-300'
+                    : 'text-red-600 dark:text-red-300'
+                }
+              />
               <Show when={cert().issuer}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Issuer</span>
-                  <span class="ml-2 truncate text-base-content" title={cert().issuer}>
-                    {cert().issuer}
-                  </span>
-                </div>
+                <InfoCardKeyValueRow
+                  label="Issuer"
+                  value={cert().issuer}
+                  valueClass="truncate font-normal"
+                  valueTitle={cert().issuer}
+                />
               </Show>
               <Show when={cert().fingerprintSha256}>
                 {(fingerprint) => (
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">SHA-256</span>
-                    <span
-                      class="ml-2 truncate font-mono text-[10px] text-base-content"
-                      title={fingerprint()}
-                    >
-                      {fingerprint().slice(0, 16)}…
-                    </span>
-                  </div>
+                  <InfoCardKeyValueRow
+                    label="SHA-256"
+                    value={`${fingerprint().slice(0, 16)}…`}
+                    valueClass="truncate font-mono text-[10px] font-normal"
+                    valueTitle={fingerprint()}
+                  />
                 )}
               </Show>
             </div>

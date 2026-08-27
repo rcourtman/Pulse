@@ -5,7 +5,7 @@ import {
   type DrawerDiskListItem,
 } from '@/components/Workloads/DrawerDiskListCard';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
@@ -99,32 +99,19 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
           Container updates
         </h3>
         <div class="space-y-1.5 text-[11px]">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-muted">Available</span>
-            <span class="font-medium text-base-content">{updatesAvailable()}</span>
-          </div>
+          <InfoCardKeyValueRow label="Available" value={updatesAvailable()} />
           <Show when={checkedAtMillis()} keyed>
             {(timestamp) => (
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">Last checked</span>
-                <span class="font-medium text-base-content">{formatRelativeTime(timestamp)}</span>
-              </div>
+              <InfoCardKeyValueRow label="Last checked" value={formatRelativeTime(timestamp)} />
             )}
           </Show>
           <Show when={hostCommand()?.type || hostCommand()?.status}>
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-muted">
-                {titleCase(cleanText(hostCommand()?.type).replace(/_/g, ' ') || 'Command')}
-              </span>
-              <span
-                class={`truncate text-right font-medium ${
-                  hostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'
-                }`}
-                title={hostCommand()?.failureReason || hostCommand()?.message || undefined}
-              >
-                {titleCase(cleanText(hostCommand()?.status).replace(/_/g, ' ') || 'unknown')}
-              </span>
-            </div>
+            <InfoCardKeyValueRow
+              label={titleCase(cleanText(hostCommand()?.type).replace(/_/g, ' ') || 'Command')}
+              value={titleCase(cleanText(hostCommand()?.status).replace(/_/g, ' ') || 'unknown')}
+              valueClass={`truncate ${hostCommandActive() ? 'text-sky-700 dark:text-sky-300' : ''}`}
+              valueTitle={hostCommand()?.failureReason || hostCommand()?.message || undefined}
+            />
           </Show>
           <Show when={updateActions.dockerActionError()}>
             <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">

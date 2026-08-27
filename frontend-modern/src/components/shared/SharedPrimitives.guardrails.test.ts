@@ -1171,6 +1171,7 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/cards/RootDiskCard.tsx',
       'src/components/shared/cards/SystemInfoCard.tsx',
       'src/components/shared/cards/TemperaturesCard.tsx',
+      'src/components/Workloads/AvailabilityProbeSuggestionCard.tsx',
       'src/components/Workloads/DrawerDiskListCard.tsx',
       'src/features/docker/DockerHostDrawerOverview.tsx',
       'src/features/storageBackups/detailPresentation.ts',
@@ -1232,6 +1233,19 @@ describe('shared primitive guardrails', () => {
       const source = readFrontendSource(consumerPath);
       expect(source).toContain('InfoCardKeyValueRow');
       expect(source).not.toContain('flex items-center justify-between');
+    }
+
+    for (const consumerPath of [
+      'src/components/Infrastructure/AvailabilityProbeStatusCard.tsx',
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+      'src/components/Workloads/AvailabilityProbeSuggestionCard.tsx',
+      'src/features/docker/DockerHostDrawerOverview.tsx',
+    ]) {
+      const source = readFrontendSource(consumerPath);
+      expect(source).toContain('InfoCardKeyValueRow');
+      expect(source).not.toMatch(
+        /class="flex items-(?:center|start) justify-between gap-2">\s*<span class="text-muted">/,
+      );
     }
   });
 

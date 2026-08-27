@@ -215,6 +215,7 @@ overflow.
    1a. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts`
    1b. `frontend-modern/src/components/Workloads/nodeDrawerModel.ts`
    1c. `frontend-modern/src/features/docker/dockerHostDrawerModel.ts`
+   1d. `frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx`
 2. `frontend-modern/src/components/Settings/Settings.tsx`
 3. `frontend-modern/src/components/Settings/SettingsDialogs.tsx`
 4. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
@@ -1226,6 +1227,12 @@ not a replacement status card, CTA band, or page-local nested card.
    otherwise the shared `lg` transition is canonical. Feature surfaces own the
    labels, values, wrapping, and selection behavior, but must not restore
    drawer-width `justify-between` rows on desktop.
+   This contract also covers secondary drawer facts in availability status and
+   suggestion cards, resource change-history entries, Docker/PBS/PMG service
+   support panels, and Docker container-update management cards. Headers,
+   status summaries, actions, disk capacity summaries, and RAID state pairs may
+   retain intentional endpoint alignment; ordinary label/value facts in those
+   surfaces may not.
    Read-only metadata chips belong to `MetadataBadge` and domain wrappers over
    it. Organization role and share-status chips must use
    `OrganizationRoleBadge` and `OrganizationShareStatusBadge`, so role/status
@@ -6185,6 +6192,10 @@ Known platform resources use that same compact presentation when availability
 is attached. `AvailabilityProbeStatusCard` is the shared detail primitive for
 Workloads and Docker host drawers; it renders the complete target, protocol,
 latest result, latency when relevant, evidence freshness, and last observation.
+Its fact rows, and the matching service/probe/target rows in
+`AvailabilityProbeSuggestionCard`, compose `InfoCardKeyValueRow` so phone
+layouts remain condensed while wide cards keep each value adjacent to its
+label.
 Plural attached checks render as repeated bounded cards from
 `availabilityChecks`, while the row keeps one compatibility summary. Expired
 successful evidence must render an amber `Stale` state with no green

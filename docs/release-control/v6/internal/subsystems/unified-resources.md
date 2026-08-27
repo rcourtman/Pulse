@@ -1329,6 +1329,11 @@ and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
 desktop rows use the shared fixed label track so labels and values remain
 visually adjacent instead of spanning the full drawer width.
+The same boundary applies to availability facts, resource change-history
+metadata, Docker/PBS/PMG service facts, nested PMG queue/mail breakdowns, and
+Docker container-update management facts. Their headers, actions, and compact
+status summaries remain feature-owned, while ordinary label/value rows compose
+`InfoCardKeyValueRow` rather than restoring a drawer-width flex split.
 Curated technical inventory follows the shared compact-row contract instead
 of the secondary-card contract. Docker-host drawers must project system,
 runtime, memory, storage, and telemetry facts through

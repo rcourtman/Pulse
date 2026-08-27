@@ -1,34 +1,36 @@
 {
   "version": 1,
-  "base_sha": "636367e96ee97ce56c7b1353635236a418a3922c",
-  "verified_at": "2026-08-27T19:10:47Z",
+  "base_sha": "81b09d870fb39112cbcef70becf09d6f30d77393",
+  "verified_at": "2026-08-27T19:35:10Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx",
-    "frontend-modern/src/features/alerts/helpers.ts",
-    "frontend-modern/src/features/alerts/useAlertScheduleState.ts"
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx": "f80f94d529196fffb4e184288c5ce9369f673bc8cabc0eb2047ebc10b7dfe363",
-    "frontend-modern/src/features/alerts/helpers.ts": "27feef6ede9bdb6668af5c447c5b9256f019b8df5a291ae8b5d436d371363794",
-    "frontend-modern/src/features/alerts/useAlertScheduleState.ts": "84ec18253c926be70d941daf5b56bf045cf372ded5026033849d38f76c23e84f"
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "2d991718c178866ba5bd7d1b89e7a1a9bec6fcd30133bc2fd549aa2fd3ccf4e5",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "ac68e2e7f5d954ca5bd23b44f347817ce9a39414ab493d22ad52340ceb3296e2",
+    "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx": "a8c549b1284befee652c9ecc79c3c449602d1a102f3867acb81f4a5c9f5fd042",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "ab63fba8e1a06cb5951e0d3dc637d92ef371f2b5db5da2dfb80408cd477c0ea5"
   },
-  "routes": ["/alerts/schedule"],
+  "routes": ["/standalone/availability", "/proxmox/backups/date", "/docker/overview"],
   "viewports": [
     { "width": 1280, "height": 720 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "alert escalation enabled with one level and selected disabled destinations visible",
-    "level delay normalized to the 5 minute lower bound",
-    "level delay normalized to the 180 minute upper bound",
-    "upper-bound level retained in the narrow layout without horizontal overflow"
+    "Solar inverter web panel expanded with availability facts visible",
+    "backup-vault expanded with Platform details and PBS service facts visible",
+    "auth-service-01 expanded on Manage with Container updates visible"
   ],
   "interactions": [
-    "enabled alert escalation and added an escalation level",
-    "entered 0 minutes and blurred the field, confirming it normalized to 5",
-    "entered 999 minutes and blurred the field, confirming it normalized to 180",
-    "resized from desktop to 390px and confirmed zero document-level horizontal overflow",
-    "confirmed the browser console contained no warnings or errors"
+    "expanded the Solar inverter web panel and confirmed desktop availability values use an adjacent fixed label track",
+    "confirmed availability facts retain condensed right-aligned values and clean wrapping at 390px",
+    "expanded backup-vault, opened Platform details, and revealed the PBS service section",
+    "confirmed PBS service facts use adjacent desktop values and retain compact mobile alignment",
+    "expanded auth-service-01, selected Manage, and confirmed Container updates facts use adjacent desktop values",
+    "confirmed Docker management facts retain condensed right alignment at 390px"
   ]
 }
