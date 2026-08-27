@@ -20878,3 +20878,27 @@ func TestCleanupRemovesOnlyStaleSMARTCounterSnapshots(t *testing.T) {
 		t.Fatal("current SMART counter snapshot was removed")
 	}
 }
+
+func TestCheckStorageForecastUsesCanonicalUsageAlertIdentity(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.StorageDefault = HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.mu.Unlock()
+
+	storage := models.Storage{ID: "forecast-proof", Name: "archive", Status: "active", Usage: 72}
+	trend := CapacityTrendObservation{
+		Ready: true, Reason: "increasing", ObservedAt: time.Now(), DailyChange: 5,
+		Confidence: 0.99, SampleCount: 300, BucketCount: 48, CoverageSpan: 48 * time.Hour,
+	}
+	m.CheckStorageWithCapacityTrend(storage, trend)
+	m.CheckStorageWithCapacityTrend(storage, trend)
+
+	alert := testRequireActiveAlert(t, m, canonicalMetricStateID(storage.ID, "usage"))
+	if alert.CanonicalSpecID != canonicalMetricSpecID(storage.ID, "usage") {
+		t.Fatalf("CanonicalSpecID = %q, want canonical usage spec", alert.CanonicalSpecID)
+	}
+	if got := alert.Metadata[capacityAlertOriginKey]; got != capacityAlertOriginForecast {
+		t.Fatalf("capacity origin = %v, want forecast", got)
+	}
+}

@@ -494,7 +494,7 @@ func TestUnifiedResourceAlertSyncEvaluatesMetricsBeforeIncidents(t *testing.T) {
 	}
 	source := string(data)
 
-	metricIndex := strings.Index(source, "CheckUnifiedResourceMetrics(resources)")
+	metricIndex := strings.Index(source, "CheckUnifiedResourceMetricsWithCapacityTrends(resources")
 	incidentIndex := strings.Index(source, "SyncUnifiedResourceIncidents(resources)")
 	if metricIndex < 0 {
 		t.Fatalf("monitor alert sync must run unified resource metric evaluation")

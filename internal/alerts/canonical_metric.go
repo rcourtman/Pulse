@@ -327,6 +327,11 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		if existingAlert.Metadata == nil {
 			existingAlert.Metadata = map[string]interface{}{}
 		}
+		if opts != nil {
+			for _, key := range opts.RemoveMetadata {
+				delete(existingAlert.Metadata, key)
+			}
+		}
 		for k, v := range alertMetadata {
 			existingAlert.Metadata[k] = v
 		}

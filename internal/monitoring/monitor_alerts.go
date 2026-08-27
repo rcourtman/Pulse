@@ -549,7 +549,7 @@ func (m *Monitor) checkMockAlerts() {
 			Str("name", storage.Name).
 			Float64("usage", storage.Usage).
 			Msg("Checking storage for alerts")
-		m.alertManager.CheckStorage(storage)
+		m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, time.Now()))
 	}
 
 	// Check alerts for PBS instances

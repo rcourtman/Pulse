@@ -193,6 +193,22 @@ lifecycle when the agent heartbeat is unhealthy, and resolves only when a
 fresh result from the currently assigned agent arrives. Notification delivery,
 acknowledgement, history, and recovery reuse the normal alert pipeline.
 
+Storage capacity forecasting is an alert-grade evidence boundary, not an AI
+prose feature. It requires at least 24 hours of valid history, hourly median
+normalization, a fresh terminal sample, agreement between full-window and
+recent positive slopes, and confidence of at least 0.80 before it can fire.
+Raw poll count alone must never manufacture confidence. Forecast risk opens
+only when projected exhaustion is within seven days (critical within one day)
+and recovers only after the projection moves beyond fourteen days or trusted
+evidence proves growth stopped. Missing, shallow, stale, or low-confidence
+history is unknown rather than recovery for an already-active forecast.
+Predictive and static usage policy share `metric-threshold:usage` as one
+canonical occurrence: a forecast that later crosses the percentage threshold
+keeps its start time, acknowledgement, history, and timeline instead of
+emitting a forecast recovery plus a second capacity alert. The same contract
+applies to Proxmox, Ceph, TrueNAS pools/datasets, and vSphere datastores through
+their existing platform thresholds and disable policy.
+
 Active-alert restore is opt-out at construction. `NewManagerWithDataDir` accepts
 `ManagerOption` values, and `WithoutPersistedAlertRestore` starts the manager
 with an empty active-alert set instead of reading `active-alerts.json`. Mock
@@ -252,6 +268,7 @@ default construction path still restores.
 45. `internal/alerts/docker.go`
 46. `internal/alerts/pbs.go`
 47. `internal/alerts/storage.go`
+47a. `internal/alerts/capacity_forecast.go`
 48. `internal/alerts/node.go`
 49. `internal/alerts/host.go`
 50. `internal/alerts/backup_snapshot.go`

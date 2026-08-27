@@ -420,6 +420,18 @@ lifecycle, and treats a fresh result from that same assignment as recovery.
 Assignment trackers are removed with their targets and reset when agent identity
 changes.
 
+Storage capacity forecasting consumes monitoring-owned percentage history
+through `internal/monitoring/storage_capacity_forecast.go`. The bridge combines
+the durable SQLite series with the in-memory tail and current observation, then
+caches the alert-owned trend result for a bounded interval. Durable history is
+required in the read path so restart cannot erase a previously earned
+confidence floor. Canonical storage resources must resolve their metrics target
+before trend evaluation, keeping TrueNAS and vSphere forecast identity aligned
+with the series written by `syncUnifiedStorageMetrics`; Proxmox and Ceph retain
+their source-native storage history IDs. Monitoring supplies evidence only and
+must not choose forecast horizons, severity, hysteresis, notification routing,
+or lifecycle identity.
+
 Monitoring ingest keeps mock mode hermetic. The unified read path already
 substitutes the mock snapshot wholesale, so anything that runs after that
 substitution has to be suppressed explicitly rather than assumed hidden. Server
@@ -510,6 +522,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 50. `internal/models/ceph_cluster_identity.go`
 51. `internal/truenas/types.go`
 52. `internal/monitoring/monitor_alert_sync.go`
+52a. `internal/monitoring/storage_capacity_forecast.go`
 53. `internal/monitoring/platform_poller_shared.go`
 54. `internal/monitoring/monitor_backups.go`
 55. `internal/monitoring/resource_stale_thresholds.go`

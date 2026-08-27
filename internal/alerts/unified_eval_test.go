@@ -1537,3 +1537,25 @@ func TestUnifiedResourceInputExcludesDockerAppContainers(t *testing.T) {
 		t.Fatalf("truenas app containers must stay unified-eval owned, got %+v ok=%v", input, ok)
 	}
 }
+
+func TestUnifiedStorageForecastKeepsCanonicalMetricSpecAcrossPlatforms(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+	input := &UnifiedResourceInput{
+		ID:   "vmware:lab/datastore:archive",
+		Type: "vmware-datastore",
+		Name: "archive",
+		Disk: &UnifiedResourceMetric{Percent: 70},
+	}
+	trend := CapacityTrendObservation{
+		Ready: true, Reason: "increasing", ObservedAt: time.Now(), DailyChange: 7,
+		Confidence: 0.99, SampleCount: 300, BucketCount: 48, CoverageSpan: 48 * time.Hour,
+	}
+	m.CheckUnifiedResourceWithCapacityTrend(input, trend)
+	m.CheckUnifiedResourceWithCapacityTrend(input, trend)
+
+	alert := testRequireActiveAlert(t, m, canonicalMetricStateID(input.ID, "usage"))
+	if alert.CanonicalSpecID != canonicalMetricSpecID(input.ID, "usage") {
+		t.Fatalf("CanonicalSpecID = %q, want canonical usage spec", alert.CanonicalSpecID)
+	}
+}
