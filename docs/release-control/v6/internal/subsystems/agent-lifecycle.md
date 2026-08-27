@@ -1679,8 +1679,18 @@ the intentionally sparse public response.
    or a typed inconclusive reason. It must never enter the operation receipt
    store, execute a mutation, accept command text, or infer action truth. The
    server validates freshness and correlation and owns all evidence-class and
-   verification projection. Older agents advertise version zero and therefore
+   verification projection. Agents advertising a protocol version below 2
    fail closed without receiving an unsupported request.
+   Observation protocol version 2 also requires an explicit bounded daemon
+   health state (`none`, `starting`, `healthy`, or `unhealthy`) in every
+   successful snapshot. `none` means the daemon confirms that no health check
+   exists; omission is unknown, never an alias for `none`. Typed start and
+   restart execution waits within the existing action timeout while a running
+   container remains `starting` or `unhealthy`, performs no second mutation,
+   and completes only after the daemon reports `healthy` or explicit `none`.
+   Timeout, persistent unhealthy state, unsupported health vocabulary, or a
+   missing health fact remains contradicted or inconclusive rather than
+   manufacturing a successful postcondition from running state alone.
    RG-06 has a separate mutation harness at
    `scripts/intelligence_lab/patrol_autonomy_colima.py` and
    `internal/api/patrol_autonomy_colima_real_lab_test.go`. It must run from a

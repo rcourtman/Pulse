@@ -16,13 +16,22 @@ import (
 
 var dockerContextNamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
 
+const dockerLifecycleHealthPollInterval = 2 * time.Second
+
 type dockerLifecycleManager interface {
 	Apply(context.Context, agentexec.DockerContainerLifecyclePayload) agentexec.DockerContainerLifecycleResultPayload
 	Preflight(context.Context, agentexec.DockerContainerLifecyclePayload) (bool, string)
 }
 
-func (m *localDockerLifecycleManager) Observe(ctx context.Context, runtime, containerID string) (agentexec.DockerContainerLifecycleSnapshot, error) {
-	return m.inspect(ctx, runtime, containerID)
+func (m *localDockerLifecycleManager) Observe(ctx context.Context, runtime, containerID string) (agentexec.DockerContainerObservationSnapshot, error) {
+	snapshot, err := m.inspect(ctx, runtime, containerID)
+	if err != nil {
+		return agentexec.DockerContainerObservationSnapshot{}, err
+	}
+	return agentexec.DockerContainerObservationSnapshot{
+		ContainerID: snapshot.ContainerID, State: snapshot.State, Running: snapshot.Running, Health: snapshot.Health,
+		StartedAt: snapshot.StartedAt, RestartCount: snapshot.RestartCount, ObservedAt: snapshot.ObservedAt,
+	}, nil
 }
 
 // DockerContainerLifecycleOperator is the narrow bridge from the host command
@@ -37,9 +46,10 @@ type DockerContainerLifecycleOperator interface {
 type dockerLifecycleCommandRunner func(context.Context, string, ...string) ([]byte, error)
 
 type localDockerLifecycleManager struct {
-	run      dockerLifecycleCommandRunner
-	operator DockerContainerLifecycleOperator
-	now      func() time.Time
+	run                dockerLifecycleCommandRunner
+	operator           DockerContainerLifecycleOperator
+	now                func() time.Time
+	healthPollInterval time.Duration
 }
 
 func newLocalDockerLifecycleManager(operators ...DockerContainerLifecycleOperator) *localDockerLifecycleManager {
@@ -101,6 +111,25 @@ func (m *localDockerLifecycleManager) Apply(ctx context.Context, req agentexec.D
 		result.ExecutionPhase = agentexec.DockerContainerPhaseComplete
 		return result
 	}
+	if dockerLifecycleHealthPending(req, before, after) {
+		verifyCtx, cancel := context.WithTimeout(ctx, time.Duration(req.Timeout)*time.Second)
+		defer cancel()
+		for dockerLifecycleHealthPending(req, before, after) {
+			if err := m.waitForDockerLifecycleHealth(verifyCtx); err != nil {
+				break
+			}
+			after, err = m.inspect(verifyCtx, req.Runtime, req.ContainerID)
+			if err != nil {
+				result.Error = "container postcondition inspect unavailable"
+				return result
+			}
+			result.After = after
+			if dockerLifecyclePostcondition(req, before, after) {
+				result.ExecutionPhase = agentexec.DockerContainerPhaseComplete
+				return result
+			}
+		}
+	}
 	result.Error = "container postcondition contradicted the requested state"
 	return result
 }
@@ -159,6 +188,9 @@ func (m *localDockerLifecycleManager) inspect(ctx context.Context, runtime, cont
 		Running      bool   `json:"Running"`
 		StartedAt    string `json:"StartedAt"`
 		RestartCount int    `json:"RestartCount"`
+		Health       *struct {
+			Status string `json:"Status"`
+		} `json:"Health"`
 	}
 	if err := json.Unmarshal([]byte(strings.TrimSpace(string(raw))), &state); err != nil {
 		return agentexec.DockerContainerLifecycleSnapshot{}, fmt.Errorf("decode container state: %w", err)
@@ -178,9 +210,16 @@ func (m *localDockerLifecycleManager) inspect(ctx context.Context, runtime, cont
 			state.RestartCount = count
 		}
 	}
+	health := agentexec.DockerContainerHealthNone
+	if state.Health != nil {
+		health = strings.ToLower(strings.TrimSpace(state.Health.Status))
+		if !agentexec.IsDockerContainerHealth(health) {
+			return agentexec.DockerContainerLifecycleSnapshot{}, fmt.Errorf("container inspect returned unsupported health status")
+		}
+	}
 	return agentexec.DockerContainerLifecycleSnapshot{
 		ContainerID: strings.ToLower(containerID), State: strings.ToLower(strings.TrimSpace(state.Status)), Running: state.Running,
-		StartedAt: startedAt.UTC(), RestartCount: state.RestartCount, ObservedAt: m.currentTime(),
+		Health: health, StartedAt: startedAt.UTC(), RestartCount: state.RestartCount, ObservedAt: m.currentTime(),
 	}, nil
 }
 
@@ -207,12 +246,42 @@ func dockerLifecyclePostcondition(req agentexec.DockerContainerLifecyclePayload,
 	}
 	switch req.Operation {
 	case agentexec.DockerContainerOperationStart:
-		return after.Running && after.State == "running"
+		return after.Running && after.State == "running" && agentexec.DockerContainerHealthAllowsVerifiedRunningState(after.Health)
 	case agentexec.DockerContainerOperationStop:
 		return !after.Running && after.State == "exited"
+	case agentexec.DockerContainerOperationRestart:
+		return after.Running && after.State == "running" && !after.StartedAt.IsZero() && after.StartedAt.After(before.StartedAt) && agentexec.DockerContainerHealthAllowsVerifiedRunningState(after.Health)
+	default:
+		return false
+	}
+}
+
+func dockerLifecycleHealthPending(req agentexec.DockerContainerLifecyclePayload, before, after agentexec.DockerContainerLifecycleSnapshot) bool {
+	health := strings.ToLower(strings.TrimSpace(after.Health))
+	if health != agentexec.DockerContainerHealthStarting && health != agentexec.DockerContainerHealthUnhealthy {
+		return false
+	}
+	switch req.Operation {
+	case agentexec.DockerContainerOperationStart:
+		return after.Running && after.State == "running"
 	case agentexec.DockerContainerOperationRestart:
 		return after.Running && after.State == "running" && !after.StartedAt.IsZero() && after.StartedAt.After(before.StartedAt)
 	default:
 		return false
+	}
+}
+
+func (m *localDockerLifecycleManager) waitForDockerLifecycleHealth(ctx context.Context) error {
+	interval := dockerLifecycleHealthPollInterval
+	if m != nil && m.healthPollInterval > 0 {
+		interval = m.healthPollInterval
+	}
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }

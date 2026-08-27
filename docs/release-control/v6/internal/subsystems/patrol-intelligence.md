@@ -2409,6 +2409,12 @@ stale snapshots, digest or subject mismatch, and same-agent receipt evidence
 remain verification unknown. This closes the prior structural dead end where
 an unhealthy-container restart could execute in production but the executor
 had no observer capable of satisfying Patrol's verified-outcome contract.
+Running state alone is not recovery evidence for a container-health finding.
+The version-2 observer must explicitly report `healthy`, or `none` when the
+daemon confirms no health check exists; `starting`, `unhealthy`, omitted
+health, and legacy protocol versions cannot advance the finding to
+`fix_verified`. The agent may wait for a health transition within the bounded
+action timeout, but it must never repeat the mutation while waiting.
 
 Patrol now consumes the server-derived effective Autopilot mode. Requested
 `full` is admitted only with a current persisted human acknowledgement and

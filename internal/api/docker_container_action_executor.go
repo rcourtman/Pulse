@@ -29,7 +29,7 @@ type dockerContainerPostconditionObservation struct {
 	ObserverID  string
 	TrustDomain string
 	Method      string
-	Snapshot    agentexec.DockerContainerLifecycleSnapshot
+	Snapshot    agentexec.DockerContainerObservationSnapshot
 	ReceivedAt  time.Time
 }
 

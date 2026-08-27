@@ -31,6 +31,13 @@ func (a *Agent) InspectDockerContainerLifecycle(ctx context.Context, runtime, co
 	if inspect.State == nil {
 		return agentexec.DockerContainerLifecycleSnapshot{}, fmt.Errorf("container inspect returned no state")
 	}
+	health := agentexec.DockerContainerHealthNone
+	if inspect.State.Health != nil {
+		health = strings.ToLower(strings.TrimSpace(string(inspect.State.Health.Status)))
+		if !agentexec.IsDockerContainerHealth(health) {
+			return agentexec.DockerContainerLifecycleSnapshot{}, fmt.Errorf("container inspect returned unsupported health status")
+		}
+	}
 	startedAt := time.Time{}
 	if value := strings.TrimSpace(inspect.State.StartedAt); value != "" && !strings.HasPrefix(value, "0001-") {
 		startedAt, err = time.Parse(time.RFC3339Nano, value)
@@ -42,6 +49,7 @@ func (a *Agent) InspectDockerContainerLifecycle(ctx context.Context, runtime, co
 		ContainerID:  strings.ToLower(strings.TrimSpace(inspect.ID)),
 		State:        strings.ToLower(strings.TrimSpace(string(inspect.State.Status))),
 		Running:      inspect.State.Running,
+		Health:       health,
 		StartedAt:    startedAt.UTC(),
 		RestartCount: inspect.RestartCount,
 		ObservedAt:   time.Now().UTC(),

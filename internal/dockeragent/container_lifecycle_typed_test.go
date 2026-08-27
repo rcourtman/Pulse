@@ -8,6 +8,7 @@ import (
 	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 )
 
 func TestTypedContainerLifecycleUsesConnectedDaemonAPI(t *testing.T) {
@@ -23,7 +24,7 @@ func TestTypedContainerLifecycleUsesConnectedDaemonAPI(t *testing.T) {
 				}
 				return containertypes.InspectResponse{
 					ID: containerID, RestartCount: 3,
-					State: &containertypes.State{Status: containertypes.ContainerState("running"), Running: true, StartedAt: startedAt.Format(time.RFC3339Nano)},
+					State: &containertypes.State{Status: containertypes.ContainerState("running"), Running: true, StartedAt: startedAt.Format(time.RFC3339Nano), Health: &containertypes.Health{Status: "healthy"}},
 				}, nil
 			},
 			containerRestartFn: func(_ context.Context, id string, _ dockerContainerRestartOptions) error {
@@ -39,7 +40,7 @@ func TestTypedContainerLifecycleUsesConnectedDaemonAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.ContainerID != containerID || snapshot.State != "running" || !snapshot.Running || snapshot.RestartCount != 3 || !snapshot.StartedAt.Equal(startedAt) {
+	if snapshot.ContainerID != containerID || snapshot.State != "running" || !snapshot.Running || snapshot.Health != agentexec.DockerContainerHealthHealthy || snapshot.RestartCount != 3 || !snapshot.StartedAt.Equal(startedAt) {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
 	if err := agent.MutateDockerContainerLifecycle(context.Background(), "docker", "restart", containerID); err != nil {

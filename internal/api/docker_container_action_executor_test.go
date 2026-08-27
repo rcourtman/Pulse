@@ -50,7 +50,7 @@ func (f *observingDockerActionAgentCommander) ObserveDockerContainer(_ context.C
 	return &agentexec.DockerContainerObservationResultPayload{
 		RequestID: req.RequestID, ActionID: req.ActionID, ProtocolVersion: req.ProtocolVersion, RequestDigest: req.RequestDigest,
 		Observed: true,
-		Snapshot: agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, StartedAt: time.Now().UTC(), ObservedAt: time.Now().UTC()},
+		Snapshot: agentexec.DockerContainerObservationSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthHealthy, StartedAt: time.Now().UTC(), ObservedAt: time.Now().UTC()},
 	}, nil
 }
 
@@ -103,8 +103,8 @@ func (f *fakeDockerActionAgentCommander) ExecuteDockerContainerLifecycle(_ conte
 	return &agentexec.DockerContainerLifecycleResultPayload{
 		RequestID: req.RequestID, ActionID: req.ActionID, Operation: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, ContainerID: req.ContainerID,
 		ExecutionPhase: agentexec.DockerContainerPhaseComplete, MutationStarted: true, MutationCompleted: true, ReadbackRan: true,
-		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: req.ExpectedState, Running: true, StartedAt: req.ExpectedStartedAt, ObservedAt: now.Add(-time.Second)},
-		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, StartedAt: now, ObservedAt: now},
+		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: req.ExpectedState, Running: true, Health: agentexec.DockerContainerHealthNone, StartedAt: req.ExpectedStartedAt, ObservedAt: now.Add(-time.Second)},
+		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthNone, StartedAt: now, ObservedAt: now},
 	}, nil
 }
 

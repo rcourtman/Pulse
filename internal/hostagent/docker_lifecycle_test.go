@@ -42,8 +42,8 @@ func TestDockerLifecycleManagerUsesConnectedModuleWithoutExternalCLI(t *testing.
 	before := time.Now().UTC().Add(-time.Minute).Truncate(time.Nanosecond)
 	after := before.Add(time.Minute)
 	operator := &stubDockerLifecycleOperator{snapshots: []agentexec.DockerContainerLifecycleSnapshot{
-		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, StartedAt: before, ObservedAt: before},
-		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, StartedAt: after, ObservedAt: after},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthUnhealthy, StartedAt: before, ObservedAt: before},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthHealthy, StartedAt: after, ObservedAt: after},
 	}}
 	manager := newLocalDockerLifecycleManager(operator)
 	manager.run = func(context.Context, string, ...string) ([]byte, error) {
@@ -58,10 +58,46 @@ func TestDockerLifecycleManagerUsesConnectedModuleWithoutExternalCLI(t *testing.
 	}
 }
 
+func TestDockerLifecycleManagerWaitsForHealthRecovery(t *testing.T) {
+	before := time.Now().UTC().Add(-time.Minute).Truncate(time.Nanosecond)
+	after := before.Add(time.Minute)
+	operator := &stubDockerLifecycleOperator{snapshots: []agentexec.DockerContainerLifecycleSnapshot{
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthUnhealthy, StartedAt: before, ObservedAt: before},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthStarting, StartedAt: after, ObservedAt: after},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthHealthy, StartedAt: after, ObservedAt: after.Add(time.Millisecond)},
+	}}
+	manager := newLocalDockerLifecycleManager(operator)
+	manager.healthPollInterval = time.Millisecond
+	result := manager.Apply(context.Background(), dockerLifecycleTestRequest(t, before))
+	if result.ExecutionPhase != agentexec.DockerContainerPhaseComplete || result.After.Health != agentexec.DockerContainerHealthHealthy {
+		t.Fatalf("health recovery result = %#v", result)
+	}
+	if len(operator.mutations) != 1 {
+		t.Fatalf("mutations = %v, want one restart", operator.mutations)
+	}
+}
+
+func TestDockerLifecycleManagerDoesNotVerifyPersistentUnhealthyState(t *testing.T) {
+	before := time.Now().UTC().Add(-time.Minute).Truncate(time.Nanosecond)
+	after := before.Add(time.Minute)
+	operator := &stubDockerLifecycleOperator{snapshots: []agentexec.DockerContainerLifecycleSnapshot{
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthUnhealthy, StartedAt: before, ObservedAt: before},
+		{ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthUnhealthy, StartedAt: after, ObservedAt: after},
+	}}
+	manager := newLocalDockerLifecycleManager(operator)
+	manager.healthPollInterval = time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	result := manager.Apply(ctx, dockerLifecycleTestRequest(t, before))
+	if result.ExecutionPhase == agentexec.DockerContainerPhaseComplete || result.After.Health != agentexec.DockerContainerHealthUnhealthy {
+		t.Fatalf("persistent unhealthy result = %#v", result)
+	}
+}
+
 func TestDockerLifecycleManagerObservationIsReadOnly(t *testing.T) {
 	now := time.Now().UTC()
 	operator := &stubDockerLifecycleOperator{snapshots: []agentexec.DockerContainerLifecycleSnapshot{{
-		ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, ObservedAt: now,
+		ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, Health: agentexec.DockerContainerHealthNone, ObservedAt: now,
 	}}}
 	manager := newLocalDockerLifecycleManager(operator)
 	manager.run = func(context.Context, string, ...string) ([]byte, error) {

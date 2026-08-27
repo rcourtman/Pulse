@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog"
 )
@@ -105,8 +106,8 @@ func TestCommandClient_sendRegistration_WritesExpectedPayload(t *testing.T) {
 	if payload.Token != "token-1" {
 		t.Fatalf("payload.Token = %q, want %q", payload.Token, "token-1")
 	}
-	if payload.DockerObservationVersion != 1 {
-		t.Fatalf("payload.DockerObservationVersion = %d, want 1", payload.DockerObservationVersion)
+	if payload.DockerObservationVersion != agentexec.DockerContainerObservationProtocolVersion {
+		t.Fatalf("payload.DockerObservationVersion = %d, want %d", payload.DockerObservationVersion, agentexec.DockerContainerObservationProtocolVersion)
 	}
 }
 

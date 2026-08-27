@@ -783,7 +783,7 @@ func TestDockerContainerObservationRoundTripIsReadOnlyAndActionBound(t *testing.
 		result := DockerContainerObservationResultPayload{
 			RequestID: payload.RequestID, ActionID: payload.ActionID, ProtocolVersion: payload.ProtocolVersion, RequestDigest: payload.RequestDigest,
 			Observed: true,
-			Snapshot: DockerContainerLifecycleSnapshot{ContainerID: payload.ContainerID, State: "running", Running: true, ObservedAt: time.Now().UTC()},
+			Snapshot: DockerContainerObservationSnapshot{ContainerID: payload.ContainerID, State: "running", Running: true, Health: DockerContainerHealthHealthy, ObservedAt: time.Now().UTC()},
 		}
 		agentErr <- conn.WriteJSON(mustNewMessage(t, MsgTypeDockerContainerObserveResult, payload.RequestID, result))
 	}()
@@ -812,6 +812,7 @@ func TestDockerContainerObservationRejectsUnsupportedAgentBeforeDispatch(t *test
 	defer conn.Close()
 	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
 		AgentID: "older-agent", Hostname: "host1", Version: "6.3", Platform: "linux", Token: "any",
+		DockerObservationVersion: 1,
 	}))
 	_ = wsReadRegisteredPayload(t, conn)
 	started := time.Now()

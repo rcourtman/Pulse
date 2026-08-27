@@ -742,7 +742,7 @@ func (c *CommandClient) handleDockerContainerObservation(ctx context.Context, co
 	observeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	observer, ok := c.dockerLifecycle.(interface {
-		Observe(context.Context, string, string) (agentexec.DockerContainerLifecycleSnapshot, error)
+		Observe(context.Context, string, string) (agentexec.DockerContainerObservationSnapshot, error)
 	})
 	result := agentexec.DockerContainerObservationResultPayload{
 		RequestID: payload.RequestID, ActionID: payload.ActionID, ProtocolVersion: payload.ProtocolVersion,

@@ -2437,6 +2437,14 @@ a new API state machine, queue contract, or verification-accounting field.
    server clock, the API conservatively binds its canonical `ObservedAt` to the
    server `ReceivedAt` boundary; stale or excessively future observations stay
    inconclusive and must never be made fresh by clamping.
+   The version-2 independent Docker observation contract carries a canonical
+   daemon health state as well as lifecycle state. For start and restart, the
+   API may confirm the postcondition only when the container is running and
+   the independent snapshot says `healthy` or explicitly `none` because no
+   health check exists. `starting`, `unhealthy`, missing health, protocol-v1
+   agents, and unsupported values remain contradicted or inconclusive. Legacy
+   durable receipts without health stay recoverable but cannot be upgraded
+   from execution truth to verified outcome truth.
    Proxmox QEMU VM and LXC lifecycle execution is part of that same API-owned
    action contract. Proxmox guest resources may expose only conservative
    lifecycle operations (`start`, `shutdown`, `reboot`, `stop`) and execution

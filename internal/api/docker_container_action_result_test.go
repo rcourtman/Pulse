@@ -128,7 +128,7 @@ func TestDockerContainerExecutionResultClassifiesDistinctDaemonObserverAsIndepen
 	req := agentexec.DockerContainerLifecyclePayload{ActionID: "action-1", Operation: agentexec.DockerContainerOperationRestart}
 	observation := &dockerContainerPostconditionObservation{
 		ObserverID: "colima-direct-cli", TrustDomain: "daemon:colima-direct", Method: "docker_api_inspect",
-		Snapshot: facts.After, ReceivedAt: now,
+		Snapshot: dockerObservationSnapshotFromLifecycle(facts.After), ReceivedAt: now,
 	}
 	result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", req, facts, observation, now)
 	if err != nil {
@@ -137,6 +137,48 @@ func TestDockerContainerExecutionResultClassifiesDistinctDaemonObserverAsIndepen
 	truth := result.ActionResultV2.Verification
 	if truth.Status != unified.ActionVerificationConfirmed || truth.EvidenceClass != unified.ActionEvidenceIndependent || len(truth.Evidence) != 1 || truth.Evidence[0].Digest == "" || len(truth.Evidence[0].Refs) != 1 {
 		t.Fatalf("independent verification = %#v", truth)
+	}
+}
+
+func TestDockerContainerExecutionResultDoesNotVerifyUnrecoveredHealth(t *testing.T) {
+	now := time.Now().UTC()
+	facts := dockerResultFacts(now, true, true, true, true)
+	facts.ContainerID = dockerLifecycleTestID
+	req := agentexec.DockerContainerLifecyclePayload{ActionID: "action-1", Operation: agentexec.DockerContainerOperationRestart}
+	for _, health := range []string{"", agentexec.DockerContainerHealthStarting, agentexec.DockerContainerHealthUnhealthy} {
+		observation := &dockerContainerPostconditionObservation{
+			ObserverID: "docker-observer", TrustDomain: "docker-daemon:agent-1", Method: "docker_api_inspect",
+			Snapshot: dockerObservationSnapshotFromLifecycle(facts.After), ReceivedAt: now,
+		}
+		observation.Snapshot.Health = health
+		result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", req, facts, observation, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.ActionResultV2.Verification.Status == unified.ActionVerificationConfirmed {
+			t.Fatalf("health %q produced confirmed verification: %#v", health, result.ActionResultV2.Verification)
+		}
+	}
+}
+
+func dockerObservationSnapshotFromLifecycle(snapshot agentexec.DockerContainerLifecycleSnapshot) agentexec.DockerContainerObservationSnapshot {
+	return agentexec.DockerContainerObservationSnapshot{
+		ContainerID: snapshot.ContainerID, State: snapshot.State, Running: snapshot.Running, Health: snapshot.Health,
+		StartedAt: snapshot.StartedAt, RestartCount: snapshot.RestartCount, ObservedAt: snapshot.ObservedAt,
+	}
+}
+
+func TestDockerContainerExecutionResultTreatsLegacyMissingHealthAsInconclusive(t *testing.T) {
+	now := time.Now().UTC()
+	facts := dockerResultFacts(now, true, true, true, true)
+	facts.After.Health = ""
+	result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", agentexec.DockerContainerLifecyclePayload{Operation: agentexec.DockerContainerOperationRestart}, facts, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verification := result.ActionResultV2.Verification
+	if verification.Status != unified.ActionVerificationInconclusive || verification.ReasonCode != "container_health_unknown" {
+		t.Fatalf("legacy health verification = %#v", verification)
 	}
 }
 
@@ -150,8 +192,8 @@ func dockerResultFacts(now time.Time, started, completed, readback, matches bool
 	}
 	return agentexec.DockerContainerLifecycleResultPayload{
 		ExecutionPhase: agentexec.DockerContainerPhaseComplete, MutationStarted: started, MutationCompleted: completed, ReadbackRan: readback,
-		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: "running", Running: true, StartedAt: beforeStart, ObservedAt: now.Add(-time.Second)},
-		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: state, Running: running, StartedAt: afterStart, ObservedAt: now},
+		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: "running", Running: true, Health: agentexec.DockerContainerHealthHealthy, StartedAt: beforeStart, ObservedAt: now.Add(-time.Second)},
+		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: state, Running: running, Health: agentexec.DockerContainerHealthHealthy, StartedAt: afterStart, ObservedAt: now},
 	}
 }
 

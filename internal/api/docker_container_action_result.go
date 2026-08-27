@@ -36,7 +36,10 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 			}
 			status := unified.ActionVerificationContradicted
 			reason := "postcondition_contradicted"
-			if dockerLifecycleFactsMatch(req.Operation, facts.Before, facts.After) {
+			if dockerLifecycleRunningHealthUnknown(req.Operation, facts.After) {
+				status = unified.ActionVerificationInconclusive
+				reason = "container_health_unknown"
+			} else if dockerLifecycleFactsMatch(req.Operation, facts.Before, facts.After) {
 				status = unified.ActionVerificationConfirmed
 				reason = ""
 			}
@@ -46,15 +49,15 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 	if independent != nil && freshDockerLifecycleObservation(facts.Before.ObservedAt, independent.Snapshot.ObservedAt, independent.ReceivedAt) && strings.TrimSpace(independent.TrustDomain) != "" && strings.TrimSpace(independent.TrustDomain) != "agent:"+agentID && strings.EqualFold(independent.Snapshot.ContainerID, facts.ContainerID) {
 		evidenceObservedAt, evidenceReceivedAt := dockerActionEvidenceTimes(independent.Snapshot.ObservedAt, independent.ReceivedAt)
 		observationDigest, err := operationreceipt.DigestCanonicalJSON(struct {
-			ActionID  string                                     `json:"action_id"`
-			SubjectID string                                     `json:"subject_id"`
-			Before    agentexec.DockerContainerLifecycleSnapshot `json:"before"`
-			After     agentexec.DockerContainerLifecycleSnapshot `json:"after"`
+			ActionID  string                                       `json:"action_id"`
+			SubjectID string                                       `json:"subject_id"`
+			Before    agentexec.DockerContainerLifecycleSnapshot   `json:"before"`
+			After     agentexec.DockerContainerObservationSnapshot `json:"after"`
 		}{req.ActionID, resourceID, facts.Before, independent.Snapshot})
 		if err != nil {
 			return nil, err
 		}
-		independentSummary := fmt.Sprintf("Direct daemon observation: before=%s; after=%s; running=%t", facts.Before.State, independent.Snapshot.State, independent.Snapshot.Running)
+		independentSummary := fmt.Sprintf("Direct daemon observation: before=%s; after=%s; running=%t; health=%s", facts.Before.State, independent.Snapshot.State, independent.Snapshot.Running, independent.Snapshot.Health)
 		evidence, err := unified.NormalizeActionEvidence(unified.ActionEvidence{
 			Version: unified.ActionEvidenceVersion, ID: req.ActionID + "-direct-daemon-observation", ObserverID: independent.ObserverID,
 			ObserverKind: "docker_daemon_observer", ObserverTrustDomain: independent.TrustDomain, ExecutorTrustDomain: "agent:" + agentID,
@@ -66,7 +69,7 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 		}
 		status := unified.ActionVerificationContradicted
 		reason := "postcondition_contradicted"
-		if dockerLifecycleFactsMatch(req.Operation, facts.Before, independent.Snapshot) {
+		if dockerLifecycleObservationFactsMatch(req.Operation, facts.Before, independent.Snapshot) {
 			status = unified.ActionVerificationConfirmed
 			reason = ""
 		}
@@ -112,7 +115,7 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 			}
 			status := unified.ActionVerificationContradicted
 			reason := "postcondition_contradicted"
-			if dockerUpdateFactsMatch(facts, facts.After) {
+			if dockerUpdateFactsMatch(facts, facts.After.ContainerID) {
 				status = unified.ActionVerificationConfirmed
 				reason = ""
 			}
@@ -122,10 +125,10 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 	if independent != nil && facts.NewContainerID != "" && freshDockerUpdateObservation(independent.Snapshot.ObservedAt, independent.ReceivedAt) && strings.TrimSpace(independent.TrustDomain) != "" && strings.TrimSpace(independent.TrustDomain) != "agent:"+agentID {
 		evidenceObservedAt, evidenceReceivedAt := dockerActionEvidenceTimes(independent.Snapshot.ObservedAt, independent.ReceivedAt)
 		observationDigest, err := operationreceipt.DigestCanonicalJSON(struct {
-			ActionID       string                                     `json:"action_id"`
-			SubjectID      string                                     `json:"subject_id"`
-			NewContainerID string                                     `json:"new_container_id"`
-			After          agentexec.DockerContainerLifecycleSnapshot `json:"after"`
+			ActionID       string                                       `json:"action_id"`
+			SubjectID      string                                       `json:"subject_id"`
+			NewContainerID string                                       `json:"new_container_id"`
+			After          agentexec.DockerContainerObservationSnapshot `json:"after"`
 		}{facts.ActionID, resourceID, facts.NewContainerID, independent.Snapshot})
 		if err != nil {
 			return nil, err
@@ -142,7 +145,7 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 		}
 		status := unified.ActionVerificationContradicted
 		reason := "postcondition_contradicted"
-		if dockerUpdateFactsMatch(facts, independent.Snapshot) {
+		if dockerUpdateFactsMatch(facts, independent.Snapshot.ContainerID) {
 			status = unified.ActionVerificationConfirmed
 			reason = ""
 		}
@@ -253,15 +256,22 @@ func dockerActionEvidenceTimes(observedAt, receivedAt time.Time) (time.Time, tim
 // dockerUpdateFactsMatch confirms the observed container is the replacement
 // the agent claims to have created. A stopped original is recreated without
 // being started, so run-state is not part of the postcondition; identity is.
-func dockerUpdateFactsMatch(facts agentexec.DockerContainerUpdateResultPayload, observed agentexec.DockerContainerLifecycleSnapshot) bool {
-	if facts.NewContainerID == "" || observed.ContainerID == "" {
+func dockerUpdateFactsMatch(facts agentexec.DockerContainerUpdateResultPayload, observedContainerID string) bool {
+	if facts.NewContainerID == "" || observedContainerID == "" {
 		return false
 	}
-	return strings.EqualFold(facts.NewContainerID, observed.ContainerID)
+	return strings.EqualFold(facts.NewContainerID, observedContainerID)
 }
 
 func dockerContainerFactSummary(facts agentexec.DockerContainerLifecycleResultPayload) string {
-	return fmt.Sprintf("Container lifecycle: phase=%s; mutation started=%t; mutation completed=%t; readback ran=%t; before=%s; after=%s", strings.TrimSpace(facts.ExecutionPhase), facts.MutationStarted, facts.MutationCompleted, facts.ReadbackRan, strings.TrimSpace(facts.Before.State), strings.TrimSpace(facts.After.State))
+	return fmt.Sprintf("Container lifecycle: phase=%s; mutation started=%t; mutation completed=%t; readback ran=%t; before=%s/%s; after=%s/%s", strings.TrimSpace(facts.ExecutionPhase), facts.MutationStarted, facts.MutationCompleted, facts.ReadbackRan, strings.TrimSpace(facts.Before.State), dockerLifecycleHealthSummary(facts.Before.Health), strings.TrimSpace(facts.After.State), dockerLifecycleHealthSummary(facts.After.Health))
+}
+
+func dockerLifecycleHealthSummary(health string) string {
+	if health = strings.TrimSpace(health); health != "" {
+		return health
+	}
+	return "unknown"
 }
 
 func freshDockerLifecycleObservation(before, after, receivedAt time.Time) bool {
@@ -277,12 +287,23 @@ func dockerLifecycleFactsMatch(operation string, before, after agentexec.DockerC
 	}
 	switch operation {
 	case agentexec.DockerContainerOperationStart:
-		return after.Running && after.State == "running"
+		return after.Running && after.State == "running" && agentexec.DockerContainerHealthAllowsVerifiedRunningState(after.Health)
 	case agentexec.DockerContainerOperationStop:
 		return !after.Running && after.State == "exited"
 	case agentexec.DockerContainerOperationRestart:
-		return after.Running && after.State == "running" && !after.StartedAt.IsZero() && after.StartedAt.After(before.StartedAt)
+		return after.Running && after.State == "running" && !after.StartedAt.IsZero() && after.StartedAt.After(before.StartedAt) && agentexec.DockerContainerHealthAllowsVerifiedRunningState(after.Health)
 	default:
 		return false
 	}
+}
+
+func dockerLifecycleObservationFactsMatch(operation string, before agentexec.DockerContainerLifecycleSnapshot, after agentexec.DockerContainerObservationSnapshot) bool {
+	return dockerLifecycleFactsMatch(operation, before, agentexec.DockerContainerLifecycleSnapshot{
+		ContainerID: after.ContainerID, State: after.State, Running: after.Running, Health: after.Health,
+		StartedAt: after.StartedAt, RestartCount: after.RestartCount, ObservedAt: after.ObservedAt,
+	})
+}
+
+func dockerLifecycleRunningHealthUnknown(operation string, after agentexec.DockerContainerLifecycleSnapshot) bool {
+	return (operation == agentexec.DockerContainerOperationStart || operation == agentexec.DockerContainerOperationRestart) && !agentexec.IsDockerContainerHealth(after.Health)
 }

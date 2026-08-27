@@ -16,6 +16,10 @@ const (
 	DockerContainerLifecycleOperationVersion = 1
 	DockerContainerLifecycleReceiptKind      = "pulse.docker_container_lifecycle_result"
 	DockerContainerLifecycleReceiptVersion   = 1
+	DockerContainerHealthNone                = "none"
+	DockerContainerHealthStarting            = "starting"
+	DockerContainerHealthHealthy             = "healthy"
+	DockerContainerHealthUnhealthy           = "unhealthy"
 )
 
 var dockerContainerIDPattern = regexp.MustCompile(`^[a-f0-9]{12,64}$`)
@@ -168,8 +172,12 @@ func ValidateDockerContainerLifecycleResultPayload(result *DockerContainerLifecy
 		return fmt.Errorf("docker lifecycle refusal reason conflicts with mutation state")
 	}
 	for _, snapshot := range []DockerContainerLifecycleSnapshot{result.Before, result.After} {
+		snapshot.Health = strings.ToLower(strings.TrimSpace(snapshot.Health))
 		if snapshot.ContainerID != "" && !dockerContainerIDPattern.MatchString(strings.ToLower(strings.TrimSpace(snapshot.ContainerID))) {
 			return fmt.Errorf("docker lifecycle result has invalid container id")
+		}
+		if snapshot.Health != "" && !IsDockerContainerHealth(snapshot.Health) {
+			return fmt.Errorf("docker lifecycle result has invalid container health")
 		}
 		if !snapshot.ObservedAt.IsZero() && snapshot.ObservedAt.Location() != time.UTC {
 			return fmt.Errorf("docker lifecycle observation timestamp must be UTC")
@@ -182,6 +190,23 @@ func ValidateDockerContainerLifecycleResultPayload(result *DockerContainerLifecy
 		return fmt.Errorf("docker lifecycle readback requires an observation")
 	}
 	return nil
+}
+
+func IsDockerContainerHealth(health string) bool {
+	switch strings.ToLower(strings.TrimSpace(health)) {
+	case DockerContainerHealthNone, DockerContainerHealthStarting, DockerContainerHealthHealthy, DockerContainerHealthUnhealthy:
+		return true
+	default:
+		return false
+	}
+}
+
+// DockerContainerHealthAllowsVerifiedRunningState admits only a confirmed
+// healthy check or an explicit daemon statement that no health check exists.
+// Missing and transitional health are never equivalent to recovery.
+func DockerContainerHealthAllowsVerifiedRunningState(health string) bool {
+	health = strings.ToLower(strings.TrimSpace(health))
+	return health == DockerContainerHealthNone || health == DockerContainerHealthHealthy
 }
 
 func DockerContainerLifecycleOperationIdentity(agentID string, payload DockerContainerLifecyclePayload) operationreceipt.Identity {

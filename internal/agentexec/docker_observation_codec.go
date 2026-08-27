@@ -8,7 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 )
 
-const DockerContainerObservationProtocolVersion = 1
+const DockerContainerObservationProtocolVersion = 2
 
 const dockerContainerObservationMaxClockSkew = 5 * time.Minute
 
@@ -97,6 +97,7 @@ func ValidateDockerContainerObservationResultPayload(result *DockerContainerObse
 	result.ReasonCode = strings.TrimSpace(result.ReasonCode)
 	result.Snapshot.ContainerID = strings.ToLower(strings.TrimSpace(result.Snapshot.ContainerID))
 	result.Snapshot.State = strings.ToLower(strings.TrimSpace(result.Snapshot.State))
+	result.Snapshot.Health = strings.ToLower(strings.TrimSpace(result.Snapshot.Health))
 	result.Snapshot.ObservedAt = result.Snapshot.ObservedAt.UTC()
 	result.Snapshot.StartedAt = result.Snapshot.StartedAt.UTC()
 	if result.RequestID == "" || len(result.RequestID) > maxRequestIDLength || result.ActionID == "" || len(result.ActionID) > maxRequestIDLength {
@@ -106,12 +107,12 @@ func ValidateDockerContainerObservationResultPayload(result *DockerContainerObse
 		return fmt.Errorf("invalid docker observation result binding")
 	}
 	if !result.Observed {
-		if !IsActionRefusalReasonCode(result.ReasonCode) || result.Snapshot.ContainerID != "" || result.Snapshot.State != "" || result.Snapshot.Running || !result.Snapshot.StartedAt.IsZero() || result.Snapshot.RestartCount != 0 || !result.Snapshot.ObservedAt.IsZero() {
+		if !IsActionRefusalReasonCode(result.ReasonCode) || result.Snapshot.ContainerID != "" || result.Snapshot.State != "" || result.Snapshot.Health != "" || result.Snapshot.Running || !result.Snapshot.StartedAt.IsZero() || result.Snapshot.RestartCount != 0 || !result.Snapshot.ObservedAt.IsZero() {
 			return fmt.Errorf("inconclusive docker observation requires a bounded reason and no snapshot")
 		}
 		return nil
 	}
-	if result.ReasonCode != "" || !dockerContainerIDPattern.MatchString(result.Snapshot.ContainerID) || result.Snapshot.State == "" || len(result.Snapshot.State) > 32 || result.Snapshot.RestartCount < 0 || result.Snapshot.ObservedAt.IsZero() {
+	if result.ReasonCode != "" || !dockerContainerIDPattern.MatchString(result.Snapshot.ContainerID) || result.Snapshot.State == "" || len(result.Snapshot.State) > 32 || !IsDockerContainerHealth(result.Snapshot.Health) || result.Snapshot.RestartCount < 0 || result.Snapshot.ObservedAt.IsZero() {
 		return fmt.Errorf("invalid docker observation snapshot")
 	}
 	return nil

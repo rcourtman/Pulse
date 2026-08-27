@@ -161,17 +161,17 @@ func TestDockerRestartColimaRealLabCanonicalJourney(t *testing.T) {
 }
 
 type dockerRestartLabArtifact struct {
-	RunID         string                                     `json:"run_id"`
-	Proposal      dockerRestartLabProposal                   `json:"proposal"`
-	Investigation dockerRestartLabInvestigation              `json:"investigation"`
-	Action        dockerRestartLabAction                     `json:"action"`
-	Attempt       dockerRestartLabAttempt                    `json:"attempt"`
-	Receipt       unified.ActionDispatchReceipt              `json:"receipt"`
-	Finding       dockerRestartLabFinding                    `json:"finding"`
-	Notification  dockerRestartLabNotification               `json:"notification"`
-	Before        agentexec.DockerContainerLifecycleSnapshot `json:"before"`
-	After         agentexec.DockerContainerLifecycleSnapshot `json:"after"`
-	Evidence      unified.ActionEvidence                     `json:"evidence"`
+	RunID         string                                       `json:"run_id"`
+	Proposal      dockerRestartLabProposal                     `json:"proposal"`
+	Investigation dockerRestartLabInvestigation                `json:"investigation"`
+	Action        dockerRestartLabAction                       `json:"action"`
+	Attempt       dockerRestartLabAttempt                      `json:"attempt"`
+	Receipt       unified.ActionDispatchReceipt                `json:"receipt"`
+	Finding       dockerRestartLabFinding                      `json:"finding"`
+	Notification  dockerRestartLabNotification                 `json:"notification"`
+	Before        agentexec.DockerContainerObservationSnapshot `json:"before"`
+	After         agentexec.DockerContainerObservationSnapshot `json:"after"`
+	Evidence      unified.ActionEvidence                       `json:"evidence"`
 }
 
 type dockerRestartLabProposal struct {
@@ -251,30 +251,40 @@ func (colimaDirectObserver) ObserveDockerContainer(ctx context.Context, actionID
 	return dockerContainerPostconditionObservation{ObserverID: "task06-colima-direct", TrustDomain: "daemon:colima-direct", Method: "docker_context_colima_inspect", Snapshot: snapshot, ReceivedAt: time.Now().UTC()}, err
 }
 
-func observeColimaContainer(ctx context.Context, containerID string) (agentexec.DockerContainerLifecycleSnapshot, error) {
+func observeColimaContainer(ctx context.Context, containerID string) (agentexec.DockerContainerObservationSnapshot, error) {
 	raw, err := exec.CommandContext(ctx, "docker", "--context", "colima", "inspect", "--format", `{{json .State}}`, containerID).CombinedOutput()
 	if err != nil {
-		return agentexec.DockerContainerLifecycleSnapshot{}, fmt.Errorf("direct Colima inspect: %w", err)
+		return agentexec.DockerContainerObservationSnapshot{}, fmt.Errorf("direct Colima inspect: %w", err)
 	}
 	var state struct {
 		Status    string `json:"Status"`
 		Running   bool   `json:"Running"`
 		StartedAt string `json:"StartedAt"`
+		Health    *struct {
+			Status string `json:"Status"`
+		} `json:"Health"`
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(raw), &state); err != nil {
-		return agentexec.DockerContainerLifecycleSnapshot{}, err
+		return agentexec.DockerContainerObservationSnapshot{}, err
 	}
 	startedAt, err := time.Parse(time.RFC3339Nano, state.StartedAt)
 	if err != nil {
-		return agentexec.DockerContainerLifecycleSnapshot{}, err
+		return agentexec.DockerContainerObservationSnapshot{}, err
 	}
 	restartRaw, err := exec.CommandContext(ctx, "docker", "--context", "colima", "inspect", "--format", `{{.RestartCount}}`, containerID).CombinedOutput()
 	if err != nil {
-		return agentexec.DockerContainerLifecycleSnapshot{}, err
+		return agentexec.DockerContainerObservationSnapshot{}, err
 	}
 	restartCount, err := strconv.Atoi(strings.TrimSpace(string(restartRaw)))
 	if err != nil {
-		return agentexec.DockerContainerLifecycleSnapshot{}, err
+		return agentexec.DockerContainerObservationSnapshot{}, err
 	}
-	return agentexec.DockerContainerLifecycleSnapshot{ContainerID: containerID, State: strings.ToLower(state.Status), Running: state.Running, StartedAt: startedAt.UTC(), RestartCount: restartCount, ObservedAt: time.Now().UTC()}, nil
+	health := agentexec.DockerContainerHealthNone
+	if state.Health != nil {
+		health = strings.ToLower(strings.TrimSpace(state.Health.Status))
+		if !agentexec.IsDockerContainerHealth(health) {
+			return agentexec.DockerContainerObservationSnapshot{}, fmt.Errorf("unsupported Colima container health status %q", health)
+		}
+	}
+	return agentexec.DockerContainerObservationSnapshot{ContainerID: containerID, State: strings.ToLower(state.Status), Running: state.Running, Health: health, StartedAt: startedAt.UTC(), RestartCount: restartCount, ObservedAt: time.Now().UTC()}, nil
 }

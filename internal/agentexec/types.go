@@ -203,6 +203,21 @@ type DockerContainerLifecycleSnapshot struct {
 	ContainerID  string    `json:"container_id"`
 	State        string    `json:"state"`
 	Running      bool      `json:"running"`
+	Health       string    `json:"-"`
+	StartedAt    time.Time `json:"started_at,omitempty"`
+	RestartCount int       `json:"restart_count"`
+	ObservedAt   time.Time `json:"observed_at"`
+}
+
+// DockerContainerObservationSnapshot is the protocol-v2, read-only daemon
+// fact envelope. Health is deliberately absent from the version-1 lifecycle
+// receipt above so a new agent remains receipt-compatible with an older Pulse
+// server while independent verification can require an explicit health fact.
+type DockerContainerObservationSnapshot struct {
+	ContainerID  string    `json:"container_id"`
+	State        string    `json:"state"`
+	Running      bool      `json:"running"`
+	Health       string    `json:"health"`
 	StartedAt    time.Time `json:"started_at,omitempty"`
 	RestartCount int       `json:"restart_count"`
 	ObservedAt   time.Time `json:"observed_at"`
@@ -222,13 +237,13 @@ type DockerContainerObservationPayload struct {
 }
 
 type DockerContainerObservationResultPayload struct {
-	RequestID       string                           `json:"request_id"`
-	ActionID        string                           `json:"action_id"`
-	ProtocolVersion int                              `json:"protocol_version"`
-	RequestDigest   string                           `json:"request_digest"`
-	Observed        bool                             `json:"observed"`
-	ReasonCode      string                           `json:"reason_code,omitempty"`
-	Snapshot        DockerContainerLifecycleSnapshot `json:"snapshot"`
+	RequestID       string                             `json:"request_id"`
+	ActionID        string                             `json:"action_id"`
+	ProtocolVersion int                                `json:"protocol_version"`
+	RequestDigest   string                             `json:"request_digest"`
+	Observed        bool                               `json:"observed"`
+	ReasonCode      string                             `json:"reason_code,omitempty"`
+	Snapshot        DockerContainerObservationSnapshot `json:"snapshot"`
 }
 
 type DockerContainerLifecycleResultPayload struct {
