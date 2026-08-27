@@ -13,8 +13,12 @@ func TestNotificationActivationDoesNotSuppressDetectionOrActiveReadModel(t *test
 		t.Run(string(activationState), func(t *testing.T) {
 			m := newTestManager(t)
 			delivered := make(chan *Alert, 1)
+			lifecycle := make(chan LifecycleEvent, 1)
 			m.SetAlertCallback(func(alert *Alert) {
 				delivered <- alert
+			})
+			m.SubscribeLifecycleCallback(func(event LifecycleEvent) {
+				lifecycle <- event
 			})
 
 			m.mu.Lock()
@@ -51,6 +55,15 @@ func TestNotificationActivationDoesNotSuppressDetectionOrActiveReadModel(t *test
 					activationState,
 					active[0].ResourceID,
 				)
+			}
+
+			select {
+			case event := <-lifecycle:
+				if event.Type != "fired" || event.Alert == nil || event.Alert.ID != active[0].ID {
+					t.Fatalf("activation state %q emitted unexpected lifecycle event: %#v", activationState, event)
+				}
+			default:
+				t.Fatalf("activation state %q suppressed the alert lifecycle event", activationState)
 			}
 
 			select {

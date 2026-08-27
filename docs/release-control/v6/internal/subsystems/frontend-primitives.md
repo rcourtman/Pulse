@@ -5687,6 +5687,13 @@ while `frontend-modern/src/features/alerts/OverviewTab.tsx` and
 surface composition. Future incident timeline fetch, note-save, or expansion
 control flow should extend that feature hook rather than forking back into
 either tab surface.
+Every surface invoking that owner must pass the canonical alert identifier and
+the occurrence start time as distinct arguments; a row key is local UI state,
+not a substitute for either API identity field.
+The shared `IncidentTimelinePanel` consumes loading, error, timeline, draft,
+and save state as accessors so an asynchronous result remains reactive across
+Overview, desktop History, and mobile History instead of freezing the values
+present when the panel first expands.
 Overview alert runtime now follows that same shell-versus-runtime split. The
 shell stays in `frontend-modern/src/features/alerts/OverviewTab.tsx`, while
 `frontend-modern/src/features/alerts/useAlertOverviewState.ts` owns derived

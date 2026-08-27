@@ -167,6 +167,7 @@ describe('OverviewTab incident timeline error state', () => {
     await waitFor(() => {
       expect(screen.getByText('Command executed')).toBeInTheDocument();
     });
+    expect(mockGetIncidentTimeline).toHaveBeenCalledWith('alert-1', '2026-01-01T00:00:00Z');
     expect(screen.getByText('checked service health')).toBeInTheDocument();
     expect(screen.getByText('systemctl status pulse')).toBeInTheDocument();
     expect(screen.getByText('Active: active (running)')).toBeInTheDocument();

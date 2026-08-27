@@ -2071,14 +2071,23 @@ rebuilds and supplemental ingest into the unified-resource timeline. That means
 monitoring no longer just materializes state snapshots for consumers; it also
 emits durable `ResourceChange` history through the shared resource store so
 live monitoring updates and historical inspection stay aligned.
-That same ownership now includes alert-lifecycle facts emitted by monitoring.
-When an alert is fired, acknowledged, unacknowledged, or resolved for a
-canonical resource, the monitoring runtime must write the corresponding durable
-resource-history event into the unified-resource change store instead of
-leaving that lifecycle only inside alert-scoped incident memory. Incident
-timelines may still project those breadcrumbs for operator flow, but the
-durable backend truth for alert lifecycle now lives on the canonical resource
-timeline.
+That same ownership now includes the resource-history projection of canonical
+alert-lifecycle facts. The alerts-owned SQLite event log is the lifecycle source
+of truth; monitoring consumes its delivery-independent lifecycle seam and
+materializes fired, acknowledged, unacknowledged, and resolved breadcrumbs in
+the unified-resource change store. Projection IDs derive deterministically from
+alert identity, canonical resource, transition kind, and occurrence time, so
+restart repair and duplicate consumer delivery are idempotent. Notification
+activation, quiet hours, grouping, throttling, and destination health may never
+gate this projection. Incident timelines project those breadcrumbs for
+operator flow, while the resource timeline remains the durable resource-scoped
+index rather than a second alert lifecycle authority.
+Monitoring must install the lifecycle consumer, replay durable lifecycle
+events oldest first, and then reconcile restored active alerts that predate
+the event store. Replay and reconciliation create only missing projections,
+including a stable `pulse-system` timeline identity for system alerts whose
+public alert payload intentionally has no monitored-resource link; neither path
+may duplicate a resource change or invoke notification delivery.
 The monitor-owned incident store wiring must therefore attach the canonical
 resource timeline reader whenever the unified monitor adapter is present, so
 operator alert timelines and AI incident context project those lifecycle events

@@ -991,14 +991,21 @@ projection once per refresh and may render its current delivery outcome on an
 unacknowledged active-alert card. Missing or failed diagnosis reads degrade to
 no delivery line; they must not hide alert truth or trigger per-card requests.
 `internal/alerts/eventlog/` and `internal/alerts/event_emission.go` own the
-additive append-only alert event record. Persistent managers enable a
+canonical append-only alert event record. Persistent managers enable a
 SQLite-backed store under the alerts data directory; ephemeral managers record
 nothing unless a store is installed explicitly. Resolution, acknowledgement,
 unacknowledgement, escalation, flapping detection, dispatch, quiet-hours
 deferral, and suppression append immutable events without changing lifecycle
-or delivery behavior. The write path is non-blocking and fail-open for alert
-evaluation: a full buffer counts and drops its event, while an unavailable
-store disables recording. Events retain for 90 days and prune hourly. Fired and
+or delivery behavior. Snapshot-bearing lifecycle transitions commit
+synchronously before downstream lifecycle projections run; they never share
+the droppable diagnostic buffer because alert history is reconstructed from
+them. High-volume notification decisions remain non-blocking and fail-open for
+alert evaluation: a full diagnostic buffer counts and drops that delivery
+evidence. Failed asynchronous batches do not advance the successful-write
+counter, and `Flush` must report the failure or timeout rather than falsely
+claiming the batch landed. An unavailable or failed lifecycle store degrades
+history reads to the recovery model without hiding live active-alert truth.
+Events retain for 90 days and prune hourly. Fired and
 refired lifecycle events come only from the reducer core's explicit activation
 events: canonical lifecycle reactivation maps `EventRefired` separately, while
 shared metric activation records one fired event when its pending incident
@@ -1020,8 +1027,11 @@ Lifecycle events now carry a full alert snapshot and
 `internal/alerts/history_projection.go` can fold those snapshots into one
 history row per occurrence. Existing pre-snapshot SQLite stores upgrade in
 place, and rows without snapshots remain readable but cannot contribute to the
-projection. With an event log enabled, it is the alert-history read authority;
-managers without one retain the in-memory JSON-history model as their fallback.
+projection. The event log becomes the alert-history read authority only after
+legacy history is absent or its complete import and retirement succeeds.
+Managers without an authoritative event store, and stores that report a
+lifecycle write failure, retain the in-memory JSON-history model as their
+fail-soft read fallback.
 `internal/alerts/history_projection_parity_test.go` characterizes the event-log
 projection against that fallback for active, resolved, acknowledged,
 multi-resource, and repeated occurrences. Live active-alert state overlays the
@@ -1038,12 +1048,26 @@ failure leaves JSON history authoritative for the next attempt. An unreadable
 or malformed source, or any entry that cannot produce an identified complete
 snapshot, blocks both retirement and further JSON writes so startup cannot
 silently replace recoverable user history with an empty file. Successful
-retirement stops further JSON writes. Clearing history appends a
+retirement stops further JSON writes. Retired `.imported` leaves remain bounded
+recovery sources: startup loads and idempotently replays them if `events.db` is
+recreated, so loss or quarantine of the database cannot turn a successful
+migration into silent empty history. Clearing history appends a
 `history_cleared` tombstone rather than deleting log rows; the projection
 ignores earlier lifecycle events but overlays still-active alerts as current
 state. Unified-incident and system-alert activation must emit snapshot-bearing
 fired events so their projected history does not begin at acknowledgement or
 resolution.
+`SubscribeLifecycleCallback` is the delivery-independent projection seam for
+that canonical stream. It runs for lifecycle transitions regardless of
+activation, quiet hours, grouping, rate limits, or destination state; delivery
+callbacks remain policy-controlled consumers. Monitoring uses this seam to
+materialize canonical resource-history breadcrumbs and incident shells. On
+startup it replays durable lifecycle transitions oldest first, then
+idempotently reconciles restored active alerts that predate the event store.
+This repairs resolved as well as active incident timelines without replaying
+any delivery side effect, and ensures an alert already visible in Overview
+cannot keep returning an unavailable timeline merely because its notification
+was held.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved

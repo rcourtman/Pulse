@@ -11,6 +11,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -2344,7 +2345,11 @@ func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 		StartTime:  startedAt,
 	}
 
-	monitor.handleAlertFired(alert)
+	monitor.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+		Type:       eventlog.TypeFired,
+		OccurredAt: startedAt,
+		Alert:      alert,
+	})
 
 	changes, err := store.GetRecentChanges("vm-guardrail", time.Time{}, 10)
 	if err != nil {

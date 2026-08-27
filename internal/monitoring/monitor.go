@@ -1977,6 +1977,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	}
 
 	// Set up alert callbacks
+	m.alertManager.SubscribeLifecycleCallback(m.handleAlertLifecycleEvent)
 	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
 		m.handleAlertFired(alert)
 	})
@@ -1993,15 +1994,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		// Don't broadcast full state here - it causes a cascade with many guests.
 		// The frontend will get the updated alerts through the regular broadcast ticker.
 	})
-	m.alertManager.SetAcknowledgedCallback(func(alert *alerts.Alert, user string) {
-		m.handleAlertAcknowledged(alert, user)
-	})
-	m.alertManager.SetUnacknowledgedCallback(func(alert *alerts.Alert, user string) {
-		m.handleAlertUnacknowledged(alert, user)
-	})
 	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
 		m.handleAlertEscalated(wsHub, alert, level)
 	})
+	m.replayAlertLifecycleProjections()
+	m.reconcileActiveAlertTimelines()
 
 	// Create separate tickers for polling and broadcasting using the configured cadence
 

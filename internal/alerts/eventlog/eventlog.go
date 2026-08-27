@@ -4,9 +4,9 @@
 // "why didn't I get notified?" is answerable from durable data instead of
 // being reconstructed from logs (docs/ALERT_ENGINE_EVOLUTION.md, Phase 0).
 //
-// The store is additive to the live alert manager: appends never block the
-// evaluation path (a full buffer drops the event and counts the drop), and a
-// store that fails to open degrades to a nil store whose methods are no-ops.
+// Delivery-diagnostic appends are additive to the live alert manager: they do
+// not block evaluation and may be dropped under sustained pressure. Lifecycle
+// events use AppendDurable because alert history is projected from this store.
 package eventlog
 
 import (
@@ -105,6 +105,9 @@ type Store struct {
 	dropped   atomic.Int64
 	appended  atomic.Int64
 	written   atomic.Int64
+	failed    atomic.Int64
+	failureMu sync.RWMutex
+	lastError error
 	retention time.Duration
 }
 
@@ -247,6 +250,23 @@ func (s *Store) Append(event Event) {
 	}
 }
 
+// AppendDurable commits one lifecycle event before returning. Lifecycle
+// volume is low, and this explicit durability boundary prevents alert history
+// from silently losing state when the diagnostic append buffer is saturated.
+func (s *Store) AppendDurable(event Event) error {
+	if s == nil {
+		return fmt.Errorf("event log is not enabled")
+	}
+	if event.OccurredAt.IsZero() {
+		event.OccurredAt = time.Now()
+	}
+	if err := s.insertBatch([]Event{event}); err != nil {
+		s.recordWriteFailure(err)
+		return err
+	}
+	return nil
+}
+
 // ImportEvents writes events synchronously, bypassing the droppable append
 // buffer. It exists for the one-time legacy-history migration, where losing
 // an entry to a full buffer would silently lose user data.
@@ -291,7 +311,9 @@ func (s *Store) writeLoop() {
 				}
 			}
 			if err := s.insertBatch(batch); err != nil {
+				s.recordWriteFailure(err)
 				log.Error().Err(err).Int("events", len(batch)).Msg("alert event log write failed")
+				continue
 			}
 			s.written.Add(int64(len(batch)))
 		case <-pruneTicker.C:
@@ -302,7 +324,9 @@ func (s *Store) writeLoop() {
 				select {
 				case event := <-s.events:
 					if err := s.insertBatch([]Event{event}); err != nil {
+						s.recordWriteFailure(err)
 						log.Error().Err(err).Msg("alert event log final drain write failed")
+						continue
 					}
 					s.written.Add(1)
 				default:
@@ -311,6 +335,29 @@ func (s *Store) writeLoop() {
 			}
 		}
 	}
+}
+
+func (s *Store) recordWriteFailure(err error) {
+	if s == nil || err == nil {
+		return
+	}
+	s.failureMu.Lock()
+	s.lastError = err
+	s.failureMu.Unlock()
+	s.failed.Add(1)
+}
+
+func (s *Store) writeError() error {
+	if s == nil || s.failed.Load() == 0 {
+		return nil
+	}
+	s.failureMu.RLock()
+	err := s.lastError
+	s.failureMu.RUnlock()
+	if err == nil {
+		return fmt.Errorf("alert event log write failed")
+	}
+	return fmt.Errorf("alert event log write failed: %w", err)
 }
 
 func (s *Store) insertBatch(batch []Event) error {
@@ -401,18 +448,28 @@ func (s *Store) pruneOld() {
 	}
 }
 
-// Flush blocks until every event appended before the call has been written
-// (or a short deadline passes). It exists for tests and API reads that must
-// observe just-appended events.
-func (s *Store) Flush() {
+// Flush blocks until every diagnostic event appended before the call has been
+// written. It reports failed writes and timeouts rather than claiming a lost
+// batch was successfully flushed.
+func (s *Store) Flush() error {
 	if s == nil {
-		return
+		return nil
 	}
 	target := s.appended.Load()
 	deadline := time.Now().Add(5 * time.Second)
 	for s.written.Load() < target && time.Now().Before(deadline) {
+		if err := s.writeError(); err != nil {
+			return err
+		}
 		time.Sleep(time.Millisecond)
 	}
+	if err := s.writeError(); err != nil {
+		return err
+	}
+	if written := s.written.Load(); written < target {
+		return fmt.Errorf("alert event log flush timed out: wrote %d of %d events", written, target)
+	}
+	return nil
 }
 
 // Query returns matching events, newest first.

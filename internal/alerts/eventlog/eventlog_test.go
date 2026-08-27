@@ -240,3 +240,19 @@ func TestOpenRequiresExistingDirectory(t *testing.T) {
 	}
 	store.Close()
 }
+
+func TestDurableAppendAndFlushReportDatabaseFailure(t *testing.T) {
+	store := newTestStore(t)
+	if err := store.db.Close(); err != nil {
+		t.Fatalf("close database: %v", err)
+	}
+
+	if err := store.AppendDurable(Event{Type: TypeFired, AlertID: "durable-failure"}); err == nil {
+		t.Fatal("AppendDurable reported success after the database closed")
+	}
+
+	store.Append(Event{Type: TypeNotificationSuppressed, AlertID: "async-failure"})
+	if err := store.Flush(); err == nil {
+		t.Fatal("Flush reported success after the async batch failed")
+	}
+}

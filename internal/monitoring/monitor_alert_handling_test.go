@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -67,6 +69,20 @@ func TestMonitor_HandleAlertFired_RecoversFromPushCallbackPanic(t *testing.T) {
 	m.handleAlertFired(&alerts.Alert{ID: "alert-push-panic"})
 }
 
+func TestDeliveryCallbackDoesNotDuplicateCanonicalAITrigger(t *testing.T) {
+	called := make(chan struct{}, 1)
+	monitor := &Monitor{
+		alertTriggeredAICallback: func(*alerts.Alert) { called <- struct{}{} },
+	}
+
+	monitor.handleAlertFired(&alerts.Alert{ID: "single-ai-trigger"})
+	select {
+	case <-called:
+		t.Fatal("delivery callback invoked AI analysis; the manager-owned unconditional AI callback is the sole trigger")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 	store := unifiedresources.NewMemoryStore()
 	m := &Monitor{
@@ -91,9 +107,19 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 		},
 	}
 
-	m.handleAlertFired(alert)
-	m.handleAlertAcknowledged(alert, "admin")
-	m.handleAlertUnacknowledged(alert, "admin")
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: startedAt, Alert: alert})
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+		Type:       eventlog.TypeAcknowledged,
+		OccurredAt: ackAt,
+		Alert:      alert,
+		Details:    map[string]string{"user": "admin"},
+	})
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+		Type:       eventlog.TypeUnacknowledged,
+		OccurredAt: ackAt.Add(time.Minute),
+		Alert:      alert,
+		Details:    map[string]string{"user": "admin"},
+	})
 
 	changes, err := store.GetRecentChanges("vm-1", time.Time{}, 10)
 	if err != nil {
@@ -120,6 +146,164 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 	}
 	if got := changes[2].Metadata["vmwareConnectionId"]; got != "vc-1" {
 		t.Fatalf("vmwareConnectionId = %#v, want vc-1", got)
+	}
+}
+
+func TestPausedDeliveryStillBuildsTimelineThroughRealAlertLifecycle(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+
+	resourceStore := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	monitor := &Monitor{
+		alertManager:  manager,
+		incidentStore: incidentStore,
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
+	}
+	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+	delivered := make(chan *alerts.Alert, 1)
+	manager.SetAlertCallback(func(alert *alerts.Alert) { delivered <- alert })
+
+	vm := models.VM{ID: "paused-vm", Name: "Paused VM", Node: "node-1", Instance: "pve-1", Status: "stopped"}
+	manager.CheckGuest(vm, vm.Instance)
+	manager.CheckGuest(vm, vm.Instance)
+
+	active := manager.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("active alerts = %d, want 1", len(active))
+	}
+	timeline := incidentStore.GetTimelineByAlertAt(active[0].ID, active[0].StartTime)
+	if timeline == nil || len(timeline.Events) == 0 || timeline.Events[0].Type != memory.IncidentEventAlertFired {
+		t.Fatalf("paused-delivery lifecycle did not produce an incident timeline: %#v", timeline)
+	}
+	select {
+	case alert := <-delivered:
+		t.Fatalf("pending-review alert reached delivery callback: %s", alert.ID)
+	default:
+	}
+}
+
+func TestActiveTimelineReconciliationIsIdempotent(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{}
+	manager.UpdateConfig(config)
+
+	vm := models.VM{ID: "restored-vm", Name: "Restored VM", Node: "node-1", Instance: "pve-1", Status: "stopped"}
+	manager.CheckGuest(vm, vm.Instance)
+	manager.CheckGuest(vm, vm.Instance)
+
+	resourceStore := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	monitor := &Monitor{
+		alertManager:  manager,
+		incidentStore: incidentStore,
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
+	}
+	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
+	monitor.reconcileActiveAlertTimelines()
+	monitor.reconcileActiveAlertTimelines()
+
+	active := manager.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("active alerts = %d, want 1", len(active))
+	}
+	timeline := incidentStore.GetTimelineByAlertAt(active[0].ID, active[0].StartTime)
+	if timeline == nil || len(timeline.Events) != 1 || timeline.Events[0].Type != memory.IncidentEventAlertFired {
+		t.Fatalf("reconciled timeline = %#v, want one fired event", timeline)
+	}
+	changes, err := resourceStore.GetRecentChanges(active[0].ResourceID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("reconciliation wrote %d canonical changes, want 1", len(changes))
+	}
+}
+
+func TestLifecycleReplayRepairsResolvedIncidentTimeline(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	manager.EnableEventLog()
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+
+	vm := models.VM{ID: "historical-vm", Name: "Historical VM", Node: "node-1", Instance: "pve-1", Status: "stopped"}
+	manager.CheckGuest(vm, vm.Instance)
+	manager.CheckGuest(vm, vm.Instance)
+	active := manager.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("active alerts = %d, want 1", len(active))
+	}
+	alertID, startedAt := active[0].ID, active[0].StartTime
+
+	vm.Status = "running"
+	manager.CheckGuest(vm, vm.Instance)
+	if active := manager.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("active alerts after recovery = %d, want 0", len(active))
+	}
+
+	resourceStore := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	monitor := &Monitor{
+		alertManager:  manager,
+		incidentStore: incidentStore,
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
+	}
+	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
+	monitor.replayAlertLifecycleProjections()
+	monitor.replayAlertLifecycleProjections()
+
+	timeline := incidentStore.GetTimelineByAlertAt(alertID, startedAt)
+	if timeline == nil || len(timeline.Events) != 2 {
+		t.Fatalf("replayed timeline = %#v, want fired and resolved events", timeline)
+	}
+	if timeline.Events[0].Type != memory.IncidentEventAlertFired || timeline.Events[1].Type != memory.IncidentEventAlertResolved {
+		t.Fatalf("replayed event types = %#v, want fired then resolved", timeline.Events)
+	}
+	changes, err := resourceStore.GetRecentChanges(vm.ID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) != 2 {
+		t.Fatalf("replay wrote %d canonical changes, want 2", len(changes))
+	}
+}
+
+func TestSystemAlertTimelineUsesCanonicalPulseResource(t *testing.T) {
+	resourceStore := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	monitor := &Monitor{
+		incidentStore: incidentStore,
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
+	}
+	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
+	alert := &alerts.Alert{
+		ID:           alerts.SystemAlertID("event-store-health"),
+		Type:         "event-store-health",
+		Level:        alerts.AlertLevelCritical,
+		ResourceName: alerts.SystemAlertResourceName,
+		Message:      "Alert history storage is unavailable",
+		StartTime:    time.Now().UTC(),
+	}
+	monitor.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: alert.StartTime, Alert: alert})
+	timeline := incidentStore.GetTimelineByAlertAt(alert.ID, alert.StartTime)
+	if timeline == nil || timeline.ResourceID != "pulse-system" || len(timeline.Events) != 1 {
+		t.Fatalf("system alert timeline = %#v", timeline)
 	}
 }
 

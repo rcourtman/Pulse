@@ -108,6 +108,10 @@ type Manager struct {
 	// Append-only alert event log (transitions + notification decisions).
 	// Nil until EnableEventLog/SetEventLog; recording is then a no-op.
 	eventLog atomic.Pointer[eventlog.Store]
+	// eventHistoryAuthoritative becomes true only after legacy JSON history is
+	// absent or has been durably imported. Reads keep using JSON while migration
+	// is incomplete or the event store reports a write failure.
+	eventHistoryAuthoritative atomic.Bool
 
 	// Shadow-mode reducer feed (Phase 1 capstone). Nil until
 	// EnableShadowFeed; all access is under m.mu.

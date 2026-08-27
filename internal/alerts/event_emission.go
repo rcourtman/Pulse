@@ -31,7 +31,7 @@ func (m *Manager) EnableEventLog() {
 		return
 	}
 	m.SetEventLog(store)
-	m.importLegacyHistoryIntoEventLog(store)
+	m.eventHistoryAuthoritative.Store(m.importLegacyHistoryIntoEventLog(store))
 }
 
 // SetEventLog installs an event log store. Passing nil disables recording.
@@ -41,6 +41,11 @@ func (m *Manager) SetEventLog(store *eventlog.Store) {
 		return
 	}
 	previous := m.eventLog.Swap(store)
+	authoritative := store != nil && m.historyManager != nil &&
+		!m.historyManager.StorageFileExists() &&
+		!m.historyManager.ImportedStorageFileExists() &&
+		m.historyManager.StorageLoadError() == nil
+	m.eventHistoryAuthoritative.Store(authoritative)
 	if previous != nil && previous != store {
 		previous.Close()
 	}
@@ -61,19 +66,58 @@ func (m *Manager) AlertEvents(filter eventlog.Filter) ([]eventlog.Event, error) 
 	if store == nil {
 		return nil, nil
 	}
-	store.Flush()
+	if err := store.Flush(); err != nil {
+		return nil, err
+	}
 	return store.Query(filter)
 }
 
-// recordAlertEvent appends one event for an alert. alertID is the identity
-// fallback for callers whose *Alert may be nil (some resolve paths); when the
-// alert is present its exported ID wins. Never blocks; safe under m.mu.
-func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reason, message string, details map[string]string) {
+// ReplayLifecycleEvents visits every durable lifecycle transition oldest
+// first. It is the projection-repair seam for consumers such as incident and
+// resource timelines: delivery callbacks are deliberately not involved.
+func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error {
+	if m == nil || visit == nil {
+		return nil
+	}
 	store := m.eventLogStore()
 	if store == nil {
-		return
+		return nil
 	}
+	return store.WalkOldest(eventlog.Filter{Types: []string{
+		eventlog.TypeFired,
+		eventlog.TypeRefired,
+		eventlog.TypeResolved,
+		eventlog.TypeAcknowledged,
+		eventlog.TypeUnacknowledged,
+	}}, func(event eventlog.Event) error {
+		if len(event.Snapshot) == 0 {
+			return nil
+		}
+		var snapshot Alert
+		if err := json.Unmarshal(event.Snapshot, &snapshot); err != nil {
+			log.Warn().Err(err).
+				Int64("eventID", event.ID).
+				Str("alertID", event.AlertID).
+				Msg("skipping invalid alert lifecycle snapshot during projection replay")
+			return nil
+		}
+		return visit(LifecycleEvent{
+			Type:       event.Type,
+			OccurredAt: event.OccurredAt,
+			Alert:      &snapshot,
+			Details:    cloneStringMap(event.Details),
+			Persisted:  true,
+		})
+	})
+}
 
+// recordAlertEvent emits one canonical lifecycle transition and appends it to
+// the durable event log. alertID is the identity fallback for callers whose
+// *Alert may be nil (some resolve paths); when the alert is present its
+// exported ID wins. Lifecycle subscribers run even when the diagnostic event
+// log is unavailable, so incident history never depends on notification or
+// event-log availability.
+func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reason, message string, details map[string]string) {
 	event := eventlog.Event{
 		OccurredAt: m.policyNow(),
 		Type:       eventType,
@@ -99,7 +143,58 @@ func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reas
 	if event.AlertID == "" {
 		return
 	}
-	store.Append(event)
+
+	persisted := false
+	if store := m.eventLogStore(); store != nil {
+		if eventCarriesAlertSnapshot(eventType) {
+			if err := store.AppendDurable(event); err != nil {
+				m.eventHistoryAuthoritative.Store(false)
+				log.Error().Err(err).
+					Str("alertID", event.AlertID).
+					Str("eventType", eventType).
+					Msg("durable alert lifecycle event write failed")
+			} else {
+				persisted = true
+			}
+		} else {
+			store.Append(event)
+		}
+	}
+
+	if eventCarriesAlertSnapshot(eventType) && alert != nil {
+		lifecycleEvent := LifecycleEvent{
+			Type:       eventType,
+			OccurredAt: event.OccurredAt,
+			Alert:      cloneAlertForOutput(alert),
+			Details:    cloneStringMap(details),
+			Persisted:  persisted,
+		}
+		for _, callback := range m.getLifecycleCallbacks() {
+			func(cb func(LifecycleEvent)) {
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						log.Error().
+							Interface("panic", recovered).
+							Str("alertID", event.AlertID).
+							Str("eventType", eventType).
+							Msg("panic in alert lifecycle callback")
+					}
+				}()
+				cb(lifecycleEvent)
+			}(callback)
+		}
+	}
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make(map[string]string, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
 }
 
 // eventCarriesAlertSnapshot reports whether an event type records the full

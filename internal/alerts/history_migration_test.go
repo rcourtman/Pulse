@@ -82,6 +82,41 @@ func TestLegacyHistoryImportRetiresJSONAndServesEntries(t *testing.T) {
 	}
 }
 
+func TestRetiredLegacyHistoryRecoversRecreatedEventDatabase(t *testing.T) {
+	dataDir := t.TempDir()
+	seed := NewManagerWithDataDir(dataDir)
+	past := time.Now().Add(-2 * time.Hour).UTC()
+	seed.historyManager.AddAlert(Alert{
+		ID:         "legacy-recovery::metric-threshold:cpu",
+		Type:       "cpu",
+		ResourceID: "legacy-recovery",
+		StartTime:  past,
+		LastSeen:   past.Add(time.Minute),
+	})
+	if err := seed.historyManager.saveHistory(); err != nil {
+		t.Fatalf("persist legacy history: %v", err)
+	}
+	seed.EnableEventLog()
+	seed.SetEventLog(nil)
+	seed.Stop()
+
+	eventsPath := filepath.Join(dataDir, "alerts", "events.db")
+	if err := os.Remove(eventsPath); err != nil {
+		t.Fatalf("remove event database: %v", err)
+	}
+	for _, suffix := range []string{"-shm", "-wal"} {
+		_ = os.Remove(eventsPath + suffix)
+	}
+
+	restarted := NewManagerWithDataDir(dataDir)
+	t.Cleanup(restarted.Stop)
+	restarted.EnableEventLog()
+	entries := restarted.GetAlertHistory(0)
+	if len(entries) != 1 || entries[0].ResourceID != "legacy-recovery" {
+		t.Fatalf("recreated event database did not recover retired history: %#v", entries)
+	}
+}
+
 func TestLegacyHistoryImportRetryAfterRetirementFailureIsIdempotent(t *testing.T) {
 	dataDir := t.TempDir()
 	m := NewManagerWithDataDir(dataDir)

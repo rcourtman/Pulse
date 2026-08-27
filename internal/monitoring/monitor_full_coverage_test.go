@@ -402,8 +402,6 @@ func TestMonitor_AlertCallbacks(t *testing.T) {
 	// No panic = pass
 
 	m.handleAlertResolved("test-alert")
-	m.handleAlertAcknowledged(alert, "user")
-	m.handleAlertUnacknowledged(alert, "user")
 }
 
 type mockResourceStore struct{}

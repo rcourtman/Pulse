@@ -295,6 +295,18 @@ func (hm *HistoryManager) StorageFileExists() bool {
 	return false
 }
 
+// ImportedStorageFileExists reports whether a retired JSON source remains as
+// a recovery copy. It is replayed idempotently if events.db is recreated and
+// remains the read fallback when the event store is unavailable.
+func (hm *HistoryManager) ImportedStorageFileExists() bool {
+	for _, path := range []string{hm.historyFile + ".imported", hm.backupFile + ".imported"} {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // StorageLoadError reports why a present legacy source could not be loaded.
 // Migration and periodic persistence must leave that source untouched.
 func (hm *HistoryManager) StorageLoadError() error {
@@ -493,26 +505,46 @@ func (hm *HistoryManager) loadHistory() error {
 
 		// Try backup file
 		var backupErr error
+		loadedRetired := false
 		data, backupErr = readLimitedRegularFile(hm.backupFile, maxAlertHistoryFileSizeBytes)
 		if backupErr != nil {
 			if os.IsNotExist(backupErr) && os.IsNotExist(mainErr) {
-				// Both files don't exist - this is normal on first startup.
-				log.Debug().Msg("No alert history files found, starting fresh")
-				return nil
+				// Retired JSON remains a recovery source if events.db is lost or
+				// unavailable. Prefer the primary retired leaf, then its backup.
+				var importedErr error
+				data, importedErr = readLimitedRegularFile(hm.historyFile+".imported", maxAlertHistoryFileSizeBytes)
+				if importedErr != nil {
+					data, importedErr = readLimitedRegularFile(hm.backupFile+".imported", maxAlertHistoryFileSizeBytes)
+				}
+				if importedErr != nil {
+					if os.IsNotExist(importedErr) {
+						log.Debug().Msg("No alert history files found, starting fresh")
+						return nil
+					}
+					return fmt.Errorf("failed to read retired alert history recovery source: %w", importedErr)
+				}
+				hm.storageRetired = true
+				loadedRetired = true
+				log.Info().Msg("loaded retired alert history recovery source")
 			}
-			if os.IsPermission(backupErr) {
+			if !loadedRetired && os.IsPermission(backupErr) {
 				log.Warn().
 					Err(backupErr).
 					Str("file", hm.backupFile).
 					Msg("Permission denied reading backup history file - check file ownership")
 			}
-			if !os.IsNotExist(mainErr) {
+			if loadedRetired {
+				backupErr = nil
+			} else if !os.IsNotExist(mainErr) {
 				return fmt.Errorf("failed to read history file %q (%v); failed to read history backup file %q: %w",
 					hm.historyFile, mainErr, hm.backupFile, backupErr)
+			} else {
+				return fmt.Errorf("failed to read history backup file %q: %w", hm.backupFile, backupErr)
 			}
-			return fmt.Errorf("failed to read history backup file %q: %w", hm.backupFile, backupErr)
 		}
-		log.Info().Msg("loaded alert history from backup file")
+		if !loadedRetired {
+			log.Info().Msg("loaded alert history from backup file")
+		}
 	}
 
 	var history []HistoryEntry

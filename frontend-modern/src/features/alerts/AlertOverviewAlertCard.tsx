@@ -191,7 +191,11 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
           <button
             class={getAlertOverviewSecondaryActionClass()}
             onClick={() => {
-              void props.timelineState.toggleIncidentTimeline(alertKey(), props.alert.startTime);
+              void props.timelineState.toggleIncidentTimeline(
+                alertKey(),
+                alertKey(),
+                props.alert.startTime,
+              );
             }}
           >
             {getAlertOverviewTimelineActionLabel(
@@ -222,23 +226,31 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
       <Show when={props.timelineState.expandedIncidents().has(alertKey())}>
         <div class="mt-3 border-t border-border pt-3">
           <IncidentTimelinePanel
-            loading={props.timelineState.incidentLoading()[alertKey()]}
-            error={props.timelineState.incidentErrors()[alertKey()]}
-            timeline={props.timelineState.incidentTimelines()[alertKey()]}
+            loading={() => props.timelineState.incidentLoading()[alertKey()]}
+            error={() => props.timelineState.incidentErrors()[alertKey()]}
+            timeline={() => props.timelineState.incidentTimelines()[alertKey()]}
             filters={props.timelineState.eventFilters}
             setFilters={props.timelineState.setEventFilters}
             filterVariant="panel"
             eventCardVariant="alt"
-            noteDraft={props.timelineState.incidentNoteDrafts()[alertKey()] || ''}
+            noteDraft={() => props.timelineState.incidentNoteDrafts()[alertKey()] || ''}
             onNoteDraftChange={(value) =>
               props.timelineState.setIncidentNoteDraft(alertKey(), value)
             }
-            noteSaving={props.timelineState.incidentNoteSaving().has(alertKey())}
+            noteSaving={() => props.timelineState.incidentNoteSaving().has(alertKey())}
             onSaveNote={() => {
-              void props.timelineState.saveIncidentNote(alertKey(), props.alert.startTime);
+              void props.timelineState.saveIncidentNote(
+                alertKey(),
+                alertKey(),
+                props.alert.startTime,
+              );
             }}
             onRetry={() => {
-              void props.timelineState.loadIncidentTimeline(alertKey(), props.alert.startTime);
+              void props.timelineState.loadIncidentTimeline(
+                alertKey(),
+                alertKey(),
+                props.alert.startTime,
+              );
             }}
           />
         </div>

@@ -5,8 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -122,23 +124,6 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 		}()
 	}
 
-	if m.incidentStore != nil {
-		m.incidentStore.RecordAlertFired(alert)
-	}
-	m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertFired, alert.StartTime, "")
-
-	// Trigger AI analysis if callback is configured
-	if m.alertTriggeredAICallback != nil {
-		// Run in goroutine to avoid blocking the monitor loop
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("panic in AI alert callback")
-				}
-			}()
-			m.alertTriggeredAICallback(alert)
-		}()
-	}
 }
 
 func (m *Monitor) handleAlertResolved(alertID string) {
@@ -146,21 +131,6 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 
 	if m.wsHub != nil {
 		m.wsHub.BroadcastAlertResolvedToTenant(m.GetOrgID(), alertID)
-	}
-
-	// Always record incident timeline, regardless of notification suppression.
-	// This ensures we have a complete history even during quiet hours.
-	if m.incidentStore != nil {
-		resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-		if resolvedAlert != nil && resolvedAlert.Alert != nil {
-			m.incidentStore.RecordAlertResolved(resolvedAlert.Alert, resolvedAlert.ResolvedTime)
-		}
-	}
-	if resolvedAlert == nil && m.alertManager != nil {
-		resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-	}
-	if resolvedAlert != nil && resolvedAlert.Alert != nil {
-		m.recordAlertTimelineChange(resolvedAlert.Alert, unifiedresources.ChangeAlertResolved, resolvedAlert.ResolvedTime, "")
 	}
 
 	// Always trigger AI callback, regardless of notification suppression.
@@ -248,29 +218,88 @@ func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, 
 	m.broadcastEscalatedAlert(hub, alert)
 }
 
-func (m *Monitor) handleAlertAcknowledged(alert *alerts.Alert, user string) {
-	if m.incidentStore == nil || alert == nil {
-		if alert == nil {
-			return
-		}
-	} else {
-		m.incidentStore.RecordAlertAcknowledged(alert, user)
-	}
-	occurredAt := time.Now()
-	if alert.AckTime != nil {
-		occurredAt = *alert.AckTime
-	}
-	m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertAcknowledged, occurredAt, user)
-}
-
-func (m *Monitor) handleAlertUnacknowledged(alert *alerts.Alert, user string) {
-	if alert == nil {
+func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
+	alert := event.Alert
+	if m == nil || alert == nil {
 		return
 	}
-	if m.incidentStore != nil {
-		m.incidentStore.RecordAlertUnacknowledged(alert, user)
+
+	actor := event.Details["user"]
+	timelineAlert := alert
+	if alerts.IsSystemAlert(alert) && strings.TrimSpace(alert.ResourceID) == "" {
+		timelineAlert = alert.Clone()
+		timelineAlert.ResourceID = "pulse-system"
 	}
-	m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertUnacknowledged, time.Now(), user)
+	switch event.Type {
+	case eventlog.TypeFired, eventlog.TypeRefired:
+		if m.incidentStore != nil {
+			m.incidentStore.RecordAlertFired(timelineAlert)
+		}
+		occurredAt := event.OccurredAt
+		if event.Type == eventlog.TypeFired && !alert.StartTime.IsZero() {
+			occurredAt = alert.StartTime
+		}
+		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertFired, occurredAt, "")
+	case eventlog.TypeAcknowledged:
+		if m.incidentStore != nil {
+			m.incidentStore.RecordAlertAcknowledged(timelineAlert, actor)
+		}
+		occurredAt := event.OccurredAt
+		if alert.AckTime != nil && !alert.AckTime.IsZero() {
+			occurredAt = *alert.AckTime
+		}
+		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertAcknowledged, occurredAt, actor)
+	case eventlog.TypeUnacknowledged:
+		if m.incidentStore != nil {
+			m.incidentStore.RecordAlertUnacknowledged(timelineAlert, actor)
+		}
+		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertUnacknowledged, event.OccurredAt, actor)
+	case eventlog.TypeResolved:
+		if m.incidentStore != nil {
+			m.incidentStore.RecordAlertResolved(timelineAlert, event.OccurredAt)
+		}
+		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertResolved, event.OccurredAt, "")
+	}
+}
+
+func (m *Monitor) replayAlertLifecycleProjections() {
+	if m == nil || m.alertManager == nil {
+		return
+	}
+	if err := m.alertManager.ReplayLifecycleEvents(func(event alerts.LifecycleEvent) error {
+		m.handleAlertLifecycleEvent(event)
+		return nil
+	}); err != nil {
+		log.Error().Err(err).Msg("failed to replay canonical alert lifecycle projections")
+	}
+}
+
+func (m *Monitor) reconcileActiveAlertTimelines() {
+	if m == nil || m.alertManager == nil || m.incidentStore == nil {
+		return
+	}
+	activeAlerts := m.alertManager.GetActiveAlerts()
+	for i := range activeAlerts {
+		alert := &activeAlerts[i]
+		timeline := m.incidentStore.GetTimelineByAlertAt(alert.ID, alert.StartTime)
+		if timeline != nil {
+			hasFired := false
+			for _, event := range timeline.Events {
+				if event.Type == memory.IncidentEventAlertFired {
+					hasFired = true
+					break
+				}
+			}
+			if hasFired {
+				continue
+			}
+		}
+		m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+			Type:       eventlog.TypeFired,
+			OccurredAt: alert.StartTime,
+			Alert:      alert,
+		})
+	}
 }
 
 func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedresources.ChangeKind, occurredAt time.Time, actor string) {
@@ -294,6 +323,13 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 	if change == nil {
 		return
 	}
+	change.ID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(strings.Join([]string{
+		"pulse-alert-lifecycle-v1",
+		strings.TrimSpace(alert.ID),
+		strings.TrimSpace(alert.ResourceID),
+		string(kind),
+		occurredAt.UTC().Format(time.RFC3339Nano),
+	}, "\x00"))).String()
 	if err := recorder.RecordChange(*change); err != nil {
 		log.Warn().
 			Err(err).

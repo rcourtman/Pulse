@@ -125,16 +125,16 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
               >
                 <div class="mt-3 border-t border-border pt-3">
                   <IncidentTimelinePanel
-                    loading={props.state.incidentLoading()[rowKey()]}
-                    error={props.state.incidentErrors()[rowKey()]}
-                    timeline={props.state.incidentTimelines()[rowKey()]}
+                    loading={() => props.state.incidentLoading()[rowKey()]}
+                    error={() => props.state.incidentErrors()[rowKey()]}
+                    timeline={() => props.state.incidentTimelines()[rowKey()]}
                     filters={props.state.historyIncidentEventFilters}
                     setFilters={props.state.setHistoryIncidentEventFilters}
                     filterVariant="compact"
                     eventCardVariant="surface"
-                    noteDraft={props.state.incidentNoteDrafts()[rowKey()] || ''}
+                    noteDraft={() => props.state.incidentNoteDrafts()[rowKey()] || ''}
                     onNoteDraftChange={(value) => props.state.setIncidentNoteDraft(rowKey(), value)}
-                    noteSaving={props.state.incidentNoteSaving().has(rowKey())}
+                    noteSaving={() => props.state.incidentNoteSaving().has(rowKey())}
                     onSaveNote={() => {
                       void props.state.saveIncidentNote(rowKey(), alert.id, alert.startTime);
                     }}

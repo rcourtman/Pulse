@@ -30,31 +30,31 @@ import {
 } from '@/utils/alertIncidentPresentation';
 
 export interface IncidentTimelinePanelProps {
-  timeline?: Incident | null;
-  loading: boolean;
-  error: boolean;
+  timeline: Accessor<Incident | null | undefined>;
+  loading: Accessor<boolean>;
+  error: Accessor<boolean>;
   filters: Accessor<Set<string>>;
   setFilters: (next: Set<string>) => void;
   filterVariant: AlertIncidentEventFilterVariant;
   eventCardVariant: 'surface' | 'alt';
-  noteDraft: string;
+  noteDraft: Accessor<string>;
   onNoteDraftChange: (value: string) => void;
-  noteSaving: boolean;
+  noteSaving: Accessor<boolean>;
   onSaveNote: () => void;
   onRetry: () => void;
 }
 
 export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
-  const timeline = () => props.timeline;
+  const timeline = props.timeline;
   const events = createMemo(() => timeline()?.events || []);
   const filteredEvents = createMemo(() => filterIncidentEvents(events(), props.filters()));
 
   return (
     <>
-      <Show when={props.loading}>
+      <Show when={props.loading()}>
         <p class="text-xs text-muted">{getAlertTimelineLoadingState().text}</p>
       </Show>
-      <Show when={!props.loading && timeline()}>
+      <Show when={!props.loading() && timeline()}>
         {(loadedTimeline) => (
           <div class="space-y-3">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -121,25 +121,25 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
                 textareaBaseClass={getAlertIncidentNoteTextareaClass()}
                 rows={2}
                 placeholder={getAlertTimelineNotePlaceholder()}
-                value={props.noteDraft}
+                value={props.noteDraft()}
                 onInput={(event) => props.onNoteDraftChange(event.currentTarget.value)}
               />
               <div class="flex justify-end">
                 <button
                   class={getAlertIncidentNoteSaveButtonClass()}
-                  disabled={props.noteSaving || !props.noteDraft.trim()}
+                  disabled={props.noteSaving() || !props.noteDraft().trim()}
                   onClick={() => props.onSaveNote()}
                 >
-                  {getAlertTimelineSaveNoteLabel(props.noteSaving)}
+                  {getAlertTimelineSaveNoteLabel(props.noteSaving())}
                 </button>
               </div>
             </div>
           </div>
         )}
       </Show>
-      <Show when={!props.loading && !timeline()}>
+      <Show when={!props.loading() && !timeline()}>
         <Show
-          when={props.error}
+          when={props.error()}
           fallback={<p class="text-xs text-muted">{getAlertTimelineUnavailableState().text}</p>}
         >
           <div class="flex items-center gap-2">

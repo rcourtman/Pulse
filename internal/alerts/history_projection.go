@@ -34,10 +34,9 @@ func historyOccurrenceKey(alertID string, snapshot *Alert) string {
 // fall back to the JSON-backed history manager.
 func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, bool) {
 	store := m.eventLogStore()
-	if store == nil {
+	if store == nil || !m.eventHistoryAuthoritative.Load() {
 		return nil, false
 	}
-	store.Flush()
 
 	// Fold oldest to newest through the store's bounded-page walker. The
 	// ordinary Query API intentionally caps responses at 1,000 rows, which is

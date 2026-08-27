@@ -21,17 +21,21 @@ import (
 // history reads fall back to the in-memory entries either way. A retirement
 // failure also retries safely because history_imported events are inserted by
 // immutable event identity.
-func (m *Manager) importLegacyHistoryIntoEventLog(store *eventlog.Store) {
-	if m == nil || store == nil || m.historyManager == nil {
-		return
+func (m *Manager) importLegacyHistoryIntoEventLog(store *eventlog.Store) (authoritative bool) {
+	if m != nil {
+		defer func() { m.eventHistoryAuthoritative.Store(authoritative) }()
 	}
-	if !m.historyManager.StorageFileExists() {
-		return
+	if m == nil || store == nil || m.historyManager == nil {
+		return false
+	}
+	hasLegacySource := m.historyManager.StorageFileExists()
+	if !hasLegacySource && !m.historyManager.ImportedStorageFileExists() {
+		return true
 	}
 	if err := m.historyManager.StorageLoadError(); err != nil {
 		log.Error().Err(err).
 			Msg("legacy alert history import deferred; source could not be loaded and remains untouched")
-		return
+		return false
 	}
 
 	entries := m.historyManager.SnapshotEntries()
@@ -42,13 +46,13 @@ func (m *Manager) importLegacyHistoryIntoEventLog(store *eventlog.Store) {
 		if exported == nil || exported.ID == "" {
 			log.Error().Int("entry", i).
 				Msg("legacy alert history import deferred; entry has no alert identity")
-			return
+			return false
 		}
 		snapshot, err := json.Marshal(exported)
 		if err != nil {
 			log.Error().Err(err).Int("entry", i).
 				Msg("legacy alert history import deferred; entry snapshot could not be encoded")
-			return
+			return false
 		}
 		occurredAt := entry.Timestamp
 		if entry.Alert.LastSeen.After(occurredAt) {
@@ -72,14 +76,17 @@ func (m *Manager) importLegacyHistoryIntoEventLog(store *eventlog.Store) {
 			log.Error().Err(err).
 				Int("entries", len(events)).
 				Msg("legacy alert history import failed; JSON history stays authoritative until the next attempt")
-			return
+			return false
 		}
 	}
-	if err := m.historyManager.RetireStorage(); err != nil {
-		log.Error().Err(err).Msg("legacy alert history files could not be retired after import")
-		return
+	if hasLegacySource {
+		if err := m.historyManager.RetireStorage(); err != nil {
+			log.Error().Err(err).Msg("legacy alert history files could not be retired after import")
+			return false
+		}
 	}
 	log.Info().
 		Int("entries", len(events)).
 		Msg("legacy alert history imported into the event log; JSON history files retired")
+	return true
 }

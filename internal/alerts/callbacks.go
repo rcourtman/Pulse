@@ -3,10 +3,22 @@ package alerts
 import (
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rs/zerolog/log"
 )
+
+// LifecycleEvent is an alert-state transition independent of notification
+// delivery. Consumers use this stream for durable incident history; delivery
+// callbacks remain governed by activation, quiet-hours, and suppression policy.
+type LifecycleEvent struct {
+	Type       string
+	OccurredAt time.Time
+	Alert      *Alert
+	Details    map[string]string
+	Persisted  bool
+}
 
 type callbackBus struct {
 	mu sync.RWMutex
@@ -17,6 +29,7 @@ type callbackBus struct {
 	alertForAISubs map[int]func(alert *Alert)
 	onResolved     func(alertID string)
 	resolvedSubs   map[int]func(alertID string)
+	lifecycleSubs  map[int]func(event LifecycleEvent)
 
 	onAcknowledged   func(alert *Alert, user string)
 	onUnacknowledged func(alert *Alert, user string)
@@ -32,6 +45,27 @@ func newCallbackBus() callbackBus {
 		alertSubs:      make(map[int]func(*Alert)),
 		alertForAISubs: make(map[int]func(*Alert)),
 		resolvedSubs:   make(map[int]func(string)),
+		lifecycleSubs:  make(map[int]func(LifecycleEvent)),
+	}
+}
+
+func (b *callbackBus) subscribeLifecycleCallback(cb func(event LifecycleEvent)) func() {
+	if cb == nil {
+		return func() {}
+	}
+
+	b.mu.Lock()
+	if b.lifecycleSubs == nil {
+		b.lifecycleSubs = make(map[int]func(LifecycleEvent))
+	}
+	id := b.nextIDLocked()
+	b.lifecycleSubs[id] = cb
+	b.mu.Unlock()
+
+	return func() {
+		b.mu.Lock()
+		delete(b.lifecycleSubs, id)
+		b.mu.Unlock()
 	}
 }
 
@@ -216,6 +250,19 @@ func (b *callbackBus) resolvedCallbacks() []func(alertID string) {
 	return callbacks
 }
 
+func (b *callbackBus) lifecycleCallbacks() []func(event LifecycleEvent) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	callbacks := make([]func(LifecycleEvent), 0, len(b.lifecycleSubs))
+	for _, cb := range b.lifecycleSubs {
+		if cb != nil {
+			callbacks = append(callbacks, cb)
+		}
+	}
+	return callbacks
+}
+
 func (b *callbackBus) acknowledgedCallback() func(alert *Alert, user string) {
 	b.mu.RLock()
 	cb := b.onAcknowledged
@@ -284,6 +331,13 @@ func (m *Manager) SubscribeResolvedCallback(cb func(alertID string)) func() {
 	return m.callbacks.subscribeResolvedCallback(cb)
 }
 
+// SubscribeLifecycleCallback registers a delivery-independent lifecycle
+// consumer. It is invoked synchronously at the canonical event-emission seam;
+// callbacks must not re-enter the alert manager.
+func (m *Manager) SubscribeLifecycleCallback(cb func(event LifecycleEvent)) func() {
+	return m.callbacks.subscribeLifecycleCallback(cb)
+}
+
 // SetAcknowledgedCallback sets the callback for acknowledged alerts.
 func (m *Manager) SetAcknowledgedCallback(cb func(alert *Alert, user string)) {
 	m.callbacks.setAcknowledgedCallback(cb)
@@ -327,6 +381,10 @@ func (m *Manager) getAlertForAICallbacks() []func(alert *Alert) {
 
 func (m *Manager) getResolvedCallbacks() []func(alertID string) {
 	return m.callbacks.resolvedCallbacks()
+}
+
+func (m *Manager) getLifecycleCallbacks() []func(event LifecycleEvent) {
+	return m.callbacks.lifecycleCallbacks()
 }
 
 func (m *Manager) getAcknowledgedCallback() func(alert *Alert, user string) {

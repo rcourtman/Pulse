@@ -55,16 +55,16 @@ describe('IncidentTimelinePanel', () => {
 
     render(() => (
       <IncidentTimelinePanel
-        loading={state().loading}
-        error={state().error}
-        timeline={state().timeline}
+        loading={() => state().loading}
+        error={() => state().error}
+        timeline={() => state().timeline}
         filters={filters}
         setFilters={setFilters}
         filterVariant="panel"
         eventCardVariant="alt"
-        noteDraft=""
+        noteDraft={() => ''}
         onNoteDraftChange={vi.fn()}
-        noteSaving={false}
+        noteSaving={() => false}
         onSaveNote={vi.fn()}
         onRetry={vi.fn()}
       />
@@ -88,16 +88,16 @@ describe('IncidentTimelinePanel', () => {
 
     render(() => (
       <IncidentTimelinePanel
-        loading={false}
-        error={false}
-        timeline={makeTimeline()}
+        loading={() => false}
+        error={() => false}
+        timeline={() => makeTimeline()}
         filters={filters}
         setFilters={setFilters}
         filterVariant="compact"
         eventCardVariant="surface"
-        noteDraft="operator note"
+        noteDraft={() => 'operator note'}
         onNoteDraftChange={handleNoteDraftChange}
-        noteSaving={false}
+        noteSaving={() => false}
         onSaveNote={handleSave}
         onRetry={vi.fn()}
       />
@@ -127,16 +127,16 @@ describe('IncidentTimelinePanel', () => {
 
     render(() => (
       <IncidentTimelinePanel
-        loading={false}
-        error={false}
-        timeline={makeTimeline()}
+        loading={() => false}
+        error={() => false}
+        timeline={() => makeTimeline()}
         filters={filters}
         setFilters={setFilters}
         filterVariant="compact"
         eventCardVariant="surface"
-        noteDraft=""
+        noteDraft={() => ''}
         onNoteDraftChange={vi.fn()}
-        noteSaving={false}
+        noteSaving={() => false}
         onSaveNote={vi.fn()}
         onRetry={vi.fn()}
       />
