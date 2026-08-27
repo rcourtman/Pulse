@@ -28,6 +28,10 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
+vi.mock('@/components/Workloads/StackedDiskBar', () => ({
+  StackedDiskBar: () => <div data-testid="stacked-disk-bar" />,
+}));
+
 vi.mock('@/api/resources', () => ({
   ResourceAPI: {
     getFacetBundle: vi.fn().mockResolvedValue({
@@ -40,6 +44,7 @@ vi.mock('@/api/resources', () => ({
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
+    getSettings: vi.fn().mockResolvedValue({ discovery_enabled: false }),
     getResourceIntelligence: vi.fn().mockResolvedValue({
       resource_id: 'resource-1',
       health: {
@@ -204,6 +209,55 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(activeTasks.getByText('Sync sync-remote')).toBeInTheDocument();
     expect(activeTasks.getByText('fast · Remote offsite')).toBeInTheDocument();
     expect(activeTasks.getByText('Queued')).toBeInTheDocument();
+  });
+
+  it('renders merged agent hardware for a standalone PBS host', () => {
+    const resource = baseResource({
+      id: 'pbs-agent-1',
+      type: 'pbs',
+      name: 'pbs-bare-metal',
+      displayName: 'PBS Bare Metal',
+      platformId: 'pbs-bare-metal',
+      platformType: 'proxmox-pbs',
+      sourceType: 'hybrid',
+      memory: { current: 50, total: 16_000, used: 8_000, free: 8_000 },
+      platformData: {
+        sources: ['pbs', 'agent'],
+        pbs: {
+          hostname: 'pbs-bare-metal',
+          connectionHealth: 'online',
+          datastoreCount: 1,
+        },
+        agent: {
+          agentId: 'agent-pbs-1',
+          agentVersion: '6.4.0',
+          hostname: 'pbs-bare-metal',
+          osName: 'Debian GNU/Linux',
+          osVersion: '13',
+          kernelVersion: '6.12.0-pve',
+          architecture: 'amd64',
+          cpuCount: 8,
+          networkInterfaces: [{ name: 'eno1', addresses: ['192.0.2.10'] }],
+          disks: [{ mountpoint: '/', total: 10_000, used: 4_000, free: 6_000 }],
+          sensors: { temperatureCelsius: { cpu_package: 61 } },
+        },
+      },
+    });
+
+    const { getByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} initialShowHostDetails />
+    ));
+
+    expandPlatformDetails(getByTestId);
+    const hostDetails = within(getByTestId('resource-host-details-section'));
+    expect(hostDetails.getByText('System')).toBeInTheDocument();
+    expect(hostDetails.getByText('Hardware')).toBeInTheDocument();
+    expect(hostDetails.getByText('Network')).toBeInTheDocument();
+    expect(hostDetails.getByText('Disks')).toBeInTheDocument();
+    expect(hostDetails.getByText('Thermals')).toBeInTheDocument();
+    expect(hostDetails.getByText('Debian GNU/Linux 13')).toBeInTheDocument();
+    expect(hostDetails.getByText('eno1')).toBeInTheDocument();
+    expect(hostDetails.getByText('192.0.2.10')).toBeInTheDocument();
   });
 
   it('renders PMG card with compact summary and queue/mail breakdown sections', () => {

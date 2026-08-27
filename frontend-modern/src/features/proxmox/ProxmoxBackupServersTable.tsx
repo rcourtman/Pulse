@@ -1,6 +1,5 @@
 import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 
-import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -19,6 +18,7 @@ import {
 import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailTableRow,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { PBSBackup } from '@/types/api';
@@ -44,6 +44,7 @@ import {
 
 interface BackupServerRow {
   key: string;
+  resource: Resource;
   serverName: string;
   online: boolean;
   connectionLabel: string;
@@ -124,6 +125,7 @@ export function buildBackupServerRows(
     const datastores = server.pbs?.datastores ?? [];
     const memoryTotal = server.memory?.total ?? 0;
     const host = {
+      resource: server,
       serverName: server.name,
       online: serverIsOnline(server),
       connectionLabel: connectionLabel(server),
@@ -413,39 +415,14 @@ export function ProxmoxBackupServersTable(props: {
                           </TableCell>
                         </Show>
                       </TableRow>
-                      <Show when={isExpanded()}>
-                        <InlineDetailTableRow
-                          cellId={detailRowId()}
-                          colspan={visibleColumns().length}
-                          class="bg-surface-alt/40"
-                          cellClass="px-3 py-2 whitespace-normal"
-                          contentClass="min-w-0 whitespace-normal"
-                          data-inline-detail-for={row.key}
-                        >
-                          <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-4">
-                            <span>
-                              <span class="font-medium text-base-content">Server:</span>{' '}
-                              <span class="text-muted">{row.serverName}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Datastore:</span>{' '}
-                              <span class="font-mono text-muted">{row.datastore?.name || '—'}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Version:</span>{' '}
-                              <span class="text-muted">{row.version || '—'}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Memory:</span>{' '}
-                              <span class="text-muted">
-                                {row.memoryTotal
-                                  ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
-                                  : '—'}
-                              </span>
-                            </span>
-                          </div>
-                        </InlineDetailTableRow>
-                      </Show>
+                      <PlatformResourceDetailTableRow
+                        resource={row.resource}
+                        open={isExpanded()}
+                        detailRowId={detailRowId()}
+                        colSpan={visibleColumns().length}
+                        initialShowHostDetails
+                        onClose={() => detail.close(rowIdentity)}
+                      />
                     </>
                   );
                 }}
