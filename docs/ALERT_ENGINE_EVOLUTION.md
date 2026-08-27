@@ -152,7 +152,13 @@ Post-plan hardening (2026-08-27, same-day follow-through):
   included — records its fired event. The JSON snapshot history file is
   retired. Parity with the JSON model is pinned by
   `history_projection_parity_test.go`.
-- **The identity/config migration is registered, not rushed:** governed
-  coverage gap `alert-identity-config-migration` records why the alias
-  layers persist until a versioned migration rewrites persisted
-  override keys and ack records to canonical identity.
+- **The identity/config migration is complete.** Alert configuration now
+  carries an additive identity schema version and the monitor runs a
+  non-mutating, fail-closed migration plan against the live resource registry
+  before persisting it. Proven guest, guest-disk, storage, Docker, and
+  provider-declared succession keys move to their single write identity;
+  ambiguous, conflicting, unknown, and temporarily absent rows are retained.
+  Active-alert snapshots (including acknowledgement fields) are rewritten with
+  canonical state IDs after restore. The planner is idempotent across rollback
+  and re-upgrade, rejects future schema versions, and the frontend round-trips
+  the marker on ordinary configuration saves.

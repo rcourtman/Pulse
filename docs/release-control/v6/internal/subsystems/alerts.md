@@ -1821,8 +1821,11 @@ active-alert persistence. Shared canonical identity helpers may infer resource,
 spec, and state ids from legacy alerts, but they must do so without mutating
 live in-memory alert instances unless the caller explicitly backfills that
 state. Persisted active-alert snapshots must therefore clone alerts under lock,
-backfill canonical identity on the clone, and serialize that snapshot instead
-of mutating the live alert map during async saves or incident rebuilds.
+backfill canonical identity on the clone, replace the persisted public ID with
+the canonical state ID, and serialize that snapshot instead of mutating the
+live alert map during async saves or incident rebuilds. Restore must preserve
+acknowledgement fields and rewrite a successfully derived legacy snapshot
+atomically after the in-memory restore; unrecognized records remain readable.
 That same ownership also governs acknowledgement and manual-clear cleanup.
 Clearing an alert through the canonical alerts runtime must remove both legacy
 public-id tracking and canonical-state acknowledgement records so old aliases
@@ -1871,6 +1874,36 @@ unambiguous/live/ambiguous decision matrix,
 reload behavior, and
 `frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx`
 proves the browser-side TrueNAS save/refetch contract.
+
+### Versioned persisted alert identity
+
+`AlertConfig.identitySchemaVersion` is the additive persisted identity marker;
+the current schema is version 1. `PlanAlertIdentityMigration` is the mandatory
+dry-run boundary: it operates on a copied config and reports source/target
+versions, removed and added keys, deferred rows, and unsupported future
+versions before any write. `ApplyAlertIdentityMigration` may install that exact
+plan only while its source version is still current. The monitoring bridge must
+persist the result before updating the live manager.
+
+Version 1 folds provider-declared canonical succession, Docker container
+recreation IDs, Proxmox guest and guest-disk aliases, and live storage aliases
+onto the single write identity already used by the editor/evaluator. A current
+row wins over retired duplicates. Multiple legacy rows claiming one target,
+ambiguous live ownership, unknown rows, and temporarily absent resources fail
+closed and stay in `alerts.json` for a later resource snapshot that can prove
+the mapping. Alias readers remain compatibility inputs for those deferred rows,
+not persistence authority. Storage alias provenance is carried on the unified
+resource `StorageMeta` so the plan does not reconstruct ownership from display
+names alone.
+
+The marker is rollback-safe: older binaries ignore the additive JSON field and
+may omit it on a later save; after re-upgrade the idempotent planner runs again.
+Newer binaries preserve an already-held marker when a stale browser payload
+omits it, while the alert editor explicitly round-trips the marker. A config
+whose marker is newer than the running binary is never rewritten. Regression
+ownership is `internal/alerts/alert_identity_migration_test.go`,
+`internal/monitoring/monitor_alert_override_migration_test.go`, and
+`frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.snapshot.test.ts`.
 
 ### Versioned alert-intent policy
 

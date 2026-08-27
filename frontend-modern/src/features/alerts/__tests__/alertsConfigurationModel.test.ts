@@ -16,6 +16,7 @@ describe('alertsConfigurationModel', () => {
   it('creates the canonical default snapshot', () => {
     const snapshot = createDefaultAlertsConfigurationSnapshot();
 
+    expect(snapshot.identitySchemaVersion).toBe(0);
     expect(snapshot.guestDefaults.cpu).toBe(FACTORY_GUEST_DEFAULTS.cpu);
     expect(snapshot.dockerDefaults.serviceWarnGapPercent).toBe(
       FACTORY_DOCKER_DEFAULTS.serviceWarnGapPercent,
@@ -31,6 +32,7 @@ describe('alertsConfigurationModel', () => {
 
   it('normalizes alert config into the runtime snapshot', () => {
     const config = {
+      identitySchemaVersion: 1,
       enabled: true,
       guestDefaults: {
         cpu: { trigger: 91, clear: 86 },
@@ -80,6 +82,7 @@ describe('alertsConfigurationModel', () => {
 
     const snapshot = readAlertsConfigurationSnapshot(config);
 
+    expect(snapshot.identitySchemaVersion).toBe(1);
     expect(snapshot.guestDefaults.cpu).toBe(91);
     expect(snapshot.guestDisableConnectivity).toBe(true);
     expect(snapshot.guestPoweredOffSeverity).toBe('critical');
@@ -108,6 +111,7 @@ describe('alertsConfigurationModel', () => {
 
   it('builds the canonical save payload from the runtime snapshot', () => {
     const snapshot = createDefaultAlertsConfigurationSnapshot();
+    snapshot.identitySchemaVersion = 1;
     snapshot.guestDefaults.cpu = 92;
     snapshot.dockerIgnoredPrefixes = [' web ', ''];
     snapshot.guestTagWhitelist = [' prod ', ''];
@@ -149,6 +153,7 @@ describe('alertsConfigurationModel', () => {
 
     expect(result.dockerValidationError).toBeUndefined();
     expect(result.alertConfig).toBeDefined();
+    expect(result.alertConfig?.identitySchemaVersion).toBe(1);
     expect(result.alertConfig?.guestDefaults.cpu).toEqual({ trigger: 92, clear: 87 });
     expect(result.alertConfig?.vmwareDefaults?.cpu).toEqual({ trigger: 80, clear: 75 });
     expect(result.alertConfig?.vmwareDefaults?.usage).toEqual({ trigger: 85, clear: 80 });

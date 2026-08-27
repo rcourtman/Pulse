@@ -174,23 +174,36 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
         <div class="relative mt-3 h-10">
           <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
           <For each={props.state.axisTicks()}>
-            {(tick) => (
-              <div
-                class="pointer-events-none absolute top-0 flex h-full flex-col items-center"
-                style={{ left: `${tick.position * 100}%` }}
-              >
-                <div class="h-3 w-px bg-slate-300"></div>
+            {(tick, index) => {
+              const lastIndex = props.state.axisTicks().length - 1;
+              const mobileMidpoint = Math.floor(lastIndex / 2);
+              const visibleOnMobile =
+                index() === 0 || index() === mobileMidpoint || index() === lastIndex;
+
+              return (
                 <div
-                  class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
+                  data-testid="alert-frequency-axis-tick"
+                  class="pointer-events-none absolute top-0 h-full flex-col items-center sm:flex"
                   classList={{
-                    '-translate-x-1/2': tick.align === 'center',
-                    '-translate-x-full': tick.align === 'end',
+                    hidden: !visibleOnMobile,
+                    flex: visibleOnMobile,
                   }}
+                  style={{ left: `${tick.position * 100}%` }}
                 >
-                  {tick.label}
+                  <div class="h-3 w-px bg-slate-300"></div>
+                  <div
+                    data-testid="alert-frequency-axis-label"
+                    class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
+                    classList={{
+                      '-translate-x-1/2': tick.align === 'center',
+                      '-translate-x-full': tick.align === 'end',
+                    }}
+                  >
+                    {tick.label}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            }}
           </For>
         </div>
       </Show>

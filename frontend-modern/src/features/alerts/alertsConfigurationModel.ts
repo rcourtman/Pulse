@@ -64,6 +64,7 @@ export {
 } from '@/utils/alertThresholdDefaults';
 
 export interface AlertsConfigurationSnapshot {
+  identitySchemaVersion: number;
   scheduleQuietHours: QuietHoursConfig;
   scheduleCooldown: CooldownConfig;
   scheduleGrouping: GroupingConfig;
@@ -238,6 +239,7 @@ const normalizeNotificationDeliveryTarget = (
 
 export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationSnapshot {
   return {
+    identitySchemaVersion: 0,
     scheduleQuietHours: createDefaultQuietHours(),
     scheduleCooldown: createDefaultCooldown(),
     scheduleGrouping: createDefaultGrouping(),
@@ -328,6 +330,8 @@ export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationS
 
 export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConfigurationSnapshot {
   const snapshot = createDefaultAlertsConfigurationSnapshot();
+
+  snapshot.identitySchemaVersion = Math.max(0, Math.trunc(config.identitySchemaVersion ?? 0));
 
   if (config.guestDefaults) {
     snapshot.guestDefaults = {
@@ -721,6 +725,7 @@ export function buildAlertsConfigurationPayload({
 
   return {
     alertConfig: {
+      identitySchemaVersion: snapshot.identitySchemaVersion || undefined,
       enabled: alertsActivationConfig?.enabled ?? true,
       activationState: alertsActivationState ?? undefined,
       activationTime: alertsActivationConfig?.activationTime ?? undefined,

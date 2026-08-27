@@ -230,6 +230,10 @@ type GuestLookup struct {
 
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
+	// IdentitySchemaVersion records which persisted alert-identity migration
+	// has been applied. It is additive so older Pulse releases safely ignore it;
+	// after a rollback, a newer release can rerun the idempotent migration.
+	IdentitySchemaVersion          int                            `json:"identitySchemaVersion,omitempty"`
 	Enabled                        bool                           `json:"enabled"`
 	ActivationState                ActivationState                `json:"activationState,omitempty"`
 	ObservationWindowHours         int                            `json:"observationWindowHours,omitempty"`

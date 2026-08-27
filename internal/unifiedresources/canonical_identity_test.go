@@ -931,6 +931,7 @@ func TestStorageTopologyAndVDevLayoutAreDistinctIdentityFields(t *testing.T) {
 		Platform:   "truenas",
 		Topology:   "pool",
 		VDevLayout: "mirror+special",
+		AliasIDs:   []string{"legacy-pool-id"},
 	}
 
 	cloned := cloneStorageMeta(meta)
@@ -942,6 +943,9 @@ func TestStorageTopologyAndVDevLayoutAreDistinctIdentityFields(t *testing.T) {
 	}
 	if cloned.VDevLayout != "mirror+special" {
 		t.Fatalf("cloned vdev layout = %q, want \"mirror+special\"", cloned.VDevLayout)
+	}
+	if len(cloned.AliasIDs) != 1 || cloned.AliasIDs[0] != "legacy-pool-id" {
+		t.Fatalf("cloned alias IDs = %v, want compatibility identity", cloned.AliasIDs)
 	}
 
 	// A pool with no reported vdevs still carries the discriminator, and the
@@ -964,5 +968,8 @@ func TestStorageTopologyAndVDevLayoutAreDistinctIdentityFields(t *testing.T) {
 	}
 	if decoded["vdevLayout"] != "mirror+special" {
 		t.Fatalf("wire vdevLayout = %v, want \"mirror+special\"", decoded["vdevLayout"])
+	}
+	if aliases, ok := decoded["aliasIds"].([]any); !ok || len(aliases) != 1 || aliases[0] != "legacy-pool-id" {
+		t.Fatalf("wire aliasIds = %v, want [legacy-pool-id]", decoded["aliasIds"])
 	}
 }

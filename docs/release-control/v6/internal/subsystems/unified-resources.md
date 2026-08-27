@@ -17,6 +17,11 @@
 
 Own canonical resource identity, type normalization, typed views, and
 cross-source deduplication.
+Storage metadata may expose source-authored alias IDs as compatibility evidence
+for one-time consumers such as the alerts identity migration. Adapters and
+clones must preserve that bounded alias set without promoting it to primary
+identity: `Resource.ID`, canonical identity, and the storage metrics target
+remain authoritative, and ambiguous alias claims must fail closed.
 One machine may belong to more than one typed view without becoming more than
 one canonical resource. A matching Pulse host report and Docker report merge
 into one `agent` resource with Agent and Docker facets, and the Hosts and

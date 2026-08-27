@@ -118,6 +118,7 @@ export interface BackupAlertConfig {
 export type ActivationState = 'pending_review' | 'active' | 'snoozed';
 
 export interface AlertConfig {
+  identitySchemaVersion?: number;
   enabled: boolean;
   activationState?: ActivationState;
   observationWindowHours?: number;

@@ -109,7 +109,14 @@ test.describe('Real backend alert history qualification', () => {
       message: 'Legacy history import rendered from SQLite',
       type: 'cpu',
     });
-    expect(Date.parse(importedAlert!.lastSeen) - Date.parse(importedAlert!.startTime)).toBe(30 * 60_000);
+    expect(
+      Math.abs(
+        Date.parse(importedAlert!.lastSeen) -
+          Date.parse(importedAlert!.startTime) -
+          30 * 60_000,
+      ),
+      'Seed timestamps may be constructed a few milliseconds apart',
+    ).toBeLessThanOrEqual(100);
 
     await restartManagedLocalBackend();
     await ensureAuthenticated(page);

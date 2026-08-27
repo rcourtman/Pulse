@@ -397,6 +397,7 @@ export interface ResourceStorageMeta {
   type?: string;
   content?: string;
   contentTypes?: string[];
+  aliasIds?: string[];
   shared?: boolean;
   isCeph?: boolean;
   isZfs?: boolean;

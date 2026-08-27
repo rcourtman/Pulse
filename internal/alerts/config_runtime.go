@@ -14,6 +14,14 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Clients and rollback-era config writers may not know about the additive
+	// identity schema marker. Never lower a version already held by this
+	// process; an older binary can still omit it on disk and the migration will
+	// safely rerun after a later upgrade.
+	if config.IdentitySchemaVersion < m.config.IdentitySchemaVersion {
+		config.IdentitySchemaVersion = m.config.IdentitySchemaVersion
+	}
+
 	// Preserve activation state/time when clients update the config without including it.
 	// This avoids unintentionally resetting alerts to pending review when saving thresholds.
 	if config.ActivationState == "" && m.config.ActivationState != "" {

@@ -1985,6 +1985,7 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 			Type:              storageType,
 			Content:           content,
 			ContentTypes:      parseStorageContentTypes(content),
+			AliasIDs:          append([]string(nil), storage.AliasIDs...),
 			Shared:            storage.Shared,
 			Enabled:           storage.Enabled,
 			Active:            storage.Active,

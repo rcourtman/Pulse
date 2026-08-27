@@ -57,6 +57,7 @@ func (m *Manager) SaveActiveAlerts() error {
 		}
 		clone := alert.Clone()
 		backfillCanonicalIdentity(clone)
+		clone.ID = exportedAlertID(clone, clone.ID)
 		alerts = append(alerts, clone)
 	}
 	m.mu.RUnlock()
@@ -151,10 +152,13 @@ func (m *Manager) LoadActiveAlerts() error {
 	now := time.Now()
 	restoredCount := 0
 	duplicateCount := 0
+	identityMigrationCount := 0
 	seen := make(map[string]bool)
 
 	for _, alert := range alerts {
-		backfillCanonicalIdentity(alert)
+		if alert == nil {
+			continue
+		}
 
 		// Migrate legacy guest alert IDs (instance-node-VMID -> instance-VMID).
 		isGuestAlert := strings.Contains(alert.Type, "cpu") || strings.Contains(alert.Type, "memory") ||
@@ -184,9 +188,23 @@ func (m *Manager) LoadActiveAlerts() error {
 						oldResourceID := alert.ResourceID
 						alert.ResourceID = newResourceID
 						alert.ID = strings.Replace(alert.ID, oldResourceID, newResourceID, 1)
+						alert.CanonicalSpecID = ""
+						alert.CanonicalState = ""
+						alert.CanonicalKind = ""
+						if alert.Metadata != nil {
+							delete(alert.Metadata, "canonicalSpecID")
+							delete(alert.Metadata, "canonicalAlertKind")
+						}
 					}
 				}
 			}
+		}
+
+		legacyID := alert.ID
+		backfillCanonicalIdentity(alert)
+		alert.ID = exportedAlertID(alert, alert.ID)
+		if alert.ID != legacyID {
+			identityMigrationCount++
 		}
 
 		if seen[alert.ID] {
@@ -216,6 +234,12 @@ func (m *Manager) LoadActiveAlerts() error {
 		}
 
 		m.setActiveAlertNoLock(alert.ID, alert)
+		if legacyID != alert.ID {
+			if m.activeAlertAlias == nil {
+				m.activeAlertAlias = make(map[string]string)
+			}
+			m.activeAlertAlias[legacyID] = activeAlertStorageKey(alert, alert.ID)
+		}
 		if alert.Acknowledged {
 			ackTime := alert.StartTime
 			if alert.AckTime != nil {
@@ -271,7 +295,13 @@ func (m *Manager) LoadActiveAlerts() error {
 		Int("restored", restoredCount).
 		Int("total", len(alerts)).
 		Int("duplicates", duplicateCount).
+		Int("identityMigrations", identityMigrationCount).
 		Msg("Restored active alerts from disk")
+	if identityMigrationCount > 0 {
+		// The asynchronous save waits for the load lock, then atomically replaces
+		// the legacy file with the canonical IDs just restored into memory.
+		m.saveActiveAlertsAsync("canonical-identity-migration")
+	}
 	return nil
 }
 

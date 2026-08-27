@@ -44,6 +44,19 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('Resource Type Guards', () => {
+  it('preserves storage alias IDs as compatibility metadata', () => {
+    const resource = createResource({
+      type: 'storage',
+      storage: {
+        aliasIds: ['legacy-storage-id'],
+        shared: false,
+      },
+    });
+
+    expect(resource.storage?.aliasIds).toEqual(['legacy-storage-id']);
+    expect(resource.id).toBe('test-1');
+  });
+
   it('retains three-state UDP availability evidence on canonical resources', () => {
     const resource = createResource({
       type: 'network-endpoint',

@@ -1037,6 +1037,7 @@ func TestResourceFromContainerPreservesProxmoxPool(t *testing.T) {
 func TestResourceFromStorageIncludesStorageMetadata(t *testing.T) {
 	storage := models.Storage{
 		ID:       "storage-1",
+		AliasIDs: []string{"cluster-a-pve-1-ceph-rbd-pool"},
 		Name:     "ceph-rbd-pool",
 		Node:     "pve-1",
 		Instance: "cluster-a",
@@ -1065,6 +1066,9 @@ func TestResourceFromStorageIncludesStorageMetadata(t *testing.T) {
 	}
 	if got, want := resource.Storage.Pool, "ceph/rbd-a"; got != want {
 		t.Fatalf("storage pool = %q, want %q", got, want)
+	}
+	if got, want := resource.Storage.AliasIDs, storage.AliasIDs; !reflect.DeepEqual(got, want) {
+		t.Fatalf("storage alias IDs = %v, want %v", got, want)
 	}
 	wantContentTypes := []string{"images", "rootdir"}
 	if len(resource.Storage.ContentTypes) != len(wantContentTypes) {

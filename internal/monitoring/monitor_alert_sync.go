@@ -97,17 +97,36 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 	}
 
 	config := m.alertManager.GetConfig()
-	migrated := alerts.MigrateCanonicalOverrideKeys(&config, resources)
-	if alerts.MigrateDockerContainerOverrideKeys(&config, resources) {
-		migrated = true
-	}
-	if migrated {
+	migrationPlan := alerts.PlanAlertIdentityMigration(config, resources)
+	if migrationPlan.UnsupportedVersion {
+		log.Warn().
+			Int("configVersion", migrationPlan.FromVersion).
+			Int("supportedVersion", alerts.CurrentAlertIdentitySchemaVersion).
+			Msg("alert identity config uses a newer schema; leaving persisted identities untouched")
+	} else if alerts.ApplyAlertIdentityMigration(&config, migrationPlan) {
 		if m.configPersist == nil {
-			log.Warn().Msg("cannot persist canonical alert override migration without config persistence")
+			log.Warn().
+				Int("fromVersion", migrationPlan.FromVersion).
+				Int("toVersion", migrationPlan.ToVersion).
+				Int("removedOverrides", len(migrationPlan.RemovedOverrideKeys)).
+				Int("addedOverrides", len(migrationPlan.AddedOverrideKeys)).
+				Int("deferredOverrides", len(migrationPlan.Deferred)).
+				Msg("cannot persist planned alert identity migration without config persistence")
 		} else if err := m.configPersist.SaveAlertConfig(config); err != nil {
-			log.Error().Err(err).Msg("failed to persist canonical alert override migration")
+			log.Error().
+				Err(err).
+				Int("fromVersion", migrationPlan.FromVersion).
+				Int("toVersion", migrationPlan.ToVersion).
+				Msg("failed to persist planned alert identity migration")
 		} else {
 			m.alertManager.UpdateConfig(config)
+			log.Info().
+				Int("fromVersion", migrationPlan.FromVersion).
+				Int("toVersion", migrationPlan.ToVersion).
+				Int("removedOverrides", len(migrationPlan.RemovedOverrideKeys)).
+				Int("addedOverrides", len(migrationPlan.AddedOverrideKeys)).
+				Int("deferredOverrides", len(migrationPlan.Deferred)).
+				Msg("persisted alert identity migration plan")
 		}
 	}
 

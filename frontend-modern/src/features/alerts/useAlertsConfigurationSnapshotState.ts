@@ -37,6 +37,9 @@ export function useAlertsConfigurationSnapshotState(
   props: UseAlertsConfigurationSnapshotStateProps,
 ) {
   const defaultSnapshot = createDefaultAlertsConfigurationSnapshot();
+  const [identitySchemaVersion, setIdentitySchemaVersion] = createSignal(
+    defaultSnapshot.identitySchemaVersion,
+  );
   const [scheduleQuietHours, setScheduleQuietHours] = createSignal<QuietHoursConfig>(
     defaultSnapshot.scheduleQuietHours,
   );
@@ -163,6 +166,7 @@ export function useAlertsConfigurationSnapshotState(
   );
 
   const applyConfigurationSnapshot = (snapshot: AlertsConfigurationSnapshot) => {
+    setIdentitySchemaVersion(snapshot.identitySchemaVersion);
     setScheduleQuietHours({
       ...snapshot.scheduleQuietHours,
       days: { ...snapshot.scheduleQuietHours.days },
@@ -225,6 +229,7 @@ export function useAlertsConfigurationSnapshotState(
   };
 
   const captureConfigurationSnapshot = (): AlertsConfigurationSnapshot => ({
+    identitySchemaVersion: identitySchemaVersion(),
     scheduleQuietHours: {
       ...scheduleQuietHours(),
       days: { ...scheduleQuietHours().days },

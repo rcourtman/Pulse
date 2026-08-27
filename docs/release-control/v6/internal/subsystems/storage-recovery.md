@@ -35,6 +35,12 @@ Own the storage and recovery product surfaces, recovery-point persistence and
 querying, and the operator-facing storage health presentation layer while
 keeping adjacent commercial reporting APIs out of storage/recovery product
 state.
+Unified storage metadata may carry source alias IDs so the alerts subsystem can
+rewrite legacy threshold keys to the current metrics-target identity. Those
+aliases are compatibility evidence only: they do not retarget a datastore,
+backup artifact, recovery point, protection posture, or restore operation, and
+storage/recovery consumers must continue to use the canonical resource and
+provider identities for all domain authority.
 The Proxmox overview is also a large-estate read-side consumer: it owns one
 canonical unified-resource snapshot for its node and guest regions, and its
 shared workloads adapter must consume that snapshot without starting a second

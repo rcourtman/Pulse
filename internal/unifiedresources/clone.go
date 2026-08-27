@@ -171,6 +171,7 @@ func cloneStorageMeta(in *StorageMeta) *StorageMeta {
 	}
 	out := *in
 	out.ContentTypes = cloneStringSlice(in.ContentTypes)
+	out.AliasIDs = cloneStringSlice(in.AliasIDs)
 	out.Nodes = cloneStringSlice(in.Nodes)
 	out.ConsumerTypes = cloneStringSlice(in.ConsumerTypes)
 	out.TopConsumers = cloneStorageConsumerMetaSlice(in.TopConsumers)

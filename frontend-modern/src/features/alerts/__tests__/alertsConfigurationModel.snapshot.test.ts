@@ -31,6 +31,10 @@ const UNDEF_TRIGGER = { trigger: undefined };
 describe('readAlertsConfigurationSnapshot — absent optional sections', () => {
   const snapshot = readAlertsConfigurationSnapshot(cfg({}));
 
+  it('defaults the persisted identity schema marker to zero', () => {
+    expect(snapshot.identitySchemaVersion).toBe(0);
+  });
+
   it('keeps factory guestDefaults / nodeDefaults / agentDefaults', () => {
     expect(snapshot.guestDefaults.cpu).toBe(80);
     expect(snapshot.guestDefaults.memory).toBe(85);
@@ -1332,6 +1336,19 @@ describe('buildAlertsConfigurationPayload — additional branches', () => {
     expect(alertConfig?.activationState).toBe('pending_review');
     expect(alertConfig?.activationTime).toBe('2026-01-15T08:00:00Z');
     expect(alertConfig?.observationWindowHours).toBe(48);
+  });
+
+  it('round-trips the persisted identity schema marker', () => {
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ identitySchemaVersion: 1 }));
+
+    const { alertConfig } = buildAlertsConfigurationPayload({
+      snapshot,
+      rawOverridesConfig: {},
+      alertsActivationState: null,
+      alertsActivationConfig: null,
+    });
+
+    expect(alertConfig?.identitySchemaVersion).toBe(1);
   });
 
   it('falls back to 24/72/true for null freshHours/staleHours/alertOrphaned', () => {

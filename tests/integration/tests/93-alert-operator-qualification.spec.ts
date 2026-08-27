@@ -234,6 +234,23 @@ test.describe('Alert operator qualification', () => {
     await expect(databaseCard).toContainText('deliberately long diagnostic message');
     await expect(databaseCard).toContainText('Database Node With A Deliberately Long');
 
+    const visibleAxisLabels = page.locator('[data-testid="alert-frequency-axis-label"]:visible');
+    await expect(visibleAxisLabels).toHaveCount(3);
+    const axisBoxes = (
+      await visibleAxisLabels.evaluateAll((labels) =>
+        labels.map((label) => {
+          const box = label.getBoundingClientRect();
+          return { left: box.left, right: box.right };
+        }),
+      )
+    ).sort((a, b) => a.left - b.left);
+    for (let index = 1; index < axisBoxes.length; index += 1) {
+      expect(
+        axisBoxes[index - 1]!.right,
+        'Mobile alert-frequency axis labels must not overlap',
+      ).toBeLessThanOrEqual(axisBoxes[index]!.left);
+    }
+
     const search = page.getByPlaceholder('Search alerts...');
     await search.focus();
     await expect(search).toBeFocused();

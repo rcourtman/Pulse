@@ -19,6 +19,12 @@
 
 Own polling, typed collection, runtime state assembly, and canonical monitoring
 truth for live infrastructure data.
+Monitoring supplies the live unified-resource snapshot used by the alerts-owned
+versioned identity migration. The migration must be planned without mutating
+the active configuration, persist successfully before the alert manager adopts
+it, leave ambiguous identities untouched, and reject schema versions newer than
+the running binary. Monitoring owns this orchestration only; alert identity,
+override semantics, and the schema version remain alerts authority.
 Agent Doctor interprets Proxmox capability profiles according to the monitored
 product. Only PVE host profiles require a link to a PVE node; an explicit PBS
 profile, or an auto/missing-type host that matches a configured PBS instance by

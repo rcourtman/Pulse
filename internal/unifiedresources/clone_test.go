@@ -497,6 +497,7 @@ func TestCloneStorageMeta_Nil(t *testing.T) {
 func TestCloneStorageMeta_SliceIsolation(t *testing.T) {
 	original := &StorageMeta{
 		ContentTypes:  []string{"images", "backup"},
+		AliasIDs:      []string{"legacy-storage-id"},
 		Nodes:         []string{"node1", "node2"},
 		ConsumerTypes: []string{"vm"},
 		TopConsumers: []StorageConsumerMeta{
@@ -508,6 +509,11 @@ func TestCloneStorageMeta_SliceIsolation(t *testing.T) {
 	cloned.ContentTypes[0] = "MUTATED"
 	if original.ContentTypes[0] == "MUTATED" {
 		t.Error("mutating cloned ContentTypes should not affect original")
+	}
+
+	cloned.AliasIDs[0] = "MUTATED"
+	if original.AliasIDs[0] == "MUTATED" {
+		t.Error("mutating cloned AliasIDs should not affect original")
 	}
 
 	cloned.Nodes[0] = "MUTATED"

@@ -405,6 +405,7 @@ type StorageMeta struct {
 	Type         string   `json:"type,omitempty"`
 	Content      string   `json:"content,omitempty"`
 	ContentTypes []string `json:"contentTypes,omitempty"`
+	AliasIDs     []string `json:"aliasIds,omitempty"`
 	Shared       bool     `json:"shared"`
 	Enabled      bool     `json:"enabled"`
 	Active       bool     `json:"active"`

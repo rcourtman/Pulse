@@ -1,19 +1,27 @@
 {
   "version": 1,
-  "base_sha": "96add5d57a2b703e756eb7157b4faa2f7db37c55",
-  "verified_at": "2026-08-27T10:04:09Z",
+  "base_sha": "ff27c3881f0c418de856b26175cb2fcd96a962ec",
+  "verified_at": "2026-08-27T10:55:17Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts",
+    "frontend-modern/src/types/alerts.ts",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "8fb34851a8bcc32c67a4f4f156fdc32f62236a0fa8c5e2aa8b3d4dfcc8ecd47f"
+    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx": "7794ba25adfb94f5bf11a718ad774ea717dc7e8b543572ddfb461465c0593515",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "d295586ac8044fda4930ee56a9ea6b1ca2bfb27792ce594f4fb9d5fc0cbf1243",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts": "3cd18ea4cf402a5a5594e63eec7bb98bc0dbad8031c8b610ee9c10f3d2caed98",
+    "frontend-modern/src/types/alerts.ts": "5d57daaa49c83caa5ce40217b9bca1daf17867743d311d472724d6d5210349b1",
+    "frontend-modern/src/types/resource.ts": "b1c07de178e5b8a6725bb555031af8df0abf9a731dcf84e7791c70d95b399053"
   },
-  "routes": ["/proxmox/backups/date"],
+  "routes": ["/alerts/history"],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 1000
     },
     {
       "width": 390,
@@ -21,16 +29,15 @@
     }
   ],
   "states": [
-    "mock-mode Proxmox Backups loaded with backup-vault offsite-vault, backup-vault primary-vault, and dr-vault primary-vault rows in deterministic server and datastore order",
-    "the backup-vault primary-vault row expanded into the canonical resource detail drawer",
-    "the primary-vault row remained expanded after multiple two-second mock provider refreshes while row order remained unchanged",
-    "the same deterministic order and expanded primary-vault row rendered in the compact phone table"
+    "live development History tab loaded with the seven-day alert-frequency chart and 114 history rows",
+    "desktop chart rendered all five time-axis labels without overlap or horizontal page overflow",
+    "phone chart rendered the start, midpoint, and Now labels without overlap or horizontal page overflow",
+    "phone history cards remained contained and readable at 390px width"
   ],
   "interactions": [
-    "expanded the backup-vault primary-vault row and confirmed the matching detail drawer appeared",
-    "waited across multiple live mock refresh intervals and confirmed offsite-vault remained before primary-vault and the expanded row did not reset",
-    "resized from 1280x720 to 390x844 and confirmed the row stayed expanded with compact Server, State, Store, Used, and Backups columns",
-    "confirmed document and body scroll widths matched both viewports with no horizontal page overflow",
+    "opened the History tab against the running development backend and inspected the rendered alert-frequency chart",
+    "measured every visible desktop and phone axis-label bounding box and confirmed no adjacent boxes overlapped",
+    "resized from 1440x1000 to 390x844 and confirmed document scroll width continued to match the viewport",
     "confirmed the browser console contained no errors during the final desktop and phone verification flow"
   ]
 }

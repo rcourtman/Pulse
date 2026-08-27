@@ -153,6 +153,9 @@ func TestSyncUnifiedResourceAlertsPersistsAndEvaluatesTrueNASOverrideSuccession(
 	if override := reloaded.Overrides[newID]; override.Memory == nil || override.Memory.Trigger != 95 {
 		t.Fatalf("reloaded override missing under canonical identity %s: %+v", newID, override)
 	}
+	if got := reloaded.IdentitySchemaVersion; got != alerts.CurrentAlertIdentitySchemaVersion {
+		t.Fatalf("persisted alert identity schema version = %d, want %d", got, alerts.CurrentAlertIdentitySchemaVersion)
+	}
 
 	resources = []unifiedresources.Resource{
 		trueNASMemoryAlertResource(newID, oldID, sharedName, 96),

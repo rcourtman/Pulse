@@ -4603,6 +4603,13 @@ visibility preference decides whether they are shown. A feature must not build
 counts from page-wide alert totals after search or another active facet has
 narrowed the rendered rows, and a time-scope option must not claim a count from
 an unfetched period.
+The Alert History frequency axis is also a responsive contract. Desktop keeps
+the complete model-owned tick set; below the `sm` breakpoint the render surface
+keeps only start, midpoint, and end labels so locale-formatted timestamps do
+not overlap or create horizontal overflow. The 390px operator qualification
+must assert three visible labels, non-overlapping client rectangles, keyboard
+reachability, and a contained document before its actual-pixels receipt is
+recorded.
 Because that popover combines view application, default selection, removal,
 and an inline naming form, it is a labelled non-modal dialog rather than an
 ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus
