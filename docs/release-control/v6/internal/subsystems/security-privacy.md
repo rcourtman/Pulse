@@ -22,6 +22,11 @@ API-token rename is an authenticated token-management mutation: blank labels
 fail closed, successful changes are persisted and audited as `token_renamed`,
 and neither the plaintext credential nor its stored hash is exposed or
 rotated. Rename UI copy must state that connected agents remain unchanged.
+Live token-file reloads must serialize their disk snapshot with in-process
+rename, scope-update, rotate, create, and revoke mutations under `config.Mu`.
+An older watcher snapshot may never overwrite newer runtime and durable token
+state; `TestConfigWatcher_ReloadAPITokensDoesNotOverwriteConcurrentMutation`
+is the required concurrency proof.
 
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,
@@ -1509,6 +1514,12 @@ legacy plaintext metadata file may only serve as migration input. Canonical
 runtime persistence must rewrite plaintext API token metadata immediately into
 encrypted-at-rest storage on load instead of continuing to run against the
 unencrypted file as a normal primary path.
+Live `api_tokens.json` reloads and in-process token mutations share that same
+inventory authority. `internal/config/watcher.go` must serialize reading and
+applying a disk snapshot with rename, scope-update, rotate, create, and revoke
+mutations under `config.Mu`; an older snapshot may not be applied after a newer
+mutation has updated runtime state and durable storage. The concurrency proof
+is `TestConfigWatcher_ReloadAPITokensDoesNotOverwriteConcurrentMutation`.
 That same trust boundary also governs API token scope identity: legacy
 `host-agent:*` scopes may be accepted only at request-ingress or persistence/
 migration boundaries, where they must be rewritten immediately into canonical
