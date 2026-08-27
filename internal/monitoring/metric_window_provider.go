@@ -58,7 +58,9 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 	points := m.inMemoryMetricWindow(resourceType, resourceID, metric, duration)
 	if metricWindowCoverage(points) < duration*8/10 {
 		stored := m.persistentMetricWindow(resourceType, resourceID, metric, request.Start, request.End)
-		points = mergeMetricWindowPoints(points, stored, request.Start, request.End)
+		// Append the fresh in-memory tail last so it remains authoritative when
+		// SQLite contains an older value at the same timestamp.
+		points = mergeMetricWindowPoints(stored, points, request.Start, request.End)
 	}
 
 	result := make([]alerts.MetricWindowPoint, 0, len(points))

@@ -437,10 +437,13 @@ identity and durable history as charts. `internal/monitoring/metric_window_provi
 resolves the unified resource metrics target, reads the fresh in-memory tail,
 and falls back to the SQLite metrics store when that tail lacks the requested
 coverage. Persistent fallbacks are briefly cached to bound restart-time query
-load, merged by timestamp, and returned as observations only; alert policy owns
-averaging, readiness, hysteresis, and lifecycle decisions. Missing target,
-query failure, shallow history, or gapped history must remain unknown at the
-alerts boundary rather than being replaced by a synthetic healthy value.
+load, merged by timestamp, and returned as observations only. When the durable
+series and fresh in-memory tail contain the same timestamp, the in-memory value
+is authoritative so an older persisted or rolled-up value cannot replace the
+latest observation. Alert policy owns averaging, readiness, hysteresis, and
+lifecycle decisions. Missing target, query failure, shallow history, or gapped
+history must remain unknown at the alerts boundary rather than being replaced
+by a synthetic healthy value.
 
 Monitoring ingest keeps mock mode hermetic. The unified read path already
 substitutes the mock snapshot wholesale, so anything that runs after that

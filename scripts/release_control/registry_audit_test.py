@@ -87,10 +87,13 @@ class RegistryAuditTest(unittest.TestCase):
             },
             ("alerts", "canonical-alert-runtime"): {
                 "internal/alerts/intent_policy_test.go",
+                "internal/alerts/windowed_metric_test.go",
             },
             ("alerts", "alerts-runtime-support"): {
                 "internal/alerts/canonical_override_migration_test.go",
+                "internal/alerts/config/evaluation_windows_test.go",
                 "internal/alerts/intent_policy_test.go",
+                "internal/alerts/windowed_metric_test.go",
                 "internal/monitoring/monitor_alert_override_migration_test.go",
             },
             ("api-contracts", "alert-intent-policy-api"): {
@@ -126,8 +129,12 @@ class RegistryAuditTest(unittest.TestCase):
             ("monitoring", "monitoring-runtime"): {
                 "internal/monitoring/availability_udp_test.go",
                 "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/monitoring/metric_window_provider_test.go",
                 "internal/monitoring/monitor_alert_intent_test.go",
                 "internal/monitoring/monitor_alert_override_migration_test.go",
+            },
+            ("monitoring", "metrics-history-runtime"): {
+                "internal/monitoring/metric_window_provider_test.go",
             },
             ("monitoring", "agent-fleet-diagnostics-runtime"): {
                 "internal/api/agent_fleet_doctor_test.go",

@@ -4230,6 +4230,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "internal/monitoring/metric_window_provider_test.go",
                 "internal/monitoring/metrics_history_concurrency_test.go",
                 "internal/monitoring/metrics_history_memory_regression_test.go",
                 "internal/monitoring/metrics_history_test.go",
