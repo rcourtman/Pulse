@@ -7,7 +7,7 @@ import {
   type AvailabilityTarget,
 } from '@/api/availabilityTargets';
 import type { AvailabilityProbeSuggestion } from '@/types/discovery';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 
 interface AvailabilityProbeSuggestionCardProps {
   suggestion: AvailabilityProbeSuggestion;
@@ -64,28 +64,19 @@ export function AvailabilityProbeSuggestionCard(props: AvailabilityProbeSuggesti
       </div>
       <div class="space-y-1.5 text-[11px]">
         <Show when={state() !== 'created'}>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-muted">Service</span>
-            <span
-              class="font-medium text-base-content truncate ml-2"
-              title={props.suggestion.service_name}
-            >
-              {props.suggestion.service_name}
-            </span>
-          </div>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-muted">Probe</span>
-            <span class="font-medium text-base-content">{protocolLabel()}</span>
-          </div>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-muted">Target</span>
-            <span
-              class="font-medium text-base-content truncate ml-2"
-              title={props.suggestion.address}
-            >
-              {props.suggestion.address}
-            </span>
-          </div>
+          <InfoCardKeyValueRow
+            label="Service"
+            value={props.suggestion.service_name}
+            valueClass="truncate"
+            valueTitle={props.suggestion.service_name}
+          />
+          <InfoCardKeyValueRow label="Probe" value={protocolLabel()} />
+          <InfoCardKeyValueRow
+            label="Target"
+            value={props.suggestion.address}
+            valueClass="truncate"
+            valueTitle={props.suggestion.address}
+          />
           <Show when={state() === 'error'}>
             <div class="text-[10px] text-red-600 dark:text-red-400 mt-1">{error()}</div>
           </Show>

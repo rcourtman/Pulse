@@ -18,7 +18,7 @@ import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { FormSelect } from '@/components/shared/FormSelect';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import {
   WEB_INTERFACE_LINK_COLOR_CLASS,
@@ -575,31 +575,27 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                           <span class="text-muted">{sourceTypePresentation.label}</span>
                         </div>
                         <div class="mt-1 space-y-1">
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Confidence</span>
-                            <span class="font-medium text-base-content">
-                              {formatConfidenceLabel(change.confidence)}
-                            </span>
-                          </div>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Adapter</span>
-                            <span class="font-medium text-base-content">
-                              {sourceAdapterPresentation?.label || '—'}
-                            </span>
-                          </div>
+                          <InfoCardKeyValueRow
+                            label="Confidence"
+                            value={formatConfidenceLabel(change.confidence)}
+                          />
+                          <InfoCardKeyValueRow
+                            label="Adapter"
+                            value={sourceAdapterPresentation?.label || '—'}
+                          />
                           <Show when={change.actor}>
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Actor</span>
-                              <span class="font-medium text-base-content">{change.actor}</span>
-                            </div>
+                            <InfoCardKeyValueRow
+                              label="Actor"
+                              value={change.actor}
+                              valueClass="break-words"
+                            />
                           </Show>
                           <Show when={change.from || change.to}>
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Transition</span>
-                              <span class="font-medium text-base-content">
-                                {change.from || '—'} → {change.to || '—'}
-                              </span>
-                            </div>
+                            <InfoCardKeyValueRow
+                              label="Transition"
+                              value={`${change.from || '—'} → ${change.to || '—'}`}
+                              valueClass="break-words"
+                            />
                           </Show>
                         </div>
                         <Show when={change.reason}>
@@ -726,27 +722,24 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                       </div>
 
                       <div class="space-y-1.5 text-[11px]">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Containers</span>
-                          <span class="font-medium text-base-content">
-                            {formatInteger(drawer.dockerContainerCount())}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Updates</span>
-                          <span
-                            class={`font-medium ${drawer.dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
-                          >
-                            {formatInteger(drawer.dockerUpdatesAvailable())}
-                          </span>
-                        </div>
+                        <InfoCardKeyValueRow
+                          label="Containers"
+                          value={formatInteger(drawer.dockerContainerCount())}
+                        />
+                        <InfoCardKeyValueRow
+                          label="Updates"
+                          value={formatInteger(drawer.dockerUpdatesAvailable())}
+                          valueClass={
+                            drawer.dockerUpdatesAvailable() > 0
+                              ? 'text-sky-700 dark:text-sky-300'
+                              : ''
+                          }
+                        />
                         <Show when={drawer.dockerUpdatesCheckedRelative()}>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Checked</span>
-                            <span class="font-medium text-base-content">
-                              {drawer.dockerUpdatesCheckedRelative()}
-                            </span>
-                          </div>
+                          <InfoCardKeyValueRow
+                            label="Checked"
+                            value={drawer.dockerUpdatesCheckedRelative()}
+                          />
                         </Show>
 
                         <Show when={drawer.showDockerUpdateControls()}>
@@ -758,24 +751,24 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                               }
                             >
                               <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
-                                <div class="flex items-center justify-between gap-2">
-                                  <span class="text-muted">Action</span>
-                                  <span class="font-medium text-base-content">
-                                    {formatIdentifierLabel(drawer.dockerHostCommand()?.type, {
-                                      fallback: 'command',
-                                    })}
-                                  </span>
-                                </div>
-                                <div class="mt-1 flex items-center justify-between gap-2">
-                                  <span class="text-muted">State</span>
-                                  <span
-                                    class={`font-medium ${drawer.dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
-                                  >
-                                    {formatIdentifierLabel(drawer.dockerHostCommand()?.status, {
-                                      fallback: 'unknown',
-                                    })}
-                                  </span>
-                                </div>
+                                <InfoCardKeyValueRow
+                                  label="Action"
+                                  value={formatIdentifierLabel(drawer.dockerHostCommand()?.type, {
+                                    fallback: 'command',
+                                  })}
+                                />
+                                <InfoCardKeyValueRow
+                                  class="mt-1"
+                                  label="State"
+                                  value={formatIdentifierLabel(drawer.dockerHostCommand()?.status, {
+                                    fallback: 'unknown',
+                                  })}
+                                  valueClass={
+                                    drawer.dockerHostCommandActive()
+                                      ? 'text-sky-700 dark:text-sky-300'
+                                      : ''
+                                  }
+                                />
                                 <Show when={drawer.dockerHostCommand()?.message}>
                                   <div
                                     class="mt-1 text-muted truncate"
@@ -885,33 +878,26 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             </Show>
                           </div>
                           <div class="space-y-1.5 text-[11px]">
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">State</span>
-                              <span class={`font-medium ${connection.text}`}>
-                                {connection.label}
-                              </span>
-                            </div>
+                            <InfoCardKeyValueRow
+                              label="State"
+                              value={connection.label}
+                              valueClass={connection.text}
+                            />
                             <Show when={pbs().version}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Version</span>
-                                <span class="font-medium text-base-content">{pbs().version}</span>
-                              </div>
+                              <InfoCardKeyValueRow label="Version" value={pbs().version} />
                             </Show>
                             <Show when={pbs().uptimeSeconds || resource.uptime}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Uptime</span>
-                                <span class="font-medium text-base-content">
-                                  {formatUptime(pbs().uptimeSeconds ?? resource.uptime ?? 0)}
-                                </span>
-                              </div>
+                              <InfoCardKeyValueRow
+                                label="Uptime"
+                                value={formatUptime(pbs().uptimeSeconds ?? resource.uptime ?? 0)}
+                              />
                             </Show>
                             <Show when={drawer.pbsActiveTaskCount() > 0}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Active tasks</span>
-                                <span class="font-medium text-emerald-700 dark:text-emerald-300">
-                                  {formatInteger(drawer.pbsActiveTaskCount())}
-                                </span>
-                              </div>
+                              <InfoCardKeyValueRow
+                                label="Active tasks"
+                                value={formatInteger(drawer.pbsActiveTaskCount())}
+                                valueClass="text-emerald-700 dark:text-emerald-300"
+                              />
                             </Show>
                             <Show when={drawer.showPbsJobDetail()}>
                               <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
@@ -1141,25 +1127,19 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             </Show>
                           </div>
                           <div class="space-y-1.5 text-[11px]">
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">State</span>
-                              <span class={`font-medium ${connection.text}`}>
-                                {connection.label}
-                              </span>
-                            </div>
+                            <InfoCardKeyValueRow
+                              label="State"
+                              value={connection.label}
+                              valueClass={connection.text}
+                            />
                             <Show when={pmg().version}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Version</span>
-                                <span class="font-medium text-base-content">{pmg().version}</span>
-                              </div>
+                              <InfoCardKeyValueRow label="Version" value={pmg().version} />
                             </Show>
                             <Show when={pmg().uptimeSeconds || resource.uptime}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Uptime</span>
-                                <span class="font-medium text-base-content">
-                                  {formatUptime(pmg().uptimeSeconds ?? resource.uptime ?? 0)}
-                                </span>
-                              </div>
+                              <InfoCardKeyValueRow
+                                label="Uptime"
+                                value={formatUptime(pmg().uptimeSeconds ?? resource.uptime ?? 0)}
+                              />
                             </Show>
                             <Show when={drawer.showPmgMailFlowDetail()}>
                               <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
@@ -1187,22 +1167,21 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                     class="space-y-1.5 rounded border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
                                   >
                                     <Show when={pmg().nodeCount}>
-                                      <div class="flex items-center justify-between gap-2">
-                                        <span class="text-muted">Nodes</span>
-                                        <span class="font-medium text-base-content">
-                                          {formatInteger(pmg().nodeCount)}
-                                        </span>
-                                      </div>
+                                      <InfoCardKeyValueRow
+                                        label="Nodes"
+                                        value={formatInteger(pmg().nodeCount)}
+                                      />
                                     </Show>
                                     <Show when={drawer.pmgUpdatedRelative()}>
-                                      <div
-                                        class={`flex items-center justify-between gap-2 ${pmg().nodeCount ? 'border-t border-rose-200 pt-1.5 dark:border-rose-700' : ''}`}
-                                      >
-                                        <span class="text-muted">Updated</span>
-                                        <span class="font-medium text-base-content">
-                                          {drawer.pmgUpdatedRelative()}
-                                        </span>
-                                      </div>
+                                      <InfoCardKeyValueRow
+                                        class={
+                                          pmg().nodeCount
+                                            ? 'border-t border-rose-200 pt-1.5 dark:border-rose-700'
+                                            : ''
+                                        }
+                                        label="Updated"
+                                        value={drawer.pmgUpdatedRelative()}
+                                      />
                                     </Show>
                                   </div>
                                 </Show>
@@ -1213,14 +1192,13 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                   <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                                     <For each={drawer.pmgVisibleQueueBreakdown()}>
                                       {(entry) => (
-                                        <div class="flex items-center justify-between gap-2 text-muted">
-                                          <span>{entry.label}</span>
-                                          <span
-                                            class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                                          >
-                                            {formatInteger(entry.value)}
-                                          </span>
-                                        </div>
+                                        <InfoCardKeyValueRow
+                                          label={entry.label}
+                                          value={formatInteger(entry.value)}
+                                          valueClass={
+                                            entry.warn ? 'text-amber-600 dark:text-amber-400' : ''
+                                          }
+                                        />
                                       )}
                                     </For>
                                   </div>
@@ -1232,12 +1210,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                   <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                                     <For each={drawer.pmgVisibleMailBreakdown()}>
                                       {(entry) => (
-                                        <div class="flex items-center justify-between gap-2 text-muted">
-                                          <span>{entry.label}</span>
-                                          <span class="font-medium text-base-content">
-                                            {formatInteger(entry.value)}
-                                          </span>
-                                        </div>
+                                        <InfoCardKeyValueRow
+                                          label={entry.label}
+                                          value={formatInteger(entry.value)}
+                                        />
                                       )}
                                     </For>
                                   </div>

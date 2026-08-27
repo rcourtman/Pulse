@@ -21,6 +21,12 @@ describe('AvailabilityProbeStatusCard', () => {
     expect(screen.getByText('Not checked')).toBeInTheDocument();
     expect(screen.queryByText('Down')).not.toBeInTheDocument();
     expect(screen.getByText('freshness unknown')).toBeInTheDocument();
+    expect(screen.getByText('Latency').parentElement).toHaveClass(
+      'justify-between',
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(screen.getByText('freshness unknown')).toHaveClass('text-right', 'lg:text-left');
   });
 
   it('shows stale evidence and an unresolved canonical resource link', () => {

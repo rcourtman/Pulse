@@ -802,6 +802,12 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.getByText('Confidence')).toBeInTheDocument();
     expect(panel.getByText('Adapter')).toBeInTheDocument();
+    expect(panel.getByText('Confidence').parentElement).toHaveClass(
+      'justify-between',
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(panel.getByText('High')).toHaveClass('text-right', 'lg:text-left');
     expect(panel.getByText('Metadata')).toBeInTheDocument();
     expect(panel.getByText(/"ticket": "INC-1234"/)).toBeInTheDocument();
     expect(panel.queryByText('Capabilities')).toBeNull();
