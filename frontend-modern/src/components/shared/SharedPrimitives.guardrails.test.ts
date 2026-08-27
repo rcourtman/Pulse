@@ -7931,6 +7931,8 @@ describe('shared primitive guardrails', () => {
     expect(detailSectionTableSource).toContain('lg:grid-cols-[7rem_minmax(0,1fr)]');
     expect(detailSectionTableSource).toContain('lg:text-left');
     expect(detailSectionTableSource).toContain('lg:divide-y-0');
+    expect(detailSectionModelSource).toContain('footerContent?: JSX.Element');
+    expect(detailSectionTableSource).toContain('section.footerContent');
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/DetailSectionTable'");
     expect(resourceDetailSummarySource).not.toContain('<table');
 

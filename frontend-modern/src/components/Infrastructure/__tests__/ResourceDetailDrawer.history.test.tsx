@@ -184,7 +184,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/DetailSectionTable'");
     expect(resourceDetailSummarySource).not.toContain('<table');
-    expect(resourceInvestigationContextSource).toContain('<table');
+    expect(resourceInvestigationContextSource).toContain(
+      "from '@/components/shared/DetailSectionTable'",
+    );
+    expect(resourceInvestigationContextSource).not.toContain('<table');
     expect(resourceInvestigationContextSource).toContain('RESOURCE_SAFE_SUMMARY_LABEL');
     expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
     expect(resourceDetailDrawerOverviewSource).not.toContain("'All kinds'");
@@ -602,9 +605,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await within(contextSection).findByText('Analysis');
     expect(contextSection.querySelector('table')).toBeTruthy();
     expect(contextSection.querySelector('tbody')).toBeTruthy();
-    expect(
-      contextSection.querySelectorAll('.rounded.border.border-border.bg-surface.p-3').length,
-    ).toBe(0);
+    expect(contextSection.querySelectorAll('tbody[class*="shadow-sm"]')).toHaveLength(1);
     expect(screen.getByText('Health')).toBeInTheDocument();
     expect(screen.getByText('A · 92/100')).toBeInTheDocument();
     expect(screen.getByText('Trend')).toBeInTheDocument();

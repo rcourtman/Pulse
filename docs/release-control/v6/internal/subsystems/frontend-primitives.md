@@ -1249,8 +1249,11 @@ not a replacement status card, CTA band, or page-local nested card.
    A compact detail row may carry optional bounded rich value content for
    links, tags, aliases, and address badges while retaining a canonical text
    value for titles, tests, and operator-readable fallback. It may also carry
-   optional bounded progress metadata, but the
-   shared `DetailSectionTable` must render that metadata through the CSP-safe
+   optional bounded progress metadata. A detail section may carry bounded
+   full-width footer content for supporting evidence such as a compact change
+   summary; that content remains inside the section card and must not be
+   squeezed into the value column or detached into a feature-local card. The
+   shared `DetailSectionTable` must render progress metadata through the CSP-safe
    `ProgressBar` while preserving the row's textual value as the primary
    operator-readable fact. Feature surfaces must omit the metadata when the
    measurement is unavailable rather than presenting an empty bar as 0%.

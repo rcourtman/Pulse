@@ -977,6 +977,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     const contextSection = getByTestId('resource-investigation-context');
     expect(contextSection.querySelector('table')).toBeTruthy();
     expect(contextSection.querySelector('tbody')).toBeTruthy();
+    expect(contextSection.querySelectorAll('tbody[class*="shadow-sm"]')).toHaveLength(1);
     expect(getByText('Health')).toBeInTheDocument();
     expect(getByText('A · 92/100')).toBeInTheDocument();
     expect(getByText('Trend')).toBeInTheDocument();

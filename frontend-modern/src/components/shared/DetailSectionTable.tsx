@@ -94,6 +94,13 @@ export const DetailSectionTable: Component<{
                 </TableRow>
               )}
             </For>
+            {section.footerContent ? (
+              <TableRow class="lg:mt-2 lg:block lg:min-w-0 lg:border-t lg:border-border lg:pt-2 lg:hover:bg-transparent">
+                <TableCell colspan={2} class="px-2 py-2 lg:block lg:px-0 lg:py-0">
+                  {section.footerContent}
+                </TableCell>
+              </TableRow>
+            ) : null}
           </TableBody>
         )}
       </For>

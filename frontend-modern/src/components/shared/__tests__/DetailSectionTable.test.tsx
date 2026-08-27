@@ -133,6 +133,25 @@ describe('DetailSectionTable', () => {
     );
   });
 
+  it('keeps full-width supporting content inside its responsive section card', () => {
+    render(() => (
+      <DetailSectionTable
+        sections={[
+          {
+            label: 'Analysis',
+            rows: [{ label: 'Health', value: 'A · 92/100' }],
+            footerContent: <div data-testid="analysis-footer">Latest canonical change</div>,
+          },
+        ]}
+      />
+    ));
+
+    const footer = screen.getByTestId('analysis-footer');
+    expect(footer).toBeInTheDocument();
+    expect(footer.closest('td')).toHaveAttribute('colspan', '2');
+    expect(footer.closest('tr')).toHaveClass('lg:border-t', 'lg:pt-2');
+  });
+
   it('renders optional row progress without replacing its compact text value', () => {
     const { container } = render(() => (
       <DetailSectionTable

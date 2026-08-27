@@ -24,6 +24,7 @@ export type DetailSection = {
   label: string;
   rows: DetailRow[];
   testId?: string;
+  footerContent?: JSX.Element;
 };
 
 export const makeDetailRow = (
@@ -44,7 +45,7 @@ export const compactDetailRows = (rows: Array<DetailRow | null>): DetailRow[] =>
 
 export const compactDetailSections = (sections: Array<DetailSection | null>): DetailSection[] =>
   sections.filter((section): section is DetailSection =>
-    Boolean(section && section.rows.length > 0),
+    Boolean(section && (section.rows.length > 0 || section.footerContent)),
   );
 
 export type DetailBytesFormatOptions = {
