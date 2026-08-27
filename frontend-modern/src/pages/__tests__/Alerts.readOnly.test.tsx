@@ -37,6 +37,8 @@ vi.mock('@solidjs/router', async () => {
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     activeAlerts: {},
+    activeAlertsHydrationStatus: () => 'ready',
+    refreshActiveAlerts: vi.fn(async () => undefined),
     updateAlert: vi.fn(),
     removeAlerts: vi.fn(),
   }),
