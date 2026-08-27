@@ -468,6 +468,13 @@ alert-owned presentation helpers. Alert IDs, alert types, resource IDs,
 resource names, node names, source messages, event payloads, commands, command
 output, logs, and Assistant model-context labels stay machine-stable and
 untranslated.
+The Alerts Overview hydration boundary must localize its pending, unavailable,
+and retry presentation through the same catalog. Pending and unavailable copy
+must explicitly withhold an all-clear until active-alert truth is confirmed;
+the surface must not reuse the localized zero-alert empty state while the
+canonical alert snapshot is unknown. First-wave catalogs and their focused
+catalog proof must advance together so this reliability distinction cannot
+silently fall back to English or collapse into ordinary empty-state wording.
 The active-alert card's delivery-status row remains an alerts-owned compact
 presentation composed inside the shared responsive card shell. It consumes one
 bulk diagnosis snapshot per overview refresh, wraps beside started-at and

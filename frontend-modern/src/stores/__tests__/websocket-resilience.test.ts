@@ -180,6 +180,157 @@ describe('websocket store resilience', () => {
     }
   });
 
+  it('bounds cold alert uncertainty when an open socket never sends its snapshot', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce([]);
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      expect(store.activeAlertsHydrationStatus()).toBe('pending');
+
+      vi.advanceTimersByTime(4_998);
+      expect(apiFetchJSONMock).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2);
+      await flushMicrotasks();
+
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/alerts/active');
+      expect(store.activeAlertsHydrationStatus()).toBe('ready');
+      expect(store.state.activeAlerts).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('recovers canonical active alert truth over REST when the socket closes before hydration', async () => {
+    autoOpenSockets = false;
+    const recoveredAlert = {
+      id: 'agent:host-1-cpu',
+      type: 'cpu',
+      level: 'critical',
+      resourceId: 'agent:host-1',
+      resourceName: 'host-1',
+      node: 'host-1',
+      instance: 'host-1',
+      message: 'CPU above threshold',
+      value: 96,
+      threshold: 90,
+      startTime: '2026-05-14T07:59:00Z',
+      acknowledged: false,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce([recoveredAlert]);
+
+    const { store, dispose } = await createStoreHarness();
+    try {
+      expect(store.activeAlertsHydrationStatus()).toBe('pending');
+      currentInstance!.onclose?.({ code: 1006, reason: '' } as CloseEvent);
+      await flushMicrotasks();
+
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/alerts/active');
+      expect(store.activeAlertsHydrationStatus()).toBe('ready');
+      expect(store.activeAlerts[recoveredAlert.id]).toMatchObject(recoveredAlert);
+      expect(store.state.activeAlerts).toHaveLength(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('exposes an honest unavailable state and supports an operator retry', async () => {
+    autoOpenSockets = false;
+    const recoveredAlert = {
+      id: 'agent:host-2-memory',
+      type: 'memory',
+      level: 'warning',
+      resourceId: 'agent:host-2',
+      resourceName: 'host-2',
+      node: 'host-2',
+      instance: 'host-2',
+      message: 'Memory above threshold',
+      value: 88,
+      threshold: 85,
+      startTime: '2026-05-14T07:58:00Z',
+      acknowledged: false,
+    };
+    apiFetchJSONMock
+      .mockRejectedValueOnce(new Error('backend unavailable'))
+      .mockResolvedValueOnce([recoveredAlert]);
+
+    const { store, dispose } = await createStoreHarness();
+    try {
+      currentInstance!.onclose?.({ code: 1006, reason: '' } as CloseEvent);
+      await flushMicrotasks();
+      expect(store.activeAlertsHydrationStatus()).toBe('unavailable');
+      expect(Object.keys(store.activeAlerts)).toHaveLength(0);
+
+      await expect(store.refreshActiveAlerts()).resolves.toBe(true);
+      expect(store.activeAlertsHydrationStatus()).toBe('ready');
+      expect(store.activeAlerts[recoveredAlert.id]).toMatchObject(recoveredAlert);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('discards a late REST recovery after newer socket alert truth arrives', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    let resolveRecovery!: (alerts: unknown[]) => void;
+    apiFetchJSONMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRecovery = resolve;
+        }),
+    );
+
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const firstConnection = currentInstance;
+      firstConnection!.onclose?.({ code: 1006, reason: '' } as CloseEvent);
+
+      vi.advanceTimersByTime(1_000);
+      vi.advanceTimersByTime(1);
+      const secondConnection = currentInstance;
+      const socketAlert = {
+        id: 'agent:host-3-disk',
+        type: 'disk',
+        level: 'critical',
+        resourceId: 'agent:host-3',
+        resourceName: 'host-3',
+        node: 'host-3',
+        instance: 'host-3',
+        message: 'Disk above threshold',
+        value: 97,
+        threshold: 90,
+        startTime: '2026-05-14T07:57:00Z',
+        acknowledged: false,
+      };
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'initialState',
+          data: {
+            resources: [],
+            activeAlerts: [socketAlert],
+            recentlyResolved: [],
+            lastUpdate: Date.now(),
+          },
+        }),
+      } as MessageEvent);
+
+      resolveRecovery([
+        {
+          ...socketAlert,
+          id: 'stale-rest-alert',
+          message: 'Older recovery response',
+        },
+      ]);
+      await flushMicrotasks();
+
+      expect(store.activeAlertsHydrationStatus()).toBe('ready');
+      expect(store.activeAlerts[socketAlert.id]).toMatchObject(socketAlert);
+      expect(store.activeAlerts['stale-rest-alert']).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
   it('preserves active alert state when a resource-only delta arrives', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

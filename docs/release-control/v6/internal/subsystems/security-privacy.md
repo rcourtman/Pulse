@@ -417,6 +417,11 @@ the `white_label` branding entitlement.
    security/privacy terminology and destination confidentiality. Pausing
    delivery changes no authorization, tenant boundary, destination secret, or
    active-alert evidence access rule.
+   Localized active-alert hydration states may distinguish unconfirmed,
+   unavailable, and confirmed-empty alert truth, but they remain presentation
+   only. Retry must reuse the authenticated active-alert read boundary and must
+   not disclose destination configuration, recipient identity, alert evidence,
+   or tenant-private failure detail in customer-facing copy.
    Per-alert snooze and resume remain authenticated `monitoring:write`
    operations. Their canonical lifecycle projection may retain the authenticated
    actor and exact expiry needed for auditability, but must not copy destination

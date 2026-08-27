@@ -1,27 +1,43 @@
 {
   "version": 1,
-  "base_sha": "1878245cdb1cde95f626cbe8cc95fa1e76c93155",
-  "verified_at": "2026-08-27T20:55:57Z",
+  "base_sha": "8ade613dfd3cd94e20a43e23c7a86e626a62cd48",
+  "verified_at": "2026-08-27T21:47:50Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx"
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "0f77405c3ece3b1d507e48ca0b7057a076fead8c1503a2c94cc4161594585c6c"
+    "frontend-modern/src/i18n/messages.de.ts": "55202c2f8518f2400369222f2b46ad71d4d4cf5db7dc553972f42175436d97ea",
+    "frontend-modern/src/i18n/messages.es.ts": "206edbdaaba5b8a25a2947fc2ead16a9e3a8246f0a74c7d9245ec61cad41cddb",
+    "frontend-modern/src/i18n/messages.ts": "5fab4be38db1741dd4c59268f022978662b631f4c67a1cfbe030f9c472dd51e4",
+    "frontend-modern/src/pages/Alerts.tsx": "eba29751e432ca74f7408890b2d5724905fcad9b6f32d3545b28aea218081f54",
+    "frontend-modern/src/stores/websocket-global.ts": "f34a455d0f73a73a074e2c226a933bf6008811e840accdcb07983f3bc2966246",
+    "frontend-modern/src/stores/websocket.ts": "b7734ce09fa0f8b113d84ab0b9501026a9be1b6dddf293cba55d25ae74d0f670",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "6b41224b13b4ff8bb5bd9979f89278e54f8eda7459c4317543a7cd9dc04c8329"
   },
-  "routes": ["/alerts/thresholds/proxmox"],
+  "routes": ["/alerts/overview"],
   "viewports": [
-    { "width": 1920, "height": 900 },
+    { "width": 1280, "height": 720 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "default CPU evaluation windows with the all-workload fallback visible",
-    "all-workload override set to 15 minutes with VM and application-container inheritance visible",
-    "narrow platform-overrides disclosure expanded with the same inheritance state"
+    "live updates reconnecting with 51 active alerts recovered through the canonical REST projection",
+    "active-alert REST recovery unavailable with no false all-clear and an explicit Retry action",
+    "successful Retry restoring all 51 active alerts without a page reload",
+    "expanded active-alert incident timeline with fired event filters and incident note composer",
+    "pending and unavailable alert-truth panels remain fluid at the narrow layout contract"
   ],
   "interactions": [
-    "set All workloads to a 15 minute average and confirmed Virtual machines and Application containers changed to Inherit (15 minutes)",
-    "expanded Platform overrides at 390px and confirmed the workload controls remain readable without horizontal overflow",
-    "discarded the unsaved mock-runtime change after verification and confirmed the browser console contained no errors"
+    "reloaded Alerts Overview while WebSocket upgrades were rejected and confirmed REST recovery rendered the real active-alert count",
+    "forced only GET /api/alerts/active to return 503 and confirmed the page showed unavailable truth, Retry, and no No active alerts copy",
+    "restored the active-alert endpoint, selected Retry, and confirmed the canonical overview returned with 51 alerts",
+    "expanded the first active alert Timeline and confirmed its incident opened with an alert-triggered event and note editor",
+    "reviewed the recovery panel against the existing 390px responsive Alerts layout contract and confirmed its fluid container and localized copy introduce no fixed-width surface"
   ]
 }

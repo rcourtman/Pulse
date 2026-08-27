@@ -1,4 +1,4 @@
-import { createWebSocketStore } from './websocket';
+import { createWebSocketStore, type ActiveAlertsHydrationStatus } from './websocket';
 import { createSignal, createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { getPulseWebSocketUrl } from '@/utils/url';
@@ -21,6 +21,7 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
   const [connected] = createSignal(false);
   const [reconnecting] = createSignal(false);
   const [initialDataReceived] = createSignal(true);
+  const [activeAlertsHydrationStatus] = createSignal<ActiveAlertsHydrationStatus>('ready');
   const [updateProgress] = createSignal<unknown>(null);
   const [resourceChange] = createSignal<{
     version: number;
@@ -62,11 +63,13 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     connected,
     reconnecting,
     initialDataReceived,
+    activeAlertsHydrationStatus,
     updateProgress,
     resourceChange,
     changedResourceIdsSince: () => null,
     changedResourceMetaSince: () => null,
     shutdown: () => {},
+    refreshActiveAlerts: async () => false,
     reconnect: () => {},
     switchUrl: () => {},
     markDockerRuntimesTokenRevoked: () => {},

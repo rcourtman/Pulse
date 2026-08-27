@@ -275,6 +275,18 @@ snapshots reuse the previous row object whenever the serialized row is
 unchanged, and a refresh that changes nothing returns the previous row array
 itself, so per-tick row identity churn stays bounded to guests whose data
 changed.
+Initial active-alert availability must not pay the full `/api/state` estate
+cost merely because the live connection failed before its first alert
+snapshot. The process-wide store uses the bounded `/api/alerts/active`
+projection after a cold socket close or a five-second open-without-alerts
+deadline, coalesces concurrent requests, and throttles automatic attempts to
+one per thirty seconds. The HTTP result is
+revision-fenced against later socket commits and never becomes the keyed-delta
+baseline, so recovery adds neither a page-local subscription nor a second
+per-tick reconciliation path. The JSDOM no-op global store reports this
+projection as ready without starting transport work, preserving deterministic
+consumer tests while the production owner retains the pending/ready/unavailable
+contract.
 Retained or prefetched tabs may keep fetched snapshots, but only the visible tab
 consumes realtime projection work. Re-entering an inactive tab must catch up
 from the shared canonical cache rather than replaying every missed delta.

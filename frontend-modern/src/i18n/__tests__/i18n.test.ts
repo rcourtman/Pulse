@@ -325,6 +325,26 @@ describe('i18n foundation', () => {
     }
   });
 
+  it('keeps unconfirmed alert truth distinct from a localized all-clear', () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const pendingTitle = I18N_MESSAGES[locale]['alerts.overview.hydration.pending.title'];
+      const unavailableTitle = I18N_MESSAGES[locale]['alerts.overview.hydration.unavailable.title'];
+      const retry = I18N_MESSAGES[locale]['alerts.overview.hydration.retry'];
+
+      expect(pendingTitle).toBeTruthy();
+      expect(unavailableTitle).toBeTruthy();
+      expect(retry).toBeTruthy();
+      expect(pendingTitle).not.toBe(I18N_MESSAGES[locale]['alerts.overview.empty.title']);
+      expect(unavailableTitle).not.toBe(I18N_MESSAGES[locale]['alerts.overview.empty.title']);
+      expect(I18N_MESSAGES[locale]['alerts.overview.hydration.pending.description']).toContain(
+        'Pulse',
+      );
+      expect(I18N_MESSAGES[locale]['alerts.overview.hydration.unavailable.description']).toContain(
+        'Pulse',
+      );
+    }
+  });
+
   it('keeps external notification delivery distinct from alert detection', () => {
     expect(I18N_MESSAGES.en['alerts.activation.label.enabled']).toBe('Notifications enabled');
     expect(I18N_MESSAGES.en['alerts.activation.label.disabled']).toBe('Notifications paused');

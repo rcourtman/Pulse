@@ -1436,10 +1436,14 @@ describe('websocket store unified resource contract', () => {
     });
 
     it('recovers immediately after a reconnect instead of inheriting the throttle', async () => {
-      apiFetchJSONMock.mockResolvedValue({
-        lastUpdate: 500,
-        resources: [{ id: 'agent-host-1', type: 'agent', name: 'host-1', lastSeen: 100 }],
-      });
+      apiFetchJSONMock.mockImplementation((path: string) =>
+        path === '/api/alerts/active'
+          ? Promise.resolve([])
+          : Promise.resolve({
+              lastUpdate: 500,
+              resources: [{ id: 'agent-host-1', type: 'agent', name: 'host-1', lastSeen: 100 }],
+            }),
+      );
 
       const { store, dispose } = await createStoreHarness();
       try {
@@ -1461,7 +1465,10 @@ describe('websocket store unified resource contract', () => {
         emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1));
         await flushMicrotasks();
 
-        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+        expect(apiFetchJSONMock.mock.calls.filter(([path]) => path === '/api/state')).toHaveLength(
+          2,
+        );
+        expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/alerts/active');
         expect(sentMessageTypes()).not.toContain('requestData');
         expect(store.state.resources).toHaveLength(1);
       } finally {
@@ -1509,7 +1516,10 @@ describe('websocket store unified resource contract', () => {
         await flushMicrotasks();
 
         expect(sentMessageTypes()).not.toContain('requestData');
-        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+        expect(apiFetchJSONMock.mock.calls.filter(([path]) => path === '/api/state')).toHaveLength(
+          2,
+        );
+        expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/alerts/active');
       } finally {
         dispose();
       }

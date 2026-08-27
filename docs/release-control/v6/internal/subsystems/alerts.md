@@ -390,6 +390,22 @@ is not lost. Alert deltas still apply immediately when their socket baseline
 exists. Late socket callbacks and REST responses from a retired connection
 must be ignored, while a current oversized connection remains free to hydrate
 without waiting for the retired connection's request to settle.
+Cold active-alert hydration has a narrower recovery path than oversized estate
+state. Until the canonical store has accepted either a socket-owned alert
+snapshot or a successful `GET /api/alerts/active` response, the Alerts overview
+must expose `pending` or `unavailable` truth and must not turn an empty local
+store into a "No active alerts" all-clear. An unintentional socket close before
+that first alert snapshot starts one throttled active-alert REST recovery from
+the canonical store, and an open connection that remains alert-snapshot-free
+for five seconds starts the same recovery rather than waiting for the
+ninety-second heartbeat timeout; pages must not own an independent alert fetch
+or cache.
+That response may refresh display truth but must leave `rawActiveAlerts`
+baseline-free, and an alert revision plus request-generation fence must discard
+it if newer socket truth, a URL-scope switch, or disposal wins the race. Once a
+snapshot is known, reconnects retain it as the last confirmed projection rather
+than replacing known alert state with transport uncertainty. A failed recovery
+must remain visibly unavailable and provide an explicit operator retry.
 While the document is hidden, that same connection-scoped baseline must keep
 accepting resource deltas without reconciling the visible resource store on
 every message. The store accumulates changed resource IDs (and their per-key

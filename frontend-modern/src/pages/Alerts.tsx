@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
 import { t } from '@/i18n';
 import { Card } from '@/components/shared/Card';
+import { Button } from '@/components/shared/Button';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useActiveHorizontalRailItemVisibility } from '@/components/shared/useActiveHorizontalRailItemVisibility';
 
@@ -28,7 +29,10 @@ import {
   getAlertsTabTitle,
   isAlertsConfigurationTab,
 } from '@/utils/alertTabsPresentation';
-import { getAlertsPageHeaderMeta } from '@/utils/alertOverviewPresentation';
+import {
+  getAlertOverviewHydrationState,
+  getAlertsPageHeaderMeta,
+} from '@/utils/alertOverviewPresentation';
 import { getAlertConfigLeaveConfirmation } from '@/utils/alertConfigPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
@@ -42,7 +46,13 @@ import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';
 import { pathForTab, tabFromPath, type AlertTab, type Override } from '@/features/alerts/types';
 
 export function Alerts() {
-  const { activeAlerts, updateAlert, removeAlerts } = useWebSocket();
+  const {
+    activeAlerts,
+    activeAlertsHydrationStatus,
+    refreshActiveAlerts,
+    updateAlert,
+    removeAlerts,
+  } = useWebSocket();
   const { get: getResource, resources: allResources, byType, children } = useResources();
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,6 +117,12 @@ export function Alerts() {
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
   const [overviewOverrides, setOverviewOverrides] = createSignal<Override[]>([]);
   const alertsPageHeaderMeta = createMemo(() => getAlertsPageHeaderMeta());
+  const alertHydrationPresentation = createMemo(() =>
+    getAlertOverviewHydrationState(activeAlertsHydrationStatus()),
+  );
+  const canRenderActiveAlertTruth = createMemo(
+    () => !alertsActivation.detectionEnabled() || activeAlertsHydrationStatus() === 'ready',
+  );
 
   const headerMeta = () => alertsPageHeaderMeta()[activeTab()] ?? alertsPageHeaderMeta().default;
 
@@ -371,16 +387,45 @@ export function Alerts() {
 
           <div class="p-2 sm:p-6">
             <Show when={activeTab() === 'overview'}>
-              <OverviewTab
-                overrides={overviewOverrides()}
-                activeAlerts={activeAlerts}
-                updateAlert={updateAlert}
-                showQuickTip={showQuickTip}
-                dismissQuickTip={dismissQuickTip}
-                showAcknowledged={showAcknowledged}
-                setShowAcknowledged={setShowAcknowledged}
-                alertsDisabled={() => !alertsActivation.detectionEnabled()}
-              />
+              <Show
+                when={canRenderActiveAlertTruth()}
+                fallback={
+                  <div
+                    class="rounded-lg border border-border bg-surface p-6 sm:p-8"
+                    role={activeAlertsHydrationStatus() === 'unavailable' ? 'alert' : 'status'}
+                    aria-live="polite"
+                  >
+                    <div class="max-w-2xl space-y-3">
+                      <h2 class="text-lg font-semibold text-base-content">
+                        {alertHydrationPresentation().title}
+                      </h2>
+                      <p class="text-sm leading-6 text-muted">
+                        {alertHydrationPresentation().description}
+                      </p>
+                      <Show when={activeAlertsHydrationStatus() === 'unavailable'}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void refreshActiveAlerts()}
+                        >
+                          {alertHydrationPresentation().retryLabel}
+                        </Button>
+                      </Show>
+                    </div>
+                  </div>
+                }
+              >
+                <OverviewTab
+                  overrides={overviewOverrides()}
+                  activeAlerts={activeAlerts}
+                  updateAlert={updateAlert}
+                  showQuickTip={showQuickTip}
+                  dismissQuickTip={dismissQuickTip}
+                  showAcknowledged={showAcknowledged}
+                  setShowAcknowledged={setShowAcknowledged}
+                  alertsDisabled={() => !alertsActivation.detectionEnabled()}
+                />
+              </Show>
             </Show>
 
             <Show when={!readOnlySession()}>

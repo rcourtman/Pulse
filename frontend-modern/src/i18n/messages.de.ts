@@ -75,6 +75,14 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.empty.title': 'Keine aktiven Warnmeldungen',
   'alerts.overview.filteredEmpty.all': 'Keine aktiven Warnmeldungen',
   'alerts.overview.filteredEmpty.unacknowledged': 'Keine unbestaetigten Warnmeldungen',
+  'alerts.overview.hydration.pending.description':
+    'Pulse bestaetigt den aktuellen Vorfallstatus, bevor Entwarnung gemeldet wird.',
+  'alerts.overview.hydration.pending.title': 'Aktive Warnmeldungen werden geprueft',
+  'alerts.overview.hydration.retry': 'Erneut versuchen',
+  'alerts.overview.hydration.unavailable.description':
+    'Pulse konnte den aktuellen Vorfallstatus nicht bestaetigen. Diese Seite meldet keine Entwarnung, bis Warnmeldungsdaten verfuegbar sind.',
+  'alerts.overview.hydration.unavailable.title':
+    'Der Status aktiver Warnmeldungen ist voruebergehend nicht verfuegbar',
   'alerts.overview.nodePrefix': 'auf {node}',
   'alerts.overview.notification.acknowledged': 'Warnmeldung bestaetigt',
   'alerts.overview.notification.acknowledgeFailed': 'Warnmeldung konnte nicht bestaetigt werden',
