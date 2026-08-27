@@ -287,14 +287,18 @@ func TestV5GotifyWebhookSurvivesV6LoadAndRestart(t *testing.T) {
 	loaded, err := v6Persistence.LoadWebhooks()
 	require.NoError(t, err)
 	require.Len(t, loaded, 1)
-	assert.Equal(t, v5Webhooks[0], loaded[0])
+	// The legacy empty value and the v6 canonical "all" value have identical
+	// delivery semantics; persistence normalizes the former at its read boundary.
+	want := v5Webhooks[0]
+	want.MinimumSeverity = "all"
+	assert.Equal(t, want, loaded[0])
 
 	// A fresh persistence instance models the post-upgrade process restart.
 	restarted := config.NewConfigPersistence(dataDir)
 	loadedAfterRestart, err := restarted.LoadWebhooks()
 	require.NoError(t, err)
 	require.Len(t, loadedAfterRestart, 1)
-	assert.Equal(t, v5Webhooks[0], loadedAfterRestart[0])
+	assert.Equal(t, want, loadedAfterRestart[0])
 
 	stored, err := os.ReadFile(filepath.Join(dataDir, "webhooks.enc"))
 	require.NoError(t, err)
