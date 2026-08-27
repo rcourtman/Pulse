@@ -22,6 +22,7 @@ import {
 } from '@/utils/alertConfigPresentation';
 
 import type { EscalationConfig, EscalationDestination, EscalationNotifyTarget } from './types';
+import { ESCALATION_DELAY_MAX_MINUTES, ESCALATION_DELAY_MIN_MINUTES } from './helpers';
 
 interface AlertEscalationSectionProps {
   escalation: EscalationConfig;
@@ -102,8 +103,8 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                       <input
                         id={afterId()}
                         type="number"
-                        min="5"
-                        max="180"
+                        min={ESCALATION_DELAY_MIN_MINUTES}
+                        max={ESCALATION_DELAY_MAX_MINUTES}
                         value={level.after}
                         onChange={(event) =>
                           props.setEscalationAfter(index(), event.currentTarget.value)
@@ -195,8 +196,8 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                   <input
                     id={`${fieldIdPrefix}-repeat-every`}
                     type="number"
-                    min="5"
-                    max="180"
+                    min={ESCALATION_DELAY_MIN_MINUTES}
+                    max={ESCALATION_DELAY_MAX_MINUTES}
                     value={props.escalation.repeatEvery}
                     onChange={(event) => props.setEscalationRepeatEvery(event.currentTarget.value)}
                     class={`${controlClass('px-2 py-1 text-sm')} w-20`}

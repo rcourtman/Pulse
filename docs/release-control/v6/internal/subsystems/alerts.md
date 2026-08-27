@@ -2200,6 +2200,12 @@ global detection or delivery controls are paused. A repeat is durable escalation
 evidence with an explicit repeat marker rather than a new incident or a replay
 of missed intervals.
 
+Every escalation level delay uses the same 5–180 minute safety boundary at the
+frontend state owner and the backend configuration-normalization boundary.
+Malformed API payloads and manually entered values therefore cannot turn a
+level into an immediate escalation or an unreachable timer beyond the supported
+schedule range.
+
 The Schedule surface loads the same email, Apprise, and webhook catalog as the
 Destinations surface. It shows disabled and deleted selections explicitly,
 prevents an escalation level from becoming destinationless, and explains the

@@ -59,7 +59,7 @@ describe('useAlertScheduleState', () => {
     result.setNotifyOnResolveEnabled(true);
     result.setEscalationEnabled(true);
     result.addEscalationLevel();
-    result.setEscalationAfter(0, '30');
+    result.setEscalationAfter(0, '0');
     result.setEscalationNotify(0, 'webhook');
     result.setEscalationDestinationIds(0, ['webhook:pager']);
     result.setEscalationRepeatCritical(true);
@@ -83,13 +83,18 @@ describe('useAlertScheduleState', () => {
       repeatEvery: 15,
       levels: [
         expect.objectContaining({
-          after: 30,
+          after: 5,
           notify: 'webhook',
           destinationIds: ['webhook:pager'],
         }),
       ],
     });
 
+    result.setEscalationAfter(0, '180');
+    result.addEscalationLevel();
+    expect(escalation().levels[1].after).toBe(180);
+
+    result.removeEscalationLevel(1);
     result.removeEscalationLevel(0);
     expect(escalation().levels).toHaveLength(0);
 

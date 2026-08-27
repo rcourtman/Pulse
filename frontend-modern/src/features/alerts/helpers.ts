@@ -36,6 +36,15 @@ export const fallbackMaxAlertsPerHour = (value?: number): number => {
   return clampMaxAlertsPerHour(numericValue);
 };
 
+export const ESCALATION_DELAY_MIN_MINUTES = 5;
+export const ESCALATION_DELAY_MAX_MINUTES = 180;
+
+export const clampEscalationDelayMinutes = (value: number, fallback: number): number => {
+  const candidate = Number.isFinite(value) ? value : fallback;
+  if (!Number.isFinite(candidate)) return ESCALATION_DELAY_MIN_MINUTES;
+  return Math.min(ESCALATION_DELAY_MAX_MINUTES, Math.max(ESCALATION_DELAY_MIN_MINUTES, candidate));
+};
+
 export const getLocalTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 export const createDefaultQuietHours = (): QuietHoursConfig => ({

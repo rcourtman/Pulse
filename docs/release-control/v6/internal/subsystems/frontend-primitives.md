@@ -6704,4 +6704,6 @@ used by the Notifications tab, preserves selected-but-disabled and deleted
 entries visibly, and prevents the final selection from being removed. The
 critical-repeat control exposes a bounded numeric interval only when enabled
 and states every lifecycle condition that stops paging. Desktop and mobile
-layouts must retain associated labels and avoid horizontal overflow.
+layouts must retain associated labels and avoid horizontal overflow. Escalation
+level delays and repeat intervals share the rendered 5–180 minute bounds; the
+feature state clamps typed values before they can leave the control surface.

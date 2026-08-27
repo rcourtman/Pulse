@@ -90,11 +90,14 @@ func TestUpdateConfigNormalizesExactEscalationRoutingAndRepeatPolicy(t *testing.
 		Enabled:        true,
 		RepeatCritical: true,
 		RepeatEvery:    1,
-		Levels: []EscalationLevel{{
-			After:          15,
-			Notify:         "WEBHOOKS",
-			DestinationIDs: []string{" webhook:pager ", "email", "webhook:pager", "https://secret.example"},
-		}},
+		Levels: []EscalationLevel{
+			{
+				After:          -1,
+				Notify:         "WEBHOOKS",
+				DestinationIDs: []string{" webhook:pager ", "email", "webhook:pager", "https://secret.example"},
+			},
+			{After: 181, Notify: "email"},
+		},
 	}
 
 	m.UpdateConfig(cfg)
@@ -105,6 +108,12 @@ func TestUpdateConfigNormalizesExactEscalationRoutingAndRepeatPolicy(t *testing.
 	}
 	if got.Levels[0].Notify != "webhook" {
 		t.Fatalf("legacy target = %q, want webhook", got.Levels[0].Notify)
+	}
+	if got.Levels[0].After != MinEscalationDelayMinutes {
+		t.Fatalf("minimum escalation delay = %d, want %d", got.Levels[0].After, MinEscalationDelayMinutes)
+	}
+	if got.Levels[1].After != MaxEscalationDelayMinutes {
+		t.Fatalf("maximum escalation delay = %d, want %d", got.Levels[1].After, MaxEscalationDelayMinutes)
 	}
 	wantIDs := []string{"webhook:pager", "email"}
 	if len(got.Levels[0].DestinationIDs) != len(wantIDs) {

@@ -115,7 +115,7 @@ func TestSnoozeExpiryResumesEscalationWithoutReplayingMissedLevels(t *testing.T)
 	cfg.Enabled = true
 	cfg.ActivationState = ActivationActive
 	cfg.Schedule.Escalation.Enabled = true
-	cfg.Schedule.Escalation.Levels = []EscalationLevel{{After: 1, Notify: "all"}}
+	cfg.Schedule.Escalation.Levels = []EscalationLevel{{After: MinEscalationDelayMinutes, Notify: "all"}}
 	m.UpdateConfig(cfg)
 	alert := &Alert{ID: "disk:vm/100", CanonicalState: "disk:vm/100", CanonicalSpecID: "disk", Type: "disk", Level: AlertLevelCritical, ResourceID: "vm/100", ResourceName: "vm-100", StartTime: now.Add(-time.Hour), LastSeen: now}
 	m.mu.Lock()
@@ -139,7 +139,7 @@ func TestSnoozeExpiryResumesEscalationWithoutReplayingMissedLevels(t *testing.T)
 		t.Fatal("expired snooze did not reopen the alert")
 	}
 
-	now = now.Add(2 * time.Minute)
+	now = now.Add((MinEscalationDelayMinutes + 1) * time.Minute)
 	m.checkEscalations()
 	select {
 	case <-escalations:

@@ -1,43 +1,34 @@
 {
   "version": 1,
-  "base_sha": "e0baecc418d15a6638ef80ed1e2b39d08aa9a5ad",
-  "verified_at": "2026-08-27T18:57:57Z",
+  "base_sha": "636367e96ee97ce56c7b1353635236a418a3922c",
+  "verified_at": "2026-08-27T19:10:47Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/StorageDetailKeyValueRow.tsx",
-    "frontend-modern/src/components/shared/InfoCardFrame.tsx",
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx",
-    "frontend-modern/src/components/shared/cards/HardwareCard.tsx",
-    "frontend-modern/src/components/shared/cards/RootDiskCard.tsx",
-    "frontend-modern/src/components/shared/cards/SystemInfoCard.tsx",
-    "frontend-modern/src/components/shared/cards/TemperaturesCard.tsx",
-    "frontend-modern/src/features/storageBackups/detailPresentation.ts"
+    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx",
+    "frontend-modern/src/features/alerts/helpers.ts",
+    "frontend-modern/src/features/alerts/useAlertScheduleState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/StorageDetailKeyValueRow.tsx": "db827a709c0f018c24dd0821ae9845022a2ba15c7052b6471926957aafdf6270",
-    "frontend-modern/src/components/shared/InfoCardFrame.tsx": "0819bce063e2caf72ffbbd3beb398fd4776a7fe089da7eac5c899bd92fffe66c",
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "f9721f90d6b1c1a7030bbc1767c90a4d353d8c4a82843e47ad37aae8f687c46d",
-    "frontend-modern/src/components/shared/cards/HardwareCard.tsx": "66df4609cc019cf5a7d0928abb82a2ad88f99683cd277ee1f0e38b9b48d281dc",
-    "frontend-modern/src/components/shared/cards/RootDiskCard.tsx": "48a1698a5781639a2fcb027837edc6c7b580e392b37041c89911f23c71d80fc6",
-    "frontend-modern/src/components/shared/cards/SystemInfoCard.tsx": "723fab36dbd6eeaf882f6eb89d2d0c7c276f5b930c17bfcbc44413a13f531880",
-    "frontend-modern/src/components/shared/cards/TemperaturesCard.tsx": "f91cecf1de23abec0b7b571b02516643206ba2b27f7cb37cd8b941f2588229dd",
-    "frontend-modern/src/features/storageBackups/detailPresentation.ts": "6dd2da6052aa37e6cfe2488356a296c578c26f7aed3ee8e49f6a5362135b34e7"
+    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx": "f80f94d529196fffb4e184288c5ce9369f673bc8cabc0eb2047ebc10b7dfe363",
+    "frontend-modern/src/features/alerts/helpers.ts": "27feef6ede9bdb6668af5c447c5b9256f019b8df5a291ae8b5d436d371363794",
+    "frontend-modern/src/features/alerts/useAlertScheduleState.ts": "84ec18253c926be70d941daf5b56bf045cf372ded5026033849d38f76c23e84f"
   },
-  "routes": ["/standalone/machines", "/proxmox/storage"],
+  "routes": ["/alerts/schedule"],
   "viewports": [
-    { "width": 1920, "height": 800 },
+    { "width": 1280, "height": 720 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "Apollo-114 expanded with Platform details and Machine details visible",
-    "west-f-service-pool expanded with Configuration and ZFS Pool cards visible"
+    "alert escalation enabled with one level and selected disabled destinations visible",
+    "level delay normalized to the 5 minute lower bound",
+    "level delay normalized to the 180 minute upper bound",
+    "upper-bound level retained in the narrow layout without horizontal overflow"
   ],
   "interactions": [
-    "expanded the Apollo-114 row, opened Platform details, and revealed the nested Machine details",
-    "confirmed System, Hardware, Disks, and temperature facts use an adjacent fixed label track at 1920px",
-    "confirmed machine facts retain condensed right-aligned values and clean wrapping at 390px",
-    "expanded west-f-service-pool and confirmed Configuration values sit adjacent to their labels at 1920px",
-    "confirmed storage Configuration values retain condensed right alignment and clean wrapping at 390px",
-    "reloaded the phone machine route and repeated the complete disclosure interaction"
+    "enabled alert escalation and added an escalation level",
+    "entered 0 minutes and blurred the field, confirming it normalized to 5",
+    "entered 999 minutes and blurred the field, confirming it normalized to 180",
+    "resized from desktop to 390px and confirmed zero document-level horizontal overflow",
+    "confirmed the browser console contained no warnings or errors"
   ]
 }
