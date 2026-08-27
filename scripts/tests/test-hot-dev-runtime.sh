@@ -339,9 +339,9 @@ test_go_release_toolchain_floor() {
   module_toolchain="$(sed -n 's/^toolchain //p' "${ROOT_DIR}/go.mod")"
   installed_toolchain="$(cd "${ROOT_DIR}" && go env GOVERSION)"
 
-  assert_contains "Go module uses the patched release toolchain" "${module_toolchain}" "go1.26.6"
-  assert_contains "dev toolchain installer uses the patched release toolchain" "$(<"${ROOT_DIR}/scripts/.go-version")" "go1.26.6"
-  assert_contains "active dev runtime resolves the patched release toolchain" "${installed_toolchain}" "go1.26.6"
+  assert_contains "Go module uses the patched release toolchain" "${module_toolchain}" "go1.26.7"
+  assert_contains "dev toolchain installer uses the patched release toolchain" "$(<"${ROOT_DIR}/scripts/.go-version")" "go1.26.7"
+  assert_contains "active dev runtime resolves the patched release toolchain" "${installed_toolchain}" "go1.26.7"
 }
 
 test_backend_race_suite_keeps_hosted_runner_timeout_headroom() {

@@ -44,7 +44,7 @@ case "${OUTPUT_ROOT}" in
         ;;
 esac
 
-required_go="go1.26.6"
+required_go="go1.26.7"
 current_go="$(go env GOVERSION 2>/dev/null || true)"
 if [[ "${current_go}" != "${required_go}" ]]; then
     echo "Error: Go toolchain must be ${required_go} (got ${current_go:-unknown})." >&2

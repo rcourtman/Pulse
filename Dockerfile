@@ -26,7 +26,7 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
 # Build stage for Go backend
 # Force amd64 platform - Go cross-compiles for all targets anyway,
 # and this avoids slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 golang:1.26.6-alpine@sha256:1a9c10cf505a9e6b1e96ea77ebdbfe79a0f10380181faf88bc3b51d7e4315fae AS backend-builder
+FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS backend-builder
 
 ARG BUILD_AGENT
 ARG VERSION

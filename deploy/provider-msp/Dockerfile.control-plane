@@ -12,7 +12,7 @@ COPY SECURITY.md TERMS.md /app/
 RUN --mount=type=cache,id=pulse-control-plane-npm-cache,target=/root/.npm \
     npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine@sha256:1a9c10cf505a9e6b1e96ea77ebdbfe79a0f10380181faf88bc3b51d7e4315fae AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS builder
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
 ARG GIT_COMMIT=unknown
