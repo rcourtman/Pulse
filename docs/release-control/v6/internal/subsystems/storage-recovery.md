@@ -5642,3 +5642,16 @@ whose atomic/fsync discipline ensures a later process can report a Pulse
 monitoring gap; it contains endpoint fingerprint and timing only. Configuration
 export/import carries the watchdog URL solely inside the existing
 passphrase-encrypted bundle and advances that bundle contract to version 4.4.
+
+### Deploy credential replacement preserves restart-time truth
+
+The shared deploy enrollment path treats the persisted API-token inventory as
+the commit boundary when exchanging a bootstrap token for a runtime token. One
+locked write records the replacement; a failed write restores the complete
+prior inventory and primary-token projection, returns no new credential, and
+leaves the deployment target retryable. Bootstrap minting also restores live
+state and returns no token if its inventory write fails. These transitions add
+no backup, restore, retention, snapshot, or recovery authority; they prevent a
+successful enrollment response from describing credential state that a restart
+would undo. Their success and forced-write-failure proofs live in
+`internal/api/deploy_handlers_test.go`.

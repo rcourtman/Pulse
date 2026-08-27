@@ -9965,3 +9965,21 @@ failure count, sanitized error, and last interruption. It never returns the
 URL or endpoint fingerprint. A saved configuration that cannot be decrypted is
 `configuration_unavailable`, while explicit removal is immediately `disabled`
 even if cancellation of an older request is still unwinding.
+
+### Deploy enrollment reports only committed credentials
+
+`POST /api/agents/agent/enroll` returns a long-lived runtime token only after
+the authenticated single-use bootstrap token has been replaced in the durable
+API-token inventory. The replacement is one locked persistence transition;
+another request that already consumed the bootstrap token receives the stable
+`409 token_already_consumed` response. If persistence fails, the API restores
+the complete prior inventory and legacy primary-token projection, returns
+`500 token_persistence_error`, emits no runtime token, and does not advance the
+deployment target from `ENROLLING` to `VERIFYING`.
+
+The internal bootstrap-mint boundary likewise returns no raw token or token ID
+when persistence fails. `TestHandleEnroll_Success`,
+`TestHandleEnroll_RollsBackBootstrapConsumptionWhenPersistenceFails`, and
+`TestMintBootstrapTokenForTarget_RollsBackWhenPersistenceFails` in
+`internal/api/deploy_handlers_test.go` prove the persisted success state and
+both failed-commit responses.

@@ -6674,3 +6674,22 @@ or re-enrollment authority. Its liveness marker observes only whether the
 monitor select loop is progressing; agent report success or failure cannot
 independently assert that Pulse is healthy. Agent-lifecycle behavior and proof
 routes remain unchanged.
+
+### Deploy enrollment swaps credentials as one durable transition
+
+A deploy bootstrap token remains the live credential until Pulse can durably
+replace it with the long-lived, host-bound runtime token. Enrollment prepares
+the runtime credential first, then removes the single-use bootstrap token and
+adds the runtime token under one configuration lock and one persistence write.
+Concurrent reuse loses the locked removal and returns `409`; persistence
+failure restores the complete prior token inventory and primary-token
+projection, returns `500`, discloses no runtime credential, and leaves the
+target enrolling so the same bootstrap credential can be retried safely.
+
+Bootstrap minting follows the same commit boundary: a token is returned only
+after its updated inventory is durably stored, and a failed write restores the
+prior live inventory. `TestHandleEnroll_Success`,
+`TestHandleEnroll_RollsBackBootstrapConsumptionWhenPersistenceFails`, and
+`TestMintBootstrapTokenForTarget_RollsBackWhenPersistenceFails` in
+`internal/api/deploy_handlers_test.go` pin the durable replacement and rollback
+paths.

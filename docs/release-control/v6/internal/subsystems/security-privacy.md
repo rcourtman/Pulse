@@ -2356,3 +2356,15 @@ tokens and primary-token projection, emits only a failed `token_deleted` audit
 event, and returns an error; a successful response identifies a deletion that
 will survive restart. Exact multi-token removal and persistence-failure
 rollback are exercised in `internal/api/security_tokens_lifecycle_test.go`.
+
+### Deploy enrollment never exposes an uncommitted credential
+
+The deploy bootstrap secret is single-use only at the durable API-token commit
+boundary. Pulse generates the host-bound runtime credential without admitting
+or returning it, then replaces the bootstrap record under one lock and persists
+the resulting inventory once. A concurrent replay cannot pass the locked
+removal. A failed persistence write restores the complete prior inventory and
+primary-token projection, returns an error, and discloses no runtime secret;
+failed bootstrap minting likewise returns no credential material. The success,
+replay, and forced-write-failure paths are exercised in
+`internal/api/deploy_handlers_test.go`.
