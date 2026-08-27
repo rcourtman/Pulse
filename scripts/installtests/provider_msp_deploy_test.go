@@ -306,7 +306,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		"FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder",
 		"npm ci",
 		"npm run build",
-		"FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder",
+		"FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine@sha256:1a9c10cf505a9e6b1e96ea77ebdbfe79a0f10380181faf88bc3b51d7e4315fae AS builder",
 		"FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
 		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
 		"ARG TARGETOS",
