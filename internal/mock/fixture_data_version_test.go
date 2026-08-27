@@ -32,6 +32,17 @@ func TestFixtureDataVersionAdvancesOnMetricTick(t *testing.T) {
 func TestUnifiedResourceSnapshotMemoizedPerDataVersion(t *testing.T) {
 	withMockEnabledForTest(t)
 
+	// This test advances the fixture explicitly below. Pause the automatic
+	// metric ticker so a slow race-enabled snapshot build cannot change the
+	// data version between the two reads whose memoization identity we are
+	// asserting.
+	stopUpdateLoop()
+	t.Cleanup(func() {
+		if IsMockEnabled() {
+			startUpdateLoop()
+		}
+	})
+
 	first, firstFreshness := UnifiedResourceSnapshot()
 	if len(first) == 0 {
 		t.Fatal("expected mock resources")
