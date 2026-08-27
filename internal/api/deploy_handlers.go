@@ -760,16 +760,18 @@ func (h *DeployHandlers) MintBootstrapTokenForTarget(req deploy.BootstrapTokenRe
 	}
 
 	config.Mu.Lock()
+	previousTokens := append([]config.APITokenRecord(nil), h.config.APITokens...)
 	h.config.UpsertAPIToken(*record)
-	tokens := make([]config.APITokenRecord, len(h.config.APITokens))
-	copy(tokens, h.config.APITokens)
-	config.Mu.Unlock()
-
 	if h.persistence != nil {
-		if err := h.persistence.SaveAPITokens(tokens); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist bootstrap token")
+		if err := h.persistence.SaveAPITokens(h.config.APITokens); err != nil {
+			h.config.APITokens = previousTokens
+			h.config.SortAPITokens()
+			config.Mu.Unlock()
+			log.Error().Err(err).Msg("Failed to persist bootstrap token")
+			return "", "", fmt.Errorf("persist bootstrap token: %w", err)
 		}
 	}
+	config.Mu.Unlock()
 
 	return raw, record.ID, nil
 }
@@ -865,25 +867,9 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 7. Invalidate bootstrap token (single-use) BEFORE minting runtime token.
-	// Check return value to prevent concurrent replay.
-	config.Mu.Lock()
-	removed := h.config.RemoveAPIToken(bootstrapToken.ID)
-	tokensAfterRemove := make([]config.APITokenRecord, len(h.config.APITokens))
-	copy(tokensAfterRemove, h.config.APITokens)
-	config.Mu.Unlock()
-	if removed == nil {
-		writeErrorResponse(w, http.StatusConflict, "token_already_consumed",
-			"Bootstrap token has already been used", nil)
-		return
-	}
-	if h.persistence != nil {
-		if err := h.persistence.SaveAPITokens(tokensAfterRemove); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist token removal during enroll")
-		}
-	}
-
-	// 8. Mint runtime token (long-lived, host-bound).
+	// 7. Prepare the long-lived, host-bound runtime token before consuming the
+	// bootstrap token. The credential is not admitted to live state until the
+	// atomic replacement below succeeds.
 	runtimeRaw, err := auth.GenerateAPIToken()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate runtime token during enroll")
@@ -914,16 +900,32 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 	}
 	setAPITokenOwnerUserID(runtimeRecord, apiTokenOwnerUserID(*bootstrapToken))
 
+	// 8. Replace the single-use bootstrap token with the runtime token in one
+	// persisted transition. Holding the config lock through persistence prevents
+	// concurrent enrollment from consuming the same token and prevents unrelated
+	// token mutations from being omitted from the saved snapshot.
 	config.Mu.Lock()
+	previousTokens := append([]config.APITokenRecord(nil), h.config.APITokens...)
+	removed := h.config.RemoveAPIToken(bootstrapToken.ID)
+	if removed == nil {
+		config.Mu.Unlock()
+		writeErrorResponse(w, http.StatusConflict, "token_already_consumed",
+			"Bootstrap token has already been used", nil)
+		return
+	}
 	h.config.UpsertAPIToken(*runtimeRecord)
-	tokensAfterMint := make([]config.APITokenRecord, len(h.config.APITokens))
-	copy(tokensAfterMint, h.config.APITokens)
-	config.Mu.Unlock()
 	if h.persistence != nil {
-		if err := h.persistence.SaveAPITokens(tokensAfterMint); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist runtime token during enroll")
+		if err := h.persistence.SaveAPITokens(h.config.APITokens); err != nil {
+			h.config.APITokens = previousTokens
+			h.config.SortAPITokens()
+			config.Mu.Unlock()
+			log.Error().Err(err).Msg("Failed to persist deploy enrollment token replacement")
+			writeErrorResponse(w, http.StatusInternalServerError, "token_persistence_error",
+				"Failed to persist enrollment credentials", nil)
+			return
 		}
 	}
+	config.Mu.Unlock()
 
 	// 9. Update target status to VERIFYING.
 	_ = h.store.UpdateTargetStatus(ctx, targetID, deploy.TargetVerifying, "")

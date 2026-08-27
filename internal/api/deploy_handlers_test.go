@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -522,6 +523,10 @@ func TestHandleEnroll_Success(t *testing.T) {
 	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
 	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
 	rec.Metadata[apiTokenMetadataOwnerUserID] = "alice"
+	h.persistence = config.NewConfigPersistence(h.config.DataPath)
+	if err := h.persistence.SaveAPITokens(h.config.APITokens); err != nil {
+		t.Fatalf("persist bootstrap token: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
 	attachAPITokenRecord(req, rec)
@@ -563,6 +568,13 @@ func TestHandleEnroll_Success(t *testing.T) {
 	if got := runtimeRecord.Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
 		t.Fatalf("runtime token owner_user_id = %q, want alice", got)
 	}
+	persistedTokens, err := h.persistence.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("load persisted tokens: %v", err)
+	}
+	if len(persistedTokens) != 1 || persistedTokens[0].ID != runtimeTokenID {
+		t.Fatalf("persisted enrollment transition = %+v, want only runtime token %q", persistedTokens, runtimeTokenID)
+	}
 
 	// Target should now be verifying.
 	target, err := store.GetTarget(context.Background(), targetID)
@@ -597,6 +609,49 @@ func TestHandleEnroll_InstallingState(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for installing state, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleEnroll_RollsBackBootstrapConsumptionWhenPersistenceFails(t *testing.T) {
+	h, store := newEnrollTestHandlers(t)
+	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
+	bootstrap := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
+
+	statePath := filepath.Join(t.TempDir(), "blocked-state")
+	h.persistence = config.NewConfigPersistence(statePath)
+	if err := os.RemoveAll(statePath); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
+	attachAPITokenRecord(req, bootstrap)
+	rr := httptest.NewRecorder()
+	h.HandleEnroll(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d (body=%q)", rr.Code, http.StatusInternalServerError, rr.Body.String())
+	}
+
+	config.Mu.Lock()
+	tokens := append([]config.APITokenRecord(nil), h.config.APITokens...)
+	primaryToken := h.config.APIToken
+	config.Mu.Unlock()
+	if len(tokens) != 1 || tokens[0].ID != bootstrap.ID {
+		t.Fatalf("bootstrap token was not restored exactly: %+v", tokens)
+	}
+	if primaryToken != bootstrap.Hash {
+		t.Fatalf("legacy primary token = %q, want restored bootstrap hash", primaryToken)
+	}
+
+	target, err := store.GetTarget(context.Background(), targetID)
+	if err != nil {
+		t.Fatalf("get target: %v", err)
+	}
+	if target.Status != deploy.TargetEnrolling {
+		t.Fatalf("target status = %q, want %q", target.Status, deploy.TargetEnrolling)
 	}
 }
 
@@ -785,6 +840,47 @@ func TestMintBootstrapTokenForTarget(t *testing.T) {
 	}
 	if rec.Metadata[apiTokenMetadataOwnerUserID] != "alice" {
 		t.Fatalf("expected owner_user_id=alice, got %q", rec.Metadata[apiTokenMetadataOwnerUserID])
+	}
+}
+
+func TestMintBootstrapTokenForTarget_RollsBackWhenPersistenceFails(t *testing.T) {
+	statePath := filepath.Join(t.TempDir(), "blocked-state")
+	persistence := config.NewConfigPersistence(statePath)
+	if err := os.RemoveAll(statePath); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+
+	existing := config.APITokenRecord{
+		ID: "existing", Name: "existing", Hash: "existing-hash",
+		CreatedAt: time.Now().UTC(), Scopes: []string{config.ScopeWildcard},
+	}
+	cfg := &config.Config{APITokens: []config.APITokenRecord{existing}}
+	cfg.SortAPITokens()
+	h := &DeployHandlers{
+		config:      cfg,
+		persistence: persistence,
+		sseSubs:     make(map[string]*deploySSESub),
+	}
+
+	raw, tokenID, err := h.MintBootstrapTokenForTarget(deploy.BootstrapTokenRequest{
+		ClusterID: "c1", NodeID: "n1", ExpectedNode: "pve-3",
+		JobID: "job-m1", TargetID: "tgt-m1", SourceAgentID: "agent-src",
+		OrgID: "test-org", TTL: 15 * time.Minute,
+	}, "alice")
+	if err == nil {
+		t.Fatal("expected persistence failure")
+	}
+	if raw != "" || tokenID != "" {
+		t.Fatalf("failed mint returned credential material: raw=%q id=%q", raw, tokenID)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != existing.ID {
+		t.Fatalf("live tokens were not rolled back: %+v", cfg.APITokens)
+	}
+	if cfg.APIToken != existing.Hash {
+		t.Fatalf("legacy primary token = %q, want %q", cfg.APIToken, existing.Hash)
 	}
 }
 
