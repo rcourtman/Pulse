@@ -40,6 +40,12 @@ func TestPhysicalDisksFromHostAgentSMART_BuildsDisks(t *testing.T) {
 			// Entries without a device name cannot form a stable ID.
 			Device: "  ",
 		},
+		{
+			// Older agents may report optical drives as SMART inventory.
+			Device: "/dev/sr0",
+			Model:  "DVD-ROM",
+			Type:   "sata",
+		},
 	}
 
 	disks := physicalDisksFromHostAgentSMART("pve1", "node1", entries)
@@ -93,6 +99,17 @@ type permissionDeniedDisksPVEClient struct {
 func (client *permissionDeniedDisksPVEClient) GetDisks(context.Context, string) ([]proxmox.Disk, error) {
 	close(client.called)
 	return nil, fmt.Errorf("403 permission check failed")
+}
+
+type opticalDiskPVEClient struct {
+	fakeStorageClient
+}
+
+func (*opticalDiskPVEClient) GetDisks(context.Context, string) ([]proxmox.Disk, error) {
+	return []proxmox.Disk{
+		{DevPath: "/dev/sda", Model: "Samsung SSD", Serial: "REAL-DISK", Type: "sata", Health: "PASSED"},
+		{DevPath: "/dev/sr0", Model: "DVD-ROM", Type: "sata"},
+	}, nil
 }
 
 // A node whose Proxmox disks/list query fails (wide nodes can exceed the API
@@ -152,6 +169,44 @@ func TestMaybePollPhysicalDisksAsync_AgentFallbackWhenDiskQueryFails(t *testing.
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("expected fallback physical disk from host agent SMART, got %+v", disks)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestMaybePollPhysicalDisksAsync_SkipsOpticalProxmoxDevices(t *testing.T) {
+	m := &Monitor{
+		state:                models.NewState(),
+		lastPhysicalDiskPoll: make(map[string]time.Time),
+		alertManager:         alerts.NewManager(),
+	}
+	m.state.UpdateNodesForInstance("pve1", []models.Node{{
+		ID:       "pve1-node1",
+		Name:     "node1",
+		Instance: "pve1",
+	}})
+
+	m.maybePollPhysicalDisksAsync(
+		context.Background(),
+		"pve1",
+		&config.PVEInstance{},
+		&opticalDiskPVEClient{},
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+		[]models.Node{{Name: "node1", Instance: "pve1"}},
+	)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		disks := m.state.GetSnapshot().PhysicalDisks
+		if len(disks) == 1 && disks[0].Serial == "REAL-DISK" {
+			if disks[0].DevPath != "/dev/sda" {
+				t.Fatalf("unexpected physical disk: %+v", disks[0])
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected optical device to be excluded, got %+v", disks)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

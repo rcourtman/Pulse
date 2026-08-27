@@ -41,7 +41,52 @@ describe('buildBackupServerRows', () => {
       expect(row.memoryTotal).toBe(8_000);
       expect(row.uptimeSeconds).toBe(1_036_800);
     }
-    expect(rows.map((row) => row.datastore?.name)).toEqual(['tank', 'offsite']);
+    expect(rows.map((row) => row.datastore?.name)).toEqual(['offsite', 'tank']);
+  });
+
+  it('keeps server and datastore rows stable when provider order changes', () => {
+    const firstServer = makePbsResource({
+      id: 'pbs-zulu',
+      name: 'zulu',
+      pbs: {
+        instanceId: 'zulu',
+        datastores: [
+          { name: 'tank', total: 1_000, used: 400, available: 600 },
+          { name: 'archive', total: 2_000, used: 500, available: 1_500 },
+        ],
+      },
+    });
+    const secondServer = makePbsResource({
+      id: 'pbs-alpha',
+      name: 'alpha',
+      pbs: {
+        instanceId: 'alpha',
+        datastores: [
+          { name: 'fast', total: 1_000, used: 200, available: 800 },
+          { name: 'bulk', total: 4_000, used: 1_000, available: 3_000 },
+        ],
+      },
+    });
+
+    const orderedKeys = buildBackupServerRows([firstServer, secondServer]).map((row) => row.key);
+    const reorderedKeys = buildBackupServerRows([
+      {
+        ...secondServer,
+        pbs: { ...secondServer.pbs!, datastores: [...secondServer.pbs!.datastores!].reverse() },
+      },
+      {
+        ...firstServer,
+        pbs: { ...firstServer.pbs!, datastores: [...firstServer.pbs!.datastores!].reverse() },
+      },
+    ]).map((row) => row.key);
+
+    expect(orderedKeys).toEqual([
+      'pbs-alpha:bulk',
+      'pbs-alpha:fast',
+      'pbs-zulu:archive',
+      'pbs-zulu:tank',
+    ]);
+    expect(reorderedKeys).toEqual(orderedKeys);
   });
 
   it('keeps the reachability row when a server reports no datastores or metrics', () => {

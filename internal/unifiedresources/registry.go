@@ -1966,6 +1966,9 @@ func pbsStorageInstance(storage models.Storage) bool {
 }
 
 func (rr *ResourceRegistry) ingestPhysicalDisk(disk models.PhysicalDisk) {
+	if fsfilters.IsVirtualBlockDevice(disk.DevPath) {
+		return
+	}
 	resource, identity := resourceFromPhysicalDisk(disk)
 	parentSourceID := proxmoxNodeSourceID(disk.Instance, disk.Node)
 	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {

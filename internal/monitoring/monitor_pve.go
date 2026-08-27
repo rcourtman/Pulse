@@ -1067,6 +1067,13 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			// Record each disk; alert evaluation happens after host-agent SMART merges
 			// so the canonical disk view includes post-merge health/wearout data.
 			for _, disk := range disks {
+				if fsfilters.IsVirtualBlockDevice(disk.DevPath) {
+					log.Debug().
+						Str("node", node.Node).
+						Str("device", disk.DevPath).
+						Msg("Skipping non-physical device reported by Proxmox disk inventory")
+					continue
+				}
 				diskID := unifiedresources.ProxmoxPhysicalDiskSourceID(
 					inst,
 					node.Node,
@@ -1213,7 +1220,7 @@ func physicalDisksFromHostAgentSMART(inst, nodeName string, smartEntries []model
 	disks := make([]models.PhysicalDisk, 0, len(smartEntries))
 	for _, smart := range smartEntries {
 		device := strings.TrimSpace(smart.Device)
-		if device == "" {
+		if device == "" || fsfilters.IsVirtualBlockDevice(device) {
 			continue
 		}
 		devPath := device

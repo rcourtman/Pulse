@@ -347,6 +347,8 @@ func TestIsVirtualBlockDevice(t *testing.T) {
 		{"raid md", "md0", true},
 		{"virtio disk", "vda", true},
 		{"xen disk", "xvda", true},
+		{"optical drive", "sr0", true},
+		{"optical drive with dev prefix", "/dev/sr1", true},
 		{"with dev prefix", "/dev/zram0", true},
 		{"uppercase prefix", "/DEV/ZD0", true},
 		{"sata disk", "sda", false},

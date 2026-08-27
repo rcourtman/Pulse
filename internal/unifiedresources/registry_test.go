@@ -2363,6 +2363,25 @@ func TestResourceRegistry_IngestSnapshotSkipsVirtualBlockDevicesFromHostSMART(t 
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotSkipsOpticalProxmoxDisks(t *testing.T) {
+	rr := NewRegistry(nil)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{ID: "pve-disk", Instance: "pve-main", Node: "pve-1", DevPath: "/dev/sda", Serial: "REAL-DISK"},
+			{ID: "pve-optical", Instance: "pve-main", Node: "pve-1", DevPath: "/dev/sr0", Model: "DVD-ROM", Type: "sata"},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected only the real Proxmox disk, got %d: %+v", len(disks), disks)
+	}
+	if disks[0].PhysicalDisk == nil || disks[0].PhysicalDisk.Serial != "REAL-DISK" {
+		t.Fatalf("expected only the real Proxmox disk, got %+v", disks[0].PhysicalDisk)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIdentity(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

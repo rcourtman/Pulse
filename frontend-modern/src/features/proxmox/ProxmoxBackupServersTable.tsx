@@ -121,8 +121,14 @@ export function buildBackupServerRows(
   // *datastore* storage resources (type 'storage', sources ['pbs']). This table
   // is about the server, so keep only actual PBS server instances — otherwise a
   // datastore renders as a phantom offline "server" row.
-  for (const server of servers.filter((resource) => resource.type === 'pbs')) {
-    const datastores = server.pbs?.datastores ?? [];
+  const sortedServers = servers
+    .filter((resource) => resource.type === 'pbs')
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+  for (const server of sortedServers) {
+    const datastores = (server.pbs?.datastores ?? [])
+      .slice()
+      .sort((left, right) => left.name.localeCompare(right.name));
     const memoryTotal = server.memory?.total ?? 0;
     const host = {
       resource: server,

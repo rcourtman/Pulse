@@ -1,11 +1,15 @@
 {
   "version": 1,
-  "base_sha": "325ff793c88c193431b76a9ae8c25d375504a3cd",
-  "verified_at": "2026-08-27T00:41:31Z",
+  "base_sha": "96add5d57a2b703e756eb7157b4faa2f7db37c55",
+  "verified_at": "2026-08-27T10:04:09Z",
   "result": "passed",
-  "changed_paths": [],
-  "content_sha256": {},
-  "routes": ["/proxmox/backups"],
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "8fb34851a8bcc32c67a4f4f156fdc32f62236a0fa8c5e2aa8b3d4dfcc8ecd47f"
+  },
+  "routes": ["/proxmox/backups/date"],
   "viewports": [
     {
       "width": 1280,
@@ -17,16 +21,16 @@
     }
   ],
   "states": [
-    "mock-mode Proxmox Backups loaded with standalone PBS server and datastore rows",
-    "the backup-vault PBS row expanded into the canonical resource detail drawer",
-    "Platform details expanded to expose provider context and PBS service context",
-    "the canonical PBS detail drawer collapsed back to its originating row control"
+    "mock-mode Proxmox Backups loaded with backup-vault offsite-vault, backup-vault primary-vault, and dr-vault primary-vault rows in deterministic server and datastore order",
+    "the backup-vault primary-vault row expanded into the canonical resource detail drawer",
+    "the primary-vault row remained expanded after multiple two-second mock provider refreshes while row order remained unchanged",
+    "the same deterministic order and expanded primary-vault row rendered in the compact phone table"
   ],
   "interactions": [
-    "expanded backup-vault from the Backup servers table and confirmed Overview, History, and Manage sections were available",
-    "expanded Platform details and confirmed provider context and PBS service context remained available in the shared drawer",
-    "collapsed the drawer and confirmed keyboard focus returned to the matching backup-vault expansion control",
-    "repeated the expand, Platform details, and collapse flow at 390x844 and confirmed document and body scroll widths remained equal to the 390px viewport",
-    "confirmed the browser console contained no errors during the final desktop and phone verification flows"
+    "expanded the backup-vault primary-vault row and confirmed the matching detail drawer appeared",
+    "waited across multiple live mock refresh intervals and confirmed offsite-vault remained before primary-vault and the expanded row did not reset",
+    "resized from 1280x720 to 390x844 and confirmed the row stayed expanded with compact Server, State, Store, Used, and Backups columns",
+    "confirmed document and body scroll widths matched both viewports with no horizontal page overflow",
+    "confirmed the browser console contained no errors during the final desktop and phone verification flow"
   ]
 }
