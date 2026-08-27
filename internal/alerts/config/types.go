@@ -135,6 +135,8 @@ func NormalizeNotificationDeliveryTarget(target string) string {
 }
 
 const (
+	MinEscalationDelayMinutes      = 5
+	MaxEscalationDelayMinutes      = 180
 	DefaultEscalationRepeatMinutes = 30
 	MinEscalationRepeatMinutes     = 5
 	MaxEscalationRepeatMinutes     = 180
@@ -185,6 +187,7 @@ func NormalizeEscalationConfig(config *EscalationConfig) {
 		return
 	}
 	for index := range config.Levels {
+		config.Levels[index].After = max(MinEscalationDelayMinutes, min(MaxEscalationDelayMinutes, config.Levels[index].After))
 		config.Levels[index].Notify = NormalizeNotificationDeliveryTarget(config.Levels[index].Notify)
 		config.Levels[index].DestinationIDs = NormalizeEscalationDestinationIDs(config.Levels[index].DestinationIDs)
 	}

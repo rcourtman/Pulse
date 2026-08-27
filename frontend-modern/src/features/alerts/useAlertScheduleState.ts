@@ -6,6 +6,7 @@ import {
   createDefaultGrouping,
   createDefaultQuietHours,
   createDefaultResolveNotifications,
+  clampEscalationDelayMinutes,
   fallbackMaxAlertsPerHour,
 } from './helpers';
 import type {
@@ -308,7 +309,7 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
     const parsed = Number.parseInt(rawValue, 10);
     nextLevels[index] = {
       ...currentLevel,
-      after: Number.isNaN(parsed) ? currentLevel.after : parsed,
+      after: clampEscalationDelayMinutes(parsed, currentLevel.after),
     };
     props.setEscalation({
       ...props.escalation(),
@@ -357,9 +358,7 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
     const parsed = Number.parseInt(rawValue, 10);
     props.setEscalation({
       ...props.escalation(),
-      repeatEvery: Number.isNaN(parsed)
-        ? props.escalation().repeatEvery
-        : Math.min(180, Math.max(5, parsed)),
+      repeatEvery: clampEscalationDelayMinutes(parsed, props.escalation().repeatEvery),
     });
     markUnsaved();
   };
@@ -377,7 +376,10 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
 
   const addEscalationLevel = () => {
     const lastLevel = props.escalation().levels[props.escalation().levels.length - 1];
-    const nextAfter = typeof lastLevel?.after === 'number' ? lastLevel.after + 30 : 15;
+    const nextAfter = clampEscalationDelayMinutes(
+      typeof lastLevel?.after === 'number' ? lastLevel.after + 30 : 15,
+      15,
+    );
     const destinationIds = props.escalationDestinations().map((destination) => destination.id);
     props.setEscalation({
       ...props.escalation(),

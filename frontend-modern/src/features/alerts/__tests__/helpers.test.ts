@@ -10,9 +10,20 @@ import {
   createDefaultAppriseConfig,
   createDefaultEmailConfig,
   alertTypeDisplayLabel,
+  clampEscalationDelayMinutes,
 } from '@/features/alerts/helpers';
 
 describe('alerts helpers', () => {
+  describe('clampEscalationDelayMinutes', () => {
+    it('keeps escalation schedules inside the supported interval', () => {
+      expect(clampEscalationDelayMinutes(-1, 30)).toBe(5);
+      expect(clampEscalationDelayMinutes(15, 30)).toBe(15);
+      expect(clampEscalationDelayMinutes(181, 30)).toBe(180);
+      expect(clampEscalationDelayMinutes(Number.NaN, 30)).toBe(30);
+      expect(clampEscalationDelayMinutes(Number.NaN, Number.NaN)).toBe(5);
+    });
+  });
+
   describe('clampMaxAlertsPerHour', () => {
     it('returns default min for NaN', () => {
       expect(clampMaxAlertsPerHour(NaN)).toBe(1);

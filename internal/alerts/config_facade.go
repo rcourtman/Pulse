@@ -43,6 +43,8 @@ const (
 	AlertIntentSignalOffline              = alertconfig.AlertIntentSignalOffline
 	AlertIntentSignalAvailability         = alertconfig.AlertIntentSignalAvailability
 	DefaultEscalationRepeatMinutes        = alertconfig.DefaultEscalationRepeatMinutes
+	MinEscalationDelayMinutes             = alertconfig.MinEscalationDelayMinutes
+	MaxEscalationDelayMinutes             = alertconfig.MaxEscalationDelayMinutes
 	MinEscalationRepeatMinutes            = alertconfig.MinEscalationRepeatMinutes
 	MaxEscalationRepeatMinutes            = alertconfig.MaxEscalationRepeatMinutes
 )
