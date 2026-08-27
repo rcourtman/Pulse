@@ -1789,11 +1789,13 @@ Helm chart release metadata to the same `6.4.0-rc.6` release version. It follows
 `rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
 install pointers or stable semver aliases. The candidate restores complete
-merged host detail on the standalone PBS surface; detects SMART UDMA CRC
-counter growth; resolves alert configuration through one declarative policy
-fold; removes the superseded transition-tracking maps; bounds alert-event query
-allocation by the effective result limit; and advances the release toolchain to
-Go 1.26.7. The changes since `v6.4.0-rc.5` do not
+merged host detail on the standalone PBS surface; prevents `pct df` lock
+contention and shared-deadline starvation from dropping later LXC filesystem
+reports; detects SMART UDMA CRC counter growth; resolves alert configuration
+through one declarative policy fold; removes the superseded transition-tracking
+maps; bounds alert-event query allocation by the effective result limit; and
+advances the release toolchain to Go 1.26.7. The changes since
+`v6.4.0-rc.5` do not
 require a Pulse Mobile client change and preserve
 the existing mobile, Relay, onboarding, and mobile-facing API contracts, so the
 server cut is classified `no-mobile-impact`; no companion upload or public
