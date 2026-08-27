@@ -7,6 +7,7 @@ package alerts
 // changes no lifecycle behavior.
 
 import (
+	"encoding/json"
 	"os"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
@@ -88,9 +89,28 @@ func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reas
 		event.ResourceName = alert.ResourceName
 		event.AlertType = alert.Type
 		event.Level = string(alert.Level)
+		if eventCarriesAlertSnapshot(eventType) {
+			if snapshot, err := json.Marshal(cloneAlertForOutput(alert)); err == nil {
+				event.Snapshot = snapshot
+			}
+		}
 	}
 	if event.AlertID == "" {
 		return
 	}
 	store.Append(event)
+}
+
+// eventCarriesAlertSnapshot reports whether an event type records the full
+// alert state alongside the transition. Lifecycle transitions do — they are
+// what alert history is projected from — while high-frequency notification
+// decisions stay lean.
+func eventCarriesAlertSnapshot(eventType string) bool {
+	switch eventType {
+	case eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeResolved,
+		eventlog.TypeAcknowledged, eventlog.TypeUnacknowledged, eventlog.TypeEscalated:
+		return true
+	default:
+		return false
+	}
 }

@@ -313,6 +313,12 @@ func (hm *HistoryManager) UpdateAlertOperationalContractForAlert(alert *Alert) {
 			hm.history[i].Alert.LatestTransition = snapshot.LatestTransition
 			hm.history[i].Alert.Transitions = snapshot.Transitions
 			hm.history[i].Alert.Evidence = snapshot.Evidence
+			// The live alert is authoritative for acknowledgement; a row
+			// that keeps its fire-time ack state shows an acknowledged
+			// alert as unacknowledged for its whole active life.
+			hm.history[i].Alert.Acknowledged = snapshot.Acknowledged
+			hm.history[i].Alert.AckTime = snapshot.AckTime
+			hm.history[i].Alert.AckUser = snapshot.AckUser
 			return
 		}
 	}

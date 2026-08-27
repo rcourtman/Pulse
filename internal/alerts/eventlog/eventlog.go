@@ -59,6 +59,10 @@ type Event struct {
 	Reason       string            `json:"reason,omitempty"`
 	Message      string            `json:"message,omitempty"`
 	Details      map[string]string `json:"details,omitempty"`
+	// Snapshot is the full alert state at the moment of the event, recorded
+	// for lifecycle transitions (fired, refired, resolved, acknowledged,
+	// unacknowledged) so alert history can be projected from the log alone.
+	Snapshot json.RawMessage `json:"snapshot,omitempty"`
 }
 
 // Filter narrows a Query. Zero values mean "no constraint".
@@ -176,12 +180,44 @@ func (s *Store) initSchema() error {
 			level TEXT NOT NULL DEFAULT '',
 			reason TEXT NOT NULL DEFAULT '',
 			message TEXT NOT NULL DEFAULT '',
-			details TEXT NOT NULL DEFAULT ''
+			details TEXT NOT NULL DEFAULT '',
+			snapshot TEXT NOT NULL DEFAULT ''
 		);
 		CREATE INDEX IF NOT EXISTS idx_alert_events_alert ON alert_events(alert_id, occurred_at);
 		CREATE INDEX IF NOT EXISTS idx_alert_events_time ON alert_events(occurred_at);
 		CREATE INDEX IF NOT EXISTS idx_alert_events_type ON alert_events(event_type, occurred_at);
 	`)
+	if err != nil {
+		return err
+	}
+	return s.ensureSnapshotColumn()
+}
+
+// ensureSnapshotColumn upgrades a pre-snapshot database in place. ALTER TABLE
+// ADD COLUMN on SQLite is metadata-only, so the upgrade is cheap and existing
+// rows read back with an empty snapshot.
+func (s *Store) ensureSnapshotColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(alert_events)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dflt any
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == "snapshot" {
+			return rows.Err()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`ALTER TABLE alert_events ADD COLUMN snapshot TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 
@@ -261,8 +297,8 @@ func (s *Store) insertBatch(batch []Event) error {
 	}
 	stmt, err := tx.Prepare(`
 		INSERT INTO alert_events
-			(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -288,6 +324,7 @@ func (s *Store) insertBatch(batch []Event) error {
 			event.Reason,
 			event.Message,
 			details,
+			string(event.Snapshot),
 		); err != nil {
 			_ = tx.Rollback()
 			return err
@@ -363,7 +400,7 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		limit = maxQueryLimit
 	}
 
-	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details FROM alert_events"
+	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -384,7 +421,7 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 	events := make([]Event, 0, defaultQueryLimit)
 	for rows.Next() {
 		var event Event
-		var occurredAt, details string
+		var occurredAt, details, snapshot string
 		if err := rows.Scan(
 			&event.ID,
 			&occurredAt,
@@ -397,8 +434,12 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 			&event.Reason,
 			&event.Message,
 			&details,
+			&snapshot,
 		); err != nil {
 			return nil, fmt.Errorf("scan alert event: %w", err)
+		}
+		if snapshot != "" {
+			event.Snapshot = json.RawMessage(snapshot)
 		}
 		if parsed, err := time.Parse(time.RFC3339Nano, occurredAt); err == nil {
 			event.OccurredAt = parsed
