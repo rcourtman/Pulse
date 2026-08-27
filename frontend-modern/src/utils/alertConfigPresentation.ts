@@ -72,6 +72,14 @@ export const ALERT_CONFIG_RECOVERY_HELP =
 export const ALERT_CONFIG_ESCALATION_HELP = 'Define escalation levels for unresolved alerts:';
 export const ALERT_CONFIG_ESCALATION_AFTER_LABEL = 'After';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_LABEL = 'Notify';
+export const ALERT_CONFIG_ESCALATION_DESTINATIONS_HELP =
+  'Choose the exact destinations for this level. Disabled destinations remain selected but will not receive alerts until they are enabled.';
+export const ALERT_CONFIG_ESCALATION_DESTINATION_DISABLED = 'disabled';
+export const ALERT_CONFIG_ESCALATION_DESTINATION_UNAVAILABLE = 'Unavailable destination';
+export const ALERT_CONFIG_ESCALATION_REPEAT_LABEL = 'Repeat critical escalation until acknowledged';
+export const ALERT_CONFIG_ESCALATION_REPEAT_HELP =
+  'After the final level, repeat critical alerts at this interval. Repeats stop when the alert is acknowledged, resolved, snoozed, or notifications are paused.';
+export const ALERT_CONFIG_ESCALATION_REPEAT_EVERY_LABEL = 'Repeat every';
 export const ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX = 'min';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL = 'Email';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS = 'Webhooks';

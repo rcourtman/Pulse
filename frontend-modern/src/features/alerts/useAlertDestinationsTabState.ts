@@ -1,6 +1,7 @@
 import { createMemo, createSignal, onMount, type Accessor } from 'solid-js';
 
-import { NotificationsAPI, type AppriseConfig } from '@/api/notifications';
+import { NotificationsAPI, type AppriseConfig, type Webhook } from '@/api/notifications';
+import type { Setter } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { showErrorWithDetail } from '@/utils/toast';
@@ -29,6 +30,8 @@ export interface AlertDestinationsTabStateProps {
   isRetrying: Accessor<boolean>;
   isLoadingDestinations: Accessor<boolean>;
   onRetryLoad: () => void;
+  webhooks?: Accessor<Webhook[]>;
+  setWebhooks?: Setter<Webhook[]>;
 }
 
 export function useAlertDestinationsTabState(props: AlertDestinationsTabStateProps) {
@@ -50,7 +53,11 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     heldEvents,
     loadDeliveryLog,
   } = useNotificationDeliveryLog();
-  const webhookState = useAlertWebhookDestinationsState();
+  const webhookState = useAlertWebhookDestinationsState({
+    webhooks: props.webhooks,
+    setWebhooks: props.setWebhooks,
+    autoLoad: props.webhooks === undefined,
+  });
 
   const isLoading = createMemo(
     () => props.isLoadingDestinations() || webhookState.isLoadingWebhooks() || props.isRetrying(),
@@ -142,7 +149,9 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
 
   const handleRetry = () => {
     props.onRetryLoad();
-    void webhookState.loadWebhooks();
+    if (props.webhooks === undefined) {
+      void webhookState.loadWebhooks();
+    }
     void loadDeliveryHealth();
     void loadDeliveryLog();
   };

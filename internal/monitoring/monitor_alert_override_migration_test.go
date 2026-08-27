@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -31,6 +34,94 @@ func trueNASMemoryAlertResource(id, supersededID, hostname string, memory float6
 		resource.SupersededCanonicalIDs = []string{supersededID}
 	}
 	return resource
+}
+
+func TestHandleAlertEscalatedPreservesLegacyAppriseAndExactWebhookRouting(t *testing.T) {
+	t.Run("legacy Apprise", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		requests := make(chan struct{}, 1)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requests <- struct{}{}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		notifMgr := notifications.NewNotificationManager("https://pulse.local")
+		defer notifMgr.Stop()
+		notifMgr.SetGroupingWindow(0)
+		if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+			t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+		}
+		notifMgr.SetAppriseConfig(notifications.AppriseConfig{
+			Enabled: true, Mode: notifications.AppriseModeHTTP, ServerURL: server.URL,
+		})
+
+		manager := alerts.NewManager()
+		cfg := manager.GetConfig()
+		cfg.Schedule.Escalation.Levels = []alerts.EscalationLevel{{After: 1, Notify: "apprise"}}
+		cfg.Schedule.QuietHours.Enabled = false
+		manager.UpdateConfig(cfg)
+
+		(&Monitor{notificationMgr: notifMgr, alertManager: manager}).handleAlertEscalated(nil, &alerts.Alert{
+			ID: "apprise-escalation", Type: "connectivity", Level: alerts.AlertLevelCritical,
+			ResourceID: "node/pve-1", ResourceName: "pve-1", StartTime: time.Now(),
+		}, 1)
+
+		select {
+		case <-requests:
+		case <-time.After(2 * time.Second):
+			t.Fatal("expected legacy Apprise escalation delivery")
+		}
+	})
+
+	t.Run("exact webhook", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		selectedRequests := make(chan struct{}, 1)
+		selectedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			selectedRequests <- struct{}{}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer selectedServer.Close()
+		unselectedRequests := make(chan struct{}, 1)
+		unselectedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			unselectedRequests <- struct{}{}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer unselectedServer.Close()
+
+		notifMgr := notifications.NewNotificationManager("https://pulse.local")
+		defer notifMgr.Stop()
+		notifMgr.SetGroupingWindow(0)
+		if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+			t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+		}
+		notifMgr.AddWebhook(notifications.WebhookConfig{ID: "ops", Name: "ops", URL: unselectedServer.URL, Enabled: true})
+		notifMgr.AddWebhook(notifications.WebhookConfig{ID: "pager", Name: "pager", URL: selectedServer.URL, Enabled: true})
+
+		manager := alerts.NewManager()
+		cfg := manager.GetConfig()
+		cfg.Schedule.Escalation.Levels = []alerts.EscalationLevel{{
+			After: 1, Notify: "webhook", DestinationIDs: []string{"webhook:pager"},
+		}}
+		cfg.Schedule.QuietHours.Enabled = false
+		manager.UpdateConfig(cfg)
+
+		(&Monitor{notificationMgr: notifMgr, alertManager: manager}).handleAlertEscalated(nil, &alerts.Alert{
+			ID: "exact-webhook-escalation", Type: "connectivity", Level: alerts.AlertLevelCritical,
+			ResourceID: "node/pve-1", ResourceName: "pve-1", StartTime: time.Now(),
+		}, 1)
+
+		select {
+		case <-selectedRequests:
+		case <-time.After(2 * time.Second):
+			t.Fatal("expected selected webhook escalation delivery")
+		}
+		select {
+		case <-unselectedRequests:
+			t.Fatal("exact escalation selection widened to an unselected webhook")
+		case <-time.After(300 * time.Millisecond):
+		}
+	})
 }
 
 func activeMemoryAlertForResource(manager *alerts.Manager, resourceID string) (alerts.Alert, bool) {

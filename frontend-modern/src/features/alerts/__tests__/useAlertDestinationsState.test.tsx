@@ -13,6 +13,7 @@ vi.mock('@/api/notifications', () => ({
   NotificationsAPI: {
     getAppriseConfig: vi.fn(),
     getEmailConfig: vi.fn(),
+    getWebhooks: vi.fn(),
     updateAppriseConfig: vi.fn(),
     updateEmailConfig: vi.fn(),
   },
@@ -46,6 +47,7 @@ describe('useAlertDestinationsState', () => {
   beforeEach(() => {
     vi.mocked(NotificationsAPI.getEmailConfig).mockReset();
     vi.mocked(NotificationsAPI.getAppriseConfig).mockReset();
+    vi.mocked(NotificationsAPI.getWebhooks).mockReset();
     vi.mocked(NotificationsAPI.updateEmailConfig).mockReset();
     vi.mocked(NotificationsAPI.updateAppriseConfig).mockReset();
     vi.mocked(AlertsAPI.getDeadManConfig).mockReset();
@@ -92,6 +94,16 @@ describe('useAlertDestinationsState', () => {
       timeoutSeconds: 30,
       skipTlsVerify: false,
     } as any);
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([
+      {
+        id: 'pager',
+        name: 'Pager',
+        url: 'https://pager.example.test',
+        method: 'POST',
+        headers: {},
+        enabled: true,
+      },
+    ]);
     vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({
       pingUrl: '***REDACTED***',
       configured: true,
@@ -112,6 +124,7 @@ describe('useAlertDestinationsState', () => {
     await result.loadDestinations();
     expect(NotificationsAPI.getEmailConfig).toHaveBeenCalledTimes(1);
     expect(NotificationsAPI.getAppriseConfig).toHaveBeenCalledTimes(1);
+    expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(1);
     expect(AlertsAPI.getDeadManConfig).toHaveBeenCalledTimes(1);
     expect(RelayAPI.getConfig).toHaveBeenCalledTimes(1);
     expect(result.emailConfig().server).toBe('smtp.example.com');
@@ -120,12 +133,16 @@ describe('useAlertDestinationsState', () => {
     expect(result.appriseConfig().minimumSeverity).toBe('critical');
     expect(result.deadManPingUrl()).toBe('***REDACTED***');
     expect(result.pushMinimumSeverity()).toBe('critical');
+    expect(result.webhooks()).toEqual([
+      expect.objectContaining({ id: 'pager', service: 'generic' }),
+    ]);
 
     setActiveTab('destinations');
     await Promise.resolve();
     await Promise.resolve();
     expect(NotificationsAPI.getEmailConfig).toHaveBeenCalledTimes(2);
     expect(NotificationsAPI.getAppriseConfig).toHaveBeenCalledTimes(2);
+    expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(2);
     expect(AlertsAPI.getDeadManConfig).toHaveBeenCalledTimes(2);
     expect(RelayAPI.getConfig).toHaveBeenCalledTimes(2);
 

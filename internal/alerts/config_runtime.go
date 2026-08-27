@@ -52,11 +52,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	config.NodeDefaults.PoweredOffSeverity = alertconfig.NormalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
 	config.DockerIgnoredContainerPrefixes = alertconfig.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 	config.Schedule.InitialNotify = alertconfig.NormalizeNotificationDeliveryTarget(config.Schedule.InitialNotify)
-	for index := range config.Schedule.Escalation.Levels {
-		config.Schedule.Escalation.Levels[index].Notify = alertconfig.NormalizeNotificationDeliveryTarget(
-			config.Schedule.Escalation.Levels[index].Notify,
-		)
-	}
+	alertconfig.NormalizeEscalationConfig(&config.Schedule.Escalation)
 
 	// Migration logic for activation state (backward compatibility)
 	m.migrateActivationState(&config)

@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import {
@@ -20,6 +20,26 @@ import {
 
 export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProps) {
   const state = useAlertsConfigurationState(props);
+  const escalationDestinations = createMemo(() => [
+    {
+      id: 'email',
+      label: 'Email',
+      kind: 'email' as const,
+      enabled: state.emailConfig().enabled,
+    },
+    {
+      id: 'apprise',
+      label: 'Apprise',
+      kind: 'apprise' as const,
+      enabled: state.appriseConfig().enabled,
+    },
+    ...state.webhooks().map((webhook) => ({
+      id: `webhook:${webhook.id}`,
+      label: webhook.name || webhook.id,
+      kind: 'webhook' as const,
+      enabled: webhook.enabled,
+    })),
+  ]);
 
   return (
     <>
@@ -224,6 +244,8 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           isRetrying={state.isReloadingConfig}
           isLoadingDestinations={state.isLoadingDestinations}
           onRetryLoad={() => void state.loadAlertConfiguration()}
+          webhooks={state.webhooks}
+          setWebhooks={state.setWebhooks}
         />
       </Show>
 
@@ -242,6 +264,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           setNotifyOnResolve={state.setNotifyOnResolve}
           escalation={state.scheduleEscalation}
           setEscalation={state.setScheduleEscalation}
+          escalationDestinations={escalationDestinations}
         />
       </Show>
     </>

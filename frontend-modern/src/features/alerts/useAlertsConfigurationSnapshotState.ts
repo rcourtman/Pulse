@@ -176,7 +176,12 @@ export function useAlertsConfigurationSnapshotState(
     setScheduleGrouping({ ...snapshot.scheduleGrouping });
     setScheduleEscalation({
       enabled: snapshot.scheduleEscalation.enabled,
-      levels: snapshot.scheduleEscalation.levels.map((level) => ({ ...level })),
+      repeatCritical: snapshot.scheduleEscalation.repeatCritical,
+      repeatEvery: snapshot.scheduleEscalation.repeatEvery,
+      levels: snapshot.scheduleEscalation.levels.map((level) => ({
+        ...level,
+        ...(level.destinationIds ? { destinationIds: [...level.destinationIds] } : {}),
+      })),
     });
     setInitialNotify(snapshot.initialNotify);
     setNotifyOnResolve(snapshot.notifyOnResolve);
@@ -239,7 +244,12 @@ export function useAlertsConfigurationSnapshotState(
     scheduleGrouping: { ...scheduleGrouping() },
     scheduleEscalation: {
       enabled: scheduleEscalation().enabled,
-      levels: scheduleEscalation().levels.map((level) => ({ ...level })),
+      repeatCritical: scheduleEscalation().repeatCritical,
+      repeatEvery: scheduleEscalation().repeatEvery,
+      levels: scheduleEscalation().levels.map((level) => ({
+        ...level,
+        ...(level.destinationIds ? { destinationIds: [...level.destinationIds] } : {}),
+      })),
     },
     initialNotify: initialNotify(),
     notifyOnResolve: notifyOnResolve(),

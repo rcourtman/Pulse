@@ -119,7 +119,9 @@ describe('Alert schedule sections', () => {
   it('associates visible labels with escalation controls', () => {
     const escalation: EscalationConfig = {
       enabled: true,
-      levels: [{ after: 15, notify: 'email' }],
+      levels: [{ after: 15, notify: 'email', destinationIds: ['email'] }],
+      repeatCritical: true,
+      repeatEvery: 30,
     };
 
     render(() => (
@@ -128,6 +130,13 @@ describe('Alert schedule sections', () => {
         setEscalationEnabled={vi.fn()}
         setEscalationAfter={vi.fn()}
         setEscalationNotify={vi.fn()}
+        destinations={[
+          { id: 'email', label: 'Email', kind: 'email', enabled: true },
+          { id: 'apprise', label: 'Apprise', kind: 'apprise', enabled: false },
+        ]}
+        setEscalationDestinationIds={vi.fn()}
+        setEscalationRepeatCritical={vi.fn()}
+        setEscalationRepeatEvery={vi.fn()}
         removeEscalationLevel={vi.fn()}
         addEscalationLevel={vi.fn()}
       />
@@ -138,8 +147,13 @@ describe('Alert schedule sections', () => {
       'true',
     );
     expect(screen.getByRole('spinbutton', { name: 'After' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Notify' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Apprise' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Notify' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Email' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Apprise/ })).not.toBeChecked();
+    expect(
+      screen.getByRole('button', { name: 'Repeat critical escalation until acknowledged' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('spinbutton', { name: 'Repeat every' })).toHaveValue(30);
     expect(screen.getByRole('button', { name: 'Remove escalation level' })).toBeInTheDocument();
   });
 

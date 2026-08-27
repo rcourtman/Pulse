@@ -184,6 +184,8 @@ export const normalizeMetricDelayMap = (
 export const createDefaultEscalation = (): EscalationConfig => ({
   enabled: false,
   levels: [],
+  repeatCritical: false,
+  repeatEvery: 30,
 });
 
 export const getTriggerValue = (

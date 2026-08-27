@@ -238,7 +238,9 @@ export interface AlertConfig {
     };
     escalation?: {
       enabled: boolean;
-      levels?: Array<{ after: number; notify: string }>;
+      levels?: Array<{ after: number; notify: string; destinationIds?: string[] }>;
+      repeatCritical?: boolean;
+      repeatEvery?: number;
     };
   };
   disableAllNodes?: boolean;

@@ -42,6 +42,9 @@ const (
 	AlertIntentSignalDefault              = alertconfig.AlertIntentSignalDefault
 	AlertIntentSignalOffline              = alertconfig.AlertIntentSignalOffline
 	AlertIntentSignalAvailability         = alertconfig.AlertIntentSignalAvailability
+	DefaultEscalationRepeatMinutes        = alertconfig.DefaultEscalationRepeatMinutes
+	MinEscalationRepeatMinutes            = alertconfig.MinEscalationRepeatMinutes
+	MaxEscalationRepeatMinutes            = alertconfig.MaxEscalationRepeatMinutes
 )
 
 func NewAlertIntentPolicyDocument() AlertIntentPolicyDocument {
@@ -76,6 +79,10 @@ func NormalizeMetricTimeThresholds(input map[string]map[string]int) map[string]m
 
 func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
 	return alertconfig.NormalizeDockerIgnoredPrefixes(prefixes)
+}
+
+func NormalizeEscalationDestinationIDs(destinationIDs []string) []string {
+	return alertconfig.NormalizeEscalationDestinationIDs(destinationIDs)
 }
 
 func CanonicalResourceTypeKeys(resourceType string) []string {

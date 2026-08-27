@@ -11,6 +11,7 @@ import {
 import type {
   CooldownConfig,
   EscalationConfig,
+  EscalationDestination,
   EscalationLevel,
   EscalationNotifyTarget,
   GroupingConfig,
@@ -33,6 +34,7 @@ export interface UseAlertScheduleStateProps {
   setNotifyOnResolve: (value: boolean) => void;
   escalation: () => EscalationConfig;
   setEscalation: (value: EscalationConfig) => void;
+  escalationDestinations: () => EscalationDestination[];
 }
 
 export const ALERT_SCHEDULE_TIMEZONES = [
@@ -328,6 +330,40 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
     markUnsaved();
   };
 
+  const setEscalationDestinationIds = (index: number, destinationIds: string[]) => {
+    if (destinationIds.length === 0) return;
+    const destinations = props.escalationDestinations();
+    const selected = destinations.filter((destination) => destinationIds.includes(destination.id));
+    const allSelected = destinations.length > 0 && selected.length === destinations.length;
+    const fallbackNotify: EscalationNotifyTarget = allSelected
+      ? 'all'
+      : (selected[0]?.kind ?? 'all');
+    const nextLevels = [...props.escalation().levels];
+    nextLevels[index] = {
+      ...nextLevels[index],
+      notify: fallbackNotify,
+      destinationIds: [...new Set(destinationIds)],
+    };
+    props.setEscalation({ ...props.escalation(), levels: nextLevels });
+    markUnsaved();
+  };
+
+  const setEscalationRepeatCritical = (repeatCritical: boolean) => {
+    props.setEscalation({ ...props.escalation(), repeatCritical });
+    markUnsaved();
+  };
+
+  const setEscalationRepeatEvery = (rawValue: string) => {
+    const parsed = Number.parseInt(rawValue, 10);
+    props.setEscalation({
+      ...props.escalation(),
+      repeatEvery: Number.isNaN(parsed)
+        ? props.escalation().repeatEvery
+        : Math.min(180, Math.max(5, parsed)),
+    });
+    markUnsaved();
+  };
+
   const removeEscalationLevel = (index: number) => {
     const nextLevels = props
       .escalation()
@@ -342,11 +378,16 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
   const addEscalationLevel = () => {
     const lastLevel = props.escalation().levels[props.escalation().levels.length - 1];
     const nextAfter = typeof lastLevel?.after === 'number' ? lastLevel.after + 30 : 15;
+    const destinationIds = props.escalationDestinations().map((destination) => destination.id);
     props.setEscalation({
       ...props.escalation(),
       levels: [
         ...props.escalation().levels,
-        { after: nextAfter, notify: 'all' as EscalationNotifyTarget },
+        {
+          after: nextAfter,
+          notify: 'all' as EscalationNotifyTarget,
+          ...(destinationIds.length > 0 ? { destinationIds } : {}),
+        },
       ],
     });
     markUnsaved();
@@ -374,6 +415,9 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
     setEscalationEnabled,
     setEscalationAfter,
     setEscalationNotify,
+    setEscalationDestinationIds,
+    setEscalationRepeatCritical,
+    setEscalationRepeatEvery,
     removeEscalationLevel,
     addEscalationLevel,
   };

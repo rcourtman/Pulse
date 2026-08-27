@@ -87,14 +87,17 @@ type QuietHoursSuppression struct {
 
 // EscalationLevel represents an escalation rule
 type EscalationLevel struct {
-	After  int    `json:"after"`  // minutes after initial alert
-	Notify string `json:"notify"` // "email", "webhook", "apprise", or "all"
+	After          int      `json:"after"`                    // minutes after initial alert
+	Notify         string   `json:"notify"`                   // backward-compatible channel fallback
+	DestinationIDs []string `json:"destinationIds,omitempty"` // exact logical destinations: email, apprise, webhook:<id>
 }
 
 // EscalationConfig represents alert escalation configuration
 type EscalationConfig struct {
-	Enabled bool              `json:"enabled"`
-	Levels  []EscalationLevel `json:"levels"`
+	Enabled        bool              `json:"enabled"`
+	Levels         []EscalationLevel `json:"levels"`
+	RepeatCritical bool              `json:"repeatCritical,omitempty"`
+	RepeatEvery    int               `json:"repeatEvery,omitempty"` // minutes after the final level
 }
 
 // GroupingConfig represents alert grouping configuration
@@ -128,6 +131,70 @@ func NormalizeNotificationDeliveryTarget(target string) string {
 		return "apprise"
 	default:
 		return "all"
+	}
+}
+
+const (
+	DefaultEscalationRepeatMinutes = 30
+	MinEscalationRepeatMinutes     = 5
+	MaxEscalationRepeatMinutes     = 180
+	maxEscalationDestinations      = 32
+)
+
+// NormalizeEscalationDestinationIDs keeps exact escalation routing bounded and
+// credential-free. Unknown identifiers are dropped rather than widening to all
+// destinations; an empty result preserves the legacy channel fallback.
+func NormalizeEscalationDestinationIDs(destinationIDs []string) []string {
+	if len(destinationIDs) == 0 {
+		return nil
+	}
+	result := make([]string, 0, min(len(destinationIDs), maxEscalationDestinations))
+	seen := make(map[string]struct{}, len(destinationIDs))
+	for _, raw := range destinationIDs {
+		id := strings.TrimSpace(raw)
+		valid := id == "email" || id == "apprise"
+		if strings.HasPrefix(id, "webhook:") {
+			webhookID := strings.TrimSpace(strings.TrimPrefix(id, "webhook:"))
+			valid = webhookID != "" && len(webhookID) <= 128 && !strings.ContainsAny(webhookID, "\r\n\x00")
+			if valid {
+				id = "webhook:" + webhookID
+			}
+		}
+		if !valid {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+		if len(result) == maxEscalationDestinations {
+			break
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// NormalizeEscalationConfig applies the schedule safety bounds without
+// inventing repeat behavior for configurations written by older releases.
+func NormalizeEscalationConfig(config *EscalationConfig) {
+	if config == nil {
+		return
+	}
+	for index := range config.Levels {
+		config.Levels[index].Notify = NormalizeNotificationDeliveryTarget(config.Levels[index].Notify)
+		config.Levels[index].DestinationIDs = NormalizeEscalationDestinationIDs(config.Levels[index].DestinationIDs)
+	}
+	if !config.RepeatCritical || len(config.Levels) == 0 {
+		config.RepeatCritical = false
+		config.RepeatEvery = 0
+		return
+	}
+	if config.RepeatEvery < MinEscalationRepeatMinutes || config.RepeatEvery > MaxEscalationRepeatMinutes {
+		config.RepeatEvery = DefaultEscalationRepeatMinutes
 	}
 }
 

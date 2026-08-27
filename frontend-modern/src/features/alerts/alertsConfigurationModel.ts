@@ -690,9 +690,17 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
     if (config.schedule.escalation) {
       snapshot.scheduleEscalation = {
         enabled: Boolean(config.schedule.escalation.enabled),
+        repeatCritical: Boolean(config.schedule.escalation.repeatCritical),
+        repeatEvery:
+          typeof config.schedule.escalation.repeatEvery === 'number'
+            ? config.schedule.escalation.repeatEvery
+            : 30,
         levels: (config.schedule.escalation.levels || []).map((level) => ({
           after: typeof level.after === 'number' ? level.after : 15,
           notify: normalizeNotificationDeliveryTarget(level.notify) as EscalationNotifyTarget,
+          ...(Array.isArray(level.destinationIds)
+            ? { destinationIds: level.destinationIds.filter((id) => typeof id === 'string') }
+            : {}),
         })),
       };
     }
@@ -899,7 +907,12 @@ export function buildAlertsConfigurationPayload({
         maxAlertsHour: normalizedMaxAlertsHour,
         escalation: {
           enabled: snapshot.scheduleEscalation.enabled,
-          levels: snapshot.scheduleEscalation.levels.map((level) => ({ ...level })),
+          repeatCritical: snapshot.scheduleEscalation.repeatCritical,
+          repeatEvery: snapshot.scheduleEscalation.repeatEvery,
+          levels: snapshot.scheduleEscalation.levels.map((level) => ({
+            ...level,
+            ...(level.destinationIds ? { destinationIds: [...level.destinationIds] } : {}),
+          })),
         },
         grouping: {
           enabled: groupingEnabled,

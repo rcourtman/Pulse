@@ -3,6 +3,7 @@ import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI } from '@/api/notifications';
+import type { Webhook } from '@/api/notifications';
 import { RelayAPI } from '@/api/relay';
 import { hasFeature } from '@/stores/license';
 import { getAlertDestinationsConfigLoadError } from '@/utils/alertDestinationsPresentation';
@@ -30,6 +31,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
   );
   const [deadManPingUrl, setDeadManPingUrl] = createSignal('');
   const [pushMinimumSeverity, setPushMinimumSeverity] = createSignal<'all' | 'critical'>('all');
+  const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
 
   let reloadVersion = 0;
   let lastActiveTab: AlertTab | null = null;
@@ -40,6 +42,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setAppriseConfig(createDefaultAppriseConfig());
     setDeadManPingUrl('');
     setPushMinimumSeverity('all');
+    setWebhooks([]);
   };
 
   const loadDestinations = async (options: { indicateLoading?: boolean } = {}) => {
@@ -55,13 +58,14 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
       NotificationsAPI.getAppriseConfig(),
       AlertsAPI.getDeadManConfig(),
       hasFeature('relay') ? RelayAPI.getConfig() : Promise.resolve(null),
+      NotificationsAPI.getWebhooks(),
     ]);
 
     if (thisVersion !== reloadVersion) {
       return;
     }
 
-    const [emailResult, appriseResult, deadManResult, relayResult] = results;
+    const [emailResult, appriseResult, deadManResult, relayResult, webhooksResult] = results;
 
     if (emailResult.status === 'fulfilled') {
       setEmailConfig(normalizeEmailConfigFromAPI(emailResult.value));
@@ -78,6 +82,15 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     if (relayResult.status === 'fulfilled' && relayResult.value) {
       setPushMinimumSeverity(
         relayResult.value.alert_minimum_severity === 'critical' ? 'critical' : 'all',
+      );
+    }
+
+    if (webhooksResult.status === 'fulfilled') {
+      setWebhooks(
+        webhooksResult.value.map((webhook) => ({
+          ...webhook,
+          service: webhook.service || 'generic',
+        })),
       );
     }
 
@@ -138,6 +151,8 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setDeadManPingUrl,
     pushMinimumSeverity,
     setPushMinimumSeverity,
+    webhooks,
+    setWebhooks,
     resetDestinations,
     loadDestinations,
     saveDestinations,

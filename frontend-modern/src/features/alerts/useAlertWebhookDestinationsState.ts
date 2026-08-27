@@ -1,4 +1,4 @@
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, onMount, type Accessor, type Setter } from 'solid-js';
 
 import { NotificationsAPI, type Webhook } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
@@ -20,10 +20,20 @@ const normalizeWebhook = (webhook: Webhook): Webhook => ({
   service: webhook.service || 'generic',
 });
 
-export function useAlertWebhookDestinationsState() {
-  const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
+interface AlertWebhookDestinationsStateOptions {
+  webhooks?: Accessor<Webhook[]>;
+  setWebhooks?: Setter<Webhook[]>;
+  autoLoad?: boolean;
+}
+
+export function useAlertWebhookDestinationsState(
+  options: AlertWebhookDestinationsStateOptions = {},
+) {
+  const [localWebhooks, setLocalWebhooks] = createSignal<Webhook[]>([]);
+  const webhooks = options.webhooks ?? localWebhooks;
+  const setWebhooks = options.setWebhooks ?? setLocalWebhooks;
   const [webhookLoadError, setWebhookLoadError] = createSignal<string | null>(null);
-  const [isLoadingWebhooks, setIsLoadingWebhooks] = createSignal(true);
+  const [isLoadingWebhooks, setIsLoadingWebhooks] = createSignal(options.autoLoad !== false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
 
   const loadWebhooks = async () => {
@@ -41,7 +51,9 @@ export function useAlertWebhookDestinationsState() {
   };
 
   onMount(() => {
-    void loadWebhooks();
+    if (options.autoLoad !== false) {
+      void loadWebhooks();
+    }
   });
 
   const testWebhook = async (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => {

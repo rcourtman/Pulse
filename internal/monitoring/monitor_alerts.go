@@ -295,8 +295,13 @@ func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, 
 
 	if m.notificationMgr != nil {
 		escalationLevel := config.Schedule.Escalation.Levels[level-1]
+		if len(escalationLevel.DestinationIDs) > 0 {
+			m.notificationMgr.SendEscalatedAlertToDestinations(alert, escalationLevel.Notify, escalationLevel.DestinationIDs)
+			m.broadcastEscalatedAlert(hub, alert)
+			return
+		}
 		switch strings.ToLower(strings.TrimSpace(escalationLevel.Notify)) {
-		case "", "all", "email", "webhook", "webhooks":
+		case "", "all", "email", "webhook", "webhooks", "apprise":
 			m.notificationMgr.SendEscalatedAlert(alert, escalationLevel.Notify)
 		default:
 			log.Warn().

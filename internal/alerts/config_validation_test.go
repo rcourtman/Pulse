@@ -82,3 +82,37 @@ func TestUpdateConfigNormalizesFlappingSettings(t *testing.T) {
 		t.Fatalf("expected FlappingCooldownMinutes to default to 15, got %d", m.config.FlappingCooldownMinutes)
 	}
 }
+
+func TestUpdateConfigNormalizesExactEscalationRoutingAndRepeatPolicy(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.Schedule.Escalation = EscalationConfig{
+		Enabled:        true,
+		RepeatCritical: true,
+		RepeatEvery:    1,
+		Levels: []EscalationLevel{{
+			After:          15,
+			Notify:         "WEBHOOKS",
+			DestinationIDs: []string{" webhook:pager ", "email", "webhook:pager", "https://secret.example"},
+		}},
+	}
+
+	m.UpdateConfig(cfg)
+
+	got := m.GetConfig().Schedule.Escalation
+	if got.RepeatEvery != DefaultEscalationRepeatMinutes {
+		t.Fatalf("repeat interval = %d, want %d", got.RepeatEvery, DefaultEscalationRepeatMinutes)
+	}
+	if got.Levels[0].Notify != "webhook" {
+		t.Fatalf("legacy target = %q, want webhook", got.Levels[0].Notify)
+	}
+	wantIDs := []string{"webhook:pager", "email"}
+	if len(got.Levels[0].DestinationIDs) != len(wantIDs) {
+		t.Fatalf("destination IDs = %v, want %v", got.Levels[0].DestinationIDs, wantIDs)
+	}
+	for index, want := range wantIDs {
+		if got.Levels[0].DestinationIDs[index] != want {
+			t.Fatalf("destination IDs = %v, want %v", got.Levels[0].DestinationIDs, wantIDs)
+		}
+	}
+}

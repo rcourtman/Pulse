@@ -487,8 +487,21 @@ func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
 
 // safeCallEscalateCallback invokes onEscalate with panic recovery and alert cloning.
 func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
-	m.recordAlertEvent(eventlog.TypeEscalated, alert, "", "", "Alert escalated.",
-		map[string]string{"level": strconv.Itoa(level)})
+	m.safeCallEscalateCallbackWithKind(alert, level, false)
+}
+
+func (m *Manager) safeCallEscalationRepeatCallback(alert *Alert, level int) {
+	m.safeCallEscalateCallbackWithKind(alert, level, true)
+}
+
+func (m *Manager) safeCallEscalateCallbackWithKind(alert *Alert, level int, repeat bool) {
+	details := map[string]string{"level": strconv.Itoa(level)}
+	message := "Alert escalated."
+	if repeat {
+		details["repeat"] = "true"
+		message = "Critical alert escalation repeated."
+	}
+	m.recordAlertEvent(eventlog.TypeEscalated, alert, "", "", message, details)
 
 	callback := m.getEscalateCallback()
 	if callback == nil {

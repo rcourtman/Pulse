@@ -121,6 +121,41 @@ func TestBuildNotificationDeliveryJobsRoutesGroupedAlertsByDestinationSeverity(t
 	}
 }
 
+func TestBuildNotificationDeliveryJobsTargetsExactEscalationDestinations(t *testing.T) {
+	alert := &alerts.Alert{ID: "critical", Level: alerts.AlertLevelCritical, StartTime: time.Unix(1_700_000_000, 0)}
+	jobs := buildNotificationDeliveryJobsForSelection(
+		EmailConfig{Enabled: true},
+		[]WebhookConfig{
+			{ID: "ops", Enabled: true},
+			{ID: "pager", Enabled: true},
+		},
+		AppriseConfig{Enabled: true, Mode: AppriseModeHTTP, ServerURL: "https://apprise.example.test"},
+		[]*alerts.Alert{alert},
+		eventAlert,
+		time.Time{},
+		notificationDeliveryTargetAll,
+		[]string{"webhook:pager", "apprise"},
+	)
+
+	if len(jobs) != 2 || jobs[0].WebhookConfig == nil || jobs[0].WebhookConfig.ID != "pager" || jobs[1].AppriseConfig == nil {
+		t.Fatalf("exact escalation jobs = %+v, want pager webhook plus Apprise", jobs)
+	}
+
+	jobs = buildNotificationDeliveryJobsForSelection(
+		EmailConfig{Enabled: true},
+		[]WebhookConfig{{ID: "ops", Enabled: true}},
+		AppriseConfig{Enabled: true},
+		[]*alerts.Alert{alert},
+		eventAlert,
+		time.Time{},
+		notificationDeliveryTargetAll,
+		[]string{"webhook:deleted"},
+	)
+	if len(jobs) != 0 {
+		t.Fatalf("unknown exact destination widened delivery: %+v", jobs)
+	}
+}
+
 func TestResolvedSeverityRoutingDefersToOccurrenceReceipts(t *testing.T) {
 	warning := &alerts.Alert{ID: "warning", Level: alerts.AlertLevelWarning}
 	routed := routeNotificationAlerts(

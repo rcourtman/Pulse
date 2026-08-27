@@ -16,6 +16,7 @@ import { useAlertScheduleState } from '../useAlertScheduleState';
 import type {
   CooldownConfig,
   EscalationConfig,
+  EscalationDestination,
   GroupingConfig,
   NotificationDeliveryTarget,
   QuietHoursConfig,
@@ -35,6 +36,7 @@ export interface ScheduleTabProps {
   setNotifyOnResolve: (value: boolean) => void;
   escalation: () => EscalationConfig;
   setEscalation: (value: EscalationConfig) => void;
+  escalationDestinations: () => EscalationDestination[];
 }
 
 export function ScheduleTab(props: ScheduleTabProps) {
@@ -119,6 +121,10 @@ export function ScheduleTab(props: ScheduleTabProps) {
           setEscalationEnabled={scheduleState.setEscalationEnabled}
           setEscalationAfter={scheduleState.setEscalationAfter}
           setEscalationNotify={scheduleState.setEscalationNotify}
+          destinations={props.escalationDestinations()}
+          setEscalationDestinationIds={scheduleState.setEscalationDestinationIds}
+          setEscalationRepeatCritical={scheduleState.setEscalationRepeatCritical}
+          setEscalationRepeatEvery={scheduleState.setEscalationRepeatEvery}
           removeEscalationLevel={scheduleState.removeEscalationLevel}
           addEscalationLevel={scheduleState.addEscalationLevel}
         />

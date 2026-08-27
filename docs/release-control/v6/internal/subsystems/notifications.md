@@ -472,3 +472,17 @@ have queued delivery cancelled by an uncommitted disable action. The forced
 failure paths are pinned in
 `internal/api/alerting/notifications_test.go`; the API ordering proof lives in
 `internal/api/contract_test.go`.
+
+### Escalation delivery can select exact logical destinations
+
+Escalation dispatch accepts optional logical destination IDs in addition to the
+legacy channel target. Exact selection is applied before destination tag and
+severity policy: `email` selects the enabled email job, `apprise` selects the
+enabled Apprise job, and `webhook:<id>` selects only that enabled webhook.
+Unknown or unavailable IDs produce no job and never fall back to a broader
+channel. A no-job exact selection also leaves notification cooldown state
+untouched so configuration drift cannot masquerade as successful paging.
+
+Destination IDs never contain endpoint URLs, credentials, or Apprise targets.
+All retry, queue, receipt, grouping, and recovery semantics remain owned by the
+selected notification job after routing.

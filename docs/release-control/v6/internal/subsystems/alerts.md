@@ -2184,3 +2184,23 @@ idempotent fingerprints. A restart interruption is raised into history even
 when the first successful external report immediately resolves it, so recovery
 does not erase the outage record. The watchdog must never invent resource
 identity or become a second lifecycle for infrastructure alerts.
+
+### Escalation targets are exact and critical repeats are bounded
+
+An escalation level may address credential-free logical destination IDs:
+`email`, `apprise`, or `webhook:<id>`. Once exact IDs are present they are the
+authority for that level; a deleted or unknown ID fails closed and must never
+widen to a channel or every webhook. The legacy `notify` channel remains a
+mixed-version fallback for configurations that do not yet carry exact IDs.
+
+Optional critical-repeat policy applies only after the final escalation level.
+It sends at most one repeat per checker pass, uses a normalized 5–180 minute
+interval, and stops while the incident is acknowledged, resolved, snoozed, or
+global detection or delivery controls are paused. A repeat is durable escalation
+evidence with an explicit repeat marker rather than a new incident or a replay
+of missed intervals.
+
+The Schedule surface loads the same email, Apprise, and webhook catalog as the
+Destinations surface. It shows disabled and deleted selections explicitly,
+prevents an escalation level from becoming destinationless, and explains the
+critical-repeat stop conditions before save.

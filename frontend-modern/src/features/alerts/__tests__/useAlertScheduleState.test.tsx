@@ -38,6 +38,10 @@ describe('useAlertScheduleState', () => {
         setNotifyOnResolve,
         escalation,
         setEscalation,
+        escalationDestinations: () => [
+          { id: 'email', label: 'Email', kind: 'email', enabled: true },
+          { id: 'webhook:pager', label: 'Pager', kind: 'webhook', enabled: true },
+        ],
       }),
     );
 
@@ -57,6 +61,9 @@ describe('useAlertScheduleState', () => {
     result.addEscalationLevel();
     result.setEscalationAfter(0, '30');
     result.setEscalationNotify(0, 'webhook');
+    result.setEscalationDestinationIds(0, ['webhook:pager']);
+    result.setEscalationRepeatCritical(true);
+    result.setEscalationRepeatEvery('15');
 
     expect(hasUnsavedChanges()).toBe(true);
     expect(quietHours()).toMatchObject({
@@ -72,7 +79,15 @@ describe('useAlertScheduleState', () => {
     expect(notifyOnResolve()).toBe(true);
     expect(escalation()).toMatchObject({
       enabled: true,
-      levels: [expect.objectContaining({ after: 30, notify: 'webhook' })],
+      repeatCritical: true,
+      repeatEvery: 15,
+      levels: [
+        expect.objectContaining({
+          after: 30,
+          notify: 'webhook',
+          destinationIds: ['webhook:pager'],
+        }),
+      ],
     });
 
     result.removeEscalationLevel(0);

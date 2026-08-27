@@ -141,6 +141,8 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     setDeadManPingUrl: destinationsState.setDeadManPingUrl,
     pushMinimumSeverity: destinationsState.pushMinimumSeverity,
     setPushMinimumSeverity: destinationsState.setPushMinimumSeverity,
+    webhooks: destinationsState.webhooks,
+    setWebhooks: destinationsState.setWebhooks,
     ...configurationSnapshotState,
     allGuests: overridesState.allGuests,
     agentResources: overridesState.agentResources,

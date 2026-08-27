@@ -130,6 +130,18 @@ describe('alertsConfigurationModel', () => {
       byGuest: false,
     };
     snapshot.initialNotify = 'email';
+    snapshot.scheduleEscalation = {
+      enabled: true,
+      repeatCritical: true,
+      repeatEvery: 15,
+      levels: [
+        {
+          after: 30,
+          notify: 'webhook',
+          destinationIds: ['webhook:pager'],
+        },
+      ],
+    };
     snapshot.backupDefaults = {
       enabled: true,
       warningDays: 30,
@@ -168,6 +180,18 @@ describe('alertsConfigurationModel', () => {
       window: 120,
       byNode: true,
       byGuest: false,
+    });
+    expect(result.alertConfig?.schedule?.escalation).toEqual({
+      enabled: true,
+      repeatCritical: true,
+      repeatEvery: 15,
+      levels: [
+        {
+          after: 30,
+          notify: 'webhook',
+          destinationIds: ['webhook:pager'],
+        },
+      ],
     });
     expect(result.alertConfig?.backupDefaults).toMatchObject({
       warningDays: 10,

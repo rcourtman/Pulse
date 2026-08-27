@@ -86,5 +86,31 @@ func (m *Manager) checkEscalations() {
 				m.safeCallEscalateCallback(alert, i+1)
 			}
 		}
+
+		escalation := m.config.Schedule.Escalation
+		if !escalation.RepeatCritical || alert.Level != AlertLevelCritical || len(escalation.Levels) == 0 || alert.LastEscalation < len(escalation.Levels) {
+			continue
+		}
+		repeatEvery := time.Duration(escalation.RepeatEvery) * time.Minute
+		if repeatEvery <= 0 {
+			continue
+		}
+		lastLevel := escalation.Levels[len(escalation.Levels)-1]
+		repeatBaseline := escalationBaseline.Add(time.Duration(lastLevel.After) * time.Minute)
+		if count := len(alert.EscalationTimes); count > 0 && alert.EscalationTimes[count-1].After(repeatBaseline) {
+			repeatBaseline = alert.EscalationTimes[count-1]
+		}
+		if !now.After(repeatBaseline.Add(repeatEvery)) {
+			continue
+		}
+
+		alert.EscalationTimes = append(alert.EscalationTimes, now)
+		log.Info().
+			Str("alertID", alert.ID).
+			Str("trackingKey", canonicalTrackingKeyForAlert(alert)).
+			Int("level", len(escalation.Levels)).
+			Int("repeatEveryMinutes", escalation.RepeatEvery).
+			Msg("Critical alert escalation repeated")
+		m.safeCallEscalationRepeatCallback(alert, len(escalation.Levels))
 	}
 }

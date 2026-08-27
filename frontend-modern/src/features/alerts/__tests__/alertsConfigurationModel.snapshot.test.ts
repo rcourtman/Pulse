@@ -1180,6 +1180,39 @@ describe('readAlertsConfigurationSnapshot — schedule.escalation', () => {
     ]);
   });
 
+  it('preserves exact destination IDs and critical repeat policy', () => {
+    const snapshot = readAlertsConfigurationSnapshot(
+      cfg({
+        schedule: {
+          escalation: {
+            enabled: true,
+            repeatCritical: true,
+            repeatEvery: 15,
+            levels: [
+              {
+                after: 30,
+                notify: 'webhook',
+                destinationIds: ['webhook:pager', 'apprise'],
+              },
+            ],
+          },
+        },
+      }),
+    );
+    expect(snapshot.scheduleEscalation).toEqual({
+      enabled: true,
+      repeatCritical: true,
+      repeatEvery: 15,
+      levels: [
+        {
+          after: 30,
+          notify: 'webhook',
+          destinationIds: ['webhook:pager', 'apprise'],
+        },
+      ],
+    });
+  });
+
   it('defaults level.after to 15 for non-number values', () => {
     const snapshot = readAlertsConfigurationSnapshot(
       cfg({

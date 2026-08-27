@@ -1,29 +1,37 @@
 import { For, Show, createUniqueId } from 'solid-js';
 
 import { controlClass, formHelpText } from '@/components/shared/Form';
-import { FormSelect } from '@/components/shared/FormSelect';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import {
   ALERT_CONFIG_ESCALATION_ADD_LABEL,
   ALERT_CONFIG_ESCALATION_AFTER_LABEL,
   ALERT_CONFIG_ESCALATION_DESCRIPTION,
+  ALERT_CONFIG_ESCALATION_DESTINATIONS_HELP,
+  ALERT_CONFIG_ESCALATION_DESTINATION_DISABLED,
+  ALERT_CONFIG_ESCALATION_DESTINATION_UNAVAILABLE,
   ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX,
   ALERT_CONFIG_ESCALATION_NOTIFY_LABEL,
   ALERT_CONFIG_ESCALATION_REMOVE_TITLE,
+  ALERT_CONFIG_ESCALATION_REPEAT_EVERY_LABEL,
+  ALERT_CONFIG_ESCALATION_REPEAT_HELP,
+  ALERT_CONFIG_ESCALATION_REPEAT_LABEL,
   ALERT_CONFIG_ESCALATION_TITLE,
   getAlertConfigEscalationHelp,
-  getAlertConfigEscalationNotifyLabel,
   getAlertConfigToggleStatusLabel,
 } from '@/utils/alertConfigPresentation';
 
-import type { EscalationConfig, EscalationNotifyTarget } from './types';
+import type { EscalationConfig, EscalationDestination, EscalationNotifyTarget } from './types';
 
 interface AlertEscalationSectionProps {
   escalation: EscalationConfig;
   setEscalationEnabled: (value: boolean) => void;
   setEscalationAfter: (index: number, value: string) => void;
   setEscalationNotify: (index: number, value: EscalationNotifyTarget) => void;
+  destinations: EscalationDestination[];
+  setEscalationDestinationIds: (index: number, destinationIds: string[]) => void;
+  setEscalationRepeatCritical: (value: boolean) => void;
+  setEscalationRepeatEvery: (value: string) => void;
   removeEscalationLevel: (index: number) => void;
   addEscalationLevel: () => void;
 }
@@ -59,11 +67,34 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
           <For each={props.escalation.levels}>
             {(level, index) => {
               const afterId = () => `${fieldIdPrefix}-after-${index()}`;
-              const notifyId = () => `${fieldIdPrefix}-notify-${index()}`;
+              const destinationsId = () => `${fieldIdPrefix}-destinations-${index()}`;
+              const selectedDestinationIds = () =>
+                level.destinationIds && level.destinationIds.length > 0
+                  ? level.destinationIds
+                  : props.destinations
+                      .filter(
+                        (destination) =>
+                          level.notify === 'all' || destination.kind === level.notify,
+                      )
+                      .map((destination) => destination.id);
+              const destinationOptions = () => [
+                ...props.destinations,
+                ...selectedDestinationIds()
+                  .filter((id) => !props.destinations.some((destination) => destination.id === id))
+                  .map(
+                    (id) =>
+                      ({
+                        id,
+                        label: `${ALERT_CONFIG_ESCALATION_DESTINATION_UNAVAILABLE} (${id})`,
+                        kind: id === 'email' ? 'email' : id === 'apprise' ? 'apprise' : 'webhook',
+                        enabled: false,
+                      }) as EscalationDestination,
+                  ),
+              ];
 
               return (
-                <div class="flex items-center gap-3 rounded-md border border-border bg-surface-hover p-3">
-                  <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
+                <div class="flex items-start gap-3 rounded-md border border-border bg-surface-hover p-3">
+                  <div class="flex flex-1 flex-col gap-3">
                     <div class="flex items-center gap-2">
                       <label for={afterId()} class="text-xs font-medium text-muted">
                         {ALERT_CONFIG_ESCALATION_AFTER_LABEL}
@@ -83,30 +114,43 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                         {ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX}
                       </span>
                     </div>
-                    <FormSelect
-                      id={notifyId()}
-                      label={ALERT_CONFIG_ESCALATION_NOTIFY_LABEL}
-                      value={level.notify}
-                      onChange={(event) =>
-                        props.setEscalationNotify(
-                          index(),
-                          event.currentTarget.value as EscalationNotifyTarget,
-                        )
-                      }
-                      fieldBaseClass="flex"
-                      fieldClass="items-center gap-2"
-                      labelClass="text-xs font-medium text-muted"
-                      selectBaseClass={`${controlClass('px-2 py-1 text-sm')} flex-1`}
-                    >
-                      <option value="email">{getAlertConfigEscalationNotifyLabel('email')}</option>
-                      <option value="webhook">
-                        {getAlertConfigEscalationNotifyLabel('webhook')}
-                      </option>
-                      <option value="apprise">
-                        {getAlertConfigEscalationNotifyLabel('apprise')}
-                      </option>
-                      <option value="all">{getAlertConfigEscalationNotifyLabel('all')}</option>
-                    </FormSelect>
+                    <fieldset id={destinationsId()} class="space-y-2">
+                      <legend class="text-xs font-medium text-muted">
+                        {ALERT_CONFIG_ESCALATION_NOTIFY_LABEL}
+                      </legend>
+                      <div class="grid gap-2 sm:grid-cols-2">
+                        <For each={destinationOptions()}>
+                          {(destination) => {
+                            const checked = () => selectedDestinationIds().includes(destination.id);
+                            return (
+                              <label class="flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={checked()}
+                                  disabled={checked() && selectedDestinationIds().length === 1}
+                                  onChange={(event) => {
+                                    const next = event.currentTarget.checked
+                                      ? [...selectedDestinationIds(), destination.id]
+                                      : selectedDestinationIds().filter(
+                                          (id) => id !== destination.id,
+                                        );
+                                    props.setEscalationDestinationIds(index(), next);
+                                  }}
+                                  class="h-4 w-4 rounded border-border"
+                                />
+                                <span class="min-w-0 truncate">{destination.label}</span>
+                                <Show when={!destination.enabled}>
+                                  <span class="ml-auto text-xs text-muted">
+                                    {ALERT_CONFIG_ESCALATION_DESTINATION_DISABLED}
+                                  </span>
+                                </Show>
+                              </label>
+                            );
+                          }}
+                        </For>
+                      </div>
+                      <p class={formHelpText}>{ALERT_CONFIG_ESCALATION_DESTINATIONS_HELP}</p>
+                    </fieldset>
                   </div>
                   <button
                     type="button"
@@ -128,6 +172,41 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
               );
             }}
           </For>
+
+          <Show when={props.escalation.levels.length > 0}>
+            <div class="space-y-3 rounded-md border border-border bg-surface p-3">
+              <Toggle
+                checked={props.escalation.repeatCritical}
+                onChange={(event) => props.setEscalationRepeatCritical(event.currentTarget.checked)}
+                label={
+                  <span class="text-sm font-medium text-base-content">
+                    {ALERT_CONFIG_ESCALATION_REPEAT_LABEL}
+                  </span>
+                }
+              />
+              <Show when={props.escalation.repeatCritical}>
+                <div class="flex items-center gap-2">
+                  <label
+                    for={`${fieldIdPrefix}-repeat-every`}
+                    class="text-xs font-medium text-muted"
+                  >
+                    {ALERT_CONFIG_ESCALATION_REPEAT_EVERY_LABEL}
+                  </label>
+                  <input
+                    id={`${fieldIdPrefix}-repeat-every`}
+                    type="number"
+                    min="5"
+                    max="180"
+                    value={props.escalation.repeatEvery}
+                    onChange={(event) => props.setEscalationRepeatEvery(event.currentTarget.value)}
+                    class={`${controlClass('px-2 py-1 text-sm')} w-20`}
+                  />
+                  <span class="text-xs text-muted">{ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX}</span>
+                </div>
+              </Show>
+              <p class={formHelpText}>{ALERT_CONFIG_ESCALATION_REPEAT_HELP}</p>
+            </div>
+          </Show>
 
           <button
             type="button"

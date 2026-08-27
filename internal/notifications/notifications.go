@@ -97,6 +97,7 @@ type alertSendOptions struct {
 	bypassCooldown bool
 	immediate      bool
 	target         notificationDeliveryTarget
+	destinationIDs []string
 }
 
 // createSecureWebhookClient creates an HTTP client with security controls
@@ -969,7 +970,7 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 	n.mu.Unlock()
 
 	for _, alert := range pending {
-		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, initialTarget, queue)
+		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, initialTarget, nil, queue)
 	}
 
 	log.Info().
@@ -1109,10 +1110,18 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 // cadence is owned by the alert schedule, so delivery cooldown must not suppress
 // a level that the alert manager has already decided is due.
 func (n *NotificationManager) SendEscalatedAlert(alert *alerts.Alert, notifyTarget string) {
+	n.SendEscalatedAlertToDestinations(alert, notifyTarget, nil)
+}
+
+// SendEscalatedAlertToDestinations sends one due escalation to exact logical
+// destinations when provided. Exact selection is intentionally fail-closed:
+// stale or unknown IDs never widen into a channel-wide or all-destination send.
+func (n *NotificationManager) SendEscalatedAlertToDestinations(alert *alerts.Alert, notifyTarget string, destinationIDs []string) {
 	n.sendAlert(alert, alertSendOptions{
 		bypassCooldown: true,
 		immediate:      true,
 		target:         normalizeNotificationDeliveryTarget(notifyTarget),
+		destinationIDs: normalizeEscalationDestinationIDs(destinationIDs),
 	})
 }
 
@@ -1172,7 +1181,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		queue := n.queue
 		n.mu.Unlock()
 
-		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, options.target, queue)
+		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, options.target, options.destinationIDs, queue)
 		return
 	}
 
@@ -1224,9 +1233,10 @@ func (n *NotificationManager) dispatchFiringAlerts(
 	appriseConfig AppriseConfig,
 	alertsToSend []*alerts.Alert,
 	target notificationDeliveryTarget,
+	destinationIDs []string,
 	queue *NotificationQueue,
 ) {
-	jobs := buildNotificationDeliveryJobsForTarget(
+	jobs := buildNotificationDeliveryJobsForSelection(
 		emailConfig,
 		webhooks,
 		appriseConfig,
@@ -1234,9 +1244,12 @@ func (n *NotificationManager) dispatchFiringAlerts(
 		eventAlert,
 		time.Time{},
 		target,
+		destinationIDs,
 	)
 	if len(jobs) == 0 {
-		n.markAlertsNotified(alertsToSend, time.Now())
+		if len(destinationIDs) == 0 {
+			n.markAlertsNotified(alertsToSend, time.Now())
+		}
 		return
 	}
 	if queue != nil {
@@ -1533,7 +1546,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	queue := n.queue
 	n.mu.Unlock()
 
-	n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, alertsToSend, initialTarget, queue)
+	n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, alertsToSend, initialTarget, nil, queue)
 }
 
 func buildNotificationDeliveryJobs(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert, event notificationEvent, resolvedAt time.Time) []notificationDeliveryJob {
@@ -1557,12 +1570,44 @@ func buildNotificationDeliveryJobsForTarget(
 	resolvedAt time.Time,
 	target notificationDeliveryTarget,
 ) []notificationDeliveryJob {
+	return buildNotificationDeliveryJobsForSelection(
+		emailConfig,
+		webhooks,
+		appriseConfig,
+		alertsToSend,
+		event,
+		resolvedAt,
+		target,
+		nil,
+	)
+}
+
+func buildNotificationDeliveryJobsForSelection(
+	emailConfig EmailConfig,
+	webhooks []WebhookConfig,
+	appriseConfig AppriseConfig,
+	alertsToSend []*alerts.Alert,
+	event notificationEvent,
+	resolvedAt time.Time,
+	target notificationDeliveryTarget,
+	destinationIDs []string,
+) []notificationDeliveryJob {
 	if target == "" {
 		target = notificationDeliveryTargetAll
 	}
+	destinationIDs = normalizeEscalationDestinationIDs(destinationIDs)
+	exactSelection := len(destinationIDs) > 0
+	selected := make(map[string]struct{}, len(destinationIDs))
+	for _, id := range destinationIDs {
+		selected[id] = struct{}{}
+	}
+	isSelected := func(id string) bool {
+		_, ok := selected[id]
+		return ok
+	}
 
 	jobs := make([]notificationDeliveryJob, 0, 2+len(webhooks))
-	if emailConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetEmail) {
+	if emailConfig.Enabled && ((exactSelection && isSelected("email")) || (!exactSelection && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetEmail))) {
 		routedAlerts := routeNotificationAlerts(alertsToSend, emailConfig.TagFilter, emailConfig.TagMode, emailConfig.MinimumSeverity, event)
 		if len(routedAlerts) > 0 {
 			emailCopy := emailConfig
@@ -1575,9 +1620,9 @@ func buildNotificationDeliveryJobsForTarget(
 			})
 		}
 	}
-	if target == notificationDeliveryTargetAll || target == notificationDeliveryTargetWebhook {
+	if exactSelection || target == notificationDeliveryTargetAll || target == notificationDeliveryTargetWebhook {
 		for _, webhook := range webhooks {
-			if !webhook.Enabled {
+			if !webhook.Enabled || (exactSelection && !isSelected("webhook:"+strings.TrimSpace(webhook.ID))) {
 				continue
 			}
 			routedAlerts := routeNotificationAlerts(alertsToSend, webhook.TagFilter, webhook.TagMode, webhook.MinimumSeverity, event)
@@ -1593,7 +1638,7 @@ func buildNotificationDeliveryJobsForTarget(
 			}
 		}
 	}
-	if appriseConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetApprise) {
+	if appriseConfig.Enabled && ((exactSelection && isSelected("apprise")) || (!exactSelection && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetApprise))) {
 		routedAlerts := routeNotificationAlerts(alertsToSend, nil, "", appriseConfig.MinimumSeverity, event)
 		if len(routedAlerts) > 0 {
 			appriseCopy := appriseConfig
@@ -1607,6 +1652,10 @@ func buildNotificationDeliveryJobsForTarget(
 		}
 	}
 	return jobs
+}
+
+func normalizeEscalationDestinationIDs(destinationIDs []string) []string {
+	return alerts.NormalizeEscalationDestinationIDs(destinationIDs)
 }
 
 func queueTypeForNotificationDeliveryJob(job notificationDeliveryJob) string {

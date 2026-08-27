@@ -3293,3 +3293,12 @@ in-flight request before durable stop or replacement state is published, so a
 revoked endpoint receives no trailing heartbeat and a removed destination
 becomes disabled immediately. State corruption and write failure are visible
 system conditions rather than silent loss of future outage evidence.
+
+### Escalation callbacks preserve exact routing intent
+
+The monitoring callback resolves the configured escalation level and forwards
+exact logical destination IDs to notification delivery when present. Legacy
+levels continue to route by channel, including Apprise; this compatibility path
+must not silently skip a supported destination. Monitoring broadcasts the
+escalated alert after dispatch but does not reinterpret destination identity,
+retry semantics, acknowledgement, or the critical-repeat cadence.

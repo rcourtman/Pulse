@@ -6686,3 +6686,14 @@ its privacy and current-state boundary—but it must not redefine the policy.
 Alert feature state owns persistence and entitlement gating; the primitive
 owns presentation only. `alertDestinationsPresentation.test.ts` pins the
 shared vocabulary and the distinct mobile guidance.
+
+### Escalation configuration uses destination identity, not channel aliases
+
+The alerts-owned escalation section composes shared settings, toggle, and form
+controls while presenting a feature-owned checkbox catalog keyed by logical
+destination ID. It sources that catalog from the same loaded destination state
+used by the Notifications tab, preserves selected-but-disabled and deleted
+entries visibly, and prevents the final selection from being removed. The
+critical-repeat control exposes a bounded numeric interval only when enabled
+and states every lifecycle condition that stops paging. Desktop and mobile
+layouts must retain associated labels and avoid horizontal overflow.

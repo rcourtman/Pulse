@@ -202,15 +202,26 @@ export interface GroupingConfig {
 
 export type NotificationDeliveryTarget = 'email' | 'webhook' | 'apprise' | 'all';
 export type EscalationNotifyTarget = NotificationDeliveryTarget;
+export type EscalationDestinationKind = Exclude<NotificationDeliveryTarget, 'all'>;
+
+export interface EscalationDestination {
+  id: string;
+  label: string;
+  kind: EscalationDestinationKind;
+  enabled: boolean;
+}
 
 export interface EscalationLevel {
   after: number;
   notify: EscalationNotifyTarget;
+  destinationIds?: string[];
 }
 
 export interface EscalationConfig {
   enabled: boolean;
   levels: EscalationLevel[];
+  repeatCritical: boolean;
+  repeatEvery: number;
 }
 
 const COOLDOWN_MIN_MINUTES = 5;

@@ -1,30 +1,55 @@
 {
   "version": 1,
-  "base_sha": "8df9db7ab1159c9384b233d6f1e45a78720d231e",
-  "verified_at": "2026-08-27T18:21:17Z",
+  "base_sha": "5f6bfefa5603adc16c349115b8f453c8430ddce3",
+  "verified_at": "2026-08-27T18:39:55Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceInvestigationContextTables.tsx",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
-    "frontend-modern/src/components/shared/detailSectionModel.ts"
+    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/helpers.ts",
+    "frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx",
+    "frontend-modern/src/features/alerts/types.ts",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
+    "frontend-modern/src/features/alerts/useAlertScheduleState.ts",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/types/alerts.ts",
+    "frontend-modern/src/utils/alertConfigPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceInvestigationContextTables.tsx": "86708854264fb59d14aa23766ccceb406301b9606e3af5ec5964ae524170f2d4",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "135153e1a29dc85afe8867643a31cbb66a6a13468f0f3af8efdd4be049f4d223",
-    "frontend-modern/src/components/shared/detailSectionModel.ts": "c98b6befd1348282abd990c47886fb5af60e362fdbb6c453d60f36e2fd3ebe1c"
+    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx": "f4b12a0f7d5da49961ac952b94963d61a1b1f59bc3234ed7e961c9d264139021",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "c514dd4b9f769c58af9af4fa5fcf647163224c85e6c4e640969a34c1d3b24708",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "855189aaf23c66b14ac43a1b7b0101e7fc0d59348a09415971a16a276f083f7f",
+    "frontend-modern/src/features/alerts/helpers.ts": "6ba556d57241fc7d7bfff7218d0dd924eaaeb9507f73ccda62204def14c3be61",
+    "frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx": "7e5fa374edf72de0b9216f672cd179c183d348e22f087827c478bb29170ba9cf",
+    "frontend-modern/src/features/alerts/types.ts": "9b7c4331ac52f06d889fcdd02e75a95b247945cea6036a10e6fbea30e55d1eca",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "abf1a8c0acd32fbc4a1c7177dca213edee817b637af953c0f5a5ec275d41a600",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "e9b2cabfaa1720ab430c410fdb269a164710478bcef775a5d163f69cc3965226",
+    "frontend-modern/src/features/alerts/useAlertScheduleState.ts": "fc439f16c0b79bfa6c01a74a3359ae0cb58e5765c074d75107c1ba8bd763cf31",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts": "ee7a5d6c75902ab66a92ca0292b367bc02ba8dd268cab1e011fe719d09251fa9",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts": "af9014e6d93b0aa22399470efa00f8e048df7fbe54559092d8749b3fcf5bb43a",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "20d61b9a97180d56aa6cef8445ba9d53e7043a22cc4020e6f72b505ed0c38fe7",
+    "frontend-modern/src/types/alerts.ts": "24999c6668c262214fcd3b8a92b09e7a68cab2163b8a4876780ce1148d9064cf",
+    "frontend-modern/src/utils/alertConfigPresentation.ts": "82d04fb6ce0c209fa968b1dabf19333dffae5a7317441a8a2cac5cfda86b831c"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": ["/alerts/schedule"],
   "viewports": [
     { "width": 1920, "height": 800 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "expanded backup-vault drawer after extending the shared responsive section primitive",
-    "Analysis and Governance responsive section state covered by focused rendered drawer tests"
+    "escalation enabled with one level and the unsaved-changes guard visible",
+    "exact Email selected while Apprise is unselected and both disabled states remain explicit",
+    "repeat critical escalation enabled with a 30 minute interval"
   ],
   "interactions": [
-    "confirmed shared desktop sections remain aligned equal-width cards with adjacent labels and values",
-    "confirmed compact mobile table rows remain intact at 390x844 with zero horizontal overflow",
-    "reloaded the final implementation and confirmed no new browser console errors"
+    "enabled escalation and added a level without saving the live configuration",
+    "confirmed exact destination selection updates independently and never broadens to another destination",
+    "confirmed repeat-until-ack exposes its bounded interval and stop-condition guidance",
+    "confirmed the 390x844 schedule layout has zero horizontal overflow",
+    "confirmed no browser console errors on the exercised route"
   ]
 }
