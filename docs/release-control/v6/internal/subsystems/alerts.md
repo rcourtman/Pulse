@@ -100,6 +100,24 @@ own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
 worst reading a disk can publish, which let a spent SSD read critical on the
 Physical Disks surface while raising no alert at all.
 
+Host SMART counter growth is an event boundary rather than a warning on every
+historical non-zero value. For an agent-only disk, the first reported UDMA CRC
+error count establishes an in-memory baseline and raises no alert. A later
+increase contributes `crc_errors_increased` as a warning reason to that disk's
+canonical `disk-health` assessment; the next stable sample resolves the active
+growth event while normal alert and notification history retain it. A lower
+counter, including a reset or disk replacement, establishes a new baseline and
+must not alert. Missing or negative evidence cannot create a baseline or prove
+growth. Baselines are bounded tracking state, are discarded by a full alert
+state reset, and expire after the standard stale-tracking window. Linked
+Proxmox host agents continue to defer SMART risk alert ownership to the
+provider-backed disk surface rather than creating a duplicate host alert.
+`TestCheckHostAlertsWhenSMARTCRCCountIncreases`,
+`TestCheckHostSMARTCRCCounterResetEstablishesNewBaseline`, and
+`TestCleanupRemovesOnlyStaleSMARTCounterSnapshots` in
+`internal/alerts/alerts_test.go` pin the baseline, growth, reset, recovery, and
+retention boundaries.
+
 Threshold sections are keyed by override identity, not by resource type. The
 Virtualization Hosts section reads and writes overrides on the bare resource id,
 while the Machines section resolves through the agent-derived identity
