@@ -126,8 +126,14 @@ async function routeOfflineProxmoxInventory(page: Page) {
     // these agent rows for storage, backup, Ceph, and PMG queries violates the
     // API's type-filter contract and feeds the same identities into multiple
     // reactive caches. Only the overview query owns this fixture.
-    const requestedTypes = requestUrl.searchParams.get("type");
-    if (requestedTypes === "agent,vm,system-container,oci-container") {
+    const requestedTypes = new Set(
+      (requestUrl.searchParams.get("type") ?? "").split(",").filter(Boolean),
+    );
+    if (
+      ["agent", "vm", "system-container", "oci-container"].every((type) =>
+        requestedTypes.has(type),
+      )
+    ) {
       const response = await route.fetch();
       const payload = asRecord(await response.json());
       const data = Array.isArray(payload.data)
