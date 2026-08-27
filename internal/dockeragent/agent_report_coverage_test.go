@@ -3,15 +3,106 @@ package dockeragent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
+	imagetypes "github.com/moby/moby/api/types/image"
 	swarmtypes "github.com/moby/moby/api/types/swarm"
 	systemtypes "github.com/moby/moby/api/types/system"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rs/zerolog"
 )
+
+func TestBuildReportSynologySizedInventoryBoundsStorageComputations(t *testing.T) {
+	swap(t, &hostmetricsCollect, func(context.Context, []string) (hostmetrics.Snapshot, error) {
+		return hostmetrics.Snapshot{}, nil
+	})
+
+	const (
+		containerCount = 47
+		runningCount   = 4
+	)
+	containers := make([]containertypes.Summary, 0, containerCount)
+	running := make(map[string]bool, runningCount)
+	for i := 0; i < containerCount; i++ {
+		id := fmt.Sprintf("container-%02d", i)
+		state := containertypes.ContainerState("exited")
+		if i < runningCount {
+			state = "running"
+			running[id] = true
+		}
+		containers = append(containers, containertypes.Summary{
+			ID:    id,
+			Names: []string{"/" + id},
+			State: state,
+		})
+	}
+
+	var diskUsageCalls, imageListCalls, sharedSizeRequests int
+	agent := &Agent{
+		cfg: Config{
+			Interval:          30 * time.Second,
+			IncludeContainers: true,
+		},
+		runtime:          RuntimeDocker,
+		logger:           zerolog.Nop(),
+		prevContainerCPU: make(map[string]cpuSample),
+		docker: &fakeDockerClient{
+			infoFunc: func(context.Context) (systemtypes.Info, error) {
+				return systemtypes.Info{ID: "synology-daemon", Name: "synology", ServerVersion: "24.0.0"}, nil
+			},
+			containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
+				return containers, nil
+			},
+			containerInspectWithRawFn: func(_ context.Context, id string, size bool) (containertypes.InspectResponse, []byte, error) {
+				if size {
+					t.Fatal("normal unified-agent reports must not request per-container size walks")
+				}
+				return containertypes.InspectResponse{
+					State:  &containertypes.State{Running: running[id]},
+					Config: &containertypes.Config{},
+				}, nil, nil
+			},
+			containerStatsOneShotFn: func(context.Context, string) (dockerStatsResponseReader, error) {
+				return statsReader(t, containertypes.StatsResponse{}), nil
+			},
+			diskUsageFn: func(context.Context, dockerDiskUsageOptions) (dockerclient.DiskUsageResult, error) {
+				diskUsageCalls++
+				return dockerclient.DiskUsageResult{}, nil
+			},
+			imageListFn: func(_ context.Context, opts dockerImageListOptions) ([]imagetypes.Summary, error) {
+				imageListCalls++
+				if opts.SharedSize {
+					sharedSizeRequests++
+				}
+				return nil, nil
+			},
+		},
+	}
+
+	for cycle := 1; cycle <= 2; cycle++ {
+		report, err := agent.buildReport(context.Background())
+		if err != nil {
+			t.Fatalf("build report cycle %d: %v", cycle, err)
+		}
+		if len(report.Containers) != containerCount {
+			t.Fatalf("cycle %d containers = %d, want %d", cycle, len(report.Containers), containerCount)
+		}
+	}
+
+	if diskUsageCalls != 1 {
+		t.Fatalf("full daemon storage walks = %d, want one across two live telemetry cycles", diskUsageCalls)
+	}
+	if imageListCalls != 2 {
+		t.Fatalf("fresh image inventory calls = %d, want one per live telemetry cycle", imageListCalls)
+	}
+	if sharedSizeRequests != 0 {
+		t.Fatalf("live image inventory requested %d shared-size computations, want none", sharedSizeRequests)
+	}
+}
 
 func TestBuildReport_RuntimeChangePodman(t *testing.T) {
 	swap(t, &hostmetricsCollect, func(context.Context, []string) (hostmetrics.Snapshot, error) {

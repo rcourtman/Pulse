@@ -133,14 +133,17 @@ func TestCollectDockerNativeInventory(t *testing.T) {
 	agent := &Agent{
 		logger: zerolog.Nop(),
 		docker: &fakeDockerClient{
-			imageListFn: func(context.Context, dockerImageListOptions) ([]imagetypes.Summary, error) {
+			imageListFn: func(_ context.Context, opts dockerImageListOptions) ([]imagetypes.Summary, error) {
+				if opts.SharedSize {
+					t.Fatal("live image inventory must not request shared-size computation")
+				}
 				return []imagetypes.Summary{{
 					ID:          " sha256:image1 ",
 					RepoTags:    []string{"repo/app:latest", " "},
 					RepoDigests: []string{"repo/app@sha256:abc"},
 					Size:        1024,
-					SharedSize:  256,
-					Containers:  2,
+					SharedSize:  -1,
+					Containers:  -1,
 					Created:     createdAt.Unix(),
 					Labels:      map[string]string{"tier": "web"},
 				}}, nil
@@ -176,6 +179,7 @@ func TestCollectDockerNativeInventory(t *testing.T) {
 				return dockerclient.DiskUsageResult{
 					Images: dockerclient.ImagesDiskUsage{
 						TotalCount: 3, ActiveCount: 2, TotalSize: 4096, Reclaimable: 512,
+						Items: []imagetypes.Summary{{ID: "sha256:image1", SharedSize: 256, Containers: 2}},
 					},
 					Volumes: dockerclient.VolumesDiskUsage{
 						TotalCount: 1,
@@ -189,7 +193,15 @@ func TestCollectDockerNativeInventory(t *testing.T) {
 		},
 	}
 
-	images, err := agent.collectImages(context.Background())
+	usageResult, storageUsage, err := agent.collectStorageUsage(context.Background())
+	if err != nil {
+		t.Fatalf("collectStorageUsage: %v", err)
+	}
+	if storageUsage.Images.TotalCount != 3 || storageUsage.Images.ReclaimableBytes != 512 {
+		t.Fatalf("unexpected storage usage: %+v", storageUsage)
+	}
+
+	images, err := agent.collectImages(context.Background(), usageResult.Images.Items)
 	if err != nil {
 		t.Fatalf("collectImages: %v", err)
 	}
@@ -199,13 +211,8 @@ func TestCollectDockerNativeInventory(t *testing.T) {
 	if len(images[0].RepoTags) != 1 || images[0].RepoTags[0] != "repo/app:latest" {
 		t.Fatalf("expected normalized repo tags, got %#v", images[0].RepoTags)
 	}
-
-	usageResult, storageUsage, err := agent.collectStorageUsage(context.Background())
-	if err != nil {
-		t.Fatalf("collectStorageUsage: %v", err)
-	}
-	if storageUsage.Images.TotalCount != 3 || storageUsage.Images.ReclaimableBytes != 512 {
-		t.Fatalf("unexpected storage usage: %+v", storageUsage)
+	if images[0].SharedSizeBytes != 256 || images[0].Containers != 2 {
+		t.Fatalf("image storage projection = %+v, want cached shared-size and container counts", images[0])
 	}
 
 	volumes, err := agent.collectVolumes(context.Background(), usageResult.Volumes.Items)

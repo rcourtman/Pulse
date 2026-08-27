@@ -3245,7 +3245,13 @@ daemons such as Synology DSM when many stopped containers exist. It runs once
 per refresh window with no immediate transient retry, preserves the last good
 aggregate across a failed refresh, and suppresses a failed cold-start scan
 until the next window instead of starting it again on every 30-second report
-(#1729). `TestCollectStorageUsageDecouplesFullDaemonScanFromLiveTelemetry` and
+(#1729). Live image-list requests also leave Docker's optional `shared-size`
+calculation disabled; image IDs, tags, and digests remain fresh each report,
+while shared-layer bytes and container counts come from the cached storage
+snapshot. `TestBuildReportSynologySizedInventoryBoundsStorageComputations`
+qualifies two live cycles over the reported 47-container/4-running inventory
+shape and pins one full storage walk with no additional shared-size request.
+`TestCollectStorageUsageDecouplesFullDaemonScanFromLiveTelemetry` and
 `TestCollectStorageUsageThrottlesInitialTransientFailureWithoutRetry` pin the
 cadence, stale-result continuity, and no-retry boundary.
 

@@ -136,7 +136,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	if err != nil {
 		a.logger.Warn().Err(err).Msg("failed to collect Docker storage usage")
 	}
-	images, err := a.collectImages(ctx)
+	images, err := a.collectImages(ctx, diskUsageResult.Images.Items)
 	if err != nil {
 		a.logger.Warn().Err(err).Msg("failed to collect Docker images")
 	}
@@ -317,9 +317,20 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 	return containers, nil
 }
 
-func (a *Agent) collectImages(ctx context.Context) ([]agentsdocker.Image, error) {
+func (a *Agent) collectImages(ctx context.Context, usageImages []image.Summary) ([]agentsdocker.Image, error) {
+	usageByID := make(map[string]image.Summary, len(usageImages))
+	for _, summary := range usageImages {
+		if id := strings.TrimSpace(summary.ID); id != "" {
+			usageByID[id] = summary
+		}
+	}
+
 	list, err := dockerCallWithRetry(ctx, dockerInventoryCallTimeout, func(callCtx context.Context) ([]image.Summary, error) {
-		return a.docker.ImageList(callCtx, dockerImageListOptions{All: true, SharedSize: true})
+		// Keep image identity and tags on the live telemetry cadence without
+		// asking the daemon to recompute shared layer sizes every 30 seconds.
+		// The throttled /system/df snapshot above already owns that expensive
+		// calculation and supplies its cached values here (#1729).
+		return a.docker.ImageList(callCtx, dockerImageListOptions{All: true})
 	})
 	if err != nil {
 		return nil, annotateDockerConnectionError(err)
@@ -327,13 +338,23 @@ func (a *Agent) collectImages(ctx context.Context) ([]agentsdocker.Image, error)
 
 	images := make([]agentsdocker.Image, 0, len(list))
 	for _, summary := range list {
+		sharedSize := summary.SharedSize
+		containers := summary.Containers
+		if usage, ok := usageByID[strings.TrimSpace(summary.ID)]; ok {
+			sharedSize = usage.SharedSize
+			containers = usage.Containers
+		}
+		// Docker uses -1 when these optional calculations were not requested.
+		// Do not project that sentinel as a real negative byte/container count.
+		sharedSize = max(sharedSize, 0)
+		containers = max(containers, 0)
 		images = append(images, agentsdocker.Image{
 			ID:              strings.TrimSpace(summary.ID),
 			RepoTags:        normalizedNonEmptyStrings(summary.RepoTags),
 			RepoDigests:     normalizedNonEmptyStrings(summary.RepoDigests),
 			SizeBytes:       summary.Size,
-			SharedSizeBytes: summary.SharedSize,
-			Containers:      summary.Containers,
+			SharedSizeBytes: sharedSize,
+			Containers:      containers,
 			CreatedAt:       dockerUnixTimestamp(summary.Created),
 			Labels:          cloneStringMap(summary.Labels),
 		})
