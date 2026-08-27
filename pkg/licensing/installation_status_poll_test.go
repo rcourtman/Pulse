@@ -68,7 +68,10 @@ func TestInstallationStatusPollStartsImmediatelyAndIsIdempotent(t *testing.T) {
 	svc.mu.Unlock()
 	svc.StartInstallationStatusPoll(context.Background())
 	svc.StartInstallationStatusPoll(context.Background())
-	waitForCondition(t, time.Second, func() bool { return calls.Load() == 1 }, "immediate status request did not run")
+	waitForCondition(t, time.Second, func() bool {
+		status := svc.Status().Synchronization
+		return calls.Load() == 1 && status != nil && status.Running && status.Healthy && status.LastAttemptAt != nil && status.LastSuccessAt != nil && status.ConsecutiveFailures == 0
+	}, "immediate status request did not complete successfully")
 	svc.StopInstallationStatusPoll()
 	svc.StopInstallationStatusPoll()
 	if calls.Load() != 1 {
