@@ -1,4 +1,4 @@
-import { render, cleanup, waitFor } from '@solidjs/testing-library';
+import { render, cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ThresholdsTab } from '../tabs/ThresholdsTab';
@@ -340,5 +340,39 @@ describe('ThresholdsTab', () => {
         requestId: 1,
       });
     });
+  });
+
+  it('configures the canonical workload fallback and shows effective inheritance', () => {
+    const props = buildProps();
+    const setMetricEvaluationWindows = vi.fn();
+    const setHasUnsavedChanges = vi.fn();
+    props.metricEvaluationWindows = () => ({
+      all: { cpu: 300 },
+      guest: { cpu: 900 },
+    });
+    props.setMetricEvaluationWindows = setMetricEvaluationWindows;
+    props.setHasUnsavedChanges = setHasUnsavedChanges;
+
+    render(() => <ThresholdsTab {...props} />);
+
+    const workloadWindow = screen.getAllByLabelText(
+      'All workloads CPU evaluation window',
+    )[0] as HTMLSelectElement;
+    const virtualMachineWindow = screen.getAllByLabelText(
+      'Virtual machines CPU evaluation window',
+    )[0] as HTMLSelectElement;
+    expect(workloadWindow.value).toBe('900');
+    expect(virtualMachineWindow.options[0].textContent).toBe('Inherit (15 minutes)');
+
+    fireEvent.input(workloadWindow, { target: { value: '60' } });
+
+    const update = setMetricEvaluationWindows.mock.calls[0][0] as (
+      previous: Record<string, Record<string, number>>,
+    ) => Record<string, Record<string, number>>;
+    expect(update({ all: { cpu: 300 }, guest: { cpu: 900 } })).toEqual({
+      all: { cpu: 300 },
+      guest: { cpu: 60 },
+    });
+    expect(setHasUnsavedChanges).toHaveBeenCalledWith(true);
   });
 });

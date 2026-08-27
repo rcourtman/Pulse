@@ -510,6 +510,14 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		return
 	}
 
+	// Serialize the disk snapshot with every in-process API-token mutation.
+	// Without this lock a reload can read the old file, wait behind a rename or
+	// revoke that writes the new file, and then replace the newer runtime
+	// inventory with its stale snapshot. The final stat below would also record
+	// the new file's timestamp, leaving polling unable to repair the rollback.
+	Mu.Lock()
+	defer Mu.Unlock()
+
 	// Preserve existing tokens in case reload fails
 	existingTokens := cw.config.APITokens
 	existingCount := len(existingTokens)
@@ -577,11 +585,9 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		}
 	}
 
-	// Only update if we successfully loaded tokens
-	Mu.Lock()
+	// Only update if we successfully loaded tokens.
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
-	Mu.Unlock()
 
 	if cw.apiTokensPath != "" {
 		if stat, err := os.Stat(cw.apiTokensPath); err == nil {

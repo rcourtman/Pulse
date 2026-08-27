@@ -92,6 +92,22 @@ export function getAlertOverviewPausedState() {
   } as const;
 }
 
+export function getAlertOverviewHydrationState(status: 'pending' | 'ready' | 'unavailable') {
+  if (status === 'unavailable') {
+    return {
+      title: t('alerts.overview.hydration.unavailable.title'),
+      description: t('alerts.overview.hydration.unavailable.description'),
+      retryLabel: t('alerts.overview.hydration.retry'),
+    } as const;
+  }
+
+  return {
+    title: t('alerts.overview.hydration.pending.title'),
+    description: t('alerts.overview.hydration.pending.description'),
+    retryLabel: t('alerts.overview.hydration.retry'),
+  } as const;
+}
+
 export function getAlertOverviewStatsLabels() {
   return {
     last24Hours: t('alerts.overview.stats.triggered24h'),

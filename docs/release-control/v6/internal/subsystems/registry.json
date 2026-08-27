@@ -2334,7 +2334,8 @@
               "internal/alerts/unified_eval_parity_test.go",
               "internal/alerts/unified_eval_test.go",
               "internal/alerts/unified_incident_confirmation_test.go",
-              "internal/alerts/unified_incidents_test.go"
+              "internal/alerts/unified_incidents_test.go",
+              "internal/alerts/windowed_metric_test.go"
             ]
           },
           {
@@ -2540,6 +2541,7 @@
               "internal/alerts/callback_config_coverage_test.go",
               "internal/alerts/canonical_override_migration_test.go",
               "internal/alerts/canonical_stateful_test.go",
+              "internal/alerts/config/evaluation_windows_test.go",
               "internal/alerts/config_validation_test.go",
               "internal/alerts/eventlog/eventlog_snapshot_test.go",
               "internal/alerts/external_probe_test.go",
@@ -2564,6 +2566,7 @@
               "internal/alerts/threshold_resolution_shared_test.go",
               "internal/alerts/unified_incident_confirmation_test.go",
               "internal/alerts/update_alerts_test.go",
+              "internal/alerts/windowed_metric_test.go",
               "internal/monitoring/deadman_test.go",
               "internal/monitoring/monitor_alert_override_migration_test.go"
             ]
@@ -2995,6 +2998,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/alertIntentPolicies.test.ts",
+              "internal/api/alerting/alerts_test.go",
               "internal/api/alerting/deadman_handlers_test.go",
               "internal/api/alerts_endpoints_test.go"
             ]
@@ -5551,6 +5555,8 @@
         "internal/dockeragent/swarm.go",
         "internal/kubernetesagent/agent.go",
         "internal/mock/action_fixtures.go",
+        "internal/mock/alert_history.go",
+        "internal/mock/alert_incidents.go",
         "internal/mock/availability_fixtures.go",
         "internal/mock/demo_scenarios.go",
         "internal/mock/fixture_graph.go",
@@ -5715,6 +5721,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/metric_window_provider_test.go",
               "internal/monitoring/metrics_history_concurrency_test.go",
               "internal/monitoring/metrics_history_memory_regression_test.go",
               "internal/monitoring/metrics_history_test.go",
@@ -5937,6 +5944,8 @@
             "match_prefixes": [],
             "match_files": [
               "internal/mock/action_fixtures.go",
+              "internal/mock/alert_history.go",
+              "internal/mock/alert_incidents.go",
               "internal/mock/availability_fixtures.go",
               "internal/mock/demo_scenarios.go",
               "internal/mock/fixture_graph.go",
@@ -5949,6 +5958,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/mock/action_fixtures_test.go",
+              "internal/mock/alert_incidents_test.go",
               "internal/mock/canonical_api_guardrails_test.go",
               "internal/mock/demo_scenarios_test.go",
               "internal/mock/generator_test.go",
@@ -6055,6 +6065,7 @@
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/issue1613_contract_test.go",
               "internal/monitoring/issue1638_dns_cache_test.go",
+              "internal/monitoring/metric_window_provider_test.go",
               "internal/monitoring/monitor_additional_test.go",
               "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_alert_override_migration_test.go",
@@ -6727,6 +6738,7 @@
             "exact_files": [
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts",
+              "internal/mock/alert_incidents_test.go",
               "internal/mock/integration_coverage_test.go",
               "internal/mock/platform_fixtures_test.go"
             ]

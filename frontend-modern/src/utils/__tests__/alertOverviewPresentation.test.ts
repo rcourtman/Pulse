@@ -41,6 +41,7 @@ import {
   getAlertOverviewBulkAcknowledgedNotification,
   getAlertOverviewCardPresentation,
   getAlertOverviewEmptyState,
+  getAlertOverviewHydrationState,
   getAlertOverviewNodeLabel,
   getAlertOverviewPausedState,
   getAlertOverviewPrimaryActionClass,
@@ -104,6 +105,17 @@ describe('alertOverviewPresentation', () => {
     expect(getAlertOverviewPausedState()).toEqual({
       title: 'Alerting is paused',
       description: 'Toggle alerts on to resume monitoring and unlock configuration tabs',
+    });
+    expect(getAlertOverviewHydrationState('pending')).toEqual({
+      title: 'Checking active alerts',
+      description: 'Pulse is confirming the current incident state before reporting an all-clear.',
+      retryLabel: 'Retry',
+    });
+    expect(getAlertOverviewHydrationState('unavailable')).toEqual({
+      title: 'Active alert status is temporarily unavailable',
+      description:
+        'Pulse could not confirm the current incident state. This page will not report an all-clear until alert data is available.',
+      retryLabel: 'Retry',
     });
   });
 

@@ -17,7 +17,6 @@ import (
 // integrationOrchestrator records investigation triggers without running real LLM calls.
 type integrationOrchestrator struct {
 	canStart      bool
-	investigated  []string // finding IDs passed to InvestigateFinding
 	investigateCh chan string
 	canStartCh    chan struct{}
 	runningCount  int32
@@ -32,7 +31,6 @@ func newIntegrationOrchestrator(canStart bool) *integrationOrchestrator {
 }
 
 func (o *integrationOrchestrator) InvestigateFinding(_ context.Context, f *InvestigationFinding, _ string) error {
-	o.investigated = append(o.investigated, f.ID)
 	o.investigateCh <- f.ID
 	return nil
 }

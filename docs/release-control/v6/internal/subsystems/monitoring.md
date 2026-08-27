@@ -437,10 +437,13 @@ identity and durable history as charts. `internal/monitoring/metric_window_provi
 resolves the unified resource metrics target, reads the fresh in-memory tail,
 and falls back to the SQLite metrics store when that tail lacks the requested
 coverage. Persistent fallbacks are briefly cached to bound restart-time query
-load, merged by timestamp, and returned as observations only; alert policy owns
-averaging, readiness, hysteresis, and lifecycle decisions. Missing target,
-query failure, shallow history, or gapped history must remain unknown at the
-alerts boundary rather than being replaced by a synthetic healthy value.
+load, merged by timestamp, and returned as observations only. When the durable
+series and fresh in-memory tail contain the same timestamp, the in-memory value
+is authoritative so an older persisted or rolled-up value cannot replace the
+latest observation. Alert policy owns averaging, readiness, hysteresis, and
+lifecycle decisions. Missing target, query failure, shallow history, or gapped
+history must remain unknown at the alerts boundary rather than being replaced
+by a synthetic healthy value.
 
 Monitoring ingest keeps mock mode hermetic. The unified read path already
 substitutes the mock snapshot wholesale, so anything that runs after that
@@ -512,6 +515,8 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 35b. `internal/mock/availability_fixtures.go`
 35c. `internal/mock/recovery_points.go`
 35d. `internal/mock/integration.go`
+35e. `internal/mock/alert_incidents.go`
+35f. `internal/mock/alert_history.go`
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
@@ -1928,6 +1933,24 @@ enumerated backup artifact must never mint protected posture. The
 `TestCuratedDemoProtectionStoriesProduceRepresentativePostures` proof in
 `internal/mock/demo_scenarios_test.go` evaluates those fixtures through the
 production posture engine.
+Mock alert history and incident timelines belong to the same fixture authority.
+`internal/mock/alert_incidents.go` enriches every displayed mock alert row with
+one occurrence-qualified incident whose resource identity, acknowledgement
+state, lifecycle status, and ordered events agree with that row. Historical
+fixtures close with a resolution event, active fixtures remain open, and
+representative investigation and runbook events exercise the richer timeline
+surface. Alert-level reads, resource-level incident lists, and graph-lifetime
+notes must all query or mutate that same fixture instance; a mock history row
+must never expose a Timeline control backed by a missing incident.
+`internal/mock/alert_history.go` is the canonical history fixture generator and
+must mirror the live history read contract: rows are newest-first, closed rows
+carry the same resolution timestamp as their incident in `lastSeen`, and live
+alerts come from the active-alert snapshot rather than unrelated synthetic open
+history rows. The current-day generator is bounded by the fixture observation
+clock and local calendar boundary, including short or long daylight-saving
+days, so neither a row nor its lifecycle events can occur in the future.
+History duration, status, and Timeline therefore remain three projections of
+one occurrence instead of contradicting each other in demo mode.
 Mock fixture defaults in `internal/mock/generator.go` (the `DefaultConfig`
 constant) are also part of that mock-runtime contract. The Proxmox default is
 an intentionally large public-demo estate so platform-first pages exercise

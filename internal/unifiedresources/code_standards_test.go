@@ -867,7 +867,7 @@ func TestCephPoolsProjectThroughCanonicalStoragePath(t *testing.T) {
 			"m.checkCephPoolStorage(cluster)",
 			"models.CephPoolStorage(cluster)",
 			`m.metricsStore.Write("storage", storage.ID, "usage", storage.Usage, timestamp)`,
-			"m.alertManager.CheckStorage(storage)",
+			"m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, timestamp))",
 		},
 	}
 

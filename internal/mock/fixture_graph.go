@@ -3,6 +3,7 @@ package mock
 import (
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -15,6 +16,7 @@ import (
 type FixtureGraph struct {
 	State                models.StateSnapshot
 	AlertHistory         []models.Alert
+	AlertIncidents       []*memory.Incident
 	PlatformFixtures     PlatformFixtures
 	AvailabilityFixtures []AvailabilityFixture
 	DiscoveryFixtures    []*DiscoveryFixture
@@ -38,6 +40,7 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 	syncMetricFixtureRegistriesFromGraph(graph)
 	graph.UpdateMetrics(cfg, now)
 	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
+	graph.AlertHistory, graph.AlertIncidents = buildAlertIncidentFixtures(graph.AlertHistory, now)
 	resources, _ := graph.UnifiedResourceSnapshot()
 	graph.ActionFixtures = buildActionFixtures(resources, now)
 	syncMetricFixtureRegistriesFromGraph(graph)
@@ -47,7 +50,8 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 func cloneFixtureGraph(in FixtureGraph) FixtureGraph {
 	return FixtureGraph{
 		State:                cloneState(in.State),
-		AlertHistory:         append([]models.Alert(nil), in.AlertHistory...),
+		AlertHistory:         cloneMockAlerts(in.AlertHistory),
+		AlertIncidents:       cloneMockIncidents(in.AlertIncidents),
 		PlatformFixtures:     clonePlatformFixtures(in.PlatformFixtures),
 		AvailabilityFixtures: cloneAvailabilityFixtures(in.AvailabilityFixtures),
 		DiscoveryFixtures:    cloneDiscoveryFixtures(in.DiscoveryFixtures),
@@ -137,6 +141,7 @@ func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []mo
 			Value:        alert.Value,
 			Threshold:    alert.Threshold,
 			StartTime:    alert.StartTime,
+			LastSeen:     cloneMockTime(alert.LastSeen),
 			Acknowledged: alert.Acknowledged,
 			// GetActiveAlerts returns deep clones, so the map is already private.
 			Metadata: alert.Metadata,

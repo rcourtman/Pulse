@@ -468,6 +468,13 @@ alert-owned presentation helpers. Alert IDs, alert types, resource IDs,
 resource names, node names, source messages, event payloads, commands, command
 output, logs, and Assistant model-context labels stay machine-stable and
 untranslated.
+The Alerts Overview hydration boundary must localize its pending, unavailable,
+and retry presentation through the same catalog. Pending and unavailable copy
+must explicitly withhold an all-clear until active-alert truth is confirmed;
+the surface must not reuse the localized zero-alert empty state while the
+canonical alert snapshot is unknown. First-wave catalogs and their focused
+catalog proof must advance together so this reliability distinction cannot
+silently fall back to English or collapse into ordinary empty-state wording.
 The active-alert card's delivery-status row remains an alerts-owned compact
 presentation composed inside the shared responsive card shell. It consumes one
 bulk diagnosis snapshot per overview refresh, wraps beside started-at and
@@ -511,8 +518,12 @@ absorb those persistence or validation rules into shared form/table chrome
 The alerts-owned threshold surface also owns rolling metric evaluation
 configuration. `ThresholdsTab` presents the understandable policy (current
 value or a named rolling duration) rather than a query language, with one
-global CPU rule and sparse platform overrides that visibly inherit it. The
-configuration snapshot and payload models must round-trip explicit zero and
+global CPU rule, a canonical all-workload fallback, and sparse platform
+overrides that visibly inherit the effective parent. The select options and
+inherit labels must mirror the runtime hierarchy: VMs and application
+containers inherit `guest`, agent-backed systems inherit `node`, and every
+chain terminates at `all`. The configuration snapshot and payload models must
+round-trip explicit zero and
 resource-specific maps without flattening inheritance. Copy must explain that
 incomplete history holds incident state instead of firing or recovering, and
 the control must remain usable at desktop and narrow viewports through shared

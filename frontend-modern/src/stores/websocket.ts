@@ -38,6 +38,10 @@ const AUTO_REGISTER_NOTIFICATION_FRESH_MS = 2 * 60 * 1000;
 const AUTO_REGISTER_NOTIFICATION_FUTURE_SKEW_MS = 30 * 1000;
 const AUTO_REGISTER_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
 const AUTO_REGISTER_NOTIFICATION_SESSION_GRACE_MS = 5 * 1000;
+const ACTIVE_ALERTS_REST_RECOVERY_MIN_INTERVAL_MS = 30 * 1000;
+const ACTIVE_ALERTS_COLD_HYDRATION_DELAY_MS = 5 * 1000;
+
+export type ActiveAlertsHydrationStatus = 'pending' | 'ready' | 'unavailable';
 
 type TimestampedWSMessage = WSMessage & { timestamp?: number | string };
 type AutoRegisterNotificationPayload = {
@@ -302,6 +306,8 @@ export function createWebSocketStore(url: string) {
   });
   const [state, setState] = createStore<State>(createInitialState());
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
+  const [activeAlertsHydrationStatus, setActiveAlertsHydrationStatus] =
+    createSignal<ActiveAlertsHydrationStatus>('pending');
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
   const [updateProgress, setUpdateProgress] = createSignal<unknown>(null);
   let resourceChangeVersion = 0;
@@ -358,6 +364,8 @@ export function createWebSocketStore(url: string) {
 
   let alertsEnabled = isAlertsDetectionEnabled();
   let lastActiveAlertsPayload: Record<string, Alert> = {};
+  let hasActiveAlertsSnapshot = false;
+  let activeAlertsRevision = 0;
 
   const clearPendingAckTimeout = (alertIdentifier: string) => {
     const timeout = pendingAckTimeouts.get(alertIdentifier);
@@ -541,12 +549,108 @@ export function createWebSocketStore(url: string) {
   let reconnectAttempt = 0;
   let isReconnecting = false;
   let isDisposed = false;
+  let activeAlertsRecoveryRequestId = 0;
+  let activeAlertsRecoveryInFlight: Promise<boolean> | null = null;
+  let lastActiveAlertsRecoveryAt = 0;
+  let activeAlertsColdHydrationTimeout = 0;
   let currentConnectionOpenedAtMs = 0;
   const maxReconnectDelay = POLLING_INTERVALS.RECONNECT_MAX;
   const initialReconnectDelay = POLLING_INTERVALS.RECONNECT_BASE;
   const heartbeatIntervalMs = 30000; // Send heartbeat every 30 seconds
   const heartbeatTimeoutMs = heartbeatIntervalMs * 3;
   const reconnectJitterRatio = 0.2;
+
+  const commitActiveAlertsTruth = (alertsMap: Record<string, Alert>) => {
+    if (activeAlertsColdHydrationTimeout) {
+      window.clearTimeout(activeAlertsColdHydrationTimeout);
+      activeAlertsColdHydrationTimeout = 0;
+    }
+    activeAlertsRevision += 1;
+    hasActiveAlertsSnapshot = true;
+    lastActiveAlertsPayload = alertsMap;
+    setActiveAlertsHydrationStatus('ready');
+    applyActiveAlerts(alertsEnabled ? alertsMap : {});
+  };
+
+  // Cold-start recovery is owned by the canonical store rather than the page.
+  // HTTP may refresh the displayed alert projection, but it never establishes
+  // the socket-owned keyed-delta baseline. A revision fence prevents a late
+  // HTTP response from replacing newer WebSocket truth.
+  const recoverActiveAlertsFromREST = (force = false): Promise<boolean> => {
+    if (isDisposed) return Promise.resolve(false);
+    if (activeAlertsRecoveryInFlight) return activeAlertsRecoveryInFlight;
+
+    const now = Date.now();
+    if (
+      !force &&
+      lastActiveAlertsRecoveryAt > 0 &&
+      now - lastActiveAlertsRecoveryAt < ACTIVE_ALERTS_REST_RECOVERY_MIN_INTERVAL_MS
+    ) {
+      return Promise.resolve(false);
+    }
+
+    lastActiveAlertsRecoveryAt = now;
+    const requestId = ++activeAlertsRecoveryRequestId;
+    const startingRevision = activeAlertsRevision;
+    if (!hasActiveAlertsSnapshot) {
+      setActiveAlertsHydrationStatus('pending');
+    }
+
+    let request: Promise<boolean>;
+    request = (async () => {
+      try {
+        const alerts = await apiFetchJSON<Alert[]>('/api/alerts/active');
+        if (
+          isDisposed ||
+          requestId !== activeAlertsRecoveryRequestId ||
+          startingRevision !== activeAlertsRevision
+        ) {
+          return false;
+        }
+        if (!Array.isArray(alerts)) {
+          throw new Error('Active alert recovery returned an unusable payload');
+        }
+
+        const recoveredAlerts: Record<string, Alert> = {};
+        for (const alert of alerts) {
+          if (alert && typeof alert.id === 'string' && alert.id.length > 0) {
+            recoveredAlerts[alert.id] = alert;
+          }
+        }
+        // Intentionally leave rawActiveAlerts null. Only a connection-native
+        // socket snapshot may become the baseline for activeAlertsDelta.
+        commitActiveAlertsTruth(recoveredAlerts);
+        logger.info('Recovered active alert truth over REST while live updates reconnect');
+        return true;
+      } catch (error) {
+        if (
+          !isDisposed &&
+          requestId === activeAlertsRecoveryRequestId &&
+          startingRevision === activeAlertsRevision &&
+          !hasActiveAlertsSnapshot
+        ) {
+          setActiveAlertsHydrationStatus('unavailable');
+          logger.error('Active alert REST recovery failed', error);
+        }
+        return false;
+      } finally {
+        if (requestId === activeAlertsRecoveryRequestId) {
+          activeAlertsRecoveryInFlight = null;
+        }
+      }
+    })();
+    activeAlertsRecoveryInFlight = request;
+    return request;
+  };
+
+  const scheduleColdActiveAlertsRecovery = (connectionId: number) => {
+    if (hasActiveAlertsSnapshot || activeAlertsColdHydrationTimeout) return;
+    activeAlertsColdHydrationTimeout = window.setTimeout(() => {
+      activeAlertsColdHydrationTimeout = 0;
+      if (!isCurrentConnection(connectionId) || hasActiveAlertsSnapshot) return;
+      void recoverActiveAlertsFromREST();
+    }, ACTIVE_ALERTS_COLD_HYDRATION_DELAY_MS);
+  };
 
   const clearHeartbeatTimer = () => {
     if (heartbeatInterval) {
@@ -875,6 +979,10 @@ export function createWebSocketStore(url: string) {
   }
 
   const beginConnection = () => {
+    if (activeAlertsColdHydrationTimeout) {
+      window.clearTimeout(activeAlertsColdHydrationTimeout);
+      activeAlertsColdHydrationTimeout = 0;
+    }
     const connectionId = ++nextConnectionId;
     activeConnectionId = connectionId;
     resetConnectionBaseline();
@@ -887,6 +995,10 @@ export function createWebSocketStore(url: string) {
 
   const retireConnection = (connectionId: number) => {
     if (activeConnectionId !== connectionId) return false;
+    if (activeAlertsColdHydrationTimeout) {
+      window.clearTimeout(activeAlertsColdHydrationTimeout);
+      activeAlertsColdHydrationTimeout = 0;
+    }
     activeConnectionId = null;
     resetConnectionBaseline();
     setInitialDataReceived(false);
@@ -904,6 +1016,12 @@ export function createWebSocketStore(url: string) {
     pendingAckTimeouts.forEach((timeout) => window.clearTimeout(timeout));
     pendingAckTimeouts.clear();
     pendingAckChanges.clear();
+    activeAlertsRecoveryRequestId += 1;
+    activeAlertsRecoveryInFlight = null;
+    if (activeAlertsColdHydrationTimeout) {
+      window.clearTimeout(activeAlertsColdHydrationTimeout);
+      activeAlertsColdHydrationTimeout = 0;
+    }
     activeConnectionId = null;
     resetConnectionBaseline();
 
@@ -941,6 +1059,9 @@ export function createWebSocketStore(url: string) {
     } catch (err) {
       retireConnection(connectionId);
       logger.error('Failed to create WebSocket', err);
+      if (!hasActiveAlertsSnapshot) {
+        void recoverActiveAlertsFromREST();
+      }
       handleReconnect();
     }
   };
@@ -1212,8 +1333,7 @@ export function createWebSocketStore(url: string) {
                 newAlerts[alert.id] = alert;
               });
 
-              lastActiveAlertsPayload = newAlerts;
-              applyActiveAlerts(alertsEnabled ? newAlerts : {});
+              commitActiveAlertsTruth(newAlerts);
             } else if (
               'activeAlertsDelta' in message.data &&
               message.data.activeAlertsDelta !== undefined
@@ -1231,8 +1351,7 @@ export function createWebSocketStore(url: string) {
                 for (const alert of rawActiveAlerts) {
                   newAlerts[alert.id] = structuredClone(alert);
                 }
-                lastActiveAlertsPayload = newAlerts;
-                applyActiveAlerts(alertsEnabled ? newAlerts : {});
+                commitActiveAlertsTruth(newAlerts);
               } else {
                 requestFullStateRecovery(connectionId);
               }
@@ -1528,6 +1647,7 @@ export function createWebSocketStore(url: string) {
       }
 
       // Alerts will come with the initial state broadcast
+      scheduleColdActiveAlertsRecovery(connectionId);
     };
 
     socket.onmessage = (event) => {
@@ -1607,6 +1727,9 @@ export function createWebSocketStore(url: string) {
         return;
       }
 
+      if (!hasActiveAlertsSnapshot) {
+        void recoverActiveAlertsFromREST();
+      }
       handleReconnect();
     };
 
@@ -1634,6 +1757,12 @@ export function createWebSocketStore(url: string) {
     window.clearInterval(heartbeatInterval);
     pendingAckTimeouts.forEach((t) => window.clearTimeout(t));
     pendingAckTimeouts.clear();
+    activeAlertsRecoveryRequestId += 1;
+    activeAlertsRecoveryInFlight = null;
+    if (activeAlertsColdHydrationTimeout) {
+      window.clearTimeout(activeAlertsColdHydrationTimeout);
+      activeAlertsColdHydrationTimeout = 0;
+    }
     if (typeof window !== 'undefined') {
       window.removeEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent);
       for (const eventName of OPERATOR_INPUT_EVENTS) {
@@ -1721,11 +1850,13 @@ export function createWebSocketStore(url: string) {
     connected,
     reconnecting,
     initialDataReceived,
+    activeAlertsHydrationStatus,
     updateProgress,
     resourceChange,
     changedResourceIdsSince,
     changedResourceMetaSince,
     shutdown,
+    refreshActiveAlerts: () => recoverActiveAlertsFromREST(true),
     reconnect: () => {
       if (isDisposed) return;
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -1745,10 +1876,21 @@ export function createWebSocketStore(url: string) {
       }
 
       wsUrl = nextUrl;
+      activeAlertsRecoveryRequestId += 1;
+      activeAlertsRecoveryInFlight = null;
+      if (activeAlertsColdHydrationTimeout) {
+        window.clearTimeout(activeAlertsColdHydrationTimeout);
+        activeAlertsColdHydrationTimeout = 0;
+      }
+      lastActiveAlertsRecoveryAt = 0;
+      hasActiveAlertsSnapshot = false;
+      activeAlertsRevision += 1;
+      lastActiveAlertsPayload = {};
       batch(() => {
         setConnected(false);
         setReconnecting(false);
         setInitialDataReceived(false);
+        setActiveAlertsHydrationStatus('pending');
         setUpdateProgress(null);
         setResourceChange({
           version: ++resourceChangeVersion,

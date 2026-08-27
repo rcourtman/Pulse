@@ -370,7 +370,66 @@ func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
 			m.incidentStore.RecordAlertResolved(timelineAlert, event.OccurredAt)
 		}
 		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertResolved, event.OccurredAt, "")
+	case eventlog.TypeHistoryImported:
+		m.materializeImportedAlertTimeline(timelineAlert, event.OccurredAt)
 	}
+}
+
+func (m *Monitor) materializeImportedAlertTimeline(alert *alerts.Alert, importedAt time.Time) {
+	if m == nil || alert == nil || m.incidentStore == nil {
+		return
+	}
+
+	var resolvedAt *time.Time
+	if !m.isActiveAlertOccurrence(alert) {
+		endedAt := importedAt
+		if alert.OperationalRecord != nil && alert.OperationalRecord.ResolvedAt != nil && !alert.OperationalRecord.ResolvedAt.IsZero() {
+			endedAt = *alert.OperationalRecord.ResolvedAt
+		} else if alert.LastSeen.After(endedAt) {
+			endedAt = alert.LastSeen
+		}
+		if endedAt.IsZero() {
+			endedAt = alert.LastSeen
+		}
+		if !endedAt.IsZero() {
+			if !alert.StartTime.IsZero() && endedAt.Before(alert.StartTime) {
+				endedAt = alert.StartTime
+			}
+			resolvedAt = &endedAt
+		}
+	}
+
+	m.incidentStore.EnsureAlertOccurrence(alert, resolvedAt)
+	firedAt := alert.StartTime
+	if firedAt.IsZero() {
+		firedAt = importedAt
+	}
+	m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertFired, firedAt, "")
+	if alert.Acknowledged {
+		ackAt := alert.AckTime
+		if ackAt == nil || ackAt.IsZero() {
+			ackAt = &firedAt
+		}
+		m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertAcknowledged, *ackAt, alert.AckUser)
+	}
+	if resolvedAt != nil {
+		m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertResolved, *resolvedAt, "")
+	}
+}
+
+func (m *Monitor) isActiveAlertOccurrence(candidate *alerts.Alert) bool {
+	if m == nil || m.alertManager == nil || candidate == nil {
+		return false
+	}
+	for _, active := range m.alertManager.GetActiveAlerts() {
+		if active.ID != candidate.ID {
+			continue
+		}
+		if candidate.StartTime.IsZero() || active.StartTime.IsZero() || active.StartTime.Equal(candidate.StartTime) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Monitor) replayAlertLifecycleProjections() {

@@ -212,8 +212,12 @@ their existing platform thresholds and disable policy.
 Rolling metric evaluation is alert policy over monitoring-owned history, not a
 second incident family. `metricEvaluationWindows` stores seconds by canonical
 resource type and metric, with an explicit zero meaning current-value
-evaluation and platform-specific entries inheriting the `all` rule. CPU seeds a
-five-minute default; only CPU and burst-prone disk/network rate metrics may use
+evaluation. The Thresholds surface exposes both the global `all` rule and the
+canonical `guest` workload fallback; concrete workloads inherit through the
+same runtime chain (`vm` and `app-container` through `guest`, host-like agents
+through `node`, then `all`) and must label the effective parent duration rather
+than always presenting the global value. CPU seeds a five-minute default; only
+CPU and burst-prone disk/network rate metrics may use
 rolling averages, while memory, capacity, and temperature remain instantaneous
 evidence boundaries. A window requires at least three samples, at least 80%
 temporal coverage, and no gap larger than the bounded cadence allowance. Weak,
@@ -386,6 +390,22 @@ is not lost. Alert deltas still apply immediately when their socket baseline
 exists. Late socket callbacks and REST responses from a retired connection
 must be ignored, while a current oversized connection remains free to hydrate
 without waiting for the retired connection's request to settle.
+Cold active-alert hydration has a narrower recovery path than oversized estate
+state. Until the canonical store has accepted either a socket-owned alert
+snapshot or a successful `GET /api/alerts/active` response, the Alerts overview
+must expose `pending` or `unavailable` truth and must not turn an empty local
+store into a "No active alerts" all-clear. An unintentional socket close before
+that first alert snapshot starts one throttled active-alert REST recovery from
+the canonical store, and an open connection that remains alert-snapshot-free
+for five seconds starts the same recovery rather than waiting for the
+ninety-second heartbeat timeout; pages must not own an independent alert fetch
+or cache.
+That response may refresh display truth but must leave `rawActiveAlerts`
+baseline-free, and an alert revision plus request-generation fence must discard
+it if newer socket truth, a URL-scope switch, or disposal wins the race. Once a
+snapshot is known, reconnects retain it as the last confirmed projection rather
+than replacing known alert state with transport uncertainty. A failed recovery
+must remain visibly unavailable and provide an explicit operator retry.
 While the document is hidden, that same connection-scoped baseline must keep
 accepting resource deltas without reconciling the visible resource store on
 every message. The store accumulates changed resource IDs (and their per-key
@@ -1066,7 +1086,20 @@ SQLite-backed store under the alerts data directory; ephemeral managers record
 nothing unless a store is installed explicitly. Resolution, acknowledgement,
 unacknowledgement, escalation, flapping detection, dispatch, quiet-hours
 deferral, and suppression append immutable events without changing lifecycle
-or delivery behavior. Snapshot-bearing lifecycle transitions commit
+or delivery behavior. Suppression and deferral are recorded as outcome
+episodes: the first decision is immutable, identical reevaluations of that
+unchanged outcome append no duplicate row, and a changed reason, details,
+resource presentation, intervening lifecycle/dispatch event, or later return
+to that outcome opens a new episode. Lifecycle, escalation, and dispatch
+events are never coalesced. This keeps delivery activity explanatory instead
+of poll-frequency-shaped, prevents unchanged reevaluations from crowding a
+real outcome change out of the non-blocking diagnostic buffer, and bounds
+diagnostic growth without erasing a meaningful decision transition. A failed
+write forgets its admission key so a recovered store can accept the outcome
+again. Reads apply the same episode projection to
+redundant diagnostic rows written by older versions, so upgraded installations
+become readable immediately without rewriting their immutable event records.
+Snapshot-bearing lifecycle transitions commit
 synchronously before downstream lifecycle projections run; they never share
 the droppable diagnostic buffer because alert history is reconstructed from
 them. High-volume notification decisions remain non-blocking and fail-open for
@@ -1132,12 +1165,29 @@ that canonical stream. It runs for lifecycle transitions regardless of
 activation, quiet hours, grouping, rate limits, or destination state; delivery
 callbacks remain policy-controlled consumers. Monitoring uses this seam to
 materialize canonical resource-history breadcrumbs and incident shells. On
-startup it replays durable lifecycle transitions oldest first, then
-idempotently reconciles restored active alerts that predate the event store.
-This repairs resolved as well as active incident timelines without replaying
-any delivery side effect, and ensures an alert already visible in Overview
-cannot keep returning an unavailable timeline merely because its notification
-was held.
+startup it replays durable lifecycle transitions and migrated legacy-history
+snapshots oldest first, then idempotently reconciles restored active alerts
+that predate the event store. Because monitor construction precedes attachment
+of the API-owned durable unified-resource store, that attachment repeats the
+same idempotent replay so canonical resource history is repaired as well as the
+incident fallback cache. A migrated final snapshot expands only facts it
+actually carries: the occurrence start, saved acknowledgement, and known end;
+it does not invent delivery, escalation, analysis, or remediation events.
+The incident store retains those snapshot events as a fallback only when the
+canonical resource timeline lacks the equivalent event, so a partial durable
+projection cannot erase the occurrence start while complete canonical history
+still wins. The occurrence-qualified incident API performs the same repair
+from the active/history read model when retention or an older migration left a
+shell absent or empty. This repairs resolved as well as active incident
+timelines without replaying any delivery side effect, and ensures an alert
+already visible in Overview or History cannot keep returning an unavailable
+timeline merely because its notification was held or it predates the event
+store. Occurrence lookup allows only one second of start-time precision drift;
+it must not merge recurring or flapping incidents merely because they share an
+alert identifier and started within the same former ten-minute window.
+Snapshot events stored at equal timestamp precision order by lifecycle meaning,
+with detection first and resolution last, rather than by generated event ID;
+a malformed legacy end before its own start clamps to the start boundary.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved
@@ -1705,6 +1755,11 @@ Assistant are now owned by the Alerts incident handoff model and carry only
 sanitized incident facts plus event summaries into both the visible drawer
 briefing and the backend model-only handoff context; raw command and output
 details stay in the incident timeline or approval surface.
+The shared hook may expose Timeline for a displayed mock alert because mock
+mode now guarantees an occurrence-qualified incident through the same typed
+API. A mock fixture missing that incident is a broken alert read-model contract,
+not an empty-state case for the frontend to disguise; genuine unknown real
+occurrences may still render the existing no-timeline state.
 
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`

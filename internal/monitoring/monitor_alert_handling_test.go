@@ -301,6 +301,67 @@ func TestLifecycleReplayRepairsResolvedIncidentTimeline(t *testing.T) {
 	}
 }
 
+func TestLifecycleReplayMaterializesImportedHistoryTimeline(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	store, err := eventlog.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
+	}
+	manager.SetEventLog(store)
+
+	startedAt := time.Now().UTC().Add(-30 * time.Minute).Truncate(time.Second)
+	ackAt := startedAt.Add(5 * time.Minute)
+	resolvedAt := startedAt.Add(20 * time.Minute)
+	snapshot := alerts.Alert{
+		ID:           "imported-alert-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "imported-resource-1",
+		ResourceName: "Imported VM",
+		StartTime:    startedAt,
+		LastSeen:     resolvedAt,
+		Acknowledged: true,
+		AckTime:      &ackAt,
+		AckUser:      "operator",
+	}
+	payload, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("marshal imported snapshot: %v", err)
+	}
+	if err := store.ImportEvents([]eventlog.Event{{
+		OccurredAt: resolvedAt,
+		Type:       eventlog.TypeHistoryImported,
+		AlertID:    snapshot.ID,
+		ResourceID: snapshot.ResourceID,
+		Snapshot:   payload,
+	}}); err != nil {
+		t.Fatalf("import history event: %v", err)
+	}
+
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	monitor := &Monitor{alertManager: manager, incidentStore: incidentStore}
+	resourceStore := unifiedresources.NewMemoryStore()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore))
+	monitor.SetResourceStore(adapter)
+	monitor.SetResourceStore(adapter)
+
+	timeline := incidentStore.GetTimelineByAlertAt(snapshot.ID, snapshot.StartTime)
+	if timeline == nil || timeline.Status != memory.IncidentStatusResolved || !timeline.Acknowledged {
+		t.Fatalf("imported timeline state = %#v", timeline)
+	}
+	if len(timeline.Events) != 3 {
+		t.Fatalf("imported timeline events = %d, want three idempotent snapshot events", len(timeline.Events))
+	}
+	changes, err := resourceStore.GetRecentChanges(snapshot.ResourceID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("read imported canonical changes: %v", err)
+	}
+	if len(changes) != 3 {
+		t.Fatalf("imported canonical changes = %d, want fired, acknowledged, and resolved", len(changes))
+	}
+}
+
 func TestSystemAlertTimelineUsesCanonicalPulseResource(t *testing.T) {
 	resourceStore := unifiedresources.NewMemoryStore()
 	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})

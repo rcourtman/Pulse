@@ -201,6 +201,12 @@ start a goroutine, timer, or notification lifecycle per target.
 21. `internal/mock/fixture_graph.go` shared with `monitoring`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.
 22. `internal/mock/generator.go` shared with `monitoring`: mock metric generation is both monitoring-owned runtime data and a protected large-estate demo update hot path.
 23. `internal/mock/integration.go` shared with `monitoring`: the mock runtime scheduler is both monitoring-owned sampling infrastructure and a protected large-estate demo cadence boundary.
+    Alert-history lifecycle enrichment remains graph-build work, not sampler-tick
+    work. History access must apply its requested limit before cloning rows, and
+    cloning optional lifecycle timestamps must stay linear in the returned
+    slice rather than rebuilding or walking the full mock estate. This keeps
+    history/timeline consistency from adding cost to the protected realtime
+    update path.
 
 Large-estate realtime updates must be sparse end to end. The public 50-node,
 900-guest demo advances node-scoped metrics through ten bounded cohorts on the
@@ -275,6 +281,18 @@ snapshots reuse the previous row object whenever the serialized row is
 unchanged, and a refresh that changes nothing returns the previous row array
 itself, so per-tick row identity churn stays bounded to guests whose data
 changed.
+Initial active-alert availability must not pay the full `/api/state` estate
+cost merely because the live connection failed before its first alert
+snapshot. The process-wide store uses the bounded `/api/alerts/active`
+projection after a cold socket close or a five-second open-without-alerts
+deadline, coalesces concurrent requests, and throttles automatic attempts to
+one per thirty seconds. The HTTP result is
+revision-fenced against later socket commits and never becomes the keyed-delta
+baseline, so recovery adds neither a page-local subscription nor a second
+per-tick reconciliation path. The JSDOM no-op global store reports this
+projection as ready without starting transport work, preserving deterministic
+consumer tests while the production owner retains the pending/ready/unavailable
+contract.
 Retained or prefetched tabs may keep fetched snapshots, but only the visible tab
 consumes realtime projection work. Re-entering an inactive tab must catch up
 from the shared canonical cache rather than replaying every missed delta.
@@ -2860,3 +2878,17 @@ goroutine per destination. Updating Relay settings atomically replaces the
 cached client and floor, so the next incident observes the new policy without
 turning alert fan-out into configuration I/O. The hosted Relay runtime tests
 pin persistence and cache replacement together.
+
+### Mock alert timelines reuse the canonical fixture graph
+
+Mock alert incidents are built once with the canonical fixture graph and read
+under its existing lock. An occurrence lookup is a bounded scan of that
+in-memory fixture slice; a resource lookup performs one scan, clones only the
+matching incidents, sorts them newest-first, and applies the requested limit
+before transport. Reads add no persistence access, provider request, polling
+loop, or per-row frontend fetch. Notes mutate the matching in-memory fixture
+under the same graph lock and advance the fixture data version without
+rebuilding the estate. `internal/mock/alert_incidents_test.go` proves bounded
+resource results and defensive-copy isolation, while
+`internal/api/alerting/alerts_test.go` proves that mock transport does not need
+the production incident store.

@@ -1,32 +1,43 @@
 {
   "version": 1,
-  "base_sha": "4b9abd4eca5a1399a2386814d98eeadded198e45",
-  "verified_at": "2026-08-27T20:10:44Z",
+  "base_sha": "b8d3a768bd216b29f472c1c6cf704493a290c675",
+  "verified_at": "2026-08-27T21:47:50Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx": "50839ded7dc62cbc3a9fb11fc5fc575acd1997ec9a4b0d7331fba22f0afb0ab4",
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "241e5f93f444b3838b80c05f6b4f78c4788931c760d01dc63f54ee5d4ee5270a",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "26faeb83e422b1d928385ce836e86a701ce544aa936b8de5bb38caee845bcb4d"
+    "frontend-modern/src/i18n/messages.de.ts": "55202c2f8518f2400369222f2b46ad71d4d4cf5db7dc553972f42175436d97ea",
+    "frontend-modern/src/i18n/messages.es.ts": "206edbdaaba5b8a25a2947fc2ead16a9e3a8246f0a74c7d9245ec61cad41cddb",
+    "frontend-modern/src/i18n/messages.ts": "5fab4be38db1741dd4c59268f022978662b631f4c67a1cfbe030f9c472dd51e4",
+    "frontend-modern/src/pages/Alerts.tsx": "eba29751e432ca74f7408890b2d5724905fcad9b6f32d3545b28aea218081f54",
+    "frontend-modern/src/stores/websocket-global.ts": "f34a455d0f73a73a074e2c226a933bf6008811e840accdcb07983f3bc2966246",
+    "frontend-modern/src/stores/websocket.ts": "b7734ce09fa0f8b113d84ab0b9501026a9be1b6dddf293cba55d25ae74d0f670",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "6b41224b13b4ff8bb5bd9979f89278e54f8eda7459c4317543a7cd9dc04c8329"
   },
-  "routes": ["/proxmox/mail", "/standalone/machines", "/docker/overview", "/actions"],
+  "routes": ["/alerts/overview"],
   "viewports": [
-    { "width": 1920, "height": 800 },
+    { "width": 1280, "height": 720 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "mail-gateway-eu expanded with inbound disposition statistics visible",
-    "Apollo-114 and auth-service-01 management drawers inspected for Discovery and action-audit availability",
-    "Actions open and history views inspected for seeded action records"
+    "live updates reconnecting with 51 active alerts recovered through the canonical REST projection",
+    "active-alert REST recovery unavailable with no false all-clear and an explicit Retry action",
+    "successful Retry restoring all 51 active alerts without a page reload",
+    "expanded active-alert incident timeline with fired event filters and incident note composer",
+    "pending and unavailable alert-truth panels remain fluid at the narrow layout contract"
   ],
   "interactions": [
-    "expanded mail-gateway-eu and confirmed Greylist, RBL, and average-process values remain adjacent to their labels on desktop",
-    "confirmed the three inbound statistic rows span the mobile card cleanly at 390px without overlap",
-    "repeated the PMG desktop check after the mobile span correction",
-    "inspected machine and Docker host drawers plus Actions history; the demo does not seed resource-level Discovery facts or action-audit drawer rows, so those responsive states are covered by rendered component tests"
+    "reloaded Alerts Overview while WebSocket upgrades were rejected and confirmed REST recovery rendered the real active-alert count",
+    "forced only GET /api/alerts/active to return 503 and confirmed the page showed unavailable truth, Retry, and no No active alerts copy",
+    "restored the active-alert endpoint, selected Retry, and confirmed the canonical overview returned with 51 alerts",
+    "expanded the first active alert Timeline and confirmed its incident opened with an alert-triggered event and note editor",
+    "reviewed the recovery panel against the existing 390px responsive Alerts layout contract and confirmed its fluid container and localized copy introduce no fixed-width surface"
   ]
 }

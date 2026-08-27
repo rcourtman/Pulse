@@ -73,6 +73,14 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.overview.empty.title': 'No hay alertas activas',
   'alerts.overview.filteredEmpty.all': 'No hay alertas activas',
   'alerts.overview.filteredEmpty.unacknowledged': 'No hay alertas sin reconocer',
+  'alerts.overview.hydration.pending.description':
+    'Pulse esta confirmando el estado actual de los incidentes antes de indicar que todo esta bien.',
+  'alerts.overview.hydration.pending.title': 'Comprobando alertas activas',
+  'alerts.overview.hydration.retry': 'Reintentar',
+  'alerts.overview.hydration.unavailable.description':
+    'Pulse no pudo confirmar el estado actual de los incidentes. Esta pagina no indicara que todo esta bien hasta que los datos de alertas esten disponibles.',
+  'alerts.overview.hydration.unavailable.title':
+    'El estado de las alertas activas no esta disponible temporalmente',
   'alerts.overview.nodePrefix': 'en {node}',
   'alerts.overview.notification.acknowledged': 'Alerta reconocida',
   'alerts.overview.notification.acknowledgeFailed': 'No se pudo reconocer la alerta',

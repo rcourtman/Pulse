@@ -1,6 +1,8 @@
 // Package eventlog is the append-only alert event log: every alert lifecycle
-// transition and notification decision — including suppressions, with the
-// mechanism that held them — is recorded as one immutable event. It exists so
+// transition and distinct notification-decision episode — including
+// suppressions, with the mechanism that held them — is recorded as one
+// immutable event. Re-evaluating an unchanged suppression or deferral does not
+// create another episode. It exists so
 // "why didn't I get notified?" is answerable from durable data instead of
 // being reconstructed from logs (docs/ALERT_ENGINE_EVOLUTION.md, Phase 0).
 //
@@ -112,6 +114,8 @@ type Store struct {
 	failureMu sync.RWMutex
 	lastError error
 	retention time.Duration
+	episodeMu sync.Mutex
+	episodes  map[string]string
 }
 
 func sqliteDSN(path string) string {
@@ -171,6 +175,7 @@ func openDSN(dbPath, dsn string) (*Store, error) {
 		events:    make(chan Event, appendBufferSize),
 		stop:      make(chan struct{}),
 		retention: defaultRetention,
+		episodes:  make(map[string]string),
 	}
 	if err := s.initSchema(); err != nil {
 		db.Close()
@@ -258,6 +263,24 @@ func (s *Store) Append(event Event) {
 	if event.OccurredAt.IsZero() {
 		event.OccurredAt = time.Now()
 	}
+	if event.AlertID != "" && coalescesUnchangedDeliveryEpisode(event.Type) {
+		signature := deliveryEpisodeSignature(event)
+		s.episodeMu.Lock()
+		if s.episodes[event.AlertID] == signature {
+			s.episodeMu.Unlock()
+			return
+		}
+		select {
+		case s.events <- event:
+			s.episodes[event.AlertID] = signature
+			s.appended.Add(1)
+		default:
+			s.dropped.Add(1)
+		}
+		s.episodeMu.Unlock()
+		return
+	}
+	s.clearDeliveryEpisode(event.AlertID)
 	select {
 	case s.events <- event:
 		s.appended.Add(1)
@@ -276,6 +299,7 @@ func (s *Store) AppendDurable(event Event) error {
 	if event.OccurredAt.IsZero() {
 		event.OccurredAt = time.Now()
 	}
+	s.clearDeliveryEpisode(event.AlertID)
 	if err := s.insertBatch([]Event{event}); err != nil {
 		s.recordWriteFailure(err)
 		return err
@@ -327,6 +351,7 @@ func (s *Store) writeLoop() {
 				}
 			}
 			if err := s.insertBatch(batch); err != nil {
+				s.forgetFailedDeliveryEpisodes(batch)
 				s.recordWriteFailure(err)
 				log.Error().Err(err).Int("events", len(batch)).Msg("alert event log write failed")
 				continue
@@ -340,6 +365,7 @@ func (s *Store) writeLoop() {
 				select {
 				case event := <-s.events:
 					if err := s.insertBatch([]Event{event}); err != nil {
+						s.forgetFailedDeliveryEpisodes([]Event{event})
 						s.recordWriteFailure(err)
 						log.Error().Err(err).Msg("alert event log final drain write failed")
 						continue
@@ -391,6 +417,34 @@ func (s *Store) insertBatch(batch []Event) error {
 		return err
 	}
 	defer stmt.Close()
+	decisionStmt, err := tx.Prepare(`
+		INSERT INTO alert_events
+			(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		WHERE NOT EXISTS (
+			SELECT 1 FROM alert_events AS latest
+			WHERE latest.id = (
+				SELECT candidate.id FROM alert_events AS candidate
+				WHERE candidate.alert_id = ?
+				ORDER BY candidate.occurred_at DESC, candidate.id DESC
+				LIMIT 1
+			)
+			AND latest.event_type = ?
+			AND latest.resource_id = ?
+			AND latest.resource_name = ?
+			AND latest.alert_type = ?
+			AND latest.level = ?
+			AND latest.reason = ?
+			AND latest.message = ?
+			AND latest.details = ?
+			AND latest.snapshot = ?
+		)
+	`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	defer decisionStmt.Close()
 	var importStmt *sql.Stmt
 	for _, event := range batch {
 		if event.Type != TypeHistoryImported {
@@ -443,6 +497,19 @@ func (s *Store) insertBatch(batch []Event) error {
 				occurredAt,
 				snapshot,
 			)...)
+		} else if event.AlertID != "" && coalescesUnchangedDeliveryEpisode(event.Type) {
+			_, insertErr = decisionStmt.Exec(append(args,
+				event.AlertID,
+				event.Type,
+				event.ResourceID,
+				event.ResourceName,
+				event.AlertType,
+				event.Level,
+				event.Reason,
+				event.Message,
+				details,
+				snapshot,
+			)...)
 		} else {
 			_, insertErr = stmt.Exec(args...)
 		}
@@ -456,6 +523,67 @@ func (s *Store) insertBatch(batch []Event) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func coalescesUnchangedDeliveryEpisode(eventType string) bool {
+	return eventType == TypeNotificationSuppressed || eventType == TypeNotificationDeferred
+}
+
+type deliveryEpisodeIdentity struct {
+	Type         string            `json:"type"`
+	ResourceID   string            `json:"resourceId"`
+	ResourceName string            `json:"resourceName"`
+	AlertType    string            `json:"alertType"`
+	Level        string            `json:"level"`
+	Reason       string            `json:"reason"`
+	Message      string            `json:"message"`
+	Details      map[string]string `json:"details"`
+	Snapshot     string            `json:"snapshot"`
+}
+
+func deliveryEpisodeSignature(event Event) string {
+	details := event.Details
+	if len(details) == 0 {
+		details = nil
+	}
+	encoded, _ := json.Marshal(deliveryEpisodeIdentity{
+		Type:         event.Type,
+		ResourceID:   event.ResourceID,
+		ResourceName: event.ResourceName,
+		AlertType:    event.AlertType,
+		Level:        event.Level,
+		Reason:       event.Reason,
+		Message:      event.Message,
+		Details:      details,
+		Snapshot:     string(event.Snapshot),
+	})
+	return string(encoded)
+}
+
+func (s *Store) clearDeliveryEpisode(alertID string) {
+	if s == nil || alertID == "" {
+		return
+	}
+	s.episodeMu.Lock()
+	delete(s.episodes, alertID)
+	s.episodeMu.Unlock()
+}
+
+func (s *Store) forgetFailedDeliveryEpisodes(events []Event) {
+	if s == nil {
+		return
+	}
+	s.episodeMu.Lock()
+	defer s.episodeMu.Unlock()
+	for _, event := range events {
+		if !coalescesUnchangedDeliveryEpisode(event.Type) {
+			continue
+		}
+		signature := deliveryEpisodeSignature(event)
+		if s.episodes[event.AlertID] == signature {
+			delete(s.episodes, event.AlertID)
+		}
+	}
 }
 
 func (s *Store) pruneOld() {
@@ -492,7 +620,47 @@ func (s *Store) Flush() error {
 	return nil
 }
 
-// Query returns matching events, newest first.
+// deliveryEpisodeQuerySource projects legacy poll-frequency duplicates as the
+// single decision episode they represent. It compares each diagnostic hold to
+// the immediately preceding event for that alert, including events outside the
+// caller's filter, so a lifecycle or dispatch transition always opens a new
+// episode. New writes are already coalesced in insertBatch; this read projection
+// keeps upgraded stores immediately useful without rewriting immutable rows.
+const deliveryEpisodeQuerySource = `(
+	SELECT current.*
+	FROM alert_events AS current
+	WHERE NOT (
+		current.alert_id <> ''
+		AND current.event_type IN ('notification_suppressed', 'notification_deferred')
+		AND EXISTS (
+			SELECT 1
+			FROM alert_events AS previous
+			WHERE previous.id = (
+				SELECT candidate.id
+				FROM alert_events AS candidate
+				WHERE candidate.alert_id = current.alert_id
+					AND (
+						candidate.occurred_at < current.occurred_at
+						OR (candidate.occurred_at = current.occurred_at AND candidate.id < current.id)
+					)
+				ORDER BY candidate.occurred_at DESC, candidate.id DESC
+				LIMIT 1
+			)
+			AND previous.event_type = current.event_type
+			AND previous.resource_id = current.resource_id
+			AND previous.resource_name = current.resource_name
+			AND previous.alert_type = current.alert_type
+			AND previous.level = current.level
+			AND previous.reason = current.reason
+			AND previous.message = current.message
+			AND previous.details = current.details
+			AND previous.snapshot = current.snapshot
+		)
+	)
+) AS alert_events`
+
+// Query returns matching events, newest first. Repeated unchanged suppression
+// and deferral rows written by earlier versions are projected as one episode.
 func (s *Store) Query(filter Filter) ([]Event, error) {
 	if s == nil {
 		return nil, nil
@@ -508,7 +676,7 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		limit = maxQueryLimit
 	}
 
-	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events"
+	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM " + deliveryEpisodeQuerySource
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}

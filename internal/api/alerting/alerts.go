@@ -793,12 +793,6 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		return
 	}
 
-	store := h.getMonitor(r.Context()).GetIncidentStore()
-	if store == nil {
-		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	query := r.URL.Query()
 	alertID := strings.TrimSpace(query.Get("alertIdentifier"))
 	resourceID := strings.TrimSpace(query.Get("resource_id"))
@@ -827,12 +821,29 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			}
 			startedAt = parsed
 		}
+		if mockIncident := mock.GetMockAlertIncidentTimeline(alertID, startedAt); mockIncident != nil {
+			if err := utils.WriteJSONResponse(w, exportIncident(mockIncident)); err != nil {
+				log.Error().Err(err).Msg("Failed to write mock incident timeline response")
+			}
+			return
+		}
+
+		store := h.getMonitor(r.Context()).GetIncidentStore()
+		if store == nil {
+			http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
+			return
+		}
 
 		var incident *memory.Incident
 		if !startedAt.IsZero() {
 			incident = store.GetTimelineByAlertAt(alertID, startedAt)
 		} else {
 			incident = store.GetTimelineByAlertIdentifier(alertID)
+		}
+		if !startedAt.IsZero() && (incident == nil || len(incident.Events) == 0) {
+			if alert, resolvedAt := findAlertOccurrenceForTimeline(h.getMonitor(r.Context()).GetAlertManager(), alertID, startedAt); alert != nil {
+				incident = store.EnsureAlertOccurrence(alert, resolvedAt)
+			}
 		}
 		if err := utils.WriteJSONResponse(w, exportIncident(incident)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident timeline response")
@@ -845,6 +856,18 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			http.Error(w, "Invalid resource ID", http.StatusBadRequest)
 			return
 		}
+		if mock.IsMockEnabled() {
+			incidents := mock.GetMockAlertIncidentsForResource(resourceID, limit)
+			if err := utils.WriteJSONResponse(w, exportIncidents(incidents)); err != nil {
+				log.Error().Err(err).Msg("Failed to write mock incident list response")
+			}
+			return
+		}
+		store := h.getMonitor(r.Context()).GetIncidentStore()
+		if store == nil {
+			http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		incidents := store.ListIncidentsByResource(resourceID, limit)
 		if err := utils.WriteJSONResponse(w, exportIncidents(incidents)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident list response")
@@ -855,16 +878,55 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 	http.Error(w, "Missing alertIdentifier or resource_id", http.StatusBadRequest)
 }
 
+func findAlertOccurrenceForTimeline(manager AlertManager, alertID string, startedAt time.Time) (*alerts.Alert, *time.Time) {
+	if manager == nil || strings.TrimSpace(alertID) == "" {
+		return nil, nil
+	}
+
+	for _, active := range manager.GetActiveAlerts() {
+		if alertOccurrenceMatches(&active, alertID, startedAt) {
+			return active.Clone(), nil
+		}
+	}
+
+	for _, historical := range manager.GetAlertHistory(0) {
+		if !alertOccurrenceMatches(&historical, alertID, startedAt) {
+			continue
+		}
+		resolvedAt := historical.LastSeen
+		if historical.OperationalRecord != nil && historical.OperationalRecord.ResolvedAt != nil && !historical.OperationalRecord.ResolvedAt.IsZero() {
+			resolvedAt = *historical.OperationalRecord.ResolvedAt
+		}
+		if resolvedAt.IsZero() {
+			return historical.Clone(), nil
+		}
+		if !historical.StartTime.IsZero() && resolvedAt.Before(historical.StartTime) {
+			resolvedAt = historical.StartTime
+		}
+		return historical.Clone(), &resolvedAt
+	}
+
+	return nil, nil
+}
+
+func alertOccurrenceMatches(alert *alerts.Alert, alertID string, startedAt time.Time) bool {
+	if alert == nil || strings.TrimSpace(alert.ID) != strings.TrimSpace(alertID) {
+		return false
+	}
+	if startedAt.IsZero() || alert.StartTime.IsZero() {
+		return true
+	}
+	delta := alert.StartTime.Sub(startedAt)
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta <= time.Second
+}
+
 // SaveAlertIncidentNote stores a user note in the incident timeline.
 func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	store := h.getMonitor(r.Context()).GetIncidentStore()
-	if store == nil {
-		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -897,6 +959,18 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	}
 	if req.Note == "" {
 		http.Error(w, "note is required", http.StatusBadRequest)
+		return
+	}
+	if mock.AddMockAlertIncidentNote(alertIdentifier, req.IncidentID, req.Note, req.User) {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{"success": true}); err != nil {
+			log.Error().Err(err).Msg("Failed to write mock incident note response")
+		}
+		return
+	}
+
+	store := h.getMonitor(r.Context()).GetIncidentStore()
+	if store == nil {
+		http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 		return
 	}
 

@@ -3,6 +3,7 @@ package mock
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -10,6 +11,10 @@ import (
 
 // buildAlertHistory derives historical alert data from the canonical fixture graph.
 func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models.Container) []models.Alert {
+	return buildAlertHistoryAt(nodes, vms, containers, time.Now())
+}
+
+func buildAlertHistoryAt(nodes []models.Node, vms []models.VM, containers []models.Container, now time.Time) []models.Alert {
 	var history []models.Alert
 
 	// Alert types and messages
@@ -65,8 +70,9 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 		},
 	}
 
-	// Generate alerts for the past 90 days with more consistent distribution
-	now := time.Now()
+	// Generate alerts for the past 90 days with more consistent distribution.
+	// The current day is bounded by now; a history fixture must never describe
+	// an incident that has not happened yet.
 	for days := 90; days >= 0; days-- {
 		// Generate 2-15 alerts per day for more realistic history
 		numAlerts := rand.Intn(14) + 2
@@ -106,16 +112,7 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 				}
 			}
 
-			// Random time during that day
-			hours := rand.Intn(24)
-			minutes := rand.Intn(60)
-			seconds := rand.Intn(60)
-
-			startTime := now.AddDate(0, 0, -days).
-				Truncate(24 * time.Hour).
-				Add(time.Duration(hours) * time.Hour).
-				Add(time.Duration(minutes) * time.Minute).
-				Add(time.Duration(seconds) * time.Second)
+			startTime := randomAlertHistoryTime(now, days)
 
 			// Alert duration (resolved after 1 minute to 4 hours) - for display purposes
 
@@ -153,50 +150,27 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 		}
 	}
 
-	// Add some recent unresolved alerts (last 2 hours)
-	for i := 0; i < 3; i++ {
-		alertType := alertTypes[rand.Intn(len(alertTypes))]
-
-		var resourceName, resourceID, node string
-		if len(nodes) > 0 {
-			selectedNode := nodes[rand.Intn(len(nodes))]
-			resourceName = selectedNode.Name
-			resourceID = selectedNode.ID
-			node = selectedNode.Name
-		}
-
-		startTime := now.Add(-time.Duration(rand.Intn(120)) * time.Minute)
-
-		msg := alertType.messages[rand.Intn(len(alertType.messages))]
-		if alertType.alertType == "threshold" {
-			value := rand.Intn(30) + 70
-			msg = fmt.Sprintf(msg, value)
-		}
-
-		alert := models.Alert{
-			ID:           fmt.Sprintf("active-%d-%d", i, rand.Intn(10000)),
-			Type:         alertType.alertType,
-			Level:        alertType.level,
-			ResourceID:   resourceID,
-			ResourceName: resourceName,
-			Node:         node,
-			Message:      msg,
-			StartTime:    startTime,
-			Acknowledged: false,
-		}
-		if resourceName != "" {
-			alert.Metadata = map[string]interface{}{"resourceType": "node"}
-		}
-
-		if alertType.alertType == "threshold" {
-			value := float64(rand.Intn(30) + 70)
-			threshold := float64(rand.Intn(20) + 60)
-			alert.Value = value
-			alert.Threshold = threshold
-		}
-
-		history = append(history, alert)
-	}
+	// The live history endpoint is newest-first. Active alerts are supplied by
+	// the live alert snapshot and merged by the UI, so this fixture contains
+	// only closed occurrences; inventing unrelated open rows makes their
+	// history status contradict the active-alert source of truth.
+	sort.SliceStable(history, func(i, j int) bool {
+		return history[i].StartTime.After(history[j].StartTime)
+	})
 
 	return history
+}
+
+func randomAlertHistoryTime(now time.Time, daysAgo int) time.Time {
+	day := now.AddDate(0, 0, -daysAgo)
+	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+	latest := dayStart.AddDate(0, 0, 1).Add(-time.Second)
+	if daysAgo == 0 {
+		latest = now.Truncate(time.Second)
+	}
+	if !latest.After(dayStart) {
+		return dayStart
+	}
+	spanSeconds := int64(latest.Sub(dayStart) / time.Second)
+	return dayStart.Add(time.Duration(rand.Int63n(spanSeconds+1)) * time.Second)
 }

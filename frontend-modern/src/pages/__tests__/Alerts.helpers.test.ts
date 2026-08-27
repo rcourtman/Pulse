@@ -850,6 +850,8 @@ describe('default schedule helpers', () => {
     expect(createDefaultEscalation()).toEqual({
       enabled: false,
       levels: [],
+      repeatCritical: false,
+      repeatEvery: 30,
     });
   });
 });

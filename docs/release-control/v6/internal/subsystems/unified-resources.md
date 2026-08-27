@@ -1363,6 +1363,12 @@ Browser WebSocket liveness tracking is part of that same store boundary:
 valid inbound server messages, including heartbeat `ping`/`pong` traffic,
 must refresh the browser-side activity timestamp so quiet periods between
 resource snapshots do not cause avoidable reconnect churn.
+The global store's active-alert hydration signal is orthogonal to unified
+resource readiness: cold alert recovery may call only `/api/alerts/active` and
+must not trigger, clear, or reinterpret the canonical resource snapshot. The
+JSDOM no-op owner initializes that alert-only signal as ready so unified-resource
+consumer tests remain transport-free; production resource hydration and its
+connection-scoped delta lineage continue to follow the rules above unchanged.
 That shared store/adapter/hook path must also preserve canonical row shape
 across transport boundaries: thinner realtime `state.resources` payloads
 must merge into the existing canonical resource snapshot instead of

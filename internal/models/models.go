@@ -102,6 +102,7 @@ type Alert struct {
 	Value           float64    `json:"value"`
 	Threshold       float64    `json:"threshold"`
 	StartTime       time.Time  `json:"startTime"`
+	LastSeen        *time.Time `json:"lastSeen,omitempty"`
 	Acknowledged    bool       `json:"acknowledged"`
 	AckTime         *time.Time `json:"ackTime,omitempty"`
 	AckUser         string     `json:"ackUser,omitempty"`

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,6 +12,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type blockingTokenReadFileSystem struct {
+	FileSystem
+	target      string
+	readStarted chan struct{}
+	releaseRead chan struct{}
+	once        sync.Once
+}
+
+func (fs *blockingTokenReadFileSystem) ReadFile(name string) ([]byte, error) {
+	data, err := fs.FileSystem.ReadFile(name)
+	if name == fs.target {
+		fs.once.Do(func() { close(fs.readStarted) })
+		<-fs.releaseRead
+	}
+	return data, err
+}
 
 func TestNewConfigWatcher_DirectoryPriority(t *testing.T) {
 	tempDir := t.TempDir()
@@ -241,6 +259,101 @@ func TestConfigWatcher_ReloadAPITokens(t *testing.T) {
 
 	// Wait for callback
 	require.Eventually(t, func() bool { return callbackCalled.Load() }, 1*time.Second, 10*time.Millisecond)
+}
+
+func TestConfigWatcher_ReloadAPITokensDoesNotOverwriteConcurrentMutation(t *testing.T) {
+	oldTokens := []APITokenRecord{{
+		ID:        "token-1",
+		Name:      "Old name",
+		Hash:      "hash-1",
+		Scopes:    []string{ScopeWildcard},
+		OrgID:     "default",
+		CreatedAt: time.Now().UTC(),
+	}}
+
+	for _, tt := range []struct {
+		name      string
+		newTokens []APITokenRecord
+	}{
+		{
+			name: "rename",
+			newTokens: []APITokenRecord{{
+				ID:        "token-1",
+				Name:      "Renamed token",
+				Hash:      "hash-1",
+				Scopes:    []string{ScopeWildcard},
+				OrgID:     "default",
+				CreatedAt: oldTokens[0].CreatedAt,
+			}},
+		},
+		{name: "revoke", newTokens: []APITokenRecord{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			watcherPersistence := NewConfigPersistence(tempDir)
+			require.NoError(t, watcherPersistence.SaveAPITokens(oldTokens))
+			writerPersistence := NewConfigPersistence(tempDir)
+			cfg := &Config{APITokens: append([]APITokenRecord(nil), oldTokens...)}
+			readFS := &blockingTokenReadFileSystem{
+				FileSystem:  watcherPersistence.fs,
+				target:      watcherPersistence.apiTokensFile,
+				readStarted: make(chan struct{}),
+				releaseRead: make(chan struct{}),
+			}
+			watcherPersistence.fs = readFS
+			cw := &ConfigWatcher{
+				config:        cfg,
+				apiTokensPath: watcherPersistence.apiTokensFile,
+				persistence:   watcherPersistence,
+				stopChan:      make(chan struct{}),
+			}
+
+			reloadDone := make(chan struct{})
+			go func() {
+				cw.reloadAPITokens()
+				close(reloadDone)
+			}()
+			<-readFS.readStarted
+
+			writerLocked := make(chan struct{})
+			writerDone := make(chan error, 1)
+			go func() {
+				Mu.Lock()
+				close(writerLocked)
+				cfg.APITokens = append([]APITokenRecord(nil), tt.newTokens...)
+				err := writerPersistence.SaveAPITokens(cfg.APITokens)
+				Mu.Unlock()
+				writerDone <- err
+			}()
+
+			// On the regressed implementation the writer acquires Mu while the watcher
+			// is holding an old disk snapshot. On the fixed implementation it remains
+			// queued until that snapshot has been applied, so its newer mutation wins.
+			select {
+			case <-writerLocked:
+			case <-time.After(100 * time.Millisecond):
+			}
+			close(readFS.releaseRead)
+
+			require.NoError(t, <-writerDone)
+			<-reloadDone
+
+			Mu.RLock()
+			runtimeTokens := append([]APITokenRecord(nil), cfg.APITokens...)
+			Mu.RUnlock()
+			require.Len(t, runtimeTokens, len(tt.newTokens))
+			if len(tt.newTokens) > 0 {
+				assert.Equal(t, tt.newTokens, runtimeTokens)
+			}
+
+			persisted, err := writerPersistence.LoadAPITokens()
+			require.NoError(t, err)
+			require.Len(t, persisted, len(tt.newTokens))
+			if len(tt.newTokens) > 0 {
+				assert.Equal(t, tt.newTokens, persisted)
+			}
+		})
+	}
 }
 
 func TestConfigWatcher_CalculateFileHash_Error(t *testing.T) {

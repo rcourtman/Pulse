@@ -4026,6 +4026,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 match["verification_requirement"]["exact_files"],
                 [
                     "internal/mock/action_fixtures_test.go",
+                    "internal/mock/alert_incidents_test.go",
                     "internal/mock/canonical_api_guardrails_test.go",
                     "internal/mock/demo_scenarios_test.go",
                     "internal/mock/generator_test.go",
@@ -4230,6 +4231,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "internal/monitoring/metric_window_provider_test.go",
                 "internal/monitoring/metrics_history_concurrency_test.go",
                 "internal/monitoring/metrics_history_memory_regression_test.go",
                 "internal/monitoring/metrics_history_test.go",
