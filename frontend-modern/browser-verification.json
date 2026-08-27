@@ -1,36 +1,38 @@
 {
   "version": 1,
-  "base_sha": "b0c1eca4cdace3cb798a77b2fa0c01a220f76981",
-  "verified_at": "2026-08-27T19:35:10Z",
+  "base_sha": "478a39bdec4b3a20f309490a564bcaca8e423a34",
+  "verified_at": "2026-08-27T20:06:10Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx"
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx",
+    "frontend-modern/src/features/alerts/thresholds/types.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts",
+    "frontend-modern/src/types/alerts.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "2d991718c178866ba5bd7d1b89e7a1a9bec6fcd30133bc2fd549aa2fd3ccf4e5",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "ac68e2e7f5d954ca5bd23b44f347817ce9a39414ab493d22ad52340ceb3296e2",
-    "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx": "a8c549b1284befee652c9ecc79c3c449602d1a102f3867acb81f4a5c9f5fd042",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "ab63fba8e1a06cb5951e0d3dc637d92ef371f2b5db5da2dfb80408cd477c0ea5"
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "6e52a34562926185ae32483add8e303b0a8fae5c3d5315f5b87865f960f54929",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "adb7c745b8fdee148edf56beea8f1b7a02f30e6495d6fc6d7e2eff36f228d10c",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "00e8e50cd3892262c9195129b28fc834d4dbc87adb37aeb6f652957869367ad8",
+    "frontend-modern/src/features/alerts/thresholds/types.ts": "d87f4509648798b55c01ac9e701faa2b9a96de7e25bf6453bfc10fbc5176e1f3",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts": "34fff486ecf33457f42cefeb0b04bbd4b3e04dad24faca8bd99bfd86a75e70f7",
+    "frontend-modern/src/types/alerts.ts": "ef4e8322a38e8443393f762ee4ba6c512ffd4ff18b3f32ff5fd64f5d3754585d"
   },
-  "routes": ["/standalone/availability", "/proxmox/backups/date", "/docker/overview"],
+  "routes": ["/alerts/thresholds/proxmox"],
   "viewports": [
-    { "width": 1920, "height": 800 },
+    { "width": 1440, "height": 900 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "Solar inverter web panel expanded with availability facts visible",
-    "backup-vault expanded with Platform details and PBS service facts visible",
-    "auth-service-01 expanded on Manage with Container updates visible"
+    "CPU evaluation window loaded with the global five-minute rule and inherited platform overrides",
+    "mobile platform overrides collapsed and expanded",
+    "global rule changed to one minute with inherited labels updating immediately"
   ],
   "interactions": [
-    "expanded the Solar inverter web panel and confirmed desktop availability values use an adjacent fixed label track",
-    "confirmed availability facts retain condensed right-aligned values and clean wrapping at 390px",
-    "expanded backup-vault, opened Platform details, and revealed the PBS service section",
-    "confirmed PBS service facts use adjacent desktop values and retain compact mobile alignment",
-    "expanded auth-service-01, selected Manage, and confirmed Container updates facts use adjacent desktop values",
-    "confirmed Docker management facts retain condensed right alignment at 390px"
+    "confirmed the desktop three-column profile grid is readable without displacing threshold navigation",
+    "confirmed the narrow layout keeps the global rule visible and collapses platform overrides",
+    "expanded mobile platform overrides and confirmed every selector remains accessible",
+    "changed the global CPU window to one minute and confirmed inherited labels and unsaved-change state update"
   ]
 }

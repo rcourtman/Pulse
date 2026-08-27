@@ -196,6 +196,13 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		return
 	}
 
+	windowed := m.evaluateMetricWindow(resourceID, resourceType, metricType, value, m.policyNow())
+	if !windowed.Ready {
+		return
+	}
+	value = windowed.Value
+	opts = metricWindowOptions(opts, metricType, resourceType, windowed)
+
 	m.mu.Lock()
 	migratedAlertIdentity := false
 	defer func() {

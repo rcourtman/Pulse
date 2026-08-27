@@ -153,6 +153,9 @@ func defaultAlertConfig() AlertConfig {
 			"vmware-datastore": 5,
 			"vmware-network":   5,
 		},
+		MetricEvaluationWindows: map[string]map[string]int{
+			"all": {"cpu": 5 * 60},
+		},
 		Overrides: make(map[string]ThresholdConfig),
 		Schedule: ScheduleConfig{
 			QuietHours: QuietHours{

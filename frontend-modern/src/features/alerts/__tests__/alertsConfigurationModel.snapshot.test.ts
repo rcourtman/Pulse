@@ -83,11 +83,12 @@ describe('readAlertsConfigurationSnapshot — absent optional sections', () => {
     expect(snapshot.pmgThresholds.quarantineGrowthCritMin).toBe(500);
   });
 
-  it('keeps default timeThresholds / metricTimeThresholds', () => {
+  it('keeps default delays and the five-minute CPU evaluation window', () => {
     expect(snapshot.timeThresholds.guest).toBe(5);
     expect(snapshot.timeThresholds.pod).toBe(5);
     expect(snapshot.timeThresholds['vmware-network']).toBe(5);
     expect(snapshot.metricTimeThresholds).toEqual({});
+    expect(snapshot.metricEvaluationWindows).toEqual({ all: { cpu: 300 } });
   });
 
   it('keeps default schedule sections when schedule is absent', () => {
@@ -719,6 +720,20 @@ describe('readAlertsConfigurationSnapshot — metricTimeThresholds', () => {
       }),
     );
     expect(snapshot.metricTimeThresholds).toEqual({ guest: { cpu: 17, memory: 22 } });
+  });
+});
+
+describe('readAlertsConfigurationSnapshot — metricEvaluationWindows', () => {
+  it('normalizes keys and preserves explicit current-value overrides', () => {
+    const snapshot = readAlertsConfigurationSnapshot(
+      cfg({
+        metricEvaluationWindows: {
+          ALL: { CPU: 300 },
+          VM: { CPU: 0 },
+        },
+      }),
+    );
+    expect(snapshot.metricEvaluationWindows).toEqual({ all: { cpu: 300 }, vm: { cpu: 0 } });
   });
 });
 

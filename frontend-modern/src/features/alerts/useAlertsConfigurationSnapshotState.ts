@@ -122,6 +122,9 @@ export function useAlertsConfigurationSnapshotState(
   const [metricTimeThresholds, setMetricTimeThresholds] = createSignal<
     Record<string, Record<string, number>>
   >(defaultSnapshot.metricTimeThresholds);
+  const [metricEvaluationWindows, setMetricEvaluationWindows] = createSignal<
+    Record<string, Record<string, number>>
+  >(defaultSnapshot.metricEvaluationWindows);
   const [snapshotDefaults, setSnapshotDefaults] = createSignal<SnapshotAlertConfig>(
     defaultSnapshot.snapshotDefaults,
   );
@@ -211,6 +214,7 @@ export function useAlertsConfigurationSnapshotState(
     });
     setTimeThresholds({ ...snapshot.timeThresholds });
     setMetricTimeThresholds(structuredClone(snapshot.metricTimeThresholds));
+    setMetricEvaluationWindows(structuredClone(snapshot.metricEvaluationWindows));
     setSnapshotDefaults({ ...snapshot.snapshotDefaults });
     setPMGThresholds({ ...snapshot.pmgThresholds });
     setDisableAllNodes(snapshot.disableAllNodes);
@@ -279,6 +283,7 @@ export function useAlertsConfigurationSnapshotState(
     },
     timeThresholds: { ...timeThresholds() },
     metricTimeThresholds: structuredClone(metricTimeThresholds()),
+    metricEvaluationWindows: structuredClone(metricEvaluationWindows()),
     snapshotDefaults: { ...snapshotDefaults() },
     pmgThresholds: { ...pmgThresholds() },
     disableAllNodes: disableAllNodes(),
@@ -420,6 +425,8 @@ export function useAlertsConfigurationSnapshotState(
     setTimeThresholds,
     metricTimeThresholds,
     setMetricTimeThresholds,
+    metricEvaluationWindows,
+    setMetricEvaluationWindows,
     snapshotDefaults,
     setSnapshotDefaults,
     pmgThresholds,

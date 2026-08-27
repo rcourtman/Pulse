@@ -363,6 +363,7 @@ type AlertConfig struct {
 	HysteresisMargin               float64                        `json:"hysteresisMargin"`             // Default margin for legacy thresholds
 	TimeThresholds                 map[string]int                 `json:"timeThresholds"`               // Per-type delays: guest, node, agent, storage, pbs
 	MetricTimeThresholds           map[string]map[string]int      `json:"metricTimeThresholds"`         // Optional per-metric delays keyed by resource type
+	MetricEvaluationWindows        map[string]map[string]int      `json:"metricEvaluationWindows"`      // Rolling-average seconds keyed by resource type and metric; explicit zero uses the current value
 	MaxAlertAgeDays                int                            `json:"maxAlertAgeDays"`              // Maximum age for alerts before auto-cleanup (0 = disabled)
 	MaxAcknowledgedAgeDays         int                            `json:"maxAcknowledgedAgeDays"`       // Maximum age for acknowledged alerts (0 = disabled)
 	AutoAcknowledgeAfterHours      int                            `json:"autoAcknowledgeAfterHours"`    // Auto-acknowledge alerts after X hours (0 = disabled)
@@ -408,17 +409,18 @@ func NormalizeAlertConfigAliases(config *AlertConfig) {
 		}
 	}
 
-	if len(config.MetricTimeThresholds) == 0 {
-		return
-	}
-
-	for key := range config.MetricTimeThresholds {
-		typeKey := CanonicalAlertResourceType(key)
-		if typeKey == "" || typeKey == "all" {
-			continue
-		}
-		if isUnsupportedLegacyAlertResourceType(typeKey) {
-			delete(config.MetricTimeThresholds, key)
+	for _, keyedMetrics := range []map[string]map[string]int{
+		config.MetricTimeThresholds,
+		config.MetricEvaluationWindows,
+	} {
+		for key := range keyedMetrics {
+			typeKey := CanonicalAlertResourceType(key)
+			if typeKey == "" || typeKey == "all" {
+				continue
+			}
+			if isUnsupportedLegacyAlertResourceType(typeKey) {
+				delete(keyedMetrics, key)
+			}
 		}
 	}
 }

@@ -178,6 +178,7 @@ export interface AlertConfig {
     'vmware-network'?: number;
   };
   metricTimeThresholds?: Record<string, Record<string, number>>;
+  metricEvaluationWindows?: Record<string, Record<string, number>>;
   aggregation?: {
     enabled: boolean;
     timeWindow: number;

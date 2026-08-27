@@ -47,6 +47,8 @@ const (
 	MaxEscalationDelayMinutes             = alertconfig.MaxEscalationDelayMinutes
 	MinEscalationRepeatMinutes            = alertconfig.MinEscalationRepeatMinutes
 	MaxEscalationRepeatMinutes            = alertconfig.MaxEscalationRepeatMinutes
+	DefaultCPUEvaluationWindowSeconds     = alertconfig.DefaultCPUEvaluationWindowSeconds
+	MaxMetricEvaluationWindowSeconds      = alertconfig.MaxMetricEvaluationWindowSeconds
 )
 
 func NewAlertIntentPolicyDocument() AlertIntentPolicyDocument {
@@ -77,6 +79,10 @@ func NormalizeAlertConfigAliases(config *AlertConfig) {
 
 func NormalizeMetricTimeThresholds(input map[string]map[string]int) map[string]map[string]int {
 	return alertconfig.NormalizeMetricTimeThresholds(input)
+}
+
+func NormalizeMetricEvaluationWindows(input map[string]map[string]int) map[string]map[string]int {
+	return alertconfig.NormalizeMetricEvaluationWindows(input)
 }
 
 func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {

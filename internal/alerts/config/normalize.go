@@ -696,6 +696,56 @@ func NormalizeMetricTimeThresholds(input map[string]map[string]int) map[string]m
 	return normalizeMetricTimeThresholds(input)
 }
 
+const (
+	// DefaultCPUEvaluationWindowSeconds smooths short-lived CPU bursts while
+	// remaining responsive enough for operational alerting.
+	DefaultCPUEvaluationWindowSeconds = 5 * 60
+	MaxMetricEvaluationWindowSeconds  = 60 * 60
+)
+
+var supportedWindowedMetrics = map[string]struct{}{
+	"cpu":        {},
+	"diskread":   {},
+	"diskwrite":  {},
+	"networkin":  {},
+	"networkout": {},
+}
+
+// NormalizeMetricEvaluationWindows canonicalizes rolling-window settings.
+// Explicit zero values are retained because zero means evaluate the current
+// observation. An absent global CPU rule is seeded with the safe 5-minute
+// default for both new and migrated configurations.
+func NormalizeMetricEvaluationWindows(input map[string]map[string]int) map[string]map[string]int {
+	normalized := make(map[string]map[string]int)
+	for rawType, metrics := range input {
+		typeKey := CanonicalAlertResourceType(rawType)
+		if typeKey == "" || (typeKey != "all" && isUnsupportedLegacyAlertResourceType(typeKey)) {
+			continue
+		}
+		for rawMetric, window := range metrics {
+			metricKey := strings.ToLower(strings.TrimSpace(rawMetric))
+			if _, supported := supportedWindowedMetrics[metricKey]; !supported || window < 0 {
+				continue
+			}
+			if window > MaxMetricEvaluationWindowSeconds {
+				window = MaxMetricEvaluationWindowSeconds
+			}
+			if _, exists := normalized[typeKey]; !exists {
+				normalized[typeKey] = make(map[string]int)
+			}
+			normalized[typeKey][metricKey] = window
+		}
+	}
+
+	if _, exists := normalized["all"]; !exists {
+		normalized["all"] = make(map[string]int)
+	}
+	if _, exists := normalized["all"]["cpu"]; !exists {
+		normalized["all"]["cpu"] = DefaultCPUEvaluationWindowSeconds
+	}
+	return normalized
+}
+
 // NormalizeDockerIgnoredPrefixes trims, deduplicates, and lowercases comparison keys for ignored Docker containers.
 func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
 	if len(prefixes) == 0 {

@@ -209,6 +209,23 @@ emitting a forecast recovery plus a second capacity alert. The same contract
 applies to Proxmox, Ceph, TrueNAS pools/datasets, and vSphere datastores through
 their existing platform thresholds and disable policy.
 
+Rolling metric evaluation is alert policy over monitoring-owned history, not a
+second incident family. `metricEvaluationWindows` stores seconds by canonical
+resource type and metric, with an explicit zero meaning current-value
+evaluation and platform-specific entries inheriting the `all` rule. CPU seeds a
+five-minute default; only CPU and burst-prone disk/network rate metrics may use
+rolling averages, while memory, capacity, and temperature remain instantaneous
+evidence boundaries. A window requires at least three samples, at least 80%
+temporal coverage, and no gap larger than the bounded cadence allowance. Weak,
+stale, or unavailable history is unknown: it cannot open or recover an
+incident, and an existing incident retains its last trusted value. Ready
+windows use time-weighted averaging so polling jitter cannot bias the result.
+The evaluated value drives trigger, hysteresis, severity, delay, and recovery;
+the current value, sample count, coverage, and window remain alert metadata and
+operator-visible message evidence. Window changes never change the canonical
+`metric-threshold:<metric>` identity, so start time, acknowledgement, history,
+timeline, escalation, and recovery stay one occurrence.
+
 Active-alert restore is opt-out at construction. `NewManagerWithDataDir` accepts
 `ManagerOption` values, and `WithoutPersistedAlertRestore` starts the manager
 with an empty active-alert set instead of reading `active-alerts.json`. Mock
@@ -269,6 +286,7 @@ default construction path still restores.
 46. `internal/alerts/pbs.go`
 47. `internal/alerts/storage.go`
 47a. `internal/alerts/capacity_forecast.go`
+47b. `internal/alerts/windowed_metric.go`
 48. `internal/alerts/node.go`
 49. `internal/alerts/host.go`
 50. `internal/alerts/backup_snapshot.go`

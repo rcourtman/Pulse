@@ -27,6 +27,12 @@ func metricClearThreshold(spec *alertspecs.MetricThresholdSpec, threshold *Hyste
 
 func resourceTypeLabel(resourceType string) string {
 	switch strings.TrimSpace(resourceType) {
+	case "vm":
+		return "VM"
+	case "system-container":
+		return "System container"
+	case "app-container", "oci-container":
+		return "Application container"
 	case "agent-disk":
 		return "Disk"
 	case "agent":
@@ -97,6 +103,12 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	}
 
 	observedAt := m.policyNow()
+	windowed := m.evaluateMetricWindow(spec.ResourceID, resourceType, metricType, value, observedAt)
+	if !windowed.Ready {
+		return
+	}
+	value = windowed.Value
+	opts = metricWindowOptions(opts, metricType, resourceType, windowed)
 
 	m.mu.Lock()
 	migratedAlertIdentity := false

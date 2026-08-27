@@ -866,6 +866,7 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 
 	// Time thresholds
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
+	config.MetricEvaluationWindows = alerts.NormalizeMetricEvaluationWindows(config.MetricEvaluationWindows)
 	if config.TimeThresholds == nil {
 		config.TimeThresholds = make(map[string]int)
 	}

@@ -47,6 +47,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	alertconfig.NormalizeVMwareDefaults(&config)
 	alertconfig.NormalizeGeneralSettings(&config)
 	alertconfig.NormalizeTimeThresholds(&config)
+	config.MetricEvaluationWindows = alertconfig.NormalizeMetricEvaluationWindows(config.MetricEvaluationWindows)
 
 	config.GuestDefaults.PoweredOffSeverity = alertconfig.NormalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
 	config.NodeDefaults.PoweredOffSeverity = alertconfig.NormalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)

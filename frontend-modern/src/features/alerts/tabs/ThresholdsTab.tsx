@@ -1,4 +1,5 @@
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Card } from '@/components/shared/Card';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import {
   AlertIntentPolicyPanel,
@@ -22,12 +23,115 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
     });
   };
 
+  const evaluationProfiles = [
+    { key: 'all', label: 'All resources' },
+    { key: 'vm', label: 'Virtual machines' },
+    { key: 'app-container', label: 'Application containers' },
+    { key: 'node', label: 'Infrastructure nodes' },
+    { key: 'agent', label: 'Pulse agents' },
+    { key: 'k8s-node', label: 'Kubernetes nodes' },
+    { key: 'truenas-system', label: 'TrueNAS systems' },
+    { key: 'vmware-host', label: 'VMware hosts' },
+    { key: 'pbs', label: 'Proxmox Backup Servers' },
+  ] as const;
+  const globalCPUWindow = createMemo(() => props.metricEvaluationWindows?.().all?.cpu ?? 300);
+  const evaluationLabel = (seconds: number) => {
+    if (seconds === 0) return 'Current value';
+    if (seconds < 60) return `${seconds} seconds`;
+    return `${seconds / 60} minute${seconds === 60 ? '' : 's'}`;
+  };
+  const updateCPUWindow = (profile: string, rawValue: string) => {
+    if (!props.setMetricEvaluationWindows) return;
+    props.setMetricEvaluationWindows((previous) => {
+      const next = structuredClone(previous);
+      if (rawValue === 'inherit') {
+        if (next[profile]) {
+          delete next[profile].cpu;
+          if (Object.keys(next[profile]).length === 0) delete next[profile];
+        }
+        return next;
+      }
+      next[profile] = { ...(next[profile] ?? {}), cpu: Number(rawValue) };
+      return next;
+    });
+    props.setHasUnsavedChanges(true);
+  };
+  const evaluationProfileControl = (profile: (typeof evaluationProfiles)[number]) => {
+    const configured = () => props.metricEvaluationWindows?.()[profile.key]?.cpu;
+    return (
+      <label class="block rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+        <span class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+          {profile.label}
+        </span>
+        <select
+          aria-label={`${profile.label} CPU evaluation window`}
+          class="mt-2 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          value={
+            profile.key === 'all'
+              ? String(configured() ?? 300)
+              : configured() === undefined
+                ? 'inherit'
+                : String(configured())
+          }
+          onInput={(event) => updateCPUWindow(profile.key, event.currentTarget.value)}
+        >
+          <Show when={profile.key !== 'all'}>
+            <option value="inherit">Inherit ({evaluationLabel(globalCPUWindow())})</option>
+          </Show>
+          <option value="0">Current value</option>
+          <option value="60">1 minute average</option>
+          <option value="300">5 minute average</option>
+          <option value="900">15 minute average</option>
+        </select>
+      </label>
+    );
+  };
+
   return (
     <div class="space-y-4">
       <AlertIntentPolicyPanel
         resources={props.allResources}
         selectionTarget={intentSelectionTarget()}
       />
+      <Show when={props.metricEvaluationWindows && props.setMetricEvaluationWindows}>
+        <Card padding="md">
+          <div class="space-y-4">
+            <div>
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                CPU evaluation window
+              </h3>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Pulse averages CPU over time before applying trigger and recovery thresholds. This
+                filters harmless bursts without delaying a sustained incident or splitting its
+                timeline.
+              </p>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <For each={evaluationProfiles}>
+                {(profile) => (
+                  <div class={profile.key === 'all' ? 'block' : 'hidden sm:block'}>
+                    {evaluationProfileControl(profile)}
+                  </div>
+                )}
+              </For>
+            </div>
+            <details class="rounded-lg border border-gray-200 p-3 sm:hidden dark:border-gray-700">
+              <summary class="cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-200">
+                Platform overrides
+              </summary>
+              <div class="mt-3 space-y-3">
+                <For each={evaluationProfiles.slice(1)}>
+                  {(profile) => evaluationProfileControl(profile)}
+                </For>
+              </div>
+            </details>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              A rolling rule waits for enough recent, gap-free samples. If history is incomplete,
+              Pulse holds the existing incident state instead of firing or resolving on weak data.
+            </p>
+          </div>
+        </Card>
+      </Show>
       <ThresholdsTable
         onConfigureResourceIntent={configureResourceIntent}
         overrides={props.overrides}

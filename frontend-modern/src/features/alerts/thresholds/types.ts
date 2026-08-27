@@ -260,6 +260,12 @@ export interface ThresholdsTableProps {
       | Record<string, Record<string, number>>
       | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
   ) => void;
+  metricEvaluationWindows?: () => Record<string, Record<string, number>>;
+  setMetricEvaluationWindows?: (
+    value:
+      | Record<string, Record<string, number>>
+      | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
+  ) => void;
   snapshotDefaults: () => SnapshotAlertConfig;
   setSnapshotDefaults: (
     value: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),

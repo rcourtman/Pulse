@@ -159,6 +159,8 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           timeThresholds={state.timeThresholds}
           metricTimeThresholds={state.metricTimeThresholds}
           setMetricTimeThresholds={state.setMetricTimeThresholds}
+          metricEvaluationWindows={state.metricEvaluationWindows}
+          setMetricEvaluationWindows={state.setMetricEvaluationWindows}
           backupDefaults={state.backupDefaults}
           setBackupDefaults={state.setBackupDefaults}
           snapshotDefaults={state.snapshotDefaults}

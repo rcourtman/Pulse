@@ -113,6 +113,7 @@ export interface AlertsConfigurationSnapshot {
     'vmware-network': number;
   };
   metricTimeThresholds: Record<string, Record<string, number>>;
+  metricEvaluationWindows: Record<string, Record<string, number>>;
   snapshotDefaults: SnapshotAlertConfig;
   pmgThresholds: {
     queueTotalWarning: number;
@@ -288,6 +289,7 @@ export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationS
       'vmware-network': DEFAULT_DELAY_SECONDS,
     },
     metricTimeThresholds: {},
+    metricEvaluationWindows: { all: { cpu: 300 } },
     snapshotDefaults: { ...FACTORY_SNAPSHOT_DEFAULTS },
     pmgThresholds: {
       queueTotalWarning: 500,
@@ -542,6 +544,9 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   }
   if (config.metricTimeThresholds) {
     snapshot.metricTimeThresholds = normalizeMetricDelayMap(config.metricTimeThresholds);
+  }
+  if (config.metricEvaluationWindows) {
+    snapshot.metricEvaluationWindows = normalizeMetricDelayMap(config.metricEvaluationWindows);
   }
 
   if (config.backupDefaults) {
@@ -878,6 +883,7 @@ export function buildAlertsConfigurationPayload({
       hysteresisMargin: 5.0,
       timeThresholds: { ...snapshot.timeThresholds },
       metricTimeThresholds: normalizeMetricDelayMap(snapshot.metricTimeThresholds),
+      metricEvaluationWindows: normalizeMetricDelayMap(snapshot.metricEvaluationWindows),
       snapshotDefaults: {
         enabled: snapshot.snapshotDefaults.enabled,
         warningDays: normalizedSnapshotPair.warning,

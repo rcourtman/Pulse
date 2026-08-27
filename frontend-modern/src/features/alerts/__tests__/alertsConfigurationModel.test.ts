@@ -118,6 +118,10 @@ describe('alertsConfigurationModel', () => {
     snapshot.metricTimeThresholds = {
       Guest: { CPU: 17 },
     } as Record<string, Record<string, number>>;
+    snapshot.metricEvaluationWindows = {
+      ALL: { CPU: 300 },
+      VM: { CPU: 0 },
+    } as Record<string, Record<string, number>>;
     snapshot.scheduleCooldown = {
       enabled: true,
       minutes: 47,
@@ -172,6 +176,10 @@ describe('alertsConfigurationModel', () => {
     expect(result.alertConfig?.dockerIgnoredContainerPrefixes).toEqual(['web']);
     expect(result.alertConfig?.guestTagWhitelist).toEqual(['prod']);
     expect(result.alertConfig?.metricTimeThresholds).toEqual({ guest: { cpu: 17 } });
+    expect(result.alertConfig?.metricEvaluationWindows).toEqual({
+      all: { cpu: 300 },
+      vm: { cpu: 0 },
+    });
     expect(result.alertConfig?.schedule?.cooldown).toBe(47);
     expect(result.alertConfig?.schedule?.initialNotify).toBe('email');
     expect(result.alertConfig?.schedule?.maxAlertsHour).toBe(10);

@@ -507,6 +507,16 @@ and the warning/critical pair reconciliation in the thresholds helpers adjusts
 the untouched field on a conflicting single-field edit. Primitives must not
 absorb those persistence or validation rules into shared form/table chrome
 (#1126).
+
+The alerts-owned threshold surface also owns rolling metric evaluation
+configuration. `ThresholdsTab` presents the understandable policy (current
+value or a named rolling duration) rather than a query language, with one
+global CPU rule and sparse platform overrides that visibly inherit it. The
+configuration snapshot and payload models must round-trip explicit zero and
+resource-specific maps without flattening inheritance. Copy must explain that
+incomplete history holds incident state instead of firing or recovering, and
+the control must remain usable at desktop and narrow viewports through shared
+`Card`, label, and native-select primitives.
 PlatformTableToolbar may accept compact consumer-owned context through its
 shared leading-control rail when the context is actionable for the inventory
 immediately below it. Consumers must use that extension point for local

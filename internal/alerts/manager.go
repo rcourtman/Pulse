@@ -60,6 +60,7 @@ type Manager struct {
 	operatorIntentResolver OperatorIntentContextResolver
 	backupIntentResolver   BackupIntentContextResolver
 	resourceIntentResolver ResourceIntentIdentityResolver
+	metricWindowProvider   MetricWindowProvider
 	// Offline confirmation tracking
 	// core is the authoritative transition state for the canonical
 	// lifecycle (match-spec) family: the deterministic reducer owns

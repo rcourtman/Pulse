@@ -56,6 +56,8 @@ type MetricsHistory struct {
 
 	capacityForecastMu    sync.Mutex
 	capacityForecastCache map[string]storageCapacityForecastCacheEntry
+	metricWindowMu        sync.Mutex
+	metricWindowCache     map[string]metricWindowCacheEntry
 }
 
 // NewMetricsHistory creates a new metrics history tracker
@@ -135,12 +137,15 @@ func cloneGuestMetrics(metrics *GuestMetrics) *GuestMetrics {
 // Reset clears all historical metrics data.
 func (mh *MetricsHistory) Reset() {
 	mh.mu.Lock()
-	defer mh.mu.Unlock()
-
 	mh.guestMetrics = make(map[string]*GuestMetrics)
 	mh.nodeMetrics = make(map[string]*GuestMetrics)
 	mh.storageMetrics = make(map[string]*StorageMetrics)
 	mh.diskMetrics = make(map[string]*DiskMetrics)
+	mh.mu.Unlock()
+
+	mh.metricWindowMu.Lock()
+	mh.metricWindowCache = nil
+	mh.metricWindowMu.Unlock()
 }
 
 // AddGuestMetric adds a metric value for a guest
