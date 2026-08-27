@@ -819,10 +819,16 @@ container inventory table.
 11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
     Each row carries the canonical PBS `Resource` into the shared platform
-    resource-detail row. When coalescence has attached an agent facet, that
-    same drawer must expose host system, hardware, network, disks, thermals,
-    history, and management context without recreating a PBS-local host model
-    or returning the provider-owned resource to the standalone Machines list.
+    resource-detail row. When coalescence has attached an agent facet, or when
+    the product-family projection contains exactly one separate Agent resource
+    with a matching normalized host identity, that same drawer must expose
+    host system, hardware, network, disks, thermals, history, and management
+    context without recreating a PBS-local host model or returning the
+    provider-owned resource to the standalone Machines list. Presentation-only
+    correlation retains the canonical PBS row id and service facet, uses the
+    Agent metrics target and telemetry facets, and fails closed when no Agent
+    matches or more than one candidate matches. It must not alter registry
+    identity or treat input order as correlation evidence.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `performance-and-scalability`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.

@@ -494,6 +494,13 @@ thermal, history, and management context through that shared drawer. Bare-metal
 PBS hosts therefore remain fully inspectable after leaving the standalone
 Machines surface, while storage/recovery does not duplicate agent telemetry or
 invent a competing provider drawer hierarchy.
+The product-family projection may still deliver the PBS service and its Agent
+host as separate resources. In that case the Backup servers table correlates
+only a unique normalized host-identity match for drawer presentation, preserves
+the PBS row identity and datastore/service evidence, and delegates host current
+metrics and stored History to the Agent metrics target. An absent or ambiguous
+Agent match fails closed on the original PBS resource; datastore names, backup
+artifacts, and proximity in the input list are never host-correlation evidence.
 The Proxmox backup view selector follows the same ownership split:
 storage/recovery owns the chronological-versus-coverage view values and backup
 semantics, while the visible segmented selector shell must compose the

@@ -556,6 +556,13 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupServersTableSource).toContain('PlatformResourceDetailTableRow');
     expect(proxmoxBackupServersTableSource).toContain('resource={row.resource}');
     expect(proxmoxBackupServersTableSource).toContain('initialShowHostDetails');
+    expect(proxmoxBackupServersTableSource).toContain('uniquelyCorrelatedAgent');
+    expect(proxmoxBackupServersTableSource).toContain(
+      'return matches.length === 1 ? matches[0] : undefined;',
+    );
+    expect(proxmoxBackupServersTableSource).toContain(
+      'metricsTarget: agent.metricsTarget ?? server.metricsTarget',
+    );
     expect(proxmoxBackupServersTableSource).not.toContain(
       '<span class="font-medium text-base-content">Server:</span>',
     );

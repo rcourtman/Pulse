@@ -166,6 +166,14 @@ focus restoration, and responsive drawer behavior on one primitive. Proxmox
 Backup Server rows follow this rule and request the shared host-details
 disclosure open initially so a merged agent's system, hardware, network, disk,
 and thermal facts remain discoverable from the PBS surface.
+When that surface receives the provider-owned PBS resource and its host Agent
+as separate canonical resources, `ProxmoxBackupServersTable` may assemble a
+presentation-only drawer resource only after one unique normalized host
+identity match. The row retains the PBS id and service facet while current host
+telemetry, host details, and stored History use the Agent facet and Agent
+metrics target. Zero or multiple matches must leave the PBS resource unchanged
+rather than guessing; this presentation correlation must not mutate either
+canonical input or create a second mobile disclosure interaction.
 
 
 Presentation helpers that mirror a server-side classification must name the

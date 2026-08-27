@@ -1,23 +1,11 @@
 {
   "version": 1,
-  "base_sha": "ff27c3881f0c418de856b26175cb2fcd96a962ec",
-  "verified_at": "2026-08-27T10:55:17Z",
+  "base_sha": "118c90d1f0df2ff007a3494e25139f019a38137d",
+  "verified_at": "2026-08-27T11:18:00Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx",
-    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
-    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts",
-    "frontend-modern/src/types/alerts.ts",
-    "frontend-modern/src/types/resource.ts"
-  ],
-  "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx": "7794ba25adfb94f5bf11a718ad774ea717dc7e8b543572ddfb461465c0593515",
-    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "d295586ac8044fda4930ee56a9ea6b1ca2bfb27792ce594f4fb9d5fc0cbf1243",
-    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts": "3cd18ea4cf402a5a5594e63eec7bb98bc0dbad8031c8b610ee9c10f3d2caed98",
-    "frontend-modern/src/types/alerts.ts": "5d57daaa49c83caa5ce40217b9bca1daf17867743d311d472724d6d5210349b1",
-    "frontend-modern/src/types/resource.ts": "b1c07de178e5b8a6725bb555031af8df0abf9a731dcf84e7791c70d95b399053"
-  },
-  "routes": ["/alerts/history"],
+  "changed_paths": [],
+  "content_sha256": {},
+  "routes": ["/proxmox/backups"],
   "viewports": [
     {
       "width": 1440,
@@ -29,15 +17,17 @@
     }
   ],
   "states": [
-    "live development History tab loaded with the seven-day alert-frequency chart and 114 history rows",
-    "desktop chart rendered all five time-axis labels without overlap or horizontal page overflow",
-    "phone chart rendered the start, midpoint, and Now labels without overlap or horizontal page overflow",
-    "phone history cards remained contained and readable at 390px width"
+    "mock-mode Proxmox Backups loaded with standalone PBS service and correlated Agent host resources",
+    "backup-vault expanded into the canonical resource detail row with PBS service identity and Agent metrics target",
+    "History rendered stored utilization, network, disk, and thermal samples instead of Collecting History",
+    "History range changed from 24 hours to 7 days and retained populated charts",
+    "backup-vault collapsed back to the originating summary row"
   ],
   "interactions": [
-    "opened the History tab against the running development backend and inspected the rendered alert-frequency chart",
-    "measured every visible desktop and phone axis-label bounding box and confirmed no adjacent boxes overlapped",
-    "resized from 1440x1000 to 390x844 and confirmed document scroll width continued to match the viewport",
-    "confirmed the browser console contained no errors during the final desktop and phone verification flow"
+    "opened backup-vault from the Backup servers table and selected the shared History tab at 1440x1000",
+    "confirmed the desktop drawer showed populated Agent-backed charts and the document and body scroll widths matched the viewport",
+    "repeated the whole-row touch expansion and History flow at 390x844, selected the 7 day range, and confirmed every chart card remained contained",
+    "collapsed the phone detail through the originating backup-vault row and confirmed focus returned to that row",
+    "confirmed the browser console contained no errors during the final desktop and phone verification flows"
   ]
 }
