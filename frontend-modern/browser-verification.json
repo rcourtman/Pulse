@@ -1,30 +1,33 @@
 {
   "version": 1,
-  "base_sha": "d48e70da152525471c1d1ee3364c92c76b4d06af",
-  "verified_at": "2026-08-27T17:00:26Z",
+  "base_sha": "ce555ee09d7cef30a2d784c18c629272aef9ab22",
+  "verified_at": "2026-08-27T17:11:50Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
-    "frontend-modern/src/components/shared/detailSectionModel.ts"
+    "frontend-modern/src/api/resourceOperatorState.ts",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "438dd4e834e576911bcf06d8849f832bb59e9349ff6476a3b437b356ecdf3d1a",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "5b2592463049e3b1740fa8c63cabb09529a83bd1cd64509c57b473d3b05dc35a",
-    "frontend-modern/src/components/shared/detailSectionModel.ts": "da27583092cad09d50ea03c4308f7841bd2475e8c6539527142da06a78d9722f"
+    "frontend-modern/src/api/resourceOperatorState.ts": "edbbb0253d63fba3f8c893edb4c911948883c88ba1ee61ecdac453853d370de4",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "9b45eb2a826c6db7fb7a47ec3dcc341c1ed47109228d83ed085788e647c69012",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx": "fc2e4d010d80419e9532c49cddd9df954672c2d4a3b5de9d3336fd483562a4ad"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": ["/alerts/overview", "/proxmox/overview"],
   "viewports": [
-    { "width": 1920, "height": 800 },
+    { "width": 1280, "height": 800 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "expanded backup-vault backup-server resource drawer with Overview selected",
-    "runtime context and identity sections with rich alias values"
+    "active Alerts overview with the per-alert Monitoring policy action",
+    "newly discovered resource with no explicit operator-state record",
+    "resource Manage drawer with the maintenance scheduler open in recurring mode",
+    "recurring schedule with weekday, Europe/London timezone, and descendant scope selected"
   ],
   "interactions": [
-    "expanded the first backup-vault row and confirmed two aligned equal-height desktop cards with a local 7rem label column",
-    "confirmed the same sections retain compact native table rows at 390x844 with zero document horizontal overflow",
-    "reloaded the final implementation and confirmed no new browser console errors"
+    "opened an alert Monitoring action and confirmed the canonical policy choices render without changing saved state",
+    "opened a resource with no saved operator state and confirmed the lookup completes without a failed response or console error",
+    "opened Manage, switched the maintenance scheduler from One time to Recurring, and exercised weekday, timezone, and descendant-scope controls without saving",
+    "verified the full scheduler at 1280x800 and 390x844 with no horizontal overflow, interaction console errors, or failed interaction responses"
   ]
 }

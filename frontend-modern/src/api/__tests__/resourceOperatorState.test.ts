@@ -33,12 +33,18 @@ describe('resourceOperatorState api', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       // colons are reserved in URL paths and must be percent-encoded
       // before the canonical id reaches the server router.
-      '/api/resources/instance%3Anode%3A101/operator-state',
+      '/api/resources/instance%3Anode%3A101/operator-state?view=lookup',
       { cache: 'no-store' },
     );
   });
 
-  it('returns null when the server reports operator_state_not_set as 404', async () => {
+  it('returns null from the successful lookup envelope when no state is configured', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ configured: false });
+
+    await expect(getResourceOperatorState('vm:101')).resolves.toBeNull();
+  });
+
+  it('returns null when an older server reports operator_state_not_set as 404', async () => {
     apiFetchJSONMock.mockRejectedValueOnce(Object.assign(new Error('Not found'), { status: 404 }));
 
     await expect(getResourceOperatorState('vm:101')).resolves.toBeNull();

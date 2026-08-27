@@ -84,6 +84,8 @@ describe('ResourceOperatorStateSection', () => {
     // local edit state.
     expect(sectionSource).toContain('maintenanceStartAt: current?.maintenanceStartAt');
     expect(sectionSource).toContain('maintenanceEndAt: current?.maintenanceEndAt');
+    expect(sectionSource).toContain('maintenanceRecurrence: current?.maintenanceRecurrence');
+    expect(sectionSource).toContain("maintenanceScope: current?.maintenanceScope ?? 'resource'");
     expect(sectionSource).toContain('maintenanceReason: current?.maintenanceReason');
     expect(sectionSource).toContain('criticality: criticality()');
     expect(sectionSource).toContain('note: noteForSave()');
@@ -109,8 +111,10 @@ describe('ResourceOperatorStateSection', () => {
     // must forward the local priority/note signals rather than the last
     // persisted values. Otherwise editing a note and then scheduling a
     // window would silently lose the note.
-    expect(sectionSource).toContain('maintenanceStartAt: start.toISOString()');
-    expect(sectionSource).toContain('maintenanceEndAt: end.toISOString()');
+    expect(sectionSource).toContain("scheduleKind() === 'once' ? start!.toISOString() : undefined");
+    expect(sectionSource).toContain("scheduleKind() === 'recurring'");
+    expect(sectionSource).toContain('maintenanceRecurrence:');
+    expect(sectionSource).toContain('maintenanceScope: scheduleScope()');
     expect(sectionSource).toContain('criticality: criticality()');
     expect(sectionSource).toContain('note: noteForSave()');
     expect(sectionSource).not.toContain('criticality: current?.criticality');
@@ -129,9 +133,8 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('type="datetime-local"');
     expect(sectionSource).toContain('scheduleValidationError');
     // Quick presets — the three most common operator durations.
-    expect(sectionSource).toContain('applyPresetDuration(1)');
-    expect(sectionSource).toContain('applyPresetDuration(4)');
-    expect(sectionSource).toContain('applyPresetDuration(24)');
+    expect(sectionSource).toContain('<For each={[1, 4, 24]}>');
+    expect(sectionSource).toContain('applyPresetDuration(hours)');
     // Both directions of the datetime conversion live in helpers so the
     // scheduler stays free of inline date arithmetic.
     expect(sectionSource).toContain('formatLocalForInput');
@@ -176,6 +179,18 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('neverAutoRemediate: neverAutoRemediate()');
     expect(sectionSource).toContain('maintenanceStartAt: undefined,');
     expect(sectionSource).toContain('maintenanceEndAt: undefined,');
+    expect(sectionSource).toContain('maintenanceRecurrence: undefined,');
+    expect(sectionSource).toContain("maintenanceScope: 'resource',");
+  });
+
+  it('offers recurring timezone-aware windows and explicit descendant scope', () => {
+    expect(sectionSource).toContain("createSignal<'once' | 'recurring'>");
+    expect(sectionSource).toContain('Days the window starts');
+    expect(sectionSource).toContain('scheduleTimezone');
+    expect(sectionSource).toContain('startMinute: timeToMinute(scheduleRecurringStart())');
+    expect(sectionSource).toContain('endMinute: timeToMinute(scheduleRecurringEnd())');
+    expect(sectionSource).toContain('resource_and_descendants');
+    expect(sectionSource).toContain('Recurring maintenance configured.');
   });
 
   it('keeps drawer disclosure and operator controls touch-safe on phones', () => {

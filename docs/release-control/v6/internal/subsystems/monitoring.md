@@ -2960,7 +2960,12 @@ Monitoring supplies read-only context to the alerts-owned intent resolver. The
 operator-state adapter resolves source-native references to one canonical
 unified-resource ID before reading durable operator intent. Lookup failure,
 ambiguity, absence, or store error yields no suppression context; monitoring
-does not synthesize maintenance state.
+does not synthesize maintenance state. The adapter may traverse the live
+canonical parent chain for maintenance only. An ancestor contributes an active
+occurrence only when its scope is `resource_and_descendants`; monitoring mode,
+lifecycle state, and every other operator field remain exact-resource policy.
+When active windows overlap, the adapter projects the occurrence with the
+latest end together with its source id and inherited marker.
 
 Backup-aware offline intent consumes a PVE task only when VMID, instance, and
 node match and the task is active. `pollBackupTasks` stamps server observation
@@ -3179,13 +3184,23 @@ change beyond the shutdown defect.
 ### Monitoring projects canonical resource policy into alert evaluation
 
 The monitoring-owned operator-intent adapter projects `monitoringMode` and
-`lifecycleState` together with maintenance timing and the legacy compatibility
+`lifecycleState` together with effective one-shot/recurring maintenance timing
+and the legacy compatibility
 boolean. It still resolves source-native references through canonical resource
 identity before reading the store and fails open on missing, ambiguous, or
 errored identity lookup. Monitoring does not reinterpret provider ownership or
 invent lifecycle state; Alerts owns signal suppression and unified resources
 owns persistence. `internal/monitoring/monitor_alert_intent_test.go` and the
 alerts intent-policy proof pin this adapter boundary.
+
+`internal/maintenancesentinel/` is monitoring-owned post-maintenance assurance.
+Its bounded sweep derives every concrete one-shot or recurring occurrence that
+ended in the seven-day lookback, de-duplicates on canonical resource plus exact
+occurrence end, and writes one maintenance-verification report and timeline
+record per occurrence. Restart therefore backfills recent missed recurrences
+without mutable scheduler state or duplicate reports; ancient windows remain
+out of scope. `internal/maintenancesentinel/sentinel_test.go` and
+`verification_test.go` are the focused proof.
 
 ### Agent privilege profile is descriptive model state
 

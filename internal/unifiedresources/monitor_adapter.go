@@ -146,6 +146,43 @@ func (a *MonitorAdapter) ResolveCanonicalResourceID(ref string) (string, bool) {
 	return canonicalID, ok
 }
 
+// ResolveCanonicalResourceAncestors returns the live canonical parent chain,
+// nearest parent first. It is used by policy consumers that deliberately opt
+// into inherited intent; ordinary per-resource state remains exact-match.
+func (a *MonitorAdapter) ResolveCanonicalResourceAncestors(ref string) []string {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return nil
+	}
+	_, canonicalID, ok := registry.GetByReference(ref)
+	if !ok {
+		canonicalID = CanonicalResourceID(ref)
+	}
+	seen := map[string]struct{}{canonicalID: {}}
+	ancestors := make([]string, 0, 4)
+	for canonicalID != "" {
+		resource, found := registry.Get(canonicalID)
+		if !found || resource.ParentID == nil {
+			break
+		}
+		parentRef := CanonicalResourceID(*resource.ParentID)
+		parentID := parentRef
+		if _, resolvedParentID, resolved := registry.GetByReference(parentRef); resolved {
+			parentID = resolvedParentID
+		}
+		if parentID == "" {
+			break
+		}
+		if _, cycle := seen[parentID]; cycle {
+			break
+		}
+		seen[parentID] = struct{}{}
+		ancestors = append(ancestors, parentID)
+		canonicalID = parentID
+	}
+	return ancestors
+}
+
 // LastRebuiltAt returns when the registry last published a generation. Zero
 // when no snapshot or supplemental ingest has completed yet.
 func (a *MonitorAdapter) LastRebuiltAt() time.Time {

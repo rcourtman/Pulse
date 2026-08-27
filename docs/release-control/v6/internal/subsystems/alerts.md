@@ -2028,7 +2028,13 @@ durable pending state and its transient monotonic baseline before a later
 outage can start.
 
 Operator maintenance and intentionally-offline state are read only through the
-canonical unified-resource identity. Backup-aware offline deferral consumes
+canonical unified-resource identity. One-shot and recurring maintenance use
+the same effective occurrence boundary. Exact-resource maintenance always
+applies; ancestor maintenance applies only when its persisted scope is
+`resource_and_descendants`. Overlapping exact and inherited windows remain
+suppressed until the latest active end, and every operator-state mutation
+reconciles the active-alert set immediately so a host window cannot leave child
+alerts visible until another detector write. Backup-aware offline deferral consumes
 fresh, matching, active task evidence, applies the configured post-backup grace,
 and always terminates at its hard cap. Missing, stale, future-skewed,
 finished, or mismatched backup evidence cannot suppress an outage. This policy

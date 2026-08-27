@@ -2876,7 +2876,7 @@ completes.
 
 The findings runtime reads operator-set state through the same
 durable `resource_operator_state` SQLite table on every
-new-finding-add. Both the time-bounded maintenance window and the
+new-finding-add. One-shot and timezone-aware recurring maintenance windows and the
 indefinite `IntentionallyOffline` flag persist across restarts; the
 operator commitment in either form survives without needing a
 re-entry on startup. The provider adapter returns one projection
@@ -2885,7 +2885,7 @@ finding regardless of which signal is active.
 
 The `resource_operator_state` SQLite table introduced by the
 unified-resources store keeps operator-set per-resource intent
-(intentionally offline, never auto-remediate, maintenance window,
+(intentionally offline, never auto-remediate, one-shot or recurring maintenance window and scope,
 criticality) durably alongside the rest of the unified-resource
 durable state. The `/api/resources/{id}/operator-state` API surface in
 `internal/api/resources_operator_state.go` reads and writes that table

@@ -19,6 +19,10 @@ type resourceIntentIdentityReader interface {
 	ResolveCanonicalResourceID(ref string) (string, bool)
 }
 
+type resourceIntentAncestorReader interface {
+	ResolveCanonicalResourceAncestors(ref string) []string
+}
+
 func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 	if m == nil || m.alertManager == nil {
 		return
@@ -34,7 +38,8 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 		m.alertManager.SetOperatorIntentContextResolver(nil)
 		return
 	}
-	m.alertManager.SetOperatorIntentContextResolver(func(resourceID string, _ time.Time) (alerts.OperatorIntentContext, bool) {
+	ancestorReader, hasAncestorReader := store.(resourceIntentAncestorReader)
+	m.alertManager.SetOperatorIntentContextResolver(func(resourceID string, now time.Time) (alerts.OperatorIntentContext, bool) {
 		if hasIdentityReader {
 			if canonicalID, found := identityReader.ResolveCanonicalResourceID(resourceID); found {
 				resourceID = canonicalID
@@ -45,17 +50,50 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 			log.Warn().Err(err).Str("resourceID", resourceID).Msg("Failed to read operator state for alert intent")
 			return alerts.OperatorIntentContext{}, false
 		}
-		if !found {
-			return alerts.OperatorIntentContext{}, false
+		context := alerts.OperatorIntentContext{}
+		if found {
+			context = alerts.OperatorIntentContext{
+				IntentionallyOffline: state.IntentionallyOffline,
+				MonitoringMode:       string(state.MonitoringMode),
+				LifecycleState:       string(state.LifecycleState),
+			}
 		}
-		return alerts.OperatorIntentContext{
-			IntentionallyOffline: state.IntentionallyOffline,
-			MonitoringMode:       string(state.MonitoringMode),
-			LifecycleState:       string(state.LifecycleState),
-			MaintenanceStartAt:   state.MaintenanceStartAt,
-			MaintenanceEndAt:     state.MaintenanceEndAt,
-			MaintenanceReason:    state.MaintenanceReason,
-		}, true
+
+		applyActiveMaintenance := func(candidate unifiedresources.ResourceOperatorState, sourceID string, inherited bool) {
+			occurrence, active := candidate.ActiveMaintenanceOccurrenceAt(now)
+			if !active {
+				return
+			}
+			// Overlapping exact/inherited schedules remain suppressed until the
+			// latest active end. This avoids promising an early delivery resume.
+			if context.MaintenanceEndAt != nil && !occurrence.EndAt.After(*context.MaintenanceEndAt) {
+				return
+			}
+			startAt, endAt := occurrence.StartAt, occurrence.EndAt
+			context.MaintenanceStartAt = &startAt
+			context.MaintenanceEndAt = &endAt
+			context.MaintenanceReason = candidate.MaintenanceReason
+			context.MaintenanceSourceID = sourceID
+			context.MaintenanceInherited = inherited
+			context.MaintenanceScope = string(candidate.MaintenanceScope)
+		}
+		if found {
+			applyActiveMaintenance(state, resourceID, false)
+		}
+		if hasAncestorReader {
+			for _, ancestorID := range ancestorReader.ResolveCanonicalResourceAncestors(resourceID) {
+				ancestorState, ancestorFound, ancestorErr := reader.GetResourceOperatorState(ancestorID)
+				if ancestorErr != nil {
+					log.Warn().Err(ancestorErr).Str("resourceID", resourceID).Str("ancestorID", ancestorID).Msg("Failed to read inherited operator maintenance state")
+					continue
+				}
+				if !ancestorFound || ancestorState.MaintenanceScope != unifiedresources.MaintenanceScopeResourceAndDescendants {
+					continue
+				}
+				applyActiveMaintenance(ancestorState, ancestorID, true)
+			}
+		}
+		return context, found || context.MaintenanceEndAt != nil
 	})
 }
 

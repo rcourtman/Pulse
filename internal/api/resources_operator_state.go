@@ -18,24 +18,39 @@ import (
 // adapts to and from `unified.ResourceOperatorState` so the storage
 // type's evolution stays decoupled from the wire format.
 type resourceOperatorStateAPI struct {
-	CanonicalID           string                        `json:"canonicalId"`
-	MonitoringMode        string                        `json:"monitoringMode"`
-	LifecycleState        string                        `json:"lifecycleState"`
-	IntentionallyOffline  bool                          `json:"intentionallyOffline"`
-	NeverAutoRemediate    bool                          `json:"neverAutoRemediate"`
-	AutoRemediationPolicy unified.AutoRemediationPolicy `json:"autoRemediationPolicy"`
-	MaintenanceStartAt    *time.Time                    `json:"maintenanceStartAt,omitempty"`
-	MaintenanceEndAt      *time.Time                    `json:"maintenanceEndAt,omitempty"`
-	MaintenanceReason     string                        `json:"maintenanceReason,omitempty"`
-	Criticality           string                        `json:"criticality,omitempty"`
-	Note                  string                        `json:"note,omitempty"`
-	SetAt                 time.Time                     `json:"setAt"`
-	SetBy                 string                        `json:"setBy,omitempty"`
+	CanonicalID              string                              `json:"canonicalId"`
+	MonitoringMode           string                              `json:"monitoringMode"`
+	LifecycleState           string                              `json:"lifecycleState"`
+	IntentionallyOffline     bool                                `json:"intentionallyOffline"`
+	NeverAutoRemediate       bool                                `json:"neverAutoRemediate"`
+	AutoRemediationPolicy    unified.AutoRemediationPolicy       `json:"autoRemediationPolicy"`
+	MaintenanceStartAt       *time.Time                          `json:"maintenanceStartAt,omitempty"`
+	MaintenanceEndAt         *time.Time                          `json:"maintenanceEndAt,omitempty"`
+	MaintenanceRecurrence    *unified.RecurringMaintenanceWindow `json:"maintenanceRecurrence,omitempty"`
+	MaintenanceScope         string                              `json:"maintenanceScope"`
+	MaintenanceReason        string                              `json:"maintenanceReason,omitempty"`
+	MaintenanceWindowActive  bool                                `json:"maintenanceWindowActive"`
+	MaintenanceActiveStartAt *time.Time                          `json:"maintenanceActiveStartAt,omitempty"`
+	MaintenanceActiveEndAt   *time.Time                          `json:"maintenanceActiveEndAt,omitempty"`
+	Criticality              string                              `json:"criticality,omitempty"`
+	Note                     string                              `json:"note,omitempty"`
+	SetAt                    time.Time                           `json:"setAt"`
+	SetBy                    string                              `json:"setBy,omitempty"`
+}
+
+// resourceOperatorStateLookupAPI is the UI-safe read envelope. The canonical
+// agent/API contract keeps a missing explicit record as 404 so callers can
+// branch on operator_state_not_set. Interactive clients use view=lookup to
+// receive the same distinction as data instead of generating a routine failed
+// network request for every newly discovered resource.
+type resourceOperatorStateLookupAPI struct {
+	Configured bool                      `json:"configured"`
+	State      *resourceOperatorStateAPI `json:"state,omitempty"`
 }
 
 func toResourceOperatorStateAPI(state unified.ResourceOperatorState) resourceOperatorStateAPI {
 	state = unified.NormalizeResourceOperatorState(state)
-	return resourceOperatorStateAPI{
+	result := resourceOperatorStateAPI{
 		CanonicalID:           state.CanonicalID,
 		MonitoringMode:        string(state.MonitoringMode),
 		LifecycleState:        string(state.LifecycleState),
@@ -44,12 +59,21 @@ func toResourceOperatorStateAPI(state unified.ResourceOperatorState) resourceOpe
 		AutoRemediationPolicy: state.AutoRemediationPolicy,
 		MaintenanceStartAt:    state.MaintenanceStartAt,
 		MaintenanceEndAt:      state.MaintenanceEndAt,
+		MaintenanceRecurrence: state.MaintenanceRecurrence,
+		MaintenanceScope:      string(state.MaintenanceScope),
 		MaintenanceReason:     state.MaintenanceReason,
 		Criticality:           string(state.Criticality),
 		Note:                  state.Note,
 		SetAt:                 state.SetAt,
 		SetBy:                 state.SetBy,
 	}
+	if occurrence, active := state.ActiveMaintenanceOccurrenceAt(time.Now().UTC()); active {
+		startAt, endAt := occurrence.StartAt, occurrence.EndAt
+		result.MaintenanceWindowActive = true
+		result.MaintenanceActiveStartAt = &startAt
+		result.MaintenanceActiveEndAt = &endAt
+	}
+	return result
 }
 
 // HandleResourceOperatorState dispatches GET / PUT / DELETE on
@@ -92,6 +116,15 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
+		if r.URL.Query().Get("view") == "lookup" {
+			result := resourceOperatorStateLookupAPI{Configured: found}
+			if found {
+				wireState := toResourceOperatorStateAPI(state)
+				result.State = &wireState
+			}
+			writeJSON(w, http.StatusOK, result)
+			return
+		}
 		if !found {
 			writeJSONError(w, http.StatusNotFound, agentcapabilities.AgentErrCodeOperatorStateNotSet,
 				"No operator-set state recorded for this resource.")
@@ -116,6 +149,8 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			AutoRemediationPolicy: payload.AutoRemediationPolicy,
 			MaintenanceStartAt:    payload.MaintenanceStartAt,
 			MaintenanceEndAt:      payload.MaintenanceEndAt,
+			MaintenanceRecurrence: payload.MaintenanceRecurrence,
+			MaintenanceScope:      unified.MaintenanceScope(payload.MaintenanceScope),
 			MaintenanceReason:     payload.MaintenanceReason,
 			Criticality:           unified.ResourceCriticality(payload.Criticality),
 			Note:                  payload.Note,

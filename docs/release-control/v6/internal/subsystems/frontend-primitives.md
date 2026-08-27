@@ -182,7 +182,6 @@ metrics target. Zero or multiple matches must leave the PBS resource unchanged
 rather than guessing; this presentation correlation must not mutate either
 canonical input or create a second mobile disclosure interaction.
 
-
 Presentation helpers that mirror a server-side classification must name the
 predicate they mirror and expose it as a single exported function rather than
 inlining the boundary at each call site. `isPhysicalDiskWearoutReported` mirrors
@@ -292,67 +291,67 @@ overflow.
 71. `frontend-modern/src/utils/systemLogsPresentation.ts`
 72. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
 73. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
-75. `frontend-modern/src/utils/reportableResourceTypes.ts`
-76. `frontend-modern/src/utils/reportingResourceTypes.ts`
-77. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
-78. `frontend-modern/src/utils/workloadGuestPresentation.ts`
-79. `frontend-modern/src/utils/emptyStatePresentation.ts`
-80. `frontend-modern/src/utils/semanticTonePresentation.ts`
-81. `frontend-modern/src/components/Toast/Toast.tsx`
-82. `frontend-modern/src/utils/toast.ts`
-83. `frontend-modern/src/utils/semanticTonePresentation.ts`
-84. `frontend-modern/src/utils/emptyStatePresentation.ts`
-85. `frontend-modern/src/utils/typeColumnPresentation.ts`
-86. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-87. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-88. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-89. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-90. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
-91. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
-92. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-93. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-94. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-95. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-96. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-97. `frontend-modern/src/components/Settings/settingsRouting.ts`
-98. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-99. `frontend-modern/src/components/Settings/settingsTypes.ts`
-100. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-101. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-102. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-103. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-104. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
-105. `frontend-modern/src/utils/environmentLockPresentation.ts`
-106. `frontend-modern/src/utils/docsLinks.ts`
-107. `tests/integration/tests/20-local-doc-links.spec.ts`
-108. `frontend-modern/src/index.css`
-109. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
-110. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
-111. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+74. `frontend-modern/src/utils/reportableResourceTypes.ts`
+75. `frontend-modern/src/utils/reportingResourceTypes.ts`
+76. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
+77. `frontend-modern/src/utils/workloadGuestPresentation.ts`
+78. `frontend-modern/src/utils/emptyStatePresentation.ts`
+79. `frontend-modern/src/utils/semanticTonePresentation.ts`
+80. `frontend-modern/src/components/Toast/Toast.tsx`
+81. `frontend-modern/src/utils/toast.ts`
+82. `frontend-modern/src/utils/semanticTonePresentation.ts`
+83. `frontend-modern/src/utils/emptyStatePresentation.ts`
+84. `frontend-modern/src/utils/typeColumnPresentation.ts`
+85. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+86. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+87. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+88. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+89. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
+90. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
+91. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+92. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+93. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+94. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+95. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+96. `frontend-modern/src/components/Settings/settingsRouting.ts`
+97. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+98. `frontend-modern/src/components/Settings/settingsTypes.ts`
+99. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+100. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+101. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+102. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+103. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+104. `frontend-modern/src/utils/environmentLockPresentation.ts`
+105. `frontend-modern/src/utils/docsLinks.ts`
+106. `tests/integration/tests/20-local-doc-links.spec.ts`
+107. `frontend-modern/src/index.css`
+108. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
+109. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
+110. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
      111a. `frontend-modern/src/utils/storageSummaryCache.ts`
-112. `frontend-modern/src/components/shared/TableCardHeader.tsx`
-113. `frontend-modern/src/components/shared/UpgradeLink.tsx`
-114. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
-115. `frontend-modern/src/utils/upgradeNavigation.ts`
-116. `frontend-modern/src/components/DemoBanner.tsx`
+111. `frontend-modern/src/components/shared/TableCardHeader.tsx`
+112. `frontend-modern/src/components/shared/UpgradeLink.tsx`
+113. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
+114. `frontend-modern/src/utils/upgradeNavigation.ts`
+115. `frontend-modern/src/components/DemoBanner.tsx`
      116a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
      116b. `frontend-modern/src/components/GitHubStarBanner.tsx`
-117. `frontend-modern/src/components/Login.tsx`
-118. `frontend-modern/src/stores/sessionCapabilities.ts`
-119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
-120. `frontend-modern/src/stores/licenseCommercial.ts`
-121. `frontend-modern/src/useAppRuntimeState.ts`
-122. `frontend-modern/src/routing/routePreload.ts`
-123. `frontend-modern/src/stores/aiChat.ts`
-124. `frontend-modern/scripts/header-audit.mjs`
-125. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-126. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-127. `frontend-modern/scripts/canonical-platform-audit.mjs`
-128. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
-129. `frontend-modern/scripts/shared-template-audit.mjs`
-130. `frontend-modern/scripts/shared-template-registry.json`
-131. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
-    131a. `frontend-modern/src/features/platformPage/platformSearchSuggestions.ts`
+116. `frontend-modern/src/components/Login.tsx`
+117. `frontend-modern/src/stores/sessionCapabilities.ts`
+118. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
+119. `frontend-modern/src/stores/licenseCommercial.ts`
+120. `frontend-modern/src/useAppRuntimeState.ts`
+121. `frontend-modern/src/routing/routePreload.ts`
+122. `frontend-modern/src/stores/aiChat.ts`
+123. `frontend-modern/scripts/header-audit.mjs`
+124. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+125. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+126. `frontend-modern/scripts/canonical-platform-audit.mjs`
+127. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
+128. `frontend-modern/scripts/shared-template-audit.mjs`
+129. `frontend-modern/scripts/shared-template-registry.json`
+130. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
+     131a. `frontend-modern/src/features/platformPage/platformSearchSuggestions.ts`
      131b. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
      131c. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
      131d. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
@@ -361,23 +360,23 @@ overflow.
      131g. `frontend-modern/src/components/shared/FormSelect.tsx`
      131h. `frontend-modern/src/components/shared/FormTextarea.tsx`
      131i. `frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx`
-132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-133. `frontend-modern/src/utils/platformSupportManifest.ts`
-134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
-135. `frontend-modern/src/utils/sourcePlatforms.ts`
-136. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
-137. `frontend-modern/src/components/shared/Button.tsx`
-138. `frontend-modern/src/components/shared/buttonModel.ts`
-139. `frontend-modern/src/components/shared/Button.test.tsx`
+131. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+132. `frontend-modern/src/utils/platformSupportManifest.ts`
+133. `frontend-modern/src/utils/sourcePlatformOptions.ts`
+134. `frontend-modern/src/utils/sourcePlatforms.ts`
+135. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
+136. `frontend-modern/src/components/shared/Button.tsx`
+137. `frontend-modern/src/components/shared/buttonModel.ts`
+138. `frontend-modern/src/components/shared/Button.test.tsx`
      139a. `frontend-modern/src/components/shared/InlineNotice.tsx`
      139b. `frontend-modern/src/components/shared/InlineNotice.test.tsx`
      139c. `frontend-modern/src/components/shared/ExternalTextLink.tsx`
      139d. `frontend-modern/src/components/shared/ExternalTextLink.test.tsx`
-140. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
-141. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
-142. `frontend-modern/src/components/shared/detailSectionModel.ts`
-143. `frontend-modern/src/components/Settings/__tests__/settingsLocalization.test.ts`
-144. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
+139. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
+140. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
+141. `frontend-modern/src/components/shared/detailSectionModel.ts`
+142. `frontend-modern/src/components/Settings/__tests__/settingsLocalization.test.ts`
+143. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 
 ## Shared Boundaries
 
@@ -720,8 +719,8 @@ scan-friendly without hiding any container from drilldown.
 
 1. `frontend-modern/src/components/CommercialMigrationBanner.tsx` shared with `cloud-paid`: the global commercial migration notice is both a cloud-paid entitlement recovery surface and a shared app-shell notice primitive consumer.
 2. `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` shared with `performance-and-scalability`: the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary.
-2. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `ai-runtime`, `api-contracts`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
-3. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
+3. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `ai-runtime`, `api-contracts`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
+4. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but
    token-specific Docker / Podman copy must come from
    `frontend-modern/src/utils/apiTokenPresentation.ts` rather than page-local
@@ -811,9 +810,9 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    the Agent integrations panel are settings-shell chrome only: they may route
    to the API Access token creation section, but token preset semantics and
    required-scope derivation remain owned by the API/security boundary.
-4. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
-5. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
-6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+5. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
+6. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
+7. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    The panel owns compact settings-shell framing for outbound usage telemetry, but
    its vocabulary must stay aligned with `security-privacy`: coarse deployment
    and lifecycle buckets, aggregate resource and outcome counts, coarse feature
@@ -822,8 +821,8 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    URLs, paths, locale, browser events, prompts, chat messages, command text,
    action output, token values, and personal information must stay explicitly
    excluded.
-7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+8. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+9. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    These settings panels consume the privileged security-status projection,
    while the shared status type also represents intentionally sparse public and
    authenticated tiers. Privileged posture booleans therefore remain optional
@@ -834,8 +833,8 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
 10. `frontend-modern/src/features/platformPage/PlatformWindowedList.tsx` shared with `performance-and-scalability`: the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 11. `frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx` shared with `performance-and-scalability`: the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 12. `frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts` shared with `performance-and-scalability`: the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path.
-9. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
-10. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+13. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
+14. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
     Assistant session pickers and reloads must restore only safe
     `handoff_summary` presentation state from the session list. Loading a plain
     session or starting a new conversation must clear stale scoped handoff
@@ -899,7 +898,7 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
     routes and must render as named choices without secondary raw route IDs,
     while external provider route IDs may remain visible where they disambiguate
     catalog entries.
-11. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+15. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must expose the manifest `surface_kind` field so runtime lenses such as
     `docker` are not collapsed back into owning platform semantics.
     It must also preserve canonical projection lists from the governed manifest
@@ -907,7 +906,7 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
     `vm`, `network-share`, and `app-container` workloads through the same
     generated platform projection used by route helpers, badges, source
     filters, reportable-resource pickers, and type unions.
-12. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+16. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless
     monitoring source for `network-endpoint` resources and settings presets,
     so source badges and platform/source type resolution do not fall back to
@@ -1247,7 +1246,10 @@ not a replacement status card, CTA band, or page-local nested card.
    classes, table rendering, and inline close-action chrome must come from
    `detailSectionModel.ts`, `DetailSectionTable`, and `InlineDetailPanel`
    instead of local `DetailField` grids or provider-named reusable primitives.
-   A compact detail row may carry optional bounded progress metadata, but the
+   A compact detail row may carry optional bounded rich value content for
+   links, tags, aliases, and address badges while retaining a canonical text
+   value for titles, tests, and operator-readable fallback. It may also carry
+   optional bounded progress metadata, but the
    shared `DetailSectionTable` must render that metadata through the CSP-safe
    `ProgressBar` while preserving the row's textual value as the primary
    operator-readable fact. Feature surfaces must omit the metadata when the
@@ -3015,10 +3017,10 @@ verification.
     as `type: 'storage'`, so `topology === 'pool'` is the only pool
     discriminator available to the page model, and layout strings belong
     in `storage.vdevLayout`. Regression coverage: the `pool identity
-    boundary` cases in
+boundary` cases in
     `frontend-modern/src/features/truenas/__tests__/truenasPageModel.test.ts`
     and `shows the vdev layout as the storage kind while topology stays
-    the pool discriminator` in
+the pool discriminator` in
     `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerTrueNASModel.test.ts`.
 
 43. The diagnostics export sanitizer owns the redaction boundary for the
@@ -3029,10 +3031,10 @@ verification.
     the sanitizer's source, because the failure mode is a payload field
     added later that the sanitizer never learned about. Regression
     coverage: `redacts PBS probe failures and state reasons in the
-    exported bundle` in
+exported bundle` in
     `frontend-modern/src/components/Settings/__tests__/diagnosticsModel.test.ts`
     and `keeps every PBS diagnostic failure string inside the export
-    redaction boundary` in
+redaction boundary` in
     `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
 
 44. An org switch must leave every live query surface with data for the
@@ -3044,10 +3046,9 @@ verification.
     refetch shape every other org-switch handler in the app already uses.
     Stale pre-switch responses are still discarded by request generation.
     Regression coverage: `refetches a constant-source query after an org
-    switch` and `does not repopulate the cache when an old-org request
-    resolves late` in
+switch` and `does not repopulate the cache when an old-org request
+resolves late` in
     `frontend-modern/src/hooks/__tests__/createNonSuspendingQuery.test.tsx`.
-
 
 ## Current State
 
@@ -3794,7 +3795,9 @@ section cards on desktop. Desktop cards share the available row width, stretch
 to the same row height, balance five- and six-section drawers across three-card
 rows, and use a bounded local label column with left-aligned values so the
 layout has no ragged fixed-width island, stranded full-width final card, or
-full-drawer scan distance. The responsive presentation stays owned by the shared primitive;
+full-drawer scan distance. Unified-resource technical summaries are part of
+this boundary and must not retain a full-width local table on desktop. The
+responsive presentation stays owned by the shared primitive;
 provider drawers must not fork their own desktop card renderers. Monitoring
 Optional detail-row progress is also owned by that shared presentation: the
 value text remains visible, `DetailSectionTable` composes `ProgressBar` for the
@@ -6561,7 +6564,7 @@ settings away from every non-admin, and the panel is not empty for them. Proof:
 which pins the withheld, granted, and unresolved cases plus the
 `system-general` exclusion.
 
-Because `DEFAULT_SETTINGS_TAB` *is* `infrastructure-systems`, the blocked-route
+Because `DEFAULT_SETTINGS_TAB` _is_ `infrastructure-systems`, the blocked-route
 fallback in `useSettingsAccess.ts` can no longer resolve to the constant — that
 sent a refused session straight back to the tab that had just refused it. The
 fallback uses an explicit preference order: the default when reachable, then
@@ -6595,7 +6598,8 @@ fail-closed mount, failed-status, deduplicated-load, and General-fallback rules.
 
 The Alerts overview may offer a compact per-resource Monitoring menu, but the
 menu is an adapter over the canonical resource operator-state API. It must
-preserve unrelated state on every write, distinguish availability-only
+preserve unrelated state on every write, including one-shot/recurring
+maintenance and descendant scope, distinguish availability-only
 expected-offline from all-attention mute, and state that retirement changes
 Pulse monitoring rather than deleting provider inventory. Resource detail and
 alert surfaces use the same typed monitoring and lifecycle vocabulary and

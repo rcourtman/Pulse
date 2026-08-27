@@ -134,27 +134,18 @@ func (s *Sentinel) tickOnce(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if state.MaintenanceStartAt == nil || state.MaintenanceEndAt == nil {
-			continue
+		for _, occurrence := range state.MaintenanceOccurrencesEndingBetween(cutoff, now) {
+			s.evaluateForOccurrence(state, occurrence, store, now)
 		}
-		if !state.MaintenanceEndAt.Before(now) && !state.MaintenanceEndAt.Equal(now) {
-			// Window hasn't ended yet.
-			continue
-		}
-		if state.MaintenanceEndAt.Before(cutoff) {
-			// Window ended too long ago — don't backfill ancient events.
-			continue
-		}
-		s.evaluateForState(state, store, now)
 	}
 }
 
-func (s *Sentinel) evaluateForState(state unified.ResourceOperatorState, store unified.ResourceStore, now time.Time) {
+func (s *Sentinel) evaluateForOccurrence(state unified.ResourceOperatorState, occurrence unified.MaintenanceWindowOccurrence, store unified.ResourceStore, now time.Time) {
 	canonicalID := unified.CanonicalResourceID(state.CanonicalID)
-	if canonicalID == "" || state.MaintenanceEndAt == nil {
+	if canonicalID == "" || occurrence.StartAt.IsZero() || occurrence.EndAt.IsZero() {
 		return
 	}
-	if _, exists, err := store.FindLoopReportByWindow(unified.LoopReportTypeMaintenanceVerification, canonicalID, *state.MaintenanceEndAt); err != nil {
+	if _, exists, err := store.FindLoopReportByWindow(unified.LoopReportTypeMaintenanceVerification, canonicalID, occurrence.EndAt); err != nil {
 		log.Debug().Err(err).Str("resource", canonicalID).Msg("maintenance-verification sentinel: dedupe lookup")
 		return
 	} else if exists {
@@ -162,7 +153,7 @@ func (s *Sentinel) evaluateForState(state unified.ResourceOperatorState, store u
 		return
 	}
 
-	inputs := s.buildInputs(state, now)
+	inputs := s.buildInputs(state, occurrence, now)
 	report := EvaluateVerification(inputs)
 	if err := store.RecordLoopReport(report); err != nil {
 		// A unique-constraint conflict (race against a parallel
@@ -180,18 +171,18 @@ func (s *Sentinel) evaluateForState(state unified.ResourceOperatorState, store u
 // buildInputs gathers the deterministic input bundle for the
 // evaluator. Provider closures may be nil — the inputs simply carry
 // zero values in that case.
-func (s *Sentinel) buildInputs(state unified.ResourceOperatorState, now time.Time) VerificationInputs {
+func (s *Sentinel) buildInputs(state unified.ResourceOperatorState, occurrence unified.MaintenanceWindowOccurrence, now time.Time) VerificationInputs {
 	canonicalID := unified.CanonicalResourceID(state.CanonicalID)
+	stateForOccurrence := cloneOperatorState(state)
+	startAt, endAt := occurrence.StartAt.UTC(), occurrence.EndAt.UTC()
+	stateForOccurrence.MaintenanceStartAt = &startAt
+	stateForOccurrence.MaintenanceEndAt = &endAt
 	inputs := VerificationInputs{
-		ResourceID:    canonicalID,
-		OperatorState: cloneOperatorState(state),
-		Now:           now,
-	}
-	if state.MaintenanceStartAt != nil {
-		inputs.WindowStartedAt = state.MaintenanceStartAt.UTC()
-	}
-	if state.MaintenanceEndAt != nil {
-		inputs.WindowEndedAt = state.MaintenanceEndAt.UTC()
+		ResourceID:      canonicalID,
+		OperatorState:   stateForOccurrence,
+		Now:             now,
+		WindowStartedAt: startAt,
+		WindowEndedAt:   endAt,
 	}
 	if s.providers.ActiveAlerts != nil {
 		inputs.ActiveAlerts = s.providers.ActiveAlerts(s.orgID, canonicalID)
@@ -223,6 +214,11 @@ func cloneOperatorState(s unified.ResourceOperatorState) *unified.ResourceOperat
 	if s.MaintenanceEndAt != nil {
 		t := *s.MaintenanceEndAt
 		clone.MaintenanceEndAt = &t
+	}
+	if s.MaintenanceRecurrence != nil {
+		recurrence := *s.MaintenanceRecurrence
+		recurrence.Weekdays = append([]string(nil), s.MaintenanceRecurrence.Weekdays...)
+		clone.MaintenanceRecurrence = &recurrence
 	}
 	return &clone
 }
@@ -261,11 +257,13 @@ func (s *Sentinel) EvaluateOnce(ctx context.Context, canonicalID string) (unifie
 	if !found {
 		return unified.LoopReport{}, fmt.Errorf("maintenancesentinel: no operator state for %q", canonicalID)
 	}
-	if state.MaintenanceStartAt == nil || state.MaintenanceEndAt == nil {
+	now := s.now()
+	occurrences := state.MaintenanceOccurrencesEndingBetween(now.Add(-s.lookbackLimit), now)
+	if len(occurrences) == 0 {
 		return unified.LoopReport{}, fmt.Errorf("maintenancesentinel: resource %q has no maintenance window to verify", canonicalID)
 	}
-	now := s.now()
-	inputs := s.buildInputs(state, now)
+	occurrence := occurrences[len(occurrences)-1]
+	inputs := s.buildInputs(state, occurrence, now)
 	report := EvaluateVerification(inputs)
 	report.ID = uniqueRerunID(store, report.ID)
 	if err := store.RecordLoopReport(report); err != nil {

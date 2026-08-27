@@ -501,6 +501,12 @@ the `white_label` branding entitlement.
     action lifecycle, but it exposes only typed-proposal capture and gives the
     orchestrator no autonomy control, command execution, or command-shaped
     approval path.
+    Operator-state mutation callbacks wired here may trigger alert
+    reconciliation across active incidents so descendant-scoped maintenance
+    takes effect immediately, but they receive only tenant-bound canonical
+    resource identity and the already authorized mutation result. They must not
+    expose inventory, operator notes, maintenance reasons, credentials, or
+    cross-organization state through router callbacks or synchronization events.
     Automatic action authority is a versioned, one-use admission lease rather
     than a reusable approval. Tenant mode/license/unlock, capability safety and
     approval floor, resource allowlist/window/Never state, plan hashes, and the

@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -130,6 +131,30 @@ func TestMonitorAdapterResolvesCanonicalOperatorIntentCapabilities(t *testing.T)
 	}
 	if !got.IntentionallyOffline || got.MaintenanceReason != operatorState.MaintenanceReason {
 		t.Fatalf("operator state = %+v, want persisted intent", got)
+	}
+}
+
+func TestMonitorAdapterResolvesCanonicalResourceAncestorsNearestFirst(t *testing.T) {
+	registry := NewRegistry(NewMemoryStore())
+	adapter := NewMonitorAdapter(registry)
+	clusterID := "cluster:analytics"
+	nodeID := "node:pve-a"
+	vmID := "vm:pve-a:101"
+	adapter.PopulateSupplementalRecords(SourceProxmox, []IngestRecord{
+		{SourceID: clusterID, Resource: Resource{ID: clusterID, Type: ResourceTypeAgent, Name: "analytics"}},
+		{SourceID: nodeID, ParentSourceID: clusterID, Resource: Resource{ID: nodeID, Type: ResourceTypeAgent, Name: "pve-a"}},
+		{SourceID: vmID, ParentSourceID: nodeID, Resource: Resource{ID: vmID, Type: ResourceTypeVM, Name: "vm-101"}},
+	})
+
+	canonicalVM, found := adapter.ResolveCanonicalResourceID(vmID)
+	if !found {
+		t.Fatalf("ResolveCanonicalResourceID(%q) did not find VM", vmID)
+	}
+	canonicalNode, _ := adapter.ResolveCanonicalResourceID(nodeID)
+	canonicalCluster, _ := adapter.ResolveCanonicalResourceID(clusterID)
+	want := []string{canonicalNode, canonicalCluster}
+	if got := adapter.ResolveCanonicalResourceAncestors(canonicalVM); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolveCanonicalResourceAncestors() = %v, want %v", got, want)
 	}
 }
 

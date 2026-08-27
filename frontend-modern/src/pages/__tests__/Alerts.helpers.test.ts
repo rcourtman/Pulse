@@ -32,6 +32,7 @@ import alertOverviewActiveAlertsSectionSource from '@/features/alerts/AlertOverv
 import alertOverviewAlertCardSource from '@/features/alerts/AlertOverviewAlertCard.tsx?raw';
 import alertOverviewStatsCardsSource from '@/features/alerts/AlertOverviewStatsCards.tsx?raw';
 import alertOverviewStateSource from '@/features/alerts/useAlertOverviewState.ts?raw';
+import resourceMonitoringPolicyActionSource from '@/features/alerts/ResourceMonitoringPolicyAction.tsx?raw';
 import alertScheduleStateSource from '@/features/alerts/useAlertScheduleState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
@@ -1172,6 +1173,15 @@ describe('unifiedTypeToAlertDisplayType', () => {
 });
 
 describe('Unified selector parity', () => {
+  it('preserves recurring maintenance and descendant scope when an alert changes monitoring policy', () => {
+    expect(resourceMonitoringPolicyActionSource).toContain(
+      'maintenanceRecurrence: current?.maintenanceRecurrence',
+    );
+    expect(resourceMonitoringPolicyActionSource).toContain(
+      "maintenanceScope: current?.maintenanceScope ?? 'resource'",
+    );
+  });
+
   it('maps all unified resource types to display types', () => {
     const cases: Array<[ResourceType, string]> = [
       ['agent', 'Agent'],

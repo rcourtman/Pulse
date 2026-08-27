@@ -2819,6 +2819,24 @@ func TestSQLiteResourceStore_ResourceOperatorState_RoundTrips(t *testing.T) {
 		t.Errorf("maintenance_end_at: got %v want %v", got.MaintenanceEndAt, end)
 	}
 
+	// Recurring maintenance uses additive JSON/scope columns and replaces the
+	// one-shot form atomically on the same canonical row.
+	want.MaintenanceStartAt, want.MaintenanceEndAt = nil, nil
+	want.MaintenanceRecurrence = &RecurringMaintenanceWindow{
+		Timezone: "Europe/London", Weekdays: []string{"sunday", "monday"}, StartMinute: 120, EndMinute: 240,
+	}
+	want.MaintenanceScope = MaintenanceScopeResourceAndDescendants
+	if err := store.SetResourceOperatorState(want); err != nil {
+		t.Fatalf("set recurring maintenance: %v", err)
+	}
+	got, _, _ = store.GetResourceOperatorState("vm:101")
+	if got.MaintenanceStartAt != nil || got.MaintenanceEndAt != nil || got.MaintenanceRecurrence == nil {
+		t.Fatalf("recurring maintenance did not replace one-shot fields: %+v", got)
+	}
+	if got.MaintenanceScope != MaintenanceScopeResourceAndDescendants || got.MaintenanceRecurrence.Timezone != "Europe/London" || strings.Join(got.MaintenanceRecurrence.Weekdays, ",") != "monday,sunday" {
+		t.Fatalf("recurring maintenance did not round-trip canonically: %+v", got)
+	}
+
 	// Upsert: Set again with different values should overwrite, not error.
 	want.IntentionallyOffline = false
 	want.Criticality = CriticalityLow

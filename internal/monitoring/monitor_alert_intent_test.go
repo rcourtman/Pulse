@@ -39,6 +39,64 @@ func TestInstallOperatorIntentResolverProjectsCanonicalResourcePolicy(t *testing
 	}
 }
 
+func TestInstallOperatorIntentResolverInheritsScopedMaintenanceFromParent(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	registry := unifiedresources.NewRegistry(store)
+	parentID := "node:pve-a"
+	registry.IngestResources([]unifiedresources.Resource{
+		{ID: parentID, Type: unifiedresources.ResourceTypeAgent, Name: "pve-a"},
+		{ID: "vm:101", Type: unifiedresources.ResourceTypeVM, Name: "database", ParentID: &parentID},
+	})
+	now := time.Now().UTC()
+	start, end := now.Add(-time.Hour), now.Add(2*time.Hour)
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID:        parentID,
+		MaintenanceStartAt: &start,
+		MaintenanceEndAt:   &end,
+		MaintenanceReason:  "hypervisor patching",
+		MaintenanceScope:   unifiedresources.MaintenanceScopeResourceAndDescendants,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	monitor := &Monitor{alertManager: manager}
+	monitor.installOperatorIntentResolver(unifiedresources.NewMonitorAdapter(registry))
+	preview, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+		ResourceID: "vm:101", ResourceType: "vm", Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Reason != "operator_maintenance" || preview.Status != "expected_transient" {
+		t.Fatalf("inherited maintenance preview = %+v", preview)
+	}
+	if preview.EligibleAt == nil || !preview.EligibleAt.Equal(end) {
+		t.Fatalf("eligibleAt = %v, want %v", preview.EligibleAt, end)
+	}
+
+	// Scope is explicit: the same parent window must not leak to descendants
+	// when changed back to resource-only.
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID:        parentID,
+		MaintenanceStartAt: &start,
+		MaintenanceEndAt:   &end,
+		MaintenanceScope:   unifiedresources.MaintenanceScopeResource,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	preview, err = manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+		ResourceID: "vm:101", ResourceType: "vm", Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Status != "would_activate" {
+		t.Fatalf("resource-only parent window leaked to child: %+v", preview)
+	}
+}
+
 func TestPlatformMonitorResourceIdentityConstructors(t *testing.T) {
 	if got := PBSMonitorResourceID("backup-main"); got != "pbs-backup-main" {
 		t.Fatalf("PBS monitor resource ID = %q", got)

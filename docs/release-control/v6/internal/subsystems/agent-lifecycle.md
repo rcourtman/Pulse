@@ -3294,7 +3294,8 @@ restarts because the underlying state lives in the durable
 The `/api/resources/{id}/operator-state` GET / PUT / DELETE handlers in
 `internal/api/resources_operator_state.go` are the canonical operator
 surface for setting per-resource intent (intentionally offline, never
-auto-remediate, maintenance window, criticality hint). The route lives
+auto-remediate, mutually exclusive one-shot or timezone-aware recurring
+maintenance with explicit resource/descendant scope, criticality hint). The route lives
 on the same monitoring router (`router_routes_monitoring.go`) as the
 rest of `/api/resources/{id}/...`; method-keyed scope dispatch means GET
 runs under `monitoring:read` while PUT and DELETE require
@@ -3302,7 +3303,7 @@ runs under `monitoring:read` while PUT and DELETE require
 against the resource. The agent runtime must surface the same
 operator-set state across restarts — persistence is in the
 `resource_operator_state` SQLite table managed by the unified-resources
-store from slice 29 — so a maintenance window or never-auto-remediate
+store from slice 29 — so either maintenance schedule form or never-auto-remediate
 flag set before a process restart is honored after the agent reloads.
 
 Patrol-finding to unified-finding mirroring in `internal/api/router.go`

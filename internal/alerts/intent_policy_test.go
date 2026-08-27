@@ -251,22 +251,27 @@ func TestAlertIntentHonorsCanonicalResourcePolicyWithoutExplicitRules(t *testing
 
 func TestCanonicalResourcePolicyGatesAllAlertWritersAndReconcilesExisting(t *testing.T) {
 	m := newTestManager(t)
-	mode := "normal"
+	modes := map[string]string{"vm:101": "normal", "vm:202": "normal"}
 	m.SetOperatorIntentContextResolver(func(resourceID string, observedAt time.Time) (OperatorIntentContext, bool) {
-		return OperatorIntentContext{MonitoringMode: mode, LifecycleState: "active"}, true
+		return OperatorIntentContext{MonitoringMode: modes[resourceID], LifecycleState: "active"}, true
 	})
 
 	existing := &Alert{ID: "backup-vm-101", ResourceID: "vm:101", Type: "backup-age"}
+	unaffected := &Alert{ID: "backup-vm-202", ResourceID: "vm:202", Type: "backup-age"}
 	m.mu.Lock()
 	m.setActiveAlertNoLock(existing.ID, existing)
+	m.setActiveAlertNoLock(unaffected.ID, unaffected)
 	m.mu.Unlock()
-	if got := len(m.GetActiveAlerts()); got != 1 {
-		t.Fatalf("active alerts before mute = %d, want 1", got)
+	if got := len(m.GetActiveAlerts()); got != 2 {
+		t.Fatalf("active alerts before mute = %d, want 2", got)
 	}
 
-	mode = "muted"
-	if cleared := m.ReconcileResourceOperatorState("vm:101"); cleared != 1 {
-		t.Fatalf("ReconcileResourceOperatorState() cleared = %d, want 1", cleared)
+	modes["vm:101"] = "muted"
+	if cleared := m.ReconcileOperatorIntentState(); cleared != 1 {
+		t.Fatalf("ReconcileOperatorIntentState() cleared = %d, want 1", cleared)
+	}
+	if !testHasActiveAlert(t, m, unaffected.ID) {
+		t.Fatal("global operator-intent reconciliation cleared an unaffected alert")
 	}
 
 	m.mu.Lock()

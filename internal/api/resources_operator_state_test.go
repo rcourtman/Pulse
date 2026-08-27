@@ -64,6 +64,25 @@ func TestHandleResourceOperatorState_GetReturns404WhenUnset(t *testing.T) {
 	}
 }
 
+func TestHandleResourceOperatorState_LookupViewReturnsCleanUnsetEnvelope(t *testing.T) {
+	h := newOperatorStateHandlers(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:101/operator-state?view=lookup", nil)
+
+	h.HandleResourceOperatorState(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 lookup envelope on unset state; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body resourceOperatorStateLookupAPI
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("lookup body must be JSON; got %q", rec.Body.String())
+	}
+	if body.Configured || body.State != nil {
+		t.Fatalf("unset lookup must preserve absence without a synthetic state: %+v", body)
+	}
+}
+
 func TestHandleResourceOperatorState_PutPersistsAndGetReturns200(t *testing.T) {
 	h := newOperatorStateHandlers(t)
 

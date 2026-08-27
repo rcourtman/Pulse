@@ -120,7 +120,6 @@ NVMe percentage-used conversion is shared with storage risk: negative values
 remain unknown, while values above 100 clamp to exhausted before remaining
 life is derived.
 
-
 `WearoutUnreported` is the canonical absent-value sentinel for
 `PhysicalDiskMeta.Wearout` and is pinned to `-1`. Views and adapters must return
 it whenever a resource carries no physical-disk facet; returning the Go zero
@@ -142,7 +141,7 @@ about the same disk cannot diverge.
 8. `internal/unifiedresources/metrics.go`
 9. `internal/unifiedresources/metrics_targets.go`
 10. `internal/unifiedresources/registry.go`
-10a. `internal/unifiedresources/xcpng.go`
+    10a. `internal/unifiedresources/xcpng.go`
 11. `internal/unifiedresources/resolve.go`
 12. `internal/unifiedresources/resolve_context.go`
 13. `internal/unifiedresources/resolved_host_set.go`
@@ -159,8 +158,8 @@ about the same disk cannot diverge.
 24. `internal/unifiedresources/relationships.go`
 25. `internal/unifiedresources/privacy.go`
 26. `internal/unifiedresources/actions.go`
-26a. `internal/unifiedresources/action_dispatch.go`
-26b. `internal/unifiedresources/action_dispatch_store.go`
+    26a. `internal/unifiedresources/action_dispatch.go`
+    26b. `internal/unifiedresources/action_dispatch_store.go`
 27. `internal/unifiedresources/audit_redaction.go`
 28. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
@@ -169,9 +168,9 @@ about the same disk cannot diverge.
 32. `frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx`
 33. `frontend-modern/src/features/docker/DockerConfigsTable.tsx`
 34. `frontend-modern/src/features/docker/DockerContainersTable.tsx`
-34a. `frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx`
-34b. `frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts`
-34c. `frontend-modern/src/features/docker/dockerContainerTableModel.ts`
+    34a. `frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx`
+    34b. `frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts`
+    34c. `frontend-modern/src/features/docker/dockerContainerTableModel.ts`
 35. `frontend-modern/src/features/docker/DockerImagesTable.tsx`
 36. `frontend-modern/src/features/docker/DockerNativeTableShared.tsx`
 37. `frontend-modern/src/features/docker/DockerNetworksTable.tsx`
@@ -188,7 +187,7 @@ about the same disk cannot diverge.
 48. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 49. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 50. `frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx`
-50a. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+    50a. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 51. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
 52. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
 53. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
@@ -199,7 +198,7 @@ about the same disk cannot diverge.
 58. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
 59. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
 60. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
-60a. `frontend-modern/src/utils/workloads.ts`
+    60a. `frontend-modern/src/utils/workloads.ts`
 61. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
 62. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 63. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
@@ -209,7 +208,7 @@ about the same disk cannot diverge.
 67. `frontend-modern/src/components/Discovery/discoveryReadiness.ts`
 68. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
 69. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-69a. `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`
+    69a. `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`
 70. `frontend-modern/src/utils/agentResources.ts`
 71. `frontend-modern/src/utils/canonicalResourceTypes.ts`
 72. `frontend-modern/src/utils/resourceBadgePresentation.ts`
@@ -217,77 +216,77 @@ about the same disk cannot diverge.
 74. `frontend-modern/src/utils/actionAuditPresentation.ts`
 75. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
 76. `frontend-modern/src/utils/resourcePlatformData.ts`
-76. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
-77. `frontend-modern/src/utils/resourceStateAdapters.ts`
-78. `frontend-modern/src/utils/resourceTypeCompat.ts`
-79. `frontend-modern/src/utils/resourceTypePresentation.ts`
-80. `frontend-modern/src/utils/serviceHealthPresentation.ts`
-81. `frontend-modern/src/utils/sourceTypePresentation.ts`
-82. `frontend-modern/src/utils/workloadTypePresentation.ts`
-83. `frontend-modern/src/utils/resourceIdentity.ts`
-84. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
-85. `frontend-modern/src/hooks/useUnifiedResources.ts`
-86. `frontend-modern/src/types/resource.ts`
-87. `frontend-modern/src/utils/sourcePlatforms.ts`
-88. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-89. `internal/unifiedresources/kubernetes_metric_ids.go`
-90. `internal/unifiedresources/policy_posture.go`
-91. `frontend-modern/src/features/platformNavigation/platformNavigationModel.ts`
-91. `internal/unifiedresources/clone.go`
-92. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
-93. `internal/unifiedresources/storage_consumers.go`
-94. `frontend-modern/src/features/standalone/standalonePageModel.ts`
-95. `frontend-modern/src/features/standalone/StandalonePageSurface.tsx`
-96. `frontend-modern/src/features/standalone/AgentsMachinesTable.tsx`
-97. `frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx`
-98. `internal/platformsupport/manifest_generated.go`
-99. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
-100. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
-101. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
-102. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
-103. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
-104. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
-105. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
-106. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
-107. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
-108. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
-109. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
-110. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
-111. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
-112. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
-113. `frontend-modern/src/features/docker/DockerAlertsTable.tsx`
-114. `frontend-modern/src/features/docker/DockerServicesTable.tsx`
-115. `frontend-modern/src/features/docker/DockerStorageUsageTable.tsx`
-116. `frontend-modern/src/features/actions/ActionDecisionPacket.tsx`
-117. `frontend-modern/src/features/actions/ActionReviewDialog.tsx`
-118. `frontend-modern/src/features/actions/actionPresentation.ts`
-118a. `frontend-modern/src/features/actions/actionRouting.ts`
-119. `frontend-modern/src/pages/Actions.tsx`
-120. `frontend-modern/src/routing/navigation.ts`
-121. `frontend-modern/src/routing/routePreload.ts`
-116. `frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx`
-117. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
-118. `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`
-119. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
-120. `frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx`
-121. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
-122. `frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx`
-122a. `frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts`
-122b. `frontend-modern/src/features/proxmox/proxmoxPageModel.ts`
-123. `frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx`
-124. `frontend-modern/src/features/truenas/TrueNASAppsTable.tsx`
-125. `frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx`
-126. `frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx`
-127. `frontend-modern/src/features/truenas/TrueNASServicesTable.tsx`
-128. `frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx`
-129. `frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx`
-130. `frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx`
-131. `frontend-modern/src/features/vmware/VsphereActivityTable.tsx`
-132. `frontend-modern/src/features/vmware/VsphereAlertsTable.tsx`
-133. `frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx`
-134. `frontend-modern/src/features/vmware/VsphereNetworksTable.tsx`
-135. `frontend-modern/src/features/truenas/TrueNASPageSurface.tsx`
-136. `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`
+77. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+78. `frontend-modern/src/utils/resourceStateAdapters.ts`
+79. `frontend-modern/src/utils/resourceTypeCompat.ts`
+80. `frontend-modern/src/utils/resourceTypePresentation.ts`
+81. `frontend-modern/src/utils/serviceHealthPresentation.ts`
+82. `frontend-modern/src/utils/sourceTypePresentation.ts`
+83. `frontend-modern/src/utils/workloadTypePresentation.ts`
+84. `frontend-modern/src/utils/resourceIdentity.ts`
+85. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+86. `frontend-modern/src/hooks/useUnifiedResources.ts`
+87. `frontend-modern/src/types/resource.ts`
+88. `frontend-modern/src/utils/sourcePlatforms.ts`
+89. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+90. `internal/unifiedresources/kubernetes_metric_ids.go`
+91. `internal/unifiedresources/policy_posture.go`
+92. `frontend-modern/src/features/platformNavigation/platformNavigationModel.ts`
+93. `internal/unifiedresources/clone.go`
+94. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
+95. `internal/unifiedresources/storage_consumers.go`
+96. `frontend-modern/src/features/standalone/standalonePageModel.ts`
+97. `frontend-modern/src/features/standalone/StandalonePageSurface.tsx`
+98. `frontend-modern/src/features/standalone/AgentsMachinesTable.tsx`
+99. `frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx`
+100. `internal/platformsupport/manifest_generated.go`
+101. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
+102. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
+103. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
+104. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
+105. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
+106. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
+107. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
+108. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
+109. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
+110. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
+111. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
+112. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
+113. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
+114. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
+115. `frontend-modern/src/features/docker/DockerAlertsTable.tsx`
+116. `frontend-modern/src/features/docker/DockerServicesTable.tsx`
+117. `frontend-modern/src/features/docker/DockerStorageUsageTable.tsx`
+118. `frontend-modern/src/features/actions/ActionDecisionPacket.tsx`
+119. `frontend-modern/src/features/actions/ActionReviewDialog.tsx`
+120. `frontend-modern/src/features/actions/actionPresentation.ts`
+     118a. `frontend-modern/src/features/actions/actionRouting.ts`
+121. `frontend-modern/src/pages/Actions.tsx`
+122. `frontend-modern/src/routing/navigation.ts`
+123. `frontend-modern/src/routing/routePreload.ts`
+124. `frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx`
+125. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
+126. `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`
+127. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
+128. `frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx`
+129. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
+130. `frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx`
+     122a. `frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts`
+     122b. `frontend-modern/src/features/proxmox/proxmoxPageModel.ts`
+131. `frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx`
+132. `frontend-modern/src/features/truenas/TrueNASAppsTable.tsx`
+133. `frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx`
+134. `frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx`
+135. `frontend-modern/src/features/truenas/TrueNASServicesTable.tsx`
+136. `frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx`
+137. `frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx`
+138. `frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx`
+139. `frontend-modern/src/features/vmware/VsphereActivityTable.tsx`
+140. `frontend-modern/src/features/vmware/VsphereAlertsTable.tsx`
+141. `frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx`
+142. `frontend-modern/src/features/vmware/VsphereNetworksTable.tsx`
+143. `frontend-modern/src/features/truenas/TrueNASPageSurface.tsx`
+144. `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`
 
 ## Shared Boundaries
 
@@ -845,12 +844,12 @@ container inventory table.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `performance-and-scalability`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
 16. `frontend-modern/src/stores/websocket-global.ts` shared with `performance-and-scalability`: the process-wide realtime store owner is both a unified-resource state boundary and a fleet-scale connection and reconciliation hot path.
-16. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+17. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
     remain `platform` entries.
-17. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
-18. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+18. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+19. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared vocabulary boundary owns the generic `docker` platform label:
     selectors, badges, and filter options render it as "Docker / Podman" so
     v5 Docker users can still find the runtime surface while Podman-backed
@@ -872,8 +871,8 @@ container inventory table.
     display/source family; `platformScopes` is the overlap set used when a
     runtime workload belongs to both Docker and an owning infrastructure
     platform.
-19. `frontend-modern/src/utils/workloads.ts` shared with `performance-and-scalability`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
-20. `internal/api/resourceapi/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+20. `frontend-modern/src/utils/workloads.ts` shared with `performance-and-scalability`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
+21. `internal/api/resourceapi/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
     `/api/resources` type filters must accept URL-encoded comma-separated lists
     from browser query builders exactly like literal comma separators, so Docker
     / Podman runtime pages do not lose `docker-host` inventory while requesting
@@ -887,12 +886,13 @@ container inventory table.
     id over host labels when building host-level Discovery targets, so detail
     drawers, websocket hydration, and API lookups use the same identity.
     The global resource timeline is also owned at this boundary. `GET
-    /api/resources/timeline` may expose provider-wide `ResourceChange` records
+/api/resources/timeline` may expose provider-wide `ResourceChange` records
     for platform pages before a single resource drawer is selected, but those
     records must still come from the canonical resource-change store and use
     the same filter parser as per-resource timelines. Relationship-aware
     expansion remains a per-resource timeline behavior; unscoped provider
     activity must not infer related resources in the frontend.
+
 ## Extension Points
 
 The global Product Trust projection is owned at
@@ -1128,9 +1128,9 @@ cannot create a browser mutation.
    tables must not render ConfigMap or Secret payload values, and metadata-only
    rows must not expose key names as if payload fields had been read.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
-Resource detail mappers now reuse the shared
-`frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
-labels so the canonical unified-resource presentation layer owns the wording.
+   Resource detail mappers now reuse the shared
+   `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
+   labels so the canonical unified-resource presentation layer owns the wording.
 
 The canonical AI-safe summary builder now owns the sensitivity-specific suffix
 phrases for `sensitive` and `restricted` resources, so the backend policy
@@ -1148,350 +1148,342 @@ Canonical policy posture aggregation is owned here as well. Resource API
 payloads may expose a camelCase transport projection, but the counts must be
 derived from `internal/unifiedresources/policy_posture.go` after canonical
 policy metadata has been refreshed, not recomputed from frontend labels,
-AI-only summary payloads, or page-local heuristics.
-4. Add metrics-target normalization, surface-friendly projections of
-   nested source payloads, or synthetic metrics support through
-   `internal/unifiedresources/metrics_targets.go`,
-   `internal/unifiedresources/metrics.go`, and the relevant adapter in
-   `internal/unifiedresources/adapters.go`. The unified `Resource` shape
-   carries top-level `Uptime` and `Temperature` projections so frontend
-   tables that render those columns do not have to dig into per-source
-   payloads (`agent.uptimeSeconds`, `proxmox.uptime`,
-   `agent.temperature`, `proxmox.temperature`); adapters that wrap an
-   `AgentData` or `ProxmoxData` must populate those top-level fields
-   from the nested source values, and adapters for resource types that
-   have no native uptime/temperature concept (e.g. `k8s-deployment`,
-   `k8s-replicaset`, `k8s-configmap`, `k8s-secret`,
-   `docker-service`, `k8s-cluster` aggregates) must leave them unset so
-   bespoke platform-page tables can hide the column entirely.
-   Kubernetes deployment metrics live on the canonical adapter through
-   `metricsFromKubernetesDeployment(cluster, deployment)`. Upstream
-   Deployments do not expose CPU / memory natively because they are
-   scheduling abstractions over their controlled pods, so the helper
-   returns nil for non-mock runtimes (until the adapter aggregates pod
-   metrics into the owning deployment) and synthesizes deployment-stable
-   CPU / memory / disk / network values for mock mode so the
-   platform-page Deployments table renders meaningful operator values
-   instead of dashes. The synthetic branch is gated by
-   `mockmode.IsEnabled()` and scales with the deployment's
-   ready/desired/available replica state so degraded deployments read as
-   elevated pressure on the surviving replicas.
-   Namespaced Kubernetes adapters share one Resource scaffold: a new
-   namespaced kind populates its kind-specific `K8sData` fields (after
-   `baseKubernetesData`) and delegates Resource assembly and identity to
-   `namespacedKubernetesResource(cluster, clusterName, namespace, name,
+AI-only summary payloads, or page-local heuristics. 4. Add metrics-target normalization, surface-friendly projections of
+nested source payloads, or synthetic metrics support through
+`internal/unifiedresources/metrics_targets.go`,
+`internal/unifiedresources/metrics.go`, and the relevant adapter in
+`internal/unifiedresources/adapters.go`. The unified `Resource` shape
+carries top-level `Uptime` and `Temperature` projections so frontend
+tables that render those columns do not have to dig into per-source
+payloads (`agent.uptimeSeconds`, `proxmox.uptime`,
+`agent.temperature`, `proxmox.temperature`); adapters that wrap an
+`AgentData` or `ProxmoxData` must populate those top-level fields
+from the nested source values, and adapters for resource types that
+have no native uptime/temperature concept (e.g. `k8s-deployment`,
+`k8s-replicaset`, `k8s-configmap`, `k8s-secret`,
+`docker-service`, `k8s-cluster` aggregates) must leave them unset so
+bespoke platform-page tables can hide the column entirely.
+Kubernetes deployment metrics live on the canonical adapter through
+`metricsFromKubernetesDeployment(cluster, deployment)`. Upstream
+Deployments do not expose CPU / memory natively because they are
+scheduling abstractions over their controlled pods, so the helper
+returns nil for non-mock runtimes (until the adapter aggregates pod
+metrics into the owning deployment) and synthesizes deployment-stable
+CPU / memory / disk / network values for mock mode so the
+platform-page Deployments table renders meaningful operator values
+instead of dashes. The synthetic branch is gated by
+`mockmode.IsEnabled()` and scales with the deployment's
+ready/desired/available replica state so degraded deployments read as
+elevated pressure on the surviving replicas.
+Namespaced Kubernetes adapters share one Resource scaffold: a new
+namespaced kind populates its kind-specific `K8sData` fields (after
+`baseKubernetesData`) and delegates Resource assembly and identity to
+`namespacedKubernetesResource(cluster, clusterName, namespace, name,
    resourceType, status, data, labels)` in
-   `internal/unifiedresources/adapters.go` instead of hand-rolling the
-   `Resource{...}` literal plus `namespacedKubernetesIdentity` return.
-   The scaffold owns `Technology: "kubernetes"`, `LastSeen` from the
-   cluster, `UpdatedAt`, the `Kubernetes` facet pointer, and label-derived
-   tags; only cluster-scoped or non-namespaced kinds (cluster, node, PV,
-   StorageClass, namespace itself) keep bespoke identity construction.
-5. Add platform registry, resolution, host-dedup, or monitored-system
-   projection behavior through `internal/unifiedresources/registry.go`,
-   `internal/unifiedresources/resolve.go`,
-   `internal/unifiedresources/resolved_host_set.go`,
-   `internal/unifiedresources/snapshot_source_filter.go`,
-   `internal/unifiedresources/store.go`,
-   `internal/unifiedresources/kubernetes_capabilities.go`,
-   `internal/unifiedresources/pbs_rollups.go`,
-   `internal/unifiedresources/monitored_systems.go`,
-   `internal/unifiedresources/monitored_system_projection.go`, and
-   the shared list-order helpers consumed by `internal/api/resourceapi/resources.go`;
-   canonical unified-resource lists must preserve one deterministic
-   `name -> type -> id` order across registry reads, REST pagination, and
-   websocket-backed refreshes so equal-name resources do not silently reshuffle
-   between cold hydrate and later runtime updates
-   Realtime delta reconciliation must preserve exact display-object identity
-   for untouched non-host resources, canonicalize changed and newly added rows,
-   and re-evaluate exactly the host-merge groups the delta could have altered:
-   a group refreshes when a flagged id names one of its current members, and a
-   flagged id absent from the incoming snapshot (a removal, or a partner id an
-   earlier coalesce folded away) conservatively refreshes every group. A tick
-   that flags no member of a group must preserve that group's cached merged
-   host row by object identity. Incremental and
-   full-snapshot paths must therefore produce the same canonical host identity,
-   labels, and compatibility fields without cloning the entire estate per tick.
-   The connection store publishes each reconciliation's changed IDs and resource
-   revision. `useUnifiedResources` applies that revision to the shared
-   all-resources cache once and derives type-filtered route projections from the
-   canonical result. An instance observing a revision the shared cache already
-   holds must not re-read or deep-unwrap the realtime store, and the merging
-   instance dereferences raw store subtrees only for rows the delta merge will
-   clone (flagged ids, host-merge members, and ids absent from the shared
-   cache). A sequential revision with unchanged route membership
-   patches only the changed row indices plus the bounded agent coalescing set.
-   The connection store retains a bounded per-revision changed-id history; an
-   instance that resumes several revisions behind the shared cache must catch
-   up through the unioned changed-id set as an incremental delta merge whenever
-   the history covers the gap, so tab entry and re-entry do not deep-unwrap or
-   remerge the full estate. Only initial hydration, uncovered revision gaps,
-   full-snapshot commits, additions, removals, or reorderings
-   fall back to keyed full reconciliation.
-   Each reconciliation also records the per-resource top-level keys its merge
-   patches touched (`platformData` expanded one level), published with the
-   revision and unioned across the history window and the hidden-tab deferral
-   set with unknown-shape contamination. A changed non-host row whose recorded
-   keys stay within the pass-through metric fields, the `proxmox` facet
-   mirror, and the `platformData` metric mirror leaves takes a fast merge
-   path: the previous display row with only the patched subtrees cloned in,
-   bypassing the full clone-canonicalize-merge, and committing to the
-   connection store and instance projections as per-key subtree writes rather
-   than whole-row keyed reconciles. The fast output must stay
-   content-equivalent to the full path (facet keeps, deletion semantics, and
-   default-policy synthesis included), must never adopt raw-baseline subtrees
-   by reference, and any row outside the allow-list — including agent rows,
-   whose output can depend on host coalescing — must take the full path. Route-prefetch and route-realtime
-   activation are separate:
-   a prefetched hidden surface may retain REST data without subscribing its full
-   projection to every realtime tick, and activation catches up from the shared
-   cache. Richer REST-only facets are promoted into that cache before thinner
-   realtime deltas are applied, so the optimization cannot discard disk I/O,
-   PBS, policy, or provider metadata.
-   Broadcast payload slimming is reversed at the connection-store ingestion
-   boundary, before any canonical merge or consumer read: `capabilitiesRef` is
-   expanded into per-row inline `capabilities` through the state payload's
-   `capabilityCatalog` (per-row clones, because store reconciliation mutates
-   adopted objects in place), and a resource arriving without a policy is given
-   a synthesized default posture (internal sensitivity, cloud-summary routing,
-   no redactions) so a posture transition patched as `policy: null` cannot
-   leave a stale governed policy behind. Client identity-alias resolution must
-   consult `canonicalIdentity.supersededIds` explicitly, because broadcast
-   aliases no longer duplicate superseded canonical ids.
-   That same unified-resource owner also defines the canonical transport
-   projection for operator-facing resources: `/api/resources` and websocket
-   `state.resources` must share `ContractResourceType`, canonical display
-   names, and canonical cluster labels instead of publishing separate REST and
-   broadcast aliases for the same machine.
-   Fleet command posture that reaches resource-facing rows must remain a
-   projection of `/api/connections` `fleet.commandPolicy`: desired server
-   policy, applied agent truth, enforcement, and reason stay separate. Unified
-   resource consumers may show compact remote-control status, but they must not
-   treat top-level `remoteControl` as applied agent runtime truth, and they
-   must preserve desired/applied drift or no-report attention when enriching
-   resource rows.
-   Platform-page stale-agent notices may consume canonical agent identity from
-   merged resources only to scope the Infrastructure settings update-command
-   route to the affected agents. That scoped lifecycle handoff must not become a
-   new resource-action authority, a page-local command runner, or a substitute
-   for the `/api/connections` fleet command-policy truth described above.
-   Resource consumers must also use the API-owned agent update target when
-   comparing resource-carried agent versions; the running app build version is
-   not a resource freshness contract.
-   Kubernetes node rows are cluster-agent-backed for this purpose: even when a
-   canonical `k8s-node` row is a pure Kubernetes API projection with no merged
-   `agent` facet, `internal/unifiedresources/adapters.go` must carry the
-   cluster `AgentID` and cluster-scoped `AgentVersion` on the row's
-   Kubernetes facet so platform consumers can scope stale-agent notices and
-   update-command links from typed resource evidence instead of rebuilding
-   ownership from the parent cluster row.
-   `internal/unifiedresources/top_level_systems.go`
-   Explicit linked-host correlation is canonical here: when Kubernetes node
-   ingest has a resolved backing host agent, the registry must merge that node
-   into the agent resource instead of publishing duplicate top-level
-   infrastructure rows for the same machine under both `agent` and `k8s-node`
-   identities.
-   Canonical read-state overlays belong here as well: when monitoring or a
-   preview path needs to project extra source-native records onto an existing
-   settled read state, it must do so through
-   `internal/unifiedresources/monitor_adapter.go` and
-   `internal/unifiedresources/registry.go` so matcher seeding, manual links,
-   and merge semantics stay unified-resource-owned instead of being rebuilt in
-   consumers.
-   Storage consumer projection is unified-resource-owned through
-   `internal/unifiedresources/storage_consumers.go`. When a provider publishes
-   source-native storage consumer metadata that cannot be derived from shared
-   Proxmox/PBS relationship indexes, refresh must preserve that source-owned
-   consumer count, consumer type list, and top-consumer summary on the
-   canonical storage resource unless a stronger shared consumer projection has
-   already populated those fields in the same refresh.
-   Operator-facing storage posture wording is part of that same ownership:
-   when multiple storage-risk reasons exist, shared posture helpers must prefer
-   the most decision-useful protection loss summary such as lost parity over a
-   generic disk-count aggregate, so resource drawers and incidents do not hide
-   the actual protection boundary behind a broader count phrase.
-6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
-8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership, `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership, and `frontend-modern/src/components/Discovery/discoveryReadiness.ts` for the shared readiness verdict used by resource-drawer Discovery surfaces. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
-   Drawer-level feature availability belongs to
-   `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`.
-   It consumes the shared AI runtime settings store and fails closed until the
-   runtime explicitly reports `discovery_enabled=true`. Resource, guest, node,
-   and Docker host drawers must use that boundary for every Discovery tab,
-   readiness badge, analysis reveal, identified-service suggestion, and
-   passive discovery-record query. A disabled or unresolved feature must leave
-   no Discovery mention in drawer chrome or content and must not start a
-   drawer-local discovery read.
-   Resource drawer secondary sections, action history, discovery run summaries,
-   and other compact resource-detail cards may own their resource-specific
-   labels, rows, filters, and actions, but the repeated bordered compact frame
-   is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
-   `ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
-   `InfoCardFrame` for that shell instead of restoring local card-frame
-   classes.
-   Curated technical inventory follows the shared compact-row contract instead
-   of the secondary-card contract. Docker-host drawers must project system,
-   runtime, memory, storage, and telemetry facts through
-   `TechnicalDetailsSection` with canonical `DetailSection[]` data, while the
-   unified-resource drawer keeps its existing compact technical summary tables
-   visible. Only genuinely large or interactive provider-support content stays
-   lazy behind `TechnicalDetailsDisclosure`; technical inventory must not
-   restore a local card mosaic or add a drawer-open fetch.
-9. Keep dashboard and infrastructure freshness on the canonical unified-resource
-   ownership path. `frontend-modern/src/stores/websocket.ts`,
-   `frontend-modern/src/utils/resourceStateAdapters.ts`, and
-   `frontend-modern/src/hooks/useUnifiedResources.ts` together own the frontend
-   canonicalization boundary: REST may hydrate the initial snapshot and
-   unsupported filtered queries, but supported snapshot freshness must come
-   from websocket `state.resources` instead of layering confirmatory
-   route-local REST refetch loops over already-owned resource
-   updates.
-   Oversized WebSocket recovery is the transport exception: a complete
-   `/api/state` response may refresh display state while the connection remains
-   baseline-free, but resource deltas must not patch that independently built
-   REST snapshot. The store resumes delta application only after the same
-   connection delivers a complete WebSocket resource snapshot.
-   Browser WebSocket liveness tracking is part of that same store boundary:
-   valid inbound server messages, including heartbeat `ping`/`pong` traffic,
-   must refresh the browser-side activity timestamp so quiet periods between
-   resource snapshots do not cause avoidable reconnect churn.
-   That shared store/adapter/hook path must also preserve canonical row shape
-   across transport boundaries: thinner realtime `state.resources` payloads
-   must merge into the existing canonical resource snapshot instead of
-   downgrading richer REST-only infrastructure details such as disk I/O, source
-   metadata, or platform summary fields after first hydrate. For default
-   Source lists and their source-specific facets are the exception: a current
-   snapshot with canonical source evidence replaces stale source lists and
-   removes provider facets that no longer have matching source evidence, so
-   rows do not keep displaying a previous platform identity after websocket
-   refreshes. For default
-   `initialHydration: 'immediate'` consumers, that same path must not paint the
-   thinner websocket transport before the first canonical REST snapshot exists;
-   only explicit websocket-first consumers may render directly from the realtime
-   transport before canonical hydrate completes. Operator surfaces that must
-   preserve already-known infrastructure continuity after login, such as the
-   Infrastructure page, must use websocket-first hydration with stale-cache
-   REST revalidation after the first-paint settle window so the page can paint
-   from live state immediately without forcing a second resource-shape
-   transition while summary and table surfaces are still mounting.
-   Org-scope and enabled-state transitions in
-   `frontend-modern/src/hooks/useUnifiedResources.ts` must invalidate older
-   in-flight REST refreshes before publishing the new scoped cache entry, so a
-   stale request cannot set active-scope errors, clear the active request guard,
-   or replace the currently mounted Infrastructure/Workloads resource snapshot.
-   Canonical cluster membership in that shared path must come only from
-   explicit cluster identity such as Kubernetes context or platform cluster
-   labels; standalone resource names must never be repurposed as synthetic
-   `clusterId` values.
-13. Keep operator-facing resource analysis vocabulary task-first on unified-resource
-    surfaces. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`,
-    `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`,
-    and `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` may expose
-    provider identity or governed safe-summary posture when that context helps
-    an operator, but the rendered labels must stay product-neutral and use
-    `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
-    generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
-    shell.
-14. Keep the operator-facing unified resource table width-aware at the table
-    surface, not just at the browser viewport. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-    must route its root ref through `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-    and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-    owns the column-priority breakpoints for host and service infrastructure
-    rows. When the app shell leaves tablet-sized space during live resize, the
-    table hides lower-priority metadata first. At phone width, the state model
-    must remove the old 640-pixel floor, preserve identity at exactly 30 percent
-    of the table, and allocate the remaining width across the bounded
-    source-relevant health and activity columns. Both the document and table
-    shell must remain free of horizontal overflow; desktop and tablet stages
-    retain their existing complete column contracts.
-15. Keep shared policy-posture framing on the unified-resource card owner.
-    `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-    may accept caller-owned subtitle or resource-count wording when Patrol or
-    another shared surface needs to explain how the same governed policy counts
-    should be read, but those framing lines must extend the shared card API
-    rather than spawning page-local policy summary shells.
-16. Keep platform/runtime top-level route paths on the canonical resource-link
-    helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
-    `STANDALONE_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
-    `VMWARE_PATH`, `PATROL_PATH`, `PATROL_CONTROL_ANCHOR`,
-    `PATROL_CONTROL_PATH`, and `PATROL_CONTROL_STARTER_QUERY_PARAM` constants,
-    the route-backed Patrol control starter helpers, and the `buildStandalonePath`,
-    `buildDockerPath`, `buildKubernetesPath`, `buildTrueNASPath`,
-    `buildVmwarePath` builders.
-    Per-platform surfaces and tab specs must
-    derive every internal link from those builders so the canonical resource
-    URL vocabulary stays single-sourced; ad hoc string concatenation of
-    platform routes inside feature directories is not permitted. The canonical
-    Pulse Intelligence external-agent hash
-    `/settings/pulse-intelligence/assistant#external-agent-setup` and legacy
-    `/settings/security/api#external-agent-setup` /
-    `/settings/security/api#pulse-mcp-setup` compatibility hashes may live in
-    the shared route helper, but they are adjacent settings route state, not
-    unified-resource identity, platform scope, or drawer focus state.
-    The Patrol `patrolControlStarter=patrol_control` query is an adjacent
-    first-party Patrol control handoff flag, with legacy
-    `operationsLoopStarter` values accepted only as compatibility aliases, not
-    unified-resource filters or focus keys. Unified-resource consumers must not reuse those values for resource
-    identity, list filtering, contextual focus, storage state, recovery state,
-    or platform scoping.
-    The user-facing Machines surface's default resource route is the machines projection
-    (`/standalone/machines`); agentless endpoint rows use the
-    `/standalone/availability` projection and must not be collapsed into a
-    generic overview URL.
-    The frontend-primitives-owned Machines IA contract consumes the
-    unified-resource projection for Pulse-managed standalone agent rows and
-    agentless availability endpoint rows; this subsystem owns only the
-    membership rules for those projected rows. Agent membership must require
-    `resource.type === "agent"`, canonical Pulse-agent source evidence from
-    resource sources or source status, and no stronger provider-owner evidence
-    from Proxmox, VMware, TrueNAS, or Kubernetes. Source-less legacy snapshots
-    may fall back to a normalized `platformType === "agent"`, but
-    provider-owned nodes must not become machine-page members through
-    hostname, `agent` platform scope, or agent telemetry alone; those facts
-    surface as facets on the owning provider page.
-    `AgentsMachinesTable.tsx` may own row membership, resource-derived menu
-    eligibility, evidence-gated column relevance, and remove-agent semantics
-    for these projected rows. In particular, the GPU metric column and its
-    View choice are relevant only when at least one projected machine reports
-    finite GPU utilization; absent telemetry must not produce an empty default
-    column or a no-op column choice, while persisted visibility remains ready
-    for the column when evidence later appears. The
-    compact row action trigger chrome stays under the frontend-primitives
-    `ActionIconButton` boundary rather than becoming a unified-resource-local
-    button shell.
-    Machines list search and online-state narrowing are frontend route state,
-    not new unified-resource membership fields. `StandalonePageSurface.tsx`
-    owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
-    reset, while `AgentsMachinesTable.tsx` consumes those controlled values so
-    saved links and bookmarks cannot diverge from the canonical projected row
-    set. Those query parameters must only narrow the already-owned agent
-    projection; they must not cause provider nodes or availability endpoints to
-    enter the Machines membership bucket.
-    `PROXMOX_BACKUPS_QUERY_PARAMS` in the same shared route-helper module is
-    storage/recovery-owned filter and workspace state for the Proxmox Backups
-    surface. Its query, view, node, type, source, posture, and day keys may
-    narrow already-correlated backup rows, but they do not add unified-resource
-    membership, change canonical workload identity, or turn recovery evidence
-    into a provider-resource projection.
-    The Proxmox backup workspace's chronological and coverage views are
-    canonical route state under `/proxmox/backups/date` and
-    `/proxmox/backups/coverage`. The shared route helper owns those path
-    builders; the backup surface must use the shared platform section-tab
-    primitive for navigation and may retain legacy query parsing only as
-    compatibility input. Those view paths describe backup evidence and must
-    not be treated as unified-resource membership or workload identity.
-    The default tab for each platform path must point at a sub-tab whose
-    canonical unified-resource projection actually populates, and visible
-    workflow subtabs must stay evidence-gated by the same canonical row or
-    signal source instead of advertising empty object browsers. The
-    canonical TrueNAS adapter (`internal/truenas/provider.go::
+`internal/unifiedresources/adapters.go` instead of hand-rolling the
+`Resource{...}` literal plus `namespacedKubernetesIdentity` return.
+The scaffold owns `Technology: "kubernetes"`, `LastSeen` from the
+cluster, `UpdatedAt`, the `Kubernetes` facet pointer, and label-derived
+tags; only cluster-scoped or non-namespaced kinds (cluster, node, PV,
+StorageClass, namespace itself) keep bespoke identity construction. 5. Add platform registry, resolution, host-dedup, or monitored-system
+projection behavior through `internal/unifiedresources/registry.go`,
+`internal/unifiedresources/resolve.go`,
+`internal/unifiedresources/resolved_host_set.go`,
+`internal/unifiedresources/snapshot_source_filter.go`,
+`internal/unifiedresources/store.go`,
+`internal/unifiedresources/kubernetes_capabilities.go`,
+`internal/unifiedresources/pbs_rollups.go`,
+`internal/unifiedresources/monitored_systems.go`,
+`internal/unifiedresources/monitored_system_projection.go`, and
+the shared list-order helpers consumed by `internal/api/resourceapi/resources.go`;
+canonical unified-resource lists must preserve one deterministic
+`name -> type -> id` order across registry reads, REST pagination, and
+websocket-backed refreshes so equal-name resources do not silently reshuffle
+between cold hydrate and later runtime updates
+Realtime delta reconciliation must preserve exact display-object identity
+for untouched non-host resources, canonicalize changed and newly added rows,
+and re-evaluate exactly the host-merge groups the delta could have altered:
+a group refreshes when a flagged id names one of its current members, and a
+flagged id absent from the incoming snapshot (a removal, or a partner id an
+earlier coalesce folded away) conservatively refreshes every group. A tick
+that flags no member of a group must preserve that group's cached merged
+host row by object identity. Incremental and
+full-snapshot paths must therefore produce the same canonical host identity,
+labels, and compatibility fields without cloning the entire estate per tick.
+The connection store publishes each reconciliation's changed IDs and resource
+revision. `useUnifiedResources` applies that revision to the shared
+all-resources cache once and derives type-filtered route projections from the
+canonical result. An instance observing a revision the shared cache already
+holds must not re-read or deep-unwrap the realtime store, and the merging
+instance dereferences raw store subtrees only for rows the delta merge will
+clone (flagged ids, host-merge members, and ids absent from the shared
+cache). A sequential revision with unchanged route membership
+patches only the changed row indices plus the bounded agent coalescing set.
+The connection store retains a bounded per-revision changed-id history; an
+instance that resumes several revisions behind the shared cache must catch
+up through the unioned changed-id set as an incremental delta merge whenever
+the history covers the gap, so tab entry and re-entry do not deep-unwrap or
+remerge the full estate. Only initial hydration, uncovered revision gaps,
+full-snapshot commits, additions, removals, or reorderings
+fall back to keyed full reconciliation.
+Each reconciliation also records the per-resource top-level keys its merge
+patches touched (`platformData` expanded one level), published with the
+revision and unioned across the history window and the hidden-tab deferral
+set with unknown-shape contamination. A changed non-host row whose recorded
+keys stay within the pass-through metric fields, the `proxmox` facet
+mirror, and the `platformData` metric mirror leaves takes a fast merge
+path: the previous display row with only the patched subtrees cloned in,
+bypassing the full clone-canonicalize-merge, and committing to the
+connection store and instance projections as per-key subtree writes rather
+than whole-row keyed reconciles. The fast output must stay
+content-equivalent to the full path (facet keeps, deletion semantics, and
+default-policy synthesis included), must never adopt raw-baseline subtrees
+by reference, and any row outside the allow-list — including agent rows,
+whose output can depend on host coalescing — must take the full path. Route-prefetch and route-realtime
+activation are separate:
+a prefetched hidden surface may retain REST data without subscribing its full
+projection to every realtime tick, and activation catches up from the shared
+cache. Richer REST-only facets are promoted into that cache before thinner
+realtime deltas are applied, so the optimization cannot discard disk I/O,
+PBS, policy, or provider metadata.
+Broadcast payload slimming is reversed at the connection-store ingestion
+boundary, before any canonical merge or consumer read: `capabilitiesRef` is
+expanded into per-row inline `capabilities` through the state payload's
+`capabilityCatalog` (per-row clones, because store reconciliation mutates
+adopted objects in place), and a resource arriving without a policy is given
+a synthesized default posture (internal sensitivity, cloud-summary routing,
+no redactions) so a posture transition patched as `policy: null` cannot
+leave a stale governed policy behind. Client identity-alias resolution must
+consult `canonicalIdentity.supersededIds` explicitly, because broadcast
+aliases no longer duplicate superseded canonical ids.
+That same unified-resource owner also defines the canonical transport
+projection for operator-facing resources: `/api/resources` and websocket
+`state.resources` must share `ContractResourceType`, canonical display
+names, and canonical cluster labels instead of publishing separate REST and
+broadcast aliases for the same machine.
+Fleet command posture that reaches resource-facing rows must remain a
+projection of `/api/connections` `fleet.commandPolicy`: desired server
+policy, applied agent truth, enforcement, and reason stay separate. Unified
+resource consumers may show compact remote-control status, but they must not
+treat top-level `remoteControl` as applied agent runtime truth, and they
+must preserve desired/applied drift or no-report attention when enriching
+resource rows.
+Platform-page stale-agent notices may consume canonical agent identity from
+merged resources only to scope the Infrastructure settings update-command
+route to the affected agents. That scoped lifecycle handoff must not become a
+new resource-action authority, a page-local command runner, or a substitute
+for the `/api/connections` fleet command-policy truth described above.
+Resource consumers must also use the API-owned agent update target when
+comparing resource-carried agent versions; the running app build version is
+not a resource freshness contract.
+Kubernetes node rows are cluster-agent-backed for this purpose: even when a
+canonical `k8s-node` row is a pure Kubernetes API projection with no merged
+`agent` facet, `internal/unifiedresources/adapters.go` must carry the
+cluster `AgentID` and cluster-scoped `AgentVersion` on the row's
+Kubernetes facet so platform consumers can scope stale-agent notices and
+update-command links from typed resource evidence instead of rebuilding
+ownership from the parent cluster row.
+`internal/unifiedresources/top_level_systems.go`
+Explicit linked-host correlation is canonical here: when Kubernetes node
+ingest has a resolved backing host agent, the registry must merge that node
+into the agent resource instead of publishing duplicate top-level
+infrastructure rows for the same machine under both `agent` and `k8s-node`
+identities.
+Canonical read-state overlays belong here as well: when monitoring or a
+preview path needs to project extra source-native records onto an existing
+settled read state, it must do so through
+`internal/unifiedresources/monitor_adapter.go` and
+`internal/unifiedresources/registry.go` so matcher seeding, manual links,
+and merge semantics stay unified-resource-owned instead of being rebuilt in
+consumers.
+Storage consumer projection is unified-resource-owned through
+`internal/unifiedresources/storage_consumers.go`. When a provider publishes
+source-native storage consumer metadata that cannot be derived from shared
+Proxmox/PBS relationship indexes, refresh must preserve that source-owned
+consumer count, consumer type list, and top-consumer summary on the
+canonical storage resource unless a stronger shared consumer projection has
+already populated those fields in the same refresh.
+Operator-facing storage posture wording is part of that same ownership:
+when multiple storage-risk reasons exist, shared posture helpers must prefer
+the most decision-useful protection loss summary such as lost parity over a
+generic disk-count aggregate, so resource drawers and incidents do not hide
+the actual protection boundary behind a broader count phrase. 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go` 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership, `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership, and `frontend-modern/src/components/Discovery/discoveryReadiness.ts` for the shared readiness verdict used by resource-drawer Discovery surfaces. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
+Drawer-level feature availability belongs to
+`frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`.
+It consumes the shared AI runtime settings store and fails closed until the
+runtime explicitly reports `discovery_enabled=true`. Resource, guest, node,
+and Docker host drawers must use that boundary for every Discovery tab,
+readiness badge, analysis reveal, identified-service suggestion, and
+passive discovery-record query. A disabled or unresolved feature must leave
+no Discovery mention in drawer chrome or content and must not start a
+drawer-local discovery read.
+Resource drawer secondary sections, action history, discovery run summaries,
+and other compact resource-detail cards may own their resource-specific
+labels, rows, filters, and actions, but the repeated bordered compact frame
+is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
+`ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
+`InfoCardFrame` for that shell instead of restoring local card-frame
+classes.
+Curated technical inventory follows the shared compact-row contract instead
+of the secondary-card contract. Docker-host drawers must project system,
+runtime, memory, storage, and telemetry facts through
+`TechnicalDetailsSection` with canonical `DetailSection[]` data, while the
+unified-resource drawer projects runtime, identity, container, tag, alias,
+and address facts through the same `DetailSectionTable` responsive
+presentation. Only genuinely large or interactive provider-support content stays
+lazy behind `TechnicalDetailsDisclosure`; technical inventory must not
+restore a local card mosaic or add a drawer-open fetch. 9. Keep dashboard and infrastructure freshness on the canonical unified-resource
+ownership path. `frontend-modern/src/stores/websocket.ts`,
+`frontend-modern/src/utils/resourceStateAdapters.ts`, and
+`frontend-modern/src/hooks/useUnifiedResources.ts` together own the frontend
+canonicalization boundary: REST may hydrate the initial snapshot and
+unsupported filtered queries, but supported snapshot freshness must come
+from websocket `state.resources` instead of layering confirmatory
+route-local REST refetch loops over already-owned resource
+updates.
+Oversized WebSocket recovery is the transport exception: a complete
+`/api/state` response may refresh display state while the connection remains
+baseline-free, but resource deltas must not patch that independently built
+REST snapshot. The store resumes delta application only after the same
+connection delivers a complete WebSocket resource snapshot.
+Browser WebSocket liveness tracking is part of that same store boundary:
+valid inbound server messages, including heartbeat `ping`/`pong` traffic,
+must refresh the browser-side activity timestamp so quiet periods between
+resource snapshots do not cause avoidable reconnect churn.
+That shared store/adapter/hook path must also preserve canonical row shape
+across transport boundaries: thinner realtime `state.resources` payloads
+must merge into the existing canonical resource snapshot instead of
+downgrading richer REST-only infrastructure details such as disk I/O, source
+metadata, or platform summary fields after first hydrate. For default
+Source lists and their source-specific facets are the exception: a current
+snapshot with canonical source evidence replaces stale source lists and
+removes provider facets that no longer have matching source evidence, so
+rows do not keep displaying a previous platform identity after websocket
+refreshes. For default
+`initialHydration: 'immediate'` consumers, that same path must not paint the
+thinner websocket transport before the first canonical REST snapshot exists;
+only explicit websocket-first consumers may render directly from the realtime
+transport before canonical hydrate completes. Operator surfaces that must
+preserve already-known infrastructure continuity after login, such as the
+Infrastructure page, must use websocket-first hydration with stale-cache
+REST revalidation after the first-paint settle window so the page can paint
+from live state immediately without forcing a second resource-shape
+transition while summary and table surfaces are still mounting.
+Org-scope and enabled-state transitions in
+`frontend-modern/src/hooks/useUnifiedResources.ts` must invalidate older
+in-flight REST refreshes before publishing the new scoped cache entry, so a
+stale request cannot set active-scope errors, clear the active request guard,
+or replace the currently mounted Infrastructure/Workloads resource snapshot.
+Canonical cluster membership in that shared path must come only from
+explicit cluster identity such as Kubernetes context or platform cluster
+labels; standalone resource names must never be repurposed as synthetic
+`clusterId` values. 13. Keep operator-facing resource analysis vocabulary task-first on unified-resource
+surfaces. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`,
+`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`,
+and `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` may expose
+provider identity or governed safe-summary posture when that context helps
+an operator, but the rendered labels must stay product-neutral and use
+`Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
+generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
+shell. 14. Keep the operator-facing unified resource table width-aware at the table
+surface, not just at the browser viewport. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+must route its root ref through `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
+and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+owns the column-priority breakpoints for host and service infrastructure
+rows. When the app shell leaves tablet-sized space during live resize, the
+table hides lower-priority metadata first. At phone width, the state model
+must remove the old 640-pixel floor, preserve identity at exactly 30 percent
+of the table, and allocate the remaining width across the bounded
+source-relevant health and activity columns. Both the document and table
+shell must remain free of horizontal overflow; desktop and tablet stages
+retain their existing complete column contracts. 15. Keep shared policy-posture framing on the unified-resource card owner.
+`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+may accept caller-owned subtitle or resource-count wording when Patrol or
+another shared surface needs to explain how the same governed policy counts
+should be read, but those framing lines must extend the shared card API
+rather than spawning page-local policy summary shells. 16. Keep platform/runtime top-level route paths on the canonical resource-link
+helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
+`STANDALONE_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
+`VMWARE_PATH`, `PATROL_PATH`, `PATROL_CONTROL_ANCHOR`,
+`PATROL_CONTROL_PATH`, and `PATROL_CONTROL_STARTER_QUERY_PARAM` constants,
+the route-backed Patrol control starter helpers, and the `buildStandalonePath`,
+`buildDockerPath`, `buildKubernetesPath`, `buildTrueNASPath`,
+`buildVmwarePath` builders.
+Per-platform surfaces and tab specs must
+derive every internal link from those builders so the canonical resource
+URL vocabulary stays single-sourced; ad hoc string concatenation of
+platform routes inside feature directories is not permitted. The canonical
+Pulse Intelligence external-agent hash
+`/settings/pulse-intelligence/assistant#external-agent-setup` and legacy
+`/settings/security/api#external-agent-setup` /
+`/settings/security/api#pulse-mcp-setup` compatibility hashes may live in
+the shared route helper, but they are adjacent settings route state, not
+unified-resource identity, platform scope, or drawer focus state.
+The Patrol `patrolControlStarter=patrol_control` query is an adjacent
+first-party Patrol control handoff flag, with legacy
+`operationsLoopStarter` values accepted only as compatibility aliases, not
+unified-resource filters or focus keys. Unified-resource consumers must not reuse those values for resource
+identity, list filtering, contextual focus, storage state, recovery state,
+or platform scoping.
+The user-facing Machines surface's default resource route is the machines projection
+(`/standalone/machines`); agentless endpoint rows use the
+`/standalone/availability` projection and must not be collapsed into a
+generic overview URL.
+The frontend-primitives-owned Machines IA contract consumes the
+unified-resource projection for Pulse-managed standalone agent rows and
+agentless availability endpoint rows; this subsystem owns only the
+membership rules for those projected rows. Agent membership must require
+`resource.type === "agent"`, canonical Pulse-agent source evidence from
+resource sources or source status, and no stronger provider-owner evidence
+from Proxmox, VMware, TrueNAS, or Kubernetes. Source-less legacy snapshots
+may fall back to a normalized `platformType === "agent"`, but
+provider-owned nodes must not become machine-page members through
+hostname, `agent` platform scope, or agent telemetry alone; those facts
+surface as facets on the owning provider page.
+`AgentsMachinesTable.tsx` may own row membership, resource-derived menu
+eligibility, evidence-gated column relevance, and remove-agent semantics
+for these projected rows. In particular, the GPU metric column and its
+View choice are relevant only when at least one projected machine reports
+finite GPU utilization; absent telemetry must not produce an empty default
+column or a no-op column choice, while persisted visibility remains ready
+for the column when evidence later appears. The
+compact row action trigger chrome stays under the frontend-primitives
+`ActionIconButton` boundary rather than becoming a unified-resource-local
+button shell.
+Machines list search and online-state narrowing are frontend route state,
+not new unified-resource membership fields. `StandalonePageSurface.tsx`
+owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
+reset, while `AgentsMachinesTable.tsx` consumes those controlled values so
+saved links and bookmarks cannot diverge from the canonical projected row
+set. Those query parameters must only narrow the already-owned agent
+projection; they must not cause provider nodes or availability endpoints to
+enter the Machines membership bucket.
+`PROXMOX_BACKUPS_QUERY_PARAMS` in the same shared route-helper module is
+storage/recovery-owned filter and workspace state for the Proxmox Backups
+surface. Its query, view, node, type, source, posture, and day keys may
+narrow already-correlated backup rows, but they do not add unified-resource
+membership, change canonical workload identity, or turn recovery evidence
+into a provider-resource projection.
+The Proxmox backup workspace's chronological and coverage views are
+canonical route state under `/proxmox/backups/date` and
+`/proxmox/backups/coverage`. The shared route helper owns those path
+builders; the backup surface must use the shared platform section-tab
+primitive for navigation and may retain legacy query parsing only as
+compatibility input. Those view paths describe backup evidence and must
+not be treated as unified-resource membership or workload identity.
+The default tab for each platform path must point at a sub-tab whose
+canonical unified-resource projection actually populates, and visible
+workflow subtabs must stay evidence-gated by the same canonical row or
+signal source instead of advertising empty object browsers. The
+canonical TrueNAS adapter (`internal/truenas/provider.go::
     truenasRecordsFromSnapshot`) already emits the top-level TrueNAS
-    appliance as a unified `agent` row tagged with the `truenas`
-    platform, so TrueNAS defaults to `/truenas/overview` (the Systems
-    sub-tab); the embedded `StorageSurface` lives at `/truenas/storage`.
-    Any future platform that wants to default to a Systems / Hosts
-    overview must first have its canonical resource adapter project the
-    platform's top-level system as a unified resource so the builder
-    default still resolves to a populated table.
+appliance as a unified `agent` row tagged with the `truenas`
+platform, so TrueNAS defaults to `/truenas/overview` (the Systems
+sub-tab); the embedded `StorageSurface` lives at `/truenas/storage`.
+Any future platform that wants to default to a Systems / Hosts
+overview must first have its canonical resource adapter project the
+platform's top-level system as a unified resource so the builder
+default still resolves to a populated table.
 
 17. Platform table ordering is a two-layer contract. Each platform table's
     default order is owned by its page model's status-first compare
@@ -1613,7 +1605,7 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
     the row may highlight in place through the shared active-resource id; if it
     is off-screen, the page must offer an explicit `Jump to row` affordance
     rather than auto-scrolling or collapsing the table on hover.
-12a. Keep infrastructure summary visibility as display preference, not a
+    12a. Keep infrastructure summary visibility as display preference, not a
     unified-resource filter. Platform/runtime pages and shared infrastructure
     summary consumers may hide or restore chart sections through shared
     presentation controls, but those controls must not mutate resource
@@ -2025,7 +2017,6 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
     `internal/recovery/store/store_test.go`
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
-
 ## Current State
 
 ### Agent libvirt domains use a provider-neutral VM facet
@@ -2199,7 +2190,9 @@ rendering or frontend fallback code.
 `resource_operator_state.go` owns the operator-set per-resource intent
 schema. `ResourceOperatorState` carries five narrow operator-intent
 fields (`IntentionallyOffline`, `NeverAutoRemediate`, maintenance
-window via `MaintenanceStartAt` / `MaintenanceEndAt` / `MaintenanceReason`,
+window via one-shot `MaintenanceStartAt` / `MaintenanceEndAt` or a mutually
+exclusive weekly `MaintenanceRecurrence`, shared `MaintenanceReason`, and
+explicit `MaintenanceScope`,
 canonical `Criticality` hint of `high|medium|low|""`, and an explicit
 `AutoRemediationPolicy`) plus
 operator-attribution metadata (`Note`, `SetAt`, `SetBy`). The shape is
@@ -2219,6 +2212,18 @@ is the explicit per-resource opt-out and always wins. Capability-owned
 capability is never eligible, low-risk eligible, or elevated eligible; it does
 not lower `MinimumApprovalLevel`. The first eligible vertical is Docker/Podman
 container `restart` at `low_risk`; unspecified capabilities normalize to never.
+Recurring maintenance names the local weekdays on which occurrences start,
+uses inclusive start and exclusive end minutes, may cross midnight, and is
+evaluated in its stored IANA timezone so DST and server relocation cannot
+silently move operator intent. Weekdays normalize to unique Monday-through-
+Sunday order. `maintenanceScope` defaults to `resource`; the only inherited
+value is `resource_and_descendants`, resolved against the canonical registry
+parent chain with cycle protection. Concrete occurrence start/end boundaries
+are derived by the same model for Alerts and post-window verification. SQLite
+persists recurrence JSON and scope in additive columns while legacy one-shot
+rows retain their existing meaning. Scheduling, updating, changing scope, or
+clearing either form remains an atomic operator-state plus resource-timeline
+lifecycle write.
 `NormalizeResourceOperatorState` trims whitespace, de-duplicates capability
 names, guarantees a non-nil empty capability list, and lower-cases the
 criticality value before persistence. SQLite reads must apply that

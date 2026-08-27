@@ -141,10 +141,21 @@ func TestCanonicalManifestUsesSharedOperatorStateVocabulary(t *testing.T) {
 		t.Fatal(err)
 	}
 	inputProperties, _ := inputSchema["properties"].(map[string]any)
-	for _, field := range []string{"monitoringMode", "lifecycleState"} {
+	for _, field := range []string{"monitoringMode", "lifecycleState", "maintenanceRecurrence", "maintenanceScope"} {
 		if _, ok := inputProperties[field]; !ok {
 			t.Fatalf("set_operator_state input schema missing %q: %v", field, inputProperties)
 		}
+	}
+	recurrence, _ := inputProperties["maintenanceRecurrence"].(map[string]any)
+	recurrenceProperties, _ := recurrence["properties"].(map[string]any)
+	for _, field := range []string{"timezone", "weekdays", "startMinute", "endMinute"} {
+		if _, ok := recurrenceProperties[field]; !ok {
+			t.Fatalf("maintenanceRecurrence schema missing %q: %v", field, recurrenceProperties)
+		}
+	}
+	scope, _ := inputProperties["maintenanceScope"].(map[string]any)
+	if got := scope["enum"]; !reflect.DeepEqual(got, []any{"resource", "resource_and_descendants"}) {
+		t.Fatalf("maintenanceScope enum = %v", got)
 	}
 	getCapability, _ := FindCapability(manifest.Capabilities, GetOperatorStateCapabilityName)
 	var outputSchema map[string]any
@@ -152,7 +163,7 @@ func TestCanonicalManifestUsesSharedOperatorStateVocabulary(t *testing.T) {
 		t.Fatal(err)
 	}
 	outputProperties, _ := outputSchema["properties"].(map[string]any)
-	for _, field := range []string{"monitoringMode", "lifecycleState"} {
+	for _, field := range []string{"monitoringMode", "lifecycleState", "maintenanceRecurrence", "maintenanceScope"} {
 		if _, ok := outputProperties[field]; !ok {
 			t.Fatalf("get_operator_state output schema missing %q: %v", field, outputProperties)
 		}

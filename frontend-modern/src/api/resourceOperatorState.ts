@@ -10,6 +10,14 @@ import { apiFetchJSON } from '@/utils/apiClient';
 export type ResourceCriticality = 'high' | 'medium' | 'low' | '';
 export type ResourceMonitoringMode = 'normal' | 'expected_offline' | 'muted';
 export type ResourceLifecycleState = 'active' | 'retired';
+export type MaintenanceScope = 'resource' | 'resource_and_descendants';
+
+export interface RecurringMaintenanceWindow {
+  timezone: string;
+  weekdays: string[];
+  startMinute: number;
+  endMinute: number;
+}
 
 export interface AutoRemediationWindow {
   timezone: string;
@@ -57,7 +65,12 @@ export interface ResourceOperatorState {
    */
   maintenanceStartAt?: string;
   maintenanceEndAt?: string;
+  maintenanceRecurrence?: RecurringMaintenanceWindow;
+  maintenanceScope?: MaintenanceScope;
   maintenanceReason?: string;
+  maintenanceWindowActive?: boolean;
+  maintenanceActiveStartAt?: string;
+  maintenanceActiveEndAt?: string;
   /**
    * Optional operator hint that affects finding sort order. One of
    * `'high' | 'medium' | 'low' | ''` (empty = default).
@@ -68,6 +81,11 @@ export interface ResourceOperatorState {
   setBy?: string;
 }
 
+interface ResourceOperatorStateLookup {
+  configured: boolean;
+  state?: ResourceOperatorState;
+}
+
 /**
  * The PUT body shape — same as the read model but with attribution
  * stripped because the server populates `setAt` and `setBy` from the
@@ -75,7 +93,12 @@ export interface ResourceOperatorState {
  */
 export type ResourceOperatorStateInput = Omit<
   ResourceOperatorState,
-  'canonicalId' | 'setAt' | 'setBy'
+  | 'canonicalId'
+  | 'setAt'
+  | 'setBy'
+  | 'maintenanceWindowActive'
+  | 'maintenanceActiveStartAt'
+  | 'maintenanceActiveEndAt'
 >;
 
 const normalizeResourceOperatorState = (state: ResourceOperatorState): ResourceOperatorState => ({
@@ -83,26 +106,33 @@ const normalizeResourceOperatorState = (state: ResourceOperatorState): ResourceO
   monitoringMode:
     state.monitoringMode || (state.intentionallyOffline ? 'expected_offline' : 'normal'),
   lifecycleState: state.lifecycleState || 'active',
+  maintenanceScope: state.maintenanceScope || 'resource',
 });
 
 /**
- * Read the operator-set state for a resource. Resolves to null when
- * the server returns 404 (no entry recorded — the default no-state
- * posture). Throws on other errors.
+ * Read the operator-set state for a resource. The lookup view represents an
+ * unset record as a successful envelope so opening a newly discovered
+ * resource does not generate a routine 404 in the browser. The 404 fallback
+ * keeps the frontend compatible with an older server during a rolling update.
  */
 export async function getResourceOperatorState(
   resourceId: string,
 ): Promise<ResourceOperatorState | null> {
   try {
-    const state = await apiFetchJSON<ResourceOperatorState>(
-      `/api/resources/${encodeURIComponent(resourceId)}/operator-state`,
+    const result = await apiFetchJSON<ResourceOperatorStateLookup | ResourceOperatorState>(
+      `/api/resources/${encodeURIComponent(resourceId)}/operator-state?view=lookup`,
       { cache: 'no-store' },
     );
-    return normalizeResourceOperatorState(state);
+    if ('configured' in result) {
+      if (!result.configured || !result.state) return null;
+      return normalizeResourceOperatorState(result.state);
+    }
+    // Rolling-update compatibility: a previous server returns the persisted
+    // state directly when it exists.
+    return normalizeResourceOperatorState(result);
   } catch (err) {
-    // The 404 response shape is `{ error: 'operator_state_not_set', ... }`.
-    // Translating into null lets the caller treat "no state" as a clean
-    // default rather than a thrown error.
+    // Previous servers express no saved state as 404
+    // `{ error: 'operator_state_not_set', ... }`.
     if (
       err &&
       typeof err === 'object' &&

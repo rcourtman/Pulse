@@ -63,6 +63,36 @@ type AutoRemediationPolicy struct {
 	Window          *AutoRemediationWindow `json:"window,omitempty"`
 }
 
+// MaintenanceScope controls whether a window applies only to the resource it
+// is stored on or also to resources below it in the canonical inventory tree.
+// Descendant propagation is deliberately opt-in: a host maintenance window
+// should not silence guests unless the operator chose that scope.
+type MaintenanceScope string
+
+const (
+	MaintenanceScopeResource               MaintenanceScope = "resource"
+	MaintenanceScopeResourceAndDescendants MaintenanceScope = "resource_and_descendants"
+)
+
+// RecurringMaintenanceWindow defines a weekly maintenance schedule in an IANA
+// timezone. Weekdays name the local day on which an occurrence starts.
+// StartMinute is inclusive and EndMinute is exclusive; end may be earlier than
+// start to represent an overnight window.
+type RecurringMaintenanceWindow struct {
+	Timezone    string   `json:"timezone"`
+	Weekdays    []string `json:"weekdays"`
+	StartMinute int      `json:"startMinute"`
+	EndMinute   int      `json:"endMinute"`
+}
+
+// MaintenanceWindowOccurrence is one concrete evaluated occurrence. Keeping
+// exact boundaries in the canonical model lets Alerts, Patrol, timelines, and
+// post-maintenance verification agree on when suppression ends.
+type MaintenanceWindowOccurrence struct {
+	StartAt time.Time `json:"startAt"`
+	EndAt   time.Time `json:"endAt"`
+}
+
 // IsValidCriticality reports whether the value is empty or one of the three
 // canonical levels. Empty is valid (operator has not set a hint). Anything
 // else is rejected at the API boundary so freeform strings cannot accumulate
@@ -148,6 +178,15 @@ type ResourceOperatorState struct {
 	MaintenanceStartAt *time.Time `json:"maintenanceStartAt,omitempty"`
 	MaintenanceEndAt   *time.Time `json:"maintenanceEndAt,omitempty"`
 
+	// MaintenanceRecurrence is the recurring alternative to the one-shot
+	// start/end pair. The two forms are mutually exclusive so there is only one
+	// schedule to explain and audit for a resource.
+	MaintenanceRecurrence *RecurringMaintenanceWindow `json:"maintenanceRecurrence,omitempty"`
+
+	// MaintenanceScope defaults to resource. resource_and_descendants is
+	// resolved against the canonical unified-resource parent chain.
+	MaintenanceScope MaintenanceScope `json:"maintenanceScope"`
+
 	// MaintenanceReason is freeform operator note attached to the window
 	// for audit / Assistant context. Surfaced verbatim in the
 	// auto-acknowledge note so the operator can see WHY future findings
@@ -189,6 +228,7 @@ func (s ResourceOperatorState) IsEmpty() bool {
 		s.AutoRemediationPolicy.Window == nil &&
 		s.MaintenanceStartAt == nil &&
 		s.MaintenanceEndAt == nil &&
+		s.MaintenanceRecurrence == nil &&
 		strings.TrimSpace(s.MaintenanceReason) == "" &&
 		s.Criticality == "" &&
 		strings.TrimSpace(s.Note) == ""
@@ -220,19 +260,86 @@ func (s ResourceOperatorState) BlocksRemediation() bool {
 // maintenance window. Returns false when no window is configured, when only
 // one of start/end is set (treated as no window), or when end <= start.
 func (s ResourceOperatorState) IsInMaintenanceAt(now time.Time) bool {
-	if s.MaintenanceStartAt == nil || s.MaintenanceEndAt == nil {
-		return false
+	_, ok := s.ActiveMaintenanceOccurrenceAt(now)
+	return ok
+}
+
+// ActiveMaintenanceOccurrenceAt returns the exact one-shot or recurring
+// occurrence containing now. It fails closed for malformed schedules; writes
+// are still rejected by ValidateResourceOperatorState.
+func (s ResourceOperatorState) ActiveMaintenanceOccurrenceAt(now time.Time) (MaintenanceWindowOccurrence, bool) {
+	if s.MaintenanceStartAt != nil && s.MaintenanceEndAt != nil &&
+		s.MaintenanceEndAt.After(*s.MaintenanceStartAt) &&
+		!now.Before(*s.MaintenanceStartAt) && now.Before(*s.MaintenanceEndAt) {
+		return MaintenanceWindowOccurrence{StartAt: s.MaintenanceStartAt.UTC(), EndAt: s.MaintenanceEndAt.UTC()}, true
 	}
-	if !s.MaintenanceEndAt.After(*s.MaintenanceStartAt) {
-		return false
+	recurrence := NormalizeRecurringMaintenanceWindow(s.MaintenanceRecurrence)
+	if recurrence == nil {
+		return MaintenanceWindowOccurrence{}, false
 	}
-	if now.Before(*s.MaintenanceStartAt) {
-		return false
+	location, err := time.LoadLocation(recurrence.Timezone)
+	if err != nil {
+		return MaintenanceWindowOccurrence{}, false
 	}
-	if !now.Before(*s.MaintenanceEndAt) {
-		return false
+	localNow := now.In(location)
+	for _, dayOffset := range []int{0, -1} {
+		day := localNow.AddDate(0, 0, dayOffset)
+		if !recurringMaintenanceIncludesWeekday(recurrence, day.Weekday()) {
+			continue
+		}
+		start := time.Date(day.Year(), day.Month(), day.Day(), recurrence.StartMinute/60, recurrence.StartMinute%60, 0, 0, location)
+		endDay := day
+		if recurrence.EndMinute <= recurrence.StartMinute {
+			endDay = day.AddDate(0, 0, 1)
+		}
+		end := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), recurrence.EndMinute/60, recurrence.EndMinute%60, 0, 0, location)
+		if !localNow.Before(start) && localNow.Before(end) {
+			return MaintenanceWindowOccurrence{StartAt: start.UTC(), EndAt: end.UTC()}, true
+		}
 	}
-	return true
+	return MaintenanceWindowOccurrence{}, false
+}
+
+// MaintenanceOccurrencesEndingBetween returns concrete occurrences whose end
+// is in (since, until]. It gives the maintenance sentinel a bounded,
+// restart-safe way to verify every recurring window without inventing a
+// second scheduler or persisting mutable "last run" state.
+func (s ResourceOperatorState) MaintenanceOccurrencesEndingBetween(since, until time.Time) []MaintenanceWindowOccurrence {
+	if until.Before(since) {
+		return nil
+	}
+	occurrences := make([]MaintenanceWindowOccurrence, 0)
+	if s.MaintenanceStartAt != nil && s.MaintenanceEndAt != nil &&
+		s.MaintenanceEndAt.After(*s.MaintenanceStartAt) &&
+		s.MaintenanceEndAt.After(since) && !s.MaintenanceEndAt.After(until) {
+		occurrences = append(occurrences, MaintenanceWindowOccurrence{StartAt: s.MaintenanceStartAt.UTC(), EndAt: s.MaintenanceEndAt.UTC()})
+	}
+	recurrence := NormalizeRecurringMaintenanceWindow(s.MaintenanceRecurrence)
+	if recurrence == nil {
+		return occurrences
+	}
+	location, err := time.LoadLocation(recurrence.Timezone)
+	if err != nil {
+		return occurrences
+	}
+	firstDay := since.In(location).AddDate(0, 0, -1)
+	lastDay := until.In(location)
+	for day := time.Date(firstDay.Year(), firstDay.Month(), firstDay.Day(), 0, 0, 0, 0, location); !day.After(lastDay); day = day.AddDate(0, 0, 1) {
+		if !recurringMaintenanceIncludesWeekday(recurrence, day.Weekday()) {
+			continue
+		}
+		start := time.Date(day.Year(), day.Month(), day.Day(), recurrence.StartMinute/60, recurrence.StartMinute%60, 0, 0, location)
+		endDay := day
+		if recurrence.EndMinute <= recurrence.StartMinute {
+			endDay = day.AddDate(0, 0, 1)
+		}
+		end := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), recurrence.EndMinute/60, recurrence.EndMinute%60, 0, 0, location)
+		if end.After(since) && !end.After(until) {
+			occurrences = append(occurrences, MaintenanceWindowOccurrence{StartAt: start.UTC(), EndAt: end.UTC()})
+		}
+	}
+	sort.Slice(occurrences, func(i, j int) bool { return occurrences[i].EndAt.Before(occurrences[j].EndAt) })
+	return occurrences
 }
 
 // ErrResourceOperatorStateInvalid is returned by stores when the supplied
@@ -273,6 +380,15 @@ func ValidateResourceOperatorState(state ResourceOperatorState) error {
 			return fmt.Errorf("%w: maintenance end_at must be strictly after start_at", ErrResourceOperatorStateInvalid)
 		}
 	}
+	if startSet && state.MaintenanceRecurrence != nil {
+		return fmt.Errorf("%w: one-shot and recurring maintenance windows are mutually exclusive", ErrResourceOperatorStateInvalid)
+	}
+	if err := ValidateRecurringMaintenanceWindow(state.MaintenanceRecurrence); err != nil {
+		return fmt.Errorf("%w: %v", ErrResourceOperatorStateInvalid, err)
+	}
+	if !IsValidMaintenanceScope(string(state.MaintenanceScope)) {
+		return fmt.Errorf("%w: maintenance_scope %q is not one of (resource, resource_and_descendants)", ErrResourceOperatorStateInvalid, state.MaintenanceScope)
+	}
 	return nil
 }
 
@@ -296,11 +412,103 @@ func NormalizeResourceOperatorState(state ResourceOperatorState) ResourceOperato
 		state.LifecycleState = LifecycleStateActive
 	}
 	state.MaintenanceReason = strings.TrimSpace(state.MaintenanceReason)
+	state.MaintenanceScope = MaintenanceScope(strings.ToLower(strings.TrimSpace(string(state.MaintenanceScope))))
+	if state.MaintenanceScope == "" {
+		state.MaintenanceScope = MaintenanceScopeResource
+	}
+	state.MaintenanceRecurrence = NormalizeRecurringMaintenanceWindow(state.MaintenanceRecurrence)
 	state.Note = strings.TrimSpace(state.Note)
 	state.SetBy = strings.TrimSpace(state.SetBy)
 	state.Criticality = ResourceCriticality(strings.ToLower(strings.TrimSpace(string(state.Criticality))))
 	state.AutoRemediationPolicy = NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
 	return state
+}
+
+func IsValidMaintenanceScope(value string) bool {
+	switch MaintenanceScope(value) {
+	case MaintenanceScopeResource, MaintenanceScopeResourceAndDescendants:
+		return true
+	}
+	return false
+}
+
+var maintenanceWeekdayOrder = map[string]int{
+	"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+	"friday": 4, "saturday": 5, "sunday": 6,
+}
+
+// NormalizeRecurringMaintenanceWindow canonicalizes timezone and weekday
+// spelling/order without mutating the caller's schedule.
+func NormalizeRecurringMaintenanceWindow(window *RecurringMaintenanceWindow) *RecurringMaintenanceWindow {
+	if window == nil {
+		return nil
+	}
+	normalized := *window
+	normalized.Timezone = strings.TrimSpace(normalized.Timezone)
+	seen := make(map[string]struct{}, len(normalized.Weekdays))
+	weekdays := make([]string, 0, len(normalized.Weekdays))
+	for _, weekday := range normalized.Weekdays {
+		weekday = strings.ToLower(strings.TrimSpace(weekday))
+		if weekday == "" {
+			continue
+		}
+		if _, exists := seen[weekday]; exists {
+			continue
+		}
+		seen[weekday] = struct{}{}
+		weekdays = append(weekdays, weekday)
+	}
+	sort.Slice(weekdays, func(i, j int) bool {
+		left, leftOK := maintenanceWeekdayOrder[weekdays[i]]
+		right, rightOK := maintenanceWeekdayOrder[weekdays[j]]
+		if leftOK && rightOK {
+			return left < right
+		}
+		if leftOK != rightOK {
+			return leftOK
+		}
+		return weekdays[i] < weekdays[j]
+	})
+	normalized.Weekdays = weekdays
+	return &normalized
+}
+
+func ValidateRecurringMaintenanceWindow(window *RecurringMaintenanceWindow) error {
+	window = NormalizeRecurringMaintenanceWindow(window)
+	if window == nil {
+		return nil
+	}
+	if window.Timezone == "" {
+		return errors.New("recurring maintenance requires an IANA timezone")
+	}
+	if _, err := time.LoadLocation(window.Timezone); err != nil {
+		return fmt.Errorf("recurring maintenance timezone %q is invalid", window.Timezone)
+	}
+	if len(window.Weekdays) == 0 {
+		return errors.New("recurring maintenance requires at least one weekday")
+	}
+	for _, weekday := range window.Weekdays {
+		if _, ok := maintenanceWeekdayOrder[weekday]; !ok {
+			return fmt.Errorf("recurring maintenance weekday %q is invalid", weekday)
+		}
+	}
+	if window.StartMinute < 0 || window.StartMinute > 1439 || window.EndMinute < 0 || window.EndMinute > 1439 {
+		return errors.New("recurring maintenance minutes must be between 0 and 1439")
+	}
+	if window.StartMinute == window.EndMinute {
+		return errors.New("recurring maintenance start and end must differ")
+	}
+	return nil
+}
+
+func recurringMaintenanceIncludesWeekday(window *RecurringMaintenanceWindow, weekday time.Weekday) bool {
+	name := strings.ToLower(weekday.String())
+	for _, candidate := range window.Weekdays {
+		if candidate == name {
+			return true
+		}
+	}
+	return false
 }
 
 // NormalizeAutoRemediationPolicy returns a deterministic copy for storage,
@@ -428,9 +636,11 @@ const (
 )
 
 type maintenanceWindowLifecycleSnapshot struct {
-	start  time.Time
-	end    time.Time
-	reason string
+	start      *time.Time
+	end        *time.Time
+	recurrence *RecurringMaintenanceWindow
+	scope      MaintenanceScope
+	reason     string
 }
 
 // BuildMaintenanceWindowLifecycleChange returns the canonical resource
@@ -486,15 +696,27 @@ func BuildMaintenanceWindowLifecycleChange(previous ResourceOperatorState, previ
 		"operatorStateChange": "maintenance_window_lifecycle",
 	}
 	if beforeOK {
-		metadata["previousMaintenanceStartAt"] = before.start.UTC().Format(time.RFC3339)
-		metadata["previousMaintenanceEndAt"] = before.end.UTC().Format(time.RFC3339)
+		if before.start != nil && before.end != nil {
+			metadata["previousMaintenanceStartAt"] = before.start.UTC().Format(time.RFC3339)
+			metadata["previousMaintenanceEndAt"] = before.end.UTC().Format(time.RFC3339)
+		}
+		if before.recurrence != nil {
+			metadata["previousMaintenanceRecurrence"] = before.recurrence
+		}
+		metadata["previousMaintenanceScope"] = before.scope
 		if before.reason != "" {
 			metadata["previousMaintenanceReason"] = before.reason
 		}
 	}
 	if afterOK {
-		metadata["maintenanceStartAt"] = after.start.UTC().Format(time.RFC3339)
-		metadata["maintenanceEndAt"] = after.end.UTC().Format(time.RFC3339)
+		if after.start != nil && after.end != nil {
+			metadata["maintenanceStartAt"] = after.start.UTC().Format(time.RFC3339)
+			metadata["maintenanceEndAt"] = after.end.UTC().Format(time.RFC3339)
+		}
+		if after.recurrence != nil {
+			metadata["maintenanceRecurrence"] = after.recurrence
+		}
+		metadata["maintenanceScope"] = after.scope
 		if after.reason != "" {
 			metadata["maintenanceReason"] = after.reason
 		}
@@ -517,18 +739,46 @@ func BuildMaintenanceWindowLifecycleChange(previous ResourceOperatorState, previ
 }
 
 func maintenanceWindowSnapshot(state ResourceOperatorState) (maintenanceWindowLifecycleSnapshot, bool) {
-	if state.MaintenanceStartAt == nil || state.MaintenanceEndAt == nil {
+	state = NormalizeResourceOperatorState(state)
+	if (state.MaintenanceStartAt == nil || state.MaintenanceEndAt == nil) && state.MaintenanceRecurrence == nil {
 		return maintenanceWindowLifecycleSnapshot{}, false
 	}
+	var start, end *time.Time
+	if state.MaintenanceStartAt != nil && state.MaintenanceEndAt != nil {
+		startUTC := state.MaintenanceStartAt.UTC()
+		endUTC := state.MaintenanceEndAt.UTC()
+		start = &startUTC
+		end = &endUTC
+	}
 	return maintenanceWindowLifecycleSnapshot{
-		start:  state.MaintenanceStartAt.UTC(),
-		end:    state.MaintenanceEndAt.UTC(),
-		reason: strings.TrimSpace(state.MaintenanceReason),
+		start:      start,
+		end:        end,
+		recurrence: NormalizeRecurringMaintenanceWindow(state.MaintenanceRecurrence),
+		scope:      state.MaintenanceScope,
+		reason:     strings.TrimSpace(state.MaintenanceReason),
 	}, true
 }
 
 func (s maintenanceWindowLifecycleSnapshot) equal(other maintenanceWindowLifecycleSnapshot) bool {
-	return s.start.Equal(other.start) && s.end.Equal(other.end) && s.reason == other.reason
+	if (s.start == nil) != (other.start == nil) || (s.end == nil) != (other.end == nil) ||
+		(s.recurrence == nil) != (other.recurrence == nil) {
+		return false
+	}
+	if s.start != nil && !s.start.Equal(*other.start) {
+		return false
+	}
+	if s.end != nil && !s.end.Equal(*other.end) {
+		return false
+	}
+	if s.recurrence != nil {
+		if s.recurrence.Timezone != other.recurrence.Timezone ||
+			s.recurrence.StartMinute != other.recurrence.StartMinute ||
+			s.recurrence.EndMinute != other.recurrence.EndMinute ||
+			strings.Join(s.recurrence.Weekdays, ",") != strings.Join(other.recurrence.Weekdays, ",") {
+			return false
+		}
+	}
+	return s.scope == other.scope && s.reason == other.reason
 }
 
 func maintenanceWindowObservedAt(previous ResourceOperatorState, previousFound bool, current ResourceOperatorState, currentFound bool) time.Time {
@@ -545,11 +795,23 @@ func maintenanceWindowSummary(window maintenanceWindowLifecycleSnapshot, ok bool
 	if !ok {
 		return "no maintenance window"
 	}
-	summary := window.start.UTC().Format(time.RFC3339) + " to " + window.end.UTC().Format(time.RFC3339)
+	summary := ""
+	if window.start != nil && window.end != nil {
+		summary = window.start.UTC().Format(time.RFC3339) + " to " + window.end.UTC().Format(time.RFC3339)
+	} else if window.recurrence != nil {
+		summary = fmt.Sprintf("%s %s-%s (%s)", strings.Join(window.recurrence.Weekdays, ", "), maintenanceMinuteSummary(window.recurrence.StartMinute), maintenanceMinuteSummary(window.recurrence.EndMinute), window.recurrence.Timezone)
+	}
+	if window.scope == MaintenanceScopeResourceAndDescendants {
+		summary += ", including descendants"
+	}
 	if window.reason != "" {
 		summary += " (" + window.reason + ")"
 	}
 	return summary
+}
+
+func maintenanceMinuteSummary(minute int) string {
+	return fmt.Sprintf("%02d:%02d", minute/60, minute%60)
 }
 
 func maintenanceWindowLifecycleReason(event string) string {

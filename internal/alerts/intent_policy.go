@@ -16,6 +16,9 @@ type OperatorIntentContext struct {
 	MaintenanceStartAt   *time.Time `json:"maintenanceStartAt,omitempty"`
 	MaintenanceEndAt     *time.Time `json:"maintenanceEndAt,omitempty"`
 	MaintenanceReason    string     `json:"maintenanceReason,omitempty"`
+	MaintenanceSourceID  string     `json:"maintenanceSourceId,omitempty"`
+	MaintenanceInherited bool       `json:"maintenanceInherited,omitempty"`
+	MaintenanceScope     string     `json:"maintenanceScope,omitempty"`
 }
 
 func (c OperatorIntentContext) suppressionForSignal(signal string) (bool, string) {

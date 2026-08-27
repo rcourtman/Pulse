@@ -115,9 +115,37 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   // (UTC offset preserved) — formatLocalForInput / parseLocalFromInput
   // handle the conversion.
   const [schedulerOpen, setSchedulerOpen] = createSignal(false);
+  const [scheduleKind, setScheduleKind] = createSignal<'once' | 'recurring'>('once');
   const [scheduleStart, setScheduleStart] = createSignal('');
   const [scheduleEnd, setScheduleEnd] = createSignal('');
+  const [scheduleWeekdays, setScheduleWeekdays] = createSignal<string[]>([
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ]);
+  const [scheduleRecurringStart, setScheduleRecurringStart] = createSignal('02:00');
+  const [scheduleRecurringEnd, setScheduleRecurringEnd] = createSignal('03:00');
+  const [scheduleTimezone, setScheduleTimezone] = createSignal(
+    Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
+  );
+  const [scheduleScope, setScheduleScope] = createSignal<'resource' | 'resource_and_descendants'>(
+    'resource',
+  );
   const [scheduleReason, setScheduleReason] = createSignal('');
+
+  const maintenanceWeekdays = [
+    ['monday', 'Mon'],
+    ['tuesday', 'Tue'],
+    ['wednesday', 'Wed'],
+    ['thursday', 'Thu'],
+    ['friday', 'Fri'],
+    ['saturday', 'Sat'],
+    ['sunday', 'Sun'],
+  ] as const;
 
   // Hydrate edit state from persisted record on first load and on resource change.
   createEffect(() => {
@@ -225,6 +253,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         // on save would surprise the operator.
         maintenanceStartAt: current?.maintenanceStartAt,
         maintenanceEndAt: current?.maintenanceEndAt,
+        maintenanceRecurrence: current?.maintenanceRecurrence,
+        maintenanceScope: current?.maintenanceScope ?? 'resource',
         maintenanceReason: current?.maintenanceReason,
         criticality: criticality(),
         note: noteForSave(),
@@ -310,6 +340,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   // active and future windows are surfaced, with different copy.
   const activeMaintenanceWindow = createMemo(() => {
     const current = persisted();
+    if (current?.maintenanceWindowActive && current.maintenanceActiveEndAt) return current;
     if (!current?.maintenanceStartAt || !current?.maintenanceEndAt) return null;
     const now = Date.now();
     const start = Date.parse(current.maintenanceStartAt);
@@ -333,7 +364,10 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   });
 
   const hasAnyMaintenanceWindow = createMemo(() =>
-    Boolean(activeMaintenanceWindow() || scheduledMaintenanceWindow()),
+    Boolean(
+      persisted()?.maintenanceRecurrence ||
+      (persisted()?.maintenanceStartAt && persisted()?.maintenanceEndAt),
+    ),
   );
 
   // Datetime-local input format is "YYYY-MM-DDTHH:mm" in the browser's
@@ -357,13 +391,23 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     // Pre-fill from the persisted window when one exists; otherwise
     // default to "starting now, ending in one hour" — the most common
     // shape for a quick maintenance.
-    if (current?.maintenanceStartAt && current?.maintenanceEndAt) {
+    setScheduleScope(current?.maintenanceScope ?? 'resource');
+    if (current?.maintenanceRecurrence) {
+      setScheduleKind('recurring');
+      setScheduleWeekdays(current.maintenanceRecurrence.weekdays);
+      setScheduleRecurringStart(minuteToTime(current.maintenanceRecurrence.startMinute));
+      setScheduleRecurringEnd(minuteToTime(current.maintenanceRecurrence.endMinute));
+      setScheduleTimezone(current.maintenanceRecurrence.timezone);
+      setScheduleReason(current.maintenanceReason ?? '');
+    } else if (current?.maintenanceStartAt && current?.maintenanceEndAt) {
+      setScheduleKind('once');
       const start = new Date(current.maintenanceStartAt);
       const end = new Date(current.maintenanceEndAt);
       if (!Number.isNaN(start.getTime())) setScheduleStart(formatLocalForInput(start));
       if (!Number.isNaN(end.getTime())) setScheduleEnd(formatLocalForInput(end));
       setScheduleReason(current.maintenanceReason ?? '');
     } else {
+      setScheduleKind('once');
       setScheduleStart(formatLocalForInput(now));
       setScheduleEnd(formatLocalForInput(oneHourFromNow));
       setScheduleReason('');
@@ -377,7 +421,23 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     setScheduleEnd(formatLocalForInput(end));
   };
 
+  const toggleMaintenanceWeekday = (weekday: string) => {
+    setScheduleWeekdays((current) =>
+      current.includes(weekday)
+        ? current.filter((candidate) => candidate !== weekday)
+        : [...current, weekday],
+    );
+  };
+
   const scheduleValidationError = createMemo(() => {
+    if (scheduleKind() === 'recurring') {
+      if (scheduleWeekdays().length === 0) return 'Select at least one day.';
+      if (!scheduleTimezone().trim()) return 'Timezone is required.';
+      if (scheduleRecurringStart() === scheduleRecurringEnd()) {
+        return 'Recurring start and end times must differ.';
+      }
+      return null;
+    }
     const start = parseLocalFromInput(scheduleStart());
     const end = parseLocalFromInput(scheduleEnd());
     if (!start || !end) return 'Both start and end are required.';
@@ -388,11 +448,11 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   const handleScheduleSave = async () => {
     const start = parseLocalFromInput(scheduleStart());
     const end = parseLocalFromInput(scheduleEnd());
-    if (!start || !end) {
+    if (scheduleKind() === 'once' && (!start || !end)) {
       notificationStore.error('Both start and end are required.');
       return;
     }
-    if (end.getTime() <= start.getTime()) {
+    if (scheduleKind() === 'once' && end!.getTime() <= start!.getTime()) {
       notificationStore.error('Maintenance end must be strictly after start.');
       return;
     }
@@ -418,8 +478,18 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               }
             : {}),
         },
-        maintenanceStartAt: start.toISOString(),
-        maintenanceEndAt: end.toISOString(),
+        maintenanceStartAt: scheduleKind() === 'once' ? start!.toISOString() : undefined,
+        maintenanceEndAt: scheduleKind() === 'once' ? end!.toISOString() : undefined,
+        maintenanceRecurrence:
+          scheduleKind() === 'recurring'
+            ? {
+                timezone: scheduleTimezone().trim(),
+                weekdays: scheduleWeekdays(),
+                startMinute: timeToMinute(scheduleRecurringStart()),
+                endMinute: timeToMinute(scheduleRecurringEnd()),
+              }
+            : undefined,
+        maintenanceScope: scheduleScope(),
         maintenanceReason: scheduleReason().trim() || undefined,
         criticality: criticality(),
         note: noteForSave(),
@@ -460,6 +530,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         },
         maintenanceStartAt: undefined,
         maintenanceEndAt: undefined,
+        maintenanceRecurrence: undefined,
+        maintenanceScope: 'resource',
         maintenanceReason: undefined,
         criticality: criticality(),
         note: noteForSave(),
@@ -505,8 +577,18 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       <Show when={activeMaintenanceWindow()}>
         <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
           <span class="font-semibold">Maintenance window active.</span> Findings raised on this
-          resource are auto-acknowledged until{' '}
-          {formatRelativeTime(activeMaintenanceWindow()!.maintenanceEndAt!, { compact: true })}.
+          resource
+          <Show when={activeMaintenanceWindow()!.maintenanceScope === 'resource_and_descendants'}>
+            {' '}
+            and its descendants
+          </Show>{' '}
+          are auto-acknowledged until{' '}
+          {formatRelativeTime(
+            activeMaintenanceWindow()!.maintenanceActiveEndAt ??
+              activeMaintenanceWindow()!.maintenanceEndAt!,
+            { compact: true },
+          )}
+          .
           <Show when={activeMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">Reason: {activeMaintenanceWindow()!.maintenanceReason}</span>
           </Show>
@@ -524,6 +606,26 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             <span class="block mt-0.5">
               Reason: {scheduledMaintenanceWindow()!.maintenanceReason}
             </span>
+          </Show>
+        </div>
+      </Show>
+
+      <Show when={persisted()?.maintenanceRecurrence && !activeMaintenanceWindow()}>
+        <div class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+          <span class="font-semibold">Recurring maintenance configured.</span>{' '}
+          {persisted()!
+            .maintenanceRecurrence!.weekdays.map((weekday) => weekday.slice(0, 3))
+            .join(', ')}{' '}
+          from {minuteToTime(persisted()!.maintenanceRecurrence!.startMinute)} to{' '}
+          {minuteToTime(persisted()!.maintenanceRecurrence!.endMinute)}{' '}
+          {persisted()!.maintenanceRecurrence!.timezone}.
+          <Show when={persisted()?.maintenanceScope === 'resource_and_descendants'}>
+            <span class="block mt-0.5 font-medium">
+              This resource and all canonical descendants are covered.
+            </span>
+          </Show>
+          <Show when={persisted()!.maintenanceReason}>
+            <span class="block mt-0.5">Reason: {persisted()!.maintenanceReason}</span>
           </Show>
         </div>
       </Show>
@@ -605,56 +707,130 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       <Show when={schedulerOpen()}>
         <div class="rounded border border-border bg-surface-alt/40 px-3 py-3 space-y-2">
           <div class="text-xs font-semibold text-base-content">Schedule maintenance window</div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label class="block">
-              <span class="text-[11px] text-muted">Start</span>
-              <input
-                type="datetime-local"
-                value={scheduleStart()}
-                onInput={(e) => setScheduleStart(e.currentTarget.value)}
-                class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
-                disabled={saving()}
-              />
-            </label>
-            <label class="block">
-              <span class="text-[11px] text-muted">End</span>
-              <input
-                type="datetime-local"
-                value={scheduleEnd()}
-                onInput={(e) => setScheduleEnd(e.currentTarget.value)}
-                class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
-                disabled={saving()}
-              />
-            </label>
+          <div class="inline-flex gap-0.5 rounded border border-border bg-surface p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setScheduleKind('once')}
+              class={`rounded px-2.5 py-1 ${scheduleKind() === 'once' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
+            >
+              One time
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleKind('recurring')}
+              class={`rounded px-2.5 py-1 ${scheduleKind() === 'recurring' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
+            >
+              Recurring
+            </button>
           </div>
 
-          <div class="flex items-center gap-1 text-[11px]">
-            <span class="text-muted">Quick presets:</span>
-            <button
-              type="button"
-              onClick={() => applyPresetDuration(1)}
-              disabled={saving()}
-              class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
-            >
-              1h
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPresetDuration(4)}
-              disabled={saving()}
-              class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
-            >
-              4h
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPresetDuration(24)}
-              disabled={saving()}
-              class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
-            >
-              24h
-            </button>
-          </div>
+          <Show when={scheduleKind() === 'once'}>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-muted">Start</span>
+                <input
+                  type="datetime-local"
+                  value={scheduleStart()}
+                  onInput={(e) => setScheduleStart(e.currentTarget.value)}
+                  class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                  disabled={saving()}
+                />
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-muted">End</span>
+                <input
+                  type="datetime-local"
+                  value={scheduleEnd()}
+                  onInput={(e) => setScheduleEnd(e.currentTarget.value)}
+                  class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                  disabled={saving()}
+                />
+              </label>
+            </div>
+            <div class="flex items-center gap-1 text-[11px]">
+              <span class="text-muted">Quick presets:</span>
+              <For each={[1, 4, 24]}>
+                {(hours) => (
+                  <button
+                    type="button"
+                    onClick={() => applyPresetDuration(hours)}
+                    disabled={saving()}
+                    class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
+                  >
+                    {hours}h
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+
+          <Show when={scheduleKind() === 'recurring'}>
+            <div class="space-y-2">
+              <fieldset>
+                <legend class="text-[11px] text-muted">Days the window starts</legend>
+                <div class="mt-1 flex flex-wrap gap-1">
+                  <For each={maintenanceWeekdays}>
+                    {([value, label]) => (
+                      <button
+                        type="button"
+                        aria-pressed={scheduleWeekdays().includes(value)}
+                        onClick={() => toggleMaintenanceWeekday(value)}
+                        class={`min-h-9 rounded border px-2 text-xs ${scheduleWeekdays().includes(value) ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200' : 'border-border text-muted hover:bg-surface-hover'}`}
+                      >
+                        {label}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </fieldset>
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <label class="block">
+                  <span class="text-[11px] text-muted">Start</span>
+                  <input
+                    type="time"
+                    value={scheduleRecurringStart()}
+                    onInput={(event) => setScheduleRecurringStart(event.currentTarget.value)}
+                    class="mt-0.5 min-h-11 w-full rounded border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                  />
+                </label>
+                <label class="block">
+                  <span class="text-[11px] text-muted">End</span>
+                  <input
+                    type="time"
+                    value={scheduleRecurringEnd()}
+                    onInput={(event) => setScheduleRecurringEnd(event.currentTarget.value)}
+                    class="mt-0.5 min-h-11 w-full rounded border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                  />
+                </label>
+                <label class="block">
+                  <span class="text-[11px] text-muted">Timezone</span>
+                  <input
+                    type="text"
+                    value={scheduleTimezone()}
+                    onInput={(event) => setScheduleTimezone(event.currentTarget.value)}
+                    class="mt-0.5 min-h-11 w-full rounded border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                  />
+                </label>
+              </div>
+              <p class="text-[11px] text-muted">
+                End times earlier than start times continue into the following day.
+              </p>
+            </div>
+          </Show>
+
+          <FormSelect
+            label="Applies to"
+            density="compact"
+            value={scheduleScope()}
+            onChange={(event) =>
+              setScheduleScope(event.currentTarget.value as 'resource' | 'resource_and_descendants')
+            }
+            help="Descendant scope follows Pulse's canonical inventory hierarchy and covers resources added beneath this one later."
+            helpClass="text-[11px] leading-tight"
+          >
+            <option value="resource">This resource only</option>
+            <option value="resource_and_descendants">This resource and descendants</option>
+          </FormSelect>
 
           <label class="block">
             <span class="text-[11px] text-muted">Reason (optional)</span>

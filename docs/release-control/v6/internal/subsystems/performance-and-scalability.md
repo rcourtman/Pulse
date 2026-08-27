@@ -1404,6 +1404,14 @@ patrol fan-out: in a noisy-warning estate the default policy keeps the LLM-backe
 investigation path from being invoked once per warning, so the patrol queue and
 provider spend stay proportional to the alerts the operator actually opted into.
 
+Operator-state mutations wired through `internal/api/router.go` must reconcile
+the active-alert set once per mutation so newly inherited parent maintenance
+takes effect immediately for every descendant. The reconciliation may inspect
+the already resident active-alert map, but it must not scan unified inventory,
+query persistence once per resource, or run on the steady-state alert hot path;
+ancestor lookup remains bounded by canonical hierarchy depth for each active
+alert actually evaluated.
+
 The embedded WorkloadsSurface exposes a `compactGroupHeaders` prop on
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts` that
 platform pages owning their own hosts table (Proxmox overview today) set

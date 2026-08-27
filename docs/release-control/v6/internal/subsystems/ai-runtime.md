@@ -5164,7 +5164,12 @@ new-finding path auto-dismisses with reason `expected_behavior`,
 attributes the suppression on the lifecycle timeline
 (`operator_state_cause: maintenance_window`, with
 `maintenance_end_at` metadata), and persists the finding for audit
-history. The action broker consults the same `resource_operator_state` table
+history. The active boundary may come from a one-shot or recurring schedule;
+both are evaluated by the canonical operator-state model. Descendant-scope
+inheritance is alert-intent behavior and does not weaken exact-resource
+action-remediation locks or invent inherited action authority.
+
+The action broker consults the same `resource_operator_state` table
 on every dispatch — both the agent-command path
 (`executeCommandWithAudit`) and the native provider path
 (`executeNativeActionWithAudit`) in

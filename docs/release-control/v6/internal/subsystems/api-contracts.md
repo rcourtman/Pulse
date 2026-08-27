@@ -5193,9 +5193,12 @@ mirrors the canonical Go shape from
 `getResourceOperatorState`, `setResourceOperatorState`, and
 `clearResourceOperatorState` against the
 `/api/resources/{id}/operator-state` endpoint. The GET path
-normalizes the server's `404 operator_state_not_set` response into
-`null` so callers see "no state recorded" as a clean default rather
-than a thrown error; non-404 errors propagate. The PUT path
+uses `view=lookup` so an unset record is represented by a successful
+`{ "configured": false }` envelope rather than a routine failed browser
+request. Persisted records return `{ "configured": true, "state": {...} }`.
+The client continues to normalize an older server's `404
+operator_state_not_set` response into `null` during rolling updates;
+non-404 errors propagate. The PUT path
 percent-encodes the canonical resource id segment so colon-bearing
 ids round-trip safely through URL routing.
 Operator-state reads must keep `autoRemediationPolicy.capabilityNames`
@@ -5204,6 +5207,13 @@ capability list before JSON serialization, while the TS compatibility type and
 rendering path continue to tolerate `null` from pre-fix or cached payloads.
 Saving only `intentionallyOffline`, `neverAutoRemediate`, priority, or note
 must therefore never produce a drawer-breaking operator-state response.
+The same read/write shape carries either the legacy one-shot start/end pair or
+`maintenanceRecurrence` (`timezone`, canonical weekdays, start/end minutes),
+never both, plus `maintenanceScope` (`resource` by default or
+`resource_and_descendants`). The resource editor exposes both schedule forms,
+IANA timezone, overnight recurrence, reason, and explicit descendant scope;
+unrelated override saves and alert-card monitoring actions round-trip all
+maintenance fields instead of clobbering them.
 
 The router wires the operator-state adapter into the findings runtime
 at startup: `internal/api/router.go` calls
@@ -5224,7 +5234,8 @@ and without growing per-finding lookups as new signals land.
 
 `/api/resources/{id}/operator-state` is the canonical surface for
 operator-set per-resource intent (intentionally offline, never
-auto-remediate, maintenance window, criticality hint). GET requires
+auto-remediate, one-shot or recurring maintenance window with explicit scope,
+criticality hint). GET requires
 `monitoring:read` and returns `404` with `{ "error":
 "operator_state_not_set" }` when no entry exists; PUT and DELETE
 require `monitoring:write` because they modulate Patrol's behavior on
@@ -5242,6 +5253,10 @@ message. DELETE is idempotent (`204` whether or not an entry was
 present). The handler dispatches off `r.Method` rather than mounting
 three sibling routes so the URL surface stays a single resource path
 matching the rest of `/api/resources/{id}/...`.
+Interactive clients may request `GET .../operator-state?view=lookup`; this
+preserves the configured-versus-unset distinction in a 200 response envelope
+and prevents a normal empty state from appearing as a failed browser request.
+The default GET behavior and stable agent error code remain unchanged.
 
 The action governance loop at `/api/actions/plan`,
 `/api/actions/{id}/decision`, and `/api/actions/{id}/execute` is

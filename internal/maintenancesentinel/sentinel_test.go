@@ -55,6 +55,41 @@ func TestSentinelTickOnceWritesReportAndDedupes(t *testing.T) {
 	}
 }
 
+func TestSentinelTickOnceVerifiesEveryEndedRecurringOccurrence(t *testing.T) {
+	now := time.Date(2026, 8, 27, 5, 0, 0, 0, time.UTC) // Thursday
+	store := unified.NewMemoryStore()
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: "node:pve-a",
+		MaintenanceRecurrence: &unified.RecurringMaintenanceWindow{
+			Timezone: "UTC", Weekdays: []string{"wednesday", "thursday"}, StartMinute: 120, EndMinute: 180,
+		},
+		MaintenanceScope: unified.MaintenanceScopeResourceAndDescendants,
+		SetAt:            now.Add(-48 * time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sentinel, err := New(Config{LookbackLimit: 7 * 24 * time.Hour}, Providers{
+		Stores: func(string) (unified.ResourceStore, error) { return store, nil },
+		Now:    func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentinel.tickOnce(context.Background())
+	reports, err := store.ListLoopReportsForResource(unified.LoopReportTypeMaintenanceVerification, "node:pve-a", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 2 {
+		t.Fatalf("recurring verification reports = %d, want one per ended occurrence", len(reports))
+	}
+	sentinel.tickOnce(context.Background())
+	reports, _ = store.ListLoopReportsForResource(unified.LoopReportTypeMaintenanceVerification, "node:pve-a", 0)
+	if len(reports) != 2 {
+		t.Fatalf("recurring verification dedupe failed: %d reports", len(reports))
+	}
+}
+
 func TestMaintenanceSentinelTickOnceWritesTimelineEvidence(t *testing.T) {
 	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
 	windowStart := now.Add(-time.Hour)

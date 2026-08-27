@@ -119,6 +119,8 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
         },
         maintenanceStartAt: current?.maintenanceStartAt,
         maintenanceEndAt: current?.maintenanceEndAt,
+        maintenanceRecurrence: current?.maintenanceRecurrence,
+        maintenanceScope: current?.maintenanceScope ?? 'resource',
         maintenanceReason: current?.maintenanceReason,
         criticality: current?.criticality ?? '',
         note: current?.note,

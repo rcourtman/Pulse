@@ -214,17 +214,19 @@ type AgentOperationsLoopStatus struct {
 // as a separate type so the bundle's JSON can be agent-stable even if
 // the underlying store type's JSON tags shift.
 type AgentResourceOperatorState struct {
-	IntentionallyOffline bool       `json:"intentionallyOffline"`
-	MonitoringMode       string     `json:"monitoringMode"`
-	LifecycleState       string     `json:"lifecycleState"`
-	NeverAutoRemediate   bool       `json:"neverAutoRemediate"`
-	MaintenanceStartAt   *time.Time `json:"maintenanceStartAt,omitempty"`
-	MaintenanceEndAt     *time.Time `json:"maintenanceEndAt,omitempty"`
-	MaintenanceReason    string     `json:"maintenanceReason,omitempty"`
-	Criticality          string     `json:"criticality,omitempty"`
-	Note                 string     `json:"note,omitempty"`
-	SetAt                time.Time  `json:"setAt"`
-	SetBy                string     `json:"setBy,omitempty"`
+	IntentionallyOffline  bool                                `json:"intentionallyOffline"`
+	MonitoringMode        string                              `json:"monitoringMode"`
+	LifecycleState        string                              `json:"lifecycleState"`
+	NeverAutoRemediate    bool                                `json:"neverAutoRemediate"`
+	MaintenanceStartAt    *time.Time                          `json:"maintenanceStartAt,omitempty"`
+	MaintenanceEndAt      *time.Time                          `json:"maintenanceEndAt,omitempty"`
+	MaintenanceRecurrence *unified.RecurringMaintenanceWindow `json:"maintenanceRecurrence,omitempty"`
+	MaintenanceScope      string                              `json:"maintenanceScope"`
+	MaintenanceReason     string                              `json:"maintenanceReason,omitempty"`
+	Criticality           string                              `json:"criticality,omitempty"`
+	Note                  string                              `json:"note,omitempty"`
+	SetAt                 time.Time                           `json:"setAt"`
+	SetBy                 string                              `json:"setBy,omitempty"`
 	// MaintenanceWindowActive reports whether a window covers `now` —
 	// computed once on the server so agents don't need to re-evaluate
 	// the start/end timestamps client-side.
@@ -1339,6 +1341,8 @@ func projectAgentResourceOperatorState(
 		NeverAutoRemediate:      state.BlocksRemediation(),
 		MaintenanceStartAt:      state.MaintenanceStartAt,
 		MaintenanceEndAt:        state.MaintenanceEndAt,
+		MaintenanceRecurrence:   state.MaintenanceRecurrence,
+		MaintenanceScope:        string(state.MaintenanceScope),
 		MaintenanceReason:       state.MaintenanceReason,
 		Criticality:             string(state.Criticality),
 		Note:                    state.Note,

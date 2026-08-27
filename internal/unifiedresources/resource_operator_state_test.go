@@ -83,6 +83,65 @@ func TestResourceOperatorState_IsInMaintenanceAt(t *testing.T) {
 	})
 }
 
+func TestResourceOperatorStateRecurringMaintenance(t *testing.T) {
+	state := NormalizeResourceOperatorState(ResourceOperatorState{
+		CanonicalID: "node:pve-a",
+		MaintenanceRecurrence: &RecurringMaintenanceWindow{
+			Timezone:    "Europe/London",
+			Weekdays:    []string{" TUESDAY ", "monday", "monday"},
+			StartMinute: 23 * 60,
+			EndMinute:   60,
+		},
+		MaintenanceScope: MaintenanceScopeResourceAndDescendants,
+	})
+	if got := strings.Join(state.MaintenanceRecurrence.Weekdays, ","); got != "monday,tuesday" {
+		t.Fatalf("normalized weekdays = %q", got)
+	}
+	if err := ValidateResourceOperatorState(state); err != nil {
+		t.Fatalf("valid recurring window rejected: %v", err)
+	}
+
+	// Monday night continues into Tuesday because weekdays name the day on
+	// which the occurrence starts.
+	inside := time.Date(2026, 8, 25, 0, 30, 0, 0, time.FixedZone("BST", 3600))
+	occurrence, active := state.ActiveMaintenanceOccurrenceAt(inside)
+	if !active {
+		t.Fatal("overnight Monday occurrence must remain active on Tuesday")
+	}
+	if occurrence.EndAt != time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC) {
+		t.Fatalf("occurrence end = %v", occurrence.EndAt)
+	}
+	if state.IsInMaintenanceAt(time.Date(2026, 8, 25, 1, 0, 0, 0, time.FixedZone("BST", 3600))) {
+		t.Fatal("recurring interval must remain half-open at its local end")
+	}
+}
+
+func TestValidateResourceOperatorStateRejectsAmbiguousRecurringMaintenance(t *testing.T) {
+	start := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	base := ResourceOperatorState{
+		CanonicalID:        "node:pve-a",
+		MaintenanceStartAt: &start,
+		MaintenanceEndAt:   &end,
+		MaintenanceRecurrence: &RecurringMaintenanceWindow{
+			Timezone: "UTC", Weekdays: []string{"monday"}, StartMinute: 120, EndMinute: 180,
+		},
+	}
+	if err := ValidateResourceOperatorState(base); !errors.Is(err, ErrResourceOperatorStateInvalid) {
+		t.Fatalf("one-shot plus recurrence error = %v", err)
+	}
+	base.MaintenanceStartAt, base.MaintenanceEndAt = nil, nil
+	base.MaintenanceRecurrence.Weekdays = []string{"funday"}
+	if err := ValidateResourceOperatorState(base); !errors.Is(err, ErrResourceOperatorStateInvalid) {
+		t.Fatalf("invalid weekday error = %v", err)
+	}
+	base.MaintenanceRecurrence.Weekdays = []string{"monday"}
+	base.MaintenanceScope = "whole_world"
+	if err := ValidateResourceOperatorState(base); !errors.Is(err, ErrResourceOperatorStateInvalid) {
+		t.Fatalf("invalid scope error = %v", err)
+	}
+}
+
 func TestValidateResourceOperatorState(t *testing.T) {
 	t.Run("rejects empty canonical id", func(t *testing.T) {
 		err := ValidateResourceOperatorState(ResourceOperatorState{CanonicalID: "   "})

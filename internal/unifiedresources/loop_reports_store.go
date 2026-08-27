@@ -15,8 +15,9 @@ import (
 func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorState, error) {
 	rows, err := s.db.Query(`
 		SELECT canonical_id, monitoring_mode, lifecycle_state,
-			intentionally_offline, never_auto_remediate,
-			maintenance_start_at, maintenance_end_at, maintenance_reason,
+			intentionally_offline, never_auto_remediate, auto_remediation_policy_json,
+			maintenance_start_at, maintenance_end_at,
+			maintenance_recurrence_json, maintenance_scope, maintenance_reason,
 			criticality, note, set_at, set_by
 		FROM resource_operator_state`)
 	if err != nil {
@@ -26,59 +27,11 @@ func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorSt
 
 	var out []ResourceOperatorState
 	for rows.Next() {
-		var (
-			state          ResourceOperatorState
-			monitoringMode string
-			lifecycleState string
-			intentional    int
-			neverRemediate int
-			startAt, endAt sql.NullTime
-			reason         sql.NullString
-			criticality    sql.NullString
-			note           sql.NullString
-			setBy          sql.NullString
-		)
-		if err := rows.Scan(
-			&state.CanonicalID,
-			&monitoringMode,
-			&lifecycleState,
-			&intentional,
-			&neverRemediate,
-			&startAt,
-			&endAt,
-			&reason,
-			&criticality,
-			&note,
-			&state.SetAt,
-			&setBy,
-		); err != nil {
+		state, err := scanResourceOperatorState(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan resource operator state row: %w", err)
 		}
-		state.MonitoringMode = ResourceMonitoringMode(monitoringMode)
-		state.LifecycleState = ResourceLifecycleState(lifecycleState)
-		state.IntentionallyOffline = intentional != 0
-		state.NeverAutoRemediate = neverRemediate != 0
-		if startAt.Valid {
-			t := startAt.Time
-			state.MaintenanceStartAt = &t
-		}
-		if endAt.Valid {
-			t := endAt.Time
-			state.MaintenanceEndAt = &t
-		}
-		if reason.Valid {
-			state.MaintenanceReason = reason.String
-		}
-		if criticality.Valid {
-			state.Criticality = ResourceCriticality(criticality.String)
-		}
-		if note.Valid {
-			state.Note = note.String
-		}
-		if setBy.Valid {
-			state.SetBy = setBy.String
-		}
-		out = append(out, NormalizeResourceOperatorState(state))
+		out = append(out, state)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate resource operator state rows: %w", err)

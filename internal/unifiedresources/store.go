@@ -556,6 +556,8 @@ func (s *SQLiteResourceStore) initSchema() error {
 		auto_remediation_policy_json TEXT,
 		maintenance_start_at DATETIME,
 		maintenance_end_at DATETIME,
+		maintenance_recurrence_json TEXT,
+		maintenance_scope TEXT NOT NULL DEFAULT 'resource',
 		maintenance_reason TEXT,
 		criticality TEXT,
 		note TEXT,
@@ -657,6 +659,8 @@ func (s *SQLiteResourceStore) migrateResourceOperatorStateSchema() error {
 		"monitoring_mode":              "TEXT NOT NULL DEFAULT 'normal'",
 		"lifecycle_state":              "TEXT NOT NULL DEFAULT 'active'",
 		"auto_remediation_policy_json": "TEXT",
+		"maintenance_recurrence_json":  "TEXT",
+		"maintenance_scope":            "TEXT NOT NULL DEFAULT 'resource'",
 	}
 	for name, definition := range definitions {
 		if _, ok := columns[name]; ok {
@@ -3014,7 +3018,8 @@ func getResourceOperatorStateSQL(queryer resourceOperatorStateQueryRower, canoni
 		SELECT canonical_id, monitoring_mode, lifecycle_state,
 		       intentionally_offline, never_auto_remediate,
 		       auto_remediation_policy_json,
-		       maintenance_start_at, maintenance_end_at, maintenance_reason,
+		       maintenance_start_at, maintenance_end_at,
+		       maintenance_recurrence_json, maintenance_scope, maintenance_reason,
 		       criticality, note, set_at, set_by
 		FROM resource_operator_state WHERE canonical_id = ?`, canonicalID)
 	state, err := scanResourceOperatorState(row)
@@ -3030,16 +3035,18 @@ func getResourceOperatorStateSQL(queryer resourceOperatorStateQueryRower, canoni
 func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOperatorState, error) {
 	var state ResourceOperatorState
 	var (
-		monitoringMode string
-		lifecycleState string
-		intentional    int
-		neverRemediate int
-		autoPolicyJSON sql.NullString
-		startAt, endAt sql.NullTime
-		reason         sql.NullString
-		criticality    sql.NullString
-		note           sql.NullString
-		setBy          sql.NullString
+		monitoringMode   string
+		lifecycleState   string
+		intentional      int
+		neverRemediate   int
+		autoPolicyJSON   sql.NullString
+		recurrenceJSON   sql.NullString
+		maintenanceScope string
+		startAt, endAt   sql.NullTime
+		reason           sql.NullString
+		criticality      sql.NullString
+		note             sql.NullString
+		setBy            sql.NullString
 	)
 	if err := scanner.Scan(
 		&state.CanonicalID,
@@ -3050,6 +3057,8 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 		&autoPolicyJSON,
 		&startAt,
 		&endAt,
+		&recurrenceJSON,
+		&maintenanceScope,
 		&reason,
 		&criticality,
 		&note,
@@ -3062,6 +3071,7 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	state.LifecycleState = ResourceLifecycleState(lifecycleState)
 	state.IntentionallyOffline = intentional != 0
 	state.NeverAutoRemediate = neverRemediate != 0
+	state.MaintenanceScope = MaintenanceScope(maintenanceScope)
 	if autoPolicyJSON.Valid && strings.TrimSpace(autoPolicyJSON.String) != "" {
 		if err := json.Unmarshal([]byte(autoPolicyJSON.String), &state.AutoRemediationPolicy); err != nil {
 			return ResourceOperatorState{}, fmt.Errorf("unmarshal auto remediation policy: %w", err)
@@ -3078,6 +3088,11 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	if endAt.Valid {
 		t := endAt.Time
 		state.MaintenanceEndAt = &t
+	}
+	if recurrenceJSON.Valid && strings.TrimSpace(recurrenceJSON.String) != "" {
+		if err := json.Unmarshal([]byte(recurrenceJSON.String), &state.MaintenanceRecurrence); err != nil {
+			return ResourceOperatorState{}, fmt.Errorf("unmarshal maintenance recurrence: %w", err)
+		}
 	}
 	if reason.Valid {
 		state.MaintenanceReason = reason.String
@@ -3127,6 +3142,7 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 		note           sql.NullString
 		setBy          sql.NullString
 		autoPolicyJSON sql.NullString
+		recurrenceJSON sql.NullString
 	)
 	if policy := NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy); policy.Enabled || len(policy.CapabilityNames) > 0 || policy.Window != nil {
 		encoded, err := json.Marshal(policy)
@@ -3135,6 +3151,14 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 		}
 		autoPolicyJSON.String = string(encoded)
 		autoPolicyJSON.Valid = true
+	}
+	if recurrence := NormalizeRecurringMaintenanceWindow(state.MaintenanceRecurrence); recurrence != nil {
+		encoded, err := json.Marshal(recurrence)
+		if err != nil {
+			return fmt.Errorf("marshal maintenance recurrence: %w", err)
+		}
+		recurrenceJSON.String = string(encoded)
+		recurrenceJSON.Valid = true
 	}
 	if state.MaintenanceStartAt != nil {
 		startAt.Time = *state.MaintenanceStartAt
@@ -3165,9 +3189,10 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 			canonical_id, monitoring_mode, lifecycle_state,
 			intentionally_offline, never_auto_remediate,
 			auto_remediation_policy_json,
-			maintenance_start_at, maintenance_end_at, maintenance_reason,
+			maintenance_start_at, maintenance_end_at,
+			maintenance_recurrence_json, maintenance_scope, maintenance_reason,
 			criticality, note, set_at, set_by
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(canonical_id) DO UPDATE SET
 			monitoring_mode = excluded.monitoring_mode,
 			lifecycle_state = excluded.lifecycle_state,
@@ -3176,6 +3201,8 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 			auto_remediation_policy_json = excluded.auto_remediation_policy_json,
 			maintenance_start_at = excluded.maintenance_start_at,
 			maintenance_end_at = excluded.maintenance_end_at,
+			maintenance_recurrence_json = excluded.maintenance_recurrence_json,
+			maintenance_scope = excluded.maintenance_scope,
 			maintenance_reason = excluded.maintenance_reason,
 			criticality = excluded.criticality,
 			note = excluded.note,
@@ -3189,6 +3216,8 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 		autoPolicyJSON,
 		startAt,
 		endAt,
+		recurrenceJSON,
+		state.MaintenanceScope,
 		reason,
 		criticality,
 		note,

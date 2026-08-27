@@ -509,6 +509,11 @@ func (r *Router) setupRoutes() {
 			}
 			seen[monitor] = struct{}{}
 			if reconciler, ok := any(monitor.GetAlertManager()).(interface {
+				ReconcileOperatorIntentState() int
+			}); ok {
+				reconciler.ReconcileOperatorIntentState()
+				monitor.SyncAlertState()
+			} else if reconciler, ok := any(monitor.GetAlertManager()).(interface {
 				ReconcileResourceOperatorState(string) int
 			}); ok {
 				reconciler.ReconcileResourceOperatorState(resourceID)

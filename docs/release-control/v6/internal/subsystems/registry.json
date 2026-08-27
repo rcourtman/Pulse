@@ -5517,6 +5517,7 @@
       "owned_prefixes": [
         "internal/availabilityprobe/",
         "internal/fleethealth/",
+        "internal/maintenancesentinel/",
         "internal/monitoring/",
         "internal/storagehealth/",
         "internal/truenas/",
@@ -5566,6 +5567,20 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "maintenance-verification-runtime",
+            "label": "post-maintenance verification monitoring proof",
+            "match_prefixes": [
+              "internal/maintenancesentinel/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/maintenancesentinel/sentinel_test.go",
+              "internal/maintenancesentinel/verification_test.go"
+            ]
+          },
           {
             "id": "availability-certificate-runtime",
             "label": "availability and certificate monitoring proof",

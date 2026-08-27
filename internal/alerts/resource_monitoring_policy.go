@@ -84,3 +84,33 @@ func (m *Manager) ReconcileResourceOperatorState(resourceID string) int {
 	}
 	return cleared
 }
+
+// ReconcileOperatorIntentState re-evaluates every active alert after a policy
+// mutation. Maintenance scope can flow from a parent to any depth of
+// descendants, so an exact-resource reconciliation is not sufficient when a
+// host window starts, changes scope, or is cleared.
+func (m *Manager) ReconcileOperatorIntentState() int {
+	if m == nil {
+		return 0
+	}
+	now := time.Now().UTC()
+	m.mu.Lock()
+	alertIDs := make([]string, 0)
+	for storageKey, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		if suppressed, _ := m.operatorSuppressionForAlertNoLock(alert, now); suppressed {
+			alertIDs = append(alertIDs, effectiveAlertID(alert, storageKey))
+		}
+	}
+	m.mu.Unlock()
+
+	cleared := 0
+	for _, alertID := range alertIDs {
+		if m.ClearAlert(alertID) {
+			cleared++
+		}
+	}
+	return cleared
+}
