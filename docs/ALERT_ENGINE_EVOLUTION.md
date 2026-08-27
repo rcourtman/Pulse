@@ -96,6 +96,25 @@ from memory.
   policy replaces the per-platform config blocks and `DisableAll*`
   booleans, with a translator from the existing `AlertConfig` so persisted
   user configs keep working. UI migrates tab by tab.
+  **Status: engine side complete (2026-08-27).** The effective alert
+  policy for a resource is answered by one ordered fold
+  (`internal/alerts/alert_policy.go`): type default block → the type's
+  `DisableAll` switches → custom rules (guest-scoped, priority order) →
+  the per-resource override through the identity-aware lookup for the
+  kind. The persisted `AlertConfig` is the translator's input and keeps
+  its shape; the engine no longer reads it piecemeal — every scattered
+  `DisableAll*` read and threshold lookup routes through the fold, pinned
+  by characterization tests against the legacy resolution before any call
+  site moved.
+  *UI migration: deliberately deferred, demand-gated.* The per-platform
+  thresholds presentation is what users ask in — "VM CPU threshold", not
+  "scope selector" — and the demand ledger holds no signal for a
+  rules-first editing surface (the nearest entry warns against bolting
+  schedules onto alert rules). The tabs now sit on a single resolution
+  surface, so a rules-first UI, an effective-policy inspector ("why is
+  this alert off?"), or both can be built without further engine work
+  when a signal lands. Re-scope through
+  `repos/pulse-pro/FEATURE_REQUESTS.md` at that point.
 
 ## What is kept
 
@@ -109,3 +128,12 @@ resources, the specs/evaluator layer, the UI shell, and the
 The manager's per-family tracking maps, the imperative per-platform
 check bodies, the scattered suppression checks, and — once the event log
 is authoritative — the JSON snapshot history file.
+
+Status (2026-08-27): the tracking maps are deleted; the check bodies'
+imperative transition bulk is replaced by the reducer core (what remains
+of them is evidence assembly for the spec evaluator); suppression
+decisions emit typed, reasoned events through the Phase 0 log; policy
+reads go through the Phase 3 fold. The history-file retirement stays
+conditional on the event log becoming the sole history authority — a
+follow-on, alongside the unified-incidents reconciler emitting
+reducer-shaped events at that same boundary.

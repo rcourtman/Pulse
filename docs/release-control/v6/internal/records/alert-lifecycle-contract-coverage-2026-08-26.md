@@ -141,5 +141,19 @@ Scoped out deliberately: the unified-incidents reconciler stays on its
 batch reconciliation model (rationale recorded in
 docs/ALERT_ENGINE_EVOLUTION.md, Phase 2 status).
 
-Remaining: Phase 3 — declarative rule model with an AlertConfig
-translator, engine threshold resolution through rules, UI migration.
+Phase 3 (2026-08-27, 8827defb6): the declarative policy fold.
+effectiveAlertPolicyNoLock translates the persisted AlertConfig into the
+effective policy for one resource — type defaults, DisableAll switches,
+custom rules, identity-aware overrides — and every scattered DisableAll*
+read plus resolveResourceThresholds/getGuestThresholds now routes through
+it. Characterization tests (alert_policy_test.go) pinned the fold against
+the legacy resolution across the config matrix before call sites moved.
+UI migration deliberately deferred as demand-gated (no ledger signal for a
+rules-first editing surface); rationale in docs/ALERT_ENGINE_EVOLUTION.md.
+
+The evolution plan's phases are complete: Phase 0 event log, Phase 1
+characterized reducer + shadow feed, Phase 2 family cutovers + legacy map
+deletion, Phase 3 engine-side rule model. Open follow-ons recorded in the
+plan doc: event-log-as-sole-history-authority (retires the JSON snapshot
+file), the unified-incidents reconciler emitting reducer-shaped events at
+that boundary, and the demand-gated rules-first UI.
