@@ -444,6 +444,7 @@ describe('platform overview layout guardrails', () => {
     }
 
     expect(proxmoxPageSurfaceSource).toContain('<ProxmoxNodesTable');
+    expect(proxmoxPageSurfaceSource).toContain('<ProxmoxBackupServersTable');
     expect(proxmoxPageSurfaceSource).toContain('<WorkloadsSurface');
     expect(proxmoxPageSurfaceSource).toContain(
       "const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const",

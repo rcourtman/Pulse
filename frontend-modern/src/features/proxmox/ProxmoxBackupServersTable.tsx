@@ -40,8 +40,9 @@ import {
 // so it lives here on the Backups page, not buried on the platform Storage tab
 // where the rows read as generic "PVE" storage. One row per datastore, labelled
 // by its server; a server with no datastore data still gets a reachability row.
-// Host CPU/memory/uptime ride along on each of the server's rows: PBS hosts
-// left the v5 nodes table in the v6 IA, so this is where their health lives.
+// Host CPU/memory/uptime ride along on each of the server's rows. The shared
+// table appears on Overview for estate health and on Backups beside recovery
+// evidence, so both paths open the same canonical PBS/agent detail drawer.
 
 interface BackupServerRow {
   key: string;
