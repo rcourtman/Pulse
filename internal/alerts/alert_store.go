@@ -149,12 +149,10 @@ func (m *Manager) registerResolvedAliasUnlocked(storageKey string, resolved *Res
 	if m.resolvedAlias == nil {
 		m.resolvedAlias = make(map[string]string)
 	}
-	backfillCanonicalIdentity(resolved.Alert)
+	// Resolved alerts may already be visible to asynchronous lifecycle
+	// callbacks. Derive aliases without mutating the shared alert snapshot.
 	if alias := effectiveAlertID(resolved.Alert, ""); alias != "" && alias != storageKey {
 		m.resolvedAlias[alias] = storageKey
-	}
-	if resolved.Alert.CanonicalState != "" && resolved.Alert.CanonicalState != storageKey {
-		m.resolvedAlias[resolved.Alert.CanonicalState] = storageKey
 	}
 }
 
@@ -163,12 +161,8 @@ func (m *Manager) unregisterResolvedAliasUnlocked(storageKey string, resolved *R
 		return
 	}
 	if resolved != nil && resolved.Alert != nil {
-		backfillCanonicalIdentity(resolved.Alert)
 		if alias := effectiveAlertID(resolved.Alert, ""); alias != "" && alias != storageKey {
 			delete(m.resolvedAlias, alias)
-		}
-		if resolved.Alert.CanonicalState != "" && resolved.Alert.CanonicalState != storageKey {
-			delete(m.resolvedAlias, resolved.Alert.CanonicalState)
 		}
 	}
 }
@@ -202,8 +196,7 @@ func (m *Manager) getResolvedAlertNoLock(id string) (*ResolvedAlert, bool) {
 			if resolved == nil || resolved.Alert == nil {
 				continue
 			}
-			backfillCanonicalIdentity(resolved.Alert)
-			if resolved.Alert.CanonicalState != id {
+			if deriveCanonicalIdentity(resolved.Alert).State != id {
 				continue
 			}
 			if m.resolvedAlias == nil {

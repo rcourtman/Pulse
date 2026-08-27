@@ -8923,6 +8923,33 @@ func TestGetResolvedAlert(t *testing.T) {
 			t.Fatal("mutating returned alert changed stored resolved alert")
 		}
 	})
+
+	t.Run("canonicalizes legacy output without mutating stored alert", func(t *testing.T) {
+		m := newTestManager(t)
+		stored := &Alert{
+			ID:         "res1-cpu",
+			Type:       "cpu",
+			ResourceID: "res1",
+		}
+		m.resolvedMutex.Lock()
+		m.recentlyResolved["legacy-storage-key"] = &ResolvedAlert{
+			Alert:        stored,
+			ResolvedTime: time.Now(),
+		}
+		m.resolvedMutex.Unlock()
+
+		canonicalState := buildCanonicalStateID("res1", "metric-threshold:cpu")
+		result := m.GetResolvedAlert(canonicalState)
+		if result == nil || result.Alert == nil {
+			t.Fatal("expected canonical lookup of legacy resolved alert")
+		}
+		if result.Alert.ID != canonicalState || result.Alert.CanonicalState != canonicalState {
+			t.Fatalf("canonical output identity = (%q, %q), want %q", result.Alert.ID, result.Alert.CanonicalState, canonicalState)
+		}
+		if stored.CanonicalSpecID != "" || stored.CanonicalKind != "" || stored.CanonicalState != "" {
+			t.Fatalf("lookup mutated stored legacy alert identity: %+v", stored)
+		}
+	})
 }
 
 func TestGetAlertHistory(t *testing.T) {
