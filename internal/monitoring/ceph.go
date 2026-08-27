@@ -93,7 +93,7 @@ func (m *Monitor) checkCephPoolStorage(cluster models.CephCluster) {
 			}
 		}
 		if m.alertManager != nil {
-			m.alertManager.CheckStorage(storage)
+			m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, timestamp))
 		}
 	}
 }

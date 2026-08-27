@@ -166,8 +166,9 @@ func (m *Manager) getGlobalMetricTimeThreshold(metricType string) (int, bool) {
 
 // checkMetric checks a single metric against its threshold with hysteresis.
 type metricOptions struct {
-	Metadata map[string]interface{}
-	Message  string
+	Metadata       map[string]interface{}
+	RemoveMetadata []string
+	Message        string
 	// MonitorOnly suppresses external notifications while still tracking the alert.
 	MonitorOnly bool
 }
@@ -332,6 +333,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 			if existingAlert.Metadata == nil {
 				existingAlert.Metadata = map[string]interface{}{}
+			}
+			if opts != nil {
+				for _, key := range opts.RemoveMetadata {
+					delete(existingAlert.Metadata, key)
+				}
 			}
 			existingAlert.Metadata["resourceType"] = resourceType
 			existingAlert.Metadata["clearThreshold"] = threshold.Clear

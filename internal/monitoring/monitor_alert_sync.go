@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
@@ -132,7 +133,7 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 
 	m.migrateAvailabilityLinksToCanonicalIDs(resources)
 
-	m.alertManager.CheckUnifiedResourceMetrics(resources)
+	m.alertManager.CheckUnifiedResourceMetricsWithCapacityTrends(resources, m.unifiedStorageCapacityTrends(resources, time.Now()))
 	m.alertManager.SyncUnifiedResourceIncidents(resources)
 	m.syncAlertsToState()
 }

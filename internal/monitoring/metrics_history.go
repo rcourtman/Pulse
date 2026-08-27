@@ -53,6 +53,9 @@ type MetricsHistory struct {
 	diskMetrics    map[string]*DiskMetrics    // key: disk metrics resource ID
 	maxDataPoints  int
 	retentionTime  time.Duration
+
+	capacityForecastMu    sync.Mutex
+	capacityForecastCache map[string]storageCapacityForecastCacheEntry
 }
 
 // NewMetricsHistory creates a new metrics history tracker

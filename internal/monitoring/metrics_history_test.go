@@ -3,6 +3,8 @@ package monitoring
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestNewMetricsHistory(t *testing.T) {
@@ -1393,5 +1395,29 @@ func TestCleanupMetricsReturnsNilForExpiredData(t *testing.T) {
 	// Should return nil (not empty slice) to release backing array
 	if result != nil {
 		t.Errorf("cleanupMetrics should return nil for fully expired data, got slice with len=%d cap=%d", len(result), cap(result))
+	}
+}
+
+func TestMetricsHistorySuppliesAlertGradeStorageCapacityTrend(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Hour)
+	history := NewMetricsHistory(1000, 7*24*time.Hour)
+	for hour := 72; hour >= 0; hour-- {
+		history.AddStorageMetric(
+			"forecast-history-proof",
+			"usage",
+			60+float64(72-hour)*0.08,
+			now.Add(-time.Duration(hour)*time.Hour),
+		)
+	}
+
+	monitor := &Monitor{metricsHistory: history}
+	trend := monitor.storageCapacityTrend(models.Storage{
+		ID: "forecast-history-proof", Name: "archive", Status: "active", Usage: 65.76,
+	}, now)
+	if !trend.Ready || trend.Reason != "increasing" {
+		t.Fatalf("trend = %+v, want trusted increasing evidence", trend)
+	}
+	if trend.Confidence < 0.8 {
+		t.Fatalf("confidence = %.3f, want alert-grade evidence", trend.Confidence)
 	}
 }

@@ -462,6 +462,12 @@ func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, b
 }
 
 func (m *Manager) CheckUnifiedResourceMetrics(resources []unifiedresources.Resource) {
+	m.CheckUnifiedResourceMetricsWithCapacityTrends(resources, nil)
+}
+
+// CheckUnifiedResourceMetricsWithCapacityTrends evaluates canonical resources
+// with optional alert-grade capacity evidence keyed by canonical resource ID.
+func (m *Manager) CheckUnifiedResourceMetricsWithCapacityTrends(resources []unifiedresources.Resource, capacityTrends map[string]CapacityTrendObservation) {
 	if m == nil {
 		return
 	}
@@ -470,7 +476,7 @@ func (m *Manager) CheckUnifiedResourceMetrics(resources []unifiedresources.Resou
 		if !ok {
 			continue
 		}
-		m.CheckUnifiedResource(input)
+		m.CheckUnifiedResourceWithCapacityTrend(input, capacityTrends[input.ID])
 	}
 }
 
@@ -730,6 +736,13 @@ func (i *UnifiedResourceInput) TemperatureValue() float64 {
 // available metric. Discrete event alerts (offline, RAID, backup age, etc.)
 // are NOT evaluated here — they remain in the typed Check* methods.
 func (m *Manager) CheckUnifiedResource(input *UnifiedResourceInput) {
+	m.CheckUnifiedResourceWithCapacityTrend(input, CapacityTrendObservation{})
+}
+
+// CheckUnifiedResourceWithCapacityTrend keeps predictive and static capacity
+// evaluation on the same canonical lifecycle for every admitted storage
+// platform.
+func (m *Manager) CheckUnifiedResourceWithCapacityTrend(input *UnifiedResourceInput, trend CapacityTrendObservation) {
 	if input == nil {
 		return
 	}
@@ -756,6 +769,13 @@ func (m *Manager) CheckUnifiedResource(input *UnifiedResourceInput) {
 		Str("resourceName", input.Name).
 		Str("resourceType", unifiedAlertType(input.Type)).
 		Msg("Evaluating unified resource metrics")
+
+	if unifiedStorageUsageResourceType(input.Type) && input.Disk != nil {
+		m.evaluateUnifiedCapacity(input, thresholds, trend, func() bool {
+			return !m.config.Enabled || m.unifiedPlatformAlertsDisabledNoLock(input.Type) || m.resolveResourceThresholds(input.Type, input.ID).Disabled
+		})
+		return
+	}
 
 	m.evaluateUnifiedMetrics(input, thresholds, nil)
 }

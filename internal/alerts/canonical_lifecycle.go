@@ -13,23 +13,27 @@ import (
 )
 
 type canonicalLifecycleAlertParams struct {
-	Spec                 alertspecs.ResourceAlertSpec
-	Evidence             alertspecs.AlertEvidence
-	IntentSignal         string
-	PolicyDisabledNoLock func() bool
-	AlertID              string
-	AlertType            string
-	ResourceID           string
-	ResourceName         string
-	Node                 string
-	Instance             string
-	Message              string
-	Metadata             map[string]interface{}
-	AddToRecent          bool
-	AddToHistory         bool
-	RateLimit            bool
-	DispatchAsync        bool
-	IntentBackup         BackupIntentContext
+	Spec                         alertspecs.ResourceAlertSpec
+	Evidence                     alertspecs.AlertEvidence
+	IntentSignal                 string
+	PolicyDisabledNoLock         func() bool
+	AlertID                      string
+	AlertType                    string
+	ResourceID                   string
+	ResourceName                 string
+	Node                         string
+	Instance                     string
+	Message                      string
+	Value                        float64
+	Threshold                    float64
+	Metadata                     map[string]interface{}
+	AddToRecent                  bool
+	AddToHistory                 bool
+	RateLimit                    bool
+	DispatchAsync                bool
+	NotifyOnSeverityChange       bool
+	AddToHistoryOnSeverityChange bool
+	IntentBackup                 BackupIntentContext
 }
 
 type canonicalStatefulAlertParams struct {
@@ -460,8 +464,8 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Node:         params.Node,
 			Instance:     params.Instance,
 			Message:      params.Message,
-			Value:        0,
-			Threshold:    0,
+			Value:        params.Value,
+			Threshold:    params.Threshold,
 			StartTime:    incident.StartedAt,
 			LastSeen:     params.Evidence.ObservedAt,
 			Metadata:     cloneMetadata(params.Metadata),
@@ -501,6 +505,14 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		if existing != nil {
 			if primary == reducer.EventSeverityChanged {
 				result.Transition = transition(alertspecs.EvaluationTransitionSeverityChanged, alertspecs.AlertStateFiring, alertspecs.AlertStateFiring)
+				if params.AddToHistoryOnSeverityChange {
+					m.historyManager.AddAlertTransition(*alert)
+				}
+				if params.NotifyOnSeverityChange {
+					if !params.RateLimit || m.checkRateLimit(trackingKey) {
+						m.dispatchAlert(alert, params.DispatchAsync)
+					}
+				}
 			}
 			return result, true
 		}

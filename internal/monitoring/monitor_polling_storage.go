@@ -710,7 +710,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		}
 
 		if m.alertManager != nil {
-			m.alertManager.CheckStorage(storage)
+			m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, time.Now()))
 		}
 	}
 

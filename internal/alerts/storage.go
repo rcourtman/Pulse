@@ -15,6 +15,12 @@ import (
 
 // CheckStorage checks storage against thresholds
 func (m *Manager) CheckStorage(storage models.Storage) {
+	m.CheckStorageWithCapacityTrend(storage, CapacityTrendObservation{})
+}
+
+// CheckStorageWithCapacityTrend evaluates static storage policy and optional
+// predictive evidence as one canonical capacity lifecycle.
+func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend CapacityTrendObservation) {
 	m.mu.RLock()
 	if !m.config.Enabled {
 		m.mu.RUnlock()
@@ -97,14 +103,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 
 	// Check usage if storage is online - checkMetric will skip if threshold is nil or <= 0
 	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
-		m.evaluateUnifiedMetrics(&UnifiedResourceInput{
-			ID:       storage.ID,
-			Type:     "storage",
-			Name:     storage.Name,
-			Node:     storage.Node,
-			Instance: storage.Instance,
-			Disk:     &UnifiedResourceMetric{Percent: storage.Usage},
-		}, thresholds, nil)
+		m.evaluateStorageCapacity(storage, thresholds, trend)
 	}
 
 	// Check ZFS pool status if this is ZFS storage
