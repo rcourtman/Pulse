@@ -1239,10 +1239,11 @@ not a replacement status card, CTA band, or page-local nested card.
    drawer-width `justify-between` rows on desktop.
    This contract also covers secondary drawer facts in availability status and
    suggestion cards, resource change-history entries, Docker/PBS/PMG service
-   support panels, and Docker container-update management cards. Headers,
-   status summaries, actions, disk capacity summaries, and RAID state pairs may
-   retain intentional endpoint alignment; ordinary label/value facts in those
-   surfaces may not.
+   support panels, Docker container-update management cards, action history,
+   Discovery summaries, and the specialized Proxmox Mail Gateway drawer.
+   Headers, status summaries, actions, disk capacity summaries, and RAID state
+   pairs may retain intentional endpoint alignment; ordinary label/value facts
+   in those surfaces may not.
    Read-only metadata chips belong to `MetadataBadge` and domain wrappers over
    it. Organization role and share-status chips must use
    `OrganizationRoleBadge` and `OrganizationShareStatusBadge`, so role/status

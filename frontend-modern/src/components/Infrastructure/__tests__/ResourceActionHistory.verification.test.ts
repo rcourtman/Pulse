@@ -70,6 +70,13 @@ describe('ResourceActionHistory verification rendering', () => {
     );
 
     const actionHistory = within(screen.getByTestId('resource-action-history-section'));
+    const approvalRow = actionHistory.getAllByText('Approval')[0]?.parentElement;
+    expect(approvalRow).toHaveClass(
+      'justify-between',
+      'lg:grid',
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(approvalRow?.lastElementChild).toHaveClass('text-right', 'lg:text-left');
     expect(actionHistory.getAllByText('Legacy check passed (source unclassified)')).toHaveLength(1);
     expect(actionHistory.getByText("systemctl is-active 'nginx'")).toBeInTheDocument();
     expect(actionHistory.queryByText('should not render')).toBeNull();

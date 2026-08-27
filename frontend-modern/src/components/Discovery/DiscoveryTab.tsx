@@ -32,7 +32,7 @@ import {
 } from '@/utils/resourceAnalysisPresentation';
 import { ButtonLink, CopyValueButton } from '@/components/shared/Button';
 import { CopyableCodeRow } from '@/components/shared/CopyableCodeRow';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { useDiscoveryTabState } from './useDiscoveryTabState';
 import { orderFactsByActionability } from './factOrdering';
 import { deriveCliCommand } from './cliCommand';
@@ -1020,22 +1020,32 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   <div class="space-y-1.5">
                     <For each={orderFactsByActionability(d().facts).slice(0, 8)}>
                       {(fact) => (
-                        <div class="flex items-center justify-between gap-2 text-xs">
-                          <span class="min-w-0 text-muted truncate">{fact.key}</span>
-                          <div class="flex min-w-0 items-center gap-1.5">
-                            <span class="truncate font-medium text-base-content" title={fact.value}>
-                              {fact.value}
-                            </span>
-                            <CopyValueButton
-                              value={fact.value}
-                              copied={copiedDiscoveryValue() === fact.value.trim()}
-                              onCopyValue={handleCopyDiscoveryValue}
-                              label={`Copy ${fact.key}`}
-                              variant="ghost"
-                              size="xs"
-                            />
-                          </div>
-                        </div>
+                        <InfoCardKeyValueRow
+                          class="text-xs"
+                          label={fact.key}
+                          labelClass="truncate"
+                          labelTitle={fact.key}
+                          value={
+                            <>
+                              <span
+                                class="truncate font-medium text-base-content"
+                                title={fact.value}
+                              >
+                                {fact.value}
+                              </span>
+                              <CopyValueButton
+                                value={fact.value}
+                                copied={copiedDiscoveryValue() === fact.value.trim()}
+                                onCopyValue={handleCopyDiscoveryValue}
+                                label={`Copy ${fact.key}`}
+                                variant="ghost"
+                                size="xs"
+                              />
+                            </>
+                          }
+                          valueClass="flex items-center gap-1.5"
+                          valueTitle={fact.value}
+                        />
                       )}
                     </For>
                   </div>

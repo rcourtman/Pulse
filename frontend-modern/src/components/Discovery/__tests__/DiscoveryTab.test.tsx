@@ -226,7 +226,16 @@ describe('DiscoveryTab', () => {
       service_version: '16.1',
       category: 'database',
       cli_access: 'psql',
-      facts: [],
+      facts: [
+        {
+          category: 'network',
+          key: 'Listen address',
+          value: '0.0.0.0:5432',
+          source: 'ss',
+          confidence: 0.95,
+          discovered_at: '2026-04-15T00:00:00Z',
+        },
+      ],
       config_paths: [],
       data_paths: [],
       log_paths: [],
@@ -255,6 +264,12 @@ describe('DiscoveryTab', () => {
     ));
 
     const runButton = await screen.findByRole('button', { name: 'Run Discovery' });
+    const factRow = (await screen.findByText('Listen address')).parentElement;
+    expect(factRow).toHaveClass('justify-between', 'lg:grid', 'lg:grid-cols-[7rem_minmax(0,1fr)]');
+    expect(screen.getByText('0.0.0.0:5432').parentElement).toHaveClass(
+      'text-right',
+      'lg:text-left',
+    );
     await waitFor(() => expect(runButton).not.toBeDisabled());
     fireEvent.click(runButton);
 

@@ -6,8 +6,19 @@ import {
   MAIL_GATEWAY_PHONE_COLUMNS,
   MAIL_GATEWAY_PHONE_COLUMN_WIDTHS,
 } from '../ProxmoxMailGatewayTable';
+import mailGatewayDrawerSource from '../ProxmoxMailGatewayDrawer.tsx?raw';
 
 describe('ProxmoxMailGatewayTable phone presentation', () => {
+  it('keeps compact drawer statistics on the shared responsive row contract', () => {
+    expect(mailGatewayDrawerSource).toContain('InfoCardKeyValueRow');
+    expect(mailGatewayDrawerSource).not.toMatch(
+      /class="flex items-baseline justify-between[^\"]*">\s*<span class="text-muted">/,
+    );
+    expect(
+      mailGatewayDrawerSource.match(/class="col-span-2 text-\[11px\] sm:col-span-1"/g),
+    ).toHaveLength(3);
+  });
+
   it('keeps fleet context and mail-flow counters visible without scrolling', () => {
     expect(MAIL_GATEWAY_PHONE_COLUMNS).toEqual([
       'instance',

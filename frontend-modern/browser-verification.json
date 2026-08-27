@@ -1,38 +1,32 @@
 {
   "version": 1,
-  "base_sha": "478a39bdec4b3a20f309490a564bcaca8e423a34",
-  "verified_at": "2026-08-27T20:06:10Z",
+  "base_sha": "4b9abd4eca5a1399a2386814d98eeadded198e45",
+  "verified_at": "2026-08-27T20:10:44Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
-    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
-    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx",
-    "frontend-modern/src/features/alerts/thresholds/types.ts",
-    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts",
-    "frontend-modern/src/types/alerts.ts"
+    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "6e52a34562926185ae32483add8e303b0a8fae5c3d5315f5b87865f960f54929",
-    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "adb7c745b8fdee148edf56beea8f1b7a02f30e6495d6fc6d7e2eff36f228d10c",
-    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "00e8e50cd3892262c9195129b28fc834d4dbc87adb37aeb6f652957869367ad8",
-    "frontend-modern/src/features/alerts/thresholds/types.ts": "d87f4509648798b55c01ac9e701faa2b9a96de7e25bf6453bfc10fbc5176e1f3",
-    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts": "34fff486ecf33457f42cefeb0b04bbd4b3e04dad24faca8bd99bfd86a75e70f7",
-    "frontend-modern/src/types/alerts.ts": "ef4e8322a38e8443393f762ee4ba6c512ffd4ff18b3f32ff5fd64f5d3754585d"
+    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx": "50839ded7dc62cbc3a9fb11fc5fc575acd1997ec9a4b0d7331fba22f0afb0ab4",
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "241e5f93f444b3838b80c05f6b4f78c4788931c760d01dc63f54ee5d4ee5270a",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "26faeb83e422b1d928385ce836e86a701ce544aa936b8de5bb38caee845bcb4d"
   },
-  "routes": ["/alerts/thresholds/proxmox"],
+  "routes": ["/proxmox/mail", "/standalone/machines", "/docker/overview", "/actions"],
   "viewports": [
-    { "width": 1440, "height": 900 },
+    { "width": 1920, "height": 800 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "CPU evaluation window loaded with the global five-minute rule and inherited platform overrides",
-    "mobile platform overrides collapsed and expanded",
-    "global rule changed to one minute with inherited labels updating immediately"
+    "mail-gateway-eu expanded with inbound disposition statistics visible",
+    "Apollo-114 and auth-service-01 management drawers inspected for Discovery and action-audit availability",
+    "Actions open and history views inspected for seeded action records"
   ],
   "interactions": [
-    "confirmed the desktop three-column profile grid is readable without displacing threshold navigation",
-    "confirmed the narrow layout keeps the global rule visible and collapses platform overrides",
-    "expanded mobile platform overrides and confirmed every selector remains accessible",
-    "changed the global CPU window to one minute and confirmed inherited labels and unsaved-change state update"
+    "expanded mail-gateway-eu and confirmed Greylist, RBL, and average-process values remain adjacent to their labels on desktop",
+    "confirmed the three inbound statistic rows span the mobile card cleanly at 390px without overlap",
+    "repeated the PMG desktop check after the mobile span correction",
+    "inspected machine and Docker host drawers plus Actions history; the demo does not seed resource-level Discovery facts or action-audit drawer rows, so those responsive states are covered by rendered component tests"
   ]
 }

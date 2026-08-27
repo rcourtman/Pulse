@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createResource, type Component } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -396,34 +397,28 @@ export const ProxmoxMailGatewayDrawer: Component<{
                     outValue={stats()!.bytesOut ?? 0}
                     format={(v) => (v > 0 ? formatBytes(v) : '—')}
                   />
-                  <div class="space-y-1">
-                    <div class="flex items-baseline justify-between text-[11px]">
-                      <span class="text-muted">Greylist / Junk in</span>
-                      <span class="font-mono text-[10px] text-base-content font-semibold">
-                        {formatPlatformTableIntegerValue(stats()!.greylistCount)} /{' '}
-                        {formatPlatformTableIntegerValue(stats()!.junkIn)}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="space-y-1">
-                    <div class="flex items-baseline justify-between text-[11px]">
-                      <span class="text-muted">RBL / Pregreet rejects</span>
-                      <span class="font-mono text-[10px] text-base-content font-semibold">
-                        {formatPlatformTableIntegerValue(stats()!.rblRejects)} /{' '}
-                        {formatPlatformTableIntegerValue(stats()!.pregreetRejects)}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="space-y-1">
-                    <div class="flex items-baseline justify-between text-[11px]">
-                      <span class="text-muted">Avg process</span>
-                      <span class="font-mono text-[10px] text-base-content font-semibold">
-                        {stats()?.averageProcessTimeMs
-                          ? `${Math.round(stats()!.averageProcessTimeMs)}ms`
-                          : '—'}
-                      </span>
-                    </div>
-                  </div>
+                  <InfoCardKeyValueRow
+                    class="col-span-2 text-[11px] sm:col-span-1"
+                    label="Greylist / Junk in"
+                    value={`${formatPlatformTableIntegerValue(stats()!.greylistCount)} / ${formatPlatformTableIntegerValue(stats()!.junkIn)}`}
+                    valueClass="font-mono text-[10px]"
+                  />
+                  <InfoCardKeyValueRow
+                    class="col-span-2 text-[11px] sm:col-span-1"
+                    label="RBL / Pregreet rejects"
+                    value={`${formatPlatformTableIntegerValue(stats()!.rblRejects)} / ${formatPlatformTableIntegerValue(stats()!.pregreetRejects)}`}
+                    valueClass="font-mono text-[10px]"
+                  />
+                  <InfoCardKeyValueRow
+                    class="col-span-2 text-[11px] sm:col-span-1"
+                    label="Avg process"
+                    value={
+                      stats()?.averageProcessTimeMs
+                        ? `${Math.round(stats()!.averageProcessTimeMs)}ms`
+                        : '—'
+                    }
+                    valueClass="font-mono text-[10px]"
+                  />
                 </div>
               </Show>
             </Card>

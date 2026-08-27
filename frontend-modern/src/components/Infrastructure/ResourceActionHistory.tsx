@@ -1,6 +1,6 @@
 import { For, Show } from 'solid-js';
 import type { Component } from 'solid-js';
-import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import type { ActionAuditRecord } from '@/types/actionAudit';
 import { formatRelativeTime } from '@/utils/format';
 import {
@@ -55,27 +55,22 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
         <Show when={props.audit.request?.reason}>
           <div class="text-base-content">{props.audit.request.reason}</div>
         </Show>
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-muted">Approval</span>
-          <span class="font-medium text-base-content">
-            {formatActionApprovalPolicyLabel(props.audit.plan?.approvalPolicy)}
-          </span>
-        </div>
+        <InfoCardKeyValueRow
+          label="Approval"
+          value={formatActionApprovalPolicyLabel(props.audit.plan?.approvalPolicy)}
+        />
         <Show when={preflight()}>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-muted">Dry run</span>
-            <span class="font-medium text-base-content">
-              {preflight()?.dryRunAvailable ? 'Available' : 'Not available'}
-            </span>
-          </div>
+          <InfoCardKeyValueRow
+            label="Dry run"
+            value={preflight()?.dryRunAvailable ? 'Available' : 'Not available'}
+          />
         </Show>
         <Show when={preflight()?.intendedChange}>
-          <div class="flex items-start justify-between gap-2">
-            <span class="text-muted">Intent</span>
-            <span class="max-w-[70%] text-right font-medium text-base-content">
-              {preflight()?.intendedChange}
-            </span>
-          </div>
+          <InfoCardKeyValueRow
+            label="Intent"
+            value={preflight()?.intendedChange}
+            valueClass="break-words"
+          />
         </Show>
         <Show when={(preflight()?.safetyChecks || []).length > 0}>
           <div class="space-y-1">
@@ -113,19 +108,20 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           })()}
         </Show>
         <Show when={apt()?.facts.length}>
-          <dl
+          <div
             data-testid="resource-apt-action-facts"
             class="grid gap-1 rounded border border-border bg-surface px-2 py-1.5 sm:grid-cols-2"
           >
             <For each={apt()?.facts ?? []}>
               {(fact) => (
-                <div class="flex items-start justify-between gap-2">
-                  <dt class="text-muted">{fact.label}</dt>
-                  <dd class="text-right font-medium text-base-content">{fact.value}</dd>
-                </div>
+                <InfoCardKeyValueRow
+                  label={fact.label}
+                  value={fact.value}
+                  valueClass="break-words"
+                />
               )}
             </For>
-          </dl>
+          </div>
         </Show>
         <Show when={verificationOutcome()}>
           {(() => {

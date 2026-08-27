@@ -268,6 +268,7 @@ about the same disk cannot diverge.
 125. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
 126. `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`
 127. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
+127a. `frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx`
 128. `frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx`
 129. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
 130. `frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx`
@@ -1331,9 +1332,11 @@ desktop rows use the shared fixed label track so labels and values remain
 visually adjacent instead of spanning the full drawer width.
 The same boundary applies to availability facts, resource change-history
 metadata, Docker/PBS/PMG service facts, nested PMG queue/mail breakdowns, and
-Docker container-update management facts. Their headers, actions, and compact
-status summaries remain feature-owned, while ordinary label/value rows compose
-`InfoCardKeyValueRow` rather than restoring a drawer-width flex split.
+Docker container-update management facts. It also covers action-history facts,
+Discovery facts, and the specialized `ProxmoxMailGatewayDrawer.tsx` inbound
+statistics. Their headers, actions, and compact status summaries remain
+feature-owned, while ordinary label/value rows compose `InfoCardKeyValueRow`
+rather than restoring a drawer-width flex split.
 Curated technical inventory follows the shared compact-row contract instead
 of the secondary-card contract. Docker-host drawers must project system,
 runtime, memory, storage, and telemetry facts through

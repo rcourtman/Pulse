@@ -1247,6 +1247,18 @@ describe('shared primitive guardrails', () => {
         /class="flex items-(?:center|start) justify-between gap-2">\s*<span class="text-muted">/,
       );
     }
+
+    for (const consumerPath of [
+      'src/components/Discovery/DiscoveryTab.tsx',
+      'src/components/Infrastructure/ResourceActionHistory.tsx',
+      'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+    ]) {
+      const source = readFrontendSource(consumerPath);
+      expect(source).toContain('InfoCardKeyValueRow');
+      expect(source).not.toMatch(
+        /class="flex items-(?:baseline|center|start) justify-between[^\"]*">\s*<(?:span|dt) class="[^\"]*text-muted/,
+      );
+    }
   });
 
   it('keeps shared subtabs as one primitive and leaves shell styling to owning surfaces', () => {
