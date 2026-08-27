@@ -246,7 +246,7 @@ type dockerRestartLabNotification struct {
 
 type colimaDirectObserver struct{}
 
-func (colimaDirectObserver) ObserveDockerContainer(ctx context.Context, actionID, containerID string) (dockerContainerPostconditionObservation, error) {
+func (colimaDirectObserver) ObserveDockerContainer(ctx context.Context, actionID, _, _, containerID string) (dockerContainerPostconditionObservation, error) {
 	snapshot, err := observeColimaContainer(ctx, containerID)
 	return dockerContainerPostconditionObservation{ObserverID: "task06-colima-direct", TrustDomain: "daemon:colima-direct", Method: "docker_context_colima_inspect", Snapshot: snapshot, ReceivedAt: time.Now().UTC()}, err
 }

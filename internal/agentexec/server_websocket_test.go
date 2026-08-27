@@ -749,6 +749,83 @@ func TestActionPreflightRoundTripIsReadOnlyAndDigestBound(t *testing.T) {
 	}
 }
 
+func TestDockerContainerObservationRoundTripIsReadOnlyAndActionBound(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "docker-observer", Hostname: "host1", Version: "6", Platform: "linux", Token: "any",
+		DockerObservationVersion: DockerContainerObservationProtocolVersion,
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+	containerID := strings.Repeat("a", 64)
+	agentErr := make(chan error, 1)
+	go func() {
+		msg, readErr := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+		if readErr != nil {
+			agentErr <- readErr
+			return
+		}
+		if msg.Type != MsgTypeDockerContainerObserve || bytes.Contains(*msg.Payload, []byte(`"command"`)) || bytes.Contains(*msg.Payload, []byte(`"operation"`)) {
+			agentErr <- fmt.Errorf("unexpected docker observation envelope: %#v", msg)
+			return
+		}
+		payload, decodeErr := DecodeDockerContainerObservationPayload(*msg.Payload)
+		if decodeErr != nil {
+			agentErr <- decodeErr
+			return
+		}
+		result := DockerContainerObservationResultPayload{
+			RequestID: payload.RequestID, ActionID: payload.ActionID, ProtocolVersion: payload.ProtocolVersion, RequestDigest: payload.RequestDigest,
+			Observed: true,
+			Snapshot: DockerContainerLifecycleSnapshot{ContainerID: payload.ContainerID, State: "running", Running: true, ObservedAt: time.Now().UTC()},
+		}
+		agentErr <- conn.WriteJSON(mustNewMessage(t, MsgTypeDockerContainerObserveResult, payload.RequestID, result))
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result, err := s.ObserveDockerContainer(ctx, "docker-observer", DockerContainerObservationPayload{ActionID: "action-1", Runtime: "docker", ContainerID: containerID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ActionID != "action-1" || result.Snapshot.ContainerID != containerID || !result.Snapshot.Running {
+		t.Fatalf("result=%#v", result)
+	}
+	if err := <-agentErr; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDockerContainerObservationRejectsUnsupportedAgentBeforeDispatch(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "older-agent", Hostname: "host1", Version: "6.3", Platform: "linux", Token: "any",
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+	started := time.Now()
+	_, err = s.ObserveDockerContainer(context.Background(), "older-agent", DockerContainerObservationPayload{
+		ActionID: "action-1", Runtime: "docker", ContainerID: strings.Repeat("a", 64),
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not support docker observation protocol") {
+		t.Fatalf("error=%v", err)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatalf("unsupported agent rejection was not immediate: %s", time.Since(started))
+	}
+}
+
 func TestValidateHostUpdatePayloadRejectsOpenEndedAuthority(t *testing.T) {
 	for _, req := range []HostUpdatePayload{
 		{RequestID: "r1", ActionID: "a1", Operation: "run_command", ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)},

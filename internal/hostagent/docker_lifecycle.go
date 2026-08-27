@@ -21,6 +21,10 @@ type dockerLifecycleManager interface {
 	Preflight(context.Context, agentexec.DockerContainerLifecyclePayload) (bool, string)
 }
 
+func (m *localDockerLifecycleManager) Observe(ctx context.Context, runtime, containerID string) (agentexec.DockerContainerLifecycleSnapshot, error) {
+	return m.inspect(ctx, runtime, containerID)
+}
+
 // DockerContainerLifecycleOperator is the narrow bridge from the host command
 // channel to the unified agent's connected Docker / Podman module. It keeps
 // lifecycle execution on the daemon API and avoids requiring a second runtime

@@ -205,6 +205,8 @@ const (
 	msgTypeDockerContainerLifecycleResult messageType = "docker_container_lifecycle_result"
 	msgTypeDockerContainerUpdate          messageType = "docker_container_update"
 	msgTypeDockerContainerUpdateResult    messageType = "docker_container_update_result"
+	msgTypeDockerContainerObserve         messageType = "docker_container_observe"
+	msgTypeDockerContainerObserveResult   messageType = "docker_container_observe_result"
 	msgTypeActionPreflight                messageType = "action_preflight"
 	msgTypeActionPreflightResult          messageType = "action_preflight_result"
 	msgTypeOperationQuery                 messageType = "agent_operation_query"
@@ -224,14 +226,15 @@ type wsMessage struct {
 }
 
 type registerPayload struct {
-	AgentID                 string   `json:"agent_id"`
-	Hostname                string   `json:"hostname"`
-	Version                 string   `json:"version"`
-	Platform                string   `json:"platform"`
-	Tags                    []string `json:"tags,omitempty"`
-	Token                   string   `json:"token"`
-	OperationReceiptVersion int      `json:"operation_receipt_version,omitempty"`
-	ActionPreflightVersion  int      `json:"action_preflight_version,omitempty"`
+	AgentID                  string   `json:"agent_id"`
+	Hostname                 string   `json:"hostname"`
+	Version                  string   `json:"version"`
+	Platform                 string   `json:"platform"`
+	Tags                     []string `json:"tags,omitempty"`
+	Token                    string   `json:"token"`
+	OperationReceiptVersion  int      `json:"operation_receipt_version,omitempty"`
+	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
+	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
 }
 
 type registeredPayload struct {
@@ -457,13 +460,14 @@ func (c *CommandClient) buildWebSocketOrigin() (string, error) {
 
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 	payload, err := json.Marshal(registerPayload{
-		AgentID:                 c.agentID,
-		Hostname:                c.hostname,
-		Version:                 c.version,
-		Platform:                c.platform,
-		Token:                   c.apiToken,
-		OperationReceiptVersion: c.operationReceiptVersion(),
-		ActionPreflightVersion:  agentexec.ActionPreflightProtocolVersion,
+		AgentID:                  c.agentID,
+		Hostname:                 c.hostname,
+		Version:                  c.version,
+		Platform:                 c.platform,
+		Token:                    c.apiToken,
+		OperationReceiptVersion:  c.operationReceiptVersion(),
+		ActionPreflightVersion:   agentexec.ActionPreflightProtocolVersion,
+		DockerObservationVersion: agentexec.DockerContainerObservationProtocolVersion,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal registration payload: %w", err)
@@ -601,6 +605,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleActionPreflight(ctx, conn, payload)
 
+		case msgTypeDockerContainerObserve:
+			payload, err := agentexec.DecodeDockerContainerObservationPayload(msg.Payload)
+			if err != nil {
+				c.logger.Warn().Err(err).Msg("Dropping invalid docker container observation request")
+				continue
+			}
+			go c.handleDockerContainerObservation(ctx, conn, payload)
+
 		case msgTypeHostStorageCleanup:
 			payload, err := agentexec.DecodeHostStorageCleanupPayload(msg.Payload)
 			if err != nil {
@@ -723,6 +735,38 @@ func (c *CommandClient) handleActionPreflight(ctx context.Context, conn *websock
 	c.connMu.Unlock()
 	if err != nil {
 		c.logger.Debug().Err(err).Str("request_id", result.RequestID).Msg("Failed to send action preflight result")
+	}
+}
+
+func (c *CommandClient) handleDockerContainerObservation(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerObservationPayload) {
+	observeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	observer, ok := c.dockerLifecycle.(interface {
+		Observe(context.Context, string, string) (agentexec.DockerContainerLifecycleSnapshot, error)
+	})
+	result := agentexec.DockerContainerObservationResultPayload{
+		RequestID: payload.RequestID, ActionID: payload.ActionID, ProtocolVersion: payload.ProtocolVersion,
+		RequestDigest: payload.RequestDigest,
+	}
+	if !ok || observer == nil {
+		result.ReasonCode = agentexec.ActionRefusalCapabilityUnavailable
+	} else if snapshot, err := observer.Observe(observeCtx, payload.Runtime, payload.ContainerID); err != nil {
+		result.ReasonCode = agentexec.ActionRefusalTargetInspectionUnavailable
+		c.logger.Debug().Err(err).Str("request_id", payload.RequestID).Msg("Docker container observation failed")
+	} else {
+		result.Observed = true
+		result.Snapshot = snapshot
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	msg := wsMessage{Type: msgTypeDockerContainerObserveResult, ID: result.RequestID, Timestamp: time.Now(), Payload: encoded}
+	c.connMu.Lock()
+	err = conn.WriteJSON(msg)
+	c.connMu.Unlock()
+	if err != nil {
+		c.logger.Debug().Err(err).Str("request_id", result.RequestID).Msg("Failed to send docker container observation result")
 	}
 }
 

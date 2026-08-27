@@ -19,6 +19,7 @@ const (
 	MsgTypeHostUpdateResult               MessageType = "host_update_result"
 	MsgTypeDockerContainerLifecycleResult MessageType = "docker_container_lifecycle_result"
 	MsgTypeDockerContainerUpdateResult    MessageType = "docker_container_update_result"
+	MsgTypeDockerContainerObserveResult   MessageType = "docker_container_observe_result"
 	MsgTypeActionPreflightResult          MessageType = "action_preflight_result"
 	MsgTypeOperationQueryResult           MessageType = "agent_operation_query_result"
 
@@ -31,6 +32,7 @@ const (
 	MsgTypeHostUpdate               MessageType = "host_update"
 	MsgTypeDockerContainerLifecycle MessageType = "docker_container_lifecycle"
 	MsgTypeDockerContainerUpdate    MessageType = "docker_container_update"
+	MsgTypeDockerContainerObserve   MessageType = "docker_container_observe"
 	MsgTypeActionPreflight          MessageType = "action_preflight"
 	MsgTypeOperationQuery           MessageType = "agent_operation_query"
 	MsgTypeDeployPreflight          MessageType = "deploy_preflight"
@@ -88,14 +90,15 @@ func (m Message) DecodePayload(target any) error {
 
 // AgentRegisterPayload is sent by agent on connection
 type AgentRegisterPayload struct {
-	AgentID                 string   `json:"agent_id"`
-	Hostname                string   `json:"hostname"`
-	Version                 string   `json:"version"`
-	Platform                string   `json:"platform"` // "linux", "windows", "darwin"
-	Tags                    []string `json:"tags,omitempty"`
-	Token                   string   `json:"token"` // API token for authentication
-	OperationReceiptVersion int      `json:"operation_receipt_version,omitempty"`
-	ActionPreflightVersion  int      `json:"action_preflight_version,omitempty"`
+	AgentID                  string   `json:"agent_id"`
+	Hostname                 string   `json:"hostname"`
+	Version                  string   `json:"version"`
+	Platform                 string   `json:"platform"` // "linux", "windows", "darwin"
+	Tags                     []string `json:"tags,omitempty"`
+	Token                    string   `json:"token"` // API token for authentication
+	OperationReceiptVersion  int      `json:"operation_receipt_version,omitempty"`
+	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
+	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
 }
 
 // RegisteredPayload is sent by server after successful registration
@@ -203,6 +206,29 @@ type DockerContainerLifecycleSnapshot struct {
 	StartedAt    time.Time `json:"started_at,omitempty"`
 	RestartCount int       `json:"restart_count"`
 	ObservedAt   time.Time `json:"observed_at"`
+}
+
+// DockerContainerObservationPayload is a server-initiated, read-only daemon
+// observation made after a typed mutation has returned. It is deliberately a
+// separate protocol from the mutation receipt so verification is not authored
+// by the executor result.
+type DockerContainerObservationPayload struct {
+	RequestID       string `json:"request_id"`
+	ActionID        string `json:"action_id"`
+	ProtocolVersion int    `json:"protocol_version"`
+	RequestDigest   string `json:"request_digest"`
+	Runtime         string `json:"runtime"`
+	ContainerID     string `json:"container_id"`
+}
+
+type DockerContainerObservationResultPayload struct {
+	RequestID       string                           `json:"request_id"`
+	ActionID        string                           `json:"action_id"`
+	ProtocolVersion int                              `json:"protocol_version"`
+	RequestDigest   string                           `json:"request_digest"`
+	Observed        bool                             `json:"observed"`
+	ReasonCode      string                           `json:"reason_code,omitempty"`
+	Snapshot        DockerContainerLifecycleSnapshot `json:"snapshot"`
 }
 
 type DockerContainerLifecycleResultPayload struct {
@@ -480,16 +506,17 @@ func IsActionRefusalReasonCode(code string) bool {
 
 // ConnectedAgent represents an agent connected via WebSocket
 type ConnectedAgent struct {
-	OrganizationID          string
-	TokenID                 string
-	AgentID                 string
-	Hostname                string
-	Version                 string
-	Platform                string
-	Tags                    []string
-	ConnectedAt             time.Time
-	OperationReceiptVersion int
-	ActionPreflightVersion  int
+	OrganizationID           string
+	TokenID                  string
+	AgentID                  string
+	Hostname                 string
+	Version                  string
+	Platform                 string
+	Tags                     []string
+	ConnectedAt              time.Time
+	OperationReceiptVersion  int
+	ActionPreflightVersion   int
+	DockerObservationVersion int
 }
 
 // --- Deploy protocol payloads ---

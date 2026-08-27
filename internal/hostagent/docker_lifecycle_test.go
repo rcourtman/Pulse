@@ -58,6 +58,24 @@ func TestDockerLifecycleManagerUsesConnectedModuleWithoutExternalCLI(t *testing.
 	}
 }
 
+func TestDockerLifecycleManagerObservationIsReadOnly(t *testing.T) {
+	now := time.Now().UTC()
+	operator := &stubDockerLifecycleOperator{snapshots: []agentexec.DockerContainerLifecycleSnapshot{{
+		ContainerID: dockerLifecycleTestContainerID, State: "running", Running: true, ObservedAt: now,
+	}}}
+	manager := newLocalDockerLifecycleManager(operator)
+	manager.run = func(context.Context, string, ...string) ([]byte, error) {
+		return nil, fmt.Errorf("external runtime CLI must not be called")
+	}
+	snapshot, err := manager.Observe(context.Background(), "docker", dockerLifecycleTestContainerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.ContainerID != dockerLifecycleTestContainerID || !snapshot.Running || len(operator.mutations) != 0 {
+		t.Fatalf("snapshot=%#v mutations=%v", snapshot, operator.mutations)
+	}
+}
+
 func TestDockerLifecycleManagerRestartPerformsOneMutationAndBoundedReadback(t *testing.T) {
 	t.Setenv("DOCKER_CONTEXT", "")
 	before := time.Now().UTC().Add(-time.Minute).Truncate(time.Nanosecond)

@@ -8935,6 +8935,21 @@ the action, subject, observation and receipt times, before/after facts, and
 canonical evidence digest. It is independent operational evidence, not a
 cryptographic attestation.
 
+Production Docker and Podman lifecycle execution must install that observer,
+not leave it as a real-lab-only seam. After the typed mutation receipt returns,
+the API executor issues one separate, bounded `docker_container_observe`
+request through the authenticated Unified Agent session. The request contains
+only an action ID, immutable container ID, runtime enum, protocol version and
+canonical digest; it carries no operation verb, command, approval, dispatch
+lease, or mutation authority. The agent transports a fresh fixed daemon
+inspection but does not author action truth. The API validates the action and
+subject binding, freshness, protocol version and digest, assigns the daemon
+observer trust domain, and alone projects the observation into
+`ActionResultV2`. Missing support, inspection failure, disconnect, timeout,
+stale evidence, or identity drift retains the original agent-attested or
+inconclusive result. It must never downgrade execution success or fabricate
+independence.
+
 Proxmox VM and LXC lifecycle execution now consumes that same two-axis truth
 contract in production. The node agent remains the executor, while the API
 composition root injects the tenant-scoped monitoring client as a direct
