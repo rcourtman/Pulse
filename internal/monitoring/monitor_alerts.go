@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -27,6 +29,96 @@ func (m *Monitor) GetAlertManager() *alerts.Manager {
 // GetIncidentStore returns the incident timeline store.
 func (m *Monitor) GetIncidentStore() *memory.IncidentStore {
 	return m.incidentStore
+}
+
+// DeadManStatus returns the external watchdog state without exposing the
+// configured secret-bearing ping URL.
+func (m *Monitor) DeadManStatus() DeadManStatus {
+	if m == nil || m.deadMan == nil {
+		return (*deadManRuntime)(nil).statusSnapshot()
+	}
+	status := m.deadMan.statusSnapshot()
+	if m.deadManConfigurationLoadError() != nil {
+		status.Configured = true
+		status.State = "configuration_unavailable"
+		status.LastError = "Saved external watchdog configuration could not be read"
+	} else if strings.TrimSpace(m.deadManConfigSnapshot().PingURL) == "" {
+		status.Configured = false
+		status.State = "disabled"
+		status.LastAttemptAt = nil
+		status.LastSuccessAt = nil
+		status.ConsecutiveFailures = 0
+		status.LastError = ""
+	}
+	return status
+}
+
+// DeadManConfig returns the in-memory encrypted-destination configuration.
+// API callers must mask PingURL before returning it to a client.
+func (m *Monitor) DeadManConfig() notifications.DeadManConfig {
+	return m.deadManConfigSnapshot()
+}
+
+func (m *Monitor) deadManConfigSnapshot() notifications.DeadManConfig {
+	if m == nil {
+		return notifications.DeadManConfig{}
+	}
+	m.deadManConfigMu.RLock()
+	defer m.deadManConfigMu.RUnlock()
+	return m.deadManConfig
+}
+
+func (m *Monitor) deadManConfigurationLoadError() error {
+	if m == nil {
+		return nil
+	}
+	m.deadManConfigMu.RLock()
+	defer m.deadManConfigMu.RUnlock()
+	return m.deadManConfigLoadErr
+}
+
+// UpdateDeadManConfig persists the secret before changing live behavior, so a
+// failed encrypted write can never create a runtime-only watchdog setting.
+func (m *Monitor) UpdateDeadManConfig(config notifications.DeadManConfig) error {
+	if m == nil || m.configPersist == nil {
+		return fmt.Errorf("dead-man configuration persistence unavailable")
+	}
+	config = notifications.NormalizeDeadManConfig(config)
+	if err := notifications.ValidateDeadManPingURL(config.PingURL); err != nil {
+		return err
+	}
+	if err := m.configPersist.SaveDeadManConfig(config); err != nil {
+		return err
+	}
+	m.deadManConfigMu.Lock()
+	m.deadManConfig = config
+	m.deadManConfigLoadErr = nil
+	m.deadManConfigMu.Unlock()
+	if m.alertManager != nil {
+		m.alertManager.ClearSystemAlert(alerts.DeadManStateAlertType)
+	}
+	if m.deadMan != nil {
+		m.deadMan.notifyConfigChanged()
+	}
+	return nil
+}
+
+func (m *Monitor) markDeadManMonitoringProgress(at time.Time) {
+	if m == nil || at.IsZero() {
+		return
+	}
+	m.deadManProgressUnixNano.Store(at.UTC().UnixNano())
+}
+
+func (m *Monitor) deadManMonitoringProgress() time.Time {
+	if m == nil {
+		return time.Time{}
+	}
+	value := m.deadManProgressUnixNano.Load()
+	if value <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, value).UTC()
 }
 
 // SetAlertTriggeredAICallback sets an additional callback for AI analysis when alerts fire

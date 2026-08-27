@@ -36,6 +36,18 @@ func (w *AlertMonitorWrapper) GetNotificationManager() *notifications.Notificati
 	return w.m.GetNotificationManager()
 }
 
+func (w *AlertMonitorWrapper) DeadManStatus() monitoring.DeadManStatus {
+	return w.m.DeadManStatus()
+}
+
+func (w *AlertMonitorWrapper) DeadManConfig() notifications.DeadManConfig {
+	return w.m.DeadManConfig()
+}
+
+func (w *AlertMonitorWrapper) UpdateDeadManConfig(config notifications.DeadManConfig) error {
+	return w.m.UpdateDeadManConfig(config)
+}
+
 func (w *AlertMonitorWrapper) SyncAlertState() {
 	w.m.SyncAlertState()
 }

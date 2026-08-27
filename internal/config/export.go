@@ -32,6 +32,7 @@ type ExportData struct {
 	Email         notifications.EmailConfig         `json:"email"`
 	Webhooks      []notifications.WebhookConfig     `json:"webhooks"`
 	Apprise       notifications.AppriseConfig       `json:"apprise"`
+	DeadMan       notifications.DeadManConfig       `json:"deadMan"`
 	System        SystemSettings                    `json:"system"`
 	GuestMetadata map[string]*GuestMetadata         `json:"guestMetadata,omitempty"`
 	SSO           *SSOConfig                        `json:"sso,omitempty"`
@@ -70,6 +71,10 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load Apprise config: %w", err)
 	}
+	deadManConfig, err := c.LoadDeadManConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to load dead-man config: %w", err)
+	}
 
 	webhooks, err := c.LoadWebhooks()
 	if err != nil {
@@ -102,7 +107,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 
 	// Create export data
 	exportData := ExportData{
-		Version:       "4.3",
+		Version:       "4.4",
 		ExportedAt:    time.Now(),
 		Nodes:         *nodes,
 		Alerts:        *alertConfig,
@@ -110,6 +115,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		Email:         *emailConfig,
 		Webhooks:      webhooks,
 		Apprise:       *appriseConfig,
+		DeadMan:       *deadManConfig,
 		System:        *systemSettings,
 		GuestMetadata: guestMetadata,
 		SSO:           ssoConfig,
@@ -158,8 +164,10 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	// Check version compatibility (warn but don't fail)
 	switch exportData.Version {
-	case "4.3", "":
+	case "4.4", "":
 		// current version, nothing to do
+	case "4.3":
+		log.Info().Msg("Config was exported from version 4.3. External watchdog settings were not included in that format.")
 	case "4.2":
 		log.Info().Msg("Config was exported from version 4.2. Alert intent policies were not included in that format.")
 	case "4.1":
@@ -209,6 +217,10 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	if err := c.SaveAppriseConfig(exportData.Apprise); err != nil {
 		return fmt.Errorf("failed to import Apprise config: %w", err)
+	}
+
+	if err := c.SaveDeadManConfig(exportData.DeadMan); err != nil {
+		return fmt.Errorf("failed to import dead-man config: %w", err)
 	}
 
 	if err := c.SaveWebhooks(exportData.Webhooks); err != nil {

@@ -9,6 +9,7 @@ import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSect
 import { AlertDeliveryHealthCard } from '../AlertDeliveryHealthCard';
 import { AlertDeliveryLogCard } from '../AlertDeliveryLogCard';
 import { AlertDeliveryPausedCard } from '../AlertDeliveryPausedCard';
+import { AlertDeadManDestinationSection } from '../AlertDeadManDestinationSection';
 import { AlertDestinationsLoadErrorCard } from '../AlertDestinationsLoadErrorCard';
 import { AlertDestinationsLoadingState } from '../AlertDestinationsLoadingState';
 import { AlertEmailDestinationsSection } from '../AlertEmailDestinationsSection';
@@ -23,6 +24,8 @@ import {
 export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
   setHasUnsavedChanges: (value: boolean) => void;
   setEmailConfig: (config: ReturnType<AlertDestinationsTabStateProps['emailConfig']>) => void;
+  deadManPingUrl: () => string;
+  setDeadManPingUrl: (value: string) => void;
 }
 
 export function DestinationsTab(props: DestinationsTabProps) {
@@ -118,6 +121,12 @@ export function DestinationsTab(props: DestinationsTabProps) {
           deleteWebhook={state.deleteWebhook}
           testWebhook={state.testWebhook}
           testingWebhook={state.testingWebhook()}
+        />
+
+        <AlertDeadManDestinationSection
+          pingUrl={props.deadManPingUrl}
+          setPingUrl={props.setDeadManPingUrl}
+          setHasUnsavedChanges={props.setHasUnsavedChanges}
         />
 
         <AlertPushDestinationsSection

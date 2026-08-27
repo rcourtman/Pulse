@@ -212,6 +212,21 @@ describe('docsLinks', () => {
     expect(apiReference).toContain('append-only alert event log');
   });
 
+  it('ships the credential-safe external watchdog API contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    expect(apiReference).toContain('`GET /api/alerts/deadman/config`');
+    expect(apiReference).toContain('`PUT /api/alerts/deadman/config`');
+    expect(apiReference).toContain('`GET /api/alerts/deadman/status`');
+    expect(apiReference).toContain('`pingUrl` is `***REDACTED***` when present');
+    expect(apiReference).toContain('never includes the URL or endpoint fingerprint');
+  });
+
   it('ships the truthful Patrol objective API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

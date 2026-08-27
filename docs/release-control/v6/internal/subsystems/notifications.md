@@ -51,6 +51,7 @@ or displayed a notification.
 8. `internal/api/alerting/notification_queue.go`
 9. `internal/notifications/tag_routing.go`
 10. `internal/notifications/delivery_health.go`
+11. `internal/notifications/deadman_config.go`
 
 ## Shared Boundaries
 
@@ -431,3 +432,24 @@ alerts-owned lifecycle.
 `internal/notifications/notifications_test.go`, and
 `internal/notifications/queue_test.go` prove occurrence and destination
 isolation, persistence, cleanup, and cancellation/claim ordering.
+
+### External watchdog transport is a credential-bearing destination boundary
+
+`internal/notifications/deadman_config.go` owns normalization and validation
+for healthchecks-compatible success-ping URLs. Possession of the URL can forge
+healthy state, so configuration is encrypted at rest, exported only inside the
+passphrase-encrypted configuration bundle, and represented to API clients by a
+redacted sentinel. URLs are bounded to HTTP(S), exclude userinfo, fragments,
+localhost, loopback, unspecified, and link-local targets, and must name the
+base success endpoint rather than `/start`, `/fail`, or `/log`.
+
+The monitoring-owned sender uses a dedicated transport that bypasses ambient
+HTTP proxies, revalidates DNS answers at dial time, never follows redirects,
+and returns sanitized error classes that cannot disclose the URL or token.
+Private LAN watchdogs remain valid when separately hosted. Network and 5xx
+failures receive two bounded retries; permanent response failures do not. A
+healthy signal is GET, while canonical-loop stall and restart-gap diagnostics
+are bounded text POSTs containing Pulse health and UTC timing only—never alert
+content, infrastructure names, destination credentials, or tenant data. This
+watchdog path is deliberately independent of notification queue activation,
+quiet hours, grouping, and escalation routing.

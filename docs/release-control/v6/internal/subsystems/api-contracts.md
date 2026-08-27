@@ -9920,3 +9920,21 @@ and returns `500`; it must not report a revocation that will reverse on restart.
 `TestSecurityTokensDeleteRollsBackWhenPersistenceFails` in
 `internal/api/security_tokens_lifecycle_test.go` pin both the multi-token
 identity boundary and the failed-commit response.
+
+### External watchdog configuration and status are separate secret boundaries
+
+`GET /api/alerts/deadman/config` requires monitoring-read scope and returns
+only `{pingUrl, configured}`. A configured URL is always the literal
+`***REDACTED***` sentinel; the credential-bearing value must never cross the
+response boundary. `PUT /api/alerts/deadman/config` requires monitoring-write
+scope, accepts the sentinel as preserve, an empty string as explicit removal,
+or a validated replacement URL, and reports success only after encrypted
+persistence commits. Validation and persistence errors never echo the URL.
+
+`GET /api/alerts/deadman/status` requires monitoring-read scope and returns the
+tenant-scoped operational read model: configured flag, state, heartbeat and
+recommended-grace seconds, monitoring progress, attempt/success timestamps,
+failure count, sanitized error, and last interruption. It never returns the
+URL or endpoint fingerprint. A saved configuration that cannot be decrypted is
+`configuration_unavailable`, while explicit removal is immediately `disabled`
+even if cancellation of an older request is still unwinding.

@@ -3827,6 +3827,8 @@ func TestRemoveHostAgent_BlocksFutureReportsUntilAllowed(t *testing.T) {
 		config:            &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
+	canonicalProgress := time.Now().Add(-time.Minute).UTC()
+	monitor.markDeadManMonitoringProgress(canonicalProgress)
 
 	hostID := "host-blocked"
 	monitor.state.UpsertHost(models.Host{
@@ -3857,6 +3859,14 @@ func TestRemoveHostAgent_BlocksFutureReportsUntilAllowed(t *testing.T) {
 
 	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
 		t.Fatalf("expected host report after allow reenroll, got %v", err)
+	}
+
+	// Host-agent deletion, rejected reports, and explicit re-enrollment are
+	// important lifecycle activity, but none prove that the canonical monitor
+	// loop is still scheduling. The independent watchdog must only advance from
+	// Monitor.Start's own select loop.
+	if got := monitor.deadManMonitoringProgress(); !got.Equal(canonicalProgress) {
+		t.Fatalf("host-agent lifecycle advanced canonical monitor progress: got %s, want %s", got, canonicalProgress)
 	}
 }
 

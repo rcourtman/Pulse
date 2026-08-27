@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
@@ -151,6 +152,26 @@ func (m *MockAlertMonitor) GetIncidentStore() *memory.IncidentStore {
 func (m *MockAlertMonitor) GetNotificationManager() *notifications.NotificationManager {
 	args := m.Called()
 	return args.Get(0).(*notifications.NotificationManager)
+}
+
+func (m *MockAlertMonitor) DeadManStatus() monitoring.DeadManStatus {
+	args := m.Called()
+	if value := args.Get(0); value != nil {
+		return value.(monitoring.DeadManStatus)
+	}
+	return monitoring.DeadManStatus{}
+}
+
+func (m *MockAlertMonitor) DeadManConfig() notifications.DeadManConfig {
+	args := m.Called()
+	if value := args.Get(0); value != nil {
+		return value.(notifications.DeadManConfig)
+	}
+	return notifications.DeadManConfig{}
+}
+
+func (m *MockAlertMonitor) UpdateDeadManConfig(config notifications.DeadManConfig) error {
+	return m.Called(config).Error(0)
 }
 
 func (m *MockAlertMonitor) SyncAlertState() {

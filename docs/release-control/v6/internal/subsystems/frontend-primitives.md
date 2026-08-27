@@ -6648,3 +6648,15 @@ tokens, labels the observation `Stale`, and exposes the last successful refresh
 age in its title. Freshness presentation remains in the pure storage row model;
 the table component must not infer age from render time or restyle retained
 capacity independently.
+
+### Credential-bearing destination panels use replacement semantics
+
+The feature-owned external-watchdog panel composes `SettingsPanel` without
+creating a second settings shell. A stored credential-bearing URL renders as
+an empty password input with a configured replacement placeholder and an
+explicit `Remove` action; it must not be inserted into the DOM, tooltip, status
+copy, or client logs. Only a newly entered value may be revealed with the
+panel-local Show/Hide control. Status badges use shared theme tokens, error and
+unavailable states remain textually distinct, and the four-part status grid
+collapses without horizontal overflow at phone widths. This pattern is the
+required primitive composition for future secret-bearing destination panels.

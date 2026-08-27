@@ -5626,3 +5626,14 @@ restore, or recovery authority; it prevents a successful API response from
 describing credential state that the next restart would undo. The exact-token
 and forced-write-failure proofs live in
 `internal/api/security_tokens_lifecycle_test.go`.
+
+### Dead-man persistence is availability evidence, not recovery authority
+
+The shared configuration persistence and alert API now store the encrypted
+external-watchdog URL and a monitoring-owned restart marker. These records are
+not backup inventory, recovery points, retention state, restore evidence, or
+storage action authority. The restart marker is a bounded availability journal
+whose atomic/fsync discipline ensures a later process can report a Pulse
+monitoring gap; it contains endpoint fingerprint and timing only. Configuration
+export/import carries the watchdog URL solely inside the existing
+passphrase-encrypted bundle and advances that bundle contract to version 4.4.

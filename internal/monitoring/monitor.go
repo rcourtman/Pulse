@@ -1110,6 +1110,11 @@ type Monitor struct {
 	connectionsSnapshotLister  func() []alerts.ConnectionSnapshot // returns platform connection snapshots for the connection-degraded check
 	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
+	deadMan                    *deadManRuntime
+	deadManProgressUnixNano    atomic.Int64
+	deadManConfigMu            sync.RWMutex
+	deadManConfig              notifications.DeadManConfig
+	deadManConfigLoadErr       error
 	lastDeliveryHealthCheck    time.Time // throttles the notification-delivery system alert evaluation; guarded by mu
 	configPersist              *config.ConfigPersistence
 	discoveryService           *discovery.Service                         // Background discovery service
@@ -1689,6 +1694,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath, alertManagerRestoreOptions()...),
 		incidentStore:              incidentStore,
 		notificationMgr:            notifications.NewNotificationManagerWithDataDir(cfg.PublicURL, cfg.DataPath),
+		deadMan:                    newDeadManRuntime(config.ResolveRuntimeDataDir(cfg.DataPath)),
 		configPersist:              config.NewConfigPersistence(cfg.DataPath),
 		discoveryService:           nil, // Will be initialized in Start()
 		authFailures:               make(map[string]int),
@@ -1812,6 +1818,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 		m.notificationMgr.SetAppriseConfig(*appriseConfig)
 	} else {
 		log.Warn().Err(err).Msg("failed to load Apprise configuration")
+	}
+	if deadManConfig, err := m.configPersist.LoadDeadManConfig(); err == nil {
+		m.deadManConfig = *deadManConfig
+	} else {
+		m.deadManConfigLoadErr = err
+		log.Warn().Err(err).Msg("failed to load dead-man configuration")
 	}
 
 	// Migrate webhooks if needed (from unencrypted to encrypted)
@@ -1999,6 +2011,28 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	})
 	m.replayAlertLifecycleProjections()
 	m.reconcileActiveAlertTimelines()
+	m.markDeadManMonitoringProgress(time.Now().UTC())
+	if err := m.deadManConfigurationLoadError(); err != nil {
+		m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{
+			Type:        alerts.DeadManStateAlertType,
+			Level:       alerts.AlertLevelWarning,
+			Message:     "Pulse could not read the encrypted external watchdog configuration. Watchdog monitoring is unavailable until the destination is saved again.",
+			Fingerprint: "configuration-load-failed",
+		})
+	}
+	if m.deadMan != nil {
+		go m.deadMan.run(
+			ctx,
+			func() string {
+				if m.alertManager == nil {
+					return ""
+				}
+				return m.deadManConfigSnapshot().PingURL
+			},
+			m.deadManMonitoringProgress,
+			m.alertManager,
+		)
+	}
 
 	// Create separate tickers for polling and broadcasting using the configured cadence
 
@@ -2010,6 +2044,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	broadcastTicker := time.NewTicker(pollingInterval)
 	defer broadcastTicker.Stop()
+	deadManProgressTicker := time.NewTicker(15 * time.Second)
+	defer deadManProgressTicker.Stop()
 
 	keepRealPolling := keepRealPollingInMockMode()
 
@@ -2035,6 +2071,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	for {
 		select {
+		case now := <-deadManProgressTicker.C:
+			// This tick runs on the canonical monitor loop itself. A separate
+			// heartbeat goroutine can therefore prove that scheduling remains
+			// responsive instead of merely proving its own timer is alive.
+			m.markDeadManMonitoringProgress(now.UTC())
 		case <-pollTicker.C:
 			now := time.Now()
 			m.evaluateDockerAgents(now)
@@ -7060,6 +7101,10 @@ const guestMetadataDrainTimeout = 2 * time.Second
 
 func (m *Monitor) Stop() {
 	log.Info().Msg("stopping monitor")
+
+	if m.deadMan != nil {
+		m.deadMan.stop(time.Now().UTC(), m.alertManager)
+	}
 
 	// Stop the alert manager to save history
 	if m.alertManager != nil {

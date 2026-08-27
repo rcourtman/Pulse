@@ -27,6 +27,18 @@ const (
 	// NotificationDeliveryAlertType is the first system alert: configured
 	// notification destinations are not delivering.
 	NotificationDeliveryAlertType = "notification-delivery"
+
+	// DeadManDeliveryAlertType reports that Pulse is healthy but cannot reach
+	// the configured external watchdog.
+	DeadManDeliveryAlertType = "deadman-delivery"
+	// DeadManMonitoringStalledAlertType reports that the watchdog worker is
+	// alive but the canonical monitoring loop has stopped making progress.
+	DeadManMonitoringStalledAlertType = "deadman-monitoring-stalled"
+	// DeadManInterruptionAlertType records a monitoring availability gap found
+	// when Pulse restarts.
+	DeadManInterruptionAlertType = "deadman-interruption"
+	// DeadManStateAlertType reports loss of the durable restart-gap record.
+	DeadManStateAlertType = "deadman-state"
 )
 
 // SystemAlertInput describes a system-scoped condition. Type is required and

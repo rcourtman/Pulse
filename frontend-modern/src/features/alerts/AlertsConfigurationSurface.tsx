@@ -212,6 +212,8 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
       <Show when={props.activeTab() === 'destinations'}>
         <DestinationsTab
           setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
+          deadManPingUrl={state.deadManPingUrl}
+          setDeadManPingUrl={state.setDeadManPingUrl}
           emailConfig={state.emailConfig}
           setEmailConfig={state.setEmailConfig}
           appriseConfig={state.appriseConfig}

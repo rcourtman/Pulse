@@ -33,6 +33,7 @@ type ConfigPersistence struct {
 	emailFile                  string
 	webhookFile                string
 	appriseFile                string
+	deadManFile                string
 	reportSchedulesFile        string
 	nodesFile                  string
 	trueNASFile                string
@@ -114,6 +115,7 @@ type resolvedConfigPersistencePaths struct {
 	emailFile                  string
 	webhookFile                string
 	appriseFile                string
+	deadManFile                string
 	reportSchedulesFile        string
 	nodesFile                  string
 	trueNASFile                string
@@ -166,6 +168,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	appriseFile, err := resolveLeaf("apprise.enc")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve apprise.enc: %w", err)
+	}
+	deadManFile, err := resolveLeaf("deadman.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve deadman.enc: %w", err)
 	}
 	reportSchedulesFile, err := resolveLeaf("report_schedules.json")
 	if err != nil {
@@ -258,6 +264,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 		emailFile:                  emailFile,
 		webhookFile:                webhookFile,
 		appriseFile:                appriseFile,
+		deadManFile:                deadManFile,
 		reportSchedulesFile:        reportSchedulesFile,
 		nodesFile:                  nodesFile,
 		trueNASFile:                trueNASFile,
@@ -315,6 +322,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		emailFile:                  resolvedPaths.emailFile,
 		webhookFile:                resolvedPaths.webhookFile,
 		appriseFile:                resolvedPaths.appriseFile,
+		deadManFile:                resolvedPaths.deadManFile,
 		reportSchedulesFile:        resolvedPaths.reportSchedulesFile,
 		nodesFile:                  resolvedPaths.nodesFile,
 		trueNASFile:                resolvedPaths.trueNASFile,
@@ -1299,6 +1307,38 @@ func (c *ConfigPersistence) LoadAppriseConfig() (*notifications.AppriseConfig, e
 		Bool("encrypted", c.crypto != nil).
 		Msg("Apprise configuration loaded")
 	return &normalized, nil
+}
+
+// SaveDeadManConfig stores the credential-bearing external watchdog URL in
+// the same encrypted destination boundary as email, Apprise, and webhooks.
+func (c *ConfigPersistence) SaveDeadManConfig(config notifications.DeadManConfig) error {
+	config = notifications.NormalizeDeadManConfig(config)
+	if err := notifications.ValidateDeadManPingURL(config.PingURL); err != nil {
+		return err
+	}
+	if err := saveJSON(c, c.deadManFile, config, true); err != nil {
+		return err
+	}
+	log.Info().Str("file", c.deadManFile).Bool("configured", config.PingURL != "").Msg("Dead-man configuration saved")
+	return nil
+}
+
+// LoadDeadManConfig loads and, when necessary, migrates the encrypted
+// external watchdog configuration.
+func (c *ConfigPersistence) LoadDeadManConfig() (*notifications.DeadManConfig, error) {
+	var config notifications.DeadManConfig
+	if err := loadJSON(c, c.deadManFile, true, &config); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &notifications.DeadManConfig{}, nil
+		}
+		return nil, err
+	}
+	config = notifications.NormalizeDeadManConfig(config)
+	if err := notifications.ValidateDeadManPingURL(config.PingURL); err != nil {
+		return nil, err
+	}
+	log.Info().Str("file", c.deadManFile).Bool("configured", config.PingURL != "").Msg("Dead-man configuration loaded")
+	return &config, nil
 }
 
 // SaveWebhooks saves webhook configurations to file

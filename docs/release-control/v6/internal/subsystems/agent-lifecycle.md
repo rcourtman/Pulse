@@ -6655,3 +6655,13 @@ in the live process or regain a supposedly revoked credential after restart.
 The lifecycle proof deletes one exact token from a three-token inventory and
 forces a failed persistence commit in
 `internal/api/security_tokens_lifecycle_test.go`.
+
+### External watchdog wiring does not widen agent lifecycle authority
+
+`internal/monitoring/monitor.go` now starts and stops the external dead-man
+worker beside the canonical monitor loop. That adjacency grants the watchdog
+no enrollment, report admission, token, profile, update, command, tombstone,
+or re-enrollment authority. Its liveness marker observes only whether the
+monitor select loop is progressing; agent report success or failure cannot
+independently assert that Pulse is healthy. Agent-lifecycle behavior and proof
+routes remain unchanged.

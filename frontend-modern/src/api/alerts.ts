@@ -1,5 +1,5 @@
 import type { Alert, AlertDeliveryDiagnosis, AlertEvent, Incident } from '@/types/api';
-import type { AlertConfig } from '@/types/alerts';
+import type { AlertConfig, DeadManStatus } from '@/types/alerts';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { arrayOrEmpty } from './responseUtils';
 
@@ -119,6 +119,27 @@ export class AlertsAPI {
       method: 'PUT',
       body: JSON.stringify(config),
     });
+  }
+
+  static async getDeadManStatus(): Promise<DeadManStatus> {
+    return apiFetchJSON(`${this.baseUrl}/deadman/status`) as Promise<DeadManStatus>;
+  }
+
+  static async getDeadManConfig(): Promise<{ pingUrl: string; configured: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/deadman/config`) as Promise<{
+      pingUrl: string;
+      configured: boolean;
+    }>;
+  }
+
+  static async updateDeadManConfig(pingUrl: string): Promise<{
+    success: boolean;
+    configured: boolean;
+  }> {
+    return apiFetchJSON(`${this.baseUrl}/deadman/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ pingUrl }),
+    }) as Promise<{ success: boolean; configured: boolean }>;
   }
 
   static async activate(): Promise<{ success: boolean; state: string; activationTime?: string }> {

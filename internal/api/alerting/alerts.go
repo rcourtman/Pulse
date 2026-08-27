@@ -66,6 +66,9 @@ type AlertMonitor interface {
 	GetConfigPersistence() ConfigPersistence
 	GetIncidentStore() *memory.IncidentStore
 	GetNotificationManager() *notifications.NotificationManager
+	DeadManConfig() notifications.DeadManConfig
+	UpdateDeadManConfig(notifications.DeadManConfig) error
+	DeadManStatus() monitoring.DeadManStatus
 	SyncAlertState()
 	BuildFrontendState() models.StateFrontend
 }
@@ -205,6 +208,80 @@ func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetDeadManStatus returns the live external-watchdog read model without
+// echoing the secret-bearing ping URL.
+func (h *AlertHandlers) GetDeadManStatus(w http.ResponseWriter, r *http.Request) {
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		http.Error(w, "Alert monitor unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := utils.WriteJSONResponse(w, monitor.DeadManStatus()); err != nil {
+		log.Error().Err(err).Msg("Failed to write dead-man status response")
+	}
+}
+
+const deadManRedactedPingURL = "***REDACTED***"
+
+type deadManConfigView struct {
+	PingURL    string `json:"pingUrl"`
+	Configured bool   `json:"configured"`
+}
+
+// GetDeadManConfig returns only a presence marker for the credential-bearing
+// ping URL. The sentinel supports an edit round-trip without disclosing it.
+func (h *AlertHandlers) GetDeadManConfig(w http.ResponseWriter, r *http.Request) {
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		http.Error(w, "Alert monitor unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	configured := strings.TrimSpace(monitor.DeadManConfig().PingURL) != ""
+	view := deadManConfigView{Configured: configured}
+	if configured {
+		view.PingURL = deadManRedactedPingURL
+	}
+	if err := utils.WriteJSONResponse(w, view); err != nil {
+		log.Error().Err(err).Msg("Failed to write dead-man config response")
+	}
+}
+
+// UpdateDeadManConfig validates and durably encrypts the watchdog destination
+// before its live worker is reconfigured.
+func (h *AlertHandlers) UpdateDeadManConfig(w http.ResponseWriter, r *http.Request) {
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		http.Error(w, "Alert monitor unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, notifications.MaxDeadManPingURLLength+1024)
+	var request deadManConfigView
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	pingURL := strings.TrimSpace(request.PingURL)
+	if pingURL == deadManRedactedPingURL {
+		pingURL = monitor.DeadManConfig().PingURL
+	}
+	config := notifications.DeadManConfig{PingURL: pingURL}
+	if err := notifications.ValidateDeadManPingURL(config.PingURL); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := monitor.UpdateDeadManConfig(config); err != nil {
+		log.Error().Err(err).Msg("Failed to update dead-man configuration")
+		http.Error(w, "Failed to save external watchdog configuration", http.StatusInternalServerError)
+		return
+	}
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"success":    true,
+		"configured": config.PingURL != "",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write dead-man config update response")
+	}
+}
+
 // UpdateAlertConfig updates the alert configuration
 func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request) {
 	// Config size scales with the fleet: every per-resource toggle adds an
@@ -217,7 +294,6 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
 	updatedConfig := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
 
@@ -1253,6 +1329,21 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.UpdateAlertConfig(w, r)
+	case path == "deadman/status" && r.Method == http.MethodGet:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetDeadManStatus(w, r)
+	case path == "deadman/config" && r.Method == http.MethodGet:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetDeadManConfig(w, r)
+	case path == "deadman/config" && r.Method == http.MethodPut:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.UpdateDeadManConfig(w, r)
 	case path == "intent-policies" && r.Method == http.MethodGet:
 		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return

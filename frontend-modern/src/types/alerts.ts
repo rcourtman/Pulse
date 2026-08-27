@@ -261,6 +261,33 @@ export interface AlertConfig {
   disableAllDockerHostsOffline?: boolean;
 }
 
+export interface DeadManInterruption {
+  from: string;
+  to: string;
+  durationSeconds: number;
+  cleanShutdown: boolean;
+}
+
+export interface DeadManStatus {
+  configured: boolean;
+  state:
+    | 'disabled'
+    | 'starting'
+    | 'healthy'
+    | 'delivery_failed'
+    | 'monitor_stalled'
+    | 'misconfigured'
+    | 'configuration_unavailable';
+  heartbeatIntervalSeconds: number;
+  recommendedGraceSeconds: number;
+  lastMonitoringProgress?: string;
+  lastAttemptAt?: string;
+  lastSuccessAt?: string;
+  consecutiveFailures: number;
+  lastError?: string;
+  lastInterruption?: DeadManInterruption;
+}
+
 // Priority levels:
 // 0: Global defaults
 // 1-99: Reserved for system rules

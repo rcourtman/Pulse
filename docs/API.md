@@ -615,6 +615,15 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 
 - `GET /api/alerts/config`
 - `PUT /api/alerts/config`
+- `GET /api/alerts/deadman/config` — returns only whether an external watchdog
+  is configured; `pingUrl` is `***REDACTED***` when present and never returns
+  the credential-bearing URL
+- `PUT /api/alerts/deadman/config` — body `{ "pingUrl": "..." }`; accepts a
+  healthchecks-compatible base success URL, `***REDACTED***` to preserve the
+  saved value, or an empty string to remove it
+- `GET /api/alerts/deadman/status` — live watchdog health, monitor-loop
+  progress, sanitized delivery failure state, and the most recent restart
+  interruption; never includes the URL or endpoint fingerprint
 - `POST /api/alerts/activate`
 - `GET /api/alerts/active`
 - `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)

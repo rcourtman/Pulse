@@ -1,6 +1,7 @@
 import { createEffect, createSignal } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
+import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI } from '@/api/notifications';
 import { getAlertDestinationsConfigLoadError } from '@/utils/alertDestinationsPresentation';
 import { logger } from '@/utils/logger';
@@ -25,6 +26,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
   const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     createDefaultAppriseConfig(),
   );
+  const [deadManPingUrl, setDeadManPingUrl] = createSignal('');
 
   let reloadVersion = 0;
   let lastActiveTab: AlertTab | null = null;
@@ -33,6 +35,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setDestConfigLoadError(null);
     setEmailConfig(createDefaultEmailConfig());
     setAppriseConfig(createDefaultAppriseConfig());
+    setDeadManPingUrl('');
   };
 
   const loadDestinations = async (options: { indicateLoading?: boolean } = {}) => {
@@ -46,13 +49,14 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     const results = await Promise.allSettled([
       NotificationsAPI.getEmailConfig(),
       NotificationsAPI.getAppriseConfig(),
+      AlertsAPI.getDeadManConfig(),
     ]);
 
     if (thisVersion !== reloadVersion) {
       return;
     }
 
-    const [emailResult, appriseResult] = results;
+    const [emailResult, appriseResult, deadManResult] = results;
 
     if (emailResult.status === 'fulfilled') {
       setEmailConfig(normalizeEmailConfigFromAPI(emailResult.value));
@@ -60,6 +64,10 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
 
     if (appriseResult.status === 'fulfilled') {
       setAppriseConfig(normalizeAppriseConfig(appriseResult.value));
+    }
+
+    if (deadManResult.status === 'fulfilled') {
+      setDeadManPingUrl(deadManResult.value.pingUrl || '');
     }
 
     const failures = results.filter(
@@ -87,6 +95,8 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
       buildAppriseConfigPayload(appriseConfig()),
     );
 
+    await AlertsAPI.updateDeadManConfig(deadManPingUrl());
+
     setAppriseConfig(normalizeAppriseConfig(updatedApprise));
   };
 
@@ -109,6 +119,8 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setEmailConfig,
     appriseConfig,
     setAppriseConfig,
+    deadManPingUrl,
+    setDeadManPingUrl,
     resetDestinations,
     loadDestinations,
     saveDestinations,

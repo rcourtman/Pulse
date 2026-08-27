@@ -525,6 +525,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 62a. `internal/monitoring/monitor_xcpng.go`
 63. `internal/monitoring/metadata_stores.go`
 64. `internal/monitoring/system_alerts.go`
+65. `internal/monitoring/deadman.go`
 63a. `internal/config/docker_metadata.go`
 63b. `internal/config/guest_metadata.go`
 
@@ -3247,3 +3248,23 @@ until the next window instead of starting it again on every 30-second report
 (#1729). `TestCollectStorageUsageDecouplesFullDaemonScanFromLiveTelemetry` and
 `TestCollectStorageUsageThrottlesInitialTransientFailureWithoutRetry` pin the
 cadence, stale-result continuity, and no-retry boundary.
+
+### External dead-man proves canonical loop liveness across restarts
+
+`internal/monitoring/deadman.go` owns the monitoring side of the external
+watchdog. A separate worker emits one success signal per minute, while a
+15-second marker written only by the canonical `Monitor.Start` select loop
+proves that the polling scheduler itself is still progressing. A stale marker
+causes the worker to send the provider's `/fail` signal and raise a critical
+system alert; the worker's own timer can never count as monitoring progress.
+
+The runtime persists a privacy-minimized `alerts/deadman-state.json` record
+through fsync, atomic replacement, and directory sync. It stores endpoint
+fingerprint and timing only, never the ping URL. On startup, a gap of at least
+two minutes for the same configured endpoint is reported in the first healthy
+POST and recorded through the alerts-owned system lifecycle, distinguishing a
+clean stop from an unexpected one. Stop and configuration changes cancel an
+in-flight request before durable stop or replacement state is published, so a
+revoked endpoint receives no trailing heartbeat and a removed destination
+becomes disabled immediately. State corruption and write failure are visible
+system conditions rather than silent loss of future outage evidence.

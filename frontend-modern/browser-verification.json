@@ -1,17 +1,27 @@
 {
   "version": 1,
-  "base_sha": "699143b7b8411ad671af9ba60c74aa7f87d57758",
-  "verified_at": "2026-08-27T14:13:29Z",
+  "base_sha": "f6773f262a7ace6418fc3ab6f890307290a3de99",
+  "verified_at": "2026-08-27T15:02:27Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/api/alerts.ts",
+    "frontend-modern/src/types/alerts.ts",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "58fe2feaf93d6f37d0fd2811c829ada884941bf7de77d8d386f723d97ce32c33",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "67a7463ba44627ef48423bdcaf689153fe0d3d75c0b3b0aeeeeb6def953fe92c"
+    "frontend-modern/src/api/alerts.ts": "0158e753c8d590e62551069458659ff95eee07bb48f5fb95d43f395cae3d5b48",
+    "frontend-modern/src/types/alerts.ts": "1b63d2b690ad43267a23271f0d3244fcb8a51ceaab85b9266182f8033c242495",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "4f7e355bfaa025b2645e74ec43a81489d3709fa5aae6c44c86d33c3946ae03c7",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "6ec0e78c6383ce62a1f55b1adac341d6cae0667e4a052ee276cc4a6c68015bf3",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "0f70dd5cbf6cb962fe2474d3932b7e79c7d868ea3aad97280aae8d03a1b3c4fa",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "28fd0ab1312e2d599bad73dc8a269aebc9de2a8a85e91b188c8566fb68586dbb",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "0d81fabff6da2f2d044f74d60c69f02a17989d241015ac7d134bd6840a8db34d"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": ["/alerts/notifications"],
   "viewports": [
     {
       "width": 1280,
@@ -23,14 +33,16 @@
     }
   ],
   "states": [
-    "mock-backed Proxmox Overview with PVE nodes, standalone PBS service rows, and guests",
-    "Overview PBS health table omits backup artifact counts while retaining service and datastore health",
-    "expanded canonical PBS resource detail exposes its History tab at desktop and narrow widths"
+    "unconfigured external watchdog with one-minute heartbeat and three-minute grace guidance",
+    "configured external watchdog with credential-masked replacement placeholder and explicit removal control",
+    "unreachable external watchdog with delivery-failure status, monitoring progress, and sanitized error",
+    "removed external watchdog returning atomically to the unconfigured state"
   ],
   "interactions": [
-    "opened Proxmox Overview at 1280x800 and confirmed the PBS table is positioned between Nodes and Guests",
-    "expanded the first PBS row with its detail toggle and confirmed the shared resource detail and History tab",
-    "reloaded at 390x844, expanded the first PBS row through the whole-row interaction, and confirmed the same History tab",
-    "confirmed the narrow document scroll width did not exceed its client width"
+    "opened Alerts Notifications and confirmed the external watchdog panel is part of the destination workflow",
+    "entered a healthchecks-compatible URL, toggled reveal and conceal, saved, reloaded, and confirmed the credential was replaced by a masked placeholder",
+    "confirmed an unreachable watchdog reports delivery failure without exposing its URL or token",
+    "verified the panel layout and status grid at 390x844 with no horizontal control overflow",
+    "removed the destination, saved, reloaded, and confirmed Not configured state, normal placeholder, and no browser errors"
   ]
 }

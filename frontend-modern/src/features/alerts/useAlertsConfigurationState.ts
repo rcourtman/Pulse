@@ -137,6 +137,8 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     setEmailConfig: destinationsState.setEmailConfig,
     appriseConfig: destinationsState.appriseConfig,
     setAppriseConfig: destinationsState.setAppriseConfig,
+    deadManPingUrl: destinationsState.deadManPingUrl,
+    setDeadManPingUrl: destinationsState.setDeadManPingUrl,
     ...configurationSnapshotState,
     allGuests: overridesState.allGuests,
     agentResources: overridesState.agentResources,

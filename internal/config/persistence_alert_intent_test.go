@@ -68,7 +68,7 @@ func TestExportImportIncludesAlertIntentPolicies(t *testing.T) {
 		t.Fatalf("ExportConfig: %v", err)
 	}
 	decoded := mustDecodeExport(t, bundle, passphrase)
-	if decoded.Version != "4.3" || decoded.AlertIntent == nil {
+	if decoded.Version != "4.4" || decoded.AlertIntent == nil {
 		t.Fatalf("export metadata = version %q intent %#v", decoded.Version, decoded.AlertIntent)
 	}
 

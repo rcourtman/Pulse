@@ -288,6 +288,7 @@ default construction path still restores.
 81. `internal/alerts/history_migration.go`
 82. `internal/alerts/active_state_bootstrap.go`
 83. `internal/alerts/eventlog/active_state.go`
+84. `frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx`
 
 ## Shared Boundaries
 
@@ -2140,3 +2141,23 @@ and `useAlertWebhookDestinationsState`. Delivery evidence remains
 notification truth: the delivery log card must not resolve, suppress, or
 re-evaluate alerts, and it does not alter the `AlertConfig.enabled` versus
 `activationState` ownership boundary above.
+
+### External watchdog is Pulse-availability evidence, not notification delivery
+
+The Alerts destinations surface owns the operator contract for an external
+dead-man watchdog that detects loss of Pulse itself. It presents masked
+configuration, live heartbeat state, canonical-monitor progress, consecutive
+delivery failures, and the last restart interruption. The credential-bearing
+ping URL must never return to the browser after save; the configured state uses
+an explicit replacement placeholder and removal action. The watchdog remains
+active independently of alert activation, snooze, quiet hours, and notification
+delivery pause because those policies must not disable observation of Pulse.
+
+Watchdog transport and monitoring progress remain notifications- and
+monitoring-owned respectively. Alerts owns the system-alert projection:
+delivery failure, canonical-loop stall, restart interruption, and durable-state
+failure use stable system-alert identities, normal lifecycle/event history, and
+idempotent fingerprints. A restart interruption is raised into history even
+when the first successful external report immediately resolves it, so recovery
+does not erase the outage record. The watchdog must never invent resource
+identity or become a second lifecycle for infrastructure alerts.
