@@ -266,6 +266,10 @@ default construction path still restores.
 75. `internal/alerts/operational_contract.go`
 76. `internal/alerts/issue1497_test.go`
 77. `internal/alerts/system_alert.go`
+78. `internal/alerts/event_emission.go`
+79. `internal/alerts/eventlog/eventlog.go`
+80. `internal/alerts/history_projection.go`
+81. `internal/alerts/history_migration.go`
 
 ## Shared Boundaries
 
@@ -366,7 +370,12 @@ transition references recovery evidence separate from its trigger evidence.
 2. Add typed collector/builders in the resource-specific checker owner or
    `internal/alerts/metric_runtime.go`
 3. Add identity/persistence updates through canonical alert helpers only
-4. Add or change alert history persistence through `internal/alerts/history.go` using normalized owned storage roots and fixed storage leaves only
+4. Add or change alert history persistence through `internal/alerts/history.go`,
+   `internal/alerts/history_projection.go`, and `internal/alerts/eventlog/`
+   using normalized owned storage roots and fixed storage leaves only.
+   Event-log projection changes must preserve parity with the in-memory
+   JSON-history model, and migration changes must retain a retryable source or
+   backup until every legacy entry is durably imported.
 5. Add or change locked alert-investigation commercial handoff behavior through
    `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` while
    preserving the shared upgrade-navigation contract; the alert surface may
@@ -448,6 +457,9 @@ transition references recovery evidence separate from its trigger evidence.
 2. Update this contract if alert truth or identity rules change
 3. Route runtime changes through the explicit alert proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Tighten or add guardrails when an old alert path is removed
+5. Update the event-log schema upgrade and history-projection parity proofs
+   when lifecycle snapshots, occurrence folding, or alert-history authority
+   changes
 
 ### Attention projection source contract
 
@@ -983,6 +995,27 @@ that caller value: a request-provided limit is a row-count preference, never a
 memory-allocation hint. This remains defense in depth even when an authenticated
 API handler validates the query parameter, because non-HTTP manager callers use
 the same store boundary.
+Lifecycle events now carry a full alert snapshot and
+`internal/alerts/history_projection.go` can fold those snapshots into one
+history row per occurrence. Existing pre-snapshot SQLite stores upgrade in
+place, and rows without snapshots remain readable but cannot contribute to the
+projection. With an event log enabled, it is the alert-history read authority;
+managers without one retain the in-memory JSON-history model as their fallback.
+`internal/alerts/history_projection_parity_test.go` characterizes the event-log
+projection against that fallback for active, resolved, acknowledged,
+multi-resource, and repeated occurrences. Live active-alert state overlays the
+latest projected snapshot so acknowledgement and current values do not become
+stale.
+`internal/alerts/history_migration.go` imports every legacy JSON entry through
+the event log's synchronous, non-droppable import path before renaming the
+fixed history and backup files to their `.imported` backups. The source file's
+presence is the idempotent retry marker: an import failure leaves JSON history
+authoritative for the next attempt, while a successful import retires further
+JSON writes. Clearing history appends a `history_cleared` tombstone rather than
+deleting log rows; the projection ignores earlier lifecycle events but overlays
+still-active alerts as current state. Unified-incident and system-alert
+activation must emit snapshot-bearing fired events so their projected history
+does not begin at acknowledgement or resolution.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved
