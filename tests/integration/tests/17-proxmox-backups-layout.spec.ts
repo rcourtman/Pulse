@@ -23,9 +23,9 @@ async function openProxmoxBackups(page: Page) {
   await expect(page.getByText("Backups per day").first()).toBeVisible({
     timeout: 120_000,
   });
-  await expect(
-    page.getByRole("group", { name: "Activity range" }),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("group", { name: "Activity range" })).toBeVisible(
+    { timeout: 60_000 },
+  );
 }
 
 // Layout guards for the Proxmox Backups section, which replaced the retired
@@ -94,10 +94,12 @@ test.describe("Proxmox backups layout guards", () => {
 
     // The PBS servers table keeps its trailing column inside its wrapper on
     // the default desktop column set.
+    // Overview remains mounted for fast tab restoration and now owns the same
+    // shared PBS table. Scope to the active Backups composition so its hidden
+    // Overview sibling cannot satisfy this layout guard first.
     const serversTable = page
-      .locator("div.overflow-x-auto")
-      .filter({ has: page.locator('th:has-text("Backup server")') })
-      .first();
+      .locator('[data-proxmox-backups-table="servers"]:visible')
+      .locator("div.overflow-x-auto");
     await expect(serversTable).toBeVisible();
     const dedupHeader = serversTable
       .locator("th")
