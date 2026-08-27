@@ -1618,9 +1618,68 @@ func (p *PatrolService) retryTimedOutInvestigations() {
 	}
 }
 
+// maxPatrolActivationBacklogInvestigations bounds the one-time catch-up that
+// runs when Patrol moves out of Watch Only. Existing findings can be numerous;
+// activation must not turn that backlog into an unbounded burst of model work.
+const maxPatrolActivationBacklogInvestigations = 3
+
+// ReconcileActionableFindingBacklog starts a bounded, deterministic set of
+// investigations for findings that were detected while Patrol was in Watch
+// Only. Normal patrol runs continue to own subsequent retry and discovery.
+func (p *PatrolService) ReconcileActionableFindingBacklog() int {
+	if p == nil || p.findings == nil {
+		return 0
+	}
+	p.mu.RLock()
+	orchestrator := p.investigationOrchestrator
+	aiService := p.aiService
+	p.mu.RUnlock()
+	if orchestrator == nil || aiService == nil || aiService.GetConfig() == nil ||
+		aiService.GetEffectivePatrolAutonomyLevel() == "monitor" {
+		return 0
+	}
+
+	available := maxPatrolActivationBacklogInvestigations - orchestrator.GetRunningCount()
+	if available <= 0 {
+		return 0
+	}
+	findings := p.findings.GetActive(FindingSeverityWarning)
+	sort.SliceStable(findings, func(i, j int) bool {
+		if findings[i].Severity != findings[j].Severity {
+			return findings[i].Severity == FindingSeverityCritical
+		}
+		if !findings[i].DetectedAt.Equal(findings[j].DetectedAt) {
+			return findings[i].DetectedAt.Before(findings[j].DetectedAt)
+		}
+		return findings[i].ID < findings[j].ID
+	})
+
+	started := 0
+	for _, finding := range findings {
+		if started >= available {
+			break
+		}
+		if p.maybeInvestigateFinding(finding) {
+			started++
+		}
+	}
+	if started > 0 {
+		log.Info().Int("started", started).Int("eligible_backlog", len(findings)).
+			Msg("AI Patrol: Reconciled actionable findings after autonomy activation")
+	}
+	return started
+}
+
 // MaybeInvestigateFinding checks if a finding should be investigated and triggers investigation if so
 // This is called both during scheduled patrol runs and when alert-triggered findings are created
 func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
+	p.maybeInvestigateFinding(f)
+}
+
+func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
+	if p == nil || f == nil {
+		return false
+	}
 	p.mu.RLock()
 	orchestrator := p.investigationOrchestrator
 	aiService := p.aiService
@@ -1628,21 +1687,21 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 
 	// No orchestrator configured
 	if orchestrator == nil {
-		return
+		return false
 	}
 
 	// Get autonomy level from AI config
 	if aiService == nil {
-		return
+		return false
 	}
 	if aiService.GetConfig() == nil {
-		return
+		return false
 	}
 	autonomyLevel := aiService.GetEffectivePatrolAutonomyLevel()
 
 	// Check if finding should be investigated
 	if !f.ShouldInvestigate(autonomyLevel) {
-		return
+		return false
 	}
 
 	// Check if we can start another investigation (concurrency limit)
@@ -1650,7 +1709,7 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 		log.Debug().
 			Str("finding_id", f.ID).
 			Msg("Cannot start investigation: max concurrent investigations reached")
-		return
+		return false
 	}
 
 	// Convert Finding to shared finding type for the investigation orchestrator
@@ -1788,6 +1847,7 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 		Str("resource", f.ResourceName).
 		Str("autonomy_level", autonomyLevel).
 		Msg("Triggered autonomous investigation for finding")
+	return true
 }
 
 // PublishFindingLifecycleUpdate projects a reconciled action outcome to the

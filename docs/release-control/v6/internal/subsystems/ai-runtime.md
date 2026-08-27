@@ -5125,6 +5125,20 @@ about the next move — it does not need a separate read to get
 the situated picture, and it can avoid proposing fixes the
 operator has locked the resource against.
 
+An effective autonomy transition out of `monitor` also reconciles findings
+that were detected while Patrol was in Watch Only. The API publishes the
+persisted autonomy mutation first, then
+`PatrolService.ReconcileActionableFindingBacklog` selects active
+warning/critical findings through the same `ShouldInvestigate` admission used
+by scheduled and alert-triggered work. The activation pass is bounded to three
+concurrent starts minus the orchestrator's current running count, orders
+critical findings before warnings and older findings before newer ones, and
+leaves remaining work to ordinary Patrol runs. It must not run for a no-op
+save, a transition into Watch Only, an unavailable orchestrator, or an
+effective mode still clamped to `monitor`; activation must never create an
+unbounded model-work burst or bypass suppression, snooze, cooldown, attempt,
+terminal-outcome, operator-state, and concurrency gates.
+
 `ResourceOperatorStateProjection` carries `NeverAutoRemediate`
 and `Criticality` alongside `IntentionallyOffline` and `MaintenanceWindow` so the
 investigation read path and the suppression read path share a

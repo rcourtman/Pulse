@@ -1204,7 +1204,9 @@ new-finding/investigation/resolved-finding/autofix counts, external-agent/MCP
 readiness and recent-use booleans including the adapter-origin `pulse-mcp`
 recent-use boolean, action-plan counts, approval-request counts,
 rejected-action-decision counts, approved-action-decision counts,
-approved-action-attempt counts, and approved-action-success counts. Those fields may measure whether Patrol,
+approved-action-attempt counts, approved-action-success counts, and the
+source-specific Patrol-origin subset of plan, approval request, rejected or
+approved decision, approved attempt, and approved success counts. Those fields may measure whether Patrol,
 Assistant, external agents, approvals, and governed actions form an adopted
 governed operation, whether an operator entered the guided Patrol-control
 starter, which source carried the stage, whether the Patrol control journey

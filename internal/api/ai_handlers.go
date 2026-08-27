@@ -8074,6 +8074,7 @@ func (h *AISettingsHandler) mutatePatrolAutopilotConfig(ctx context.Context, mut
 	if persistence == nil || service == nil {
 		return fmt.Errorf("Pulse Patrol config persistence unavailable")
 	}
+	activationTransition := false
 	write := func() error {
 		current, err := h.loadAIConfig(ctx)
 		if err != nil {
@@ -8087,18 +8088,40 @@ func (h *AISettingsHandler) mutatePatrolAutopilotConfig(ctx context.Context, mut
 		if err != nil || !changed {
 			return err
 		}
+		policy := h.currentPatrolAutopilotServerPolicy()
+		orgID := strings.TrimSpace(GetOrgID(ctx))
+		if orgID == "" {
+			orgID = "default"
+		}
+		previousEffective, _ := current.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
+		nextEffective, _ := next.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
 		if err := persistence.SaveAIConfig(*next); err != nil {
 			return err
 		}
-		return service.ApplyPatrolAutonomyConfig(next)
+		if err := service.ApplyPatrolAutonomyConfig(next); err != nil {
+			return err
+		}
+		activationTransition = previousEffective == config.PatrolAutonomyMonitor && nextEffective != config.PatrolAutonomyMonitor
+		return nil
 	}
 	h.stateMu.RLock()
 	coordinator := h.policyMutation
 	h.stateMu.RUnlock()
+	var err error
 	if coordinator != nil {
-		return coordinator(write)
+		err = coordinator(write)
+	} else {
+		err = write()
 	}
-	return write()
+	if err != nil {
+		return err
+	}
+	if activationTransition {
+		if patrol := service.GetPatrolService(); patrol != nil {
+			patrol.ReconcileActionableFindingBacklog()
+		}
+	}
+	return nil
 }
 
 func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy unifiedresources.PatrolAutopilotServerPolicy, hasAutoFix bool) PatrolAutonomyResponse {

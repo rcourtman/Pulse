@@ -144,6 +144,12 @@ export interface TelemetryPingPreview {
   pulse_intelligence_approved_action_decisions_30d: number;
   pulse_intelligence_approved_action_attempts_30d: number;
   pulse_intelligence_approved_action_successes_30d: number;
+  pulse_intelligence_patrol_action_plans_30d: number;
+  pulse_intelligence_patrol_approval_requests_30d: number;
+  pulse_intelligence_patrol_rejected_action_decisions_30d: number;
+  pulse_intelligence_patrol_approved_action_decisions_30d: number;
+  pulse_intelligence_patrol_approved_action_attempts_30d: number;
+  pulse_intelligence_patrol_approved_action_successes_30d: number;
   pulse_intelligence_approved_action_failures_pre_dispatch_30d: number;
   pulse_intelligence_approved_action_failures_execution_30d: number;
   pulse_intelligence_approved_action_failures_unverified_30d: number;

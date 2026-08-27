@@ -248,6 +248,48 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.Contains(t, premiumRec.Body.String(), "limited to Monitor")
 }
 
+func TestMutatePatrolAutopilotConfigReconcilesBacklogOnlyWhenLeavingMonitor(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+
+	handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+	service := handler.GetAIService(context.Background())
+	require.NotNil(t, service)
+	service.SetStateProvider(&stubStateProvider{})
+	patrol := service.GetPatrolService()
+	require.NotNil(t, patrol)
+	patrol.GetFindings().Add(&ai.Finding{
+		ID: "backlog-warning", Severity: ai.FindingSeverityWarning,
+		ResourceID: "vm-100", DetectedAt: time.Now().Add(-time.Hour),
+	})
+	orchestrator := &stubInvestigationOrchestrator{investigateCh: make(chan string, 2)}
+	patrol.SetInvestigationOrchestrator(orchestrator)
+
+	setApproval := func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		changed := cfg.PatrolAutonomyLevel != config.PatrolAutonomyApproval
+		cfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
+		return changed, nil
+	}
+	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), setApproval))
+	select {
+	case findingID := <-orchestrator.investigateCh:
+		require.Equal(t, "backlog-warning", findingID)
+	case <-time.After(time.Second):
+		t.Fatal("leaving Watch Only did not reconcile the actionable finding backlog")
+	}
+
+	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), setApproval))
+	select {
+	case findingID := <-orchestrator.investigateCh:
+		t.Fatalf("no-op paid-mode save retriggered finding %q", findingID)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 func TestAISettingsProvidersProjectionCarriesSuggestedModelWireShape(t *testing.T) {
 	payload, err := json.Marshal(aiProviderDefinitionResponses(nil))
 	require.NoError(t, err)

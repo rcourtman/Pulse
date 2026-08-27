@@ -2899,7 +2899,9 @@ a new API state machine, queue contract, or verification-accounting field.
     content-free `internal/telemetry.Ping` payload shape exposed by the system
     settings preview route, including Pulse Intelligence loop booleans, Assistant
     and Patrol counters, operations-loop workflow starter counts, governed-action
-    counters including approved/rejected action decisions, and external-agent/MCP aggregate, adapter-origin, and
+    counters including approved/rejected action decisions, Patrol-origin plan,
+    approval, decision, approved-attempt, and approved-success counters, and
+    external-agent/MCP aggregate, adapter-origin, and
     capability-class counters, so browser preview, privacy disclosure, and
     outbound heartbeat JSON do not drift into separate contracts.
     Operations-loop starter fields may count only the canonical
@@ -8676,6 +8678,12 @@ owners must not rely on that 402 as normal control flow for stale local state:
 when the current entitlement locks safe remediation, they submit `monitor` even
 if older persisted settings or a previous entitlement left `approval`,
 `assisted`, or `full` in memory.
+After a successful persisted update whose effective mode actually crosses from
+`monitor` to `approval`, `assisted`, or eligible `full`, the shared API mutation
+boundary invokes the bounded Patrol actionable-finding reconciliation pass.
+The pass runs only after `ApplyPatrolAutonomyConfig` has published the new
+runtime authority; failed writes, Community clamps, repeated paid-mode saves,
+budget-only edits, and demotions must not start backlog work.
 The Patrol header and configuration-dialog presentation for that API boundary
 must compose the shared
 `frontend-modern/src/components/shared/FilterButtonGroup.tsx` selector: the

@@ -91,8 +91,15 @@ func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.
 				recordsByID[actionID] = record
 			}
 			snapshot.ActionPlans30d++
+			patrolOrigin := isPatrolActionOrigin(record.Origin)
+			if patrolOrigin {
+				snapshot.PatrolActionPlans30d++
+			}
 			if pulseIntelligenceActionRequiresApproval(record) {
 				snapshot.ApprovalRequests30d++
+				if patrolOrigin {
+					snapshot.PatrolApprovalRequests30d++
+				}
 			}
 			if pulseIntelligenceActionWasRejected(record) {
 				if actionID := strings.TrimSpace(record.ID); actionID != "" {
@@ -119,10 +126,32 @@ func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.
 		snapshot.ApprovedActionDecisions30d += len(approvedDecisionIDs)
 		snapshot.ApprovedActionAttempts30d += len(approvedAttemptIDs)
 		snapshot.ApprovedActionSuccesses30d += len(approvedSuccessIDs)
+		snapshot.PatrolRejectedActionDecisions30d += pulseIntelligencePatrolOriginActionCount(store, rejectedDecisionIDs, recordsByID)
+		snapshot.PatrolApprovedActionDecisions30d += pulseIntelligencePatrolOriginActionCount(store, approvedDecisionIDs, recordsByID)
+		snapshot.PatrolApprovedActionAttempts30d += pulseIntelligencePatrolOriginActionCount(store, approvedAttemptIDs, recordsByID)
+		snapshot.PatrolApprovedActionSuccesses30d += pulseIntelligencePatrolOriginActionCount(store, approvedSuccessIDs, recordsByID)
 		accumulatePulseIntelligenceApprovedActionOutcomes(&snapshot, store, orgID, approvedAttemptIDs, approvedSuccessIDs, recordsByID, time.Now().UTC())
 	}
 
 	return snapshot
+}
+
+func pulseIntelligencePatrolOriginActionCount(store unifiedresources.ResourceStore, actionIDs map[string]struct{}, recordsByID map[string]unifiedresources.ActionAuditRecord) int {
+	count := 0
+	for actionID := range actionIDs {
+		record, ok := recordsByID[actionID]
+		if !ok && store != nil {
+			fetched, found, err := store.GetActionAudit(actionID)
+			if err == nil && found {
+				record = fetched
+				ok = true
+			}
+		}
+		if ok && isPatrolActionOrigin(record.Origin) {
+			count++
+		}
+	}
+	return count
 }
 
 // pulseIntelligenceStuckExecutingThreshold separates an in-flight dispatch

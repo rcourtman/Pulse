@@ -116,6 +116,12 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		ApprovedActionDecisions30d:             1,
 		ApprovedActionAttempts30d:              1,
 		ApprovedActionSuccesses30d:             1,
+		PatrolActionPlans30d:                   6,
+		PatrolApprovalRequests30d:              5,
+		PatrolRejectedActionDecisions30d:       1,
+		PatrolApprovedActionDecisions30d:       4,
+		PatrolApprovedActionAttempts30d:        3,
+		PatrolApprovedActionSuccesses30d:       2,
 		ApprovedActionInFlight30d:              2,
 		ApprovedActionUnclassified30d:          3,
 		ApprovedActionRefusalsPlanStale30d:     4,
@@ -176,6 +182,12 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		snap.PulseIntelligenceApprovedActionDecisions30d != 1 ||
 		snap.PulseIntelligenceApprovedActionAttempts30d != 1 ||
 		snap.PulseIntelligenceApprovedActionSuccesses30d != 1 ||
+		snap.PulseIntelligencePatrolActionPlans30d != 6 ||
+		snap.PulseIntelligencePatrolApprovalRequests30d != 5 ||
+		snap.PulseIntelligencePatrolRejectedActionDecisions30d != 1 ||
+		snap.PulseIntelligencePatrolApprovedActionDecisions30d != 4 ||
+		snap.PulseIntelligencePatrolApprovedActionAttempts30d != 3 ||
+		snap.PulseIntelligencePatrolApprovedActionSuccesses30d != 2 ||
 		snap.PulseIntelligenceApprovedActionInFlight30d != 2 ||
 		snap.PulseIntelligenceApprovedActionUnclassified30d != 3 ||
 		snap.PulseIntelligenceApprovedActionRefusalsPlanStale30d != 4 ||

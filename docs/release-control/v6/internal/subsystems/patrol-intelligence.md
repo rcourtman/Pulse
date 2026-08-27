@@ -387,6 +387,12 @@ or historical proof/counting for resolved-only work.
    run history so the next Patrol operator step is visible without waiting for a
    later poll or page reload. Locked Community/runtime saves and repeated no-op selections must
    not record paid starter activity.
+   That successful server-side transition out of Watch Only also starts one
+   bounded reconciliation pass over already-active actionable findings, so the
+   next Patrol step can appear without waiting for the issue to be detected
+   again. The backend owns this behavior and retains the normal eligibility and
+   concurrency gates; the browser marker remains entry-point telemetry only and
+   must not become a second investigation trigger.
    The same journey may count a generic Patrol run or recency timestamp as
    readiness to start, but it must not advance the current operator state until
    it has issue-backed Patrol evidence: an active or resolved finding,

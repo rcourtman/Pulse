@@ -315,6 +315,7 @@ func TestPatrolOutcomeForActionAuditPreservesInconclusiveVerification(t *testing
 
 type stubInvestigationOrchestrator struct {
 	session           *ai.InvestigationSession
+	investigateCh     chan string
 	reinvestigateCh   chan reinvestigateCall
 	lastAutonomy      string
 	lastReinvestigate string
@@ -326,6 +327,9 @@ type reinvestigateCall struct {
 }
 
 func (s *stubInvestigationOrchestrator) InvestigateFinding(ctx context.Context, finding *ai.InvestigationFinding, autonomyLevel string) error {
+	if s.investigateCh != nil {
+		s.investigateCh <- finding.ID
+	}
 	return nil
 }
 

@@ -400,6 +400,15 @@ func TestGetPulseIntelligenceActionTelemetry_CountsOnlyIndependentPatrolFindingR
 	if got.ApprovedActionAttempts30d != 3 || got.ApprovedActionSuccesses30d != 3 {
 		t.Fatalf("attempts/successes = %d/%d, want 3/3", got.ApprovedActionAttempts30d, got.ApprovedActionSuccesses30d)
 	}
+	if got.PatrolActionPlans30d != 2 || got.PatrolApprovalRequests30d != 2 {
+		t.Fatalf("Patrol-origin plans/approval requests = %d/%d, want 2/2", got.PatrolActionPlans30d, got.PatrolApprovalRequests30d)
+	}
+	if got.PatrolRejectedActionDecisions30d != 0 || got.PatrolApprovedActionDecisions30d != 2 {
+		t.Fatalf("Patrol-origin rejected/approved decisions = %d/%d, want 0/2", got.PatrolRejectedActionDecisions30d, got.PatrolApprovedActionDecisions30d)
+	}
+	if got.PatrolApprovedActionAttempts30d != 2 || got.PatrolApprovedActionSuccesses30d != 2 {
+		t.Fatalf("Patrol-origin attempts/successes = %d/%d, want 2/2", got.PatrolApprovedActionAttempts30d, got.PatrolApprovedActionSuccesses30d)
+	}
 	if got.VerifiedFindingResolutions30d != 1 {
 		t.Fatalf("VerifiedFindingResolutions30d = %d, want 1", got.VerifiedFindingResolutions30d)
 	}

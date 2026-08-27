@@ -319,6 +319,12 @@ PULSE_INTELLIGENCE_COUNT_FIELDS = (
     ("pulse_intelligence_approved_action_decisions_30d", "Approved action decisions 30d"),
     ("pulse_intelligence_approved_action_attempts_30d", "Approved action attempts 30d"),
     ("pulse_intelligence_approved_action_successes_30d", "Approved action successes 30d"),
+    ("pulse_intelligence_patrol_action_plans_30d", "Patrol-origin action plans 30d"),
+    ("pulse_intelligence_patrol_approval_requests_30d", "Patrol-origin approval requests 30d"),
+    ("pulse_intelligence_patrol_rejected_action_decisions_30d", "Patrol-origin rejected action decisions 30d"),
+    ("pulse_intelligence_patrol_approved_action_decisions_30d", "Patrol-origin approved action decisions 30d"),
+    ("pulse_intelligence_patrol_approved_action_attempts_30d", "Patrol-origin approved action attempts 30d"),
+    ("pulse_intelligence_patrol_approved_action_successes_30d", "Patrol-origin approved action successes 30d"),
     (
         "pulse_intelligence_approved_action_failures_pre_dispatch_30d",
         "Approved action failures (pre-dispatch refusal) 30d",
@@ -628,6 +634,39 @@ PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
         (),
         ("pulse_intelligence_approved_action_successes_30d",),
     ),
+    (
+        "patrol_action_plan_30d",
+        "Patrol-origin action plan 30d",
+        (),
+        ("pulse_intelligence_patrol_action_plans_30d",),
+    ),
+    (
+        "patrol_approval_request_30d",
+        "Patrol-origin approval request 30d",
+        (),
+        ("pulse_intelligence_patrol_approval_requests_30d",),
+    ),
+    (
+        "patrol_action_decision_30d",
+        "Patrol-origin action decision 30d",
+        (),
+        (
+            "pulse_intelligence_patrol_rejected_action_decisions_30d",
+            "pulse_intelligence_patrol_approved_action_decisions_30d",
+        ),
+    ),
+    (
+        "patrol_action_attempt_30d",
+        "Patrol-origin approved action attempt 30d",
+        (),
+        ("pulse_intelligence_patrol_approved_action_attempts_30d",),
+    ),
+    (
+        "patrol_action_success_30d",
+        "Patrol-origin approved action success 30d",
+        (),
+        ("pulse_intelligence_patrol_approved_action_successes_30d",),
+    ),
 )
 PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS = {
     "configured": (
@@ -709,6 +748,17 @@ PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS = {
             "pulse_intelligence_rejected_action_decisions_30d",
             "pulse_intelligence_approved_action_decisions_30d",
             "pulse_intelligence_approved_action_attempts_30d",
+        ),
+    ),
+    "patrol_action": (
+        (),
+        (
+            "pulse_intelligence_patrol_action_plans_30d",
+            "pulse_intelligence_patrol_approval_requests_30d",
+            "pulse_intelligence_patrol_rejected_action_decisions_30d",
+            "pulse_intelligence_patrol_approved_action_decisions_30d",
+            "pulse_intelligence_patrol_approved_action_attempts_30d",
+            "pulse_intelligence_patrol_approved_action_successes_30d",
         ),
     ),
     "approved_execution": (

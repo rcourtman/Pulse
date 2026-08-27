@@ -165,7 +165,10 @@ const (
 	// saves a connection, concentrated three to one in container deployments,
 	// and nothing recorded whether those installs tried to reach a node and
 	// failed or never attempted one at all.
-	TelemetrySchemaVersion = 11
+	// Schema v12 adds Patrol-origin action funnel counters so detection and
+	// investigation activity can be separated from proposal, decision,
+	// execution, and successful completion without exporting action identity.
+	TelemetrySchemaVersion = 12
 )
 
 type installIDRecord struct {
@@ -353,6 +356,12 @@ type Ping struct {
 	PulseIntelligenceApprovedActionDecisions30d                    int    `json:"pulse_intelligence_approved_action_decisions_30d"`
 	PulseIntelligenceApprovedActionAttempts30d                     int    `json:"pulse_intelligence_approved_action_attempts_30d"`
 	PulseIntelligenceApprovedActionSuccesses30d                    int    `json:"pulse_intelligence_approved_action_successes_30d"`
+	PulseIntelligencePatrolActionPlans30d                          int    `json:"pulse_intelligence_patrol_action_plans_30d"`
+	PulseIntelligencePatrolApprovalRequests30d                     int    `json:"pulse_intelligence_patrol_approval_requests_30d"`
+	PulseIntelligencePatrolRejectedActionDecisions30d              int    `json:"pulse_intelligence_patrol_rejected_action_decisions_30d"`
+	PulseIntelligencePatrolApprovedActionDecisions30d              int    `json:"pulse_intelligence_patrol_approved_action_decisions_30d"`
+	PulseIntelligencePatrolApprovedActionAttempts30d               int    `json:"pulse_intelligence_patrol_approved_action_attempts_30d"`
+	PulseIntelligencePatrolApprovedActionSuccesses30d              int    `json:"pulse_intelligence_patrol_approved_action_successes_30d"`
 
 	// Cause-coded approved-action failure counters. Together with successes
 	// and still-in-flight attempts these partition the attempt count, so the
@@ -501,6 +510,12 @@ type Snapshot struct {
 	PulseIntelligenceApprovedActionDecisions30d                    int
 	PulseIntelligenceApprovedActionAttempts30d                     int
 	PulseIntelligenceApprovedActionSuccesses30d                    int
+	PulseIntelligencePatrolActionPlans30d                          int
+	PulseIntelligencePatrolApprovalRequests30d                     int
+	PulseIntelligencePatrolRejectedActionDecisions30d              int
+	PulseIntelligencePatrolApprovedActionDecisions30d              int
+	PulseIntelligencePatrolApprovedActionAttempts30d               int
+	PulseIntelligencePatrolApprovedActionSuccesses30d              int
 	PulseIntelligenceApprovedActionFailuresPreDispatch30d          int
 	PulseIntelligenceApprovedActionFailuresExecution30d            int
 	PulseIntelligenceApprovedActionFailuresUnverified30d           int
@@ -525,12 +540,18 @@ type Snapshot struct {
 // failure-cause fields carry only closed machine reason codes, never command
 // text, resource identifiers, or output.
 type PulseIntelligenceActionSnapshot struct {
-	ActionPlans30d             int
-	ApprovalRequests30d        int
-	RejectedActionDecisions30d int
-	ApprovedActionDecisions30d int
-	ApprovedActionAttempts30d  int
-	ApprovedActionSuccesses30d int
+	ActionPlans30d                   int
+	ApprovalRequests30d              int
+	RejectedActionDecisions30d       int
+	ApprovedActionDecisions30d       int
+	ApprovedActionAttempts30d        int
+	ApprovedActionSuccesses30d       int
+	PatrolActionPlans30d             int
+	PatrolApprovalRequests30d        int
+	PatrolRejectedActionDecisions30d int
+	PatrolApprovedActionDecisions30d int
+	PatrolApprovedActionAttempts30d  int
+	PatrolApprovedActionSuccesses30d int
 
 	// ApprovedActionFailuresPreDispatch30d counts approved attempts refused
 	// terminally before dispatch (plan drift, expiry, emergency stop, policy
@@ -1109,6 +1130,12 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceApprovedActionDecisions30d = s.PulseIntelligenceApprovedActionDecisions30d
 	ping.PulseIntelligenceApprovedActionAttempts30d = s.PulseIntelligenceApprovedActionAttempts30d
 	ping.PulseIntelligenceApprovedActionSuccesses30d = s.PulseIntelligenceApprovedActionSuccesses30d
+	ping.PulseIntelligencePatrolActionPlans30d = s.PulseIntelligencePatrolActionPlans30d
+	ping.PulseIntelligencePatrolApprovalRequests30d = s.PulseIntelligencePatrolApprovalRequests30d
+	ping.PulseIntelligencePatrolRejectedActionDecisions30d = s.PulseIntelligencePatrolRejectedActionDecisions30d
+	ping.PulseIntelligencePatrolApprovedActionDecisions30d = s.PulseIntelligencePatrolApprovedActionDecisions30d
+	ping.PulseIntelligencePatrolApprovedActionAttempts30d = s.PulseIntelligencePatrolApprovedActionAttempts30d
+	ping.PulseIntelligencePatrolApprovedActionSuccesses30d = s.PulseIntelligencePatrolApprovedActionSuccesses30d
 	ping.PulseIntelligenceApprovedActionFailuresPreDispatch30d = s.PulseIntelligenceApprovedActionFailuresPreDispatch30d
 	ping.PulseIntelligenceApprovedActionFailuresExecution30d = s.PulseIntelligenceApprovedActionFailuresExecution30d
 	ping.PulseIntelligenceApprovedActionFailuresUnverified30d = s.PulseIntelligenceApprovedActionFailuresUnverified30d
