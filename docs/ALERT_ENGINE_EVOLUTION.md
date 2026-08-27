@@ -74,6 +74,24 @@ from memory.
   (Docker, PBS/storage). Each family cutover deletes its tracking maps and
   the imperative bulk of its `Check*` path. Alert IDs and override keys
   stay stable until an explicit config migration.
+  **Status: complete (2026-08-27).** All four per-observation transition
+  families run on the reducer core as the authoritative state:
+  match-spec lifecycle (`evaluateCanonicalLifecycleAlert`), legacy
+  `checkMetric`, canonical metric threshold, and the stateful family.
+  The legacy tracking maps (`offlineConfirmations`,
+  `offlineRecoveryConfirmations`, `nodeOfflineCount`,
+  `connectionDegradedCount`, `dockerOfflineCount`, `dockerStateConfirm`,
+  `pendingAlerts`) are deleted; their cleanup-loop hygiene moved into the
+  core (`PruneStalePending`, pending reaping on container removal,
+  healthy observations from the online handlers).
+  *Deliberately scoped out:* the unified-incidents reconciler
+  (`unifiedIncident*` in the manager). It is a batch reconciliation
+  family, not a per-observation confirmation run — its provider hands it
+  complete incident sets and its `firstSeen` bookkeeping is already
+  identity-correct — so forcing it through the per-signal reducer would
+  add translation without retiring a defect class. It stays a follow-on:
+  if the event log becomes the sole history authority (Phase 3+), it
+  should emit reducer-shaped events at that boundary instead.
 - **Phase 3 — declarative rule model.** Scope selector + condition +
   policy replaces the per-platform config blocks and `DisableAll*`
   booleans, with a translator from the existing `AlertConfig` so persisted

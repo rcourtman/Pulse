@@ -114,4 +114,32 @@ composition. The shadow feed now models the deferral independently
 instead of echoing the manager's hold. Phase 1 characterization is
 complete: every discrete-family and metric-family behavior is pinned.
 
-Remaining: Phase 2 itself.
+Phase 2 (2026-08-26/27): all four per-observation transition families cut
+over to the reducer core as authoritative state, one scoped commit each —
+match-spec lifecycle (ee35d178b successor chain), legacy checkMetric,
+canonical metric threshold, and the stateful family. Each cutover held the
+family's full test surface green and kept the parity harnesses as
+regression pins. The cutovers surfaced and fixed three production defects
+at the root: checkMetric resolving by legacy ID so canonical-keyed alerts
+never cleared (#1580 class), confirmation-run StartTime stamped at the
+final confirming poll instead of the first match, and powered-off grace
+measured on the wall clock after cutover (restored wall-clock immunity via
+monotonic RuntimeTick signals).
+
+Legacy-map deletion (2026-08-27, 6eee5a164): the seven transition-state
+maps deleted from the manager per the plan's retirement list; cleanup-loop
+hygiene moved into the core (PruneStalePending on both cleanup paths,
+pending reaping for removed containers via PendingResourceIDs, healthy
+observations from HandleHostOnline/HandleDockerHostOnline). The test-seam
+conversion surfaced two more real gaps, fixed at the root: config-change
+auto-resolution never mirrored its forget into the core (a policy-disabled
+alert stayed firing in the core), and evaluateIntentNoLock created intent
+pending state without ResourceID/ResourceType/TrackingKey so per-resource
+clears could not match it.
+
+Scoped out deliberately: the unified-incidents reconciler stays on its
+batch reconciliation model (rationale recorded in
+docs/ALERT_ENGINE_EVOLUTION.md, Phase 2 status).
+
+Remaining: Phase 3 — declarative rule model with an AlertConfig
+translator, engine threshold resolution through rules, UI migration.
