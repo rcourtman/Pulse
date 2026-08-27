@@ -432,6 +432,17 @@ or reconcile command permissions. Frontend install surfaces may choose whether
 commands are requested for a newly minted credential but must not compose
 install-token scope lists themselves.
 
+The same server-issued metadata is the only token evidence that may authorize
+a host-identity handoff during re-enrollment. A final report from the retiring
+agent may arrive after the replacement token was minted, so the token-creation
+boundary includes at most one health window of that existing agent. Reuse of
+the existing identity additionally requires one unambiguous record with the
+same machine ID and equivalent hostname; differing non-empty report IPs or an
+active identity conflict veto the handoff. An arbitrary API token, multiple
+matching identities, or an agent that remains live beyond that window must
+retain the clone-safe fork. Once accepted, bindings for superseded tokens are
+retired so a late old process cannot overwrite the replacement identity.
+
 PVE node setup shared boundaries that render or copy `PulseMonitor`
 permissions must treat `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` as
 the PVE 9+ primary contract, with `VM.Monitor` retained only as the legacy PVE

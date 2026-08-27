@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -4673,6 +4674,17 @@ func issue1654Report(timestamp time.Time) agentshost.Report {
 	}
 }
 
+func issue1654InstallToken(id string, createdAt time.Time) *config.APITokenRecord {
+	return &config.APITokenRecord{
+		ID:        id,
+		CreatedAt: createdAt,
+		Metadata: map[string]string{
+			"install_type": "host",
+			"issued_via":   agentbinding.IssuedViaConfig,
+		},
+	}
+}
+
 func TestIssue1654FreshInstallReusesStalePhysicalHostIdentity(t *testing.T) {
 	monitor := issue1654Monitor()
 	createdAt := time.Now().UTC()
@@ -4688,7 +4700,7 @@ func TestIssue1654FreshInstallReusesStalePhysicalHostIdentity(t *testing.T) {
 
 	host, err := monitor.ApplyHostReport(
 		issue1654Report(createdAt.Add(time.Minute)),
-		&config.APITokenRecord{ID: "fresh-token", CreatedAt: createdAt},
+		issue1654InstallToken("fresh-token", createdAt),
 	)
 	if err != nil {
 		t.Fatalf("ApplyHostReport() error = %v", err)
@@ -4704,6 +4716,114 @@ func TestIssue1654FreshInstallReusesStalePhysicalHostIdentity(t *testing.T) {
 	}
 	if _, ok := monitor.hostTokenBindings["old-token:disk-host.local"]; ok {
 		t.Fatal("pre-install token binding survived stable-ID re-enrollment")
+	}
+}
+
+func TestInstallHandoffReusesIdentityAcrossFinalInFlightReport(t *testing.T) {
+	monitor := issue1654Monitor()
+	createdAt := time.Now().UTC().Add(-2 * time.Minute)
+	monitor.state.UpsertHost(models.Host{
+		ID:              "original-host-id",
+		Hostname:        "disk-host.local",
+		MachineID:       "machine-stable",
+		ReportIP:        "192.0.2.10",
+		TokenID:         "old-token",
+		LastSeen:        createdAt.Add(time.Minute),
+		IntervalSeconds: 30,
+		Status:          "online",
+	})
+	monitor.hostTokenBindings["old-token:disk-host.local"] = "original-host-id"
+	report := issue1654Report(time.Now().UTC())
+	report.Host.ReportIP = "192.0.2.10"
+
+	host, err := monitor.ApplyHostReport(report, issue1654InstallToken("fresh-token", createdAt))
+	if err != nil {
+		t.Fatalf("ApplyHostReport() error = %v", err)
+	}
+	if host.ID != "original-host-id" {
+		t.Fatalf("host ID = %q, want stable original-host-id", host.ID)
+	}
+	if got := len(monitor.state.GetHosts()); got != 1 {
+		t.Fatalf("host count = %d, want 1", got)
+	}
+	if _, ok := monitor.hostTokenBindings["old-token:disk-host.local"]; ok {
+		t.Fatal("overlapped old-token binding survived install handoff")
+	}
+}
+
+func TestInstallHandoffRequiresTrustedUnambiguousIdentityEvidence(t *testing.T) {
+	createdAt := time.Now().UTC()
+	report := issue1654Report(createdAt.Add(time.Minute))
+	report.Host.ReportIP = "192.0.2.10"
+	candidate := models.Host{
+		ID:              "original-host-id",
+		Hostname:        "disk-host.local",
+		MachineID:       "machine-stable",
+		ReportIP:        "192.0.2.10",
+		TokenID:         "old-token",
+		LastSeen:        createdAt.Add(time.Minute),
+		IntervalSeconds: 30,
+	}
+
+	for _, test := range []struct {
+		name      string
+		token     *config.APITokenRecord
+		mutate    func(*agentshost.Report, *models.Host)
+		secondary *models.Host
+	}{
+		{
+			name:  "arbitrary API token",
+			token: &config.APITokenRecord{ID: "fresh-token", CreatedAt: createdAt},
+		},
+		{
+			name:  "report IP changed",
+			token: issue1654InstallToken("fresh-token", createdAt),
+			mutate: func(report *agentshost.Report, _ *models.Host) {
+				report.Host.ReportIP = "192.0.2.11"
+			},
+		},
+		{
+			name:  "identity conflict active",
+			token: issue1654InstallToken("fresh-token", createdAt),
+			mutate: func(_ *agentshost.Report, candidate *models.Host) {
+				candidate.IdentityConflict = &models.HostIdentityConflict{Hostnames: []string{"disk-host.local", "clone.local"}}
+			},
+		},
+		{
+			name:  "overlap exceeds health window",
+			token: issue1654InstallToken("fresh-token", createdAt),
+			mutate: func(_ *agentshost.Report, candidate *models.Host) {
+				candidate.LastSeen = createdAt.Add(4 * time.Minute)
+			},
+		},
+		{
+			name:  "multiple matching identities",
+			token: issue1654InstallToken("fresh-token", createdAt),
+			secondary: &models.Host{
+				ID:              "another-host-id",
+				Hostname:        "disk-host.local",
+				MachineID:       "machine-stable",
+				ReportIP:        "192.0.2.10",
+				TokenID:         "another-old-token",
+				LastSeen:        createdAt.Add(time.Minute),
+				IntervalSeconds: 30,
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testReport := report
+			testCandidate := candidate
+			if test.mutate != nil {
+				test.mutate(&testReport, &testCandidate)
+			}
+			hosts := []models.Host{testCandidate}
+			if test.secondary != nil {
+				hosts = append(hosts, *test.secondary)
+			}
+			if got := staleHostIdentityForReenrollment(testReport, test.token, hosts); got != "" {
+				t.Fatalf("staleHostIdentityForReenrollment() = %q, want no handoff", got)
+			}
+		})
 	}
 }
 
@@ -4750,19 +4870,27 @@ func TestIssue1654ExistingDuplicateGenerationIsSuperseded(t *testing.T) {
 
 func TestIssue1654LivePreexistingAgentIsNotSuperseded(t *testing.T) {
 	monitor := issue1654Monitor()
-	createdAt := time.Now().UTC()
+	createdAt := time.Now().UTC().Add(-5 * time.Minute)
 	monitor.state.UpsertHost(models.Host{
-		ID:        "still-live-host",
-		Hostname:  "disk-host.local",
-		MachineID: "machine-stable",
-		TokenID:   "old-token",
-		LastSeen:  createdAt.Add(time.Minute),
-		Status:    "online",
+		ID:              "still-live-host",
+		Hostname:        "disk-host.local",
+		MachineID:       "machine-stable",
+		TokenID:         "old-token",
+		LastSeen:        createdAt.Add(4 * time.Minute),
+		IntervalSeconds: 30,
+		Status:          "online",
 	})
+	if got := staleHostIdentityForReenrollment(
+		issue1654Report(createdAt.Add(5*time.Minute)),
+		issue1654InstallToken("fresh-token", createdAt),
+		monitor.state.GetHosts(),
+	); got != "" {
+		t.Fatalf("live candidate unexpectedly eligible for install handoff: %q", got)
+	}
 
 	_, err := monitor.ApplyHostReport(
-		issue1654Report(createdAt.Add(2*time.Minute)),
-		&config.APITokenRecord{ID: "fresh-token", CreatedAt: createdAt},
+		issue1654Report(createdAt.Add(5*time.Minute)),
+		issue1654InstallToken("fresh-token", createdAt),
 	)
 	if err != nil {
 		t.Fatalf("ApplyHostReport() error = %v", err)

@@ -48,3 +48,25 @@ patch.
 - `<uuid>-d3b-83adbde6` — twice-forked: a base over 40 characters is
   truncated before the next suffix lands, leaving an amputated first suffix
   plus a full second one.
+
+## Prevention boundary landed (2026-08-27)
+
+New re-enrollments no longer fork merely because the retiring agent delivered
+one final in-flight report after the replacement install token was created.
+`staleHostIdentityForReenrollment` now admits that overlap for at most the old
+agent's own health window, and only for a Pulse-issued install token with one
+unambiguous same-machine, equivalent-hostname candidate. A changed non-empty
+report IP, an active identity conflict, an arbitrary API token, multiple
+matching records, or longer overlap still takes the clone-safe fork. The
+handoff also retires bindings for the superseded token so a late old process
+cannot reclaim the stable identity.
+
+Regression coverage is in `TestInstallHandoffReusesIdentityAcrossFinalInFlightReport`
+and `TestInstallHandoffRequiresTrustedUnambiguousIdentityEvidence` alongside
+the existing #1654 lifecycle cases.
+
+This is the source-side prevention slice. Hosts already persisted under one or
+more suffixed identities still require a separately governed migration that
+preserves identity-keyed profile, metadata, availability, history, and alert
+state. The coverage gap therefore remains triaged rather than being declared
+closed by prevention alone.

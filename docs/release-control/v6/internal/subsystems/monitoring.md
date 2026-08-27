@@ -2991,14 +2991,20 @@ allowance is the only path that clears that lineage. Focused proofs are
 `internal/api/host_agent_removal_lifecycle_integration_test.go`; the concurrency
 proof must also pass under the Go race detector.
 
-Fresh-install reconciliation also applies before a tombstone exists. A token
-created after a stale same-machine, same-normalized-hostname observation is
-explicit re-enrollment evidence: monitoring preserves the established host ID,
-removes older duplicate generations and token bindings, and keeps physical-disk
-resource identities attached to that host. A generation observed at or after
-the new token's creation remains live and is never removed by this rule.
-`internal/monitoring/monitor_host_agents_test.go` proves stable-ID reuse,
-duplicate cleanup, and the live-generation guard.
+Fresh-install reconciliation also applies before a tombstone exists. A
+Pulse-issued install token created after a same-machine,
+same-normalized-hostname observation is explicit re-enrollment evidence:
+monitoring preserves the established host ID, removes older duplicate
+generations and token bindings, and keeps physical-disk resource identities
+attached to that host. The retiring process may deliver one final in-flight
+report after token creation, so eligibility extends through at most that
+agent's own health window. One unambiguous candidate is required; differing
+non-empty report IPs, an active identity conflict, multiple candidates, an
+arbitrary API token, or reports beyond the overlap window preserve the
+clone-safe fork. Accepted handoffs retire the old token binding so a late old
+process cannot overwrite the replacement. `internal/monitoring/monitor_host_agents_test.go`
+proves stable-ID reuse, overlap handoff, clone-safety vetoes, duplicate cleanup,
+and the live-generation guard.
 
 ### Native pool-health collection and appliance isolation
 

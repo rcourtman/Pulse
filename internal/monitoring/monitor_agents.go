@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -2350,39 +2351,70 @@ func normalizedSecurityStrings(values []string) []string {
 }
 
 // staleHostIdentityForReenrollment recognizes explicit reinstall intent before
-// a new token is bound. Reusing the stale record's ID keeps serial-less
-// physical-disk identities stable across reinstall while the token creation
-// boundary prevents a foreign token from taking over a live host.
+// a new token is bound. A stopped agent may send a final in-flight report just
+// after the replacement token is minted, so allow one of its own health windows
+// of overlap. The supported install issuer, stable machine/hostname, report-IP,
+// and identity-conflict checks prevent an arbitrary token or visible clone from
+// taking over a live host.
 func staleHostIdentityForReenrollment(report agentshost.Report, tokenRecord *config.APITokenRecord, hosts []models.Host) string {
 	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
 		return ""
 	}
 	machineID := strings.TrimSpace(report.Host.MachineID)
 	hostname := strings.TrimSpace(report.Host.Hostname)
+	reportIP := strings.TrimSpace(report.Host.ReportIP)
 	tokenID := strings.TrimSpace(tokenRecord.ID)
 	if machineID == "" || hostname == "" || tokenID == "" {
 		return ""
 	}
+	if !agentbinding.CanBindInstallToken(tokenRecord, machineID, hostname) {
+		return ""
+	}
 
-	var bestID string
-	var bestLastSeen time.Time
+	var candidateID string
 	for _, candidate := range hosts {
 		if strings.TrimSpace(candidate.MachineID) != machineID ||
 			!unifiedresources.HostnamesEquivalent(candidate.Hostname, hostname) ||
 			strings.TrimSpace(candidate.TokenID) == tokenID ||
-			!candidate.LastSeen.Before(tokenRecord.CreatedAt) {
+			candidate.IdentityConflict != nil {
 			continue
 		}
-		candidateID := strings.TrimSpace(candidate.ID)
-		if candidateID == "" {
+		candidateReportIP := strings.TrimSpace(candidate.ReportIP)
+		if reportIP != "" && candidateReportIP != "" && !strings.EqualFold(reportIP, candidateReportIP) {
 			continue
 		}
-		if bestID == "" || candidate.LastSeen.After(bestLastSeen) {
-			bestID = candidateID
-			bestLastSeen = candidate.LastSeen
+		if candidate.LastSeen.After(tokenRecord.CreatedAt.Add(hostAgentHealthWindow(candidate.IntervalSeconds))) {
+			continue
 		}
+		matchedID := strings.TrimSpace(candidate.ID)
+		if matchedID == "" {
+			continue
+		}
+		if candidateID != "" && candidateID != matchedID {
+			return ""
+		}
+		candidateID = matchedID
 	}
-	return bestID
+	return candidateID
+}
+
+func (m *Monitor) retireSupersededHostTokenBindings(hostID, currentTokenID string) {
+	hostID = strings.TrimSpace(hostID)
+	currentTokenID = strings.TrimSpace(currentTokenID)
+	if hostID == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key, boundID := range m.hostTokenBindings {
+		if strings.TrimSpace(boundID) != hostID {
+			continue
+		}
+		if key == currentTokenID || strings.HasPrefix(key, currentTokenID+":") {
+			continue
+		}
+		delete(m.hostTokenBindings, key)
+	}
 }
 
 // hostRenameHealSource returns the host record that keeps a renamed machine's
@@ -2676,6 +2708,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				identifier = bindingID
 			}
 			m.mu.Unlock()
+			if reusedStaleID != "" {
+				m.retireSupersededHostTokenBindings(reusedStaleID, tokenID)
+			}
 		}
 	}
 
