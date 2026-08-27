@@ -5599,6 +5599,15 @@ neither backup, snapshot, restore, retention, nor recovery authority; those
 operations remain governed by their existing resource capabilities and action
 lifecycle contracts.
 
+### Docker action verification remains separate from recovery truth
+
+The shared Docker / Podman action executor performs its post-mutation daemon
+observation through a separately request-bound typed protocol. It may project
+independent `ActionResultV2` evidence only when the observer and executor trust
+domains differ. That evidence verifies the bounded container action; it is not
+backup success, restore verification, recovery freshness, or storage health,
+and storage/recovery consumers must not reinterpret it as any of those facts.
+
 ### Retained storage observations preserve freshness truth
 
 The shared storage adapter may retain the last successful capacity observation

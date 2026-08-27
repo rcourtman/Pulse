@@ -21337,6 +21337,10 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 		"ActionDispatchOperationKinds",
 		"BindActionDispatch",
 		"ReconcileActionDispatch",
+		"observer  dockerContainerPostconditionObserver",
+		"ObserveDockerContainer(context.Context, string, agentexec.DockerContainerObservationPayload)",
+		"executor.observer = agentDockerContainerPostconditionObserver{commander: commander}",
+		"independent = &observation",
 		"dockerContainerExecutionResult",
 	} {
 		if !strings.Contains(src, snippet) {
@@ -21345,6 +21349,21 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	}
 	if strings.Contains(src, "ExecuteCommand(ctx, agentID") || strings.Contains(src, "docker inspect -f") || strings.Contains(src, "podman inspect -f") {
 		t.Fatal("docker lifecycle executor regressed to raw command dispatch or server-authored agent inspect")
+	}
+	resultSource, err := os.ReadFile("docker_container_action_result.go")
+	if err != nil {
+		t.Fatalf("read docker_container_action_result.go: %v", err)
+	}
+	resultSrc := string(resultSource)
+	for _, snippet := range []string{
+		`ObserverKind: "docker_daemon_observer"`,
+		`ObserverTrustDomain: independent.TrustDomain`,
+		`ExecutorTrustDomain: "agent:" + agentID`,
+		`EvidenceClass: unified.ActionEvidenceIndependent`,
+	} {
+		if !strings.Contains(resultSrc, snippet) {
+			t.Fatalf("docker lifecycle result must preserve independent verification snippet %q", snippet)
+		}
 	}
 	if !strings.Contains(sharedSrc, "GetAgentForHost(hostname string) (string, bool)") {
 		t.Fatal("shared action command interface must keep hostname-based command-agent resolution available")
