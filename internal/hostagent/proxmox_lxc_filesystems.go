@@ -219,7 +219,7 @@ func (a *Agent) collectProxmoxLXCContainerDisksFast(
 	lxcInfoPath string,
 	vmid int,
 ) ([]agentshost.Disk, error) {
-	raw, err := a.collector.ReadFile(filepath.Join(proxmoxLXCConfigDir, strconv.Itoa(vmid)+".conf"))
+	raw, err := a.collector.ReadFile(proxmoxLXCConfigPath(vmid))
 	if err != nil {
 		return nil, fmt.Errorf("read container config: %w", err)
 	}
@@ -313,6 +313,13 @@ func (a *Agent) collectProxmoxLXCContainerDisksFast(
 		return result[i].Mountpoint < result[j].Mountpoint
 	})
 	return result, nil
+}
+
+func proxmoxLXCConfigPath(vmid int) string {
+	// The collector reads the Linux Proxmox namespace even when native tests
+	// exercise this path from another GOOS. filepath.Join would turn this into
+	// a Windows path and silently force the slower pct fallback.
+	return path.Join(proxmoxLXCConfigDir, strconv.Itoa(vmid)+".conf")
 }
 
 // parseProxmoxLXCConfigMounts extracts rootfs and mpN entries from the main

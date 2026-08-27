@@ -58,6 +58,12 @@ func TestAgentMetricsSMARTProbeAttemptsRetryExplicitSAT(t *testing.T) {
 	}
 }
 
+func TestProxmoxLXCConfigPathRemainsLinuxNative(t *testing.T) {
+	if got, want := proxmoxLXCConfigPath(100), "/etc/pve/lxc/100.conf"; got != want {
+		t.Fatalf("proxmoxLXCConfigPath(100) = %q, want %q", got, want)
+	}
+}
+
 func TestBuildReport(t *testing.T) {
 	// Setup mocks
 	fixedTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)

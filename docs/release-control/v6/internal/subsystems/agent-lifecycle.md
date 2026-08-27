@@ -54,13 +54,22 @@ standby evidence. Enumeration and each device probe have independent bounded
 deadlines so one slow disk cannot consume the complete SMART pass, while
 command errors retain bounded stderr for compatibility diagnosis.
 On a PVE node, the Unified Agent may also report the mounted filesystem
-capacity of running LXCs through the fixed local `pct list` and
-`pct df <vmid>` command set. This collector is automatic when `pct` is
-available, uses one shared deadline plus per-command byte ceilings, caps guest
-and disk counts, never accepts an unvalidated VMID as an argument, and does not
-invoke `pct df` for guests the preceding list reported stopped. The report
-carries VMID and exact container name so monitoring can reject stale migration
-or rename correlations.
+capacity of running LXCs. The collector uses the fixed local `pct list` command
+to admit only node-local running guests, reads each admitted guest's main
+`/etc/pve/lxc/<vmid>.conf` mount declarations, resolves its init PID through
+the fixed `lxc-info -n <vmid> -p` shape, and probes usage through the Linux
+`/proc/<pid>/root` namespace. A configured path that resolves to the same
+device as its parent is not a live mount and must be omitted instead of
+borrowing the parent's capacity. Least-privilege installs that cannot read the
+config, resolve the PID, or traverse `/proc` may fall back to the fixed
+`pct df <vmid>` query for that container only. The complete pass has a bounded
+collection window, every container has an independent deadline, command output
+has byte ceilings, guest and disk counts are capped, unvalidated VMIDs never
+become arguments, and stopped guests are never queried. Linux namespace paths
+remain slash-canonical in every native build so cross-platform verification
+cannot accidentally test only the fallback. The report carries VMID and exact
+container name so monitoring can reject stale migration or rename
+correlations.
 `internal/monitoring/monitor.go` also serializes shared unified-resource
 websocket payloads. Carrying plural availability facets through that serializer
 is an adjacent monitoring/API projection and does not change agent enrollment,
