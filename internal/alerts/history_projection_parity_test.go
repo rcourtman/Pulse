@@ -64,6 +64,23 @@ func assertHistoryParity(t *testing.T, m *Manager) {
 		if l.Value != p.Value {
 			t.Errorf("entry %d (%s): Value legacy=%v projected=%v", i, l.ID, l.Value, p.Value)
 		}
+		if l.ResourceName != p.ResourceName {
+			t.Errorf("entry %d (%s): ResourceName legacy=%q projected=%q", i, l.ID, l.ResourceName, p.ResourceName)
+		}
+		if l.Node != p.Node {
+			t.Errorf("entry %d (%s): Node legacy=%q projected=%q", i, l.ID, l.Node, p.Node)
+		}
+		if l.Message != p.Message {
+			t.Errorf("entry %d (%s): Message legacy=%q projected=%q", i, l.ID, l.Message, p.Message)
+		}
+		if l.Type != p.Type {
+			t.Errorf("entry %d (%s): Type legacy=%q projected=%q", i, l.ID, l.Type, p.Type)
+		}
+		// The two sides stamp resolve-time LastSeen at slightly different
+		// instants; hold them within a small tolerance.
+		if delta := l.LastSeen.Sub(p.LastSeen); delta > 2*time.Second || delta < -2*time.Second {
+			t.Errorf("entry %d (%s): LastSeen legacy=%v projected=%v", i, l.ID, l.LastSeen, p.LastSeen)
+		}
 	}
 }
 
