@@ -140,6 +140,40 @@ function withManagedLocalBackendPort(state, port) {
   };
 }
 
+const managedLocalBackendFixtureMappings = [
+  {
+    envKey: 'PULSE_E2E_ALERT_HISTORY_FIXTURE',
+    destination: path.join('alerts', 'alert-history.json'),
+  },
+  {
+    envKey: 'PULSE_E2E_ACTIVE_ALERTS_FIXTURE',
+    destination: path.join('alerts', 'active-alerts.json'),
+  },
+];
+
+async function seedManagedLocalBackendFixtures(state, env, logger) {
+  for (const fixture of managedLocalBackendFixtureMappings) {
+    const sourcePath = trim(env[fixture.envKey]);
+    if (sourcePath === '') {
+      continue;
+    }
+
+    const sourceStats = await fs.stat(sourcePath);
+    if (!sourceStats.isFile()) {
+      throw new Error(`${fixture.envKey} must name a regular file: ${sourcePath}`);
+    }
+
+    const destinationPath = path.join(state.dataDir, fixture.destination);
+    await fs.mkdir(path.dirname(destinationPath), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await fs.copyFile(sourcePath, destinationPath);
+    await fs.chmod(destinationPath, 0o600);
+    logger.log(`[integration] Seeded ${fixture.destination} from ${fixture.envKey}`);
+  }
+}
+
 export function buildManagedLocalBackendEnv(state, env = process.env) {
   const allowedOrigins = [
     `http://${state.host}:5173`,
@@ -593,6 +627,7 @@ export async function startManagedLocalBackend({
     `${backendEnv.PULSE_E2E_BOOTSTRAP_TOKEN}\n`,
     { mode: 0o600 },
   );
+  await seedManagedLocalBackendFixtures(state, env, logger);
   await ensureFrontendAssets(state, logger);
   await ensureBackendBinary(state, logger);
 
@@ -623,7 +658,10 @@ export async function startManagedLocalBackend({
       baseURL: state.baseURL,
       pid: child.pid,
       dataDir: state.dataDir,
+      rootDir: state.rootDir,
       logPath: state.logPath,
+      binaryPath: state.binaryPath,
+      auditSigningKey: backendEnv.PULSE_AUDIT_SIGNING_KEY,
       billingStatePath: state.billingStatePath,
       primaryAPIToken: securityState.primaryAPIToken,
     };
@@ -644,10 +682,90 @@ export async function startManagedLocalBackend({
   }
 }
 
+export async function restartManagedLocalBackend({ env = process.env, logger = console } = {}) {
+  const runtimeState = await readRuntimeState(env);
+  if (!runtimeState?.managedLocalBackend) {
+    throw new Error('Managed local backend restart requires an active managed backend runtime');
+  }
+
+  const parsedBaseURL = new URL(runtimeState.baseURL);
+  const configuredState = buildManagedLocalBackendState(env);
+  const rootDir = trim(runtimeState.rootDir) || path.dirname(runtimeState.dataDir);
+  const state = {
+    ...configuredState,
+    host: parsedBaseURL.hostname,
+    port: parsedBaseURL.port,
+    baseURL: runtimeState.baseURL.replace(/\/+$/, ''),
+    rootDir,
+    dataDir: runtimeState.dataDir,
+    logPath: runtimeState.logPath,
+    pidPath: path.join(rootDir, 'pulse.pid'),
+    billingStatePath: runtimeState.billingStatePath || path.join(runtimeState.dataDir, 'billing.json'),
+    binaryPath: trim(runtimeState.binaryPath) || configuredState.binaryPath,
+  };
+  const backendEnv = buildManagedLocalBackendEnv(state, {
+    ...env,
+    PULSE_AUDIT_SIGNING_KEY: trim(runtimeState.auditSigningKey) || trim(env.PULSE_AUDIT_SIGNING_KEY),
+  });
+
+  await stopManagedLocalBackend({
+    env,
+    logger,
+    state: runtimeState,
+    preserveData: true,
+    preserveRuntimeState: true,
+  });
+
+  const logHandle = await fs.open(state.logPath, 'a');
+  const child = spawn(state.binaryPath, [], {
+    cwd: state.rootDir,
+    env: backendEnv,
+    detached: true,
+    stdio: ['ignore', logHandle.fd, logHandle.fd],
+  });
+  child.unref();
+  await logHandle.close();
+
+  if (!Number.isInteger(child.pid) || child.pid <= 0) {
+    throw new Error('Managed local backend failed to restart');
+  }
+
+  await fs.writeFile(state.pidPath, `${child.pid}\n`, 'utf8');
+  try {
+    await waitForHealth(`${state.baseURL}/api/health`, child.pid);
+    await assertManagedLocalBackendStartupHealthy(state);
+    const securityState = await ensureManagedLocalBackendSecurity(state, backendEnv, logger);
+    const nextRuntimeState = {
+      ...runtimeState,
+      pid: child.pid,
+      rootDir: state.rootDir,
+      dataDir: state.dataDir,
+      logPath: state.logPath,
+      binaryPath: state.binaryPath,
+      auditSigningKey: backendEnv.PULSE_AUDIT_SIGNING_KEY,
+      primaryAPIToken: securityState.primaryAPIToken,
+    };
+    await writeRuntimeState(nextRuntimeState, env);
+    logger.log(`[integration] Restarted managed local backend at ${state.baseURL} (pid ${child.pid})`);
+    return nextRuntimeState;
+  } catch (error) {
+    if (await pidExists(child.pid)) {
+      try {
+        process.kill(child.pid, 'SIGTERM');
+      } catch {
+        // process exited between checks
+      }
+    }
+    throw error;
+  }
+}
+
 export async function stopManagedLocalBackend({
   env = process.env,
   logger = console,
   state = null,
+  preserveData = false,
+  preserveRuntimeState = false,
 } = {}) {
   const runtimeState = state || await readRuntimeState(env);
   if (!runtimeState || !runtimeState.managedLocalBackend) {
@@ -673,10 +791,19 @@ export async function stopManagedLocalBackend({
     }
   }
 
-  if (trim(runtimeState.dataDir) !== '') {
-    await fs.rm(path.dirname(runtimeState.dataDir), { recursive: true, force: true });
+  if (!preserveData && trim(runtimeState.dataDir) !== '') {
+    await fs.rm(path.dirname(runtimeState.dataDir), {
+      recursive: true,
+      force: true,
+    });
   }
-  await clearRuntimeState(env);
-  logger.log('[integration] Stopped managed local backend');
+  if (!preserveRuntimeState) {
+    await clearRuntimeState(env);
+  }
+  logger.log(
+    preserveData
+      ? '[integration] Stopped managed local backend and preserved its data'
+      : '[integration] Stopped managed local backend',
+  );
   return true;
 }

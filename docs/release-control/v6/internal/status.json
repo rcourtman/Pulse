@@ -9765,34 +9765,6 @@
       ]
     },
     {
-      "id": "alert-lifecycle-contract-coverage",
-      "summary": "Alert transition semantics (hysteresis, sustained-for delays, severity derivation, confirmations) have no deterministic engine-independent contract harness, so transition-core regressions ship undetected (#1682, #1683, #1553, #1693, #1724) and cross-family drift is invisible. Resolution is Phase 1 of docs/ALERT_ENGINE_EVOLUTION.md: a pure characterization reducer (internal/alerts/reducer) plus a parity harness driving reducer and manager through identical sequences; the first metric-family slice already surfaced and fixed a silent stale-resolve defect in checkMetric.",
-      "owner": "project-owner",
-      "status": "triaged",
-      "recorded_at": "2026-08-26",
-      "lane_ids": [
-        "L6",
-        "L13"
-      ],
-      "subsystem_ids": [
-        "alerts"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "coverage_impact": 5,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/ALERT_ENGINE_EVOLUTION.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/alert-lifecycle-contract-coverage-2026-08-26.md",
-          "kind": "file"
-        }
-      ]
-    },
-    {
       "id": "alert-identity-config-migration",
       "summary": "Persisted alert state (threshold override keys, ack records, active-alert IDs) still carries legacy identity forms bridged at read time by alias layers (thresholdOverrideForResourceNoLock registry translation, lookupGuestOverride's three-key fallback, storageThresholdLookupIDs, testAlertEquivalentIDs' ~8 equivalent forms). The Phase 3 policy fold contains the bridging behind one resolution surface, but the alias code must be maintained until an explicit, versioned config migration rewrites persisted keys to canonical identity. Deliberately deferred from the 2026-08 evolution work: rewriting user override keys requires the live resource registry for translation and carries the #1738 failure mode in reverse (silently orphaning overrides), so it needs its own migration design, dry-run tooling, and test round rather than landing mid-RC.",
       "owner": "project-owner",

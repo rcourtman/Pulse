@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node ./scripts/run-playwright.mjs",
+    "test:alerts:qualification": "node ./scripts/run-alert-qualification.mjs",
     "check:e2e-tiers": "node ./scripts/check-e2e-tiering.mjs",
     "evals": "node ./scripts/run-evals.mjs",
     "test:visual": "npm test -- tests/06-theme-visual.spec.ts --project=chromium",
