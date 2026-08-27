@@ -3539,6 +3539,10 @@ developers back to the browser entrypoint on `http://127.0.0.1:5173` and the
 repo-root `npm run dev`, `npm run dev:restart`, `npm run dev:status`, and
 `npm run dev:logs` commands for daily use, while keeping raw `launchctl`
 commands clearly secondary as LaunchAgent maintenance operations.
+When Git has already supplied an executable `scripts/dev-launchd-wrapper.sh`,
+the setup helper must leave its mode untouched so installation works from
+shared checkouts where the developer can write content but cannot change file
+modes. It may add the executable bit only when the wrapper is not executable.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service
