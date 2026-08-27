@@ -1946,8 +1946,11 @@ must never expose a Timeline control backed by a missing incident.
 must mirror the live history read contract: rows are newest-first, closed rows
 carry the same resolution timestamp as their incident in `lastSeen`, and live
 alerts come from the active-alert snapshot rather than unrelated synthetic open
-history rows. History duration, status, and Timeline therefore remain three
-projections of one occurrence instead of contradicting each other in demo mode.
+history rows. The current-day generator is bounded by the fixture observation
+clock and local calendar boundary, including short or long daylight-saving
+days, so neither a row nor its lifecycle events can occur in the future.
+History duration, status, and Timeline therefore remain three projections of
+one occurrence instead of contradicting each other in demo mode.
 Mock fixture defaults in `internal/mock/generator.go` (the `DefaultConfig`
 constant) are also part of that mock-runtime contract. The Proxmox default is
 an intentionally large public-demo estate so platform-first pages exercise

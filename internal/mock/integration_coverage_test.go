@@ -545,10 +545,12 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 }
 
 func TestMockAlertHistoryMatchesProductionLifecycleContract(t *testing.T) {
-	history := buildAlertHistory(
+	fixtureNow := time.Date(2026, time.August, 27, 23, 40, 0, 0, time.FixedZone("fixture-local", 60*60))
+	history := buildAlertHistoryAt(
 		[]models.Node{{ID: "node-1", Name: "pve-1"}},
 		[]models.VM{{ID: "vm-1", Name: "database", Node: "pve-1"}},
 		[]models.Container{{ID: "ct-1", Name: "worker", Node: "pve-1"}},
+		fixtureNow,
 	)
 	if len(history) == 0 {
 		t.Fatal("mock history is empty")
@@ -560,10 +562,12 @@ func TestMockAlertHistoryMatchesProductionLifecycleContract(t *testing.T) {
 		if index > 0 && alert.StartTime.After(history[index-1].StartTime) {
 			t.Fatalf("mock history is not newest-first at %d: %v after %v", index, alert.StartTime, history[index-1].StartTime)
 		}
+		if alert.StartTime.After(fixtureNow) {
+			t.Fatalf("mock history row %q starts in the future: %v after %v", alert.ID, alert.StartTime, fixtureNow)
+		}
 	}
 
-	now := time.Now()
-	enriched, incidents := buildAlertIncidentFixtures(history, now)
+	enriched, incidents := buildAlertIncidentFixtures(history, fixtureNow)
 	if len(enriched) != len(incidents) {
 		t.Fatalf("enriched history rows = %d, incidents = %d", len(enriched), len(incidents))
 	}
@@ -573,6 +577,34 @@ func TestMockAlertHistoryMatchesProductionLifecycleContract(t *testing.T) {
 		}
 		if enriched[index].LastSeen == nil || !enriched[index].LastSeen.Equal(*incident.ClosedAt) {
 			t.Fatalf("history row %q lastSeen = %v, closedAt = %v", enriched[index].ID, enriched[index].LastSeen, incident.ClosedAt)
+		}
+	}
+}
+
+func TestRandomAlertHistoryTimeRespectsLocalCalendarAndObservationClock(t *testing.T) {
+	location, err := time.LoadLocation("Europe/London")
+	if err != nil {
+		t.Fatalf("load fixture timezone: %v", err)
+	}
+	times := []time.Time{
+		time.Date(2026, time.March, 29, 0, 30, 0, 0, location),
+		time.Date(2026, time.October, 25, 23, 30, 0, 0, location),
+		time.Date(2026, time.August, 27, 0, 0, 0, 0, location),
+	}
+	for _, now := range times {
+		for daysAgo := 0; daysAgo <= 2; daysAgo++ {
+			day := now.AddDate(0, 0, -daysAgo)
+			dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, location)
+			nextDay := dayStart.AddDate(0, 0, 1)
+			for sample := 0; sample < 100; sample++ {
+				got := randomAlertHistoryTime(now, daysAgo)
+				if got.Before(dayStart) || !got.Before(nextDay) {
+					t.Fatalf("random history time %v outside local day [%v, %v)", got, dayStart, nextDay)
+				}
+				if daysAgo == 0 && got.After(now) {
+					t.Fatalf("random history time %v is after observation clock %v", got, now)
+				}
+			}
 		}
 	}
 }
