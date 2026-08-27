@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"strconv"
 	"strings"
 	"time"
@@ -267,6 +268,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		m.setActiveAlertNoLock(storageKey, alert)
 		m.recentAlerts[canonicalTrackingKeyForAlert(alert)] = alert
 		m.historyManager.AddAlert(*alert)
+		m.recordAlertEvent(eventlog.TypeFired, alert, storageKey, "unified-incident", alert.Message, nil)
 		m.dispatchAlert(alert, false)
 	}
 }

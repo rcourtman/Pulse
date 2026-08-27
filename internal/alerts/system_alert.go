@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"strings"
 	"time"
 
@@ -146,6 +147,7 @@ func (m *Manager) RaiseSystemAlert(input SystemAlertInput) bool {
 	if m.historyManager != nil {
 		m.historyManager.AddAlert(*alert)
 	}
+	m.recordAlertEvent(eventlog.TypeFired, alert, alertID, "system-alert", input.Message, nil)
 	m.dispatchAlert(alert, true)
 	m.mu.Unlock()
 
