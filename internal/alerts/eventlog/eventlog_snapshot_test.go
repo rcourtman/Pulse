@@ -86,6 +86,27 @@ func TestSnapshotRoundTrip(t *testing.T) {
 	}
 }
 
+func TestEventRetentionDoesNotExpireActiveState(t *testing.T) {
+	store := newTestStore(t)
+	startedAt := time.Now().Add(-180 * 24 * time.Hour).UTC()
+	if err := store.AppendDurable(testActiveEvent(t, TypeFired, "long-running-alert", startedAt, startedAt, 91)); err != nil {
+		t.Fatal(err)
+	}
+	store.pruneEventsBefore(time.Now().Add(-90 * 24 * time.Hour))
+
+	events, err := store.Query(Filter{AlertID: "long-running-alert"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("retained events = %d, want 0", len(events))
+	}
+	active, err := store.LoadActiveState()
+	if err != nil || len(active) != 1 {
+		t.Fatalf("active state = %+v, %v; long-running alert expired with history", active, err)
+	}
+}
+
 func TestUnchangedDeliveryDecisionIsOneEpisode(t *testing.T) {
 	store, err := OpenInMemory()
 	if err != nil {

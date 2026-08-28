@@ -590,8 +590,12 @@ func (s *Store) pruneOld() {
 	if s.retention <= 0 {
 		return
 	}
-	cutoff := time.Now().Add(-s.retention).UTC().Format(time.RFC3339Nano)
-	if _, err := s.db.Exec(`DELETE FROM alert_events WHERE occurred_at < ?`, cutoff); err != nil {
+	s.pruneEventsBefore(time.Now().Add(-s.retention))
+}
+
+func (s *Store) pruneEventsBefore(cutoff time.Time) {
+	cutoffValue := cutoff.UTC().Format(time.RFC3339Nano)
+	if _, err := s.db.Exec(`DELETE FROM alert_events WHERE occurred_at < ?`, cutoffValue); err != nil {
 		log.Error().Err(err).Msg("alert event log prune failed")
 	}
 }

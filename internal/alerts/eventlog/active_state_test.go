@@ -125,25 +125,3 @@ func TestStaleCheckpointCannotOverwriteLifecycleTransaction(t *testing.T) {
 		t.Fatalf("active state = %+v, %v; resolved alert was resurrected", active, err)
 	}
 }
-
-func TestEventRetentionDoesNotExpireActiveState(t *testing.T) {
-	store := newTestStore(t)
-	startedAt := time.Now().Add(-180 * 24 * time.Hour).UTC()
-	if err := store.AppendDurable(testActiveEvent(t, TypeFired, "long-running-alert", startedAt, startedAt, 91)); err != nil {
-		t.Fatal(err)
-	}
-	store.retention = 90 * 24 * time.Hour
-	store.pruneOld()
-
-	events, err := store.Query(Filter{AlertID: "long-running-alert"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(events) != 0 {
-		t.Fatalf("retained events = %d, want 0", len(events))
-	}
-	active, err := store.LoadActiveState()
-	if err != nil || len(active) != 1 {
-		t.Fatalf("active state = %+v, %v; long-running alert expired with history", active, err)
-	}
-}
