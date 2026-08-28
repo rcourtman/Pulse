@@ -902,8 +902,8 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
 	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
-	if version == "6.4.0-rc.9" {
-		comparisonSummary = "The `v6.4.0-rc.8` qualification attempt stopped before a public tag or GitHub release was created."
+	if version == "6.4.0-rc.10" {
+		comparisonSummary = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly."
 	}
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
@@ -2958,11 +2958,13 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
 	backendJob := workflowJobBlock(t, string(workflowBytes), "backend_tests")
-	if !strings.Contains(backendJob, "timeout-minutes: 30") {
-		t.Fatal("release backend job must retain headroom above the measured PVE execution time")
+	if !strings.Contains(backendJob, "timeout-minutes: 40") {
+		t.Fatal("release backend job must retain the measured PVE execution ceiling with setup and cleanup headroom")
 	}
-	if strings.Contains(backendJob, "timeout-minutes: 20") {
-		t.Fatal("release backend job must not restore the ceiling that cancelled a passing rc.9 suite")
+	for _, invalidCeiling := range []string{"timeout-minutes: 20", "timeout-minutes: 30"} {
+		if strings.Contains(backendJob, invalidCeiling) {
+			t.Fatalf("release backend job must not restore a ceiling that can pre-empt the 30-minute Go watchdog: %s", invalidCeiling)
+		}
 	}
 	if !strings.Contains(backendJob, "pulse-pve-tests") || !strings.Contains(backendJob, "run-release-backend-tests.sh") {
 		t.Fatal("release backend job must use the dedicated PVE partition runner")
@@ -3106,11 +3108,11 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	commit("stable 6.3.2 hotfix")
 	runGit("tag", "v6.3.2")
 	runGit("checkout", "main")
-	for rc := 1; rc <= 8; rc++ {
+	for rc := 1; rc <= 9; rc++ {
 		commit("release candidate " + strconv.Itoa(rc))
 		runGit("tag", "v6.4.0-rc."+strconv.Itoa(rc))
 	}
-	commit("release candidate 9 changes")
+	commit("release candidate 10 changes")
 
 	generator, err := filepath.Abs(repoFile("scripts", "generate-release-notes.sh"))
 	if err != nil {
@@ -3148,8 +3150,8 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		return strings.TrimSpace(string(output))
 	}
 
-	if got := resolve("6.4.0-rc.9"); got != "v6.4.0-rc.8" {
-		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.8", got)
+	if got := resolve("6.4.0-rc.10"); got != "v6.4.0-rc.9" {
+		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.9", got)
 	}
 	if got := resolve("6.4.0-rc.1"); got != "v6.3.2" {
 		t.Fatalf("RC1 comparison base = %q, want v6.3.2", got)
@@ -3158,13 +3160,13 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		t.Fatalf("GA comparison base = %q, want v6.3.2", got)
 	}
 
-	cmd := exec.Command("bash", generator, "6.4.0-rc.9", "v6.4.0-rc.7")
+	cmd := exec.Command("bash", generator, "6.4.0-rc.10", "v6.4.0-rc.8")
 	cmd.Dir = repo
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("generator accepted a comparison tag older than the immediately preceding RC")
 	}
-	if !strings.Contains(string(output), "expected 'v6.4.0-rc.8'") {
+	if !strings.Contains(string(output), "expected 'v6.4.0-rc.9'") {
 		t.Fatalf("unexpected comparison-range rejection:\n%s", output)
 	}
 }

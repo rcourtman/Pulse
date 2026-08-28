@@ -360,9 +360,10 @@ jobs:
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-tests"]') }}
     # The rc.9 race-enabled API shards consumed more than 18 minutes on the PVE
-    # runner before post-step accounting. Keep enough headroom for runner and
-    # checkout cleanup so a passing suite is not recorded as cancelled.
-    timeout-minutes: 30
+    # runner before post-step accounting. Keep the outer job above the canonical
+    # 30-minute Go watchdog so checkout, bundle transfer, shard planning, and
+    # cleanup cannot pre-empt the process that owns stuck-package detection.
+    timeout-minutes: 40
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:

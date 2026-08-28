@@ -2,9 +2,9 @@ apiVersion: v2
 name: pulse
 description: Helm chart for deploying the Pulse hub and optional Docker, Kubernetes, or OpenShift monitoring agent.
 type: application
-version: 6.4.0-rc.9
-appVersion: "6.4.0-rc.9"
-icon: https://raw.githubusercontent.com/rcourtman/Pulse/v6.4.0-rc.9/docs/images/pulse-logo.svg
+version: 6.4.0-rc.10
+appVersion: "6.4.0-rc.10"
+icon: https://raw.githubusercontent.com/rcourtman/Pulse/v6.4.0-rc.10/docs/images/pulse-logo.svg
 keywords:
   - monitoring
   - proxmox
@@ -32,7 +32,7 @@ annotations:
       description: Smoke tests with kind cluster deployment
   artifacthub.io/links: |
     - name: Documentation
-      url: https://github.com/rcourtman/Pulse/blob/v6.4.0-rc.9/docs/KUBERNETES.md
+      url: https://github.com/rcourtman/Pulse/blob/v6.4.0-rc.10/docs/KUBERNETES.md
     - name: Support
       url: https://github.com/rcourtman/Pulse/discussions
   artifacthub.io/maintainers: |

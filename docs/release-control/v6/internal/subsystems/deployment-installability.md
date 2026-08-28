@@ -756,9 +756,9 @@ artifact-selection behaviour.
    `TestServerInfoEndpointMethodNotAllowed`. The planner fails closed if those
    anchors disappear or reorder, and the manifest records them while
    continuing to prove exact ordered, complete, disjoint coverage. The backend
-   job owns a 30-minute ceiling, preserving post-step and runner-cleanup
-   headroom above the 1,106-second slowest API shard observed during the first
-   `v6.4.0-rc.9` qualification attempt, while each
+   job owns a 40-minute ceiling, preserving post-step and runner-cleanup
+   headroom above both the 1,106-second slowest API shard observed during the
+   first `v6.4.0-rc.9` qualification attempt and the inner watchdog, while each
    invocation retains the canonical 30-minute Go timeout as protection against
    a stuck package.
    The warm-path release-control performance objective is 15 minutes or less
@@ -1813,13 +1813,14 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.9` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.10` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.9` release version. The
-`v6.4.0-rc.8` qualification attempt stopped before a public tag or GitHub
-release was created, while `v6.4.0-rc.7` remains an immutable failed candidate.
-Consequently `v6.4.0-rc.9` follows `v6.4.0-rc.6` as the next publicly activated
-candidate. This prerelease keeps
+Helm chart release metadata to the same `6.4.0-rc.10` release version. The
+`v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version
+artifacts but did not activate publicly; `v6.4.0-rc.8` stopped before creating
+a public tag or GitHub release; and `v6.4.0-rc.7` remains an immutable failed
+candidate. Consequently `v6.4.0-rc.10` follows `v6.4.0-rc.6` as the next
+publicly activated candidate. This prerelease keeps
 `rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
 install pointers or stable semver aliases. The candidate makes the append-only
@@ -1853,17 +1854,23 @@ only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
 restores it.
 
-The initial `v6.4.0-rc.9` qualification attempt used exact source SHA
+The preceding `v6.4.0-rc.9` qualification used exact source SHA
 `dac72894a2ccaa6af2458ff88f38344cd5ce1abd`. Release run `33130438386`
-passed immutable candidate assembly, exact-version container and Helm smoke,
-asset validation, installer smoke, private Pro staging, and every backend API
-shard. The slowest shard completed in 1,106 seconds, but the 20-minute backend
-job ceiling cancelled the passing step during post-step accounting. That made
-the canonical readiness join skip and kept release `378204006` in draft
-quarantine; convergence run `33131402971` then failed closed without moving
-customer aliases or the paid-runtime broker. The governed backend ceiling is
-30 minutes before the same unpublished `v6.4.0-rc.9` draft is retried from the
-current release-line head.
+passed preparation, frontend qualification, Windows installer smoke, release
+smoke, private staging, immutable multi-platform candidate assembly, macOS
+signing and notarization, exact-candidate container and Helm smoke, public
+Docker staging, Helm staging, release-asset validation, and installer smoke.
+All three race-enabled backend shards also reported `PASS`, with the slowest
+shard completing in 1,106 seconds, but the job was cancelled by its 20-minute
+job ceiling during completion. That cancellation caused immutable readiness to
+skip and the activation verdict to fail closed. GitHub release `378204006`
+therefore remains an unpublished draft, its annotated tag and exact-version
+artifacts remain immutable, convergence run `33131402971` made no customer
+pointer changes, and stable/latest remains `v6.3.2`. The canonical backend job
+now has a 40-minute ceiling while retaining the per-invocation 30-minute Go
+timeout, so setup, bundle transfer, planning, and cleanup overhead cannot
+pre-empt the test process or cancel a successfully completed release suite.
+`v6.4.0-rc.10` fixes forward from that infrastructure failure.
 
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
@@ -2344,8 +2351,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.9` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.9` until the next
+For the active prerelease `v6.4.0-rc.10` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.10` until the next
 governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
