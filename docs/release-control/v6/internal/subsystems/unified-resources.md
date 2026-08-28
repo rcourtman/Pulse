@@ -110,7 +110,13 @@ misrepresented as Proxmox disk telemetry.
 Physical-disk matching is parent-scoped and topology-aware: persisted source
 mappings survive registry rebuilds, controller members sharing a block path
 remain distinct, placeholder serials/WWNs never become canonical or metrics
-identity, and ambiguous matches fail closed. SMART counter metadata preserves
+identity, and ambiguous matches fail closed. Serial and WWN are alternate
+representations of the same durable hardware identity across reporters, so a
+value in either field may match a value in either field after case folding and
+removing only reporter framing (`naa.`, `eui.`, `wwn-`, and `0x`). Matching
+must never truncate an identifier or accept a placeholder: a shortened WWN
+shared by sibling RAID volumes is not proof that either full identifier is the
+same device. SMART counter metadata preserves
 presence through pointer-valued JSON fields, so reported zero is distinct from
 missing. The canonical disk payload also carries provider vendor metadata and
 uses explicit SMART health, temperature, and wearout ahead of coarser
@@ -2515,6 +2521,15 @@ the five field statuses for serial, temperature, I/O, controller, and pool.
 `unavailable`, `unsupported`, or `missing` state may retain a prior value for
 continuity, but the state and reason must survive so the consumer cannot claim
 fresh evidence or synthesize controller-level activity for one member.
+
+Cross-source correlation compares normalized serial and WWN values across
+fields without truncation, allowing a PVE bare-hex array-volume serial to join
+the same smartctl `naa.` WWN while keeping sibling volumes with a common short
+WWN distinct. `pkg/diskinventory/identity_test.go` (`TestHardwareIdentityMatch`)
+pins framing, symmetry, placeholder, and no-truncation behavior;
+`internal/unifiedresources/registry_test.go`
+(`TestIssue1720ArrayVolumeMergesBareSerialWithPrefixedWWN`) pins the merged
+Proxmox-plus-agent resource boundary.
 
 ### Canonical identity succession
 

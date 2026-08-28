@@ -328,9 +328,13 @@ permission-denied `disks/list` call must remain an error so the monitor can use
 linked host-agent inventory or retain same-instance, same-node prior evidence;
 it must never become a successful empty inventory that removes valid boot or
 data disks. SMART enrichment matches serial, WWN, device path, and controller
-member topology uniquely and fail-closed, rejects placeholder hardware
-identifiers, preserves explicit failure over a later coarse healthy value, and
-lets explicit SMART endurance replace contradictory Proxmox wearout. Missing
+member topology uniquely and fail-closed. Serial and WWN are interchangeable
+hardware-identity carriers across reporters: comparison may case-fold and
+remove only `naa.`, `eui.`, `wwn-`, and `0x` framing, but must reject
+placeholders and must not truncate values, because sibling RAID volumes can
+share a shortened WWN prefix. Enrichment preserves explicit failure over a
+later coarse healthy value and lets explicit SMART endurance replace
+contradictory Proxmox wearout. Missing
 permission, ambiguous identity, standby, and absent SMART fields remain
 neutral rather than borrowing telemetry from another disk.
 Negative percentage-used counters remain unknown; values above 100 clamp to
@@ -1169,6 +1173,18 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 
 ## Current State
+
+### Proxmox and agent disk observations share full hardware identity
+
+PVE may publish a RAID array volume's full NAA value as a bare serial while
+smartctl publishes the same value as an `naa.`-prefixed WWN. Monitoring's
+cross-source join compares those serial/WWN carriers after framing-only
+normalization, preserving full-length equality so a controller's sibling
+volumes cannot collapse through a common truncated udev WWN. Placeholder
+identifiers remain non-evidence. `pkg/diskinventory/identity_test.go`
+(`TestHardwareIdentityMatch`) and `internal/unifiedresources/registry_test.go`
+(`TestIssue1720ArrayVolumeMergesBareSerialWithPrefixedWWN`) are the focused
+proofs.
 
 ### Proxmox node network inventory is secondary and continuity-safe
 
