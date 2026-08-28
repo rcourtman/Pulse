@@ -737,6 +737,22 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('expected_title="Release convergence ${TAG} source ${GITHUB_RUN_ID}"', activation)
         self.assertIn('[ "${owner_status}" = "completed" ]', activation)
         self.assertIn("immediately before the marker", activation)
+        self.assertIn("validate_existing_activation_commit", activation)
+        self.assertIn(
+            "Recover release activation ${TAG} source ${GITHUB_RUN_ID}", activation
+        )
+        self.assertIn(
+            '.path == ".github/workflows/recover-release-activation.yml"',
+            activation,
+        )
+        self.assertIn(
+            '.path == ".github/workflows/release-convergence.yml"', activation
+        )
+        verdict = workflow_job_block(release_workflow, "release_commit_verdict")
+        self.assertIn("activation_recovery_run_id", verdict)
+        self.assertIn(
+            '.status == "completed" and .conclusion == "success"', verdict
+        )
         self.assertLess(
             activation.index("require_viable_convergence_owner\n          gh api"),
             activation.index("-X PATCH --input \"$publish_payload\""),

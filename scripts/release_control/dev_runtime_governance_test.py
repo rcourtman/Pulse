@@ -25,7 +25,19 @@ class DevRuntimeGovernanceTest(unittest.TestCase):
             {match["subsystem"] for match in file_entry["matches"]},
             {"deployment-installability"},
         )
-        match = file_entry["matches"][0]
+        self.assertEqual(
+            {
+                match["verification_requirement"]["id"]
+                for match in file_entry["matches"]
+            },
+            {"dev-runtime-orchestration", "frontend-build-output"},
+        )
+        match = next(
+            match
+            for match in file_entry["matches"]
+            if match["verification_requirement"]["id"]
+            == "dev-runtime-orchestration"
+        )
         self.assertEqual(
             match["contract"],
             "docs/release-control/v6/internal/subsystems/deployment-installability.md",

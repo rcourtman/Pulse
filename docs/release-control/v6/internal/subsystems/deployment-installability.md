@@ -1387,6 +1387,17 @@ artifact-selection behaviour.
    name and display title are coherently indexed, both normal and recovered
    activation use a bounded metadata-propagation wait before rejecting the
    convergence owner; a terminal owner still fails immediately.
+   Once recovery publishes the exact activation marker, a later failed-job
+   rerun of the source release workflow must treat that committed state as an
+   idempotent success rather than reject it merely because the release is no
+   longer a draft. That adoption must fail closed unless the public marker
+   still binds the source run's exact tag, target commit, release ID, R2 prefix,
+   and numeric convergence owner; the marker names a completed successful
+   `recover-release-activation.yml` dispatch for that same tag and source run;
+   and its convergence owner is an exact mainline
+   `release-convergence.yml` dispatch for the same lineage. An unrelated public
+   marker, an unqualified recovery run, or mismatched convergence metadata must
+   remain a release failure and must never be overwritten by the rerun.
    Every convergence job that calls a reusable workflow must explicitly grant
    all permissions requested by that callee. In particular, Helm Pages
    convergence requires both `actions: read` to retrieve the exact source-run

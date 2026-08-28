@@ -1441,6 +1441,63 @@ jobs:
           activated=false
           committed=false
 
+          validate_existing_activation_commit() {
+            local marker_convergence_run_id recovery_run_id recovery_run expected_title
+            local convergence_run expected_convergence_title
+            curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
+              -o "${verified_marker}" \
+              "https://github.com/${{ github.repository }}/releases/download/${TAG}/release-activation.json"
+            jq -e \
+              --arg tag "${TAG}" \
+              --arg target_commitish "${EXPECTED_COMMIT}" \
+              --arg release_id "${RELEASE_ID}" \
+              --arg source_release_run_id "${GITHUB_RUN_ID}" \
+              --arg r2_prefix "${R2_PREFIX}" \
+              '.schema_version == 1 and .tag == $tag and
+               .target_commitish == $target_commitish and .release_id == $release_id and
+               .source_release_run_id == $source_release_run_id and
+               (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix' \
+              "${verified_marker}" >/dev/null
+
+            marker_convergence_run_id="$(jq -r '.convergence_run_id' "${verified_marker}")"
+            recovery_run_id="$(jq -r '.activation_recovery_run_id // ""' "${verified_marker}")"
+            if [ "${marker_convergence_run_id}" = "${CONVERGENCE_RUN_ID}" ] && \
+               [ -z "${recovery_run_id}" ]; then
+              echo "[OK] ${TAG} already has this release run's exact activation commit."
+              return 0
+            fi
+            if [[ ! "${recovery_run_id}" =~ ^[0-9]+$ ]]; then
+              echo "::error::Existing activation marker for ${TAG} has no valid recovery lineage."
+              return 1
+            fi
+
+            recovery_run="$(mktemp)"
+            gh api "repos/${{ github.repository }}/actions/runs/${recovery_run_id}" > "${recovery_run}"
+            expected_title="Recover release activation ${TAG} source ${GITHUB_RUN_ID}"
+            jq -e \
+              --arg repository "${GITHUB_REPOSITORY}" \
+              --arg title "${expected_title}" \
+              '.event == "workflow_dispatch" and
+               .path == ".github/workflows/recover-release-activation.yml" and
+               .head_branch == "main" and .head_repository.full_name == $repository and
+               .display_title == $title and .status == "completed" and .conclusion == "success"' \
+              "${recovery_run}" >/dev/null
+
+            convergence_run="$(mktemp)"
+            gh api "repos/${{ github.repository }}/actions/runs/${marker_convergence_run_id}" > "${convergence_run}"
+            expected_convergence_title="Release convergence ${TAG} source ${GITHUB_RUN_ID}"
+            jq -e \
+              --arg repository "${GITHUB_REPOSITORY}" \
+              --arg title "${expected_convergence_title}" \
+              '.event == "workflow_dispatch" and
+               .path == ".github/workflows/release-convergence.yml" and
+               .head_branch == "main" and .head_repository.full_name == $repository and
+               .display_title == $title' \
+              "${convergence_run}" >/dev/null
+            rm -f "${recovery_run}" "${convergence_run}"
+            echo "[OK] ${TAG} was already committed by successful recovery run ${recovery_run_id}; convergence run ${marker_convergence_run_id} owns customer rollout."
+          }
+
           require_viable_convergence_owner() {
             local attempt owner_state owner_event owner_status owner_conclusion
             local owner_workflow owner_title owner_url expected_title
@@ -1493,6 +1550,16 @@ jobs:
           published_at=$(jq -r '.published_at // ""' "$release_json")
           actual_prerelease=$(jq -r '.prerelease' "$release_json")
           activation_committed=$(jq -r 'any(.assets[]?; .name == "release-activation.json")' "$release_json")
+          if [ "$actual_tag" = "$TAG" ] && [ "$actual_commit" = "$EXPECTED_COMMIT" ] && \
+             [ "$actual_draft" = "false" ] && [ -n "$published_at" ] && \
+             [ "$activation_committed" = "true" ] && \
+             [ "$actual_prerelease" = "$IS_PRERELEASE" ]; then
+            validate_existing_activation_commit
+            rm -f "$release_json" "$publish_payload" "$quarantine_payload" \
+              "$verified_marker"
+            rm -rf "$activation_marker_dir"
+            exit 0
+          fi
           if [ "$actual_tag" != "$TAG" ] || [ "$actual_commit" != "$EXPECTED_COMMIT" ] || \
              [ "$actual_draft" != "true" ] || \
              [ "$activation_committed" = "true" ] || \
@@ -1655,10 +1722,43 @@ jobs:
               --arg target_commitish "${EXPECTED_COMMIT}" \
               --arg release_id "${RELEASE_ID}" \
               --arg source_release_run_id "${GITHUB_RUN_ID}" \
-              --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
               --arg r2_prefix "${R2_PREFIX}" \
-              '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .release_id == $release_id and .source_release_run_id == $source_release_run_id and .convergence_run_id == $convergence_run_id and .r2_prefix == $r2_prefix' \
+              '.schema_version == 1 and .tag == $tag and
+               .target_commitish == $target_commitish and .release_id == $release_id and
+               .source_release_run_id == $source_release_run_id and
+               (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix' \
               "${marker}" >/dev/null
+            marker_convergence_run_id="$(jq -r '.convergence_run_id' "${marker}")"
+            recovery_run_id="$(jq -r '.activation_recovery_run_id // ""' "${marker}")"
+            if [ "${marker_convergence_run_id}" != "${CONVERGENCE_RUN_ID}" ] || \
+               [ -n "${recovery_run_id}" ]; then
+              if [[ ! "${recovery_run_id}" =~ ^[0-9]+$ ]]; then
+                echo "::error::Activation marker for ${TAG} does not belong to the staged convergence owner or a qualified recovery."
+                exit 1
+              fi
+              recovery_run="$(mktemp)"
+              gh api "repos/${{ github.repository }}/actions/runs/${recovery_run_id}" > "${recovery_run}"
+              jq -e \
+                --arg repository "${GITHUB_REPOSITORY}" \
+                --arg title "Recover release activation ${TAG} source ${GITHUB_RUN_ID}" \
+                '.event == "workflow_dispatch" and
+                 .path == ".github/workflows/recover-release-activation.yml" and
+                 .head_branch == "main" and .head_repository.full_name == $repository and
+                 .display_title == $title and .status == "completed" and .conclusion == "success"' \
+                "${recovery_run}" >/dev/null
+              convergence_run="$(mktemp)"
+              gh api "repos/${{ github.repository }}/actions/runs/${marker_convergence_run_id}" > "${convergence_run}"
+              jq -e \
+                --arg repository "${GITHUB_REPOSITORY}" \
+                --arg title "Release convergence ${TAG} source ${GITHUB_RUN_ID}" \
+                '.event == "workflow_dispatch" and
+                 .path == ".github/workflows/release-convergence.yml" and
+                 .head_branch == "main" and .head_repository.full_name == $repository and
+                 .display_title == $title' \
+                "${convergence_run}" >/dev/null
+              rm -f "${recovery_run}" "${convergence_run}"
+              echo "Release activation was committed by qualified recovery run ${recovery_run_id}; customer convergence continues in run ${marker_convergence_run_id}."
+            fi
             rm -f "${marker}"
           fi
 

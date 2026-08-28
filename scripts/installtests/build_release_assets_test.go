@@ -2684,6 +2684,11 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	for _, needle := range []string{
 		`release-activation.json`,
 		`require_viable_convergence_owner`,
+		`validate_existing_activation_commit`,
+		`Recover release activation ${TAG} source ${GITHUB_RUN_ID}`,
+		`.path == ".github/workflows/recover-release-activation.yml"`,
+		`.path == ".github/workflows/release-convergence.yml"`,
+		`.status == "completed" and .conclusion == "success"`,
 		`continue-on-error: true`,
 		`Resuming quarantined activation for ${TAG}`,
 		`[ "$activation_committed" = "true" ] ||`,
@@ -2695,6 +2700,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 	if strings.Contains(activationJob, `[ -n "$published_at" ] ||`) {
 		t.Fatal("release activation must allow retrying a current draft when GitHub retains historical published_at metadata")
+	}
+	if strings.Contains(activationJob, `--clobber`) &&
+		!strings.Contains(activationJob, `already committed by successful recovery run`) {
+		t.Fatal("release activation reruns must recognize a qualified recovery before considering marker replacement")
 	}
 	if !strings.Contains(createJob, `Resuming quarantined draft for ${TAG}`) ||
 		!strings.Contains(createJob, `Resuming quarantined draft release for ${TAG}`) {
