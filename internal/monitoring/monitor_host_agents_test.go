@@ -586,6 +586,89 @@ func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFal
 	}
 }
 
+// The v6.4.0-rc.12 state reconciliation fix keeps standalone providers with
+// the same native node name separate, but the later agent report must still be
+// able to attach to the right node. In the common case the configured endpoint
+// is an FQDN while Proxmox and the agent both report the short hostname. The
+// provider-observed node interface is the remaining machine-local evidence.
+// Refs #1753.
+func TestFindLinkedProxmoxEntityWithHints_UsesUniqueNodeNetworkToDisambiguateFQDNEndpoints(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{
+			ID:       "staging-pve01",
+			Name:     "pve01",
+			Instance: "staging",
+			Host:     "https://pve01.staging.example:8006",
+			NetworkInterfaces: []models.HostNetworkInterface{
+				{Name: "vmbr0", Addresses: []string{"192.0.2.11/24"}},
+				{Name: "docker0", Addresses: []string{"172.17.0.1/16"}},
+			},
+		},
+		{
+			ID:       "production-pve01",
+			Name:     "pve01",
+			Instance: "production",
+			Host:     "https://pve01.production.example:8006",
+			NetworkInterfaces: []models.HostNetworkInterface{
+				{Name: "vmbr0", Addresses: []string{"198.51.100.21/24"}},
+				{Name: "docker0", Addresses: []string{"172.17.0.1/16"}},
+			},
+		},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntityWithHints(
+		"pve01",
+		"",
+		[]agentshost.NetworkInterface{
+			{Name: "vmbr0", Addresses: []string{"198.51.100.21/24"}},
+			{Name: "docker0", Addresses: []string{"172.17.0.1/16"}},
+		},
+	)
+	if nodeID != "production-pve01" || vmID != "" || ctID != "" {
+		t.Fatalf("expected unique provider network evidence to select production node, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
+func TestFindLinkedProxmoxEntityWithHints_SharedNodeNetworkRemainsAmbiguous(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{
+			ID:       "staging-pve01",
+			Name:     "pve01",
+			Instance: "staging",
+			Host:     "https://pve01.staging.example:8006",
+			NetworkInterfaces: []models.HostNetworkInterface{
+				{Name: "vmbr0", Addresses: []string{"192.168.1.11/24"}},
+			},
+		},
+		{
+			ID:       "production-pve01",
+			Name:     "pve01",
+			Instance: "production",
+			Host:     "https://pve01.production.example:8006",
+			NetworkInterfaces: []models.HostNetworkInterface{
+				{Name: "vmbr0", Addresses: []string{"192.168.1.11/24"}},
+			},
+		},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntityWithHints(
+		"pve01",
+		"",
+		[]agentshost.NetworkInterface{{Name: "vmbr0", Addresses: []string{"192.168.1.11/24"}}},
+	)
+	if nodeID != "" || vmID != "" || ctID != "" {
+		t.Fatalf("shared cross-site address must remain ambiguous, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
 func TestHostSensorsFromReadStateViewPreservesTypedSensorData(t *testing.T) {
 	customValue := 12.5
 	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)

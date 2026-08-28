@@ -946,6 +946,16 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 			"Publication still requires exact-source identity, immutable manifests, signatures, public/private artifact integrity, installer smoke, and final convergence verification.",
 		)
 	}
+	if version == "6.4.0-rc.13" {
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"Unchanged stopped-container details are refreshed every 15 minutes instead of being re-inspected every 30 seconds",
+			"Separate standalone sites that reuse a short node name can link to their own host agents through unique provider-observed addresses",
+		)
+		assertFileContainsAllNormalized(t, changelogPath,
+			"Docker hosts with many stopped containers no longer re-inspect every historical container on each 30-second agent report",
+			"Separate standalone Proxmox sites that reuse a short node name no longer lose correct agent links when their provider-observed addresses uniquely disambiguate them",
+		)
+	}
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",

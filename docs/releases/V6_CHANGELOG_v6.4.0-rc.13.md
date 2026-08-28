@@ -1,0 +1,67 @@
+# Pulse v6.4.0-rc.13
+
+This changelog describes the changes since `v6.4.0-rc.12`. The candidate also retains the complete v6.4 alerting and reliability change set summarized below.
+
+## Added
+
+- Rolling-window metric evaluation supports sustained CPU and memory policies, including workload inheritance from host defaults.
+- Predictive storage-capacity alerts estimate exhaustion risk from retained usage history and recover when the forecast clears.
+- Per-alert snooze, recurring scoped maintenance, destination severity routing, repeatable escalation schedules, and external dead-man monitoring expand operator control over alert delivery.
+- Resolved host SMART policy covers health failure, sector counters, media errors, remaining life, NVMe spare, and CRC growth without creating duplicate Proxmox disk alerts.
+- Canonical `alert_fired` push events use the existing mobile `view_alert` navigation action.
+- Informational alerts now retain an explicit `info` severity through configuration, persistence, API responses, filtering, notification routing, and display.
+
+## Changed
+
+- Unchanged inactive Docker container details are cached for 15 minutes; running, paused, restarting, changed, and incompletely described containers remain on the live inspection path.
+- Standalone Proxmox node-to-agent reconciliation can use a unique provider-observed endpoint address when node names are ambiguous, while reused addresses remain unlinked.
+- GitHub Atom fallback parsing uses the feed structure directly, retains release timestamps, and selects the current Linux architecture's release archive from a validated version tag.
+- Unraid disk-state normalization uses one canonical sentinel boundary across host-agent collection and server monitoring.
+- Standalone Proxmox provider instances require an exact endpoint or matching TLS fingerprint before sharing a linked host agent across node views.
+- API token creation, agent install issuance, and agent-removal revocation share an atomic live-and-durable inventory boundary.
+- Anthropic pricing distinguishes current Opus and Haiku model generations from legacy aliases when estimating retained usage and enforcing budgets.
+- Cross-source disk identity normalizes complete serial and WWN framing without truncating hardware identifiers.
+- Alert investigation on narrow layouts uses a dedicated timeline dialog, while shared history charts synchronize hover timestamps and retain readable axes.
+- The append-only event log is the authority for alert history and active lifecycle reconstruction, including restart recovery, acknowledgement, resolution, suppression, notification, and migration evidence.
+- Alert identities and persisted history migrate to canonical resource keys, while active state uses durable atomic snapshots and ordered recovery.
+- Alert hydration no longer exposes a false all-clear state before persisted incidents are restored.
+- Escalation and delivery decisions are destination-specific, repeated holds are coalesced, and destination updates persist before the active runtime changes.
+- Resource detail drawers use shared information-card and detail-table primitives across infrastructure, Docker, storage, and Proxmox backup surfaces.
+- Docker lifecycle results distinguish command acceptance from independently observed post-action state, and deployment enrollment plus credential updates commit atomically.
+- Email, ntfy, and mobile push presentation preserve informational priority instead of elevating non-warning events to warning treatment.
+- Remembered table View preferences expand in a responsive inline disclosure instead of covering data.
+- Phone Settings use a searchable two-level workspace with a sticky section title and touch-sized controls.
+
+## Fixed
+
+- Docker hosts with many stopped containers no longer re-inspect every historical container on each 30-second agent report; lifecycle changes invalidate cached details immediately and daemon reconnects clear the cache.
+- Separate standalone Proxmox sites that reuse a short node name no longer lose correct agent links when their provider-observed addresses uniquely disambiguate them.
+- GitHub API rate limiting no longer leaves in-app release checks with a new version but no archive URL.
+- Empty Unraid array slots no longer materialize as physical disks or contribute false degraded state.
+- Sequential standalone Proxmox connections that reuse a short node name no longer borrow the first connection's linked agent.
+- Failed token persistence no longer leaves an undisclosed new token active, evicts an older valid token, or allows an apparent agent-token revocation to reverse after restart.
+- Current Anthropic Opus usage is no longer overestimated at legacy rates, and Haiku 4.5 is no longer underestimated at Haiku 3 rates.
+- PVE and agent observations of the same RAID-controller volume no longer render duplicate resources when one source frames the NAA identity as a serial and the other as a WWN.
+- Dismissed TrueNAS SMART alerts retain uniquely resolved critical disk evidence instead of allowing a damaged disk to return to healthy presentation.
+- Mobile alert timelines remain scroll-stable, selected incident history revalidates correctly, chart axis labels remain readable, and grouped hover timestamps stay aligned.
+- Restart recovery, history queries, and mock alert timelines preserve lifecycle order, observation time, and complete incident evidence.
+- Fresh rolling-window metric data remains authoritative, including when older samples or counter resets are present.
+- Offline mock hosts remain on the normal host-alert lifecycle instead of losing active incidents during refresh.
+- API token watcher updates remain ordered across successive persistence mutations.
+- Proxmox backup health, inventory refresh, offline fixtures, and drawer detail presentation retain complete current context.
+- Informational active-alert cards use the blue severity palette, while unknown severity values fail safe to warning presentation.
+- Alert-lifecycle failures synchronously checkpoint a crash-safe recovery envelope before shutdown.
+- A malformed or source-less degraded-state marker no longer lets startup trust a potentially stale SQLite alert projection.
+- Dead-man configuration and dial-time DNS validation reject every address assigned to the Pulse host.
+
+## Release Metadata
+
+- Version: `v6.4.0-rc.13`
+- Previous candidate: `v6.4.0-rc.12`
+- Previous published candidate: `v6.4.0-rc.12`
+- Previous stable: `v6.3.2`
+- Rollback target: `v6.3.2`
+- Rollback command: `./scripts/install.sh --version v6.3.2`
+- Promotion path: exact-SHA single-build release candidate from `main`
+- Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode while SignPath remains unavailable. Windows may show an Unknown Publisher warning.
+- Mobile decision: `existing-mobile-build-compatible`. Published iOS build 12 and Android versionCode 9 already route `action_type=view_alert`; no companion upload is required. The server and Unified Agent changes do not alter mobile routes, pairing, push, or resource payload contracts.

@@ -30,18 +30,21 @@ func TestBuildReportSynologySizedInventoryBoundsStorageComputations(t *testing.T
 	for i := 0; i < containerCount; i++ {
 		id := fmt.Sprintf("container-%02d", i)
 		state := containertypes.ContainerState("exited")
+		status := "Exited (0) 2 hours ago"
 		if i < runningCount {
 			state = "running"
+			status = "Up 2 hours"
 			running[id] = true
 		}
 		containers = append(containers, containertypes.Summary{
-			ID:    id,
-			Names: []string{"/" + id},
-			State: state,
+			ID:     id,
+			Names:  []string{"/" + id},
+			State:  state,
+			Status: status,
 		})
 	}
 
-	var diskUsageCalls, imageListCalls, sharedSizeRequests int
+	var diskUsageCalls, imageListCalls, sharedSizeRequests, inspectCalls int
 	agent := &Agent{
 		cfg: Config{
 			Interval:          30 * time.Second,
@@ -58,6 +61,7 @@ func TestBuildReportSynologySizedInventoryBoundsStorageComputations(t *testing.T
 				return containers, nil
 			},
 			containerInspectWithRawFn: func(_ context.Context, id string, size bool) (containertypes.InspectResponse, []byte, error) {
+				inspectCalls++
 				if size {
 					t.Fatal("normal unified-agent reports must not request per-container size walks")
 				}
@@ -101,6 +105,99 @@ func TestBuildReportSynologySizedInventoryBoundsStorageComputations(t *testing.T
 	}
 	if sharedSizeRequests != 0 {
 		t.Fatalf("live image inventory requested %d shared-size computations, want none", sharedSizeRequests)
+	}
+	if want := containerCount + runningCount; inspectCalls != want {
+		t.Fatalf("container detail calls = %d, want %d (all on first cycle plus running only on second)", inspectCalls, want)
+	}
+}
+
+func TestInactiveContainerInspectCacheInvalidatesOnLifecycleChangeAndExpiry(t *testing.T) {
+	var inspectCalls int
+	agent := &Agent{
+		docker: &fakeDockerClient{
+			containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+				inspectCalls++
+				return containertypes.InspectResponse{
+					State:  &containertypes.State{},
+					Config: &containertypes.Config{},
+				}, nil, nil
+			},
+		},
+	}
+
+	summary := containertypes.Summary{ID: "stopped", State: "exited", Status: "Exited (0) 2 hours ago"}
+	if _, err := agent.inspectContainer(context.Background(), summary, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := agent.inspectContainer(context.Background(), summary, false); err != nil {
+		t.Fatal(err)
+	}
+	if inspectCalls != 1 {
+		t.Fatalf("unchanged inactive container inspect calls = %d, want 1", inspectCalls)
+	}
+
+	summary.Status = "Exited (1) 1 second ago"
+	if _, err := agent.inspectContainer(context.Background(), summary, false); err != nil {
+		t.Fatal(err)
+	}
+	if inspectCalls != 2 {
+		t.Fatalf("lifecycle-changed inactive container inspect calls = %d, want 2", inspectCalls)
+	}
+
+	agent.inactiveInspectMu.Lock()
+	entry := agent.inactiveInspects[summary.ID]
+	entry.expiresAt = time.Now().Add(-time.Second)
+	agent.inactiveInspects[summary.ID] = entry
+	agent.inactiveInspectMu.Unlock()
+	if _, err := agent.inspectContainer(context.Background(), summary, false); err != nil {
+		t.Fatal(err)
+	}
+	if inspectCalls != 3 {
+		t.Fatalf("expired inactive container inspect calls = %d, want 3", inspectCalls)
+	}
+	if _, err := agent.inspectContainer(context.Background(), summary, true); err != nil {
+		t.Fatal(err)
+	}
+	if inspectCalls != 4 {
+		t.Fatalf("disk-metric mode change inspect calls = %d, want 4", inspectCalls)
+	}
+
+	summary.Status = ""
+	if _, err := agent.inspectContainer(context.Background(), summary, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := agent.inspectContainer(context.Background(), summary, false); err != nil {
+		t.Fatal(err)
+	}
+	if inspectCalls != 6 {
+		t.Fatalf("inactive container without lifecycle evidence inspect calls = %d, want 6", inspectCalls)
+	}
+}
+
+func TestRuntimeAdoptionClearsDaemonScopedCollectionCaches(t *testing.T) {
+	oldClient := &fakeDockerClient{}
+	newClient := &fakeDockerClient{daemonHost: "unix:///run/new-docker.sock"}
+	agent := &Agent{
+		docker:  oldClient,
+		runtime: RuntimeDocker,
+		storageUsageCache: dockerStorageUsageCache{
+			valid:       true,
+			nextRefresh: time.Now().Add(time.Hour),
+		},
+		inactiveInspects: map[string]inactiveContainerInspectCacheEntry{
+			"old-container": {expiresAt: time.Now().Add(time.Hour)},
+		},
+	}
+
+	previous := agent.adoptRuntimeConnection(newClient, systemtypes.Info{ServerVersion: "28.0.0"}, RuntimeDocker)
+	if previous != oldClient {
+		t.Fatalf("previous client = %T, want old client", previous)
+	}
+	if agent.storageUsageCache.valid || !agent.storageUsageCache.nextRefresh.IsZero() {
+		t.Fatalf("storage cache survived runtime adoption: %+v", agent.storageUsageCache)
+	}
+	if len(agent.inactiveInspects) != 0 {
+		t.Fatalf("inactive inspect cache survived runtime adoption: %+v", agent.inactiveInspects)
 	}
 }
 
