@@ -2404,13 +2404,15 @@ func TestApplyHostReportFiltersLegacyUnraidEmptySlots(t *testing.T) {
 		Unraid: &agentshost.UnraidStorage{
 			ArrayStarted: true,
 			ArrayState:   "STARTED",
-			NumDisabled:  2,
-			NumInvalid:   2,
+			NumProtected: 0,
+			NumDisabled:  1,
+			NumInvalid:   1,
+			NumMissing:   2,
 			Disks: []agentshost.UnraidDisk{
-				{Name: "parity", Role: "parity", RawStatus: "DISK_NP_DSBL"},
-				{Name: "md1p1", Device: "/dev/sde", RawStatus: "DISK_OK", SizeBytes: 5860522532},
-				{RawStatus: "DISK_NP", Slot: 5},
-				{RawStatus: "DISK_NP_DSBL", Slot: 29},
+				{Name: "parity", Device: "/dev/sdb", Role: "parity", RawStatus: "DISK_OK", SizeBytes: 5860522532},
+				{Name: "disk1", Device: "/dev/sde", Role: "data", RawStatus: "DISK_OK", SizeBytes: 5860522532},
+				{Name: "disk6", Role: "data", RawStatus: "DISK_NP", Slot: 6},
+				{Name: "parity2", Role: "parity", RawStatus: "DISK_NP_DSBL", Slot: 29},
 			},
 		},
 		Timestamp: time.Now().UTC(),
@@ -2423,11 +2425,19 @@ func TestApplyHostReportFiltersLegacyUnraidEmptySlots(t *testing.T) {
 	if host.Unraid == nil {
 		t.Fatal("expected unraid topology on host")
 	}
-	if len(host.Unraid.Disks) != 1 {
+	if len(host.Unraid.Disks) != 2 {
 		t.Fatalf("unraid disk count = %d, want only assigned disks: %+v", len(host.Unraid.Disks), host.Unraid.Disks)
 	}
-	if got := host.Unraid.Disks[0]; got.Device != "/dev/sde" || got.Status != "online" {
-		t.Fatalf("unexpected assigned disk: %+v", got)
+	if host.Unraid.NumMissing != 0 || host.Unraid.NumDisabled != 0 || host.Unraid.NumInvalid != 0 {
+		t.Fatalf("legacy empty slots affected normalized failure counts: %+v", host.Unraid)
+	}
+	if host.Unraid.NumProtected != 1 {
+		t.Fatalf("NumProtected = %d, want one online parity disk", host.Unraid.NumProtected)
+	}
+	for _, disk := range host.Unraid.Disks {
+		if disk.Status != "online" {
+			t.Fatalf("unexpected assigned disk: %+v", disk)
+		}
 	}
 }
 

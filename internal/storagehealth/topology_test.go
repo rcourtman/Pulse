@@ -236,8 +236,8 @@ func TestAssessUnraidStorageTreatsEmptyNoPresentSlotsAsUnprotected(t *testing.T)
 		Disks: []models.HostUnraidDisk{
 			{Name: "parity", Role: "parity", Status: "missing", RawStatus: "DISK_NP_DSBL"},
 			{Name: "md1p1", Device: "/dev/sde", Status: "online", RawStatus: "DISK_OK", SizeBytes: 5860522532},
-			{Status: "missing", RawStatus: "DISK_NP", Slot: 5},
-			{Status: "missing", RawStatus: "DISK_NP_DSBL", Slot: 29},
+			{Name: "disk5", Role: "data", Status: "missing", RawStatus: "DISK_NP", Slot: 5},
+			{Name: "parity2", Role: "parity", Status: "missing", RawStatus: "DISK_NP_DSBL", Slot: 29},
 		},
 	})
 

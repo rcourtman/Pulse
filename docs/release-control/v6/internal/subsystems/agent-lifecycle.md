@@ -1219,10 +1219,11 @@ platform when `mdcmd` or array-topology collection is unavailable.
 Unraid array collection belongs to that same runtime-normalized agent path:
 `internal/hostagent/unraid.go` must treat empty `DISK_NP`/`DISK_NP_DSBL`
 slots with no device, id, filesystem, or size as unassigned topology
-placeholders rather than failed disks. Assigned disks may use `diskId`/`rdevId`
-as the serial fallback when Unraid does not expose a separate serial field, so
-monitoring receives stable disk identity without inventing host-profile or
-platform state from optional storage probe success.
+placeholders rather than failed disks, even when Unraid gives those slots
+topology labels such as `disk6` or `parity2`. Assigned disks may use
+`diskId`/`rdevId` as the serial fallback when Unraid does not expose a separate
+serial field, so monitoring receives stable disk identity without inventing
+host-profile or platform state from optional storage probe success.
 That Unraid runtime path must also prefer native appliance topology over
 generic block-device inference. The Unified Agent should best-effort merge
 `/var/local/emhttp/disks.ini` into the `mdcmd status` view and carry disk

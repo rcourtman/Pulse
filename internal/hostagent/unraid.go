@@ -105,12 +105,20 @@ func reconcileUnraidDiskCounts(storage *agentshost.UnraidStorage) *agentshost.Un
 	}
 
 	hasStructuredStatus := false
-	disabled, invalid, missing := 0, 0, 0
+	hasStructuredParity := false
+	disabled, invalid, missing, protected := 0, 0, 0, 0
 	for _, disk := range storage.Disks {
 		if isUnraidEmptySlot(disk) {
 			continue
 		}
-		switch strings.ToLower(strings.TrimSpace(disk.Status)) {
+		status := strings.ToLower(strings.TrimSpace(disk.Status))
+		if strings.EqualFold(strings.TrimSpace(disk.Role), "parity") && status != "" {
+			hasStructuredParity = true
+			if status == "online" {
+				protected++
+			}
+		}
+		switch status {
 		case "":
 			continue
 		case "disabled":
@@ -130,6 +138,9 @@ func reconcileUnraidDiskCounts(storage *agentshost.UnraidStorage) *agentshost.Un
 		storage.NumDisabled = disabled
 		storage.NumInvalid = invalid
 		storage.NumMissing = missing
+	}
+	if hasStructuredParity {
+		storage.NumProtected = protected
 	}
 	return storage
 }
@@ -502,8 +513,12 @@ func isUnraidEmptySlot(disk agentshost.UnraidDisk) bool {
 	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
 		return false
 	}
-	return strings.TrimSpace(disk.Name) == "" &&
-		strings.TrimSpace(disk.Device) == "" &&
+	// Unraid names every configured slot (for example disk6 or parity2), even
+	// when it has never been assigned. A slot label is therefore topology, not
+	// membership evidence. Preserve DISK_NP members only when native identity,
+	// device, filesystem, or size evidence shows that a disk was assigned.
+	return strings.TrimSpace(disk.Device) == "" &&
+		strings.TrimSpace(disk.Model) == "" &&
 		strings.TrimSpace(disk.Serial) == "" &&
 		strings.TrimSpace(disk.Filesystem) == "" &&
 		disk.SizeBytes == 0

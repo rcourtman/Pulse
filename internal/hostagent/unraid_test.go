@@ -151,14 +151,14 @@ rdevStatus.1=DISK_OK
 rdevName.1=sde
 rdevId.1=WDC_DATA
 diskNumber.5=5
-diskName.5=
+diskName.5=disk5
 diskSize.5=0
 diskId.5=
 rdevStatus.5=DISK_NP
 rdevName.5=
 rdevId.5=
 diskNumber.29=29
-diskName.29=
+diskName.29=parity2
 diskSize.29=0
 diskId.29=
 rdevStatus.29=DISK_NP_DSBL
@@ -175,6 +175,43 @@ rdevId.29=
 	}
 	if got := storage.Disks[0]; got.Name != "md1p1" || got.Role != "data" || got.Status != "online" || got.Serial != "WDC_DATA" {
 		t.Fatalf("unexpected assigned disk: %+v", got)
+	}
+}
+
+func TestReconcileUnraidDiskCountsIgnoresNamedEmptySlots(t *testing.T) {
+	storage, err := parseUnraidStatusOutput(`
+mdState=STARTED
+mdNumProtected=0
+mdNumDisabled=1
+mdNumInvalid=1
+mdNumMissing=2
+diskName.0=parity
+diskSize.0=12000
+rdevName.0=sdb
+rdevStatus.0=DISK_OK
+diskName.1=disk1
+diskSize.1=12000
+rdevName.1=sdc
+rdevStatus.1=DISK_OK
+diskName.6=disk6
+diskSize.6=0
+rdevStatus.6=DISK_NP
+diskName.29=parity2
+diskSize.29=0
+rdevStatus.29=DISK_NP_DSBL
+`)
+	if err != nil {
+		t.Fatalf("parseUnraidStatusOutput() error = %v", err)
+	}
+	storage = reconcileUnraidDiskCounts(storage)
+	if len(storage.Disks) != 2 {
+		t.Fatalf("disk count = %d, want only assigned parity and data disks: %+v", len(storage.Disks), storage.Disks)
+	}
+	if storage.NumMissing != 0 || storage.NumDisabled != 0 || storage.NumInvalid != 0 {
+		t.Fatalf("empty slots affected failure counts: %+v", storage)
+	}
+	if storage.NumProtected != 1 {
+		t.Fatalf("NumProtected = %d, want one online parity disk", storage.NumProtected)
 	}
 }
 
@@ -219,6 +256,22 @@ type="Cache"
 fsType="btrfs"
 fsFree="1783019588"
 fsUsed="166957852"
+["disk6"]
+idx="6"
+name="disk6"
+device=""
+id=""
+size="0"
+status="DISK_NP"
+type="Data"
+["parity2"]
+idx="29"
+name="parity2"
+device=""
+id=""
+size="0"
+status="DISK_NP_DSBL"
+type="Parity"
 `
 
 	disks := parseUnraidDisksINI(input)

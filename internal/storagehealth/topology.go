@@ -349,12 +349,8 @@ func isUnraidEmptySlot(disk models.HostUnraidDisk) bool {
 	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
 		return false
 	}
-	name := strings.ToLower(strings.TrimSpace(disk.Name))
-	role := strings.ToLower(strings.TrimSpace(disk.Role))
-	if name != "" && role != "parity" && !strings.HasPrefix(name, "parity") {
-		return false
-	}
 	return strings.TrimSpace(disk.Device) == "" &&
+		strings.TrimSpace(disk.Model) == "" &&
 		strings.TrimSpace(disk.Serial) == "" &&
 		strings.TrimSpace(disk.Filesystem) == "" &&
 		disk.SizeBytes == 0

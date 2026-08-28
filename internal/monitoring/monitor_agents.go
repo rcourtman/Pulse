@@ -2936,16 +2936,17 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		if syncAction == "" {
 			syncProgress = 0
 		}
+		numProtected, numDisabled, numInvalid, numMissing := reconcileLegacyUnraidCounts(report.Unraid, disks)
 		unraidData = &models.HostUnraidStorage{
 			ArrayStarted: report.Unraid.ArrayStarted,
 			ArrayState:   strings.TrimSpace(report.Unraid.ArrayState),
 			SyncAction:   syncAction,
 			SyncProgress: syncProgress,
 			SyncErrors:   report.Unraid.SyncErrors,
-			NumProtected: report.Unraid.NumProtected,
-			NumDisabled:  report.Unraid.NumDisabled,
-			NumInvalid:   report.Unraid.NumInvalid,
-			NumMissing:   report.Unraid.NumMissing,
+			NumProtected: numProtected,
+			NumDisabled:  numDisabled,
+			NumInvalid:   numInvalid,
+			NumMissing:   numMissing,
 			Disks:        disks,
 		}
 	}
@@ -3667,15 +3668,52 @@ func isLegacyUnraidEmptySlot(disk agentshost.UnraidDisk, normalizedStatus string
 	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
 		return false
 	}
-	name := strings.ToLower(strings.TrimSpace(disk.Name))
-	role := strings.ToLower(strings.TrimSpace(disk.Role))
-	if name != "" && role != "parity" && !strings.HasPrefix(name, "parity") {
-		return false
-	}
 	return strings.TrimSpace(disk.Device) == "" &&
+		strings.TrimSpace(disk.Model) == "" &&
 		strings.TrimSpace(disk.Serial) == "" &&
 		strings.TrimSpace(disk.Filesystem) == "" &&
 		disk.SizeBytes == 0
+}
+
+func reconcileLegacyUnraidCounts(storage *agentshost.UnraidStorage, disks []models.HostUnraidDisk) (protected, disabled, invalid, missing int) {
+	protected = storage.NumProtected
+	disabled = storage.NumDisabled
+	invalid = storage.NumInvalid
+	missing = storage.NumMissing
+
+	hasStructuredStatus := false
+	hasStructuredParity := false
+	structuredProtected, structuredDisabled, structuredInvalid, structuredMissing := 0, 0, 0, 0
+	for _, disk := range disks {
+		status := strings.ToLower(strings.TrimSpace(disk.Status))
+		if status == "" {
+			continue
+		}
+		hasStructuredStatus = true
+		if strings.EqualFold(strings.TrimSpace(disk.Role), "parity") {
+			hasStructuredParity = true
+			if status == "online" {
+				structuredProtected++
+			}
+		}
+		switch status {
+		case "disabled":
+			structuredDisabled++
+		case "invalid":
+			structuredInvalid++
+		case "missing":
+			structuredMissing++
+		}
+	}
+	if hasStructuredStatus {
+		disabled = structuredDisabled
+		invalid = structuredInvalid
+		missing = structuredMissing
+	}
+	if hasStructuredParity {
+		protected = structuredProtected
+	}
+	return protected, disabled, invalid, missing
 }
 
 type proxmoxDiskMatch struct {
