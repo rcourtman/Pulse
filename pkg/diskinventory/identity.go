@@ -66,6 +66,54 @@ func IsUsableHardwareID(value string) bool {
 	return !allZero && !allF
 }
 
+// normalizeHardwareID canonicalizes a serial or WWN for cross-source
+// comparison. Reporters disagree on framing, not identity: smartctl emits
+// naa./eui.-prefixed WWNs, udev emits wwn-0x tokens, and PVE surfaces bare
+// hex. Values are only ever prefix-stripped and case-folded, never truncated:
+// sibling volumes on one RAID controller share their leading WWN bytes, so a
+// truncated form must stay unequal to the full identifier.
+func normalizeHardwareID(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if !IsUsableHardwareID(value) {
+		return ""
+	}
+	for {
+		trimmed := value
+		for _, prefix := range []string{"naa.", "eui.", "wwn-", "0x"} {
+			trimmed = strings.TrimPrefix(trimmed, prefix)
+		}
+		if trimmed == value {
+			break
+		}
+		value = trimmed
+	}
+	if !IsUsableHardwareID(value) {
+		return ""
+	}
+	return value
+}
+
+// HardwareIdentityMatch reports whether two disk observations carry the same
+// stable hardware identity. Serial and WWN are folded together because
+// sources disagree on which field holds the durable identifier: PVE reports a
+// RAID array volume's NAA identifier as its serial while smartctl reports the
+// same value as a naa.-prefixed WWN with no serial at all.
+func HardwareIdentityMatch(leftSerial, leftWWN, rightSerial, rightWWN string) bool {
+	left := [2]string{normalizeHardwareID(leftSerial), normalizeHardwareID(leftWWN)}
+	right := [2]string{normalizeHardwareID(rightSerial), normalizeHardwareID(rightWWN)}
+	for _, l := range left {
+		if l == "" {
+			continue
+		}
+		for _, r := range right {
+			if r != "" && l == r {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // IsControllerMemberTarget reports whether target addresses one member behind
 // a shared controller block path. Controller grammars vary after the numeric
 // member prefix (for example megaraid,7, areca,1/1, and sssraid,0,1).

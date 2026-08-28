@@ -54,3 +54,74 @@ func TestPreferredIDRejectsPlaceholderHardwareIdentity(t *testing.T) {
 		t.Fatal("real disk serial/WWN was rejected")
 	}
 }
+
+func TestHardwareIdentityMatch(t *testing.T) {
+	cases := []struct {
+		name          string
+		aSerial, aWWN string
+		bSerial, bWWN string
+		want          bool
+	}{
+		{
+			name:    "pve bare-hex serial matches smartctl naa wwn",
+			aSerial: "61866da053481f002f58a43b22f964a7",
+			aWWN:    "0x61866da053481f00",
+			bWWN:    "naa.61866da053481f002f58a43b22f964a7",
+			want:    true,
+		},
+		{
+			name:    "same serial different case",
+			aSerial: "zr5dlayj",
+			bSerial: "ZR5DLAYJ",
+			want:    true,
+		},
+		{
+			name: "udev wwn-0x token matches naa wwn",
+			aWWN: "wwn-0x5000c500abcdef01",
+			bWWN: "naa.5000c500abcdef01",
+			want: true,
+		},
+		{
+			name: "eui prefix matches bare nvme id",
+			aWWN: "eui.0025385b91501234",
+			bWWN: "0025385b91501234",
+			want: true,
+		},
+		{
+			name:    "truncated udev wwn never matches full sibling identifier",
+			aWWN:    "0x61866da053481f00",
+			bSerial: "61866da053481f0030543ecb1d3b4cca",
+			bWWN:    "naa.61866da053481f0030543ecb1d3b4cca",
+			want:    false,
+		},
+		{
+			name:    "placeholder serials do not match each other",
+			aSerial: "UNKNOWN",
+			bSerial: "UNKNOWN",
+			want:    false,
+		},
+		{
+			name:    "distinct disks stay distinct",
+			aSerial: "9410A0FWFVL9",
+			bSerial: "35C0A39YFVL9",
+			want:    false,
+		},
+		{
+			name: "empty observations never match",
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := HardwareIdentityMatch(tc.aSerial, tc.aWWN, tc.bSerial, tc.bWWN)
+			if got != tc.want {
+				t.Fatalf("HardwareIdentityMatch(%q,%q,%q,%q) = %v, want %v",
+					tc.aSerial, tc.aWWN, tc.bSerial, tc.bWWN, got, tc.want)
+			}
+			mirrored := HardwareIdentityMatch(tc.bSerial, tc.bWWN, tc.aSerial, tc.aWWN)
+			if mirrored != tc.want {
+				t.Fatalf("match is not symmetric: mirrored = %v, want %v", mirrored, tc.want)
+			}
+		})
+	}
+}

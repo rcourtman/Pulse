@@ -6296,3 +6296,116 @@ func TestIssue1720AgentControllerMembersInheritOwningProxmoxScope(t *testing.T) 
 		t.Fatalf("controller members collapsed or disappeared: %v", targets)
 	}
 }
+
+// Follow-up regression on issue #1720: the PVE disks/list poll and the agent
+// SMART report both observe the same RAID array volume, but PVE surfaces the
+// NAA identifier as a bare-hex serial while smartctl reports it as a
+// naa.-prefixed WWN with no serial at all. The two observations must join into
+// one resource instead of rendering the volume twice with split histories.
+// Sibling volumes on one controller share their truncated udev ID_WWN
+// (0x + leading 16 hex), so the join must never match on truncated forms.
+func TestIssue1720ArrayVolumeMergesBareSerialWithPrefixedWWN(t *testing.T) {
+	now := time.Date(2026, 8, 27, 10, 0, 0, 0, time.UTC)
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "cluster-a-indus",
+			Name:          "indus",
+			Instance:      "cluster-a",
+			ClusterName:   "cluster-a",
+			LinkedAgentID: "host-1",
+			Status:        "online",
+			LastSeen:      now,
+		}},
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "cluster-a-indus--dev-sda",
+				Node:        "indus",
+				Instance:    "cluster-a",
+				DevPath:     "/dev/sda",
+				Model:       "PERC_H730_Mini",
+				Serial:      "61866da053481f002f58a43b22f964a7",
+				WWN:         "0x61866da053481f00",
+				Type:        "sata",
+				Health:      "UNKNOWN",
+				Size:        479_559_942_144,
+				LastChecked: now,
+			},
+			{
+				ID:          "cluster-a-indus--dev-sdb",
+				Node:        "indus",
+				Instance:    "cluster-a",
+				DevPath:     "/dev/sdb",
+				Model:       "PERC_H730_Mini",
+				Serial:      "61866da053481f0030543ecb1d3b4cca",
+				WWN:         "0x61866da053481f00",
+				Type:        "sata",
+				Health:      "UNKNOWN",
+				Size:        3_000_034_656_256,
+				LastChecked: now,
+			},
+		},
+		Hosts: []models.Host{{
+			ID:           "host-1",
+			Hostname:     "indus",
+			LinkedNodeID: "cluster-a-indus",
+			Status:       "online",
+			LastSeen:     now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+				{
+					Device:     "sda",
+					Model:      "PERC H730 Mini",
+					WWN:        "naa.61866da053481f002f58a43b22f964a7",
+					Type:       "sata",
+					Controller: "0000:02:00.0",
+					Target:     "0:2:0:0",
+					SizeBytes:  479_559_942_144,
+					Health:     "UNKNOWN",
+					Standby:    true,
+				},
+				{
+					Device:     "sdb",
+					Model:      "PERC H730 Mini",
+					WWN:        "naa.61866da053481f0030543ecb1d3b4cca",
+					Type:       "sata",
+					Controller: "0000:02:00.0",
+					Target:     "0:2:1:0",
+					SizeBytes:  3_000_034_656_256,
+					Health:     "UNKNOWN",
+					Standby:    true,
+				},
+			}},
+		}},
+	})
+
+	disks := registry.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 2 {
+		devs := make([]string, 0, len(disks))
+		for _, disk := range disks {
+			if disk.PhysicalDisk != nil {
+				devs = append(devs, disk.PhysicalDisk.DevPath)
+			}
+		}
+		t.Fatalf("physical disk resources = %d (%v), want 2 merged volumes", len(disks), devs)
+	}
+
+	byPath := make(map[string]Resource, len(disks))
+	for _, disk := range disks {
+		if disk.PhysicalDisk == nil {
+			t.Fatalf("disk %q has no physical-disk facet", disk.ID)
+		}
+		byPath[disk.PhysicalDisk.DevPath] = disk
+	}
+	for _, devPath := range []string{"/dev/sda", "/dev/sdb"} {
+		disk, ok := byPath[devPath]
+		if !ok {
+			t.Fatalf("no merged resource kept canonical devPath %q: %v", devPath, byPath)
+		}
+		if !containsDataSource(disk.Sources, SourceAgent) || !containsDataSource(disk.Sources, SourceProxmox) {
+			t.Fatalf("disk %q sources = %v, want merged proxmox+agent", devPath, disk.Sources)
+		}
+	}
+	if byPath["/dev/sda"].PhysicalDisk.SizeBytes == byPath["/dev/sdb"].PhysicalDisk.SizeBytes {
+		t.Fatalf("sibling volumes collapsed into one identity: %+v", byPath)
+	}
+}

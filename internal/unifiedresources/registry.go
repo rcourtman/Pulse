@@ -3050,9 +3050,10 @@ func (rr *ResourceRegistry) resolveLinkedPhysicalDisk(source DataSource, incomin
 			continue
 		}
 
-		identityMatch :=
-			(incomingSerial != "" && strings.EqualFold(incomingSerial, existing.PhysicalDisk.Serial)) ||
-				(incomingWWN != "" && strings.EqualFold(incomingWWN, existing.PhysicalDisk.WWN))
+		identityMatch := diskinventory.HardwareIdentityMatch(
+			incomingSerial, incomingWWN,
+			existing.PhysicalDisk.Serial, existing.PhysicalDisk.WWN,
+		)
 		existingDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(existing.PhysicalDisk.DevPath))
 		agentReportsSAS := (source == SourceProxmox && strings.EqualFold(existing.PhysicalDisk.DiskType, "sas")) ||
 			(source == SourceAgent && strings.EqualFold(incoming.PhysicalDisk.DiskType, "sas"))
