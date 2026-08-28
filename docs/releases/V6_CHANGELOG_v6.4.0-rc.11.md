@@ -20,6 +20,7 @@ This changelog describes the changes since `v6.4.0-rc.10`. The candidate also re
 - Dead-man configuration and dial-time DNS validation reject every address assigned to the Pulse host and fail closed when local-interface enumeration is unavailable.
 - Alert investigation on narrow layouts uses a dedicated timeline dialog, while shared history charts synchronize hover timestamps and retain readable axes.
 - Remembered table View preferences expand in a responsive inline disclosure with consistent controls instead of a floating panel over the monitored resources.
+- Phone Settings use a searchable two-level workspace with a sticky section title, compact preference rows, edge-to-edge content, and 44-pixel interactive targets.
 - The append-only event log is the authority for alert history and active lifecycle reconstruction, including restart recovery, acknowledgement, resolution, suppression, notification, and migration evidence.
 - Alert identities and persisted history migrate to canonical resource keys, while active state uses durable atomic snapshots and ordered recovery.
 - Escalation and delivery decisions are destination-specific, repeated holds are coalesced, and destination updates persist before the active runtime changes.

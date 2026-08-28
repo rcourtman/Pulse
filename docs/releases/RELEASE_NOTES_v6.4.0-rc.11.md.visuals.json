@@ -51,6 +51,37 @@
           "nth": 0
         }
       }
+    },
+    {
+      "id": "mobile-settings-workspace",
+      "title": "Settings built for a phone",
+      "description": "Phone settings now keep the current section clear and put dense preferences into compact touch-friendly rows.",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "before": {
+        "route": "/settings/system-general",
+        "steps": [],
+        "ready": {
+          "kind": "role",
+          "role": "heading",
+          "name": "General",
+          "exact": true,
+          "nth": 0
+        }
+      },
+      "after": {
+        "route": "/settings/system-general",
+        "steps": [],
+        "ready": {
+          "kind": "role",
+          "role": "heading",
+          "name": "General",
+          "exact": true,
+          "nth": 0
+        }
+      }
     }
   ]
 }

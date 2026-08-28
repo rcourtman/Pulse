@@ -40,7 +40,7 @@ const jsonResponse = (body: unknown) => ({
 });
 
 test.describe('Organization sharing approval UI', () => {
-  test('renders pending shares and promotes accepted incoming shares in-browser', async ({ page }) => {
+  test('renders pending shares and promotes accepted incoming shares in-browser', async ({ page, isMobile }) => {
     const currentUser = 'admin';
     const currentOrg = {
       id: 'default',
@@ -147,7 +147,12 @@ test.describe('Organization sharing approval UI', () => {
       return root !== null && root.childElementCount > 0;
     });
 
-    await expect(page.getByRole('heading', { level: 1, name: 'Organization Sharing' })).toBeVisible();
+    if (isMobile) {
+      await expect(page.getByRole('heading', { level: 1, name: 'Sharing', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: 'Organization Sharing' })).toBeVisible();
+    } else {
+      await expect(page.getByRole('heading', { level: 1, name: 'Organization Sharing' })).toBeVisible();
+    }
     await expect(page.getByText('Outbound Shared View', { exact: true })).toBeVisible();
     await expect(page.getByText('Inbound Shared View', { exact: true })).toBeVisible();
     await expect(page.getByText('Pending approval')).toHaveCount(2);
