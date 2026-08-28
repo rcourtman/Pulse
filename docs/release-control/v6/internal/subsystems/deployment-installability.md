@@ -1811,12 +1811,13 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.8` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.9` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.8` release version. It follows
-`v6.4.0-rc.7` on the published `v6.4.0` candidate line. That candidate was
-quarantined before activation, so `v6.4.0-rc.8` follows `v6.4.0-rc.6` as the
-next publicly activated candidate. This prerelease keeps
+Helm chart release metadata to the same `6.4.0-rc.9` release version. The
+`v6.4.0-rc.8` qualification attempt stopped before a public tag or GitHub
+release was created, while `v6.4.0-rc.7` remains an immutable failed candidate.
+Consequently `v6.4.0-rc.9` follows `v6.4.0-rc.6` as the next publicly activated
+candidate. This prerelease keeps
 `rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
 install pointers or stable semver aliases. The candidate makes the append-only
@@ -1827,6 +1828,7 @@ keeps informational alert severity distinct across configuration, persistence,
 API responses, filters, email, ntfy, and mobile push presentation;
 adds rolling-window metric policy and predictive storage-capacity alerts;
 makes host SMART policy configurable without duplicating Proxmox disk risk;
+keeps empty Unraid storage slots neutral instead of degrading array health;
 converges infrastructure detail presentation; and strengthens independently
 verified Docker actions plus atomic deployment enrollment and credential
 persistence. The changes since `v6.4.0-rc.6` add the canonical `alert_fired`
@@ -1849,10 +1851,25 @@ only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
 restores it.
 
+The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
+`bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
+passed preparation, frontend bundle, Windows installer smoke, release smoke,
+private staging, immutable candidate assembly, and macOS signing and
+notarization, then failed the frontend gate because stale severity coverage
+treated the newly first-class `info` value as an unknown warning. Review also
+found that the overview presentation sent truly unknown severity strings to
+the informational palette instead of the contract's warning fallback. The run
+was cancelled before a public tag or GitHub release was created. Exact fix
+commit `fcf872fb5` gives `info` an explicit blue branch, fails unknown values
+safe to warning, adds canonical and coverage proof, and carries the corrected
+browser receipt. `v6.4.0-rc.9` fixes forward from that failed immutable
+qualification without moving stable install pointers or stable semver aliases
+from `v6.3.2`.
+
 The preceding `v6.4.0-rc.7` publication attempt built and staged exact candidate
 artifacts from source SHA `595c369d85796f86855b4cf8335b9bb371d28462`,
 but the backend release gate failed before public activation. Its tag and
-versioned artifacts remain immutable, and `v6.4.0-rc.8` supersedes the failed
+versioned artifacts remain immutable, and `v6.4.0-rc.9` supersedes the failed
 candidate without moving stable install pointers or stable semver aliases from
 `v6.3.2`.
 
@@ -2313,8 +2330,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.8` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.8` until the next
+For the active prerelease `v6.4.0-rc.9` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.9` until the next
 governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a

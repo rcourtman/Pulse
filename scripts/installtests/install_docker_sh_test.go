@@ -149,6 +149,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.4.0-rc.6", want: "6.3.2"},
 		{version: "6.4.0-rc.7", want: "6.3.2"},
 		{version: "6.4.0-rc.8", want: "6.3.2"},
+		{version: "6.4.0-rc.9", want: "6.3.2"},
 	}
 
 	for _, test := range tests {
@@ -374,6 +375,9 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 		comparisonVersion = previous
 	} else {
 		comparisonLine = "It follows `v" + comparisonVersion + "` on the published `v" + stableTarget + "` candidate line."
+	}
+	if version == "6.4.0-rc.9" {
+		comparisonLine = "The `v6.4.0-rc.8` qualification attempt stopped before a public tag or GitHub release was created"
 	}
 
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),

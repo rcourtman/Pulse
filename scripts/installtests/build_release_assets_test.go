@@ -891,7 +891,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Better notification control",
 		"informational events remain distinct from warnings",
 		"Earlier capacity warnings",
-		"Host disk policies",
+		"More accurate host disk health",
 		"External availability monitoring",
 		"Clearer infrastructure details",
 		"Safer governed actions",
@@ -901,12 +901,16 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Unknown Publisher warning",
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
+	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
+	if version == "6.4.0-rc.9" {
+		comparisonSummary = "The `v6.4.0-rc.8` qualification attempt stopped before a public tag or GitHub release was created."
+	}
 	assertFileContainsAllNormalized(t, changelogPath,
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: exact-SHA single-build release candidate from `main`",
-		"This changelog describes the changes since `v"+comparisonVersion+"`",
+		comparisonSummary,
 		"Rolling-window metric evaluation supports sustained CPU and memory policies",
 		"Predictive storage-capacity alerts estimate exhaustion risk",
 		"Per-alert snooze, recurring scoped maintenance, destination severity routing",
@@ -3099,11 +3103,11 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	commit("stable 6.3.2 hotfix")
 	runGit("tag", "v6.3.2")
 	runGit("checkout", "main")
-	for rc := 1; rc <= 7; rc++ {
+	for rc := 1; rc <= 8; rc++ {
 		commit("release candidate " + strconv.Itoa(rc))
 		runGit("tag", "v6.4.0-rc."+strconv.Itoa(rc))
 	}
-	commit("release candidate 8 changes")
+	commit("release candidate 9 changes")
 
 	generator, err := filepath.Abs(repoFile("scripts", "generate-release-notes.sh"))
 	if err != nil {
@@ -3141,8 +3145,8 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		return strings.TrimSpace(string(output))
 	}
 
-	if got := resolve("6.4.0-rc.8"); got != "v6.4.0-rc.7" {
-		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.7", got)
+	if got := resolve("6.4.0-rc.9"); got != "v6.4.0-rc.8" {
+		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.8", got)
 	}
 	if got := resolve("6.4.0-rc.1"); got != "v6.3.2" {
 		t.Fatalf("RC1 comparison base = %q, want v6.3.2", got)
@@ -3151,13 +3155,13 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		t.Fatalf("GA comparison base = %q, want v6.3.2", got)
 	}
 
-	cmd := exec.Command("bash", generator, "6.4.0-rc.8", "v6.4.0-rc.6")
+	cmd := exec.Command("bash", generator, "6.4.0-rc.9", "v6.4.0-rc.7")
 	cmd.Dir = repo
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("generator accepted a comparison tag older than the immediately preceding RC")
 	}
-	if !strings.Contains(string(output), "expected 'v6.4.0-rc.7'") {
+	if !strings.Contains(string(output), "expected 'v6.4.0-rc.8'") {
 		t.Fatalf("unexpected comparison-range rejection:\n%s", output)
 	}
 }
