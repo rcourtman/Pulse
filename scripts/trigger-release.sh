@@ -94,6 +94,7 @@ python3 scripts/check-workflow-dispatch-inputs.py \
   --branch "$CURRENT_BRANCH" \
   --require version \
   --require release_notes \
+  --require release_screenshot_plan \
   --require promoted_from_tag \
   --require rollback_version \
   --require ga_date \
@@ -138,6 +139,13 @@ echo ""
 
 # Check 5: Release notes file
 NOTES_FILE="${NOTES_FILE_ARG:-/tmp/release_notes_${VERSION}.md}"
+VISUAL_PLAN_SIDECAR="${NOTES_FILE}.visuals.json"
+if [ -s "$VISUAL_PLAN_SIDECAR" ]; then
+  VISUAL_PLAN_FILE="$VISUAL_PLAN_SIDECAR"
+else
+  VISUAL_PLAN_FILE=$(mktemp)
+  rm -f "$VISUAL_PLAN_FILE"
+fi
 if [ -f "$NOTES_FILE" ]; then
   echo "Found release notes file: ${NOTES_FILE}"
   echo ""
@@ -156,7 +164,8 @@ else
   echo ""
   if [[ ! $REPLY =~ ^[Nn]$ ]]; then
       echo "Generating release notes..."
-      if ./scripts/generate-release-notes.sh "$VERSION" > "$NOTES_FILE"; then
+      if RELEASE_NOTE_VISUAL_PLAN_FILE="$VISUAL_PLAN_FILE" \
+          ./scripts/generate-release-notes.sh "$VERSION" > "$NOTES_FILE"; then
           echo "Release notes generated at ${NOTES_FILE}"
           echo ""
           # Show first few lines
@@ -168,6 +177,7 @@ else
           if [[ $REPLY =~ ^[Nn]$ ]]; then
               echo "Release notes rejected."
               rm "$NOTES_FILE"
+              rm -f "$VISUAL_PLAN_FILE"
               NOTES_FILE=""
           fi
       else
@@ -191,6 +201,27 @@ python3 scripts/release_control/render_release_body.py \
   --version "$VERSION" \
   --validate-notes-file "$NOTES_FILE"
 echo "✓ Release-note Markdown structure validated"
+
+if [ ! -s "$VISUAL_PLAN_FILE" ]; then
+  ./scripts/generate-release-notes.sh --visual-plan "$VERSION" "$NOTES_FILE" > "$VISUAL_PLAN_FILE"
+fi
+python3 scripts/release_control/release_note_visuals.py \
+  validate --plan "$VISUAL_PLAN_FILE" --output "$VISUAL_PLAN_FILE"
+VISUAL_CAPTURE_COUNT=$(python3 scripts/release_control/release_note_visuals.py \
+  count --plan "$VISUAL_PLAN_FILE")
+if [ "$VISUAL_CAPTURE_COUNT" -gt 0 ]; then
+  echo ""
+  echo "Model-selected release-note visual plan:"
+  cat "$VISUAL_PLAN_FILE"
+  echo ""
+  read -p "Use this visual plan? [Y/n] " -n 1 -r
+  echo ""
+  if [[ $REPLY =~ ^[Nn]$ ]]; then
+    printf '%s\n' '{"schema_version":1,"captures":[]}' > "$VISUAL_PLAN_FILE"
+    VISUAL_CAPTURE_COUNT=0
+  fi
+fi
+echo "✓ Release-note visual plan validated (${VISUAL_CAPTURE_COUNT} capture(s))"
 
 ROLLBACK_VERSION=""
 ROLLBACK_COMMAND=""
@@ -313,6 +344,7 @@ if [ -n "$NOTES_FILE" ]; then
   jq -n \
     --arg version "$VERSION" \
     --rawfile release_notes "$NOTES_FILE" \
+    --rawfile release_screenshot_plan "$VISUAL_PLAN_FILE" \
     --arg rollback_version "$ROLLBACK_VERSION" \
     --arg promoted_from_tag "$PROMOTED_FROM_TAG" \
     --arg ga_date "$GA_DATE" \
@@ -327,6 +359,7 @@ if [ -n "$NOTES_FILE" ]; then
     '{
       version: $version,
       release_notes: $release_notes,
+      release_screenshot_plan: $release_screenshot_plan,
       rollback_version: $rollback_version,
       promoted_from_tag: $promoted_from_tag,
       ga_date: $ga_date,

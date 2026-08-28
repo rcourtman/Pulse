@@ -12,6 +12,11 @@ on:
         description: 'Release notes (markdown)'
         required: true
         type: string
+      release_screenshot_plan:
+        description: 'Validated model-selected release-note visual plan (JSON)'
+        required: false
+        type: string
+        default: '{"schema_version":1,"captures":[]}'
       promoted_from_tag:
         description: 'Stable only: prerelease tag being promoted (for example 6.0.0-rc.2)'
         required: false
@@ -99,6 +104,8 @@ jobs:
       promotion_mode: ${{ steps.promotion.outputs.promotion_mode }}
       is_stable_patch: ${{ steps.promotion.outputs.is_stable_patch }}
       historical_asset_backfill_only: ${{ steps.extract.outputs.historical_asset_backfill_only }}
+      visual_capture_count: ${{ steps.visual_plan.outputs.capture_count }}
+      visual_comparison_tag: ${{ steps.visual_plan.outputs.comparison_tag }}
     steps:
       - name: Extract version
         id: extract
@@ -145,6 +152,29 @@ jobs:
           fi
           echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "[OK] Governed release branch for ${{ steps.extract.outputs.version }} is ${REQUIRED_BRANCH}"
+
+      - name: Validate release-note visual plan
+        id: visual_plan
+        run: |
+          set -euo pipefail
+          PLAN_FILE=$(mktemp)
+          if ! jq -er '.inputs.release_screenshot_plan | select(type == "string" and length > 0)' \
+            "$GITHUB_EVENT_PATH" > "$PLAN_FILE"; then
+            printf '%s\n' '{"schema_version":1,"captures":[]}' > "$PLAN_FILE"
+          fi
+          python3 scripts/release_control/release_note_visuals.py \
+            validate --plan "$PLAN_FILE" --output "$PLAN_FILE"
+          CAPTURE_COUNT=$(python3 scripts/release_control/release_note_visuals.py \
+            count --plan "$PLAN_FILE")
+          COMPARISON_TAG=""
+          if [ "$CAPTURE_COUNT" -gt 0 ] && \
+             [ "${{ steps.extract.outputs.historical_asset_backfill_only }}" != "true" ]; then
+            COMPARISON_TAG=$(./scripts/generate-release-notes.sh \
+              --resolve-base "${{ steps.extract.outputs.version }}")
+          fi
+          echo "capture_count=${CAPTURE_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "comparison_tag=${COMPARISON_TAG}" >> "$GITHUB_OUTPUT"
+          echo "[OK] Release-note visual plan contains ${CAPTURE_COUNT} capture(s)"
 
       - name: Validate VERSION file
         if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' }}
@@ -653,13 +683,54 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  release_note_visuals:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Install browser capture runtime
+        if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Capture comparison and candidate views
+        if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
+        run: |
+          set -euo pipefail
+          PLAN_FILE=$(mktemp)
+          jq -er '.inputs.release_screenshot_plan' "$GITHUB_EVENT_PATH" > "$PLAN_FILE"
+          bash scripts/capture-release-note-visuals.sh \
+            "$PLAN_FILE" \
+            "${{ needs.prepare.outputs.visual_comparison_tag }}" \
+            release-note-visuals
+
+      - name: Upload release-note visual artifact
+        if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-note-visuals-${{ github.sha }}
+          path: release-note-visuals/*.png
+          if-no-files-found: error
+          retention-days: 14
+
   create_release:
     needs:
       - prepare
       - build_release_candidate
+      - release_note_visuals
     # Draft metadata and immutable assets are inert staging. Qualification is
     # joined at release_readiness before any activation boundary can open.
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' }}
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.release_note_visuals.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -689,6 +760,13 @@ jobs:
           name: ${{ needs.build_release_candidate.outputs.manifest_artifact_name }}
           path: release-candidate-manifest
 
+      - name: Download release-note visuals
+        if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-note-visuals-${{ github.sha }}
+          path: release-note-visuals
+
       - name: Verify immutable release candidate
         run: |
           python3 scripts/release_candidate_manifest.py verify-local \
@@ -715,9 +793,21 @@ jobs:
           fi
 
           RENDERED_NOTES_FILE=$(mktemp)
+          VISUAL_PLAN_FILE=$(mktemp)
+          VISUAL_MARKDOWN_FILE=$(mktemp)
+          if ! jq -er '.inputs.release_screenshot_plan | select(type == "string" and length > 0)' \
+            "$GITHUB_EVENT_PATH" > "$VISUAL_PLAN_FILE"; then
+            printf '%s\n' '{"schema_version":1,"captures":[]}' > "$VISUAL_PLAN_FILE"
+          fi
+          python3 scripts/release_control/release_note_visuals.py render \
+            --plan "$VISUAL_PLAN_FILE" \
+            --repository "${{ github.repository }}" \
+            --tag "${{ needs.prepare.outputs.tag }}" \
+            --output "$VISUAL_MARKDOWN_FILE"
           python3 scripts/release_control/render_release_body.py \
             --version "$VERSION" \
             --release-notes-file "$NOTES_FILE" \
+            --release-visuals-file "$VISUAL_MARKDOWN_FILE" \
             --output "$RENDERED_NOTES_FILE" \
             --promotion-channel "${{ needs.prepare.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}" \
             --candidate-tag "${{ needs.prepare.outputs.tag }}" \
@@ -933,6 +1023,41 @@ jobs:
           if ls release/*.sshsig 1> /dev/null 2>&1; then
             release_upload_with_retry "${TAG}" release/*.sshsig --clobber
           fi
+
+      - name: Upload release-note visuals
+        if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.prepare.outputs.tag }}"
+          PLAN_FILE=$(mktemp)
+          jq -er '.inputs.release_screenshot_plan' "$GITHUB_EVENT_PATH" > "$PLAN_FILE"
+          release_upload_with_retry() {
+            local attempt=1
+            local max_attempts=5
+            local wait_seconds=15
+            while true; do
+              if gh release upload "$@"; then
+                return 0
+              fi
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "::error::gh release upload failed after ${max_attempts} attempts: $*"
+                return 1
+              fi
+              sleep "$wait_seconds"
+              attempt=$((attempt + 1))
+              wait_seconds=$((wait_seconds * 2))
+              if [ "$wait_seconds" -gt 120 ]; then
+                wait_seconds=120
+              fi
+            done
+          }
+          while IFS= read -r asset_name; do
+            test -f "release-note-visuals/${asset_name}"
+            release_upload_with_retry "$TAG" "release-note-visuals/${asset_name}" --clobber
+          done < <(python3 scripts/release_control/release_note_visuals.py \
+            assets --plan "$PLAN_FILE")
 
       - name: Upload release assets
         env:
@@ -1602,6 +1727,19 @@ jobs:
             curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
               -o /dev/null "${base}/${asset_name}"
           done
+          visual_plan=$(mktemp)
+          if jq -er '.inputs.release_screenshot_plan | select(type == "string" and length > 0)' \
+            "$GITHUB_EVENT_PATH" > "$visual_plan"; then
+            while IFS= read -r asset_name; do
+              curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
+                -o /dev/null "${base}/${asset_name}"
+            done < <(jq -r '
+              .captures[] |
+              (if .before == null then empty else "release-note-\(.id)-before.png" end),
+              "release-note-\(.id)-now.png"
+            ' "$visual_plan")
+          fi
+          rm -f "$visual_plan"
 
           # Close the dispatch-to-commit race: the exact durable convergence
           # owner must still be queued or running immediately before the marker

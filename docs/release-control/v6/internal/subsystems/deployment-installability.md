@@ -51,6 +51,17 @@ New customer release notes use plain punctuation and fail validation when they
 contain a semicolon or em dash. Already-published packets remain historical
 artifacts and retain the punctuation with which they were released.
 
+Visual release-note evidence follows the same model-led boundary. After the
+customer story is settled, a model may select no visual views or a bounded set
+of views that materially improve it. The harness supplies only safe same-origin
+navigation, accessible click and wait actions, deterministic generated data,
+and identical rendering of the channel-specific comparison tag and candidate.
+It does not prescribe product areas or visual themes. Selected before and now
+images are staged as draft release assets, linked from a `See the difference`
+section, and must be publicly retrievable before the activation marker commits
+publication. A current-only image is permitted when a truthful before view is
+not available.
+
 Customer-facing notes use one outcome list for features and fixes. Each visible
 change is described once under `What's improved`; a parallel `Fixes` section is
 forbidden for packets from `v6.4.0-rc.6` onward because it encourages the same
@@ -153,6 +164,9 @@ release-latency optimization.
 39. `scripts/run-release-backend-tests.sh`
 40. `scripts/shard_go_tests.py`
 37. `scripts/generate-release-notes.sh`
+37a. `scripts/capture-release-note-visuals.sh`
+37b. `scripts/release_control/capture_release_note_visuals.mjs`
+37c. `scripts/release_control/release_note_visuals.py`
 37. `scripts/check-workflow-dispatch-inputs.py`
 38. `scripts/clean-mock-alerts.sh`
 39. `scripts/com.pulse.hot-dev.plist.template`
@@ -549,7 +563,7 @@ artifact-selection behaviour.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
    The governed release-build surface also includes
    `scripts/prepare-release-container-context.sh` for exact-candidate container
    assembly.
@@ -1846,8 +1860,7 @@ persistence. The rc.11 corrective set extends that boundary to token creation,
 agent-install issuance, and agent-removal revocation; corrects version-specific
 Anthropic cost estimates; merges complete cross-source disk identities; retains
 uniquely resolved dismissed TrueNAS SMART risk; and stabilizes narrow alert
-investigation, shared chart interaction, and responsive inline View preferences.
-It also checkpoints active-state
+investigation plus shared chart interaction. It also checkpoints active-state
 recovery synchronously after durable lifecycle failure and prevents any Pulse
 host interface from satisfying an external dead-man signal. The changes since
 `v6.4.0-rc.6` add the canonical `alert_fired`

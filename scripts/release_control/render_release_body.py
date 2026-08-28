@@ -405,7 +405,13 @@ def validate_release_body_shape(
         raise ReleaseBodyIntegrityError(
             "published release body has no authored section before Install"
         )
-    validate_release_notes_shape(authored_prefix, version)
+    visual_heading = "\n## See the difference\n"
+    if authored_prefix.count(visual_heading) > 1:
+        raise ReleaseBodyIntegrityError(
+            "published release body must contain at most one See the difference section"
+        )
+    authored_notes = authored_prefix.split(visual_heading, 1)[0]
+    validate_release_notes_shape(authored_notes, version)
 
     if expected_body is not None:
         expected_clean = strip_validation_status_block(expected_body)
@@ -511,6 +517,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     parser.add_argument("--release-notes-file")
+    parser.add_argument("--release-visuals-file")
     parser.add_argument("--validate-notes-file")
     parser.add_argument("--validate-body-file")
     parser.add_argument("--expected-body-file")
@@ -588,11 +595,23 @@ def main() -> int:
         raw_text = Path(args.release_notes_file).read_text(encoding="utf-8")
         validate_release_notes_shape(raw_text, args.version)
         sanitized = sanitize_release_notes(raw_text, args.version).rstrip("\n")
-        sections = [
-            sanitized,
-            build_installation_section(args.version),
-            build_rollback_section(args),
-        ]
+        sections = [sanitized]
+        if args.release_visuals_file:
+            release_visuals = Path(args.release_visuals_file).read_text(
+                encoding="utf-8"
+            ).strip()
+            if release_visuals:
+                if not release_visuals.startswith("## See the difference\n"):
+                    raise ReleaseBodyIntegrityError(
+                        "release visuals must begin with '## See the difference'"
+                    )
+                sections.append(release_visuals)
+        sections.extend(
+            [
+                build_installation_section(args.version),
+                build_rollback_section(args),
+            ]
+        )
         rendered = "\n\n".join(sections) + "\n"
         validate_release_body_shape(rendered, args.version)
         Path(args.output).write_text(rendered, encoding="utf-8")

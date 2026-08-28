@@ -107,6 +107,13 @@ if [ ! -s "$NOTES_FILE" ]; then
   echo "Canonical release notes are required at ${NOTES_FILE}." >&2
   exit 1
 fi
+VISUAL_PLAN_SIDECAR="${NOTES_FILE}.visuals.json"
+if [ -s "$VISUAL_PLAN_SIDECAR" ]; then
+  VISUAL_PLAN_FILE="$VISUAL_PLAN_SIDECAR"
+else
+  VISUAL_PLAN_FILE=$(mktemp)
+  rm -f "$VISUAL_PLAN_FILE"
+fi
 
 RESOLVER_ARGS=(
   --version "$VERSION"
@@ -190,11 +197,18 @@ else
     --version "$VERSION" \
     --validate-notes-file "$NOTES_FILE"
 
+  if [ ! -s "$VISUAL_PLAN_FILE" ]; then
+    ./scripts/generate-release-notes.sh --visual-plan "$VERSION" "$NOTES_FILE" > "$VISUAL_PLAN_FILE"
+  fi
+  python3 scripts/release_control/release_note_visuals.py \
+    validate --plan "$VISUAL_PLAN_FILE" --output "$VISUAL_PLAN_FILE"
+
   python3 scripts/check-workflow-dispatch-inputs.py \
     --workflow-path .github/workflows/create-release.yml \
     --branch "$CURRENT_BRANCH" \
     --require version \
     --require release_notes \
+    --require release_screenshot_plan \
     --require promoted_from_tag \
     --require rollback_version \
     --require ga_date \
@@ -210,6 +224,7 @@ else
   jq -n \
     --arg version "$VERSION" \
     --rawfile release_notes "$NOTES_FILE" \
+    --rawfile release_screenshot_plan "$VISUAL_PLAN_FILE" \
     --arg promoted_from_tag "" \
     --arg rollback_version "$ROLLBACK_TAG" \
     --arg ga_date "" \
@@ -224,6 +239,7 @@ else
     '{
       version: $version,
       release_notes: $release_notes,
+      release_screenshot_plan: $release_screenshot_plan,
       promoted_from_tag: $promoted_from_tag,
       rollback_version: $rollback_version,
       ga_date: $ga_date,

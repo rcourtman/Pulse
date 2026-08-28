@@ -10,6 +10,7 @@
 #
 # Usage:  ./scripts/generate-release-notes.sh <version> [comparison-tag]
 #         ./scripts/generate-release-notes.sh --resolve-base <version>
+#         ./scripts/generate-release-notes.sh --visual-plan <version> <notes-file>
 #
 # Contract: the release notes markdown is written to STDOUT (trigger-release.sh
 # captures it); all progress/diagnostics go to STDERR. SAVE_TO_FILE=1 also
@@ -19,6 +20,7 @@
 #   RELEASE_NOTES_ENGINE=claude|codex   force an engine (default: claude, codex fallback)
 #   RELEASE_NOTES_MODEL=<model>         model for the claude engine (default: opus)
 #   RELEASE_NOTES_TRACE_DIR=<directory> retain each pass for inspection
+#   RELEASE_NOTE_VISUAL_PLAN_FILE=<path> write a validated optional visual plan
 
 set -euo pipefail
 
@@ -26,15 +28,30 @@ MODE=generate
 if [ "${1:-}" = "--resolve-base" ]; then
     MODE=resolve-base
     shift
+elif [ "${1:-}" = "--visual-plan" ]; then
+    MODE=visual-plan
+    shift
 fi
 
 VERSION=${1:-}
-REQUESTED_COMPARISON_TAG=${2:-}
+VISUAL_NOTES_FILE=""
+if [ "$MODE" = "visual-plan" ]; then
+    VISUAL_NOTES_FILE=${2:-}
+    REQUESTED_COMPARISON_TAG=${3:-}
+else
+    REQUESTED_COMPARISON_TAG=${2:-}
+fi
 
 if [ -z "$VERSION" ]; then
     echo "Usage: $0 <version> [comparison-tag]" >&2
     echo "       $0 --resolve-base <version>" >&2
+    echo "       $0 --visual-plan <version> <notes-file> [comparison-tag]" >&2
     echo "Example: $0 6.4.0-rc.6" >&2
+    exit 1
+fi
+
+if [ "$MODE" = "visual-plan" ] && [ ! -s "$VISUAL_NOTES_FILE" ]; then
+    echo "Visual planning requires a non-empty release-notes file" >&2
     exit 1
 fi
 
@@ -107,7 +124,9 @@ else
     RELEASE_RANGE_GUIDANCE="This stable release covers ${PREVIOUS_TAG}..HEAD. The same-version RC packets under docs/releases/ are available evidence."
 fi
 
-echo "Generating release notes for v${VERSION} (changes since ${PREVIOUS_TAG})..." >&2
+if [ "$MODE" = "generate" ]; then
+    echo "Generating release notes for v${VERSION} (changes since ${PREVIOUS_TAG})..." >&2
+fi
 
 read -r -d '' RESEARCH_PROMPT <<EOF || true
 Create a comprehensive factual account of the user-observable differences in
@@ -217,6 +236,99 @@ save_trace() {
     printf '%s\n' "$content" > "$RELEASE_NOTES_TRACE_DIR/$name"
 }
 
+clean_visual_plan() {
+    sed -e 's/^```json$//' -e 's/^```$//'
+}
+
+generate_visual_plan() {
+    local notes=$1
+    local plan validation_error
+    read -r -d '' VISUAL_PROMPT <<EOF || true
+Decide whether screenshots would materially improve the customer release notes
+for Pulse v${VERSION}. The comparison range is ${PREVIOUS_TAG}..HEAD.
+
+Use the available read-only repository and GitHub tools as you judge useful to
+understand both source states and identify views that communicate the release
+better than text alone. Select no views when screenshots would add little. The
+capture system can open same-origin routes and use accessible click or wait
+steps. It will render the exact comparison tag and current HEAD with identical
+generated demo data.
+
+Return only JSON in this shape, with at most three captures:
+{
+  "schema_version": 1,
+  "captures": [
+    {
+      "id": "lower-case-hyphenated-id",
+      "title": "Short customer-facing title",
+      "description": "Why this visible difference matters",
+      "viewport": {"width": 1440, "height": 900},
+      "before": {
+        "route": "/same-origin-path",
+        "steps": [
+          {
+            "action": "click",
+            "locator": {
+              "kind": "role",
+              "role": "button",
+              "name": "Accessible name",
+              "exact": true,
+              "nth": 0
+            }
+          }
+        ],
+        "ready": {"kind": "text", "value": "Visible text", "exact": true, "nth": 0}
+      },
+      "after": {
+        "route": "/same-origin-path",
+        "steps": [],
+        "ready": {"kind": "text", "value": "Visible text", "exact": true, "nth": 0}
+      }
+    }
+  ]
+}
+
+The before state may be null when a truthful comparison is unavailable and a
+current-state image is still useful. Locator kind may be role, text, label, or
+testid. Actions may be click or wait. Role locators use role and name. Other
+locators use value. Every state needs a ready locator for content that must be
+visible in the finished image. Use no semicolon or em dash characters in public
+text.
+
+Customer release notes:
+
+${notes}
+EOF
+
+    echo "Selecting useful release-note visuals..." >&2
+    plan=$(generate_notes "$VISUAL_PROMPT") || return 1
+    plan=$(printf '%s\n' "$plan" | clean_visual_plan)
+    if ! validation_error=$(printf '%s\n' "$plan" | \
+        python3 scripts/release_control/release_note_visuals.py validate --plan - 2>&1); then
+        echo "Visual plan failed validation; requesting one constrained revision..." >&2
+        echo "$validation_error" >&2
+        read -r -d '' VISUAL_REPAIR_PROMPT <<EOF || true
+Correct the JSON visual plan below so it passes this exact validation error:
+
+${validation_error}
+
+Preserve the selected views and their meaning. Reply only with corrected JSON.
+
+${plan}
+EOF
+        plan=$(generate_notes "$VISUAL_REPAIR_PROMPT") || return 1
+        plan=$(printf '%s\n' "$plan" | clean_visual_plan)
+    fi
+    printf '%s\n' "$plan" | \
+        python3 scripts/release_control/release_note_visuals.py validate --plan -
+}
+
+if [ "$MODE" = "visual-plan" ]; then
+    VISUAL_NOTES=$(cat "$VISUAL_NOTES_FILE")
+    generate_visual_plan "$VISUAL_NOTES"
+    exit 0
+fi
+
 echo "Researching the complete release range..." >&2
 RESEARCH_BRIEF=$(generate_notes "$RESEARCH_PROMPT") || exit 1
 
@@ -320,4 +432,9 @@ if [ "${SAVE_TO_FILE:-}" = "1" ]; then
     OUTPUT_FILE="release-notes-v${VERSION}.md"
     printf '%s\n' "$RELEASE_NOTES" > "$OUTPUT_FILE"
     echo "Saved to ${OUTPUT_FILE}" >&2
+fi
+
+if [ -n "${RELEASE_NOTE_VISUAL_PLAN_FILE:-}" ]; then
+    generate_visual_plan "$RELEASE_NOTES" > "$RELEASE_NOTE_VISUAL_PLAN_FILE"
+    echo "Visual plan saved to ${RELEASE_NOTE_VISUAL_PLAN_FILE}" >&2
 fi

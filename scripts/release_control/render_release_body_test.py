@@ -499,6 +499,47 @@ Old metadata section.
             self.assertIn("./scripts/install.sh --version v5.1.28", body)
             render_release_body.validate_release_body_shape(body, "6.0.0-rc.2")
 
+    def test_release_body_accepts_visual_evidence_before_installation(self) -> None:
+        notes = """# Pulse v6.4.0 Release Notes
+
+Pulse is easier to use on the screens operators already carry.
+
+## What's improved
+
+- **Clearer small-screen controls** - Settings remain readable on phones.
+"""
+        visuals = """## See the difference
+
+### Settings fit smaller screens
+
+Controls remain readable without horizontal scrolling.
+
+| Before | Now |
+| --- | --- |
+| ![Settings before](https://github.com/rcourtman/Pulse/releases/download/v6.4.0/release-note-settings-before.png) | ![Settings now](https://github.com/rcourtman/Pulse/releases/download/v6.4.0/release-note-settings-now.png) |
+"""
+        rollback_args = type(
+            "Args",
+            (),
+            {
+                "rollback_target": "v6.3.2",
+                "rollback_command": "./scripts/install.sh --version v6.3.2",
+            },
+        )()
+        body = "\n\n".join(
+            [
+                notes.strip(),
+                visuals.strip(),
+                render_release_body.build_installation_section("6.4.0"),
+                render_release_body.build_rollback_section(rollback_args),
+            ]
+        ) + "\n"
+
+        self.assertEqual(
+            render_release_body.validate_release_body_shape(body, "6.4.0"),
+            body,
+        )
+
     def test_flattened_release_notes_fail_closed(self) -> None:
         flattened = (
             "# Pulse v6.1.0-rc.2 Release Notes"
