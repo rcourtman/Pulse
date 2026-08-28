@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Node } from '@/types/api';
+import type { Alert, Node } from '@/types/api';
 import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 
 const chartsApiMocks = vi.hoisted(() => ({
@@ -71,6 +71,24 @@ function makeNode(overrides: Partial<Node> = {}): Node {
     isClusterMember: true,
     clusterName: 'homelab',
     linkedAgentId: '',
+    ...overrides,
+  };
+}
+
+function makeAlert(overrides: Partial<Alert> = {}): Alert {
+  return {
+    id: 'alert-memory',
+    type: 'memory',
+    level: 'warning',
+    resourceId: 'agent:pve-node-1',
+    resourceName: 'pve-node-1',
+    node: 'pve-node-1',
+    instance: 'homelab',
+    message: 'Node memory at 90.1%',
+    value: 90.1,
+    threshold: 90,
+    startTime: new Date().toISOString(),
+    acknowledged: false,
     ...overrides,
   };
 }
@@ -214,6 +232,61 @@ describe('NodeDrawer', () => {
     expect(screen.getByText('Root disk usage is above 85%')).toBeInTheDocument();
     expect(screen.getAllByText('PVE 9.1.9').length).toBeGreaterThan(0);
     expect(screen.getByTestId('node-technical-details').querySelector('table')).toBeTruthy();
+  });
+
+  it('identifies child resources and reveals every active alert in place', async () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode()}
+        alerts={[
+          makeAlert(),
+          makeAlert({
+            id: 'alert-vm-memory',
+            resourceId: 'homelab-pve-node-1-100',
+            resourceName: 'media-vm',
+            message: 'VM memory at 90.2%',
+            value: 90.2,
+          }),
+          makeAlert({
+            id: 'alert-vm-disk',
+            type: 'disk',
+            resourceId: 'homelab-pve-node-1-100-c',
+            resourceName: 'media-vm (C:)',
+            message: 'VM disk at 90.2%',
+            value: 90.2,
+          }),
+          makeAlert({
+            id: 'alert-backup',
+            type: 'backup-age',
+            level: 'info',
+            resourceId: 'homelab-pve-node-1-101',
+            resourceName: 'archive-vm',
+            message: 'Latest backup is 8 days old',
+            value: 8,
+            threshold: 7,
+          }),
+        ]}
+      />
+    ));
+
+    const attention = within(screen.getByTestId('drawer-attention-section'));
+    expect(attention.getByText('4 active')).toBeInTheDocument();
+    expect(attention.getByText('pve-node-1')).toBeInTheDocument();
+    expect(attention.getByText('media-vm')).toBeInTheDocument();
+    expect(attention.getByText('media-vm (C:)')).toBeInTheDocument();
+    expect(attention.queryByText('archive-vm')).not.toBeInTheDocument();
+
+    const revealButton = attention.getByRole('button', { name: 'Show 1 more alert' });
+    expect(revealButton).toHaveAttribute('aria-expanded', 'false');
+    await fireEvent.click(revealButton);
+
+    expect(attention.getByText('archive-vm')).toBeInTheDocument();
+    expect(attention.getByText('Backup Age')).toBeInTheDocument();
+    expect(attention.getByText('Info')).toBeInTheDocument();
+    expect(attention.getByRole('button', { name: 'Show fewer alerts' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
   });
 
   it('renders API-only node history without unavailable disk throughput', async () => {

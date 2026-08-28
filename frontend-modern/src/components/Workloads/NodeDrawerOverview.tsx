@@ -8,6 +8,7 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, Node, Temperature } from '@/types/api';
+import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { formatBytes, normalizeDiskArray } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
@@ -314,6 +315,12 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
           message: alert.message,
+          subject:
+            cleanText(alert.resourceName) ||
+            cleanText(alert.nodeDisplayName) ||
+            cleanText(alert.node) ||
+            props.node.name,
+          metric: alertTypeDisplayLabel(alert.type),
           severity: alert.level,
           acknowledged: alert.acknowledged,
         }))}

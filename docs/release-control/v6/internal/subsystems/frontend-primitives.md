@@ -3851,7 +3851,14 @@ shell.
 Object detail drawers follow one operator-first information hierarchy across
 platform implementations. Overview must begin with `DrawerAttentionSection`
 when active alert or health evidence exists and show the actual problem text,
-not only repeat a coloured status. The remaining Overview rows are additive
+not only repeat a coloured status. `DrawerAttentionSection` is a compact
+bounded alert list, not a generic detail-table card: every row preserves the
+backend-authored problem text, renders the actual info/warning/critical/
+acknowledged severity, and reveals overflow through an in-place accessible
+disclosure rather than an inert hidden-count row. Aggregate drawers that include
+alerts from child resources must also preserve the affected resource identity
+and alert metric beside that text rather than collapsing them into generic VM
+or host labels. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and

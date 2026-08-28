@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "base_sha": "9e820355b60b68954a2c03cfaf77ba81ca9e4a59",
-  "verified_at": "2026-08-28T13:49:59Z",
+  "base_sha": "aea8d3497b0474d985602c81fe17be228446c954",
+  "verified_at": "2026-08-28T14:52:18Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/updates.ts"
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/updates.ts": "3f193c0427338f8f12fe7275b7fc691a7c90a65fd4e47ee972673e370bd5e9b6"
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "ec60044cf9b250c9d049230ee7252bf73a389956b3ab611929520ad6c70dac40",
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx": "6f1b0d01ef1e3bdcb21faff305e2c2d7763cc226cb92c0f4c4daca7f1fbf04c0"
   },
   "routes": [
-    "/settings/system-updates"
+    "/attention-verification.html"
   ],
   "viewports": [
     {
@@ -23,14 +25,15 @@
     }
   ],
   "states": [
-    "update available with the confirmation dialog open and acknowledgement unchecked",
-    "update confirmation acknowledged with an intentionally missing download URL",
-    "failed update start with the error notification visible while the dialog remains open"
+    "collapsed five-alert node summary showing the first three resource-specific alerts",
+    "expanded node summary showing warning, critical, info, and acknowledged severity badges",
+    "desktop summary bounded to 768 pixels with no horizontal page overflow",
+    "390 pixel summary contained within the viewport with no horizontal page overflow"
   ],
   "interactions": [
-    "opened the confirmation dialog from the update banner",
-    "acknowledged the temporary-unavailability warning and selected Start Update",
-    "confirmed the missing download URL produced a visible error without starting an update",
-    "repeated the failed-start state at desktop and 390 pixel widths and confirmed no horizontal overflow"
+    "confirmed node and child VM resource names plus Memory, Disk, and Backup Age metrics remain visible beside their problem text",
+    "selected Show 2 more alerts and confirmed both hidden alerts appeared with aria-expanded=true",
+    "selected Show fewer alerts and confirmed the summary returned to three visible alerts with aria-expanded=false",
+    "repeated collapsed and expanded disclosure states at 1440x900 and 390x844 and confirmed no horizontal overflow"
   ]
 }

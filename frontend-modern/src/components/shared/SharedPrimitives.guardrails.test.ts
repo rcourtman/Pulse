@@ -19,6 +19,7 @@ import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
 import copyableCodeRowSource from '@/components/shared/CopyableCodeRow.tsx?raw';
 import detailSectionTableSource from '@/components/shared/DetailSectionTable.tsx?raw';
 import detailSectionModelSource from '@/components/shared/detailSectionModel.ts?raw';
+import drawerAttentionSectionSource from '@/components/shared/DrawerAttentionSection.tsx?raw';
 import externalTextLinkSource from '@/components/shared/ExternalTextLink.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
@@ -8722,6 +8723,14 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps object drawers operator-first across platform implementations', () => {
+    expect(drawerAttentionSectionSource).toContain('item.subject');
+    expect(drawerAttentionSectionSource).toContain('item.metric');
+    expect(drawerAttentionSectionSource).toContain('formatAlertSeverityLabel');
+    expect(drawerAttentionSectionSource).toContain('getAlertSeverityBadgeClass');
+    expect(drawerAttentionSectionSource).toContain('Show fewer alerts');
+    expect(drawerAttentionSectionSource).toContain('aria-expanded={expanded()}');
+    expect(drawerAttentionSectionSource).not.toContain('DetailSectionTable');
+
     const overviewConsumers = [
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
       'src/components/Workloads/GuestDrawerOverview.tsx',
@@ -8747,6 +8756,12 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('TechnicalDetailsSection');
       expect(source).not.toContain('ResourceOperatorStateSection');
     }
+
+    const nodeOverviewSource = readFrontendSource(
+      'src/components/Workloads/NodeDrawerOverview.tsx',
+    );
+    expect(nodeOverviewSource).toContain('subject:');
+    expect(nodeOverviewSource).toContain('metric: alertTypeDisplayLabel(alert.type)');
 
     for (const consumerPath of manageConsumers) {
       const source = readFrontendSource(consumerPath);
