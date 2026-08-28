@@ -1563,6 +1563,85 @@ func TestUpdateNodesForInstanceKeepsClustersWithSharedNodeNamesApart(t *testing.
 	}
 }
 
+// Standalone PVE connections have no cluster metadata, so sequential setup is
+// the dangerous variant of the shared-name case: while only the first site's
+// agent exists, a second pve01 must not borrow that agent through the short
+// endpoint alias and collapse both provider instances into one node slot.
+// Refs #1753.
+func TestUpdateNodesForInstanceKeepsSequentialSameNameStandaloneSitesApart(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:       "agent-staging-pve01",
+				Hostname: "pve01",
+				ReportIP: "192.0.2.11",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.0.2.11/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:            "staging-pve01",
+				Name:          "pve01",
+				Instance:      "staging",
+				Host:          "https://pve01.staging.example:8006",
+				LinkedAgentID: "agent-staging-pve01",
+				Status:        "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("production", []Node{
+		{
+			ID:       "production-pve01",
+			Name:     "pve01",
+			Instance: "production",
+			Host:     "https://pve01.production.example:8006",
+			Status:   "online",
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want 2 standalone sites", state.Nodes)
+	}
+	byID := make(map[string]Node, len(state.Nodes))
+	for _, node := range state.Nodes {
+		byID[node.ID] = node
+	}
+	if byID["staging-pve01"].LinkedAgentID != "agent-staging-pve01" {
+		t.Fatalf("staging link = %q, want agent-staging-pve01", byID["staging-pve01"].LinkedAgentID)
+	}
+	if byID["production-pve01"].LinkedAgentID != "" {
+		t.Fatalf("production link = %q, want no guessed cross-site agent", byID["production-pve01"].LinkedAgentID)
+	}
+
+	// Existing installations may already hold the bad many-nodes-to-one-agent
+	// link in memory. The next provider poll must discard it, not preserve it.
+	for i := range state.Nodes {
+		if state.Nodes[i].ID == "production-pve01" {
+			state.Nodes[i].LinkedAgentID = "agent-staging-pve01"
+		}
+	}
+	state.UpdateNodesForInstance("production", []Node{
+		{
+			ID:       "production-pve01",
+			Name:     "pve01",
+			Instance: "production",
+			Host:     "https://pve01.production.example:8006",
+			Status:   "online",
+		},
+	})
+	if len(state.Nodes) != 2 {
+		t.Fatalf("self-heal nodes = %#v, want 2 standalone sites", state.Nodes)
+	}
+	for _, node := range state.Nodes {
+		if node.ID == "production-pve01" && node.LinkedAgentID != "" {
+			t.Fatalf("self-healed production link = %q, want empty", node.LinkedAgentID)
+		}
+	}
+}
+
 // When TLS settings degrade node endpoints to the bare node name, the
 // endpoint-host merge alias is identical for both clusters. The alias must
 // not merge nodes whose named clusters contradict each other.

@@ -3706,10 +3706,18 @@ func nodeCrossViewMergeProven(a, b Node) bool {
 	clusterA := normalizeNodeIdentityPart(a.ClusterName)
 	clusterB := normalizeNodeIdentityPart(b.ClusterName)
 	if clusterA == "" && clusterB == "" {
-		// Two unclassified standalone views still dedup on the shared
-		// evidence alone: with no cluster identity in play there is no
-		// established cluster slot to steal.
-		return true
+		fpA := normalizeNodeTLSFingerprint(a.TLSFingerprint)
+		fpB := normalizeNodeTLSFingerprint(b.TLSFingerprint)
+		if fpA != "" && fpA == fpB {
+			return true
+		}
+		// Standalone connection instances are provider scopes too. They may
+		// reuse the same native node name, so only the exact endpoint (or the
+		// fingerprint above) proves that two unclassified views are the same
+		// machine. A shared short hostname or guessed agent link is not proof.
+		endpointA := extractHostEndpoint(a.Host)
+		endpointB := extractHostEndpoint(b.Host)
+		return endpointA != "" && endpointA == endpointB
 	}
 	if clusterA == clusterB {
 		return true
@@ -3972,6 +3980,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	hostAgentByHostname := make(map[string]map[string]struct{}) // lowercase hostname -> hostAgentIDs
 	hostAgentByIP := make(map[string]map[string]struct{})       // normalized ip -> hostAgentIDs
 	validHostAgentIDs := make(map[string]bool)                  // set of existing host agent IDs
+	hostHostnameByID := make(map[string]string)                 // hostAgentID -> normalized full hostname
 	addHostAlias := func(name, hostID string) {
 		name = strings.TrimSpace(strings.ToLower(name))
 		if name == "" || hostID == "" {
@@ -4006,6 +4015,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	for _, host := range s.Hosts {
 		if host.ID != "" {
 			validHostAgentIDs[host.ID] = true
+			hostHostnameByID[host.ID] = strings.TrimSpace(strings.ToLower(host.Hostname))
 			addHostAlias(host.Hostname, host.ID)
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
@@ -4020,6 +4030,45 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 	}
 
+	// sharedAgentProvesNodePair applies the stronger boundary required when a
+	// host agent is already linked to a node from another provider instance.
+	// A unique short hostname is only unique in the current snapshot, not in
+	// the operator's estate: during sequential setup, the first pve01 agent
+	// must not be lent to a later pve01 from another standalone connection.
+	// Preserve legitimate split views when the same agent strongly bridges
+	// both endpoints through an exact IP or a full (dotted) hostname.
+	hostStronglyCorroboratesNode := func(hostID string, node Node) bool {
+		endpoint := extractHostEndpoint(node.Host)
+		if endpoint == "" {
+			return false
+		}
+		if ip := normalizeIPAddress(endpoint); ip != "" {
+			_, ok := hostIPsByID[hostID][ip]
+			return ok
+		}
+		hostname := hostHostnameByID[hostID]
+		return strings.Contains(endpoint, ".") && endpoint == hostname
+	}
+	sharedAgentProvesNodePair := func(hostID string, existing, candidate Node) bool {
+		if nodeCrossViewMergeProven(existing, candidate) {
+			return true
+		}
+		if normalizeNodeIdentityPart(existing.ClusterName) != "" ||
+			normalizeNodeIdentityPart(candidate.ClusterName) != "" {
+			return false
+		}
+		return hostStronglyCorroboratesNode(hostID, existing) &&
+			hostStronglyCorroboratesNode(hostID, candidate)
+	}
+	hostAlreadyClaimsDifferentNode := func(hostID string, node Node) bool {
+		linkedKey := linkedHostToKey[strings.TrimSpace(hostID)]
+		if linkedKey == "" {
+			return false
+		}
+		existing, ok := nodeMap[linkedKey]
+		return ok && !sharedAgentProvesNodePair(hostID, existing, node)
+	}
+
 	// Hostname and address matches are weak evidence: two clusters can reuse
 	// the same node names, and sites that reuse RFC1918 ranges can present the
 	// same endpoint IP for different machines. Reject a candidate agent when
@@ -4028,6 +4077,9 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// fingerprint, or the node's endpoint IP is absent from the IPs the agent
 	// reports.
 	hostContradictsNode := func(hostID string, node Node) bool {
+		if hostAlreadyClaimsDifferentNode(hostID, node) {
+			return true
+		}
 		if hints := agentClusterHints[hostID]; len(hints) > 0 {
 			if cluster := normalizeNodeIdentityPart(node.ClusterName); cluster != "" {
 				if _, sameCluster := hints[cluster]; !sameCluster {
@@ -4056,7 +4108,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	for _, node := range dedupedNodes {
 		// Preserve existing link if we had one, but only if the host agent still exists
 		if existingLink, ok := existingNodeLinks[node.ID]; ok {
-			if validHostAgentIDs[existingLink] {
+			if validHostAgentIDs[existingLink] && !hostContradictsNode(existingLink, node) {
 				node.LinkedAgentID = existingLink
 			}
 			// If host agent no longer exists, leave LinkedAgentID empty (stale reference cleared)
@@ -4064,7 +4116,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		// Fallback: preserve link by logical identity when node IDs changed across polls.
 		if node.LinkedAgentID == "" {
 			if existingLink, ok := existingNodeLinksByLogicalKey[nodeLogicalKey(node)]; ok {
-				if validHostAgentIDs[existingLink] {
+				if validHostAgentIDs[existingLink] && !hostContradictsNode(existingLink, node) {
 					node.LinkedAgentID = existingLink
 				}
 			}
@@ -4149,7 +4201,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 					// across unrelated machines, a cross-instance fold needs
 					// positive same-machine proof, not just the absence of a
 					// contradiction.
-					if existing, ok := nodeMap[linkedKey]; !ok || nodeCrossViewMergeProven(existing, node) {
+					if existing, ok := nodeMap[linkedKey]; !ok || sharedAgentProvesNodePair(node.LinkedAgentID, existing, node) {
 						targetKey = linkedKey
 					}
 				}
