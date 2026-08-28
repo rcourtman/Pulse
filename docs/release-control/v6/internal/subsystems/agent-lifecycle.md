@@ -1224,6 +1224,9 @@ topology labels such as `disk6` or `parity2`. Assigned disks may use
 `diskId`/`rdevId` as the serial fallback when Unraid does not expose a separate
 serial field, so monitoring receives stable disk identity without inventing
 host-profile or platform state from optional storage probe success.
+Monitoring ingest must apply the same evidence filter to reports from deployed
+older agents, then make the remaining structured member and parity statuses
+authoritative over stale aggregate failure and protection counters.
 That Unraid runtime path must also prefer native appliance topology over
 generic block-device inference. The Unified Agent should best-effort merge
 `/var/local/emhttp/disks.ini` into the `mdcmd status` view and carry disk

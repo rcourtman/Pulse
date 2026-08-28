@@ -2936,7 +2936,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		if syncAction == "" {
 			syncProgress = 0
 		}
-		numProtected, numDisabled, numInvalid, numMissing := reconcileLegacyUnraidCounts(report.Unraid, disks)
+		numProtected, numDisabled, numInvalid, numMissing := reconcileReportedUnraidCounts(report.Unraid, disks)
 		unraidData = &models.HostUnraidStorage{
 			ArrayStarted: report.Unraid.ArrayStarted,
 			ArrayState:   strings.TrimSpace(report.Unraid.ArrayState),
@@ -3675,7 +3675,10 @@ func isLegacyUnraidEmptySlot(disk agentshost.UnraidDisk, normalizedStatus string
 		disk.SizeBytes == 0
 }
 
-func reconcileLegacyUnraidCounts(storage *agentshost.UnraidStorage, disks []models.HostUnraidDisk) (protected, disabled, invalid, missing int) {
+// reconcileReportedUnraidCounts makes the filtered per-disk topology
+// authoritative when an agent supplied structured statuses. This also repairs
+// stale aggregate counters from older agents at the server ingestion boundary.
+func reconcileReportedUnraidCounts(storage *agentshost.UnraidStorage, disks []models.HostUnraidDisk) (protected, disabled, invalid, missing int) {
 	protected = storage.NumProtected
 	disabled = storage.NumDisabled
 	invalid = storage.NumInvalid

@@ -1554,10 +1554,18 @@ signal.
 The same monitoring compatibility boundary owns Unraid slot filtering and
 operator health posture after host-agent ingest. Empty no-present Unraid slots
 must be removed before storage-risk assessment so unassigned array capacity is
-not reported as missing or disabled media. An Unraid array with assigned data
-disks but no configured parity is an attention/warning posture with the
-machine-readable `unraid_no_parity` reason, while active parity check/sync
-state remains a separate `unraid_sync_active` reason. Realtime resource
+not reported as missing or disabled media. Unraid topology labels such as
+`disk6` and `parity2` are not assignment evidence by themselves: a
+`DISK_NP`/`DISK_NP_DSBL` member remains reportable as genuinely missing only
+when device, model/serial identity, filesystem, or size evidence shows that a
+disk was assigned. After filtering, structured member statuses override stale
+aggregate missing/disabled/invalid counters, and structured parity status
+overrides the aggregate protected-parity count. This normalization belongs at
+server ingest as well as agent collection so deployed older agents stop
+creating false health alerts without waiting for an agent upgrade. An Unraid
+array with assigned data disks but no configured parity is an attention/warning
+posture with the machine-readable `unraid_no_parity` reason, while active parity
+check/sync state remains a separate `unraid_sync_active` reason. Realtime resource
 broadcasts must preserve canonical identity, discovery target, metrics target,
 incident rollups, and raw `agent`/`storage` facet payloads so frontend
 infrastructure surfaces can explain degraded/warning rows without falling back

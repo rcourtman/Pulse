@@ -2439,6 +2439,12 @@ func TestApplyHostReportFiltersLegacyUnraidEmptySlots(t *testing.T) {
 			t.Fatalf("unexpected assigned disk: %+v", disk)
 		}
 	}
+	assessment := storagehealth.AssessUnraidStorage(*host.Unraid)
+	for _, reason := range assessment.Reasons {
+		if reason.Code == "unraid_missing_disks" || reason.Code == "unraid_disabled_disks" || reason.Code == "unraid_invalid_disks" {
+			t.Fatalf("named empty slots produced a failure assessment: %+v", assessment.Reasons)
+		}
+	}
 }
 
 func TestApplyHostReportFiltersVendorManagedSystemRAIDArrays(t *testing.T) {
