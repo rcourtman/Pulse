@@ -16,7 +16,7 @@ This changelog describes the changes since `v6.4.0-rc.10`. The candidate also re
 - API token creation, agent install issuance, and agent-removal revocation now share an atomic live-and-durable inventory boundary.
 - Anthropic pricing distinguishes current Opus and Haiku model generations from legacy aliases when estimating retained usage and enforcing budgets.
 - Cross-source disk identity normalizes complete serial and WWN framing without truncating hardware identifiers.
-- Alert-lifecycle append failures synchronously checkpoint a lock-independent active-state recovery projection, while an epoch guard prevents overlapping stale checkpoints from clearing degraded state.
+- Alert-lifecycle failures synchronously checkpoint a crash-safe recovery envelope, and SQLite regains authority only after durable restart repair, while an epoch guard prevents stale checkpoints from clearing degraded state.
 - Dead-man configuration and dial-time DNS validation reject every address assigned to the Pulse host and fail closed when local-interface enumeration is unavailable.
 - Alert investigation on narrow layouts uses a dedicated timeline dialog, while shared history charts synchronize hover timestamps and retain readable axes.
 - Remembered table View preferences expand in a responsive inline disclosure with consistent controls instead of a floating panel over the monitored resources.
@@ -35,6 +35,7 @@ This changelog describes the changes since `v6.4.0-rc.10`. The candidate also re
 - PVE and agent observations of the same RAID-controller volume no longer render duplicate resources when one source frames the NAA identity as a serial and the other as a WWN.
 - Dismissed TrueNAS SMART alerts retain uniquely resolved critical disk evidence instead of allowing a damaged disk to return to healthy presentation.
 - Failed durable lifecycle writes no longer risk losing current active alerts or resurrecting alerts resolved before restart, and stale periodic checkpoints cannot overwrite the failure snapshot.
+- A malformed or source-less degraded-state marker no longer lets startup trust a potentially stale SQLite alert projection.
 - A watchdog hostname or private-LAN address that resolves back to Pulse can no longer masquerade as an external progress signal.
 - Mobile alert timelines remain scroll-stable, selected incident history revalidates correctly, chart axis labels remain readable, and grouped hover timestamps stay aligned.
 - View preferences and the nested column selector no longer clip, cover table content, or leave mismatched controls on narrow and desktop layouts.

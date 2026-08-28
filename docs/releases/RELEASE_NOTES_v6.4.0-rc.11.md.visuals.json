@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "captures": [
+    {
+      "id": "inline-view-preferences",
+      "title": "View preferences stay with the table",
+      "description": "Remembered display choices now expand in the page instead of covering the resources being adjusted.",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "before": {
+        "route": "/proxmox/overview",
+        "steps": [
+          {
+            "action": "click",
+            "locator": {
+              "kind": "role",
+              "role": "button",
+              "name": "View",
+              "exact": true,
+              "nth": 0
+            }
+          }
+        ],
+        "ready": {
+          "kind": "text",
+          "value": "These choices are remembered for future visits.",
+          "exact": true,
+          "nth": 0
+        }
+      },
+      "after": {
+        "route": "/proxmox/overview",
+        "steps": [
+          {
+            "action": "click",
+            "locator": {
+              "kind": "role",
+              "role": "button",
+              "name": "View",
+              "exact": true,
+              "nth": 0
+            }
+          }
+        ],
+        "ready": {
+          "kind": "text",
+          "value": "These choices are remembered for future visits.",
+          "exact": true,
+          "nth": 0
+        }
+      }
+    }
+  ]
+}
