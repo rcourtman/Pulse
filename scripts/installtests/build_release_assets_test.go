@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -3236,6 +3237,33 @@ func TestReleaseTriggersReevaluateVisualsInsteadOfTrustingSidecars(t *testing.T)
 			if !strings.Contains(text, required) {
 				t.Fatalf("%s missing visual reevaluation contract %q", path, required)
 			}
+		}
+	}
+}
+
+func TestCommittedReleaseVisualSidecarsCarrySelectionEvidence(t *testing.T) {
+	paths, err := filepath.Glob(repoFile("docs", "releases", "*.visuals.json"))
+	if err != nil {
+		t.Fatalf("glob release visual sidecars: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("no committed release visual sidecars found")
+	}
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var plan struct {
+			SchemaVersion int             `json:"schema_version"`
+			Decision      string          `json:"decision"`
+			Captures      json.RawMessage `json:"captures"`
+		}
+		if err := json.Unmarshal(content, &plan); err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		if plan.SchemaVersion != 1 || strings.TrimSpace(plan.Decision) == "" || len(plan.Captures) == 0 {
+			t.Fatalf("%s must carry schema version, visual selection evidence, and a captures decision", path)
 		}
 	}
 }

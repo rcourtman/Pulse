@@ -69,7 +69,8 @@ Canonical publish triggers rerun visual evidence discovery and selection for the
 exact notes and comparison range being dispatched. A committed visual sidecar is
 review material only and cannot substitute for that run. The model may still
 select zero captures when its investigation finds that screenshots add no
-meaningful customer value.
+meaningful customer value. Committed sidecars remain schema-valid review
+records and retain the evidence-backed reason for selecting captures or none.
 
 Customer-facing notes use one outcome list for features and fixes. Each visible
 change is described once under `What's improved`; a parallel `Fixes` section is

@@ -1,4 +1,5 @@
 {
   "schema_version": 1,
+  "decision": "The Docker daemon cadence and host-agent identity corrections do not have a meaningful deterministic static UI comparison.",
   "captures": []
 }

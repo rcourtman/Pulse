@@ -1,4 +1,5 @@
 {
   "schema_version": 1,
+  "decision": "The updater fallback and provider normalization corrections do not have a meaningful deterministic static UI comparison.",
   "captures": []
 }
