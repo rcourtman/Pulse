@@ -474,7 +474,7 @@ describe('PlatformTableToolbar', () => {
 
     fireEvent.click(viewTrigger);
 
-    const viewDialog = screen.getByRole('dialog', { name: 'View preferences' });
+    const viewDialog = screen.getByRole('region', { name: 'View preferences' });
     expect(viewDialog).toHaveTextContent('Columns');
     expect(viewDialog).not.toContainElement(screen.getByText('2 of 3 rows'));
 

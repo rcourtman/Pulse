@@ -309,4 +309,9 @@ describe('FilterHeader', () => {
     expect(panel).toHaveClass('max-w-[calc(100vw-2rem)]');
     expect(panel).not.toHaveClass('w-[min(40rem,calc(100vw-2rem))]');
   });
+
+  it('keeps persistent view preferences out of viewport-docked toolbar panels', () => {
+    expect(filterToolbarSource).not.toContain('filterBottomNavAwarePanelClass');
+    expect(filterToolbarSource).not.toContain('filter-bottom-nav-aware-panel');
+  });
 });

@@ -223,7 +223,14 @@ describe('FilterBar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'View' }));
 
-    expect(screen.getByRole('dialog', { name: 'View preferences' })).toHaveTextContent('Density');
+    const viewRegion = screen.getByRole('region', { name: 'View preferences' });
+    const actionCluster = screen
+      .getByRole('button', { name: 'View' })
+      .closest('[data-filter-action-cluster]');
+    expect(viewRegion).toHaveTextContent('Density');
+    expect(actionCluster).not.toBeNull();
+    expect(actionCluster).not.toContainElement(viewRegion);
+    expect(viewRegion.closest('.filter-bar')).not.toBeNull();
   });
 
   it('reveals the shared View trigger with persistent controls in the expanded mobile rail', () => {

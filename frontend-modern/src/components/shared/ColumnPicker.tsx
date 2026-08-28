@@ -59,7 +59,9 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         </p>
       </div>
 
-      <div class="max-h-64 overflow-y-auto py-1">
+      <div
+        class={`max-h-64 overflow-y-auto py-1 ${props.inline ? 'column-picker-inline-options' : ''}`.trim()}
+      >
         <For each={props.columns}>
           {(column) => (
             <label class="flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors hover:bg-surface-hover">

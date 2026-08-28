@@ -2155,9 +2155,14 @@ Status, dynamic scope, and contextual `Clear filters` actions on
 the primary filter rail. Durable presentation choices — grouped/list mode,
 bars/trends, chart visibility, Guest/Host memory basis, and Columns — pass
 their panel content through `FilterBar.viewOptions` instead of importing or
-wrapping `ViewOptionsMenu` in the workload feature or rendering as equally
-prominent filter toggles. The shared FilterBar owns View composition across
-desktop and mobile layouts, including the mobile action-row placement.
+wrapping `ViewOptionsDisclosure` in the workload feature or rendering as
+equally prominent filter toggles. The shared FilterBar owns the inline View
+disclosure across desktop and mobile layouts, including the mobile action-row
+placement. Its compact desktop tracks use one shared width and control height,
+wrap without stretching to fill the toolbar, and become one full-width column
+on phones. Segmented choices divide their track evenly; the Guest/Host memory
+basis keeps its visible labels concise so it does not widen the hot toolbar
+path.
 Contextual Clear, leading actions, and View stay in
 one non-breaking mobile action cluster; trailing analytical controls and result
 counts wrap independently so a narrow toolbar cannot strand View on a line by
@@ -2168,9 +2173,10 @@ scope editing keeps Add filter beside the chips. The sparkline range remains
 inline only while trends are active because it is the frequently changed
 analytical window, and its compact control must include a visible `Trend range`
 label so the values are not an orphaned set of durations. Columns must expand
-inside the scrolling View surface instead of opening a nested absolute panel
-that can be clipped by the menu boundary. On Proxmox, the non-default Host basis must remain visible
-in the workload memory column header after the View menu closes. Workload chart
+as a full-width responsive checkbox row inside the View disclosure instead of
+opening a nested absolute panel or a tall single-column desktop list. On
+Proxmox, the non-default Host basis must remain visible in the workload memory
+column header after the View disclosure closes. Workload chart
 visibility remains a display preference: its menu action must expose explicit
 `Show charts` / `Hide charts` pressed state, and hiding charts must remove the
 summary section rather than leaving an empty collapsed summary band on screen.

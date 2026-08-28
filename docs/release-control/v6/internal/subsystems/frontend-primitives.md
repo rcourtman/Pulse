@@ -44,14 +44,14 @@ history, and must not discard the saved note.
 
 Platform-owned workload controls extend the shared `WorkloadsFilter` view
 options rather than creating page-local toolbar shells. Persistent presentation
-choices compose the shared `ViewOptionsMenu` instead of occupying the primary
-filter rail: layout, metric style, chart visibility, memory basis, and columns
-remain discoverable behind one `View` trigger, while the trend range may stay
-inline only when trends are active because it is the frequent analytical
-control. That inline range must carry a visible contextual label. Controls
-inside the scrolling View panel must expand as inline disclosures rather than
-opening nested absolute panels that can clip or create competing overlay
-stacks. The Proxmox page owns and persists the `Guest` / `Host` memory basis;
+choices compose the shared `ViewOptionsDisclosure` instead of occupying the
+primary filter rail: layout, metric style, chart visibility, memory basis, and
+columns remain discoverable behind one `View` trigger, while the trend range
+may stay inline only when trends are active because it is the frequent
+analytical control. That inline range must carry a visible contextual label.
+Controls inside the View disclosure must expand in place rather than opening
+nested absolute panels that can clip or create competing overlay stacks. The
+Proxmox page owns and persists the `Guest` / `Host` memory basis;
 the workload state, table, panel, and row contracts carry the selected basis
 and resolved parent-node data to the canonical memory bar, and the memory
 column header must expose the non-default Host basis after the control closes.
@@ -1134,14 +1134,22 @@ not a replacement status card, CTA band, or page-local nested card.
 1. Add shared primitives in `frontend-modern/src/components/shared/`
    Filterable table surfaces that separate high-frequency narrowing from
    durable presentation preferences must compose
-   `frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx`.
-   The shared menu owns trigger, panel, outside-click, Escape, focus-return,
-   remembered-preference explanation, and viewport-safe geometry; feature
-   surfaces own the controls placed inside it. They must not restore a row of
-   equally prominent preference toggles or a page-local popover shell. The
-   panel must anchor into the viewport from the trigger's leading edge when the
-   filter rail wraps, so a left-edge View trigger cannot push a right-aligned
-   panel off-screen.
+   `frontend-modern/src/components/shared/FilterBar/ViewOptionsDisclosure.tsx`.
+   The shared disclosure owns trigger, expanded state, Escape focus-return,
+   remembered-preference explanation, and responsive option-grid geometry;
+   feature surfaces own the controls placed inside it. They must not restore a
+   row of equally prominent preference toggles or a page-local popover shell.
+   The disclosure renders in normal flow beneath the filter rows so durable
+   settings push the affected table down instead of covering it. Its option
+   grid uses compact, equal-width tracks that wrap from one column on phones to
+   as many columns as the available desktop width supports. Floating,
+   viewport-docked, and nested overlay implementations are forbidden for this
+   persistent settings surface. Every option control fills its compact grid
+   track, uses the shared control height, and divides segmented choices evenly;
+   content-sized toggle islands with mismatched footprints are forbidden. An
+   inline Columns picker expands as a full-width row below the compact controls
+   and flows its checkboxes into responsive columns, so its option list becomes
+   neither a narrow nested panel nor a tall single-column desktop list.
    Standard command buttons and button-styled route actions belong to the
    shared `Button` primitive family. Feature pages may choose the action label,
    icon, route, click handler, and contextual layout, but secondary/primary/
@@ -4608,18 +4616,18 @@ value, defaultValue, group); `FilterBar` renders chips for active filters and
 exposes the rest behind a "+ Filter" menu, with type-ahead at both the menu
 and chip popovers (`AddFilterMenu` and `FilterChip`). Low-frequency view options
 (grouping segmented control, charts toggle, columns picker, sort key) compose
-the shared `ViewOptionsMenu` through `FilterBar`'s `viewOptions` prop instead of
-remaining as permanent toolbar controls. `FilterBar` owns the View trigger and
-popover; feature consumers pass only panel content and must not import or render
-`ViewOptionsMenu` themselves. Consumers with no currently applicable
-presentation choice must omit `viewOptions` rather than passing an empty
-conditional wrapper that leaves a dead View trigger. Contextual frequent actions may use
-`leadingControls`, while table counters, active trend ranges, and other
-persistent orientation readouts may use `trailingControls`. Platform tables
-inherit the same ownership through `PlatformTableToolbar`. Recovery is event-first
-and does not use equal workspace subtabs for protected rollups versus event
-history; Storage subtabs (Pools / Physical Disks) sit above the bar as
-navigation, not filters.
+the shared `ViewOptionsDisclosure` through `FilterBar`'s `viewOptions` prop
+instead of remaining as permanent toolbar controls. `FilterBar` owns the View
+trigger and inline disclosure; feature consumers pass only panel content and
+must not import or render `ViewOptionsDisclosure` themselves. Consumers with
+no currently applicable presentation choice must omit `viewOptions` rather
+than passing an empty conditional wrapper that leaves a dead View trigger.
+Contextual frequent actions may use `leadingControls`, while table counters,
+active trend ranges, and other persistent orientation readouts may use
+`trailingControls`. Platform tables inherit the same ownership through
+`PlatformTableToolbar`. Recovery is event-first and does not use equal
+workspace subtabs for protected rollups versus event history; Storage subtabs
+(Pools / Physical Disks) sit above the bar as navigation, not filters.
 `FilterBar` owns committed infrastructure search terms as removable pills,
 separate from its consumer-owned structured `FilterDef` chips. An exact
 infrastructure completion or a recognized abbreviated query clears the draft
@@ -6703,10 +6711,8 @@ element ref, because a ref runs before the node is in the document, where the
 measured height is zero.
 
 Every surface that must sit on top of the bar reads that property: the
-Assistant overlay panel and its backdrop, the compact post-update notice, the
-global GitHub star banner, and
-the `.filter-bottom-nav-aware-panel` rule in
-`frontend-modern/src/index.css`. Consumers must not add
+Assistant overlay panel and its backdrop, the compact post-update notice, and
+the global GitHub star banner. Consumers must not add
 `env(safe-area-inset-bottom)` on top of the published value, and must not
 reintroduce a literal bar height. The declared `:root` value is a
 pre-measurement fallback only and deliberately under-estimates: reserving more

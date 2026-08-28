@@ -84,7 +84,7 @@ const pickFromMenu = (menuItem: string, optionLabel: string) => {
 
 const openViewPreferences = () => {
   fireEvent.click(screen.getByRole('button', { name: 'View' }));
-  return screen.getByRole('dialog', { name: 'View preferences' });
+  return screen.getByRole('region', { name: 'View preferences' });
 };
 
 describe('WorkloadsFilter', () => {

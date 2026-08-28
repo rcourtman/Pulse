@@ -572,6 +572,12 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('.pulse-shell--full-width');
     expect(appStylesSource).toContain('.pulse-wide-data-surface.space-y-3');
     expect(appStylesSource).toContain('.filter-bar > div > div:first-child button');
+    expect(appStylesSource).toContain(
+      'grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 11rem))',
+    );
+    expect(appStylesSource).toContain(".view-options-grid > * [role='group'] > button");
+    expect(appStylesSource).toContain('flex: 1 1 0%');
+    expect(appStylesSource).toContain("button[aria-expanded='true']");
     expect(appStylesSource).not.toContain('.proxmox-nodes-card > :first-child');
     expect(appStylesSource).toContain(
       '.table-fixed.platform-table > tbody > tr:not([data-inline-detail-for])',
@@ -915,7 +921,7 @@ describe('mobile bottom navigation clearance', () => {
 
   it('keeps every consumer reading that property instead of its own copy', () => {
     // The Assistant panel, its backdrop, the star banner and both halves of
-    // the .filter-bottom-nav-aware-panel rule each carried their own
+    // the former filter-popover docking rule each carried their own
     // calc(5rem + env(safe-area-inset-bottom)) for a bar that measures ~45px.
     // The overshoot left a band below the Assistant backdrop that was neither
     // dimmed nor click-blocked, so page content stayed interactive outside an

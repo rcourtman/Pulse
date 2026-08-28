@@ -311,7 +311,7 @@ import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx
 import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?raw';
 import filterBarOptionPresentationSource from '@/components/shared/FilterBar/filterOptionPresentation.tsx?raw';
 import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
-import viewOptionsMenuSource from '@/components/shared/FilterBar/ViewOptionsMenu.tsx?raw';
+import viewOptionsDisclosureSource from '@/components/shared/FilterBar/ViewOptionsDisclosure.tsx?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 import orgSwitcherSource from '@/components/OrgSwitcher.tsx?raw';
 import resourceDetailDrawerOverviewTabSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
@@ -8558,19 +8558,26 @@ describe('shared primitive guardrails', () => {
     // refactor that narrows the snapshot to a curated subset would silently
 
     expect(filterToolbarSource).toContain('export const FilterPopoverTrigger');
-    expect(filterToolbarSource).toContain('export const filterBottomNavAwarePanelClass');
     expect(filterToolbarSource).toContain(
       "'min-h-11 rounded-md text-xs font-medium sm:h-7 sm:min-h-0'",
     );
-    expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
-    expect(viewOptionsMenuSource).toContain('class="static ml-auto shrink-0 sm:relative sm:ml-0"');
-    expect(viewOptionsMenuSource).toContain('filterBottomNavAwarePanelClass');
+    expect(viewOptionsDisclosureSource).toContain('createViewOptionsDisclosureState');
+    expect(viewOptionsDisclosureSource).toContain('<FilterPopoverTrigger');
+    expect(viewOptionsDisclosureSource).toContain('role="region"');
+    expect(viewOptionsDisclosureSource).toContain('view-options-grid');
+    expect(viewOptionsDisclosureSource).not.toContain('xl:grid-cols-5');
+    expect(viewOptionsDisclosureSource).not.toContain('aria-haspopup');
+    expect(viewOptionsDisclosureSource).not.toContain('position:fixed');
+    expect(viewOptionsDisclosureSource).not.toContain('FilterToolbarPanel');
     expect(filterCatalogSource).toContain('leadingControls?: JSX.Element;');
     expect(filterCatalogSource).toContain('viewOptions?: JSX.Element;');
     expect(filterCatalogSource).toContain('trailingControls?: JSX.Element;');
     expect(filterCatalogSource).not.toContain('viewOptionsTrailing');
-    expect(filterBarSource).toContain("import { ViewOptionsMenu } from './ViewOptionsMenu';");
-    expect(filterBarSource).toContain('<ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>');
+    expect(filterBarSource).toContain("from './ViewOptionsDisclosure';");
+    expect(filterBarSource).toContain(
+      '<ViewOptionsDisclosureTrigger state={viewOptionsDisclosure} />',
+    );
+    expect(filterBarSource).toContain('<ViewOptionsDisclosurePanel state={viewOptionsDisclosure}>');
     expect(filterBarSource).toContain('aria-label="Filter actions"');
     expect(sharedPlatformPageSource).toContain('viewOptions?: JSX.Element;');
     expect(sharedPlatformPageSource).toContain('{props.viewOptions}');

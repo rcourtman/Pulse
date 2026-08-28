@@ -469,7 +469,7 @@ describe('Docker native tables', () => {
     // single-host inventory must not offer host grouping.
     fireEvent.click(screen.getByRole('button', { name: 'View' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'View preferences' });
+    const dialog = screen.getByRole('region', { name: 'View preferences' });
     expect(within(dialog).getByText('Inventory totals')).toBeInTheDocument();
     expect(within(dialog).queryByText('Layout')).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('group', { name: 'Group by' })).not.toBeInTheDocument();
@@ -506,7 +506,7 @@ describe('Docker native tables', () => {
     expect(container.querySelector('[data-docker-host-group]')).toBeNull();
   });
 
-  it('keeps Docker grouping inside the shared View preferences popover', () => {
+  it('keeps Docker grouping inside the shared View preferences disclosure', () => {
     const { container } = renderInRouter(() => (
       <DockerContainersTable
         resources={[
@@ -536,7 +536,7 @@ describe('Docker native tables', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'View' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'View preferences' });
+    const dialog = screen.getByRole('region', { name: 'View preferences' });
     expect(within(dialog).getByText('Layout')).toBeInTheDocument();
     expect(within(dialog).getByRole('group', { name: 'Group by' })).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'List' }));

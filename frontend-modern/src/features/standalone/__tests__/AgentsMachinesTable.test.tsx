@@ -119,7 +119,7 @@ const deleteAgentMock = vi.mocked(MonitoringAPI.deleteAgent);
 const openMachineColumnPicker = async () => {
   const viewTrigger = screen.getByRole('button', { name: 'View' });
   await fireEvent.click(viewTrigger);
-  const viewDialog = screen.getByRole('dialog', { name: 'View preferences' });
+  const viewDialog = screen.getByRole('region', { name: 'View preferences' });
   await fireEvent.click(within(viewDialog).getByTitle('Choose which columns to display'));
   return viewDialog;
 };
@@ -190,7 +190,7 @@ describe('AgentsMachinesTable', () => {
     expect(onExternalStatusChange).not.toHaveBeenCalled();
   });
 
-  it('keeps the column picker inside the shared View preferences popover', async () => {
+  it('keeps the column picker inside the shared View preferences disclosure', async () => {
     render(() => (
       <AgentsMachinesTable
         resources={[resource({ id: 'tower', name: 'Tower' })]}

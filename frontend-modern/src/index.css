@@ -18,6 +18,33 @@
   .\32xl\:text-base {
     color: inherit;
   }
+
+  .view-options-grid > * [role='group'] > button {
+    box-sizing: border-box;
+    height: 1.75rem;
+    min-height: 1.75rem;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .view-options-grid > * > :last-child:not([role='group']) > button {
+    box-sizing: border-box;
+    width: 100%;
+    height: 2rem;
+    min-height: 2rem;
+  }
+
+  @media (max-width: 640px) {
+    .view-options-grid > * [role='group'] > button {
+      height: 2.5rem;
+      min-height: 2.5rem;
+    }
+
+    .view-options-grid > * > :last-child:not([role='group']) > button {
+      height: 2.75rem;
+      min-height: 2.75rem;
+    }
+  }
 }
 
 /* Update banner animation */
@@ -426,35 +453,54 @@
     scrollbar-gutter: stable;
   }
 
-  /*
-    Filter utility panels must stay reachable in short windows as well as
-    narrow ones. While the bottom navigation is present they sit above it;
-    short desktop windows use the viewport edge, and roomy desktop windows
-    return to the trigger-anchored dropdown.
-  */
-  .filter-bottom-nav-aware-panel {
-    position: fixed !important;
-    inset-inline: auto 1rem !important;
-    top: auto !important;
-    bottom: 1rem !important;
-    max-height: calc(100dvh - 2rem);
-    overflow-y: auto;
+  .view-options-grid {
+    container-type: inline-size;
+    grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 11rem));
+    justify-content: start;
   }
 
-  @media (max-width: 79.999rem) {
-    .filter-bottom-nav-aware-panel {
-      bottom: var(--pulse-mobile-nav-height) !important;
-      max-height: calc(100dvh - var(--pulse-mobile-nav-height) - 1rem);
+  .view-options-grid > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .view-options-grid > * > :last-child,
+  .view-options-grid > * [role='group'] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .view-options-grid > * [role='group'] {
+    display: flex;
+  }
+
+  .view-options-grid > * [role='group'] > button {
+    min-width: 0;
+    flex: 1 1 0%;
+  }
+
+  .view-options-grid > *:has(> :last-child > button[aria-expanded='true']) {
+    grid-column: 1 / -1;
+    width: 100cqw;
+  }
+
+  .column-picker-inline-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+  }
+
+  @media (min-width: 641px) {
+    .view-options-grid
+      > *:has(> :last-child > button[aria-expanded='true'])
+      > :last-child
+      > button {
+      width: 11rem;
     }
   }
 
-  @media (min-width: 80rem) and (min-height: 48rem) {
-    .filter-bottom-nav-aware-panel {
-      position: absolute !important;
-      inset-inline: auto 0 !important;
-      top: calc(100% + 0.25rem) !important;
-      bottom: auto !important;
-      max-height: min(38rem, calc(100vh - 8rem));
+  @media (max-width: 640px) {
+    .view-options-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 

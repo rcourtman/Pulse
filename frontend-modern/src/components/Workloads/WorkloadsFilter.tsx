@@ -360,13 +360,13 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
                 options={[
                   {
                     value: 'guest',
-                    label: 'Guest allocation',
+                    label: 'Guest',
                     ariaLabel: 'Guest',
                     title: 'Show memory as a percentage of each guest allocation',
                   },
                   {
                     value: 'host',
-                    label: 'Host capacity',
+                    label: 'Host',
                     ariaLabel: 'Host',
                     title: 'Show memory as a percentage of the Proxmox host total',
                   },

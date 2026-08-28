@@ -109,7 +109,7 @@ const queryStorageChip = (label: string): HTMLButtonElement | null => {
 const openStorageViewOptions = () => {
   expect(screen.queryByLabelText('Sort by')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'View' }));
-  return screen.getByRole('dialog', { name: 'View preferences' });
+  return screen.getByRole('region', { name: 'View preferences' });
 };
 
 const setStorageViewOption = (dialog: HTMLElement, label: string, value: string) => {

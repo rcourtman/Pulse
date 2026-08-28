@@ -27,7 +27,6 @@ export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
 export const filterPanelClass =
   'absolute right-0 top-[calc(100%+0.5rem)] z-[80] rounded-md border border-border bg-surface p-3 shadow-lg';
 export const filterPanelDefaultWidthClass = 'w-[min(40rem,calc(100vw-2rem))]';
-export const filterBottomNavAwarePanelClass = 'filter-bottom-nav-aware-panel';
 export const filterPanelTitleClass = 'text-sm font-medium text-base-content';
 export const filterPanelDescriptionClass = 'text-xs text-muted';
 export const mobileFiltersButtonClass =

@@ -6,7 +6,11 @@ import { FilterActionButton, FilterMobileToggleButton } from '@/components/share
 import { SearchInput } from '@/components/shared/SearchInput';
 import { AddFilterMenu } from './AddFilterMenu';
 import { FilterChip } from './FilterChip';
-import { ViewOptionsMenu } from './ViewOptionsMenu';
+import {
+  ViewOptionsDisclosurePanel,
+  ViewOptionsDisclosureTrigger,
+  createViewOptionsDisclosureState,
+} from './ViewOptionsDisclosure';
 import {
   buildFilterSearchSuggestions,
   clearFilter,
@@ -80,6 +84,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   const [mobileExpanded, setMobileExpanded] = createSignal(false);
   const [searchDraft, setSearchDraft] = createSignal('');
   const [searchTerms, setSearchTerms] = createSignal<FilterSearchTerm[]>([]);
+  const viewOptionsDisclosure = createViewOptionsDisclosureState();
   let lastAppliedSearch: string | undefined;
 
   const inlineFilters = createMemo<FilterDef[]>(() =>
@@ -209,6 +214,11 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
     if (!key) return undefined;
     return { storageKey: key, emptyMessage: props.search.emptyMessage };
   };
+  const toggleMobileExpanded = () => {
+    const next = !mobileExpanded();
+    if (!next) viewOptionsDisclosure.close();
+    setMobileExpanded(next);
+  };
 
   return (
     <Card
@@ -241,10 +251,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
           </div>
           {props.searchTrailing}
           <Show when={props.isMobile()}>
-            <FilterMobileToggleButton
-              onClick={() => setMobileExpanded((value) => !value)}
-              count={activeCount()}
-            />
+            <FilterMobileToggleButton onClick={toggleMobileExpanded} count={activeCount()} />
           </Show>
         </div>
 
@@ -284,7 +291,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
                 </Show>
                 {props.leadingControls}
                 <Show when={props.viewOptions}>
-                  <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
+                  <ViewOptionsDisclosureTrigger state={viewOptionsDisclosure} />
                 </Show>
                 {props.trailingControls}
               </div>
@@ -341,7 +348,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
               </Show>
               {props.leadingControls}
               <Show when={props.viewOptions}>
-                <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
+                <ViewOptionsDisclosureTrigger state={viewOptionsDisclosure} />
               </Show>
             </div>
             <Show when={props.trailingControls}>
@@ -350,6 +357,11 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
               </div>
             </Show>
           </div>
+        </Show>
+        <Show when={props.viewOptions}>
+          <ViewOptionsDisclosurePanel state={viewOptionsDisclosure}>
+            {props.viewOptions}
+          </ViewOptionsDisclosurePanel>
         </Show>
       </div>
     </Card>

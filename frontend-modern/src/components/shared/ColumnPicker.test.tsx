@@ -77,6 +77,9 @@ describe('ColumnPicker', () => {
     expect(button).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByText('Show Columns')).toBeInTheDocument();
     expect(screen.getByLabelText('Memory')).toBeInTheDocument();
+    expect(screen.getByLabelText('Memory').parentElement?.parentElement).toHaveClass(
+      'column-picker-inline-options',
+    );
   });
 
   it('labels hidden column count with explicit context', () => {

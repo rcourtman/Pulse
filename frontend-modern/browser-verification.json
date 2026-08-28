@@ -1,35 +1,43 @@
 {
   "version": 1,
-  "base_sha": "99d4c4e8d44b2fb39a2f3c7eb0009eb1e8d126c0",
-  "verified_at": "2026-08-28T08:51:48Z",
+  "base_sha": "973944d8c048362dac2e1d82431c3280bc7fe615",
+  "verified_at": "2026-08-28T09:46:30Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/DiskDetail.tsx",
-    "frontend-modern/src/components/shared/HistoryChart.tsx",
-    "frontend-modern/src/components/shared/HistoryChartHoverGroup.tsx",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/shared/ColumnPicker.tsx",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsDisclosure.tsx",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx",
+    "frontend-modern/src/components/shared/FilterToolbar.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/DiskDetail.tsx": "fd604363e37ffd95e2bbfdfb82b36fa94b3a217e6644c4f9591946e9b41fd217",
-    "frontend-modern/src/components/shared/HistoryChart.tsx": "eef6172fbc89bdd9ec0f26ec6b71bb2f6344bd16bd5b0f5c6e32d594235d304d",
-    "frontend-modern/src/components/shared/HistoryChartHoverGroup.tsx": "58748fba95a4bb7941a08ff9e41c96e8c870b8f6fff9f9ff9767a795802a1632",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "8b54e7a48c4635e316ab01410ed07b6ddb308f6ea3f339612bb61ec55947c1d4"
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "4b7aae0fa7c6703baa7eab835e654967ac36ea4793174e721c2fee86c04b0903",
+    "frontend-modern/src/components/shared/ColumnPicker.tsx": "ed6903215456d6f41d69773e63fdb784276702e4389df648d736a801084c7aca",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "46c6cf55cad94cf9c004c21f2bf5d4a797ad0803196d3f9ca6a2c93b451317db",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsDisclosure.tsx": "c4a1f06ed5fc1416919ac808b4d862caa3c3edba5659ddfaae25695fd8c71728",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "deleted",
+    "frontend-modern/src/components/shared/FilterToolbar.tsx": "7b18839d12aba7cef74d934d98658a56bcc26ad46d728f86207d2d0dc25c7dd0",
+    "frontend-modern/src/index.css": "a9db1c5609856e9b9470c6707786b9e52cc2b4b0d9524eabed3f5b39c702a76a"
   },
-  "routes": ["/proxmox/storage?tab=disks&q=nvme2"],
+  "routes": ["/proxmox/overview"],
   "viewports": [
-    { "width": 1078, "height": 1234 },
+    { "width": 1440, "height": 900 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "Proxmox Physical Disks filtered to nvme2 with WD Red Pro 8TB expanded",
-    "disk History tab with 30-minute Read, Write, and Busy charts plus selectable-range Temperature history loaded",
-    "Read chart hovered with synchronized crosshairs, point markers, and tooltips visible on all three Live I/O charts",
-    "pointer moved outside the Live I/O group with all synchronized hover state cleared"
+    "desktop Proxmox overview with View preferences expanded inline above Guests",
+    "desktop compact tray with five equal 176 by 32 pixel controls",
+    "desktop Columns disclosure expanded as a full-width responsive checkbox row",
+    "phone filter drawer with View preferences expanded as one full-width column",
+    "phone Columns disclosure expanded below 44 pixel preference controls"
   ],
   "interactions": [
-    "expanded WD Red Pro 8TB and opened its History tab at desktop width",
-    "hovered the rebased desktop Read chart and confirmed Read, Write, and Busy show the same 09:34:00 timestamp while Temperature remains independent",
-    "repeated the hover at 390px and confirmed the stacked Read, Write, and Busy charts show the same 09:36:57 timestamp without clipped tooltips",
-    "moved the pointer outside the chart group and confirmed all grouped tooltips clear together"
+    "opened and closed View preferences from the shared View trigger",
+    "pressed Escape from a preference child and confirmed focus returned to View",
+    "opened Columns at desktop width and confirmed its panel matched the tray width with no horizontal overflow",
+    "opened Filters then View at 390 pixels and confirmed every segmented choice split the available width evenly",
+    "opened Columns at 390 pixels and confirmed its options remained reachable above the mobile navigation"
   ]
 }
