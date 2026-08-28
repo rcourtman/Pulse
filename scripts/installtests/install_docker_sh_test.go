@@ -353,9 +353,10 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"`rollback_version=v"+previous+"`",
-		"`hotfix_exception=true` transports that approved waiver through the shared promotion resolver; it does not reclassify v"+version+" as a patch hotfix.",
-		"The release owner separately approved a v"+version+"-only unsigned-Windows exception",
-		"The Windows packet must disclose the Unknown Publisher warning and retain exact-SHA, checksum, detached-signature, immutable-manifest, and published-digest verification.",
+		"`hotfix_exception=true` transports that approved waiver through the shared promotion resolver. It does not reclassify v"+version+" as a patch hotfix.",
+		"The integrated single-build workflow must pass its exact-SHA preflight and immutable readiness gates before publication.",
+		"The stable server cut is classified `existing-mobile-build-compatible`.",
+		"Stable `v"+version+"` skips SignPath under the standing unavailable policy and retains exact-SHA, checksum, detached-signature, immutable-manifest, published-digest, and Unknown Publisher disclosure controls.",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
 }

@@ -29,6 +29,25 @@ def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
+    def test_v640_stable_packet_keeps_release_boundaries_visible(self) -> None:
+        notes = (
+            _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.0.md"
+        ).read_text(encoding="utf-8")
+
+        for expected in (
+            "Alerts that survive restarts",
+            "More control over notifications",
+            "Earlier resource warnings",
+            "More accurate Proxmox and PBS coverage",
+            "Pulse Mobile iOS build 12 and Android versionCode 9 remain compatible",
+            "not Authenticode-signed",
+            "Unknown Publisher warning",
+            "The rollback target is stable `v6.3.2`",
+        ):
+            self.assertIn(expected, notes)
+        self.assertNotIn("## Fixes", notes)
+        render_release_body.validate_release_notes_shape(notes, "6.4.0")
+
     def test_rc13_packet_keeps_typed_truenas_smart_evidence_visible(self) -> None:
         notes = (
             _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.0-rc.13.md"

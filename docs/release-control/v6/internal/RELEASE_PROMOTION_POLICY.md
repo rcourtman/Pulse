@@ -475,9 +475,33 @@ TLS-unverified receipts leave the claim at `implemented` or
      silently change release behavior.
    - Windows artifacts remain bound by the exact release SHA, immutable
      candidate manifest, SHA-256 checksums, detached `.sig` and `.sshsig`
-     signatures, and published-digest verification. Public notes must disclose
-     that the binaries are not Authenticode-signed and may display an Unknown
-     Publisher warning.
+   signatures, and published-digest verification. Public notes must disclose
+   that the binaries are not Authenticode-signed and may display an Unknown
+   Publisher warning.
+17. v6.4.0 expedited stable-cutoff exception:
+   - On 2026-08-28, the release owner explicitly directed stable `v6.4.0`
+     publication from runtime cutoff
+     `18b22d1ebbfe542484652e419320fc7643a792f0`, promoted from published
+     `v6.4.0-rc.12`, without another public candidate or the remainder of the
+     normal 72-hour soak. The dated decision record is
+     `docs/release-control/v6/internal/records/v6.4.0-stable-cutoff-owner-approval-2026-08-28.md`.
+   - The accepted reason is active customer harm from incorrect same-name
+     Proxmox agent links, repeated inspection load on stopped-container-heavy
+     Docker hosts, incomplete Proxmox backup and TrueNAS SMART detail, and
+     unstable rolling metric history. The decision explicitly includes the
+     bounded product fixes after `v6.4.0-rc.12`.
+   - This is a version-bound owner-risk acceptance, not soak evidence and not
+     a standing exception for later releases. The workflow input
+     `hotfix_exception=true` transports the approved waiver through the shared
+     resolver and does not reclassify v6.4.0 as a patch hotfix.
+   - The final release-preparation commit may change only governed version,
+     release-note, qualification, test-guardrail, and release-control metadata.
+     The integrated single-build workflow must pass its exact-SHA preflight and
+     immutable readiness gates before any publication boundary. Under the
+     current single-build policy, a separate Release Dry Run is optional.
+   - The standing Windows Authenticode-unavailable policy from v6.3.2 applies
+     independently. It retains checksum, detached-signature, immutable-manifest,
+     published-digest, and public Unknown Publisher disclosure controls.
 
 ## Single-Build Release Path
 

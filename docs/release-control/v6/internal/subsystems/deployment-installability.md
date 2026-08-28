@@ -1856,14 +1856,19 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.13` cut sets the repo-root `VERSION`, repo-root
+The active stable `v6.4.0` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.13` release version. It
-follows `v6.4.0-rc.12` on the published `v6.4.0` candidate line. This
-prerelease keeps
-`rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
-plus versioned Docker and Helm artifacts, and does not move stable/latest
-install pointers or stable semver aliases. The candidate makes the append-only
+Helm chart release metadata to the same `6.4.0` release version. This stable
+minor release uses `promoted_from_tag=v6.4.0-rc.12`,
+`rollback_version=v6.3.2`, and the explicit version-bound owner decision
+recorded on 2026-08-28 to accept a shortened soak and the bounded product fixes
+after that published candidate. The workflow input `hotfix_exception=true`
+transports that approved waiver through the shared promotion resolver. It does
+not reclassify v6.4.0 as a patch hotfix. The integrated single-build workflow
+must pass its exact-SHA preflight and immutable readiness gates before
+publication. Under the current single-build policy, a separate Release Dry Run
+is optional. Stable/latest install pointers and stable semver aliases move only
+after the exact public and private candidate paths pass. The release makes the append-only
 event log authoritative for alert history and active-state reconstruction;
 adds per-alert snooze, recurring scoped maintenance, destination severity
 routing, repeatable escalation schedules, and external dead-man monitoring;
@@ -1894,24 +1899,23 @@ state, which removes one daemon call per historical container from each normal
 30-second report. It also restores same-name standalone Proxmox host-agent
 links when unique provider-observed interface addresses disambiguate the sites,
 while reused addresses remain ambiguous and fail closed.
-It also checkpoints a crash-safe active-state recovery envelope after durable
+The post-rc.12 cutoff also checkpoints a crash-safe active-state recovery envelope after durable
 lifecycle failure and prevents any Pulse host interface from satisfying an
-external dead-man signal. The changes since
+external dead-man signal. The stable server cut is classified
+`existing-mobile-build-compatible`. The changes since
 `v6.4.0-rc.6` add the canonical `alert_fired`
 mobile push type, but preserve the existing `view_alert` navigation action and
 all route, request/response, pairing, and authorization contracts. Published
 Pulse Mobile iOS build 12 and Android versionCode 9 already route
 `action_type=view_alert`, so the server cut is classified
 `existing-mobile-build-compatible`; no companion upload or public mobile-store
-rollout is part of this candidate. Published candidate source revision
+rollout is part of this stable release. Published candidate source revision
 `763e95138b840bae795ad6ca5affe930cfd0ef80` contains that navigation behavior,
 and Pulse Mobile revision `471d158e7bca7348a2cd8e7e36b8b44f343934bb`
 synchronizes the generated compatibility inventory with no required runtime
 navigation change.
-The prerelease Windows path
-retains exact-SHA, checksum, and detached-signature verification without
-Authenticode. Stable `v6.4.0` also skips SignPath under the standing unavailable
-policy and retains the same exact-SHA, checksum, detached-signature, manifest,
+Stable `v6.4.0` skips SignPath under the standing unavailable policy and
+retains exact-SHA, checksum, detached-signature, immutable-manifest,
 published-digest, and Unknown Publisher disclosure controls. Signing returns
 only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
@@ -2445,9 +2449,10 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.13` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.13` until the next
-governed stable cut moves them forward. Each new release moves
+For the active stable `v6.4.0` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0` until the next
+governed release moves them forward. The stable promotion guard remains in
+force and rejects leftover `-rc.` defaults. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
 release-packet blocker.
@@ -2740,13 +2745,13 @@ release-body verification: the exact claim is pinned in
 must still pass canonical shape validation. The `v6.4.0-rc.2` packet therefore
 binds the non-running container stale-health correction under **Fixes** without
 changing candidate artifact identity or dispatch authority.
-The `v6.4.0-rc.13` packet may continue accumulating compatible fixes while its
-public observation window prevents publication. When that happens, customer
-notes and the categorized changelog must be refreshed in the same commit as
-the added fix, and release-body proof must pin the new customer-facing claim.
-The TrueNAS SMART follow-up is therefore bound to its supported typed-counter
-claim; packet proof must reject notes that drop that claim or cease to pass
-canonical shape validation.
+The stable `v6.4.0` packet synthesizes the complete difference from `v6.3.2`
+rather than concatenating candidate notes. It retains the supported TrueNAS
+typed-counter claim, post-rc.12 Docker and Proxmox corrections, rolling-history
+snapshot fix, standing unsigned-Windows disclosure, mobile compatibility
+decision, rollback target, and owner-authorized expedited-promotion record.
+Packet proof must reject notes that drop those required release boundaries or
+cease to pass canonical shape validation.
 Release-note transport is file-backed and fail-closed: operator helpers must
 send the Markdown through JSON input rather than multiline form-field
 substitution, and every `gh workflow run --json` input value must be encoded as

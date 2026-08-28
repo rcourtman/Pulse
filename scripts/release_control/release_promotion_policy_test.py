@@ -1824,6 +1824,32 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("not Authenticode-signed", patch_signing_record)
         self.assertIn("Unknown Publisher warning", patch_signing_record)
 
+    def test_v640_expedited_stable_cutoff_is_version_bound(self) -> None:
+        policy = normalize_ws(
+            read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
+        )
+        owner_record = normalize_ws(
+            read(
+                "docs/release-control/v6/internal/records/"
+                "v6.4.0-stable-cutoff-owner-approval-2026-08-28.md"
+            )
+        )
+
+        self.assertIn("v6.4.0 expedited stable-cutoff exception", policy)
+        self.assertIn("not soak evidence and not a standing exception", policy)
+        self.assertIn("Runtime content cutoff: `18b22d1ebbfe542484652e419320fc7643a792f0`", owner_record)
+        self.assertIn("Promoted published prerelease: `v6.4.0-rc.12`", owner_record)
+        self.assertIn("Rollback target: `v6.3.2`", owner_record)
+        self.assertIn(
+            "Exact rollback reinstall command: `./scripts/install.sh --version v6.3.2`",
+            owner_record,
+        )
+        self.assertIn("active customer harm", owner_record)
+        self.assertIn("not 72-hour soak evidence", owner_record)
+        self.assertIn("standing Windows Authenticode-unavailable policy", owner_record)
+        self.assertIn("not Authenticode-signed", owner_record)
+        self.assertIn("Unknown Publisher warning", owner_record)
+
         unavailable_signing_record = normalize_ws(
             read(
                 "docs/release-control/v6/internal/records/"

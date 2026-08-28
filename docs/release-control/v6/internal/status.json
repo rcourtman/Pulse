@@ -9766,7 +9766,21 @@
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "ga-release-6-4-0-lane-l1",
+      "agent_id": "ga-release-6-4-0",
+      "summary": "Prepare and publish v6.4.0 GA from the latest main cutoff under the owner-authorized expedited promotion, with exact-SHA qualification and release convergence.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-08-28T22:31:03Z",
+      "heartbeat_at": "2026-08-28T22:31:03Z",
+      "expires_at": "2026-08-29T06:31:03Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L1"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
@@ -10749,6 +10763,18 @@
     {
       "id": "prerelease-observation-window",
       "summary": "After the first release candidate on a version line, each later public RC requires at least 24 hours of observation since the previous published RC. Compatible fixes and release evidence accumulate during the window, while draft creation, dry runs, and issue-scoped reporter test images remain available without replacing the public cohort.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-28",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
+    },
+    {
+      "id": "v6-4-0-expedited-stable-cutoff",
+      "summary": "On 2026-08-28 the release owner explicitly directed stable v6.4.0 publication from runtime cutoff 18b22d1ebbfe542484652e419320fc7643a792f0, promoted from published v6.4.0-rc.12, without another public candidate or the remainder of the normal 72-hour soak. The accepted reason is active customer harm from incorrect same-name Proxmox agent links, repeated Docker inspection load, incomplete backup and SMART detail, and unstable rolling metric history. This is a version-bound owner-risk acceptance that includes the bounded post-RC product fixes. It is not soak evidence or a standing exception.",
       "kind": "release-policy",
       "decided_at": "2026-08-28",
       "subsystem_ids": [
