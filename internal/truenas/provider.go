@@ -1181,22 +1181,43 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) t
 	}
 
 	diskPools := make(map[string]string, len(snapshot.Disks))
+	knownDiskNames := make(map[string]string, len(snapshot.Disks))
+	diskNamesBySerial := make(map[string]string, len(snapshot.Disks))
 	for _, disk := range snapshot.Disks {
 		diskName := strings.TrimSpace(disk.Name)
 		poolName := strings.TrimSpace(disk.Pool)
-		if diskName == "" || poolName == "" {
+		if diskName == "" {
 			continue
 		}
-		diskPools[diskName] = poolName
+		knownDiskNames[strings.ToLower(diskName)] = diskName
+		if serial := strings.ToUpper(strings.TrimSpace(disk.Serial)); serial != "" {
+			if existing, exists := diskNamesBySerial[serial]; exists && existing != diskName {
+				// Duplicate serials are not sufficient identity. Leave the entry
+				// empty so a provider alert cannot be assigned to the wrong disk.
+				diskNamesBySerial[serial] = ""
+			} else {
+				diskNamesBySerial[serial] = diskName
+			}
+		}
+		if poolName != "" {
+			diskPools[diskName] = poolName
+		}
 	}
 
 	nativePoolSignals := make(map[string]map[string]struct{}, len(snapshot.Alerts))
 	for _, alert := range snapshot.Alerts {
-		if alert.Dismissed {
-			continue
-		}
 		incident, ok := incidentFromAlert(alert)
 		if !ok {
+			continue
+		}
+		diskName := resolveAlertDiskName(alert, knownDiskNames, diskNamesBySerial)
+		// TrueNAS 25.10's drive-health manager exposes SMART counters through
+		// alert.list, while its supported disk API exposes no equivalent raw
+		// attribute feed. Acknowledging one of those disk-local SMART alerts
+		// changes notification state, not the underlying monotonic hardware
+		// evidence, so retain it until TrueNAS stops reporting the condition.
+		// All other dismissed alerts remain suppressed.
+		if alert.Dismissed && (incident.Code != "truenas_smart" || diskName == "") {
 			continue
 		}
 		assignments.System = append(assignments.System, incident)
@@ -1211,7 +1232,7 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) t
 			}
 		}
 
-		if diskName := diskNameFromAlert(alert); diskName != "" {
+		if diskName != "" {
 			assignments.Disks[diskName] = append(assignments.Disks[diskName], incident)
 			if poolName := diskPools[diskName]; poolName != "" {
 				assignments.Pools[poolName] = append(assignments.Pools[poolName], incident)
@@ -1267,6 +1288,15 @@ func incidentFromAlert(alert Alert) (unifiedresources.ResourceIncident, bool) {
 	severity, ok := severityFromAlertLevel(alert.Level)
 	if !ok {
 		return unifiedresources.ResourceIncident{}, false
+	}
+	// Pulse's provider-neutral storage policy treats uncorrectable media and
+	// failed self-tests as replacement-critical evidence even though TrueNAS
+	// currently labels two of those native alert classes WARNING.
+	switch strings.ToLower(strings.TrimSpace(alert.Class)) {
+	case "smartuncorrectederrors", "smartuncorrectederrorsalert",
+		"smartfailedselftest", "smartfailedselftestalert",
+		"smartspareblockcount", "smartspareblockcountalert":
+		severity = storagehealth.RiskCritical
 	}
 	return unifiedresources.ResourceIncident{
 		Provider:                      "truenas",
@@ -1534,11 +1564,13 @@ func severityFromAlertLevel(level string) (storagehealth.RiskLevel, bool) {
 
 func incidentCodeFromAlert(alert Alert) string {
 	source := strings.ToLower(strings.TrimSpace(alert.Source))
+	class := strings.ToLower(strings.TrimSpace(alert.Class))
+	if source == "smart" || strings.HasPrefix(class, "smart") {
+		return "truenas_smart"
+	}
 	switch source {
 	case "volumestatus":
 		return "truenas_volume_status"
-	case "smart":
-		return "truenas_smart"
 	case "scrub":
 		return "truenas_scrub"
 	default:
@@ -1569,6 +1601,9 @@ func poolNameFromAlert(alert Alert) string {
 }
 
 func diskNameFromAlert(alert Alert) string {
+	if name := normalizeAlertDiskName(alert.DiskName); name != "" {
+		return name
+	}
 	message := strings.TrimSpace(alert.Message)
 	if message == "" {
 		return ""
@@ -1584,9 +1619,30 @@ func diskNameFromAlert(alert Alert) string {
 	}
 	end := strings.IndexAny(rest, " :.,")
 	if end < 0 {
-		return strings.TrimSpace(rest)
+		return normalizeAlertDiskName(rest)
 	}
-	return strings.TrimSpace(rest[:end])
+	return normalizeAlertDiskName(rest[:end])
+}
+
+func normalizeAlertDiskName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.TrimPrefix(name, "/dev/")
+	if name == "" || strings.ContainsAny(name, `/\\`) || hasTraversalSegment(name) {
+		return ""
+	}
+	return name
+}
+
+func resolveAlertDiskName(alert Alert, knownDiskNames, diskNamesBySerial map[string]string) string {
+	if candidate := diskNameFromAlert(alert); candidate != "" {
+		if known := knownDiskNames[strings.ToLower(candidate)]; known != "" {
+			return known
+		}
+	}
+	if serial := strings.ToUpper(strings.TrimSpace(alert.DiskSerial)); serial != "" {
+		return diskNamesBySerial[serial]
+	}
+	return ""
 }
 
 func assessPool(pool Pool) storagehealth.Assessment {

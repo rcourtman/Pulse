@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -1061,6 +1062,121 @@ func TestRecordsProjectExplicitFailedSMARTAsReplacementRisk(t *testing.T) {
 	}
 	if !containsRiskReason(record.Resource.PhysicalDisk.Risk.Reasons, "health_status") {
 		t.Fatalf("missing health_status risk, got %+v", record.Resource.PhysicalDisk.Risk.Reasons)
+	}
+}
+
+func TestRecordsRetainDismissedTrueNASSMARTFailureAsDiskRisk(t *testing.T) {
+	fixtures := FixtureSnapshot{
+		CollectedAt: time.Date(2026, 8, 28, 9, 30, 0, 0, time.UTC),
+		System: SystemInfo{
+			Hostname: "truenas-test",
+			Healthy:  true,
+		},
+		Disks: []Disk{{
+			ID:          "disk-sda",
+			Name:        "sda",
+			Pool:        "tank",
+			Status:      "ONLINE",
+			Model:       "Samsung SSD 870 EVO 4TB",
+			Serial:      "SER-SDA",
+			SizeBytes:   4_000_787_030_016,
+			Transport:   "sata",
+			Temperature: 36,
+		}},
+		Alerts: []Alert{
+			{
+				ID:         "smart-uncorrected-sda",
+				Level:      "WARNING",
+				Message:    "53 uncorrectable errors reported for /dev/sda (SER-SDA).",
+				Source:     "SMART",
+				Class:      "SMARTUncorrectedErrorsAlert",
+				DiskName:   "/dev/sda",
+				DiskSerial: "SER-SDA",
+				Dismissed:  true,
+				Datetime:   time.Date(2026, 8, 28, 8, 0, 0, 0, time.UTC),
+			},
+			{
+				ID:        "dismissed-generic",
+				Level:     "WARNING",
+				Message:   "A dismissed non-SMART alert must remain suppressed.",
+				Source:    "Replication",
+				DiskName:  "/dev/sda",
+				Dismissed: true,
+				Datetime:  time.Date(2026, 8, 28, 8, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	var diskRecord *unifiedresources.IngestRecord
+	records := FixtureRecords(fixtures)
+	for i := range records {
+		if records[i].Resource.Type == unifiedresources.ResourceTypePhysicalDisk && records[i].Resource.Name == "sda" {
+			diskRecord = &records[i]
+			break
+		}
+	}
+	if diskRecord == nil || diskRecord.Resource.PhysicalDisk == nil {
+		t.Fatal("expected canonical sda physical-disk record")
+	}
+	if len(diskRecord.Resource.Incidents) != 1 {
+		t.Fatalf("expected only dismissed SMART evidence to survive, got %+v", diskRecord.Resource.Incidents)
+	}
+	incident := diskRecord.Resource.Incidents[0]
+	if incident.Code != "truenas_smart" || incident.Severity != storagehealth.RiskCritical ||
+		!strings.Contains(incident.Summary, "53 uncorrectable errors") {
+		t.Fatalf("unexpected retained SMART incident: %+v", incident)
+	}
+	if risk := diskRecord.Resource.PhysicalDisk.Risk; risk == nil || risk.Level != storagehealth.RiskCritical ||
+		!containsRiskReason(risk.Reasons, "truenas_smart") {
+		t.Fatalf("expected retained SMART incident in critical physical-disk risk, got %+v", risk)
+	}
+}
+
+func TestDismissedTrueNASSMARTAlertRequiresExactDiskIdentity(t *testing.T) {
+	fixtures := FixtureSnapshot{
+		CollectedAt: time.Date(2026, 8, 28, 9, 30, 0, 0, time.UTC),
+		System:      SystemInfo{Hostname: "truenas-test", Healthy: true},
+		Disks: []Disk{{
+			ID: "disk-sda", Name: "sda", Status: "ONLINE", Serial: "SER-SDA", Transport: "sata",
+		}},
+		Alerts: []Alert{{
+			ID: "smart-unknown", Level: "WARNING", Message: "uncorrectable errors reported",
+			Source: "SMART", Class: "SMARTUncorrectedErrorsAlert", DiskName: "/dev/sdz", Dismissed: true,
+		}},
+	}
+
+	records := FixtureRecords(fixtures)
+	for i := range records {
+		if records[i].Resource.Type != unifiedresources.ResourceTypePhysicalDisk {
+			continue
+		}
+		if len(records[i].Resource.Incidents) != 0 || records[i].Resource.PhysicalDisk.Risk != nil {
+			t.Fatalf("unresolved dismissed SMART alert must stay suppressed, got %+v", records[i].Resource)
+		}
+	}
+}
+
+func TestResolveAlertDiskNameUsesExactNativeIdentity(t *testing.T) {
+	knownNames := map[string]string{"sda": "sda"}
+	serials := map[string]string{"SER-SDA": "sda", "DUPLICATE": ""}
+	tests := []struct {
+		name  string
+		alert Alert
+		want  string
+	}{
+		{name: "native device argument", alert: Alert{DiskName: "/dev/sda"}, want: "sda"},
+		{name: "serial fallback", alert: Alert{DiskName: "/dev/unknown", DiskSerial: "ser-sda"}, want: "sda"},
+		{name: "unknown identity", alert: Alert{DiskName: "/dev/sdz", DiskSerial: "missing"}},
+		{name: "ambiguous serial", alert: Alert{DiskSerial: "duplicate"}},
+		{name: "unsafe device argument", alert: Alert{DiskName: "/dev/../sda", DiskSerial: "missing"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveAlertDiskName(tt.alert, knownNames, serials); got != tt.want {
+				t.Fatalf("resolveAlertDiskName() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

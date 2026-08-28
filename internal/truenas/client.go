@@ -1220,17 +1220,21 @@ func (c *Client) getAlertsRPC(ctx context.Context) ([]Alert, error) {
 		if id == "" {
 			id = strings.TrimSpace(readStringAny(item, "klass"))
 		}
+		args := readMapAny(item, "args")
 		var datetime time.Time
 		if t := readTimeAny(item, "datetime", "last_occurrence", "lastOccurrence"); t != nil {
 			datetime = *t
 		}
 		alerts = append(alerts, Alert{
-			ID:        id,
-			Level:     strings.TrimSpace(readStringAny(item, "level")),
-			Message:   strings.TrimSpace(readStringAny(item, "formatted", "text", "message", "klass")),
-			Source:    strings.TrimSpace(readStringAny(item, "source", "node")),
-			Dismissed: readBoolAny(item, "dismissed"),
-			Datetime:  datetime,
+			ID:         id,
+			Level:      strings.TrimSpace(readStringAny(item, "level")),
+			Message:    strings.TrimSpace(readStringAny(item, "formatted", "text", "message", "klass")),
+			Source:     strings.TrimSpace(readStringAny(item, "source", "node")),
+			Class:      strings.TrimSpace(readStringAny(item, "klass", "class")),
+			DiskName:   strings.TrimSpace(readStringAny(args, "name", "disk", "device")),
+			DiskSerial: strings.TrimSpace(readStringAny(args, "serial", "serial_number", "serialNumber")),
+			Dismissed:  readBoolAny(item, "dismissed"),
+			Datetime:   datetime,
 		})
 	}
 	return alerts, nil
@@ -1255,12 +1259,15 @@ func (c *Client) getAlertsREST(ctx context.Context) ([]Alert, error) {
 		}
 
 		alerts = append(alerts, Alert{
-			ID:        id,
-			Level:     strings.TrimSpace(item.Level),
-			Message:   strings.TrimSpace(item.Formatted),
-			Source:    strings.TrimSpace(item.Source),
-			Dismissed: item.Dismissed,
-			Datetime:  time.UnixMilli(ms).UTC(),
+			ID:         id,
+			Level:      strings.TrimSpace(item.Level),
+			Message:    strings.TrimSpace(item.Formatted),
+			Source:     strings.TrimSpace(item.Source),
+			Class:      strings.TrimSpace(item.Class),
+			DiskName:   strings.TrimSpace(readStringAny(item.Args, "name", "disk", "device")),
+			DiskSerial: strings.TrimSpace(readStringAny(item.Args, "serial", "serial_number", "serialNumber")),
+			Dismissed:  item.Dismissed,
+			Datetime:   time.UnixMilli(ms).UTC(),
 		})
 	}
 
@@ -4489,6 +4496,8 @@ type alertResponse struct {
 	Level     string          `json:"level"`
 	Formatted string          `json:"formatted"`
 	Source    string          `json:"source"`
+	Class     string          `json:"klass"`
+	Args      map[string]any  `json:"args"`
 	Dismissed bool            `json:"dismissed"`
 	Datetime  struct {
 		Date json.RawMessage `json:"$date"`

@@ -297,7 +297,11 @@ func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 			if !ok || len(params) != 0 {
 				t.Fatalf("expected alert.list to use no params, got %#v", request.Params)
 			}
-			writeRPCResult(t, conn, request.ID, defaultRoutePayloadMaps(t, "/api/v2.0/alert/list"))
+			writeRPCResult(t, conn, request.ID, []map[string]any{{
+				"id": "a1", "level": "WARNING", "formatted": "Disk temp high", "source": "DiskService",
+				"klass": "DiskTemperatureAlert", "args": map[string]any{"name": "/dev/sda", "serial": "SER-A"},
+				"dismissed": false, "datetime": map[string]any{"$date": 1707400000000},
+			}})
 		default:
 			t.Fatalf("unexpected rpc method %q", request.Method)
 		}
@@ -325,8 +329,28 @@ func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAlerts() error = %v", err)
 	}
-	if len(alerts) != 1 || alerts[0].ID != "a1" || alerts[0].Level != "WARNING" {
+	if len(alerts) != 1 || alerts[0].ID != "a1" || alerts[0].Level != "WARNING" ||
+		alerts[0].Class != "DiskTemperatureAlert" || alerts[0].DiskName != "/dev/sda" || alerts[0].DiskSerial != "SER-A" {
 		t.Fatalf("unexpected native alert mapping: %+v", alerts)
+	}
+}
+
+func TestGetAlertsParsesLegacyDiskIdentityArguments(t *testing.T) {
+	responses := defaultAPIResponses()
+	responses["/api/v2.0/alert/list"] = apiResponse{
+		body: `[{"id":"smart-1","level":"WARNING","formatted":"53 uncorrectable errors reported for /dev/sda (SER-A).","source":"SMART","klass":"SMARTUncorrectedErrorsAlert","args":{"name":"/dev/sda","serial":"SER-A"},"dismissed":true,"datetime":{"$date":1707400000000}}]`,
+	}
+	server := newMockServer(t, responses, nil)
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	alerts, err := client.GetAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("GetAlerts() error = %v", err)
+	}
+	if len(alerts) != 1 || alerts[0].Class != "SMARTUncorrectedErrorsAlert" ||
+		alerts[0].DiskName != "/dev/sda" || alerts[0].DiskSerial != "SER-A" || !alerts[0].Dismissed {
+		t.Fatalf("unexpected legacy SMART alert mapping: %+v", alerts)
 	}
 }
 

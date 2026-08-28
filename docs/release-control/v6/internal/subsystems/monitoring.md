@@ -2620,7 +2620,15 @@ projection. When TrueNAS raises disk-local SMART alerts such as
 `truenas_smart`, `internal/truenas/provider.go` must fold that incident truth
 into the canonical physical-disk risk payload instead of leaving SMART failure
 state trapped in incident/status-only decorations that storage consumers do
-not read.
+not read. Current TrueNAS drive-health releases expose failure counters through
+`alert.list` without exposing equivalent raw attributes through the supported
+disk API. Pulse must therefore retain a dismissed SMART alert only when its
+native arguments or serial resolve to exactly one currently inventoried disk:
+dismissal acknowledges notification state but does not erase monotonic hardware
+evidence. Other dismissed alerts, and dismissed SMART alerts with missing or
+ambiguous disk identity, remain suppressed. Native uncorrectable-error, failed
+self-test, and low-spare-block classes map to critical canonical disk risk even
+when TrueNAS labels the source alert as a warning.
 The same boundary owns TrueNAS `smart_status` normalization. `internal/truenas/client.go`
 must parse REST and RPC SMART status separately from native disk state, and
 `internal/truenas/disk_health.go` plus `internal/truenas/provider.go` must map
