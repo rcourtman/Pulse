@@ -36,6 +36,7 @@ interface AlertResourceIncidentsPanelProps {
   getResource?: (resourceId: string) => Resource | undefined;
   onClose?: () => void;
   showCloseAction?: boolean;
+  showTitle?: boolean;
 }
 
 export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelProps) {
@@ -59,9 +60,11 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
           <Card padding="md">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-base-content">
-                  {getAlertResourceIncidentPanelTitle()}
-                </h3>
+                <Show when={props.showTitle ?? true}>
+                  <h3 class="text-sm font-semibold text-base-content">
+                    {getAlertResourceIncidentPanelTitle()}
+                  </h3>
+                </Show>
                 <p class="text-xs text-muted">
                   {resourceDisplayName()}
                   <Show when={incidents().length > 0}>

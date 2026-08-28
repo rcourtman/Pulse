@@ -31,7 +31,7 @@ On your TrueNAS system:
 | Apps | TrueNAS Overview | Native app state, image/version, ports, volumes, networks, and runtime container details |
 | ZFS Pools | Storage | Total/used/free capacity, pool status (ONLINE/DEGRADED/FAULTED) |
 | ZFS Datasets | Storage | Used/available space, mount status, read-only flag |
-| Physical Disks | Storage | Model, serial, size, transport type, rotational flag |
+| Physical Disks | Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure evidence |
 | ZFS Snapshots | Recovery | Dataset, creation time, size, referenced data |
 | Replication Tasks | Recovery | Source/target datasets, direction, last run status |
 | TrueNAS Alerts | Alerts | Native TrueNAS alert messages and severity levels |
@@ -46,6 +46,12 @@ TrueNAS resources are mapped into the unified resource model:
 - **ZFS pools and datasets** → appear on the **Storage** page.
 - **ZFS snapshots and replication** → appear on the **Recovery** page as recovery points.
 - **TrueNAS alerts** → surfaced on the **Alerts** page alongside Proxmox and other platform alerts.
+
+TrueNAS drive-health alerts that identify a specific disk remain disk-health
+evidence after they are dismissed in TrueNAS. Dismissal acknowledges the
+notification; Pulse continues to show the affected disk risk while TrueNAS
+continues to report the underlying SMART condition. Other dismissed TrueNAS
+alerts remain suppressed.
 
 Resources from TrueNAS can be filtered using the **source** filter on any page.
 

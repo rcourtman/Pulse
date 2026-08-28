@@ -15,6 +15,7 @@ export interface AlertHistoryStatusPresentation {
 }
 
 export const ALERT_RESOURCE_INCIDENT_PANEL_TITLE = 'Resource incidents';
+export const ALERT_INCIDENT_TIMELINE_DIALOG_TITLE = 'Incident timeline';
 export const ALERT_RESOURCE_INCIDENT_LOADING_STATE = 'Loading incidents...';
 export const ALERT_RESOURCE_INCIDENT_EMPTY_STATE = 'No incidents recorded for this resource yet.';
 export const ALERT_RESOURCE_INCIDENT_REFRESH_LABEL = 'Refresh';
@@ -119,6 +120,10 @@ export function getAlertResourceIncidentEmptyState() {
 
 export function getAlertResourceIncidentPanelTitle() {
   return ALERT_RESOURCE_INCIDENT_PANEL_TITLE;
+}
+
+export function getAlertIncidentTimelineDialogTitle() {
+  return ALERT_INCIDENT_TIMELINE_DIALOG_TITLE;
 }
 
 export function getAlertResourceIncidentCountLabel(count: number) {

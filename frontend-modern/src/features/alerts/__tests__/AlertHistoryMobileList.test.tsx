@@ -130,6 +130,7 @@ describe('AlertHistoryMobileList', () => {
     expect(
       screen.getByRole('dialog', { name: 'Resource incidents for pve-production-01' }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Resource incidents' })).toHaveLength(1);
   });
 
   it('keeps resource investigation scrolling outside the virtualized history row', async () => {

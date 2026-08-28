@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALERT_INCIDENT_TIMELINE_DIALOG_TITLE,
   ALERT_RESOURCE_INCIDENT_EMPTY_STATE,
   ALERT_RESOURCE_INCIDENT_LOADING_STATE,
   ALERT_RESOURCE_INCIDENT_NOTE_PLACEHOLDER,
@@ -11,6 +12,7 @@ import {
   ALERT_RESOURCE_INCIDENT_SAVING_NOTE_LABEL,
   getAlertHistoryStatusPresentation,
   getAlertIncidentLevelBadgeClass,
+  getAlertIncidentTimelineDialogTitle,
   getAlertResourceIncidentAcknowledgedByLabel,
   getAlertResourceIncidentCountLabel,
   getAlertResourceIncidentEmptyState,
@@ -102,6 +104,7 @@ describe('alertIncidentPresentation', () => {
   });
 
   it('returns canonical resource incident loading and empty-state copy', () => {
+    expect(ALERT_INCIDENT_TIMELINE_DIALOG_TITLE).toBe('Incident timeline');
     expect(ALERT_RESOURCE_INCIDENT_PANEL_TITLE).toBe('Resource incidents');
     expect(ALERT_RESOURCE_INCIDENT_LOADING_STATE).toBe('Loading incidents...');
     expect(ALERT_RESOURCE_INCIDENT_EMPTY_STATE).toBe(
@@ -116,6 +119,7 @@ describe('alertIncidentPresentation', () => {
     expect(ALERT_RESOURCE_INCIDENT_SAVE_NOTE_LABEL).toBe('Save Note');
     expect(ALERT_RESOURCE_INCIDENT_SAVING_NOTE_LABEL).toBe('Saving...');
     expect(getAlertResourceIncidentPanelTitle()).toBe('Resource incidents');
+    expect(getAlertIncidentTimelineDialogTitle()).toBe('Incident timeline');
     expect(getAlertResourceIncidentLoadingState()).toEqual({
       text: 'Loading incidents...',
     });
