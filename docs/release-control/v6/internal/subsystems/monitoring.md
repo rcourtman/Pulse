@@ -2634,7 +2634,12 @@ dismissal acknowledges notification state but does not erase monotonic hardware
 evidence. Other dismissed alerts, and dismissed SMART alerts with missing or
 ambiguous disk identity, remain suppressed. Native uncorrectable-error, failed
 self-test, and low-spare-block classes map to critical canonical disk risk even
-when TrueNAS labels the source alert as a warning.
+when TrueNAS labels the source alert as a warning. For the corresponding native
+classes, typed `ue` and `sb` arguments from `alert.list` project onto canonical
+media-error and available-spare SMART fields after exact disk resolution. The
+provider must reject negative or out-of-range values, retain the worst value
+when duplicate evidence is present, and never derive a counter from formatted
+alert text.
 The same boundary owns TrueNAS `smart_status` normalization. `internal/truenas/client.go`
 must parse REST and RPC SMART status separately from native disk state, and
 `internal/truenas/disk_health.go` plus `internal/truenas/provider.go` must map

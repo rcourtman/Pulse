@@ -1225,16 +1225,23 @@ func (c *Client) getAlertsRPC(ctx context.Context) ([]Alert, error) {
 		if t := readTimeAny(item, "datetime", "last_occurrence", "lastOccurrence"); t != nil {
 			datetime = *t
 		}
+		uncorrected, uncorrectedReported, availableSpare, availableReported := smartAlertEvidenceFromArgs(
+			readStringAny(item, "klass", "class"), args,
+		)
 		alerts = append(alerts, Alert{
-			ID:         id,
-			Level:      strings.TrimSpace(readStringAny(item, "level")),
-			Message:    strings.TrimSpace(readStringAny(item, "formatted", "text", "message", "klass")),
-			Source:     strings.TrimSpace(readStringAny(item, "source", "node")),
-			Class:      strings.TrimSpace(readStringAny(item, "klass", "class")),
-			DiskName:   strings.TrimSpace(readStringAny(args, "name", "disk", "device")),
-			DiskSerial: strings.TrimSpace(readStringAny(args, "serial", "serial_number", "serialNumber")),
-			Dismissed:  readBoolAny(item, "dismissed"),
-			Datetime:   datetime,
+			ID:                          id,
+			Level:                       strings.TrimSpace(readStringAny(item, "level")),
+			Message:                     strings.TrimSpace(readStringAny(item, "formatted", "text", "message", "klass")),
+			Source:                      strings.TrimSpace(readStringAny(item, "source", "node")),
+			Class:                       strings.TrimSpace(readStringAny(item, "klass", "class")),
+			DiskName:                    strings.TrimSpace(readStringAny(args, "name", "disk", "device")),
+			DiskSerial:                  strings.TrimSpace(readStringAny(args, "serial", "serial_number", "serialNumber")),
+			SMARTUncorrectedErrors:      uncorrected,
+			SMARTUncorrectedReported:    uncorrectedReported,
+			SMARTAvailableSpare:         availableSpare,
+			SMARTAvailableSpareReported: availableReported,
+			Dismissed:                   readBoolAny(item, "dismissed"),
+			Datetime:                    datetime,
 		})
 	}
 	return alerts, nil
@@ -1258,20 +1265,48 @@ func (c *Client) getAlertsREST(ctx context.Context) ([]Alert, error) {
 			return nil, fmt.Errorf("parse alert %q datetime: %w", id, err)
 		}
 
+		uncorrected, uncorrectedReported, availableSpare, availableReported := smartAlertEvidenceFromArgs(item.Class, item.Args)
 		alerts = append(alerts, Alert{
-			ID:         id,
-			Level:      strings.TrimSpace(item.Level),
-			Message:    strings.TrimSpace(item.Formatted),
-			Source:     strings.TrimSpace(item.Source),
-			Class:      strings.TrimSpace(item.Class),
-			DiskName:   strings.TrimSpace(readStringAny(item.Args, "name", "disk", "device")),
-			DiskSerial: strings.TrimSpace(readStringAny(item.Args, "serial", "serial_number", "serialNumber")),
-			Dismissed:  item.Dismissed,
-			Datetime:   time.UnixMilli(ms).UTC(),
+			ID:                          id,
+			Level:                       strings.TrimSpace(item.Level),
+			Message:                     strings.TrimSpace(item.Formatted),
+			Source:                      strings.TrimSpace(item.Source),
+			Class:                       strings.TrimSpace(item.Class),
+			DiskName:                    strings.TrimSpace(readStringAny(item.Args, "name", "disk", "device")),
+			DiskSerial:                  strings.TrimSpace(readStringAny(item.Args, "serial", "serial_number", "serialNumber")),
+			SMARTUncorrectedErrors:      uncorrected,
+			SMARTUncorrectedReported:    uncorrectedReported,
+			SMARTAvailableSpare:         availableSpare,
+			SMARTAvailableSpareReported: availableReported,
+			Dismissed:                   item.Dismissed,
+			Datetime:                    time.UnixMilli(ms).UTC(),
 		})
 	}
 
 	return alerts, nil
+}
+
+// smartAlertEvidenceFromArgs reads only the typed arguments published by the
+// supported TrueNAS SMART alert classes. Current JSON-RPC releases do not
+// expose raw SMART attributes through disk.query, so alert.list is the native
+// source for these two values. Do not infer counters from formatted text.
+func smartAlertEvidenceFromArgs(class string, args map[string]any) (int64, bool, int, bool) {
+	switch strings.ToLower(strings.TrimSpace(class)) {
+	case "smartuncorrectederrors", "smartuncorrectederrorsalert":
+		value := readInt64PtrAny(args, "ue")
+		if value != nil && *value >= 0 {
+			return *value, true, 0, false
+		}
+	case "smartspareblockcount", "smartspareblockcountalert":
+		value := readInt64PtrAny(args, "sb")
+		// TrueNAS publishes the normalized spare-block reserve as a percentage.
+		// Reject malformed/out-of-range values rather than projecting them onto
+		// the canonical percentage field.
+		if value != nil && *value >= 0 && *value <= 100 {
+			return 0, false, int(*value), true
+		}
+	}
+	return 0, false, 0, false
 }
 
 // GetServices returns the native TrueNAS system service inventory.

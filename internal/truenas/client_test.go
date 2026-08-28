@@ -298,8 +298,8 @@ func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 				t.Fatalf("expected alert.list to use no params, got %#v", request.Params)
 			}
 			writeRPCResult(t, conn, request.ID, []map[string]any{{
-				"id": "a1", "level": "WARNING", "formatted": "Disk temp high", "source": "DiskService",
-				"klass": "DiskTemperatureAlert", "args": map[string]any{"name": "/dev/sda", "serial": "SER-A"},
+				"id": "a1", "level": "WARNING", "formatted": "53 uncorrectable errors reported", "source": "SMART",
+				"klass": "SMARTUncorrectedErrorsAlert", "args": map[string]any{"ue": 53, "name": "/dev/sda", "serial": "SER-A"},
 				"dismissed": false, "datetime": map[string]any{"$date": 1707400000000},
 			}})
 		default:
@@ -330,7 +330,8 @@ func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 		t.Fatalf("GetAlerts() error = %v", err)
 	}
 	if len(alerts) != 1 || alerts[0].ID != "a1" || alerts[0].Level != "WARNING" ||
-		alerts[0].Class != "DiskTemperatureAlert" || alerts[0].DiskName != "/dev/sda" || alerts[0].DiskSerial != "SER-A" {
+		alerts[0].Class != "SMARTUncorrectedErrorsAlert" || alerts[0].DiskName != "/dev/sda" || alerts[0].DiskSerial != "SER-A" ||
+		!alerts[0].SMARTUncorrectedReported || alerts[0].SMARTUncorrectedErrors != 53 {
 		t.Fatalf("unexpected native alert mapping: %+v", alerts)
 	}
 }
@@ -338,7 +339,7 @@ func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 func TestGetAlertsParsesLegacyDiskIdentityArguments(t *testing.T) {
 	responses := defaultAPIResponses()
 	responses["/api/v2.0/alert/list"] = apiResponse{
-		body: `[{"id":"smart-1","level":"WARNING","formatted":"53 uncorrectable errors reported for /dev/sda (SER-A).","source":"SMART","klass":"SMARTUncorrectedErrorsAlert","args":{"name":"/dev/sda","serial":"SER-A"},"dismissed":true,"datetime":{"$date":1707400000000}}]`,
+		body: `[{"id":"smart-1","level":"WARNING","formatted":"53 uncorrectable errors reported for /dev/sda (SER-A).","source":"SMART","klass":"SMARTUncorrectedErrorsAlert","args":{"ue":53,"name":"/dev/sda","serial":"SER-A"},"dismissed":true,"datetime":{"$date":1707400000000}}]`,
 	}
 	server := newMockServer(t, responses, nil)
 	t.Cleanup(server.Close)
@@ -349,8 +350,46 @@ func TestGetAlertsParsesLegacyDiskIdentityArguments(t *testing.T) {
 		t.Fatalf("GetAlerts() error = %v", err)
 	}
 	if len(alerts) != 1 || alerts[0].Class != "SMARTUncorrectedErrorsAlert" ||
-		alerts[0].DiskName != "/dev/sda" || alerts[0].DiskSerial != "SER-A" || !alerts[0].Dismissed {
+		alerts[0].DiskName != "/dev/sda" || alerts[0].DiskSerial != "SER-A" ||
+		!alerts[0].SMARTUncorrectedReported || alerts[0].SMARTUncorrectedErrors != 53 || !alerts[0].Dismissed {
 		t.Fatalf("unexpected legacy SMART alert mapping: %+v", alerts)
+	}
+}
+
+func TestSMARTAlertEvidenceFromArgsUsesOnlyTypedNativeFields(t *testing.T) {
+	tests := []struct {
+		name                string
+		class               string
+		args                map[string]any
+		wantUncorrected     int64
+		wantUncorrectedSeen bool
+		wantSpare           int
+		wantSpareSeen       bool
+	}{
+		{
+			name: "uncorrected counter", class: "SMARTUncorrectedErrors",
+			args: map[string]any{"ue": float64(53)}, wantUncorrected: 53, wantUncorrectedSeen: true,
+		},
+		{
+			name: "spare reserve", class: "SMARTSpareBlockCountAlert",
+			args: map[string]any{"sb": "8"}, wantSpare: 8, wantSpareSeen: true,
+		},
+		{name: "negative counter rejected", class: "SMARTUncorrectedErrors", args: map[string]any{"ue": -1}},
+		{name: "out of range percentage rejected", class: "SMARTSpareBlockCount", args: map[string]any{"sb": 101}},
+		{name: "formatted text is not parsed", class: "SMARTUncorrectedErrors", args: map[string]any{"text": "53 errors"}},
+		{name: "unrelated alert cannot inject smart data", class: "DiskTemperatureAlert", args: map[string]any{"ue": 53, "sb": 8}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uncorrected, uncorrectedSeen, spare, spareSeen := smartAlertEvidenceFromArgs(tt.class, tt.args)
+			if uncorrected != tt.wantUncorrected || uncorrectedSeen != tt.wantUncorrectedSeen ||
+				spare != tt.wantSpare || spareSeen != tt.wantSpareSeen {
+				t.Fatalf("smartAlertEvidenceFromArgs() = (%d,%v,%d,%v), want (%d,%v,%d,%v)",
+					uncorrected, uncorrectedSeen, spare, spareSeen,
+					tt.wantUncorrected, tt.wantUncorrectedSeen, tt.wantSpare, tt.wantSpareSeen)
+			}
+		})
 	}
 }
 

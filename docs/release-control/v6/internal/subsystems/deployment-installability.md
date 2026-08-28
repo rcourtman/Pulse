@@ -2740,6 +2740,13 @@ release-body verification: the exact claim is pinned in
 must still pass canonical shape validation. The `v6.4.0-rc.2` packet therefore
 binds the non-running container stale-health correction under **Fixes** without
 changing candidate artifact identity or dispatch authority.
+The `v6.4.0-rc.13` packet may continue accumulating compatible fixes while its
+public observation window prevents publication. When that happens, customer
+notes and the categorized changelog must be refreshed in the same commit as
+the added fix, and release-body proof must pin the new customer-facing claim.
+The TrueNAS SMART follow-up is therefore bound to its supported typed-counter
+claim; packet proof must reject notes that drop that claim or cease to pass
+canonical shape validation.
 Release-note transport is file-backed and fail-closed: operator helpers must
 send the Markdown through JSON input rather than multiline form-field
 substitution, and every `gh workflow run --json` input value must be encoded as

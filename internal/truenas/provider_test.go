@@ -1085,15 +1085,17 @@ func TestRecordsRetainDismissedTrueNASSMARTFailureAsDiskRisk(t *testing.T) {
 		}},
 		Alerts: []Alert{
 			{
-				ID:         "smart-uncorrected-sda",
-				Level:      "WARNING",
-				Message:    "53 uncorrectable errors reported for /dev/sda (SER-SDA).",
-				Source:     "SMART",
-				Class:      "SMARTUncorrectedErrorsAlert",
-				DiskName:   "/dev/sda",
-				DiskSerial: "SER-SDA",
-				Dismissed:  true,
-				Datetime:   time.Date(2026, 8, 28, 8, 0, 0, 0, time.UTC),
+				ID:                       "smart-uncorrected-sda",
+				Level:                    "WARNING",
+				Message:                  "53 uncorrectable errors reported for /dev/sda (SER-SDA).",
+				Source:                   "SMART",
+				Class:                    "SMARTUncorrectedErrorsAlert",
+				DiskName:                 "/dev/sda",
+				DiskSerial:               "SER-SDA",
+				SMARTUncorrectedErrors:   53,
+				SMARTUncorrectedReported: true,
+				Dismissed:                true,
+				Datetime:                 time.Date(2026, 8, 28, 8, 0, 0, 0, time.UTC),
 			},
 			{
 				ID:        "dismissed-generic",
@@ -1129,6 +1131,36 @@ func TestRecordsRetainDismissedTrueNASSMARTFailureAsDiskRisk(t *testing.T) {
 	if risk := diskRecord.Resource.PhysicalDisk.Risk; risk == nil || risk.Level != storagehealth.RiskCritical ||
 		!containsRiskReason(risk.Reasons, "truenas_smart") {
 		t.Fatalf("expected retained SMART incident in critical physical-disk risk, got %+v", risk)
+	}
+	if smart := diskRecord.Resource.PhysicalDisk.SMART; smart == nil || smart.MediaErrors == nil || *smart.MediaErrors != 53 {
+		t.Fatalf("expected native uncorrectable count in canonical SMART evidence, got %+v", smart)
+	}
+}
+
+func TestMergeTrueNASSMARTAlertEvidenceKeepsWorstTypedValues(t *testing.T) {
+	byDisk := make(map[string]*unifiedresources.SMARTMeta)
+	mergeTrueNASSMARTAlertEvidence(byDisk, "sda", Alert{
+		SMARTUncorrectedErrors: 12, SMARTUncorrectedReported: true,
+		SMARTAvailableSpare: 40, SMARTAvailableSpareReported: true,
+	})
+	mergeTrueNASSMARTAlertEvidence(byDisk, "sda", Alert{
+		SMARTUncorrectedErrors: 53, SMARTUncorrectedReported: true,
+		SMARTAvailableSpare: 8, SMARTAvailableSpareReported: true,
+	})
+	mergeTrueNASSMARTAlertEvidence(byDisk, "sda", Alert{
+		SMARTUncorrectedErrors: 2, SMARTUncorrectedReported: true,
+		SMARTAvailableSpare: 80, SMARTAvailableSpareReported: true,
+	})
+
+	meta := byDisk["sda"]
+	if meta == nil || meta.MediaErrors == nil || *meta.MediaErrors != 53 ||
+		meta.AvailableSpare == nil || *meta.AvailableSpare != 8 {
+		t.Fatalf("expected worst native SMART evidence, got %+v", meta)
+	}
+	mergeTrueNASSMARTAlertEvidence(byDisk, "", Alert{SMARTUncorrectedErrors: 99, SMARTUncorrectedReported: true})
+	mergeTrueNASSMARTAlertEvidence(byDisk, "sdb", Alert{})
+	if len(byDisk) != 1 {
+		t.Fatalf("empty identity or evidence must not create SMART rows: %+v", byDisk)
 	}
 }
 

@@ -200,15 +200,19 @@ type SystemMetricHistory struct {
 
 // Alert mirrors a TrueNAS alert listing entry.
 type Alert struct {
-	ID         string
-	Level      string
-	Message    string
-	Source     string
-	Class      string
-	DiskName   string
-	DiskSerial string
-	Dismissed  bool
-	Datetime   time.Time
+	ID                          string
+	Level                       string
+	Message                     string
+	Source                      string
+	Class                       string
+	DiskName                    string
+	DiskSerial                  string
+	SMARTUncorrectedErrors      int64
+	SMARTUncorrectedReported    bool
+	SMARTAvailableSpare         int
+	SMARTAvailableSpareReported bool
+	Dismissed                   bool
+	Datetime                    time.Time
 }
 
 // Service mirrors the service.query system service inventory returned by

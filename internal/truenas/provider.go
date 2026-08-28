@@ -795,6 +795,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 	for _, disk := range snapshot.Disks {
 		assessment := assessDisk(disk)
 		incidents := incidentAssignments.Disks[strings.TrimSpace(disk.Name)]
+		smart := incidentAssignments.DiskSMART[strings.TrimSpace(disk.Name)]
 		diskIdentity := unifiedresources.ResourceIdentity{
 			Hostnames: []string{snapshot.System.Hostname},
 		}
@@ -835,6 +836,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 					RPM:                  rpmFromDisk(disk),
 					StorageGroup:         strings.TrimSpace(disk.Pool),
 					StorageState:         normalizedDiskStatus(disk),
+					SMART:                smart,
 					Risk:                 unifiedresources.PhysicalDiskRiskFromAssessmentAndIncidents(assessment, incidents),
 				},
 				Tags:      []string{"truenas", "disk", disk.Transport},
@@ -1157,11 +1159,12 @@ func enrichAppStatsFromPreviousSnapshot(current *FixtureSnapshot, previous *Fixt
 }
 
 type trueNASIncidentAssignments struct {
-	System   []unifiedresources.ResourceIncident
-	Pools    map[string][]unifiedresources.ResourceIncident
-	Datasets map[string][]unifiedresources.ResourceIncident
-	Disks    map[string][]unifiedresources.ResourceIncident
-	Apps     map[string][]unifiedresources.ResourceIncident
+	System    []unifiedresources.ResourceIncident
+	Pools     map[string][]unifiedresources.ResourceIncident
+	Datasets  map[string][]unifiedresources.ResourceIncident
+	Disks     map[string][]unifiedresources.ResourceIncident
+	DiskSMART map[string]*unifiedresources.SMARTMeta
+	Apps      map[string][]unifiedresources.ResourceIncident
 }
 
 type poolIncidentProjection struct {
@@ -1171,10 +1174,11 @@ type poolIncidentProjection struct {
 
 func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) trueNASIncidentAssignments {
 	assignments := trueNASIncidentAssignments{
-		Pools:    make(map[string][]unifiedresources.ResourceIncident),
-		Datasets: make(map[string][]unifiedresources.ResourceIncident),
-		Disks:    make(map[string][]unifiedresources.ResourceIncident),
-		Apps:     make(map[string][]unifiedresources.ResourceIncident),
+		Pools:     make(map[string][]unifiedresources.ResourceIncident),
+		Datasets:  make(map[string][]unifiedresources.ResourceIncident),
+		Disks:     make(map[string][]unifiedresources.ResourceIncident),
+		DiskSMART: make(map[string]*unifiedresources.SMARTMeta),
+		Apps:      make(map[string][]unifiedresources.ResourceIncident),
 	}
 	if snapshot == nil {
 		return assignments
@@ -1234,6 +1238,7 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) t
 
 		if diskName != "" {
 			assignments.Disks[diskName] = append(assignments.Disks[diskName], incident)
+			mergeTrueNASSMARTAlertEvidence(assignments.DiskSMART, diskName, alert)
 			if poolName := diskPools[diskName]; poolName != "" {
 				assignments.Pools[poolName] = append(assignments.Pools[poolName], incident)
 			}
@@ -1267,6 +1272,31 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) t
 	}
 
 	return assignments
+}
+
+func mergeTrueNASSMARTAlertEvidence(byDisk map[string]*unifiedresources.SMARTMeta, diskName string, alert Alert) {
+	diskName = strings.TrimSpace(diskName)
+	if diskName == "" || byDisk == nil {
+		return
+	}
+	if !alert.SMARTUncorrectedReported && !alert.SMARTAvailableSpareReported {
+		return
+	}
+	meta := byDisk[diskName]
+	if meta == nil {
+		meta = &unifiedresources.SMARTMeta{}
+		byDisk[diskName] = meta
+	}
+	if alert.SMARTUncorrectedReported && alert.SMARTUncorrectedErrors >= 0 &&
+		(meta.MediaErrors == nil || alert.SMARTUncorrectedErrors > *meta.MediaErrors) {
+		value := alert.SMARTUncorrectedErrors
+		meta.MediaErrors = &value
+	}
+	if alert.SMARTAvailableSpareReported && alert.SMARTAvailableSpare >= 0 && alert.SMARTAvailableSpare <= 100 &&
+		(meta.AvailableSpare == nil || alert.SMARTAvailableSpare < *meta.AvailableSpare) {
+		value := alert.SMARTAvailableSpare
+		meta.AvailableSpare = &value
+	}
 }
 
 func assessSystemStorage(snapshot *FixtureSnapshot) storagehealth.Assessment {

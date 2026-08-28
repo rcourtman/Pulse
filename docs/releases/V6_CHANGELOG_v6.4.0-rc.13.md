@@ -42,7 +42,7 @@ This changelog describes the changes since `v6.4.0-rc.12`. The candidate also re
 - Failed token persistence no longer leaves an undisclosed new token active, evicts an older valid token, or allows an apparent agent-token revocation to reverse after restart.
 - Current Anthropic Opus usage is no longer overestimated at legacy rates, and Haiku 4.5 is no longer underestimated at Haiku 3 rates.
 - PVE and agent observations of the same RAID-controller volume no longer render duplicate resources when one source frames the NAA identity as a serial and the other as a WWN.
-- Dismissed TrueNAS SMART alerts retain uniquely resolved critical disk evidence instead of allowing a damaged disk to return to healthy presentation.
+- Dismissed TrueNAS SMART alerts retain uniquely resolved critical disk evidence and typed uncorrectable-error or spare-reserve values instead of allowing a damaged disk to return to healthy presentation.
 - Mobile alert timelines remain scroll-stable, selected incident history revalidates correctly, chart axis labels remain readable, and grouped hover timestamps stay aligned.
 - Restart recovery, history queries, and mock alert timelines preserve lifecycle order, observation time, and complete incident evidence.
 - Fresh rolling-window metric data remains authoritative, including when older samples or counter resets are present.

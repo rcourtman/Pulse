@@ -29,6 +29,17 @@ def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
+    def test_rc13_packet_keeps_typed_truenas_smart_evidence_visible(self) -> None:
+        notes = (
+            _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.0-rc.13.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "expose supported uncorrectable-error and spare-reserve values",
+            notes,
+        )
+        render_release_body.validate_release_notes_shape(notes, "6.4.0-rc.13")
+
     def test_highlights_are_a_small_plain_language_overview(self) -> None:
         notes = """# Pulse v6.2.0 Release Notes
 

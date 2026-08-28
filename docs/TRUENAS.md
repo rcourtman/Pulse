@@ -18,9 +18,11 @@ On your TrueNAS system:
 2. Click **Add** and create a new key.
 3. Copy the key value and paste it into Pulse.
 
-> **Tip**: A read-only key is sufficient for monitoring on most TrueNAS versions. Native app control actions require a key with the corresponding TrueNAS app permissions.
->
-> **TrueNAS SCALE 25.10**: API keys are linked to a user, and keys for users with the Readonly Admin role can be rejected with 403 on endpoints Pulse polls (TrueNAS serves these through its deprecated REST bridge). Until Pulse moves to the TrueNAS WebSocket API, use a key linked to a Full Admin user on 25.10.
+> **Tip**: Pulse uses the supported JSON-RPC WebSocket API on TrueNAS 25.04
+> and later. API keys inherit the linked user's roles, so the user must be able
+> to read the methods Pulse polls. Native app control actions require the
+> corresponding TrueNAS app permissions. Legacy releases continue to use the
+> version-gated REST compatibility path.
 
 ## What Gets Monitored
 
@@ -31,7 +33,7 @@ On your TrueNAS system:
 | Apps | TrueNAS Overview | Native app state, image/version, ports, volumes, networks, and runtime container details |
 | ZFS Pools | Storage | Total/used/free capacity, pool status (ONLINE/DEGRADED/FAULTED) |
 | ZFS Datasets | Storage | Used/available space, mount status, read-only flag |
-| Physical Disks | Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure evidence |
+| Physical Disks | Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure/counter evidence when TrueNAS reports it |
 | ZFS Snapshots | Recovery | Dataset, creation time, size, referenced data |
 | Replication Tasks | Recovery | Source/target datasets, direction, last run status |
 | TrueNAS Alerts | Alerts | Native TrueNAS alert messages and severity levels |
@@ -51,7 +53,10 @@ TrueNAS drive-health alerts that identify a specific disk remain disk-health
 evidence after they are dismissed in TrueNAS. Dismissal acknowledges the
 notification; Pulse continues to show the affected disk risk while TrueNAS
 continues to report the underlying SMART condition. Other dismissed TrueNAS
-alerts remain suppressed.
+alerts remain suppressed. When a supported SMART alert includes TrueNAS's
+typed uncorrectable-error or spare-reserve argument, Pulse also projects that
+value into the disk's SMART details. Pulse does not infer counters from alert
+text, and current TrueNAS APIs do not expose every raw SMART attribute.
 
 Resources from TrueNAS can be filtered using the **source** filter on any page.
 
