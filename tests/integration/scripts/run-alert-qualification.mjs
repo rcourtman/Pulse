@@ -74,31 +74,61 @@ await fs.writeFile(activeFixturePath, `${JSON.stringify(activeAlerts, null, 2)}\
 
 let exitCode = 1;
 try {
+  const runtimeQualificationPattern = [
+    'TestDurableLifecycleFailureSynchronouslyCheckpointsRecoveryMirror',
+    'TestDurableLifecycleFailureSurfacesRecoveryMarkerFailure',
+    'TestDegradedMarkerRepairsSQLiteFromRecoveryMirror',
+    'TestAlertSnoozeIsDurableAndEnforcedByDeliveryPolicy',
+    'TestSnoozeExpiryResumesEscalationWithoutReplayingMissedLevels',
+    'TestDeliveryReceiptPersistsAndIsClearedAfterRecovery',
+    'TestSendResolvedWebhookHTTP',
+    'TestBuildNotificationDeliveryJobsRoutesGroupedAlertsByDestinationSeverity',
+    'TestBuildNotificationDeliveryJobsTargetsExactEscalationDestinations',
+    'TestWebhookDeliveryCarriesSignatureAndEventID',
+    'TestDeadManRunCycleSendsHealthySignalAndPersistsProgress',
+    'TestDeadManRestartGapIsReportedExternallyAndRecordedInAlertHistory',
+  ].join('|');
   exitCode = await run(
-    process.execPath,
+    'go',
     [
-      './scripts/run-playwright.mjs',
-      'tests/93-alert-operator-qualification.spec.ts',
-      'tests/94-alert-history-real-backend.spec.ts',
-      '--project=chromium',
+      'test',
+      './internal/alerts',
+      './internal/notifications',
+      './internal/monitoring',
+      '-run',
+      `^(${runtimeQualificationPattern})$`,
+      '-count=1',
     ],
-    {
-      cwd: integrationRoot,
-      env: {
-        ...process.env,
-        PULSE_E2E_USE_LOCAL_BACKEND: '1',
-        PULSE_MOCK_MODE: 'false',
-        PULSE_E2E_ALERT_HISTORY_QUALIFICATION: '1',
-        PULSE_E2E_ALERT_HISTORY_FIXTURE: historyFixturePath,
-        PULSE_E2E_ACTIVE_ALERTS_FIXTURE: activeFixturePath,
-        PULSE_E2E_LOCAL_BACKEND_BINARY: binaryPath,
-        PULSE_E2E_RUN_ID: runId,
-        PULSE_E2E_RUNTIME_STATE_PATH: runtimeStatePath,
-        PULSE_E2E_REPORT_DIR: path.join(runRoot, 'playwright-report'),
-        PULSE_E2E_RESULTS_DIR: path.join(runRoot, 'test-results'),
-      },
-    },
+    { cwd: repoRoot, env: process.env },
   );
+
+  if (exitCode === 0) {
+    exitCode = await run(
+      process.execPath,
+      [
+        './scripts/run-playwright.mjs',
+        'tests/93-alert-operator-qualification.spec.ts',
+        'tests/94-alert-history-real-backend.spec.ts',
+        '--project=chromium',
+      ],
+      {
+        cwd: integrationRoot,
+        env: {
+          ...process.env,
+          PULSE_E2E_USE_LOCAL_BACKEND: '1',
+          PULSE_MOCK_MODE: 'false',
+          PULSE_E2E_ALERT_HISTORY_QUALIFICATION: '1',
+          PULSE_E2E_ALERT_HISTORY_FIXTURE: historyFixturePath,
+          PULSE_E2E_ACTIVE_ALERTS_FIXTURE: activeFixturePath,
+          PULSE_E2E_LOCAL_BACKEND_BINARY: binaryPath,
+          PULSE_E2E_RUN_ID: runId,
+          PULSE_E2E_RUNTIME_STATE_PATH: runtimeStatePath,
+          PULSE_E2E_REPORT_DIR: path.join(runRoot, 'playwright-report'),
+          PULSE_E2E_RESULTS_DIR: path.join(runRoot, 'test-results'),
+        },
+      },
+    );
+  }
 } finally {
   await fs.rm(fixtureRoot, { recursive: true, force: true });
   await fs.rm(runtimeStatePath, { force: true });

@@ -61,6 +61,13 @@ type HistoryAlert = {
   type: string;
   startTime: string;
   lastSeen: string;
+  operationalRecord?: {
+    state?: string;
+    suppression?: {
+      reason?: string;
+      expiresAt?: string;
+    };
+  };
 };
 
 async function readHistory(
@@ -72,6 +79,24 @@ async function readHistory(
     `history API returned ${response.status()}`,
   ).toBeTruthy();
   return (await response.json()) as HistoryAlert[];
+}
+
+async function readActiveAlert(
+  page: import('@playwright/test').Page,
+  alertIdentifier: string,
+): Promise<HistoryAlert> {
+  const response = await apiRequest(page, '/api/alerts/active');
+  expect(
+    response.ok(),
+    `active alerts API returned ${response.status()}`,
+  ).toBeTruthy();
+  const alerts = (await response.json()) as HistoryAlert[];
+  const alert = alerts.find((candidate) => candidate.id === alertIdentifier);
+  expect(
+    alert,
+    `active alert ${alertIdentifier} was not returned`,
+  ).toBeTruthy();
+  return alert!;
 }
 
 test.describe('Real backend alert history qualification', () => {
@@ -175,6 +200,79 @@ test.describe('Real backend alert history qualification', () => {
     expect(timeline?.alertIdentifier).toBe(ACTIVE_ALERT_ID);
     expect(timeline?.events.some((event) => event.type === 'alert_fired')).toBe(
       true,
+    );
+
+    const snoozedUntil = new Date(Date.now() + 60 * 60_000).toISOString();
+    const snoozeResponse = await apiRequest(page, '/api/alerts/snooze', {
+      method: 'POST',
+      data: { alertIdentifier: ACTIVE_ALERT_ID, until: snoozedUntil },
+    });
+    expect(
+      snoozeResponse.ok(),
+      `snooze API returned ${snoozeResponse.status()}: ${await snoozeResponse.text()}`,
+    ).toBeTruthy();
+    let controlledAlert = await readActiveAlert(page, ACTIVE_ALERT_ID);
+    expect(controlledAlert.operationalRecord?.state).toBe('suppressed');
+    expect(controlledAlert.operationalRecord?.suppression?.reason).toBe(
+      'user_snooze',
+    );
+    expect(
+      Date.parse(controlledAlert.operationalRecord!.suppression!.expiresAt!),
+    ).toBe(Date.parse(snoozedUntil));
+
+    const diagnosisResponse = await apiRequest(
+      page,
+      `/api/alerts/delivery-diagnosis?alertIdentifier=${encodeURIComponent(ACTIVE_ALERT_ID)}`,
+    );
+    expect(
+      diagnosisResponse.ok(),
+      `delivery diagnosis API returned ${diagnosisResponse.status()}`,
+    ).toBeTruthy();
+    const diagnosis = (await diagnosisResponse.json()) as {
+      alertIdentifier?: string;
+      status?: string;
+      reason?: string;
+      suppressedUntil?: string;
+    };
+    expect(diagnosis).toMatchObject({
+      alertIdentifier: ACTIVE_ALERT_ID,
+      status: 'suppressed',
+      reason: 'snoozed',
+    });
+    expect(Date.parse(diagnosis.suppressedUntil!)).toBe(
+      Date.parse(snoozedUntil),
+    );
+
+    await restartManagedLocalBackend();
+    await ensureAuthenticated(page);
+    controlledAlert = await readActiveAlert(page, ACTIVE_ALERT_ID);
+    expect(controlledAlert.operationalRecord?.state).toBe('suppressed');
+    expect(controlledAlert.operationalRecord?.suppression?.reason).toBe(
+      'user_snooze',
+    );
+
+    const unsnoozeResponse = await apiRequest(page, '/api/alerts/unsnooze', {
+      method: 'POST',
+      data: { alertIdentifier: ACTIVE_ALERT_ID },
+    });
+    expect(
+      unsnoozeResponse.ok(),
+      `unsnooze API returned ${unsnoozeResponse.status()}: ${await unsnoozeResponse.text()}`,
+    ).toBeTruthy();
+    controlledAlert = await readActiveAlert(page, ACTIVE_ALERT_ID);
+    expect(controlledAlert.operationalRecord?.state).toBe('open');
+    expect(controlledAlert.operationalRecord?.suppression).toBeUndefined();
+
+    const controlTimelineResponse = await apiRequest(
+      page,
+      `/api/alerts/incidents?alertIdentifier=${encodeURIComponent(ACTIVE_ALERT_ID)}&started_at=${encodeURIComponent(activeAlert!.startTime)}`,
+    );
+    expect(controlTimelineResponse.ok()).toBeTruthy();
+    const controlTimeline = (await controlTimelineResponse.json()) as {
+      events?: Array<{ type: string }>;
+    } | null;
+    expect(controlTimeline?.events?.map((event) => event.type)).toEqual(
+      expect.arrayContaining(['alert_snoozed', 'alert_unsnoozed']),
     );
 
     await page.goto('/alerts/overview', { waitUntil: 'domcontentloaded' });

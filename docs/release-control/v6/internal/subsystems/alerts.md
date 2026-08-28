@@ -2337,3 +2337,26 @@ The Schedule surface loads the same email, Apprise, and webhook catalog as the
 Destinations surface. It shows disabled and deleted selections explicitly,
 prevents an escalation level from becoming destinationless, and explains the
 critical-repeat stop conditions before save.
+
+### Recovery authority and operator qualification fail closed
+
+If a lifecycle append or active-state checkpoint cannot reach SQLite, the
+degradation marker is the crash-safe restart authority. The marker is an
+atomically replaced, file-synced, directory-synced envelope containing the
+complete active-alert snapshot; the JSON mirror remains a compatible recovery
+aid but is not required for a new marker. While the marker exists, later saves
+refresh that envelope and must not make SQLite authoritative again in the same
+process. Bootstrap repairs SQLite from the envelope and only returns authority
+after durably removing the marker. Legacy text markers may use a readable JSON
+mirror, while malformed or source-less markers defer authority rather than
+silently trusting a potentially stale projection.
+
+`tests/integration/scripts/run-alert-qualification.mjs` is the alerts-owned
+operator qualification entrypoint. One run must cover crash-safe active-state
+recovery, snooze and escalation policy, destination severity and exact-target
+routing, a signed real HTTP webhook, durable delivery receipts and recovery,
+dead-man progress and restart-gap reporting, plus the production frontend
+against a managed local backend. The browser phase must exercise active-alert
+snooze, delivery diagnosis, restart persistence, unsnooze, incident evidence,
+history migration, virtualization, and clear tombstones without replacing the
+backend APIs with route mocks.

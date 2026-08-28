@@ -2268,7 +2268,8 @@
         "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts",
         "frontend-modern/src/utils/alertWebhookPresentation.ts",
         "frontend-modern/src/utils/metricThresholds.ts",
-        "internal/proxmoxidentity/backup_identity.go"
+        "internal/proxmoxidentity/backup_identity.go",
+        "tests/integration/scripts/run-alert-qualification.mjs"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -2525,6 +2526,27 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/alertWebhookPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "alert-operator-qualification-runtime",
+            "label": "alert operator qualification proof",
+            "match_prefixes": [],
+            "match_files": [
+              "tests/integration/scripts/run-alert-qualification.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/active_state_bootstrap_test.go",
+              "internal/alerts/snooze_lifecycle_test.go",
+              "internal/monitoring/deadman_test.go",
+              "internal/notifications/delivery_receipts_test.go",
+              "internal/notifications/notifications_additional_test.go",
+              "internal/notifications/tag_routing_test.go",
+              "internal/notifications/webhook_signing_test.go",
+              "tests/integration/tests/93-alert-operator-qualification.spec.ts",
+              "tests/integration/tests/94-alert-history-real-backend.spec.ts"
             ]
           },
           {

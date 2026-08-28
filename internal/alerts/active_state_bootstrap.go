@@ -1,17 +1,29 @@
 package alerts
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rs/zerolog/log"
 )
 
-const activeStateDegradedMarker = "active-state-sqlite-degraded"
+const (
+	activeStateDegradedMarker        = "active-state-sqlite-degraded"
+	activeStateRecoverySchemaVersion = 1
+)
+
+type activeStateRecoveryEnvelope struct {
+	SchemaVersion int       `json:"schemaVersion"`
+	RecordedAt    time.Time `json:"recordedAt"`
+	Cause         string    `json:"cause,omitempty"`
+	Alerts        []*Alert  `json:"alerts"`
+}
 
 // bootstrapActiveState establishes one restart authority. Existing databases
 // load their projection; pre-projection databases import the already-decoded
@@ -36,7 +48,7 @@ func (m *Manager) bootstrapActiveState(store *eventlog.Store) bool {
 		log.Warn().Err(err).Msg("could not inspect active alert recovery mirror")
 	}
 
-	if initialized && !m.skipPersistedRestore && (!degraded || !recoveryFileExists || !m.activeRecoveryReadable.Load()) {
+	if initialized && !m.skipPersistedRestore && !degraded {
 		snapshots, err := store.LoadActiveState()
 		if err != nil {
 			m.markActiveStateDegraded(err)
@@ -55,8 +67,33 @@ func (m *Manager) bootstrapActiveState(store *eventlog.Store) bool {
 			return false
 		}
 		m.activeStateAuthoritative.Store(true)
-		m.clearActiveStateDegraded()
 		return true
+	}
+
+	if degraded && !m.skipPersistedRestore {
+		recovered, selfContained, err := m.loadActiveStateDegradedRecovery()
+		if err != nil {
+			log.Error().Err(err).Msg("active alert recovery marker is invalid; SQLite authority initialization deferred")
+			return false
+		}
+		if selfContained {
+			if err := m.restoreActiveAlertSnapshots(recovered, "crash-safe SQLite recovery marker", true); err != nil {
+				log.Error().Err(err).Msg("failed to restore active alerts from crash-safe recovery marker")
+				return false
+			}
+			// The self-contained marker is the trusted source, so it can also
+			// replace a missing or malformed compatibility mirror. Keep the
+			// marker until both recovery copies and SQLite agree.
+			m.activeRecoveryWriteBlock.Store(false)
+			if err := m.writeActiveAlertsRecoveryMirror(recovered); err != nil {
+				log.Error().Err(err).Msg("failed to repair active alert recovery mirror from crash-safe marker")
+				return false
+			}
+			m.activeRecoveryReadable.Store(true)
+		} else if !recoveryFileExists || !m.activeRecoveryReadable.Load() {
+			log.Error().Msg("legacy active alert degradation marker has no readable recovery mirror; SQLite authority initialization deferred")
+			return false
+		}
 	}
 
 	// A new database, an explicit clean-room manager, or a prior failed
@@ -77,8 +114,11 @@ func (m *Manager) bootstrapActiveState(store *eventlog.Store) bool {
 		log.Error().Err(err).Msg("failed to initialize SQLite active alert authority")
 		return false
 	}
+	if err := m.clearActiveStateDegraded(); err != nil {
+		log.Error().Err(err).Msg("failed to durably clear repaired SQLite active alert degradation marker")
+		return false
+	}
 	m.activeStateAuthoritative.Store(true)
-	m.clearActiveStateDegraded()
 	log.Info().Int("alerts", len(snapshots)).Msg("SQLite active alert authority initialized from recovery state")
 	return true
 }
@@ -128,24 +168,122 @@ func (m *Manager) markActiveStateDegraded(cause error) {
 		return
 	}
 	m.activeStateAuthoritative.Store(false)
-	if err := os.MkdirAll(m.getAlertsDir(), alertsDirPerm); err != nil {
-		log.Error().Err(err).Msg("failed to create alerts directory for SQLite degradation marker")
-		return
-	}
 	message := "SQLite active alert state requires recovery from active-alerts.json\n"
 	if cause != nil {
 		message += cause.Error() + "\n"
 	}
-	if err := os.WriteFile(m.activeStateDegradedPath(), []byte(message), alertsFilePerm); err != nil {
+	m.recoveryMirrorMu.Lock()
+	_, statErr := os.Stat(m.activeStateDegradedPath())
+	var err error
+	if errors.Is(statErr, os.ErrNotExist) {
+		err = m.writeActiveStateDegradedMarker([]byte(message))
+	} else if statErr != nil {
+		err = fmt.Errorf("inspect existing SQLite active alert degradation marker: %w", statErr)
+	}
+	m.recoveryMirrorMu.Unlock()
+	if err != nil {
 		log.Error().Err(err).Msg("failed to persist SQLite active alert degradation marker")
 	}
 }
 
-func (m *Manager) clearActiveStateDegraded() {
+func (m *Manager) writeActiveStateDegradedRecovery(alerts []*Alert, cause error) error {
+	envelope := activeStateRecoveryEnvelope{
+		SchemaVersion: activeStateRecoverySchemaVersion,
+		RecordedAt:    time.Now().UTC(),
+		Alerts:        alerts,
+	}
+	if envelope.Alerts == nil {
+		envelope.Alerts = []*Alert{}
+	}
+	if cause != nil {
+		envelope.Cause = cause.Error()
+	}
+	data, err := json.Marshal(envelope)
+	if err != nil {
+		return fmt.Errorf("marshal SQLite active alert recovery marker: %w", err)
+	}
+	return m.writeActiveStateDegradedMarker(data)
+}
+
+func (m *Manager) writeActiveStateDegradedMarker(data []byte) error {
+	alertsDir := m.getAlertsDir()
+	if err := os.MkdirAll(alertsDir, alertsDirPerm); err != nil {
+		return fmt.Errorf("create alerts directory for SQLite degradation marker: %w", err)
+	}
+	if err := os.Chmod(alertsDir, alertsDirPerm); err != nil {
+		return fmt.Errorf("set alerts directory permissions for SQLite degradation marker: %w", err)
+	}
+	tmp, err := os.CreateTemp(alertsDir, ".active-state-sqlite-degraded-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create SQLite degradation marker temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write SQLite degradation marker temp file: %w", err)
+	}
+	if err := tmp.Chmod(alertsFilePerm); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("set SQLite degradation marker permissions: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("sync SQLite degradation marker temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close SQLite degradation marker temp file: %w", err)
+	}
+	if err := replaceActiveAlertsFile(tmpName, m.activeStateDegradedPath()); err != nil {
+		return fmt.Errorf("replace SQLite degradation marker: %w", err)
+	}
+	cleanup = false
+	if err := syncActiveAlertsDirectory(alertsDir); err != nil {
+		return fmt.Errorf("sync alerts directory after SQLite degradation marker: %w", err)
+	}
+	return nil
+}
+
+func (m *Manager) loadActiveStateDegradedRecovery() ([]*Alert, bool, error) {
+	data, err := readLimitedRegularFile(m.activeStateDegradedPath(), maxActiveAlertsFileSizeBytes)
+	if err != nil {
+		return nil, false, fmt.Errorf("read SQLite active alert recovery marker: %w", err)
+	}
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, false, nil
+	}
+	var envelope activeStateRecoveryEnvelope
+	if err := json.Unmarshal(trimmed, &envelope); err != nil {
+		return nil, false, fmt.Errorf("decode SQLite active alert recovery marker: %w", err)
+	}
+	if envelope.SchemaVersion != activeStateRecoverySchemaVersion {
+		return nil, false, fmt.Errorf("unsupported SQLite active alert recovery marker schema %d", envelope.SchemaVersion)
+	}
+	if envelope.Alerts == nil {
+		return nil, false, fmt.Errorf("SQLite active alert recovery marker has no alert snapshot")
+	}
+	return envelope.Alerts, true, nil
+}
+
+func (m *Manager) clearActiveStateDegraded() error {
 	if m == nil {
-		return
+		return nil
 	}
-	if err := os.Remove(m.activeStateDegradedPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Warn().Err(err).Msg("failed to clear SQLite active alert degradation marker")
+	err := os.Remove(m.activeStateDegradedPath())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
+	if err != nil {
+		return fmt.Errorf("remove SQLite active alert degradation marker: %w", err)
+	}
+	if err := syncActiveAlertsDirectory(m.getAlertsDir()); err != nil {
+		return fmt.Errorf("sync alerts directory after clearing SQLite degradation marker: %w", err)
+	}
+	return nil
 }

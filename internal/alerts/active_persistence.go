@@ -56,16 +56,25 @@ func (m *Manager) SaveActiveAlerts() error {
 	for attempt := 0; attempt < maxCheckpointAttempts; attempt++ {
 		failureEpoch := m.activeStateFailureEpoch.Load()
 		store := m.eventLogStore()
+		if store != nil && m.activeStateDegraded() {
+			alerts := m.snapshotActiveAlerts()
+			markerErr, mirrorErr := m.writeDegradedActiveState(alerts, errors.New("SQLite active alert state remains degraded"))
+			intentErr := m.saveIntentPendingSnapshot()
+			if err := errors.Join(markerErr, mirrorErr, intentErr); err != nil {
+				return fmt.Errorf("failed to checkpoint degraded active alert recovery state: %w", err)
+			}
+			return nil
+		}
 		revision := int64(0)
 		if store != nil {
 			var err error
 			revision, err = store.ActiveStateRevision()
 			if err != nil {
 				alerts := m.snapshotActiveAlerts()
-				if mirrorErr := m.writeActiveAlertsRecoveryMirror(alerts); mirrorErr != nil {
-					return errors.Join(err, mirrorErr)
+				markerErr, mirrorErr := m.writeDegradedActiveState(alerts, err)
+				if recoveryErr := errors.Join(markerErr, mirrorErr); recoveryErr != nil {
+					return errors.Join(err, recoveryErr)
 				}
-				m.markActiveStateDegraded(err)
 				return fmt.Errorf("failed to read SQLite active alert revision: %w", err)
 			}
 		}
@@ -83,12 +92,18 @@ func (m *Manager) SaveActiveAlerts() error {
 
 		snapshots, err := activeStateSnapshots(alerts)
 		if err != nil {
-			m.markActiveStateDegraded(err)
+			markerErr, degradedMirrorErr := m.writeDegradedActiveState(alerts, err)
+			if recoveryErr := errors.Join(markerErr, degradedMirrorErr); recoveryErr != nil {
+				return errors.Join(err, recoveryErr)
+			}
 			return err
 		}
 		replaced, err := store.ReplaceActiveStateIfRevision(snapshots, revision)
 		if err != nil {
-			m.markActiveStateDegraded(err)
+			markerErr, degradedMirrorErr := m.writeDegradedActiveState(alerts, err)
+			if recoveryErr := errors.Join(markerErr, degradedMirrorErr); recoveryErr != nil {
+				return errors.Join(err, recoveryErr)
+			}
 			return fmt.Errorf("failed to checkpoint active alerts in SQLite: %w", err)
 		}
 		if !replaced {
@@ -103,7 +118,6 @@ func (m *Manager) SaveActiveAlerts() error {
 			continue
 		}
 		m.activeStateAuthoritative.Store(true)
-		m.clearActiveStateDegraded()
 		if err := errors.Join(mirrorErr, intentErr); err != nil {
 			return fmt.Errorf("SQLite active alert checkpoint succeeded but recovery persistence failed: %w", err)
 		}
@@ -278,13 +292,23 @@ func (m *Manager) checkpointActiveRecoveryAfterDurableFailure(cause error) error
 	}
 	m.recoveryMirrorMu.Lock()
 	alerts := m.activeRecoverySnapshot()
-	err := m.writeActiveAlertsRecoveryMirrorLocked(alerts)
+	markerErr := m.writeActiveStateDegradedRecovery(alerts, cause)
+	mirrorErr := m.writeActiveAlertsRecoveryMirrorLocked(alerts)
 	m.recoveryMirrorMu.Unlock()
-	if err != nil {
-		return err
+	m.activeStateAuthoritative.Store(false)
+	return errors.Join(markerErr, mirrorErr)
+}
+
+func (m *Manager) writeDegradedActiveState(alerts []*Alert, cause error) (markerErr, mirrorErr error) {
+	if m == nil {
+		return nil, nil
 	}
-	m.markActiveStateDegraded(cause)
-	return nil
+	m.activeStateAuthoritative.Store(false)
+	m.recoveryMirrorMu.Lock()
+	defer m.recoveryMirrorMu.Unlock()
+	markerErr = m.writeActiveStateDegradedRecovery(alerts, cause)
+	mirrorErr = m.writeActiveAlertsRecoveryMirrorLocked(alerts)
+	return markerErr, mirrorErr
 }
 
 // LoadActiveAlerts restores active alerts from disk.

@@ -134,9 +134,44 @@ func TestDurableLifecycleFailureSynchronouslyCheckpointsRecoveryMirror(t *testin
 		if _, err := os.Stat(filepath.Join(dataDir, "alerts", activeStateDegradedMarker)); err != nil {
 			t.Fatalf("degraded marker missing after failed fire: %v", err)
 		}
+		markerData, err := os.ReadFile(filepath.Join(dataDir, "alerts", activeStateDegradedMarker))
+		if err != nil {
+			t.Fatalf("read degraded recovery marker: %v", err)
+		}
+		var envelope activeStateRecoveryEnvelope
+		if err := json.Unmarshal(markerData, &envelope); err != nil {
+			t.Fatalf("decode degraded recovery marker: %v", err)
+		}
+		if envelope.SchemaVersion != activeStateRecoverySchemaVersion || len(envelope.Alerts) != 1 || envelope.Alerts[0].ID != alert.ID {
+			t.Fatalf("degraded recovery marker = %+v", envelope)
+		}
 
 		m.SetEventLog(nil)
 		m.Stop()
+		if err := os.WriteFile(
+			filepath.Join(dataDir, "alerts", "active-alerts.json"),
+			[]byte(`{"truncated":`),
+			alertsFilePerm,
+		); err != nil {
+			t.Fatalf("corrupt recovery mirror to isolate marker recovery: %v", err)
+		}
+		restarted := NewManagerWithDataDir(dataDir)
+		t.Cleanup(restarted.Stop)
+		restarted.EnableEventLog()
+		restarted.mu.RLock()
+		_, restored := testLookupActiveAlert(t, restarted, alert.ID)
+		restarted.mu.RUnlock()
+		if !restored {
+			t.Fatal("self-contained degraded marker did not restore fired alert over malformed JSON mirror")
+		}
+		repairedMirror, err := os.ReadFile(filepath.Join(dataDir, "alerts", "active-alerts.json"))
+		if err != nil {
+			t.Fatalf("read repaired recovery mirror: %v", err)
+		}
+		var repaired []*Alert
+		if err := json.Unmarshal(repairedMirror, &repaired); err != nil || len(repaired) != 1 || repaired[0].ID != alert.ID {
+			t.Fatalf("repaired recovery mirror = %+v, error = %v", repaired, err)
+		}
 	})
 
 	t.Run("resolved before restart", func(t *testing.T) {
@@ -167,9 +202,23 @@ func TestDurableLifecycleFailureSynchronouslyCheckpointsRecoveryMirror(t *testin
 		if len(recovered) != 0 {
 			t.Fatalf("failed resolution remained in recovery mirror: %+v", recovered)
 		}
+		markerData, err := os.ReadFile(filepath.Join(dataDir, "alerts", activeStateDegradedMarker))
+		if err != nil {
+			t.Fatalf("read degraded recovery marker: %v", err)
+		}
+		var envelope activeStateRecoveryEnvelope
+		if err := json.Unmarshal(markerData, &envelope); err != nil {
+			t.Fatalf("decode degraded recovery marker: %v", err)
+		}
+		if envelope.Alerts == nil || len(envelope.Alerts) != 0 {
+			t.Fatalf("resolved degraded recovery marker = %+v", envelope.Alerts)
+		}
 
 		m.SetEventLog(nil)
 		m.Stop()
+		if err := os.Remove(filepath.Join(dataDir, "alerts", "active-alerts.json")); err != nil {
+			t.Fatalf("remove recovery mirror to isolate marker recovery: %v", err)
+		}
 		restarted := NewManagerWithDataDir(dataDir)
 		t.Cleanup(restarted.Stop)
 		restarted.EnableEventLog()
@@ -180,6 +229,26 @@ func TestDurableLifecycleFailureSynchronouslyCheckpointsRecoveryMirror(t *testin
 			t.Fatal("failed durable resolution was resurrected after restart")
 		}
 	})
+}
+
+func TestDurableLifecycleFailureSurfacesRecoveryMarkerFailure(t *testing.T) {
+	dataDir := t.TempDir()
+	m := NewManagerWithDataDir(dataDir)
+	t.Cleanup(m.Stop)
+	marker := filepath.Join(dataDir, "alerts", activeStateDegradedMarker)
+	if err := os.MkdirAll(marker, alertsDirPerm); err != nil {
+		t.Fatal(err)
+	}
+
+	alert := durableRestoreAlert(time.Now().UTC())
+	m.setActiveRecoveryAlert(alert, alert.ID)
+	err := m.checkpointActiveRecoveryAfterDurableFailure(os.ErrClosed)
+	if err == nil {
+		t.Fatal("checkpoint did not surface an unwritable recovery marker")
+	}
+	if _, statErr := os.Stat(filepath.Join(dataDir, "alerts", "active-alerts.json")); statErr != nil {
+		t.Fatalf("best-effort recovery mirror was not written after marker failure: %v", statErr)
+	}
 }
 
 func TestDegradedMarkerRepairsSQLiteFromRecoveryMirror(t *testing.T) {
