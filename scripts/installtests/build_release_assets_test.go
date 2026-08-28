@@ -2958,8 +2958,8 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
 	backendJob := workflowJobBlock(t, string(workflowBytes), "backend_tests")
-	if !strings.Contains(backendJob, "timeout-minutes: 20") {
-		t.Fatal("release backend job must retain the measured PVE execution ceiling")
+	if !strings.Contains(backendJob, "timeout-minutes: 30") {
+		t.Fatal("release backend job must retain headroom above the measured PVE execution time")
 	}
 	if !strings.Contains(backendJob, "pulse-pve-tests") || !strings.Contains(backendJob, "run-release-backend-tests.sh") {
 		t.Fatal("release backend job must use the dedicated PVE partition runner")
