@@ -374,27 +374,28 @@ export function getAlertOverviewCardPresentation(
   acknowledged: boolean,
   processing: boolean,
 ): AlertOverviewCardPresentation {
+  const isCritical = level === 'critical';
+  const isInformational = level === 'info';
   const opacityClass = processing ? 'opacity-50' : acknowledged ? 'opacity-60' : '';
   const stateClass = acknowledged
     ? 'border-border bg-surface-alt'
-    : level === 'critical'
+    : isCritical
       ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
-      : level === 'warning'
-        ? 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
-        : 'border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900';
+      : isInformational
+        ? 'border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900'
+        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900';
   const iconClassName = acknowledged
     ? 'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400'
-    : level === 'critical'
+    : isCritical
       ? 'mr-3 mt-0.5 transition-all text-red-600 dark:text-red-400'
-      : level === 'warning'
-        ? 'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400'
-        : 'mr-3 mt-0.5 transition-all text-blue-600 dark:text-blue-400';
-  const resourceClassName =
-    level === 'critical'
-      ? 'text-sm font-medium truncate text-red-700 dark:text-red-400'
-      : level === 'warning'
-        ? 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400'
-        : 'text-sm font-medium truncate text-blue-700 dark:text-blue-400';
+      : isInformational
+        ? 'mr-3 mt-0.5 transition-all text-blue-600 dark:text-blue-400'
+        : 'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400';
+  const resourceClassName = isCritical
+    ? 'text-sm font-medium truncate text-red-700 dark:text-red-400'
+    : isInformational
+      ? 'text-sm font-medium truncate text-blue-700 dark:text-blue-400'
+      : 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400';
 
   return {
     cardClassName: ['border rounded-md p-3 sm:p-4 transition-all', opacityClass, stateClass]

@@ -35,7 +35,7 @@ describe('alertOverviewPresentation coverage', () => {
       );
     });
 
-    it('projects an unacknowledged, non-critical severity onto the warning palette', () => {
+    it('projects an unacknowledged warning onto the warning palette', () => {
       const presentation = getAlertOverviewCardPresentation('warning', false, false);
 
       expect(presentation.cardClassName).toBe(
@@ -49,8 +49,16 @@ describe('alertOverviewPresentation coverage', () => {
       );
     });
 
-    it('treats an unrecognized severity string as non-critical rather than critical', () => {
+    it('projects an unacknowledged informational alert onto the informational palette', () => {
       const presentation = getAlertOverviewCardPresentation('info', false, false);
+
+      expect(presentation.cardClassName).toContain('border-blue-300');
+      expect(presentation.iconClassName).toContain('text-blue-600');
+      expect(presentation.resourceClassName).toContain('text-blue-700');
+    });
+
+    it('fails safe to warning for an unrecognized severity string', () => {
+      const presentation = getAlertOverviewCardPresentation('notice', false, false);
 
       expect(presentation.cardClassName).toContain('border-yellow-300');
       expect(presentation.cardClassName).not.toContain('border-red-300');

@@ -287,6 +287,18 @@ describe('alertOverviewPresentation', () => {
       iconClassName: 'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400',
       resourceClassName: 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400',
     });
+    expect(getAlertOverviewCardPresentation('info', false, false)).toEqual({
+      cardClassName:
+        'border rounded-md p-3 sm:p-4 transition-all border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900',
+      iconClassName: 'mr-3 mt-0.5 transition-all text-blue-600 dark:text-blue-400',
+      resourceClassName: 'text-sm font-medium truncate text-blue-700 dark:text-blue-400',
+    });
+    expect(getAlertOverviewCardPresentation('notice', false, false)).toEqual({
+      cardClassName:
+        'border rounded-md p-3 sm:p-4 transition-all border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900',
+      iconClassName: 'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400',
+      resourceClassName: 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400',
+    });
     expect(getAlertOverviewAcknowledgedBadgeClass()).toBe(
       'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded',
     );
