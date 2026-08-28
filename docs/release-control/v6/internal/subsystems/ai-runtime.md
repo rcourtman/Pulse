@@ -6627,6 +6627,16 @@ uses the provider resolved by Patrol readiness, even when the configured
 OpenRouter model is an unprefixed slash route such as
 `anthropic/claude-sonnet-5`; scorer replay persists and reuses that resolved
 provider so the same captured report prices deterministically.
+First-party Anthropic cost estimation is version-sensitive even within one
+model family. Standard API calls for Opus 4.5, 4.6, 4.7, 4.8, and 5 use the
+reviewed $5 input / $25 output per-million-token rates, while Opus 4, 4.1, and
+3 retain the legacy $15 / $75 rates. Haiku 4.5 similarly uses $1 / $5 rather
+than the Haiku 3 fallback. These version-specific rows must precede broad
+family fallbacks because pricing lookup is first-match prefix-based, and
+dated model aliases must resolve to the same row as their base version. The
+30-day runtime budget recalculates retained usage through this table, so a
+stale higher fallback must not disable Assistant or Patrol before estimated
+first-party spend reaches the configured limit.
 After a non-interactive Patrol finding lifecycle write succeeds, the structured
 tool result is authoritative and investigation remains closed. Watch first
 offers a bounded lifecycle-completion request containing only report and

@@ -51,8 +51,18 @@ var providerPrices = map[string][]modelPrice{
 		flatPrice("gpt-4o*", 5.00, 15.00),
 	},
 	"anthropic": {
+		// Anthropic first-party standard API prices, checked from
+		// https://platform.claude.com/docs/en/about-claude/pricing on 2026-08-28.
+		// Keep version-specific rows before the legacy family fallbacks because
+		// lookupPrice returns the first matching prefix.
+		flatPriceAsOf("claude-opus-5*", 5.00, 25.00, "2026-08-28"),
+		flatPriceAsOf("claude-opus-4-8*", 5.00, 25.00, "2026-08-28"),
+		flatPriceAsOf("claude-opus-4-7*", 5.00, 25.00, "2026-08-28"),
+		flatPriceAsOf("claude-opus-4-6*", 5.00, 25.00, "2026-08-28"),
+		flatPriceAsOf("claude-opus-4-5*", 5.00, 25.00, "2026-08-28"),
 		flatPrice("claude-opus*", 15.00, 75.00),
 		flatPrice("claude-sonnet*", 3.00, 15.00),
+		flatPriceAsOf("claude-haiku-4-5*", 1.00, 5.00, "2026-08-28"),
 		flatPrice("claude-haiku*", 0.25, 1.25),
 	},
 	"deepseek": {
