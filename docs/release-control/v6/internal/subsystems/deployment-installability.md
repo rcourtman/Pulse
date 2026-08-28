@@ -29,6 +29,14 @@ The next-candidate release notes and changelog must also describe newly stable
 integration fields when external receivers need them to consume the release;
 packet proof keeps the customer-facing summary and detailed changelog aligned.
 
+A published release candidate is a cohort checkpoint rather than a delivery
+vehicle for each individual fix. After the first RC on a version line, public
+RC publications on that line are separated by at least 24 hours of observation.
+Compatible fixes and packet evidence may accumulate during that window, while
+draft creation and Release Dry Run remain available. Narrow reporter validation
+uses immutable issue-and-commit test images and does not force or bypass a new
+public RC.
+
 Release-note comparison ranges are channel-specific. Each RC compares against
 the immediately preceding RC on the same version line, with RC1 comparing
 against the previous stable release. A stable GA release compares against the

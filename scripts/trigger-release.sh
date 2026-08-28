@@ -317,6 +317,7 @@ RESOLVER_ARGS=(
   --rollback-version "$ROLLBACK_VERSION"
   --hotfix-reason "$HOTFIX_REASON"
   --release-notes-file "$NOTES_FILE"
+  --enforce-prerelease-observation-window
 )
 if [ -n "$PROMOTED_FROM_TAG" ]; then
   RESOLVER_ARGS+=(--promoted-from-tag "$PROMOTED_FROM_TAG")

@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import fnmatch
+import json
 import re
 import subprocess
 import time
@@ -17,6 +19,8 @@ from repo_file_io import REPO_ROOT, git_env
 SEMVER_STABLE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 SEMVER_STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEMVER_PRERELEASE_RE = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
+SEMVER_RC_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-rc\.(\d+)$")
+MIN_PRERELEASE_OBSERVATION_HOURS = 24
 WINDOWS_AUTHENTICODE_AVAILABLE = False
 WINDOWS_AUTHENTICODE_STANDING_UNSIGNED_MIN_VERSION = (6, 3, 2)
 WINDOWS_AUTHENTICODE_UNAVAILABLE_REASON = (
@@ -176,6 +180,56 @@ def list_same_version_rc_tags(version: str) -> list[str]:
     return [tag for tag in result.stdout.splitlines() if tag.strip()]
 
 
+def list_published_prereleases() -> list[tuple[str, int]]:
+    result = subprocess.run(
+        [
+            "gh",
+            "release",
+            "list",
+            "--limit",
+            "100",
+            "--json",
+            "tagName,isDraft,isPrerelease,publishedAt",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    releases = json.loads(result.stdout)
+    published: list[tuple[str, int]] = []
+    for release in releases:
+        if release.get("isDraft") or not release.get("isPrerelease"):
+            continue
+        published_at = (release.get("publishedAt") or "").strip()
+        if not published_at:
+            continue
+        timestamp = int(datetime.fromisoformat(published_at.replace("Z", "+00:00")).timestamp())
+        published.append((normalize_tag(release.get("tagName", "")), timestamp))
+    return published
+
+
+def latest_same_version_rc_publication(
+    version: str,
+    candidate_tag: str,
+    published_prereleases: list[tuple[str, int]],
+) -> tuple[str, int] | None:
+    candidate_match = SEMVER_RC_RE.match(version)
+    if not candidate_match:
+        return None
+    version_base = candidate_match.groups()[:3]
+    matches: list[tuple[str, int]] = []
+    for release_tag, published_unix in published_prereleases:
+        release_match = re.match(r"^v(\d+)\.(\d+)\.(\d+)-rc\.(\d+)$", release_tag)
+        if (
+            release_match
+            and release_match.groups()[:3] == version_base
+            and release_tag != candidate_tag
+        ):
+            matches.append((release_tag, published_unix))
+    return max(matches, key=lambda release: release[1]) if matches else None
+
+
 def changed_paths_between(base_tag: str) -> list[str]:
     result = subprocess.run(
         ["git", "diff", "--name-only", f"{base_tag}..HEAD"],
@@ -232,8 +286,10 @@ def resolve_metadata(
     unsigned_windows_reason_input: str = "",
     windows_authenticode_available: bool = WINDOWS_AUTHENTICODE_AVAILABLE,
     derive_rollback_when_missing: bool = False,
+    enforce_prerelease_observation_window: bool = False,
     list_stable_tags_fn: Callable[[], list[str]] = list_stable_tags,
     list_same_version_rc_tags_fn: Callable[[str], list[str]] = list_same_version_rc_tags,
+    list_published_prereleases_fn: Callable[[], list[tuple[str, int]]] = list_published_prereleases,
     changed_paths_fn: Callable[[str], list[str]] = changed_paths_between,
     tag_exists_fn: Callable[[str], bool] = tag_exists,
     tag_commit_fn: Callable[[str], str] = tag_commit,
@@ -308,9 +364,35 @@ def resolve_metadata(
 
     promoted_from_tag = ""
     soak_hours = ""
+    previous_prerelease_tag = ""
+    prerelease_observation_hours = ""
     if is_prerelease:
         if hotfix_exception:
             raise ValueError("hotfix_exception applies only to stable promotions.")
+        if enforce_prerelease_observation_window:
+            previous_publication = latest_same_version_rc_publication(
+                version,
+                tag,
+                list_published_prereleases_fn(),
+            )
+            if previous_publication:
+                previous_prerelease_tag, previous_published_unix = previous_publication
+                now_unix = now_unix_fn()
+                observation_seconds = now_unix - previous_published_unix
+                observation_hours = int(observation_seconds / 3600)
+                prerelease_observation_hours = str(observation_hours)
+                if observation_seconds < MIN_PRERELEASE_OBSERVATION_HOURS * 3600:
+                    next_publish_at = datetime.fromtimestamp(
+                        previous_published_unix + MIN_PRERELEASE_OBSERVATION_HOURS * 3600,
+                        tz=timezone.utc,
+                    ).isoformat().replace("+00:00", "Z")
+                    raise ValueError(
+                        f"Prerelease {tag} would replace {previous_prerelease_tag} after only "
+                        f"{observation_hours} hours of public observation. Same-version release "
+                        f"candidates require {MIN_PRERELEASE_OBSERVATION_HOURS} hours between "
+                        f"publications. Accumulate fixes or use an issue-scoped reporter test image "
+                        f"until {next_publish_at}."
+                    )
     else:
         promoted_from_tag = normalize_tag(promoted_from_tag_input)
         if not promoted_from_tag:
@@ -429,6 +511,8 @@ def resolve_metadata(
         "unsigned_windows_reason": unsigned_windows_reason,
         "require_windows_signing": "true" if require_windows_signing else "false",
         "soak_hours": soak_hours,
+        "previous_prerelease_tag": previous_prerelease_tag,
+        "prerelease_observation_hours": prerelease_observation_hours,
     }
 
 
@@ -452,6 +536,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--unsigned-windows-exception", action="store_true")
     parser.add_argument("--unsigned-windows-reason", default="")
     parser.add_argument("--release-notes-file", default="")
+    parser.add_argument(
+        "--enforce-prerelease-observation-window",
+        action="store_true",
+        help="Reject public same-version RC publication less than 24 hours after the prior RC.",
+    )
     return parser.parse_args()
 
 
@@ -473,6 +562,7 @@ def main() -> int:
         release_notes_input=release_notes,
         unsigned_windows_exception=args.unsigned_windows_exception,
         unsigned_windows_reason_input=args.unsigned_windows_reason,
+        enforce_prerelease_observation_window=args.enforce_prerelease_observation_window,
     )
 
     for key, value in metadata.items():

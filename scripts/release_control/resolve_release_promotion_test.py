@@ -45,6 +45,87 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["promoted_from_tag"], "")
         self.assertEqual(metadata["soak_hours"], "")
 
+    def test_first_rc_has_no_observation_window_to_wait_for(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.4.0-rc.1",
+            promoted_from_tag_input="",
+            rollback_version_input="6.3.2",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            enforce_prerelease_observation_window=True,
+            list_published_prereleases_fn=lambda: [
+                ("v6.3.0-rc.8", 100),
+                ("v6.5.0-rc.1", 200),
+            ],
+            tag_exists_fn=lambda tag: tag == "v6.3.2",
+            now_unix_fn=lambda: 10_000,
+        )
+        self.assertEqual(metadata["previous_prerelease_tag"], "")
+        self.assertEqual(metadata["prerelease_observation_hours"], "")
+
+    def test_same_version_rc_is_rejected_inside_observation_window(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "after only 23 hours of public observation.*require 24 hours",
+        ):
+            resolver.resolve_metadata(
+                version="6.4.0-rc.13",
+                promoted_from_tag_input="",
+                rollback_version_input="6.3.2",
+                ga_date_input="",
+                v5_eos_date_input="",
+                hotfix_exception=False,
+                hotfix_reason_input="",
+                release_notes_input="",
+                enforce_prerelease_observation_window=True,
+                list_published_prereleases_fn=lambda: [
+                    ("v6.4.0-rc.11", 100),
+                    ("v6.4.0-rc.12", 200),
+                ],
+                tag_exists_fn=lambda tag: tag == "v6.3.2",
+                now_unix_fn=lambda: 200 + (23 * 3600) + 3599,
+            )
+
+    def test_same_version_rc_is_allowed_after_observation_window(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.4.0-rc.13",
+            promoted_from_tag_input="",
+            rollback_version_input="6.3.2",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            enforce_prerelease_observation_window=True,
+            list_published_prereleases_fn=lambda: [
+                ("v6.3.0-rc.8", 300),
+                ("v6.4.0-rc.12", 200),
+            ],
+            tag_exists_fn=lambda tag: tag == "v6.3.2",
+            now_unix_fn=lambda: 200 + (24 * 3600),
+        )
+        self.assertEqual(metadata["previous_prerelease_tag"], "v6.4.0-rc.12")
+        self.assertEqual(metadata["prerelease_observation_hours"], "24")
+
+    def test_rehearsal_does_not_query_or_enforce_publication_window(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.4.0-rc.13",
+            promoted_from_tag_input="",
+            rollback_version_input="6.3.2",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            enforce_prerelease_observation_window=False,
+            list_published_prereleases_fn=lambda: self.fail("publication lookup should not run"),
+            tag_exists_fn=lambda tag: tag == "v6.3.2",
+        )
+        self.assertEqual(metadata["previous_prerelease_tag"], "")
+
     def test_missing_rollback_is_rejected_without_derivation(self) -> None:
         with self.assertRaisesRegex(
             ValueError,

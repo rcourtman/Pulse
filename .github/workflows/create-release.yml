@@ -217,6 +217,8 @@ jobs:
           HOTFIX_REASON_INPUT: ${{ github.event.inputs.hotfix_reason }}
           UNSIGNED_WINDOWS_EXCEPTION_INPUT: ${{ github.event.inputs.unsigned_windows_exception }}
           UNSIGNED_WINDOWS_REASON_INPUT: ${{ github.event.inputs.unsigned_windows_reason }}
+          DRAFT_ONLY_INPUT: ${{ github.event.inputs.draft_only }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -248,6 +250,9 @@ jobs:
             )
           elif [ -n "${UNSIGNED_WINDOWS_REASON_INPUT:-}" ]; then
             HELPER_ARGS+=(--unsigned-windows-reason "${UNSIGNED_WINDOWS_REASON_INPUT}")
+          fi
+          if [ "${DRAFT_ONLY_INPUT:-false}" != "true" ]; then
+            HELPER_ARGS+=(--enforce-prerelease-observation-window)
           fi
 
           python3 scripts/release_control/resolve_release_promotion.py "${HELPER_ARGS[@]}" > "$RUNNER_TEMP/promotion-metadata.out"

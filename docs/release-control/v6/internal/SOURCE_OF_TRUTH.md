@@ -671,6 +671,12 @@ Assertion design rules:
     lineage validation remains on the governed RC path. Successful reporter
     confirmation informs severity-based release scheduling but does not force
     an immediate patch release.
+22. A published release candidate is a cohort checkpoint, not a per-fix delivery
+    mechanism. After the first RC on a version line, at least 24 hours of public
+    observation must elapse before another RC on that line is published.
+    Compatible fixes, release packets, drafts, and dry runs may continue during
+    the window. Narrow reporter confirmation uses the issue-scoped test-image
+    path and cannot force or bypass another public RC.
 
 ## TrueNAS Support Floor
 

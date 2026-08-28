@@ -204,7 +204,17 @@ TLS-unverified receipts leave the claim at `implemented` or
      only structural workflow validation.
    - A governed prerelease publication record; an accidental git tag by itself
      does not count as a shipped prerelease.
-3. Failed prereleases are fixed forward and replaced with a new prerelease. They are never
+3. A published release candidate is a cohort checkpoint, not a delivery vehicle
+   for each individual fix. After the first RC on a version line, at least 24
+   hours of public observation must elapse before another RC on that line may be
+   published. Accumulate compatible fixes and release-note outcomes during the
+   window. Candidate preparation, draft creation, and Release Dry Run remain
+   available throughout it because they do not replace the public cohort.
+4. Use an immutable issue-and-commit reporter test image for narrow confirmation
+   that cannot justify a new public cohort. Broad release qualification remains
+   on the RC path, but successful narrow validation does not bypass the 24-hour
+   publication boundary.
+5. Failed prereleases are fixed forward and replaced with a new prerelease. They are never
    promoted as-is to `stable`.
 
 ## Paid Pro Artifact Lineage

@@ -10745,6 +10745,18 @@
       "lane_ids": [
         "L1"
       ]
+    },
+    {
+      "id": "prerelease-observation-window",
+      "summary": "After the first release candidate on a version line, each later public RC requires at least 24 hours of observation since the previous published RC. Compatible fixes and release evidence accumulate during the window, while draft creation, dry runs, and issue-scoped reporter test images remain available without replacing the public cohort.",
+      "kind": "release-policy",
+      "decided_at": "2026-08-28",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
     }
   ]
 }
