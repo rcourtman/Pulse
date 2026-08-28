@@ -10015,6 +10015,13 @@ sorted inventory and accidentally removing an older valid token.
 `internal/api/security_tokens_lifecycle_test.go` pins this failed-commit
 boundary.
 
+`POST /api/agent-install-command` and the hosted install-command boundary use
+the shared `internal/api/agenttokens.IssueAndPersist` commit rule. They return
+neither the generated secret nor its record when persistence fails, restore
+the complete prior inventory and legacy primary-token projection, and must not
+truncate the newest-first inventory. The forced-write-failure proof lives in
+`internal/api/agenttokens/install_test.go`.
+
 `DELETE /api/security/tokens/{id}` removes exactly the requested token and
 returns `204` only after the resulting token inventory is durably persisted.
 If persistence fails, the runtime restores the complete prior inventory,

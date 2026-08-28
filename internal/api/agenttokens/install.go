@@ -110,11 +110,16 @@ func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, 
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
+	previousTokens := append([]config.APITokenRecord(nil), cfg.APITokens...)
 	cfg.APITokens = append(cfg.APITokens, *record)
 	cfg.SortAPITokens()
 	if persistence != nil {
 		if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-			cfg.APITokens = cfg.APITokens[:len(cfg.APITokens)-1]
+			// The generated record sorts newest-first, so truncating the sorted
+			// inventory would discard an older valid token and keep the secret
+			// that the failed request never returned. Restore the full snapshot.
+			cfg.APITokens = previousTokens
+			cfg.SortAPITokens()
 			return "", nil, fmt.Errorf("%w: %w", ErrPersist, err)
 		}
 	}

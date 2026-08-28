@@ -2368,10 +2368,14 @@ a non-root agent as unhealthy on that evidence alone.
 ### API token creation and revocation are durable credential transitions
 
 Creation may not admit an unreturned secret or evict an older valid token when
-persistence fails. The token-management API retains the complete pre-creation
-inventory until the expanded inventory commits, then restores that inventory
-and its primary-token projection before returning an error on failed writes.
-The generated secret is returned only after a successful commit.
+persistence fails. Both token-management creation and shared agent
+install-token issuance retain the complete pre-creation inventory until the
+expanded inventory commits, then restore that inventory and its primary-token
+projection before returning an error on failed writes. The generated secret
+and record are returned only after a successful commit. The agent-install
+failure proof is
+`TestIssueAndPersistRollsBackCompleteInventoryWhenPersistenceFails` in
+`internal/api/agenttokens/install_test.go`.
 
 Revocation may not create different live and restart-time credential sets.
 The token-management API therefore retains a complete pre-mutation inventory

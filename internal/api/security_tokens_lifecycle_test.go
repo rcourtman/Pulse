@@ -50,6 +50,49 @@ func TestSecurityTokensCreateRollsBackCompleteInventoryWhenPersistenceFails(t *t
 	}
 }
 
+func TestAgentInstallCommandReturnsOnlyDurablyCommittedCredential(t *testing.T) {
+	now := time.Now().UTC()
+	tokens := []config.APITokenRecord{
+		{ID: "newest", Name: "newest", Hash: "hash-newest", CreatedAt: now, Scopes: []string{config.ScopeWildcard}},
+		{ID: "oldest", Name: "oldest", Hash: "hash-oldest", CreatedAt: now.Add(-time.Minute), Scopes: []string{config.ScopeWildcard}},
+	}
+	stateDir := filepath.Join(t.TempDir(), "state")
+	cfg := &config.Config{
+		DataPath:  stateDir,
+		AuthUser:  "admin",
+		AuthPass:  "hashed-password",
+		APITokens: append([]config.APITokenRecord(nil), tokens...),
+	}
+	cfg.SortAPITokens()
+	handler := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", bytes.NewBufferString(`{"type":"host","name":"must-not-survive"}`))
+	persistence := handler.Persistence(req.Context())
+	if err := persistence.SaveAPITokens(tokens); err != nil {
+		t.Fatalf("save initial tokens: %v", err)
+	}
+	if err := os.RemoveAll(stateDir); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(stateDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler.HandleAgentInstallCommand(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "must-not-survive") {
+		t.Fatalf("failed install-token response disclosed generated record: %q", rec.Body.String())
+	}
+	assertLifecycleAPITokenIDs(t, cfg.APITokens, "newest", "oldest")
+	if cfg.APIToken != "hash-newest" {
+		t.Fatalf("legacy primary token = %q, want rollback to %q", cfg.APIToken, "hash-newest")
+	}
+}
+
 func TestSecurityTokensDeletePersistsOnlyRequestedRemoval(t *testing.T) {
 	now := time.Now().UTC()
 	tokens := []config.APITokenRecord{

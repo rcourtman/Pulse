@@ -2,7 +2,10 @@ package agenttokens
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -26,6 +29,49 @@ func TestIssueAndPersistInstallToken(t *testing.T) {
 	}
 	if !record.HasScope(config.ScopeAgentExec) {
 		t.Fatalf("commands-enabled host scopes = %v", record.Scopes)
+	}
+}
+
+func TestIssueAndPersistRollsBackCompleteInventoryWhenPersistenceFails(t *testing.T) {
+	now := time.Now().UTC()
+	tokens := []config.APITokenRecord{
+		{ID: "newest", Name: "newest", Hash: "hash-newest", CreatedAt: now, Scopes: []string{config.ScopeWildcard}},
+		{ID: "oldest", Name: "oldest", Hash: "hash-oldest", CreatedAt: now.Add(-time.Minute), Scopes: []string{config.ScopeWildcard}},
+	}
+	cfg := &config.Config{APITokens: append([]config.APITokenRecord(nil), tokens...)}
+	cfg.SortAPITokens()
+
+	stateDir := filepath.Join(t.TempDir(), "state")
+	persistence := config.NewConfigPersistence(stateDir)
+	if err := os.RemoveAll(stateDir); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(stateDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+
+	raw, record, err := IssueAndPersist(cfg, persistence, IssueOptions{TokenName: "must-not-survive"})
+	if !errors.Is(err, ErrPersist) {
+		t.Fatalf("IssueAndPersist error = %v, want ErrPersist", err)
+	}
+	if raw != "" || record != nil {
+		t.Fatalf("failed issue returned credential material: raw=%q record=%#v", raw, record)
+	}
+	if len(cfg.APITokens) != len(tokens) {
+		t.Fatalf("token count = %d, want %d: %#v", len(cfg.APITokens), len(tokens), cfg.APITokens)
+	}
+	for index, want := range tokens {
+		if cfg.APITokens[index].ID != want.ID {
+			t.Fatalf("token[%d].ID = %q, want %q", index, cfg.APITokens[index].ID, want.ID)
+		}
+	}
+	if cfg.APIToken != "hash-newest" {
+		t.Fatalf("legacy primary token = %q, want rollback to %q", cfg.APIToken, "hash-newest")
+	}
+	for _, token := range cfg.APITokens {
+		if token.Name == "must-not-survive" {
+			t.Fatalf("failed issue left generated install token active: %#v", token)
+		}
 	}
 }
 

@@ -5644,6 +5644,12 @@ the commit boundary. If expansion cannot be written, it restores the complete
 prior inventory and legacy primary-token projection and returns no generated
 credential. Because token records sort newest-first, rollback restores the
 snapshot rather than truncating the sorted list and evicting an older token.
+The same rule governs shared host, Proxmox, and hosted agent install-token
+issuance in `internal/api/agenttokens`: failed persistence restores the entire
+live inventory and primary projection, and the install-command response
+contains no credential material. Its failure proofs live in
+`internal/api/agenttokens/install_test.go` and
+`internal/api/security_tokens_lifecycle_test.go`.
 
 The shared `internal/api` token revocation path treats its persisted inventory
 as the commit boundary. It snapshots the complete in-memory inventory before

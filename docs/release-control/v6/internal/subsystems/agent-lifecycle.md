@@ -6684,11 +6684,14 @@ indefinitely with 400s that no reinstall can escape (#1772).
 
 ### Agent token issuance and revocation remain continuous across persistence failure
 
-An operator-created API token carrying agent authority becomes live and is
-returned only after its expanded inventory commits. A failed creation write
-restores every prior token and the primary-token projection, so the runtime
-does not retain an undisclosed agent credential or evict an older working
-credential from its sorted inventory.
+An operator-created API token carrying agent authority, including the shared
+host and Proxmox install tokens issued by `internal/api/agenttokens`, becomes
+live and is returned only after its expanded inventory commits. A failed
+creation write restores every prior token and the primary-token projection,
+so the runtime does not retain an undisclosed install credential or evict an
+older working credential from its sorted inventory. The install-token proof is
+`TestIssueAndPersistRollsBackCompleteInventoryWhenPersistenceFails` in
+`internal/api/agenttokens/install_test.go`.
 
 The shared API-token deletion boundary may mark an agent credential revoked
 only after the reduced token inventory is durably committed. If persistence
