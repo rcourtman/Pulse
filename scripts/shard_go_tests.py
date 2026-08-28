@@ -29,6 +29,46 @@ def _digest(names: Sequence[str]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def allocate_cpu_plan(
+    test_counts: Sequence[int], vcpus: int
+) -> tuple[list[int], int]:
+    """Allocate a non-oversubscribed CPU plan for API and non-API tests.
+
+    API shards each receive one CPU before remaining API capacity is assigned
+    proportionally by planned test count. Two CPUs are reserved for the
+    concurrent non-API package graph when the worker is wide enough, otherwise
+    one is reserved. A worker with no spare CPU must run the non-API graph
+    before its API shards.
+    """
+    counts = list(test_counts)
+    if not counts:
+        raise ValueError("test_counts must contain at least one API shard")
+    if vcpus < 1:
+        raise ValueError("vcpus must be at least 1")
+    if any(
+        isinstance(count, bool) or not isinstance(count, int) or count < 1
+        for count in counts
+    ):
+        raise ValueError("test_counts must contain positive integers")
+    if len(counts) > vcpus:
+        raise ValueError("API shard count cannot exceed available vCPUs")
+
+    reserved_other = min(2, vcpus - len(counts))
+    extra_budget = vcpus - reserved_other - len(counts)
+    total = sum(counts)
+    scaled = [extra_budget * count for count in counts]
+    extras = [value // total for value in scaled]
+    remaining = extra_budget - sum(extras)
+    by_remainder = sorted(
+        range(len(counts)),
+        key=lambda index: (scaled[index] % total, counts[index], -index),
+        reverse=True,
+    )
+    for index in by_remainder[:remaining]:
+        extras[index] += 1
+    return [1 + extra for extra in extras], reserved_other
+
+
 def _test_regex(names: Sequence[str]) -> str:
     root = _RegexTrie()
     for name in names:

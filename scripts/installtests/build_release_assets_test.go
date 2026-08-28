@@ -2958,12 +2958,12 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
 	backendJob := workflowJobBlock(t, string(workflowBytes), "backend_tests")
-	if !strings.Contains(backendJob, "timeout-minutes: 40") {
+	if !strings.Contains(backendJob, "timeout-minutes: 55") {
 		t.Fatal("release backend job must retain the measured PVE execution ceiling with setup and cleanup headroom")
 	}
-	for _, invalidCeiling := range []string{"timeout-minutes: 20", "timeout-minutes: 30"} {
+	for _, invalidCeiling := range []string{"timeout-minutes: 20", "timeout-minutes: 30", "timeout-minutes: 40"} {
 		if strings.Contains(backendJob, invalidCeiling) {
-			t.Fatalf("release backend job must not restore a ceiling that can pre-empt the 30-minute Go watchdog: %s", invalidCeiling)
+			t.Fatalf("release backend job must not restore a ceiling that can pre-empt the 45-minute API watchdog: %s", invalidCeiling)
 		}
 	}
 	if !strings.Contains(backendJob, "pulse-pve-tests") || !strings.Contains(backendJob, "run-release-backend-tests.sh") {
@@ -2987,16 +2987,19 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		`2) echo $((8 * 1024 * 1024))`,
 		`*) echo $((10 * 1024 * 1024))`,
 		"Degrading to $cpu_shards API shard(s)",
-		// Shard CPU is weighted by planned test volume: the serial prefix
-		// shard measured 569s at 2 procs vs 484s at 4 on 2026-08-21, while
-		// the wait-bound tails cannot use extra width.
+		// Shard CPU is weighted by planned test volume while two single-CPU
+		// package workers are reserved for the non-API graph. The canonical
+		// 8-vCPU plan is therefore 4/1/1 plus two, never oversubscribed.
 		"SHARD_GOMAXPROCS",
 		`GOMAXPROCS="$shard_procs"`,
+		"RESERVED_OTHER_PACKAGE_PROCS",
+		`GOMAXPROCS=1 PULSE_DATA_DIR="$RUN_ROOT/data/other"`,
+		`go test -race -p "$OTHER_PACKAGE_PROCS" -timeout 30m`,
+		`API_SHARD_TIMEOUT="${PULSE_BACKEND_API_SHARD_TIMEOUT:-45m}"`,
 		"--shard-boundaries",
 		"TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback",
 		"TestServerInfoEndpointMethodNotAllowed",
-		"go test -race -timeout 30m",
-		`-test.timeout 30m`,
+		`-test.timeout "$API_SHARD_TIMEOUT"`,
 	} {
 		if !strings.Contains(backendScript, needle) {
 			t.Fatalf("PVE backend partition missing coverage contract: %s", needle)

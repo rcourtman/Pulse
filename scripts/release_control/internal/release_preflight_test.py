@@ -13,10 +13,32 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from shard_go_tests import _test_regex, build_plan, write_plan
+from shard_go_tests import _test_regex, allocate_cpu_plan, build_plan, write_plan
 
 
 class ReleasePreflightTest(unittest.TestCase):
+    def test_backend_cpu_plan_reserves_non_api_capacity_without_oversubscription(
+        self,
+    ) -> None:
+        widths, non_api = allocate_cpu_plan([3624, 15, 16], 8)
+        self.assertEqual(widths, [4, 1, 1])
+        self.assertEqual(non_api, 2)
+        self.assertEqual(sum(widths) + non_api, 8)
+
+        widths, non_api = allocate_cpu_plan([10, 10], 4)
+        self.assertEqual(widths, [1, 1])
+        self.assertEqual(non_api, 2)
+        self.assertEqual(sum(widths) + non_api, 4)
+
+        widths, non_api = allocate_cpu_plan([10], 1)
+        self.assertEqual(widths, [1])
+        self.assertEqual(non_api, 0)
+
+        for counts, vcpus in [([], 8), ([1], 0), ([1, 1], 1), ([0], 1)]:
+            with self.subTest(counts=counts, vcpus=vcpus):
+                with self.assertRaises(ValueError):
+                    allocate_cpu_plan(counts, vcpus)
+
     def run_script(
         self, *args: str, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
@@ -423,6 +445,18 @@ class ReleasePreflightTest(unittest.TestCase):
         )
         self.assertIn("shard_admission_required_kib", backend)
         self.assertIn("Degrading to $cpu_shards API shard(s)", backend)
+        self.assertIn(
+            'API_SHARD_TIMEOUT="${PULSE_BACKEND_API_SHARD_TIMEOUT:-45m}"',
+            backend,
+        )
+        self.assertIn("RESERVED_OTHER_PACKAGE_PROCS", backend)
+        self.assertIn(
+            'GOMAXPROCS=1 PULSE_DATA_DIR="$RUN_ROOT/data/other"', backend
+        )
+        self.assertIn(
+            'go test -race -p "$OTHER_PACKAGE_PROCS" -timeout 30m', backend
+        )
+        self.assertIn('-test.timeout "$API_SHARD_TIMEOUT"', backend)
         self.assertIn(
             "TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback,"
             "TestServerInfoEndpointMethodNotAllowed",

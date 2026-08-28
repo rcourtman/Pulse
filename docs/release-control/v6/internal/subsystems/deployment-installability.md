@@ -1866,11 +1866,42 @@ job ceiling during completion. That cancellation caused immutable readiness to
 skip and the activation verdict to fail closed. GitHub release `378204006`
 therefore remains an unpublished draft, its annotated tag and exact-version
 artifacts remain immutable, convergence run `33131402971` made no customer
-pointer changes, and stable/latest remains `v6.3.2`. The canonical backend job
-now has a 40-minute ceiling while retaining the per-invocation 30-minute Go
-timeout, so setup, bundle transfer, planning, and cleanup overhead cannot
-pre-empt the test process or cancel a successfully completed release suite.
-`v6.4.0-rc.10` fixes forward from that infrastructure failure.
+pointer changes, and stable/latest remains `v6.3.2`. At the
+`v6.4.0-rc.10` source SHA, the backend job had a 40-minute ceiling while
+retaining the per-invocation 30-minute Go timeout, so setup, bundle transfer,
+planning, and cleanup overhead could no longer cancel a successfully completed
+suite. `v6.4.0-rc.10` fixed forward from that infrastructure failure.
+
+The active `v6.4.0-rc.10` qualification used exact source SHA
+`827017e196ede706d27876d27637712b5b165dcc` and release run `33132798478`.
+Its first attempt staged the immutable tag, draft, 217 exact-version assets,
+container images, Helm chart, and private runtime, while every non-backend
+release gate passed. The three-shard backend plan assigned all eight worker
+CPUs to API processes (`4/2/2`) while also running the non-API package graph
+with default Go concurrency. On a cold worker the prefix shard reached its
+cumulative 30-minute test-binary watchdog after completing 2,910 of its 3,624
+top-level tests; the two 15- and 16-test tails passed independently, so this
+was bounded runner oversubscription rather than an individual hung test. The
+unchanged immutable retry completed the full backend job in 11 minutes 52
+seconds. Activation recovery run `33135968998` then committed GitHub release
+`378221878` with 220 assets and an exact-lineage activation marker; canonical
+convergence owner `33135994780` passed Docker RC aliases, Helm Pages, and the
+private paid-runtime broker and released the global promotion lease. The
+release is public as a prerelease, while stable/latest remains `v6.3.2`.
+
+Future release qualification on `main` must not depend on a warm worker. On
+the canonical 8-vCPU, three-shard PVE plan, the backend runner reserves two
+single-CPU package workers for the non-API graph, gives the API shards a
+volume-weighted `4/1/1` allocation, passes `-p 2` to `go test`, and sets
+`GOMAXPROCS=1` for every non-API test binary. The combined declared width is
+therefore eight CPUs instead of eight API CPUs plus unbounded non-API package
+concurrency. Each
+API shard has a 45-minute cumulative watchdog, the non-API graph retains its
+30-minute watchdog, and the enclosing job has a 55-minute ceiling. Constrained
+one-vCPU hosts run the non-API graph before the API shard rather than knowingly
+oversubscribing the host. The deterministic CPU allocator and release guards
+pin this partition and reject a job ceiling that could pre-empt the API
+watchdog.
 
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
