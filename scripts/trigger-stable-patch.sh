@@ -107,13 +107,8 @@ if [ ! -s "$NOTES_FILE" ]; then
   echo "Canonical release notes are required at ${NOTES_FILE}." >&2
   exit 1
 fi
-VISUAL_PLAN_SIDECAR="${NOTES_FILE}.visuals.json"
-if [ -s "$VISUAL_PLAN_SIDECAR" ]; then
-  VISUAL_PLAN_FILE="$VISUAL_PLAN_SIDECAR"
-else
-  VISUAL_PLAN_FILE=$(mktemp)
-  rm -f "$VISUAL_PLAN_FILE"
-fi
+VISUAL_PLAN_FILE=$(mktemp)
+rm -f "$VISUAL_PLAN_FILE"
 
 RESOLVER_ARGS=(
   --version "$VERSION"
@@ -197,9 +192,10 @@ else
     --version "$VERSION" \
     --validate-notes-file "$NOTES_FILE"
 
-  if [ ! -s "$VISUAL_PLAN_FILE" ]; then
-    ./scripts/generate-release-notes.sh --visual-plan "$VERSION" "$NOTES_FILE" > "$VISUAL_PLAN_FILE"
-  fi
+  # A committed sidecar is review material, not proof that visual investigation
+  # ran for this dispatch. Always make the release model judge the exact notes
+  # and comparison range used by the publication request.
+  ./scripts/generate-release-notes.sh --visual-plan "$VERSION" "$NOTES_FILE" > "$VISUAL_PLAN_FILE"
   python3 scripts/release_control/release_note_visuals.py \
     validate --plan "$VISUAL_PLAN_FILE" --output "$VISUAL_PLAN_FILE"
 

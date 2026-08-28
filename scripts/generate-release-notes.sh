@@ -274,6 +274,7 @@ current HEAD with identical generated demo data.
 Return only JSON in this shape, with at most three captures:
 {
   "schema_version": 1,
+  "decision": "Why the selected views improve the notes, or why no screenshot adds meaningful value",
   "captures": [
     {
       "id": "lower-case-hyphenated-id",
@@ -311,7 +312,9 @@ testid. Actions may be click or wait. Role locators use role and name. Other
 locators use value. Every state needs a ready locator for content that must be
 visible in the finished image. Locator names and values are literal accessible
 text, not regular expressions. Use labels verified against the deterministic
-generated demo data. Use no semicolon or em dash characters in public text.
+generated demo data. The decision field records the model's evidence-based
+reason for selecting these captures or selecting none. Use no semicolon or em
+dash characters in public text.
 
 Customer release notes:
 

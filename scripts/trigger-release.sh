@@ -139,13 +139,9 @@ echo ""
 
 # Check 5: Release notes file
 NOTES_FILE="${NOTES_FILE_ARG:-/tmp/release_notes_${VERSION}.md}"
-VISUAL_PLAN_SIDECAR="${NOTES_FILE}.visuals.json"
-if [ -s "$VISUAL_PLAN_SIDECAR" ]; then
-  VISUAL_PLAN_FILE="$VISUAL_PLAN_SIDECAR"
-else
-  VISUAL_PLAN_FILE=$(mktemp)
-  rm -f "$VISUAL_PLAN_FILE"
-fi
+VISUAL_PLAN_FILE=$(mktemp)
+rm -f "$VISUAL_PLAN_FILE"
+VISUAL_PLAN_GENERATED_THIS_RUN="false"
 if [ -f "$NOTES_FILE" ]; then
   echo "Found release notes file: ${NOTES_FILE}"
   echo ""
@@ -166,6 +162,7 @@ else
       echo "Generating release notes..."
       if RELEASE_NOTE_VISUAL_PLAN_FILE="$VISUAL_PLAN_FILE" \
           ./scripts/generate-release-notes.sh "$VERSION" > "$NOTES_FILE"; then
+          VISUAL_PLAN_GENERATED_THIS_RUN="true"
           echo "Release notes generated at ${NOTES_FILE}"
           echo ""
           # Show first few lines
@@ -202,8 +199,12 @@ python3 scripts/release_control/render_release_body.py \
   --validate-notes-file "$NOTES_FILE"
 echo "✓ Release-note Markdown structure validated"
 
-if [ ! -s "$VISUAL_PLAN_FILE" ]; then
+if [ "$VISUAL_PLAN_GENERATED_THIS_RUN" != "true" ]; then
+  # A committed sidecar is review material, not proof that visual investigation
+  # ran for this dispatch. Always make the release model judge the exact notes
+  # and comparison range used by the publication request.
   ./scripts/generate-release-notes.sh --visual-plan "$VERSION" "$NOTES_FILE" > "$VISUAL_PLAN_FILE"
+  VISUAL_PLAN_GENERATED_THIS_RUN="true"
 fi
 python3 scripts/release_control/release_note_visuals.py \
   validate --plan "$VISUAL_PLAN_FILE" --output "$VISUAL_PLAN_FILE"
@@ -217,7 +218,7 @@ if [ "$VISUAL_CAPTURE_COUNT" -gt 0 ]; then
   read -p "Use this visual plan? [Y/n] " -n 1 -r
   echo ""
   if [[ $REPLY =~ ^[Nn]$ ]]; then
-    printf '%s\n' '{"schema_version":1,"captures":[]}' > "$VISUAL_PLAN_FILE"
+    printf '%s\n' '{"schema_version":1,"decision":"The release owner declined the model-selected visual plan.","captures":[]}' > "$VISUAL_PLAN_FILE"
     VISUAL_CAPTURE_COUNT=0
   fi
 fi

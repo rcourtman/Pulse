@@ -3206,6 +3206,30 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	}
 }
 
+func TestReleaseTriggersReevaluateVisualsInsteadOfTrustingSidecars(t *testing.T) {
+	for _, path := range []string{
+		repoFile("scripts", "trigger-release.sh"),
+		repoFile("scripts", "trigger-stable-patch.sh"),
+	} {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(content)
+		if strings.Contains(text, "VISUAL_PLAN_SIDECAR") {
+			t.Fatalf("%s must not treat a committed visual sidecar as dispatch evidence", path)
+		}
+		for _, required := range []string{
+			"A committed sidecar is review material, not proof",
+			"generate-release-notes.sh --visual-plan",
+		} {
+			if !strings.Contains(text, required) {
+				t.Fatalf("%s missing visual reevaluation contract %q", path, required)
+			}
+		}
+	}
+}
+
 func assertFileContainsAllNormalized(t *testing.T, path string, required ...string) {
 	t.Helper()
 	content, err := os.ReadFile(path)

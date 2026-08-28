@@ -65,6 +65,11 @@ visual selection. Selected before and now images are staged as draft release
 assets, linked from a `See the difference` section, and must be publicly
 retrievable before the activation marker commits publication. A current-only
 image is permitted when a truthful before view is not available.
+Canonical publish triggers rerun visual evidence discovery and selection for the
+exact notes and comparison range being dispatched. A committed visual sidecar is
+review material only and cannot substitute for that run. The model may still
+select zero captures when its investigation finds that screenshots add no
+meaningful customer value.
 
 Customer-facing notes use one outcome list for features and fixes. Each visible
 change is described once under `What's improved`; a parallel `Fixes` section is

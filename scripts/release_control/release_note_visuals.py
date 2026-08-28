@@ -131,11 +131,12 @@ def _state(value: Any, field: str) -> dict[str, Any]:
 def validate_plan(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise PlanError("visual plan must be a JSON object")
-    unknown = set(raw) - {"schema_version", "captures"}
+    unknown = set(raw) - {"schema_version", "decision", "captures"}
     if unknown:
         raise PlanError(f"visual plan has unsupported fields: {', '.join(sorted(unknown))}")
     if raw.get("schema_version") != 1:
         raise PlanError("visual plan schema_version must be 1")
+    decision = _text(raw.get("decision"), "visual plan decision", maximum=500)
     captures = raw.get("captures")
     if not isinstance(captures, list) or len(captures) > MAX_CAPTURES:
         raise PlanError(f"visual plan captures must be a list with at most {MAX_CAPTURES} entries")
@@ -191,7 +192,11 @@ def validate_plan(raw: Any) -> dict[str, Any]:
                 "after": _state(capture.get("after"), f"{field}.after"),
             }
         )
-    return {"schema_version": 1, "captures": normalized_captures}
+    return {
+        "schema_version": 1,
+        "decision": decision,
+        "captures": normalized_captures,
+    }
 
 
 def load_plan(path: str) -> dict[str, Any]:
@@ -273,9 +278,10 @@ def json_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["schema_version", "captures"],
+        "required": ["schema_version", "decision", "captures"],
         "properties": {
             "schema_version": {"const": 1, "type": "integer"},
+            "decision": {"type": "string", "minLength": 1, "maxLength": 500},
             "captures": {
                 "type": "array",
                 "maxItems": MAX_CAPTURES,

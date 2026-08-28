@@ -14,9 +14,8 @@ on:
         type: string
       release_screenshot_plan:
         description: 'Validated model-selected release-note visual plan (JSON)'
-        required: false
+        required: true
         type: string
-        default: '{"schema_version":1,"captures":[]}'
       promoted_from_tag:
         description: 'Stable only: prerelease tag being promoted (for example 6.0.0-rc.2)'
         required: false
@@ -160,7 +159,8 @@ jobs:
           PLAN_FILE=$(mktemp)
           if ! jq -er '.inputs.release_screenshot_plan | select(type == "string" and length > 0)' \
             "$GITHUB_EVENT_PATH" > "$PLAN_FILE"; then
-            printf '%s\n' '{"schema_version":1,"captures":[]}' > "$PLAN_FILE"
+            echo "::error::release_screenshot_plan must contain an evidence-backed visual decision"
+            exit 1
           fi
           python3 scripts/release_control/release_note_visuals.py \
             validate --plan "$PLAN_FILE" --output "$PLAN_FILE"
@@ -797,7 +797,8 @@ jobs:
           VISUAL_MARKDOWN_FILE=$(mktemp)
           if ! jq -er '.inputs.release_screenshot_plan | select(type == "string" and length > 0)' \
             "$GITHUB_EVENT_PATH" > "$VISUAL_PLAN_FILE"; then
-            printf '%s\n' '{"schema_version":1,"captures":[]}' > "$VISUAL_PLAN_FILE"
+            echo "::error::release_screenshot_plan must contain an evidence-backed visual decision"
+            exit 1
           fi
           python3 scripts/release_control/release_note_visuals.py render \
             --plan "$VISUAL_PLAN_FILE" \

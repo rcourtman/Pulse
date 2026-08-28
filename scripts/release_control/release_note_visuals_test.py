@@ -22,6 +22,7 @@ RENDERER_SPEC.loader.exec_module(renderer)
 def valid_plan():
     return {
         "schema_version": 1,
+        "decision": "This settings comparison makes the responsive redesign immediately visible.",
         "captures": [
             {
                 "id": "responsive-settings",
@@ -79,6 +80,7 @@ class ReleaseNoteVisualPlanTest(unittest.TestCase):
     def test_structured_output_schema_carries_public_and_capture_bounds(self):
         schema = visuals.json_schema()
         self.assertEqual(schema["properties"]["schema_version"]["type"], "integer")
+        self.assertIn("decision", schema["required"])
         captures = schema["properties"]["captures"]
         capture = captures["items"]["properties"]
         self.assertEqual(captures["maxItems"], visuals.MAX_CAPTURES)
@@ -87,6 +89,18 @@ class ReleaseNoteVisualPlanTest(unittest.TestCase):
             capture["after"]["properties"]["steps"]["maxItems"],
             visuals.MAX_STEPS,
         )
+
+    def test_empty_capture_plan_requires_an_explicit_model_decision(self):
+        with self.assertRaisesRegex(visuals.PlanError, "decision"):
+            visuals.validate_plan({"schema_version": 1, "captures": []})
+        plan = visuals.validate_plan(
+            {
+                "schema_version": 1,
+                "decision": "The investigated changes have no meaningful static visual state.",
+                "captures": [],
+            }
+        )
+        self.assertEqual(plan["captures"], [])
 
     def test_current_only_capture_has_one_asset(self):
         raw = valid_plan()
