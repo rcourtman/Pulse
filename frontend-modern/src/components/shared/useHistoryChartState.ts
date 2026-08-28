@@ -20,13 +20,18 @@ import {
   type HistoryChartProps,
   type HistoryChartHoverPoint,
 } from './historyChartModel';
+import type { HistoryChartHoverGroupState } from './HistoryChartHoverGroup';
 
 interface HistoryChartRefs {
   getCanvas: () => HTMLCanvasElement | undefined;
   getContainer: () => HTMLDivElement | undefined;
 }
 
-export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChartRefs) {
+export function useHistoryChartState(
+  props: HistoryChartProps,
+  refs: HistoryChartRefs,
+  hoverGroup?: HistoryChartHoverGroupState,
+) {
   const [range, setRange] = createSignal<HistoryTimeRange>(props.range || '24h');
   const [data, setData] = createSignal(props.data ?? []);
   const [loading, setLoading] = createSignal(false);
@@ -37,12 +42,14 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
   const [refreshTick, setRefreshTick] = createSignal(0);
   const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);
-  const [cursorX, setCursorX] = createSignal<number | null>(null);
+  const [localHoveredTimestamp, setLocalHoveredTimestamp] = createSignal<number | null>(null);
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
   const [chartWidth, setChartWidth] = createSignal(300);
   const chartHeight = createMemo(() => props.height || 200);
   let chartLeftInset = HISTORY_CHART_MIN_LEFT_INSET;
   let chartRightInset = 0;
+  const hoveredTimestamp = hoverGroup?.hoveredTimestamp ?? localHoveredTimestamp;
+  const setHoveredTimestamp = hoverGroup?.setHoveredTimestamp ?? setLocalHoveredTimestamp;
 
   const refreshIntervalMs = createMemo(() => getHistoryChartRefreshIntervalMs(range()));
 
@@ -229,6 +236,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     }
 
     if (points.length === 0) {
+      setHoveredPoint(null);
       return;
     }
 
@@ -273,14 +281,17 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
       ctx.fillText(tick.label, geometry.getX(tick.timestamp), height - 2);
     }
 
-    const cursor = cursorX();
+    const hoverTimestamp = hoveredTimestamp();
     if (
-      cursor === null ||
-      cursor < chartLeftInset ||
-      cursor > width - chartRightInset ||
-      points.length === 0
-    )
+      hoverTimestamp === null ||
+      hoverTimestamp < points[0].timestamp ||
+      hoverTimestamp > points[points.length - 1].timestamp
+    ) {
+      setHoveredPoint(null);
       return;
+    }
+
+    const cursor = geometry.getX(hoverTimestamp);
 
     ctx.save();
     ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)';
@@ -292,8 +303,6 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     ctx.stroke();
     ctx.restore();
 
-    const ratio = (cursor - chartLeftInset) / (width - chartLeftInset - chartRightInset);
-    const hoverTimestamp = points[0].timestamp + ratio * geometry.timeSpan;
     const closest = findHistoryChartClosestPoint(points, hoverTimestamp);
     const pointX = geometry.getX(closest.timestamp);
     const pointY = geometry.getY(closest.value);
@@ -312,10 +321,17 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     ctx.arc(pointX, pointY, 2, 0, Math.PI * 2);
     ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.8)';
     ctx.fill();
+
+    setHoveredPoint({
+      value: closest.value,
+      timestamp: closest.timestamp,
+      x: pointX,
+      y: pointY,
+    });
   };
 
   createEffect(() => {
-    cursorX();
+    hoveredTimestamp();
     drawChart();
   });
 
@@ -350,41 +366,18 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const width = rect.width;
-    const geometry = createHistoryChartGeometry({
-      width,
-      height: chartHeight(),
-      startTime: points[0].timestamp,
-      endTime: points[points.length - 1].timestamp,
-      minValue: getHistoryChartScale(points, props.unit).minValue,
-      maxValue: getHistoryChartScale(points, props.unit).maxValue,
-      leftInset: chartLeftInset,
-      rightInset: chartRightInset,
-    });
-
     if (x < chartLeftInset || x > width - chartRightInset) {
-      setCursorX(null);
-      setHoveredPoint(null);
+      setHoveredTimestamp(null);
       return;
     }
 
-    setCursorX(x);
     const ratio = (x - chartLeftInset) / (width - chartLeftInset - chartRightInset);
-    const hoverTimestamp = points[0].timestamp + ratio * geometry.timeSpan;
-    const closest = findHistoryChartClosestPoint(points, hoverTimestamp);
-    const pointX = geometry.getX(closest.timestamp);
-    const pointY = geometry.getY(closest.value);
-
-    setHoveredPoint({
-      value: closest.value,
-      timestamp: closest.timestamp,
-      x: pointX,
-      y: pointY,
-    });
+    const timeSpan = Math.max(1, points[points.length - 1].timestamp - points[0].timestamp);
+    setHoveredTimestamp(points[0].timestamp + ratio * timeSpan);
   };
 
   const handleMouseLeave = () => {
-    setHoveredPoint(null);
-    setCursorX(null);
+    setHoveredTimestamp(null);
   };
 
   return {

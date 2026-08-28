@@ -129,6 +129,11 @@ plotted scale rather than semantic `Avg` / `Max` placeholders. Byte and
 byte-rate axes include their human-readable unit at each gridline, and the
 canvas measures both value and time labels into the same plot bounds used by
 geometry and hover selection so neither edge clips or drifts from the data.
+Related history charts that share a time range must opt into the shared hover
+group. The group owns one absolute hovered timestamp, while each chart maps
+that timestamp through its own plot geometry and nearest stored sample so
+crosshairs and tooltips remain time-aligned without coupling unrelated ranges
+or assuming identical value scales.
 Object-detail navigation follows that same canonical split across platform and
 feature owners. `Overview` is the stable landing tab for current operational
 facts, while stored metric charts appear only after selecting an evidence-gated

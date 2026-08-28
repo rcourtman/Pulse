@@ -3292,10 +3292,15 @@ chart must route through the shared `HistoryChart` API contract using the disk
 resource's canonical history target. Storage must not keep a drawer-local live
 metrics collector, agent-id/device fallback stream, or separate real-time
 history store once monitoring and `/api/metrics-store/history` already own the
-disk timeline. A disk Overview panel must never collapse into unexplained empty
-space: when neither detailed SMART attributes nor a typed collection message
-exists, it renders an explicit unavailable-details state while retaining the
-bounded model, device, host, source, and serial header facts.
+disk timeline. Charts in the disk detail's 30-minute Live I/O set share one
+history-chart hover group, and charts in its selectable-range history set share
+a separate group. Pointer movement must align crosshairs and nearest-sample
+tooltips by absolute timestamp within each set without leaking hover state
+between those independent time ranges. A disk Overview panel must never
+collapse into unexplained empty space: when neither detailed SMART attributes
+nor a typed collection message exists, it renders an explicit
+unavailable-details state while retaining the bounded model, device, host,
+source, and serial header facts.
 Storage pool and disk detail range selectors must mirror the shared history
 chart entitlement sequence. They must expose `14d` between `7d` and `30d` and
 pass the selected range through to `HistoryChart` unchanged, rather than

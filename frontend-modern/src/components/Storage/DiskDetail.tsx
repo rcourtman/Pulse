@@ -2,7 +2,7 @@ import { Component, For, Show, createEffect, createMemo, createSignal } from 'so
 import type { Resource } from '@/types/resource';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
-import { HistoryChart } from '@/components/shared/HistoryChart';
+import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import type { HistoryTimeRange } from '@/api/charts';
 import { maxHistoryDays } from '@/stores/license';
@@ -175,32 +175,34 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                 Live I/O (30m)
                 <span class={STORAGE_DETAIL_BADGE_CLASS}>{getDiskDetailLiveBadgeLabel()}</span>
               </h4>
-              <div class={STORAGE_DISK_DETAIL_LIVE_GRID_CLASS}>
-                <For each={DISK_DETAIL_LIVE_CHARTS}>
-                  {(chart) => (
-                    <div class={STORAGE_DETAIL_CARD_CLASS}>
-                      <HistoryChart
-                        resourceType="disk"
-                        resourceId={metricResourceId()!}
-                        metric={
-                          chart.series === 'read'
-                            ? 'diskread'
-                            : chart.series === 'write'
-                              ? 'diskwrite'
-                              : 'disk'
-                        }
-                        label={chart.label}
-                        unit={chart.unit}
-                        range="30m"
-                        hideSelector
-                        hideLock
-                        height={120}
-                        compact={true}
-                      />
-                    </div>
-                  )}
-                </For>
-              </div>
+              <HistoryChartHoverGroup>
+                <div class={STORAGE_DISK_DETAIL_LIVE_GRID_CLASS}>
+                  <For each={DISK_DETAIL_LIVE_CHARTS}>
+                    {(chart) => (
+                      <div class={STORAGE_DETAIL_CARD_CLASS}>
+                        <HistoryChart
+                          resourceType="disk"
+                          resourceId={metricResourceId()!}
+                          metric={
+                            chart.series === 'read'
+                              ? 'diskread'
+                              : chart.series === 'write'
+                                ? 'diskwrite'
+                                : 'disk'
+                          }
+                          label={chart.label}
+                          unit={chart.unit}
+                          range="30m"
+                          hideSelector
+                          hideLock
+                          height={120}
+                          compact={true}
+                        />
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </HistoryChartHoverGroup>
             </div>
           </Show>
 
@@ -211,27 +213,29 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
             }
           >
             <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
-              <div class={STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS}>
-                <For each={historyCharts()}>
-                  {(chart) => (
-                    <div class={STORAGE_DETAIL_CARD_CLASS}>
-                      <HistoryChart
-                        resourceType="disk"
-                        resourceId={historyResourceId()!}
-                        metric={chart.metric}
-                        label={chart.label}
-                        unit={chart.unit}
-                        height={120}
-                        color={chart.color}
-                        range={chartRange()}
-                        hideSelector={true}
-                        compact={true}
-                        hideLock={true}
-                      />
-                    </div>
-                  )}
-                </For>
-              </div>
+              <HistoryChartHoverGroup>
+                <div class={STORAGE_DISK_DETAIL_HISTORY_GRID_CLASS}>
+                  <For each={historyCharts()}>
+                    {(chart) => (
+                      <div class={STORAGE_DETAIL_CARD_CLASS}>
+                        <HistoryChart
+                          resourceType="disk"
+                          resourceId={historyResourceId()!}
+                          metric={chart.metric}
+                          label={chart.label}
+                          unit={chart.unit}
+                          height={120}
+                          color={chart.color}
+                          range={chartRange()}
+                          hideSelector={true}
+                          compact={true}
+                          hideLock={true}
+                        />
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </HistoryChartHoverGroup>
             </div>
           </Show>
         </Show>

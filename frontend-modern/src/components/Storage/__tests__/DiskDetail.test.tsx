@@ -1,9 +1,13 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { DiskDetail } from '@/components/Storage/DiskDetail';
 import type { Resource } from '@/types/resource';
 
 vi.mock('@/components/shared/HistoryChart', () => ({
+  HistoryChartHoverGroup: (props: { children: JSX.Element }) => (
+    <div data-testid="history-chart-hover-group">{props.children}</div>
+  ),
   HistoryChart: (props: {
     resourceType: string;
     resourceId: string;
@@ -69,6 +73,7 @@ describe('DiskDetail', () => {
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('14d');
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('90d');
     expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByTestId('history-chart-hover-group')).toHaveLength(2);
   });
 
   it('shows explicit collection status and does not render misleading live I/O', () => {

@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
+import historyChartHoverGroupSource from '@/components/shared/HistoryChartHoverGroup.tsx?raw';
 import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.tsx?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
-import { HistoryChart } from '@/components/shared/HistoryChart';
+import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
 import {
   getHistoryChartTooltipLayout,
   HISTORY_CHART_RANGES,
@@ -58,6 +59,7 @@ describe('HistoryChart', () => {
     expect(historyChartSource).toContain('HistoryChartHeader');
     expect(historyChartSource).toContain('HistoryChartOverlay');
     expect(historyChartSource).toContain('HistoryChartTooltip');
+    expect(historyChartSource).toContain('useHistoryChartHoverGroup');
     expect(historyChartOverlaySource).toContain(
       "import { LoadingSpinner } from './LoadingSpinner'",
     );
@@ -79,12 +81,16 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).toContain('setupCanvasDPR');
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
+    expect(historyChartStateSource).toContain('hoveredTimestamp');
     expect(historyChartStateSource).toContain("'mock_synthetic' | null");
     expect(historyChartStateSource).not.toContain('canStartCommercialTrial');
     expect(historyChartStateSource).not.toContain('runStartProTrialAction({');
     expect(historyChartStateSource).not.toContain('startProTrial()');
     expect(historyChartStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(historyChartStateSource).not.toContain('getTrialTryAgainLaterMessage()');
+
+    expect(historyChartHoverGroupSource).toContain('createContext');
+    expect(historyChartHoverGroupSource).toContain('HistoryChartHoverGroup');
 
     expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartModelSource).toContain('getHistoryChartTooltipLayout');
@@ -126,6 +132,59 @@ describe('HistoryChart', () => {
     render(() => <HistoryChart resourceType="agent" resourceId="node-1" metric="cpu" />);
 
     expect(screen.getByText('History')).toBeInTheDocument();
+  });
+
+  it('synchronizes the hovered timestamp across charts in the same group', () => {
+    const rectSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 120,
+      width: 400,
+      height: 120,
+      toJSON: () => ({}),
+    });
+    const data = [
+      { timestamp: 1_000, value: 10, min: 10, max: 10 },
+      { timestamp: 2_000, value: 20, min: 20, max: 20 },
+      { timestamp: 3_000, value: 30, min: 30, max: 30 },
+    ];
+
+    const { container } = render(() => (
+      <HistoryChartHoverGroup>
+        <HistoryChart
+          resourceType="disk"
+          resourceId="disk-1"
+          metric="diskread"
+          unit="B/s"
+          data={data}
+        />
+        <HistoryChart
+          resourceType="disk"
+          resourceId="disk-1"
+          metric="diskwrite"
+          unit="B/s"
+          data={data.map((point) => ({
+            ...point,
+            value: point.value * 2,
+            min: point.min * 2,
+            max: point.max * 2,
+          }))}
+        />
+      </HistoryChartHoverGroup>
+    ));
+
+    const canvases = container.querySelectorAll('canvas');
+    fireEvent.mouseMove(canvases[0], { clientX: 220 });
+
+    expect(container.querySelectorAll('[data-history-chart-tooltip="true"]')).toHaveLength(2);
+
+    fireEvent.mouseLeave(canvases[0]);
+
+    expect(container.querySelectorAll('[data-history-chart-tooltip="true"]')).toHaveLength(0);
+    rectSpy.mockRestore();
   });
 
   it('exposes the sub-day and Relay history ranges as first-class chart options', () => {

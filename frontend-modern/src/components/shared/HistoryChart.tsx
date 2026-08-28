@@ -1,20 +1,27 @@
 import { Component } from 'solid-js';
 import type { HistoryChartProps } from './historyChartModel';
 import { HistoryChartHeader } from './HistoryChartHeader';
+import { HistoryChartHoverGroup, useHistoryChartHoverGroup } from './HistoryChartHoverGroup';
 import { HistoryChartOverlay } from './HistoryChartOverlay';
 import { HistoryChartTooltip } from './HistoryChartTooltip';
 import { useHistoryChartState } from './useHistoryChartState';
 
 export type { HistoryChartProps } from './historyChartModel';
+export { HistoryChartHoverGroup };
 
 export const HistoryChart: Component<HistoryChartProps> = (props) => {
   let canvasRef: HTMLCanvasElement | undefined;
   let containerRef: HTMLDivElement | undefined;
+  const hoverGroup = useHistoryChartHoverGroup();
 
-  const chart = useHistoryChartState(props, {
-    getCanvas: () => canvasRef,
-    getContainer: () => containerRef,
-  });
+  const chart = useHistoryChartState(
+    props,
+    {
+      getCanvas: () => canvasRef,
+      getContainer: () => containerRef,
+    },
+    hoverGroup,
+  );
 
   return (
     <div

@@ -43,6 +43,7 @@ import patrolObjectivesPanelSource from '@/features/patrol/PatrolObjectivesPanel
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
+import historyChartHoverGroupSource from '@/components/shared/HistoryChartHoverGroup.tsx?raw';
 import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.tsx?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
@@ -5237,6 +5238,7 @@ describe('shared primitive guardrails', () => {
     expect(historyChartSource).toContain('HistoryChartHeader');
     expect(historyChartSource).toContain('HistoryChartOverlay');
     expect(historyChartSource).toContain('HistoryChartTooltip');
+    expect(historyChartSource).toContain('useHistoryChartHoverGroup');
     expect(historyChartSource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartSource).not.toContain('calculateOptimalPoints');
     expect(historyChartSource).not.toContain('setupCanvasDPR');
@@ -5249,6 +5251,10 @@ describe('shared primitive guardrails', () => {
     expect(historyChartStateSource).toContain('setupCanvasDPR');
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
+    expect(historyChartStateSource).toContain('hoveredTimestamp');
+
+    expect(historyChartHoverGroupSource).toContain('createContext');
+    expect(historyChartHoverGroupSource).toContain('HistoryChartHoverGroup');
 
     expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartModelSource).toContain('getHistoryChartTooltipLayout');

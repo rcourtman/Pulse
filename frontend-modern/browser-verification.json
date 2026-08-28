@@ -1,28 +1,35 @@
 {
   "version": 1,
-  "base_sha": "11cbc303d6f9d4abc5d33708d5ccafc82ccec306",
-  "verified_at": "2026-08-28T08:44:24Z",
+  "base_sha": "99d4c4e8d44b2fb39a2f3c7eb0009eb1e8d126c0",
+  "verified_at": "2026-08-28T08:51:48Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx",
-    "frontend-modern/src/utils/alertIncidentPresentation.ts"
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
+    "frontend-modern/src/components/shared/HistoryChartHoverGroup.tsx",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx": "b88c28b9e00787aa17f8e714d0066fa201925ef3a492339c501e86bb74947594",
-    "frontend-modern/src/utils/alertIncidentPresentation.ts": "4055b32de5e6401dcbb3cd79903d4a8afdb31f3e74645877732bcd416ec2ab45"
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "fd604363e37ffd95e2bbfdfb82b36fa94b3a217e6644c4f9591946e9b41fd217",
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "eef6172fbc89bdd9ec0f26ec6b71bb2f6344bd16bd5b0f5c6e32d594235d304d",
+    "frontend-modern/src/components/shared/HistoryChartHoverGroup.tsx": "58748fba95a4bb7941a08ff9e41c96e8c870b8f6fff9f9ff9767a795802a1632",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "8b54e7a48c4635e316ab01410ed07b6ddb308f6ea3f339612bb61ec55947c1d4"
   },
-  "routes": ["/alerts/history"],
+  "routes": ["/proxmox/storage?tab=disks&q=nvme2"],
   "viewports": [
-    { "width": 1280, "height": 720 },
-    { "width": 390, "height": 664 }
+    { "width": 1078, "height": 1234 },
+    { "width": 390, "height": 844 }
   ],
   "states": [
-    "desktop VMware alert-history row with its inline resource-incidents panel loaded",
-    "narrow VMware alert-history card with its resource-incidents drawer loaded"
+    "Proxmox Physical Disks filtered to nvme2 with WD Red Pro 8TB expanded",
+    "disk History tab with 30-minute Read, Write, and Busy charts plus selectable-range Temperature history loaded",
+    "Read chart hovered with synchronized crosshairs, point markers, and tooltips visible on all three Live I/O charts",
+    "pointer moved outside the Live I/O group with all synchronized hover state cleared"
   ],
   "interactions": [
-    "opened Resource investigation from the VMware alert-history row and card",
-    "confirmed the incident message, Resource Health label, and canonical Resource incidents heading were visible",
-    "confirmed the narrow drawer exposed exactly one matching accessible Resource incidents heading"
+    "expanded WD Red Pro 8TB and opened its History tab at desktop width",
+    "hovered the rebased desktop Read chart and confirmed Read, Write, and Busy show the same 09:34:00 timestamp while Temperature remains independent",
+    "repeated the hover at 390px and confirmed the stacked Read, Write, and Busy charts show the same 09:36:57 timestamp without clipped tooltips",
+    "moved the pointer outside the chart group and confirmed all grouped tooltips clear together"
   ]
 }
