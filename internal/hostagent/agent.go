@@ -1444,28 +1444,40 @@ func (a *Agent) ApplyRemoteConfig(settings map[string]interface{}, commandsEnabl
 		a.configMu.Lock()
 		if a.interval != interval {
 			intervalChanged = true
+			a.interval = interval
+			a.cfg.Interval = interval
 		}
-		a.interval = interval
-		a.cfg.Interval = interval
 		a.configMu.Unlock()
 		if intervalChanged {
 			a.signalRemoteConfigChanged()
+			a.logger.Info().Dur("interval", interval).Msg("Applied remote host report interval")
 		}
-		a.logger.Info().Dur("interval", interval).Msg("Applied remote host report interval")
 	}
 	if reportIP, ok := remoteStringSetting(settings, "report_ip"); ok {
 		trimmedReportIP := strings.TrimSpace(reportIP)
+		reportIPChanged := false
 		a.configMu.Lock()
-		a.reportIP = trimmedReportIP
-		a.cfg.ReportIP = trimmedReportIP
+		if a.reportIP != trimmedReportIP {
+			reportIPChanged = true
+			a.reportIP = trimmedReportIP
+			a.cfg.ReportIP = trimmedReportIP
+		}
 		a.configMu.Unlock()
-		a.logger.Info().Str("report_ip", trimmedReportIP).Msg("Applied remote host report IP override")
+		if reportIPChanged {
+			a.logger.Info().Str("report_ip", trimmedReportIP).Msg("Applied remote host report IP override")
+		}
 	}
 	if disableCeph, ok := remoteBoolSetting(settings, "disable_ceph"); ok {
+		disableCephChanged := false
 		a.configMu.Lock()
-		a.cfg.DisableCeph = disableCeph
+		if a.cfg.DisableCeph != disableCeph {
+			disableCephChanged = true
+			a.cfg.DisableCeph = disableCeph
+		}
 		a.configMu.Unlock()
-		a.logger.Info().Bool("disable_ceph", disableCeph).Msg("Applied remote Ceph collection setting")
+		if disableCephChanged {
+			a.logger.Info().Bool("disable_ceph", disableCeph).Msg("Applied remote Ceph collection setting")
+		}
 	}
 	a.applyRemoteAvailabilityTargets(settings)
 	if remoteConfigAppliedWithoutRestart(settings) && remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
@@ -1528,8 +1540,6 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 	case commandsEnabled && !currentlyEnabled:
 		clientToStart = a.newCommandClient(commandCfg, a.agentID, a.hostname, a.platform, a.agentVersion)
 		a.commandClient = clientToStart
-	case commandsEnabled && currentlyEnabled:
-		clientToStart = a.commandClient
 	case !commandsEnabled && currentlyEnabled:
 		shouldStop = true
 	}

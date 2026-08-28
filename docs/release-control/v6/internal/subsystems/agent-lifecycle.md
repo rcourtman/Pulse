@@ -6690,6 +6690,17 @@ cleared rather than read as already-consumed, so a fresh token minted after
 removal always re-enrolls the host instead of rejecting its reports
 indefinitely with 400s that no reinstall can escape (#1772).
 
+### Remote configuration refreshes are transition-quiet
+
+The Unified Agent polls its authoritative remote configuration every minute,
+but an unchanged response is reconciliation rather than an operator event.
+Repeated values for the host report interval, report-IP override, Ceph
+collection setting, availability assignments, and command-execution state
+must not reset schedules, restart command clients, or emit info-level journal
+entries. Actual state transitions and malformed or failed refreshes remain
+visible at their existing levels. This keeps managed agents quiet during
+healthy steady-state operation without hiding configuration changes or faults.
+
 ### Agent token issuance and revocation remain continuous across persistence failure
 
 An operator-created API token carrying agent authority, including the shared

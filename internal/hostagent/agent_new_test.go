@@ -1,6 +1,7 @@
 package hostagent
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -569,6 +570,43 @@ func TestAgentApplyRemoteConfigKeepsPriorFingerprintWhenRestartIsRequired(t *tes
 	snapshot := agent.runtimeConfigSnapshot()
 	if snapshot.appliedConfig == nil || snapshot.appliedConfig.Hash != prior.Hash {
 		t.Fatalf("restart-required config should retain prior applied fingerprint, got %+v", snapshot.appliedConfig)
+	}
+}
+
+func TestAgentApplyRemoteConfigDoesNotLogUnchangedSettings(t *testing.T) {
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs).Level(zerolog.InfoLevel)
+	commandClient := &CommandClient{}
+	commandsEnabled := true
+	agent := &Agent{
+		cfg: Config{
+			EnableCommands: true,
+			Interval:       30 * time.Second,
+			ReportIP:       "192.0.2.20",
+			DisableCeph:    true,
+		},
+		interval:            30 * time.Second,
+		reportIP:            "192.0.2.20",
+		remoteConfigChanged: make(chan struct{}, 1),
+		logger:              logger,
+		commandClient:       commandClient,
+	}
+	settings := map[string]interface{}{
+		"interval":     "30s",
+		"report_ip":    "192.0.2.20",
+		"disable_ceph": true,
+	}
+
+	agent.ApplyRemoteConfig(settings, &commandsEnabled)
+	agent.ApplyRemoteConfig(settings, &commandsEnabled)
+
+	if logs.Len() != 0 {
+		t.Fatalf("unchanged remote config emitted info logs: %s", logs.String())
+	}
+	select {
+	case <-agent.remoteConfigChanged:
+		t.Fatal("unchanged interval signaled a report-loop reset")
+	default:
 	}
 }
 
