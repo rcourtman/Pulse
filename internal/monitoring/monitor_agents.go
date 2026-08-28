@@ -3924,6 +3924,38 @@ func collectReportedHostIPs(
 	return ips
 }
 
+func collectNodeNetworkIPs(network []unifiedresources.NetworkInterface) map[string]struct{} {
+	ips := make(map[string]struct{})
+	for _, nic := range network {
+		for _, address := range nic.Addresses {
+			if normalized := unifiedresources.NormalizeIP(address); normalized != "" {
+				ips[normalized] = struct{}{}
+			}
+		}
+	}
+	return ips
+}
+
+// uniqueNodeNetworkMatchesReportedHints accepts only provider-observed node
+// addresses that belong to one current Proxmox node. This disambiguates the
+// common FQDN-endpoint/short-hostname case without guessing when separate
+// sites reuse an RFC1918 address or every node exposes the same bridge IP.
+func uniqueNodeNetworkMatchesReportedHints(
+	network []unifiedresources.NetworkInterface,
+	reportedIPs map[string]struct{},
+	ownerCounts map[string]int,
+) bool {
+	for ip := range collectNodeNetworkIPs(network) {
+		if ownerCounts[ip] != 1 {
+			continue
+		}
+		if _, reported := reportedIPs[ip]; reported {
+			return true
+		}
+	}
+	return false
+}
+
 func endpointHostMatchesReportedHints(
 	endpointHost string,
 	reportedHostname string,
@@ -3977,6 +4009,7 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 	if readState == nil {
 		return "", "", ""
 	}
+	nodes := readState.Nodes()
 
 	type linkedEntityMatch struct {
 		id       string
@@ -3984,13 +4017,21 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 	}
 
 	reportedIPs := collectReportedHostIPs(reportIP, network)
+	nodeIPOwnerCounts := make(map[string]int)
+	for _, node := range nodes {
+		for ip := range collectNodeNetworkIPs(node.NetworkInterfaces()) {
+			nodeIPOwnerCounts[ip]++
+		}
+	}
 
-	// First, try to match the configured PVE node endpoint against the host report.
-	// This is stronger than node-name matching and can disambiguate clustered nodes
-	// that share the same short hostname but have different management addresses.
+	// First, try to match the configured PVE node endpoint or a unique address
+	// from the provider-observed node network inventory against the host report.
+	// Both are stronger than node-name matching and can disambiguate nodes that
+	// share the same short hostname but have different management addresses.
 	var endpointMatchedNodes []linkedEntityMatch
-	for _, node := range readState.Nodes() {
-		if endpointHostMatchesReportedHints(extractHostname(node.HostURL()), hostname, reportedIPs) {
+	for _, node := range nodes {
+		if endpointHostMatchesReportedHints(extractHostname(node.HostURL()), hostname, reportedIPs) ||
+			uniqueNodeNetworkMatchesReportedHints(node.NetworkInterfaces(), reportedIPs, nodeIPOwnerCounts) {
 			endpointMatchedNodes = append(endpointMatchedNodes, linkedEntityMatch{
 				id:       node.SourceID(),
 				instance: node.Instance(),
@@ -4011,7 +4052,7 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 
 	// Check PVE nodes first - but detect ambiguity when multiple nodes match
 	var matchingNodes []linkedEntityMatch
-	for _, node := range readState.Nodes() {
+	for _, node := range nodes {
 		if matchHostname(node.Name()) {
 			matchingNodes = append(matchingNodes, linkedEntityMatch{
 				id:       node.SourceID(),
