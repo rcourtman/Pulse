@@ -56,11 +56,15 @@ customer story is settled, a model may select no visual views or a bounded set
 of views that materially improve it. The harness supplies only safe same-origin
 navigation, accessible click and wait actions, deterministic generated data,
 and identical rendering of the channel-specific comparison tag and candidate.
-It does not prescribe product areas or visual themes. Selected before and now
-images are staged as draft release assets, linked from a `See the difference`
-section, and must be publicly retrievable before the activation marker commits
-publication. A current-only image is permitted when a truthful before view is
-not available.
+It does not prescribe product areas or visual themes. Visual evidence discovery
+is separate from structured capture selection, so tool-led investigation is not
+forced to share one response with rigid JSON. Capture selection uses native JSON
+Schema bounds without prescribing its subject matter. An independent omission
+audit checks the customer story against the complete factual account before
+visual selection. Selected before and now images are staged as draft release
+assets, linked from a `See the difference` section, and must be publicly
+retrievable before the activation marker commits publication. A current-only
+image is permitted when a truthful before view is not available.
 
 Customer-facing notes use one outcome list for features and fixes. Each visible
 change is described once under `What's improved`; a parallel `Fixes` section is

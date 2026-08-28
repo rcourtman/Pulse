@@ -76,6 +76,18 @@ class ReleaseNoteVisualPlanTest(unittest.TestCase):
             ],
         )
 
+    def test_structured_output_schema_carries_public_and_capture_bounds(self):
+        schema = visuals.json_schema()
+        self.assertEqual(schema["properties"]["schema_version"]["type"], "integer")
+        captures = schema["properties"]["captures"]
+        capture = captures["items"]["properties"]
+        self.assertEqual(captures["maxItems"], visuals.MAX_CAPTURES)
+        self.assertEqual(capture["description"]["maxLength"], 240)
+        self.assertEqual(
+            capture["after"]["properties"]["steps"]["maxItems"],
+            visuals.MAX_STEPS,
+        )
+
     def test_current_only_capture_has_one_asset(self):
         raw = valid_plan()
         raw["captures"][0]["before"] = None

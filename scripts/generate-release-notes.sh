@@ -2,8 +2,7 @@
 
 # Generate release notes with an agent that explores the actual repo history.
 #
-# Engine: headless Claude Code (`claude -p`, uses your Claude subscription —
-# no API key), with Codex CLI (`codex exec`, OpenAI subscription) as fallback.
+# Engine: Codex CLI (`codex exec`, using the logged-in subscription).
 # Independent research, drafting, and review passes use read-only repository
 # tools. The models decide what matters from the evidence; the shell only owns
 # the comparison range and the public release-note shape.
@@ -17,8 +16,7 @@
 # writes release-notes-v<version>.md.
 #
 # Env overrides:
-#   RELEASE_NOTES_ENGINE=claude|codex   force an engine (default: claude, codex fallback)
-#   RELEASE_NOTES_MODEL=<model>         model for the claude engine (default: opus)
+#   RELEASE_NOTES_REASONING_EFFORT=<level> Codex effort (default: medium)
 #   RELEASE_NOTES_TRACE_DIR=<directory> retain each pass for inspection
 #   RELEASE_NOTE_VISUAL_PLAN_FILE=<path> write a validated optional visual plan
 
@@ -167,29 +165,10 @@ clean_notes() {
         awk -v title="# Pulse v${VERSION} Release Notes" '$0 == title {found=1} found{print}'
 }
 
-# Both engines must run on the logged-in subscription (Claude Max / OpenAI
-# plan), never on metered API keys. Stray env vars silently override
-# subscription auth — scrub them before invoking either CLI.
+# Run on the logged-in subscription, never on a metered API key. A stray
+# environment variable can silently override subscription authentication.
 scrub_env() {
-    env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL \
-        -u ANTHROPIC_PROFILE -u OPENAI_API_KEY "$@"
-}
-
-generate_with_claude() {
-    local prompt=$1
-    command -v claude >/dev/null || return 1
-    echo "Engine: claude (model: ${RELEASE_NOTES_MODEL:-opus})" >&2
-    scrub_env claude -p "$prompt" \
-        --model "${RELEASE_NOTES_MODEL:-opus}" \
-        --allowedTools \
-            "Bash(git log:*)" "Bash(git diff:*)" "Bash(git show:*)" \
-            "Bash(git describe:*)" "Bash(git tag:*)" "Bash(git rev-parse:*)" \
-            "Bash(git rev-list:*)" "Bash(git merge-base:*)" \
-            "Bash(git grep:*)" "Bash(git ls-tree:*)" "Bash(git blame:*)" \
-            "Bash(git status:*)" \
-            "Bash(gh issue view:*)" "Bash(gh pr view:*)" \
-            "Read" "Grep" "Glob" \
-        </dev/null
+    env -u OPENAI_API_KEY "$@"
 }
 
 generate_with_codex() {
@@ -199,7 +178,9 @@ generate_with_codex() {
     local out
     out=$(mktemp)
     # Session log goes to stderr; only the agent's final message is kept.
-    if ! scrub_env codex exec --sandbox read-only -o "$out" "$prompt" >&2 </dev/null; then
+    if ! scrub_env codex exec --ephemeral --sandbox read-only \
+        -c "model_reasoning_effort=\"${RELEASE_NOTES_REASONING_EFFORT:-medium}\"" \
+        -o "$out" "$prompt" >&2 </dev/null; then
         rm -f "$out"
         return 1
     fi
@@ -209,23 +190,30 @@ generate_with_codex() {
 
 generate_notes() {
     local prompt=$1
-    case "${RELEASE_NOTES_ENGINE:-claude}" in
-        codex)
-            generate_with_codex "$prompt" || {
-                echo "Codex generation failed" >&2
-                return 1
-            }
-            ;;
-        *)
-            if ! generate_with_claude "$prompt"; then
-                echo "Claude generation failed, trying Codex fallback..." >&2
-                generate_with_codex "$prompt" || {
-                    echo "Both engines failed (need 'claude' or 'codex' CLI, logged in)" >&2
-                    return 1
-                }
-            fi
-            ;;
-    esac
+    generate_with_codex "$prompt" || {
+        echo "Codex generation failed (the Codex CLI must be installed and logged in)" >&2
+        return 1
+    }
+}
+
+generate_structured_notes() {
+    local prompt=$1
+    local schema=$2
+    command -v codex >/dev/null || return 1
+    local out schema_file
+    out=$(mktemp)
+    schema_file=$(mktemp)
+    printf '%s\n' "$schema" > "$schema_file"
+    echo "Engine: codex (structured output)" >&2
+    if ! scrub_env codex exec --ephemeral --sandbox read-only \
+        -c "model_reasoning_effort=\"${RELEASE_NOTES_REASONING_EFFORT:-medium}\"" \
+        --output-schema "$schema_file" -o "$out" "$prompt" >&2 </dev/null; then
+        rm -f "$out" "$schema_file"
+        echo "Codex structured generation failed" >&2
+        return 1
+    fi
+    cat "$out"
+    rm -f "$out" "$schema_file"
 }
 
 save_trace() {
@@ -242,17 +230,46 @@ clean_visual_plan() {
 
 generate_visual_plan() {
     local notes=$1
-    local plan validation_error
+    local prior_research=${2:-}
+    local visual_research plan validation_error visual_schema
+    read -r -d '' VISUAL_RESEARCH_PROMPT <<EOF || true
+Investigate the visible differences in Pulse between ${PREVIOUS_TAG} and the
+current HEAD that could be communicated more clearly with screenshots than
+with text alone.
+
+Use the available read-only repository and GitHub tools as you judge useful.
+Identify truthful candidate views in the previous and current source states,
+including the route, visible state, and accessible UI labels needed to reach
+and verify each view. You may conclude that no visual adds meaningful value.
+Return a factual Markdown brief with no public length or item limit. Do not
+return JSON yet.
+
+Customer release notes:
+
+${notes}
+
+Prior factual release investigation, when available:
+
+${prior_research}
+EOF
+
+    echo "Researching visual release-note evidence..." >&2
+    visual_research=$(generate_notes "$VISUAL_RESEARCH_PROMPT") || return 1
+    if [ -z "$visual_research" ]; then
+        echo "Visual release-note research returned an empty brief" >&2
+        return 1
+    fi
+    save_trace visual-research.md "$visual_research"
+    visual_schema=$(python3 scripts/release_control/release_note_visuals.py schema)
+
     read -r -d '' VISUAL_PROMPT <<EOF || true
 Decide whether screenshots would materially improve the customer release notes
 for Pulse v${VERSION}. The comparison range is ${PREVIOUS_TAG}..HEAD.
 
-Use the available read-only repository and GitHub tools as you judge useful to
-understand both source states and identify views that communicate the release
-better than text alone. Select no views when screenshots would add little. The
-capture system can open same-origin routes and use accessible click or wait
-steps. It will render the exact comparison tag and current HEAD with identical
-generated demo data.
+Use the factual visual investigation below. Select no views when screenshots
+would add little. The capture system can open same-origin routes and use
+accessible click or wait steps. It will render the exact comparison tag and
+current HEAD with identical generated demo data.
 
 Return only JSON in this shape, with at most three captures:
 {
@@ -292,31 +309,49 @@ The before state may be null when a truthful comparison is unavailable and a
 current-state image is still useful. Locator kind may be role, text, label, or
 testid. Actions may be click or wait. Role locators use role and name. Other
 locators use value. Every state needs a ready locator for content that must be
-visible in the finished image. Use no semicolon or em dash characters in public
-text.
+visible in the finished image. Locator names and values are literal accessible
+text, not regular expressions. Use labels verified against the deterministic
+generated demo data. Use no semicolon or em dash characters in public text.
 
 Customer release notes:
 
 ${notes}
+
+Factual visual investigation:
+
+${visual_research}
 EOF
 
     echo "Selecting useful release-note visuals..." >&2
-    plan=$(generate_notes "$VISUAL_PROMPT") || return 1
+    plan=$(generate_structured_notes "$VISUAL_PROMPT" "$visual_schema") || return 1
     plan=$(printf '%s\n' "$plan" | clean_visual_plan)
     if ! validation_error=$(printf '%s\n' "$plan" | \
         python3 scripts/release_control/release_note_visuals.py validate --plan - 2>&1); then
         echo "Visual plan failed validation; requesting one constrained revision..." >&2
         echo "$validation_error" >&2
         read -r -d '' VISUAL_REPAIR_PROMPT <<EOF || true
-Correct the JSON visual plan below so it passes this exact validation error:
+Produce a fresh JSON visual plan that passes this exact validation error:
 
 ${validation_error}
 
-Preserve the selected views and their meaning. Reply only with corrected JSON.
+Use the factual investigation below to reconstruct the decision. An invalid or
+empty prior response is not evidence that screenshots add no value. Select zero
+views only if that is your judgment from the evidence. Reply only with JSON in
+the required schema.
+
+Factual visual investigation:
+
+${visual_research}
+
+Customer release notes:
+
+${notes}
+
+Invalid prior response:
 
 ${plan}
 EOF
-        plan=$(generate_notes "$VISUAL_REPAIR_PROMPT") || return 1
+        plan=$(generate_structured_notes "$VISUAL_REPAIR_PROMPT" "$visual_schema") || return 1
         plan=$(printf '%s\n' "$plan" | clean_visual_plan)
     fi
     printf '%s\n' "$plan" | \
@@ -393,6 +428,37 @@ RELEASE_NOTES=$(generate_notes "$REVIEW_PROMPT") || exit 1
 RELEASE_NOTES=$(printf '%s\n' "$RELEASE_NOTES" | clean_notes)
 save_trace reviewed-notes.md "$RELEASE_NOTES"
 
+echo "Auditing the customer story for material omissions..." >&2
+read -r -d '' OMISSION_PROMPT <<EOF || true
+Perform a final independent omission audit of the Pulse v${VERSION} customer
+release notes below.
+
+The comparison range is ${PREVIOUS_TAG}..HEAD. Use the available read-only
+repository and GitHub tools as you judge useful, along with the factual account.
+Look for distinct user-observable changes that are absent or materially
+underweighted. Decide whether any omission warrants changing the customer
+story. Keep the notes concise by combining related work around customer
+outcomes rather than listing implementation details.
+
+Use this public shape:
+
+${NOTE_FORMAT}
+
+Reply only with the complete corrected Markdown beginning exactly
+"# Pulse v${VERSION} Release Notes".
+
+Factual account from the separate investigation:
+
+${RESEARCH_BRIEF}
+
+Candidate release notes:
+
+${RELEASE_NOTES}
+EOF
+RELEASE_NOTES=$(generate_notes "$OMISSION_PROMPT") || exit 1
+RELEASE_NOTES=$(printf '%s\n' "$RELEASE_NOTES" | clean_notes)
+save_trace omission-audited-notes.md "$RELEASE_NOTES"
+
 validate_notes() {
     printf '%s\n' "$1" | python3 scripts/release_control/render_release_body.py \
         --version "$VERSION" \
@@ -435,6 +501,6 @@ if [ "${SAVE_TO_FILE:-}" = "1" ]; then
 fi
 
 if [ -n "${RELEASE_NOTE_VISUAL_PLAN_FILE:-}" ]; then
-    generate_visual_plan "$RELEASE_NOTES" > "$RELEASE_NOTE_VISUAL_PLAN_FILE"
+    generate_visual_plan "$RELEASE_NOTES" "$RESEARCH_BRIEF" > "$RELEASE_NOTE_VISUAL_PLAN_FILE"
     echo "Visual plan saved to ${RELEASE_NOTE_VISUAL_PLAN_FILE}" >&2
 fi

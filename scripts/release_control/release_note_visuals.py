@@ -215,6 +215,115 @@ def asset_names(plan: dict[str, Any]) -> list[str]:
     return names
 
 
+def json_schema() -> dict[str, Any]:
+    locator_position = {
+        "exact": {"type": "boolean"},
+        "nth": {"type": "integer", "minimum": 0, "maximum": 20},
+    }
+    locator = {
+        "anyOf": [
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["kind", "role", "name", "exact", "nth"],
+                "properties": {
+                    "kind": {"const": "role", "type": "string"},
+                    "role": {"enum": sorted(ALLOWED_ROLES), "type": "string"},
+                    "name": {"type": "string", "minLength": 1, "maxLength": 120},
+                    **locator_position,
+                },
+            },
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["kind", "value", "exact", "nth"],
+                "properties": {
+                    "kind": {
+                        "enum": sorted(ALLOWED_LOCATOR_KINDS - {"role"}),
+                        "type": "string",
+                    },
+                    "value": {"type": "string", "minLength": 1, "maxLength": 160},
+                    **locator_position,
+                },
+            },
+        ]
+    }
+    state = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["route", "steps", "ready"],
+        "properties": {
+            "route": {"type": "string", "minLength": 1, "maxLength": 240},
+            "steps": {
+                "type": "array",
+                "maxItems": MAX_STEPS,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["action", "locator"],
+                    "properties": {
+                        "action": {"enum": sorted(ALLOWED_ACTIONS)},
+                        "locator": locator,
+                    },
+                },
+            },
+            "ready": locator,
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["schema_version", "captures"],
+        "properties": {
+            "schema_version": {"const": 1, "type": "integer"},
+            "captures": {
+                "type": "array",
+                "maxItems": MAX_CAPTURES,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "id",
+                        "title",
+                        "description",
+                        "viewport",
+                        "before",
+                        "after",
+                    ],
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "maxLength": 48,
+                            "pattern": ID_PATTERN.pattern,
+                        },
+                        "title": {"type": "string", "minLength": 1, "maxLength": 90},
+                        "description": {"type": "string", "maxLength": 240},
+                        "viewport": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["width", "height"],
+                            "properties": {
+                                "width": {
+                                    "type": "integer",
+                                    "minimum": 320,
+                                    "maximum": 1920,
+                                },
+                                "height": {
+                                    "type": "integer",
+                                    "minimum": 568,
+                                    "maximum": 1440,
+                                },
+                            },
+                        },
+                        "before": {"anyOf": [state, {"type": "null"}]},
+                        "after": state,
+                    },
+                },
+            },
+        },
+    }
+
+
 def render_markdown(plan: dict[str, Any], repository: str, tag: str) -> str:
     if not plan["captures"]:
         return ""
@@ -259,6 +368,8 @@ def main() -> int:
     before_count_parser = subparsers.add_parser("before-count")
     before_count_parser.add_argument("--plan", required=True)
 
+    subparsers.add_parser("schema")
+
     assets_parser = subparsers.add_parser("assets")
     assets_parser.add_argument("--plan", required=True)
 
@@ -270,6 +381,9 @@ def main() -> int:
 
     args = parser.parse_args()
     try:
+        if args.command == "schema":
+            sys.stdout.write(json.dumps(json_schema(), separators=(",", ":")) + "\n")
+            return 0
         plan = load_plan(args.plan)
         if args.command == "validate":
             output = json.dumps(plan, indent=2) + "\n"

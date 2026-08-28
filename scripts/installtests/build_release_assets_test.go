@@ -3147,6 +3147,14 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		"It has no public length or item",
 		"Drafting an independent customer release story",
 		"Running an independent improvement pass",
+		"Auditing the customer story for material omissions",
+		"Look for distinct user-observable changes that are absent or materially",
+		"Researching visual release-note evidence",
+		"RELEASE_NOTES_REASONING_EFFORT",
+		"--ephemeral",
+		"--output-schema",
+		"empty prior response is not evidence that screenshots add no value",
+		"Locator names and values are literal accessible",
 		"make any changes you judge warranted",
 		"RELEASE_NOTES_TRACE_DIR",
 		"validate-notes-file /dev/stdin",
@@ -3157,6 +3165,11 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	} {
 		if !strings.Contains(string(generatorContent), required) {
 			t.Fatalf("release-note generator missing stable synthesis contract %q", required)
+		}
+	}
+	for _, forbidden := range []string{"claude", "anthropic", "RELEASE_NOTES_ENGINE"} {
+		if strings.Contains(strings.ToLower(string(generatorContent)), strings.ToLower(forbidden)) {
+			t.Fatalf("release-note generator must remain Codex-only, found %q", forbidden)
 		}
 	}
 	resolve := func(version string) string {
