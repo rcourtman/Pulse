@@ -10003,7 +10003,17 @@ facet on the wire. `internal/models/metrics_types_test.go`,
 `frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts` pin the
 wire shape and both client projections.
 
-### API token deletion commits durable state before reporting success
+### API token creation and deletion commit durable state before reporting success
+
+`POST /api/security/tokens` returns a newly generated credential only after
+the expanded token inventory is durably persisted. If that write fails, the
+runtime restores the complete prior inventory and its legacy primary-token
+projection, returns `500`, and does not expose the generated secret. The
+rollback must remove the new newest-first record rather than truncating the
+sorted inventory and accidentally removing an older valid token.
+`TestSecurityTokensCreateRollsBackCompleteInventoryWhenPersistenceFails` in
+`internal/api/security_tokens_lifecycle_test.go` pins this failed-commit
+boundary.
 
 `DELETE /api/security/tokens/{id}` removes exactly the requested token and
 returns `204` only after the resulting token inventory is durably persisted.

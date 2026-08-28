@@ -6682,15 +6682,21 @@ cleared rather than read as already-consumed, so a fresh token minted after
 removal always re-enrolls the host instead of rejecting its reports
 indefinitely with 400s that no reinstall can escape (#1772).
 
-### Agent token revocation remains continuous across persistence failure
+### Agent token issuance and revocation remain continuous across persistence failure
+
+An operator-created API token carrying agent authority becomes live and is
+returned only after its expanded inventory commits. A failed creation write
+restores every prior token and the primary-token projection, so the runtime
+does not retain an undisclosed agent credential or evict an older working
+credential from its sorted inventory.
 
 The shared API-token deletion boundary may mark an agent credential revoked
 only after the reduced token inventory is durably committed. If persistence
 fails, the complete prior inventory and primary-token projection are restored
 and the request fails, so connected agents do not become unauthenticated only
 in the live process or regain a supposedly revoked credential after restart.
-The lifecycle proof deletes one exact token from a three-token inventory and
-forces a failed persistence commit in
+The lifecycle proofs cover failed creation, delete one exact token from a
+three-token inventory, and force failed persistence commits in
 `internal/api/security_tokens_lifecycle_test.go`.
 
 ### External watchdog wiring does not widen agent lifecycle authority

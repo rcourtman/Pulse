@@ -223,12 +223,17 @@ func (r *Router) createAPITokenRecord(
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
+	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 	r.config.APITokens = append(r.config.APITokens, *record)
 	r.config.SortAPITokens()
 
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			r.config.APITokens = r.config.APITokens[:len(r.config.APITokens)-1]
+			// The new record sorts newest-first, so truncating the sorted slice
+			// would remove an older valid token and leave the unreturned token
+			// active. Restore the complete pre-mutation inventory instead.
+			r.config.APITokens = previousTokens
+			r.config.SortAPITokens()
 			return "", nil, fmt.Errorf("persist token: %w", err)
 		}
 	}

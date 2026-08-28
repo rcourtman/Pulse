@@ -2365,15 +2365,22 @@ sudo outright; that relaxation is part of the grant's declared cost. The agent-r
 informational: the fleet doctor presents it descriptively and must not treat
 a non-root agent as unhealthy on that evidence alone.
 
-### API token revocation is a durable credential transition
+### API token creation and revocation are durable credential transitions
+
+Creation may not admit an unreturned secret or evict an older valid token when
+persistence fails. The token-management API retains the complete pre-creation
+inventory until the expanded inventory commits, then restores that inventory
+and its primary-token projection before returning an error on failed writes.
+The generated secret is returned only after a successful commit.
 
 Revocation may not create different live and restart-time credential sets.
 The token-management API therefore retains a complete pre-mutation inventory
 until the reduced inventory is persisted. A failed write restores the prior
 tokens and primary-token projection, emits only a failed `token_deleted` audit
 event, and returns an error; a successful response identifies a deletion that
-will survive restart. Exact multi-token removal and persistence-failure
-rollback are exercised in `internal/api/security_tokens_lifecycle_test.go`.
+will survive restart. Creation rollback, exact multi-token removal, and
+revocation persistence-failure rollback are exercised in
+`internal/api/security_tokens_lifecycle_test.go`.
 
 ### Deploy enrollment never exposes an uncommitted credential
 

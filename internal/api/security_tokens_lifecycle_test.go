@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,43 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+func TestSecurityTokensCreateRollsBackCompleteInventoryWhenPersistenceFails(t *testing.T) {
+	now := time.Now().UTC()
+	tokens := []config.APITokenRecord{
+		{ID: "newest", Name: "newest", Hash: "hash-newest", CreatedAt: now, Scopes: []string{config.ScopeWildcard}},
+		{ID: "oldest", Name: "oldest", Hash: "hash-oldest", CreatedAt: now.Add(-time.Minute), Scopes: []string{config.ScopeWildcard}},
+	}
+	cfg := &config.Config{APITokens: append([]config.APITokenRecord(nil), tokens...)}
+	cfg.SortAPITokens()
+
+	stateDir := filepath.Join(t.TempDir(), "state")
+	persistence := config.NewConfigPersistence(stateDir)
+	if err := os.RemoveAll(stateDir); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(stateDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+	router := &Router{config: cfg, persistence: persistence}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", bytes.NewBufferString(`{"name":"must-not-survive"}`))
+	rec := httptest.NewRecorder()
+	router.handleCreateAPIToken(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	assertLifecycleAPITokenIDs(t, cfg.APITokens, "newest", "oldest")
+	if cfg.APIToken != "hash-newest" {
+		t.Fatalf("legacy primary token = %q, want rollback to %q", cfg.APIToken, "hash-newest")
+	}
+	for _, token := range cfg.APITokens {
+		if token.Name == "must-not-survive" {
+			t.Fatalf("failed creation left generated token active: %+v", token)
+		}
+	}
+}
 
 func TestSecurityTokensDeletePersistsOnlyRequestedRemoval(t *testing.T) {
 	now := time.Now().UTC()

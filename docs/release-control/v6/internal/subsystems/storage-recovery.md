@@ -5637,15 +5637,21 @@ no backup, snapshot, restore, retention, cleanup, or verification authority.
 The storage/recovery resource query and its admission, freshness, and
 persistence contracts are unchanged.
 
-### Token deletion preserves restart-time persistence truth
+### Token creation and deletion preserve restart-time persistence truth
+
+The shared `internal/api` token creation path treats its persisted inventory as
+the commit boundary. If expansion cannot be written, it restores the complete
+prior inventory and legacy primary-token projection and returns no generated
+credential. Because token records sort newest-first, rollback restores the
+snapshot rather than truncating the sorted list and evicting an older token.
 
 The shared `internal/api` token revocation path treats its persisted inventory
 as the commit boundary. It snapshots the complete in-memory inventory before
 removal, persists only the intended reduced set, and restores the snapshot and
 legacy primary-token projection if that write fails. This adds no backup,
 restore, or recovery authority; it prevents a successful API response from
-describing credential state that the next restart would undo. The exact-token
-and forced-write-failure proofs live in
+describing credential state that the next restart would undo. The creation,
+exact-token deletion, and forced-write-failure proofs live in
 `internal/api/security_tokens_lifecycle_test.go`.
 
 ### Dead-man persistence is availability evidence, not recovery authority
