@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -61,5 +62,48 @@ func TestMetricsHistoryResetClearsMetricWindowCache(t *testing.T) {
 	history.Reset()
 	if history.metricWindowCache != nil {
 		t.Fatalf("metric window cache survived reset: %+v", history.metricWindowCache)
+	}
+}
+
+func TestMetricWindowPointsKeepsHistorySnapshotDuringReplacement(t *testing.T) {
+	now := time.Now().UTC()
+	monitor := newChartFallbackTestMonitor(t)
+	history := monitor.metricsHistory
+	cacheKey := strings.Join([]string{"vm", "vm-1", "cpu", "300"}, "\x00")
+	history.metricWindowCache = map[string]metricWindowCacheEntry{
+		cacheKey: {
+			points:    []alerts.MetricWindowPoint{{Timestamp: now.Add(-time.Minute), Value: 42}},
+			expiresAt: now.Add(time.Minute),
+		},
+	}
+
+	history.metricWindowMu.Lock()
+	result := make(chan []alerts.MetricWindowPoint, 1)
+	go func() {
+		points, _ := monitor.metricWindowPoints(alerts.MetricWindowRequest{
+			ResourceID:   "vm-1",
+			ResourceType: "vm",
+			Metric:       "cpu",
+			Start:        now.Add(-5 * time.Minute),
+			End:          now,
+		})
+		result <- points
+	}()
+
+	// Give the request time to snapshot history and block on its cache mutex,
+	// matching the mock seed replacement that exposed the startup panic.
+	time.Sleep(20 * time.Millisecond)
+	monitor.mu.Lock()
+	monitor.metricsHistory = NewMetricsHistory(32, time.Hour)
+	monitor.mu.Unlock()
+	history.metricWindowMu.Unlock()
+
+	select {
+	case points := <-result:
+		if len(points) != 1 || points[0].Value != 42 {
+			t.Fatalf("metricWindowPoints = %+v, want cached point from the request snapshot", points)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("metricWindowPoints did not finish after history replacement")
 	}
 }

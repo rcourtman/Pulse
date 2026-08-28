@@ -441,7 +441,11 @@ identity and durable history as charts. `internal/monitoring/metric_window_provi
 resolves the unified resource metrics target, reads the fresh in-memory tail,
 and falls back to the SQLite metrics store when that tail lacks the requested
 coverage. Persistent fallbacks are briefly cached to bound restart-time query
-load, merged by timestamp, and returned as observations only. When the durable
+load, merged by timestamp, and returned as observations only. Each request must
+snapshot the active `MetricsHistory` under the monitor lock and use that same
+history generation for its in-memory read and persistent-cache access; mock
+history seeding may replace the active generation concurrently, but a request
+must never lock one generation's cache mutex and unlock another's. When the durable
 series and fresh in-memory tail contain the same timestamp, the in-memory value
 is authoritative so an older persisted or rolled-up value cannot replace the
 latest observation. Alert policy owns averaging, readiness, hysteresis, and

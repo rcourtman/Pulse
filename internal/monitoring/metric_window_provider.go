@@ -36,6 +36,9 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 	if m == nil {
 		return nil, fmt.Errorf("monitor unavailable")
 	}
+	m.mu.RLock()
+	history := m.metricsHistory
+	m.mu.RUnlock()
 	resourceType := strings.TrimSpace(request.ResourceType)
 	resourceID := strings.TrimSpace(request.ResourceID)
 	if target := m.MetricsTargetForResource(request.ResourceID); target != nil {
@@ -55,9 +58,9 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 	if duration <= 0 {
 		return nil, fmt.Errorf("invalid metric window")
 	}
-	points := m.inMemoryMetricWindow(resourceType, resourceID, metric, duration)
+	points := m.inMemoryMetricWindow(history, resourceType, resourceID, metric, duration)
 	if metricWindowCoverage(points) < duration*8/10 {
-		stored := m.persistentMetricWindow(resourceType, resourceID, metric, request.Start, request.End)
+		stored := m.persistentMetricWindow(history, resourceType, resourceID, metric, request.Start, request.End)
 		// Append the fresh in-memory tail last so it remains authoritative when
 		// SQLite contains an older value at the same timestamp.
 		points = mergeMetricWindowPoints(stored, points, request.Start, request.End)
@@ -70,39 +73,39 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 	return result, nil
 }
 
-func (m *Monitor) inMemoryMetricWindow(resourceType, resourceID, metric string, duration time.Duration) []MetricPoint {
-	if m.metricsHistory == nil {
+func (m *Monitor) inMemoryMetricWindow(history *MetricsHistory, resourceType, resourceID, metric string, duration time.Duration) []MetricPoint {
+	if history == nil {
 		return nil
 	}
 	switch strings.ToLower(resourceType) {
 	case "node":
-		return m.metricsHistory.GetNodeMetrics(resourceID, metric, duration)
+		return history.GetNodeMetrics(resourceID, metric, duration)
 	case "storage":
-		return m.metricsHistory.GetAllStorageMetrics(resourceID, duration)[metric]
+		return history.GetAllStorageMetrics(resourceID, duration)[metric]
 	case "disk":
-		return m.metricsHistory.GetDiskMetrics(resourceID, metric, duration)
+		return history.GetDiskMetrics(resourceID, metric, duration)
 	default:
-		return m.metricsHistory.GetGuestMetrics(resourceID, metric, duration)
+		return history.GetGuestMetrics(resourceID, metric, duration)
 	}
 }
 
-func (m *Monitor) persistentMetricWindow(resourceType, resourceID, metric string, start, end time.Time) []MetricPoint {
+func (m *Monitor) persistentMetricWindow(history *MetricsHistory, resourceType, resourceID, metric string, start, end time.Time) []MetricPoint {
 	if m.metricsStore == nil {
 		return nil
 	}
 	cacheKey := strings.Join([]string{resourceType, resourceID, metric, fmt.Sprint(end.Sub(start).Seconds())}, "\x00")
 	now := time.Now()
-	if m.metricsHistory != nil {
-		m.metricsHistory.metricWindowMu.Lock()
-		if cached, ok := m.metricsHistory.metricWindowCache[cacheKey]; ok && now.Before(cached.expiresAt) {
+	if history != nil {
+		history.metricWindowMu.Lock()
+		if cached, ok := history.metricWindowCache[cacheKey]; ok && now.Before(cached.expiresAt) {
 			points := make([]MetricPoint, len(cached.points))
 			for i, point := range cached.points {
 				points[i] = MetricPoint{Timestamp: point.Timestamp, Value: point.Value}
 			}
-			m.metricsHistory.metricWindowMu.Unlock()
+			history.metricWindowMu.Unlock()
 			return points
 		}
-		m.metricsHistory.metricWindowMu.Unlock()
+		history.metricWindowMu.Unlock()
 	}
 
 	var best []MetricPoint
@@ -120,24 +123,24 @@ func (m *Monitor) persistentMetricWindow(resourceType, resourceID, metric string
 			best = converted
 		}
 	}
-	if m.metricsHistory != nil {
+	if history != nil {
 		cached := make([]alerts.MetricWindowPoint, len(best))
 		for i, point := range best {
 			cached[i] = alerts.MetricWindowPoint{Timestamp: point.Timestamp, Value: point.Value}
 		}
-		m.metricsHistory.metricWindowMu.Lock()
-		if m.metricsHistory.metricWindowCache == nil {
-			m.metricsHistory.metricWindowCache = make(map[string]metricWindowCacheEntry)
+		history.metricWindowMu.Lock()
+		if history.metricWindowCache == nil {
+			history.metricWindowCache = make(map[string]metricWindowCacheEntry)
 		}
-		if len(m.metricsHistory.metricWindowCache) >= 1024 {
-			for key, entry := range m.metricsHistory.metricWindowCache {
+		if len(history.metricWindowCache) >= 1024 {
+			for key, entry := range history.metricWindowCache {
 				if !now.Before(entry.expiresAt) {
-					delete(m.metricsHistory.metricWindowCache, key)
+					delete(history.metricWindowCache, key)
 				}
 			}
 		}
-		m.metricsHistory.metricWindowCache[cacheKey] = metricWindowCacheEntry{points: cached, expiresAt: now.Add(metricWindowPersistentCacheTTL)}
-		m.metricsHistory.metricWindowMu.Unlock()
+		history.metricWindowCache[cacheKey] = metricWindowCacheEntry{points: cached, expiresAt: now.Add(metricWindowPersistentCacheTTL)}
+		history.metricWindowMu.Unlock()
 	}
 	return best
 }
