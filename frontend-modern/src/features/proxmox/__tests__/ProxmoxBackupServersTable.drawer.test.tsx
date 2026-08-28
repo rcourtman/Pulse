@@ -56,15 +56,6 @@ const makePbsResource = (): Resource =>
   }) as Resource;
 
 describe('ProxmoxBackupServersTable details', () => {
-  it('omits artifact counts when composed as overview health', () => {
-    render(() => (
-      <ProxmoxBackupServersTable servers={[makePbsResource()]} showBackupCounts={false} />
-    ));
-
-    expect(screen.queryByRole('columnheader', { name: 'Backups' })).not.toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: /Backup server/ })).toBeInTheDocument();
-  });
-
   it('opens the canonical resource drawer with merged host details expanded', () => {
     render(() => <ProxmoxBackupServersTable servers={[makePbsResource()]} />);
 

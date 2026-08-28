@@ -14,7 +14,6 @@ const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockStorageProps = vi.hoisted(() => vi.fn());
 const mockTotalStats = vi.hoisted(() => vi.fn());
 const mockNodesTableProps = vi.hoisted(() => vi.fn());
-const mockBackupServersTableProps = vi.hoisted(() => vi.fn());
 const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
@@ -114,13 +113,6 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
 
 vi.mock('../ProxmoxBackupsTable', () => ({
   ProxmoxBackupsTable: () => <div data-testid="backups-table" />,
-}));
-
-vi.mock('../ProxmoxBackupServersTable', () => ({
-  ProxmoxBackupServersTable: (props: { servers: Resource[] }) => {
-    mockBackupServersTableProps(props);
-    return <div data-testid="backup-servers-table" data-rows={props.servers.length} />;
-  },
 }));
 
 vi.mock('../ProxmoxCephTable', () => ({
@@ -334,36 +326,6 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
-  it('keeps standalone PBS host health on the Proxmox overview', () => {
-    const pbsServer = makeResource({
-      id: 'pbs:standalone',
-      type: 'pbs',
-      name: 'pbs-standalone',
-      platformType: 'proxmox-pbs',
-      sources: ['pbs'],
-      pbs: { instanceId: 'pbs-standalone', connectionHealth: 'healthy' },
-    });
-    const pbsAgent = makeResource({
-      id: 'agent:pbs-standalone',
-      type: 'agent',
-      name: 'pbs-standalone',
-      platformType: 'proxmox-pbs',
-      sources: ['agent', 'pbs'],
-      agent: { agentId: 'agent-pbs-standalone', hostname: 'pbs-standalone' },
-    });
-    setResources([pbsServer, pbsAgent]);
-
-    renderSurface();
-
-    expect(screen.getByTestId('backup-servers-table')).toHaveAttribute('data-rows', '2');
-    expect(mockBackupServersTableProps).toHaveBeenCalledWith(
-      expect.objectContaining({
-        servers: [pbsServer, pbsAgent],
-        showBackupCounts: false,
-      }),
-    );
-  });
-
   it('shares workload search with the node inventory', () => {
     mockWorkloadSearch.mockReturnValue('pve-1');
     setResources([
@@ -430,7 +392,7 @@ describe('ProxmoxPageSurface contract', () => {
       'proxmox-mail',
     ]);
     expect(options.map((value) => value.query)).toEqual([
-      'type=agent,vm,system-container,oci-container,pbs',
+      'type=agent,vm,system-container,oci-container',
       'type=agent,pbs,storage,physical_disk,ceph',
       'type=agent',
       'type=agent,vm,system-container,pbs',
@@ -442,8 +404,6 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxPageSurfaceSource).toContain('requestIdleCallback');
     expect(proxmoxPageSurfaceSource).toContain("phoneViewport\n      ? ['storage']");
     expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
-    expect(proxmoxPageSurfaceSource).toContain('servers={currentModel().pbs}');
-    expect(proxmoxPageSurfaceSource).toContain('showBackupCounts={false}');
   });
 
   it('places workload controls beside the workload table they affect', () => {
@@ -454,12 +414,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(nodesTableIndex).toBeGreaterThan(-1);
     expect(workloadFilterIndex).toBeGreaterThan(nodesTableIndex);
     expect(workloadsSurfaceIndex).toBeGreaterThan(workloadFilterIndex);
-    expect(proxmoxPageSurfaceSource.indexOf('<ProxmoxBackupServersTable')).toBeGreaterThan(
-      nodesTableIndex,
-    );
-    expect(proxmoxPageSurfaceSource.indexOf('<ProxmoxBackupServersTable')).toBeLessThan(
-      workloadFilterIndex,
-    );
+    expect(proxmoxPageSurfaceSource).not.toContain('<ProxmoxBackupServersTable');
   });
 
   it('keeps the bounded node preview before guests at every viewport', () => {

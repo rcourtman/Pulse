@@ -181,13 +181,9 @@ focus restoration, and responsive drawer behavior on one primitive. Proxmox
 Backup Server rows follow this rule and request the shared host-details
 disclosure open initially so a merged agent's system, hardware, network, disk,
 and thermal facts remain discoverable from the PBS surface.
-`ProxmoxBackupServersTable` is the single PBS host-health composition on both
-Proxmox Overview and Backups. Overview places it between PVE nodes and guests
-so a standalone PBS host remains part of the estate scan; Backups places the
-same table beside recovery evidence. Overview must omit the backup-artifact
-count column because it does not own the PBS artifact request, while both
-placements retain the same responsive columns, row interaction, and canonical
-resource drawer rather than introducing an overview-only PBS row variant.
+`ProxmoxBackupServersTable` belongs to the Proxmox Backups tab. Proxmox
+Overview must not duplicate that domain table between its node and guest
+regions; the tab boundary owns PBS server, datastore, and artifact detail.
 When that surface receives the provider-owned PBS resource and its host Agent
 as separate canonical resources, `ProxmoxBackupServersTable` may assemble a
 presentation-only drawer resource only after one unique normalized host

@@ -51,7 +51,6 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
-import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
@@ -71,7 +70,7 @@ import {
 // REST page also carries global type aggregations, so evidence-gated tabs do
 // not require the old 1,000+ row workspace request.
 const PROXMOX_RESOURCE_QUERY_BY_TAB: Record<ProxmoxPageTabId, string> = {
-  overview: 'type=agent,vm,system-container,oci-container,pbs',
+  overview: 'type=agent,vm,system-container,oci-container',
   storage: 'type=agent,pbs,storage,physical_disk,ceph',
   replication: 'type=agent',
   backups: 'type=agent,vm,system-container,pbs',
@@ -531,11 +530,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           inventoryCountsVisible={props.inventoryCountsVisible}
         />
       </section>
-      <ProxmoxBackupServersTable
-        servers={currentModel().pbs}
-        showBackupCounts={false}
-        layoutWidth={overviewWidth.width}
-      />
       <section
         id="proxmox-guests-section"
         aria-label="Guests"

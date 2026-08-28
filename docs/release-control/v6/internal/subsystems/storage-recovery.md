@@ -42,12 +42,12 @@ backup artifact, recovery point, protection posture, or restore operation, and
 storage/recovery consumers must continue to use the canonical resource and
 provider identities for all domain authority.
 The Proxmox overview is also a large-estate read-side consumer: it owns one
-canonical unified-resource snapshot for its PVE node, PBS host-health, and guest
-regions, and its shared workloads adapter must consume that snapshot without
-starting a second workload or infrastructure inventory request. Backup and
-recovery tables keep their domain-specific evidence requests, while an overview
-refresh must update all overview regions from the same owner snapshot rather
-than mixing reads from different inventory generations.
+canonical unified-resource snapshot for its node and guest regions, and its
+shared workloads adapter must consume that snapshot without starting a second
+workload or infrastructure inventory request. Backup and recovery tables keep
+their domain-specific evidence requests, while an overview refresh must update
+all overview regions from the same owner snapshot rather than mixing reads
+from different inventory generations.
 The physical-disks surface consumes every page in the server-declared unified
 resource result, scopes same-named Proxmox nodes by instance, and never hides a
 disk behind a client-side page ceiling. Search includes vendor, WWN, transport,
@@ -486,18 +486,17 @@ summary row. Compact layouts must not stack those secondary facts beneath the
 resource name and make the row taller: keep essential identity inline when no
 detail disclosure exists, and otherwise preserve supporting context in its
 existing column, the row's accessible title, or the expanded detail content.
-The Backup servers summary owns PBS reachability and datastore capacity and is
-shared by Proxmox Overview and Backups, but its row expansion is the canonical
-unified-resource drawer, not a second storage-local detail model. Overview
-places this health summary after PVE nodes and before guests so bare-metal PBS
-hosts remain in the estate scan. Because Overview consumes only the canonical
-resource snapshot, it omits the artifact-count column rather than rendering
-zero from an unrequested PBS backup feed; the Backups placement supplies that
-domain API evidence and retains the count. A PBS resource merged with a Pulse
-Agent keeps the PBS service evidence and exposes the agent's system, hardware,
-network, disk, thermal, history, and management context through that shared
-drawer. Storage/recovery does not duplicate agent telemetry or invent a
-competing provider drawer hierarchy.
+The Backup servers summary on the Proxmox Backups tab owns PBS reachability and
+datastore capacity, but its row expansion is the canonical unified-resource
+drawer, not a second storage-local detail model. A PBS resource merged with a
+Pulse Agent keeps the
+PBS service evidence and exposes the agent's system, hardware, network, disk,
+thermal, history, and management context through that shared drawer. Bare-metal
+PBS hosts therefore remain fully inspectable after leaving the standalone
+Machines surface, while storage/recovery does not duplicate agent telemetry or
+invent a competing provider drawer hierarchy.
+Proxmox Overview must not duplicate this domain table; its route-scoped
+snapshot remains limited to the node and guest regions it owns.
 The product-family projection may still deliver the PBS service and its Agent
 host as separate resources. In that case the Backup servers table correlates
 only a unique normalized host-identity match for drawer presentation, preserves
@@ -590,17 +589,15 @@ complete client-side result set; windowing must not become pagination, a partial
 count, or a recovery-local `Next` / `Load more` control. Expanded coverage
 evidence remains owned by the visible workload row.
 The Proxmox shell hydrates Overview, Storage, Replication, Backups, Ceph, and
-Mail from route-scoped resource families. Overview includes PBS service rows
-and Agent facets in its bounded snapshot so host health and the canonical PBS
-drawer do not depend on background hydration of Backups or Storage. Only the
-visible tab consumes realtime reconciliation. Desktop background hydration may
-prefetch the other route families, while phone background hydration is bounded
-to Storage because the phone shell retains at most the two most-recent tab
-trees. Storage reuses the shell's bounded agent/PBS/storage/physical-disk/Ceph
-source instead of opening a duplicate page query or an all-estate subscription,
-and is prewarmed for the common Overview/Storage transition; hidden route-state
-effects remain dormant and a forced Proxmox storage scope is not serialized as
-redundant URL state.
+Mail from route-scoped resource families. Only the visible tab consumes
+realtime reconciliation. Desktop background hydration may prefetch the other
+route families, while phone background hydration is bounded to Storage because
+the phone shell retains at most the two most-recent tab trees. Storage reuses
+the shell's bounded agent/PBS/storage/physical-disk/Ceph source instead of
+opening a duplicate page query or an all-estate subscription, and is prewarmed
+for the common Overview/Storage transition; hidden route-state effects remain
+dormant and a forced Proxmox storage scope is not serialized as redundant URL
+state.
 PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation. The table owns which PBS artifact count is

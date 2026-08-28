@@ -426,14 +426,6 @@ inventory: operator-visible guest names, VMIDs, node identities, status, and
 provider scope may retain a parent node, but opaque unified-resource `id`
 hashes must not create node matches that the normalized workload table cannot
 show.
-That Overview snapshot also includes PBS service resources and their Agent
-facets. The page composes the same `ProxmoxBackupServersTable` used by Backups
-between PVE nodes and guests, so standalone PBS health and the canonical
-resource drawer remain discoverable without returning the Agent to Machines or
-building a second host projection. Overview does not own PBS artifact evidence
-and therefore suppresses that table's backup-count column; service identity,
-datastore capacity, current Agent telemetry, and History continue to use the
-same fail-closed correlation boundary as the Backups placement.
 Large platform inventories may bound their initial row projection through the
 shared platform-table preview primitive so the next canonical surface remains
 in the initial reading flow. Proxmox node consumers retain the page model's
@@ -832,10 +824,9 @@ container inventory table.
 10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
-    The same table is composed on Proxmox Overview and Backups. Overview reads
-    PBS and Agent facets from its owner snapshot and suppresses artifact counts;
-    Backups may add counts from its PBS artifact request. Both placements keep
-    the canonical PBS row and drawer contract below.
+    The table is composed on the Proxmox Backups tab and must not be duplicated
+    on Overview. The Backups placement keeps the canonical PBS row and drawer
+    contract below while owning the domain-specific artifact request.
     Each row carries the canonical PBS `Resource` into the shared platform
     resource-detail row. When coalescence has attached an agent facet, or when
     the product-family projection contains exactly one separate Agent resource

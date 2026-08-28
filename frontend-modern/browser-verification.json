@@ -1,23 +1,21 @@
 {
   "version": 1,
-  "base_sha": "aea8d3497b0474d985602c81fe17be228446c954",
-  "verified_at": "2026-08-28T14:52:18Z",
+  "base_sha": "0dc2c8c16d9612f981a29055cc703f6100cdf8cb",
+  "verified_at": "2026-08-28T19:44:59Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
-    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "ec60044cf9b250c9d049230ee7252bf73a389956b3ab611929520ad6c70dac40",
-    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx": "6f1b0d01ef1e3bdcb21faff305e2c2d7763cc226cb92c0f4c4daca7f1fbf04c0"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "58e4c06e98108a69f1e62f631bb248eec626b3c6fc204e60507e377cd1633d8c",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "1e6daf19456ff79e7181e8117bbb2064feb53b852438294a58dd2fa5197b3817"
   },
-  "routes": [
-    "/attention-verification.html"
-  ],
+  "routes": ["/proxmox/overview", "/proxmox/backups/date"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
@@ -25,15 +23,15 @@
     }
   ],
   "states": [
-    "collapsed five-alert node summary showing the first three resource-specific alerts",
-    "expanded node summary showing warning, critical, info, and acknowledged severity badges",
-    "desktop summary bounded to 768 pixels with no horizontal page overflow",
-    "390 pixel summary contained within the viewport with no horizontal page overflow"
+    "mock-backed Proxmox Overview with the bounded node preview flowing directly into Guests and no PBS server table",
+    "Proxmox Backups By date view retaining the PBS server and datastore table with artifact counts",
+    "expanded PBS server row retaining canonical resource details on the Backups tab",
+    "desktop and narrow layouts contained within the viewport without horizontal document overflow"
   ],
   "interactions": [
-    "confirmed node and child VM resource names plus Memory, Disk, and Backup Age metrics remain visible beside their problem text",
-    "selected Show 2 more alerts and confirmed both hidden alerts appeared with aria-expanded=true",
-    "selected Show fewer alerts and confirmed the summary returned to three visible alerts with aria-expanded=false",
-    "repeated collapsed and expanded disclosure states at 1440x900 and 390x844 and confirmed no horizontal overflow"
+    "opened Proxmox Overview at 1280x800 and confirmed Nodes precede Guests with a 16 pixel section gap and no backup-server table",
+    "opened Proxmox Backups at 1280x800 and confirmed three PBS server/datastore rows remain visible",
+    "repeated Overview at 390x844 and confirmed Nodes and Guests remain visible without a duplicated PBS table or horizontal overflow",
+    "opened Proxmox Backups at 390x844, expanded the first PBS row, and confirmed canonical resource details remain usable without horizontal overflow"
   ]
 }
