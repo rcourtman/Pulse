@@ -1,6 +1,6 @@
 # Pulse v6.4.0-rc.11 Release Notes
 
-`v6.4.0-rc.11` follows the alerting improvements in rc.10 with corrective reliability work for credentials, AI cost controls, storage identity, and narrow-screen incident investigation.
+`v6.4.0-rc.11` follows the alerting improvements in rc.10 with corrective reliability work for credentials, AI cost controls, storage identity, and everyday investigation controls.
 
 ## What's improved
 
@@ -8,7 +8,7 @@
 - **Accurate Anthropic budgets** - Current Opus and Haiku versions use version-specific first-party rates, so stale estimates no longer stop Patrol early or understate current Haiku usage.
 - **Stronger disk identity and risk** - PVE and agent observations of the same RAID volume merge across normalized serial/WWN forms, while dismissed TrueNAS SMART alerts continue to flag uniquely identified disks with critical hardware evidence.
 - **Safer recovery and watchdog isolation** - Alert lifecycle failures checkpoint recoverable active state without deadlocking, and external dead-man targets fail closed when DNS or a literal address points to any Pulse host interface.
-- **More stable incident investigation** - Mobile-width alert timelines keep context and actions together, shared history charts expose readable numeric axes, and grouped charts synchronize hover timestamps.
+- **More stable incident investigation** - Mobile-width alert timelines keep context and actions together, history charts expose readable axes and synchronized hover times, and View preferences expand inline without covering tables.
 - **Durable alert lifecycles** - Alert history and active state now rebuild from the event log after restarts, with persisted identities migrated automatically and false all-clear states prevented during hydration.
 - **Better notification control** - Alerts can be snoozed individually, maintenance can recur by scope, escalation repeats can target specific destinations, delivery routes can filter by severity, and informational events remain distinct from warnings.
 - **Earlier capacity warnings** - Rolling metric windows and predictive storage forecasts surface sustained pressure and likely exhaustion before a single threshold breach becomes an outage.

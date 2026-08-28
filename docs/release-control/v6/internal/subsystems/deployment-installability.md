@@ -1846,7 +1846,8 @@ persistence. The rc.11 corrective set extends that boundary to token creation,
 agent-install issuance, and agent-removal revocation; corrects version-specific
 Anthropic cost estimates; merges complete cross-source disk identities; retains
 uniquely resolved dismissed TrueNAS SMART risk; and stabilizes narrow alert
-investigation plus shared chart interaction. It also checkpoints active-state
+investigation, shared chart interaction, and responsive inline View preferences.
+It also checkpoints active-state
 recovery synchronously after durable lifecycle failure and prevents any Pulse
 host interface from satisfying an external dead-man signal. The changes since
 `v6.4.0-rc.6` add the canonical `alert_fired`

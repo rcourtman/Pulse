@@ -19,6 +19,7 @@ This changelog describes the changes since `v6.4.0-rc.10`. The candidate also re
 - Alert-lifecycle append failures synchronously checkpoint a lock-independent active-state recovery projection, while an epoch guard prevents overlapping stale checkpoints from clearing degraded state.
 - Dead-man configuration and dial-time DNS validation reject every address assigned to the Pulse host and fail closed when local-interface enumeration is unavailable.
 - Alert investigation on narrow layouts uses a dedicated timeline dialog, while shared history charts synchronize hover timestamps and retain readable axes.
+- Remembered table View preferences expand in a responsive inline disclosure with consistent controls instead of a floating panel over the monitored resources.
 - The append-only event log is the authority for alert history and active lifecycle reconstruction, including restart recovery, acknowledgement, resolution, suppression, notification, and migration evidence.
 - Alert identities and persisted history migrate to canonical resource keys, while active state uses durable atomic snapshots and ordered recovery.
 - Escalation and delivery decisions are destination-specific, repeated holds are coalesced, and destination updates persist before the active runtime changes.
@@ -36,6 +37,7 @@ This changelog describes the changes since `v6.4.0-rc.10`. The candidate also re
 - Failed durable lifecycle writes no longer risk losing current active alerts or resurrecting alerts resolved before restart, and stale periodic checkpoints cannot overwrite the failure snapshot.
 - A watchdog hostname or private-LAN address that resolves back to Pulse can no longer masquerade as an external progress signal.
 - Mobile alert timelines remain scroll-stable, selected incident history revalidates correctly, chart axis labels remain readable, and grouped hover timestamps stay aligned.
+- View preferences and the nested column selector no longer clip, cover table content, or leave mismatched controls on narrow and desktop layouts.
 - Alert hydration no longer exposes a false all-clear state before persisted incidents are restored.
 - Restart recovery, history queries, and mock alert timelines preserve lifecycle order, observation time, and complete incident evidence.
 - Fresh rolling-window metric data remains authoritative, including when older samples or counter resets are present.
