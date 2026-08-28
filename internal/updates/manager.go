@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -40,18 +41,21 @@ type UpdateStatus struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
+// ReleaseAsset represents one downloadable artifact attached to a release.
+type ReleaseAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+}
+
 // ReleaseInfo represents a GitHub release
 type ReleaseInfo struct {
-	TagName     string    `json:"tag_name"`
-	Name        string    `json:"name"`
-	Body        string    `json:"body"`
-	Prerelease  bool      `json:"prerelease"`
-	Draft       bool      `json:"draft"`
-	PublishedAt time.Time `json:"published_at"`
-	Assets      []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-	} `json:"assets"`
+	TagName     string         `json:"tag_name"`
+	Name        string         `json:"name"`
+	Body        string         `json:"body"`
+	Prerelease  bool           `json:"prerelease"`
+	Draft       bool           `json:"draft"`
+	PublishedAt time.Time      `json:"published_at"`
+	Assets      []ReleaseAsset `json:"assets"`
 }
 
 // UpdateInfo represents available update information
@@ -104,6 +108,27 @@ func updateReleaseRepo() string {
 
 func updateReleaseDownloadPrefix() string {
 	return fmt.Sprintf("https://github.com/%s/releases/download/", updateReleaseRepo())
+}
+
+func updateReleaseAssetForRuntime(tagName string) (ReleaseAsset, bool) {
+	targetArch, ok := map[string]string{
+		"amd64": "amd64",
+		"arm64": "arm64",
+		"arm":   "armv7",
+		"386":   "386",
+	}[runtime.GOARCH]
+	if !ok {
+		return ReleaseAsset{}, false
+	}
+
+	assetName := fmt.Sprintf("pulse-%s-linux-%s.tar.gz", tagName, targetArch)
+	downloadURL := fmt.Sprintf(
+		"%s%s/%s",
+		updateReleaseDownloadPrefix(),
+		url.PathEscape(tagName),
+		url.PathEscape(assetName),
+	)
+	return ReleaseAsset{Name: assetName, BrowserDownloadURL: downloadURL}, true
 }
 
 func updateReleaseAPIPath() string {
@@ -459,26 +484,12 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 
 	// Find download URL for current architecture
 	downloadURL := ""
-	arch := runtime.GOARCH
-	// Map Go architecture names to release asset names
-	archMap := map[string]string{
-		"amd64": "amd64",
-		"arm64": "arm64",
-		"arm":   "armv7",
-		"386":   "386",
-	}
-
-	targetArch, ok := archMap[arch]
-	if !ok {
-		targetArch = arch // Use as-is if not in map
-	}
-
-	// Look for architecture-specific binary
-	targetName := fmt.Sprintf("pulse-%s-linux-%s.tar.gz", release.TagName, targetArch)
-	for _, asset := range release.Assets {
-		if asset.Name == targetName {
-			downloadURL = asset.BrowserDownloadURL
-			break
+	if targetAsset, ok := updateReleaseAssetForRuntime(release.TagName); ok {
+		for _, asset := range release.Assets {
+			if asset.Name == targetAsset.Name {
+				downloadURL = asset.BrowserDownloadURL
+				break
+			}
 		}
 	}
 
@@ -1035,25 +1046,31 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 		return nil, fmt.Errorf("feed response exceeds %d bytes", maxReleaseFeedBytes)
 	}
 
-	// Parse the Atom feed to extract version tags
-	// The feed format includes entries like: <title>Pulse v5.0.0</title>
-	// We use simple string parsing rather than a full XML parser for minimal deps
-	content := string(body)
+	type atomEntry struct {
+		Title     string `xml:"title"`
+		Published string `xml:"published"`
+		Updated   string `xml:"updated"`
+	}
+	type atomFeed struct {
+		Entries []atomEntry `xml:"entry"`
+	}
 
-	// Find all version tags in the feed (format: "Pulse vX.Y.Z" or "Pulse vX.Y.Z-rc.N")
-	versionRegex := regexp.MustCompile(`<title>Pulse (v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)</title>`)
-	matches := versionRegex.FindAllStringSubmatch(content, -1)
-
-	if len(matches) == 0 {
+	var feed atomFeed
+	if err := xml.Unmarshal(body, &feed); err != nil {
+		return nil, fmt.Errorf("failed to decode release feed: %w", err)
+	}
+	if len(feed.Entries) == 0 {
 		return nil, fmt.Errorf("no version tags found in feed")
 	}
+	versionTitleRegex := regexp.MustCompile(`^Pulse (v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)$`)
 
 	// Pick the highest version matching the channel rather than the first
 	// entry: the feed is publication-ordered and v5-line maintenance releases
 	// interleave with v6 releases in the same repo.
 	var best *ReleaseInfo
 	var bestVer *Version
-	for _, match := range matches {
+	for _, entry := range feed.Entries {
+		match := versionTitleRegex.FindStringSubmatch(strings.TrimSpace(entry.Title))
 		if len(match) < 2 {
 			continue
 		}
@@ -1075,12 +1092,27 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 		if best != nil && !ver.IsNewerThan(bestVer) {
 			continue
 		}
+		publishedAt := time.Time{}
+		for _, rawTimestamp := range []string{entry.Published, entry.Updated} {
+			if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(rawTimestamp)); err == nil {
+				publishedAt = parsed
+				break
+			}
+		}
+		assets := []ReleaseAsset{}
+		if asset, ok := updateReleaseAssetForRuntime(tagName); ok {
+			assets = append(assets, asset)
+		}
 		best = &ReleaseInfo{
-			TagName:    tagName,
-			Name:       "Pulse " + tagName,
-			Prerelease: isPrerelease,
-			// Note: Feed doesn't include full release notes or asset info
-			// This is just for version checking - actual download still uses known URL patterns
+			TagName:     tagName,
+			Name:        "Pulse " + tagName,
+			Prerelease:  isPrerelease,
+			PublishedAt: publishedAt,
+			// Atom does not list release assets. Published Pulse versions have a
+			// deterministic runtime archive name, so synthesize only the exact
+			// current-platform URL; ApplyUpdate still verifies its SSHSIG and
+			// checksum before installing anything.
+			Assets: assets,
 		}
 		bestVer = ver
 	}

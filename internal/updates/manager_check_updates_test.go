@@ -87,10 +87,7 @@ func TestCheckForUpdatesWithChannel_AvailableUsesCache(t *testing.T) {
 			Body:        "Release notes",
 			Prerelease:  false,
 			PublishedAt: releaseTime,
-			Assets: []struct {
-				Name               string `json:"name"`
-				BrowserDownloadURL string `json:"browser_download_url"`
-			}{
+			Assets: []ReleaseAsset{
 				{
 					Name:               "pulse-v99.0.0-linux-amd64.tar.gz",
 					BrowserDownloadURL: "https://example.com/pulse-v99.0.0-linux-amd64.tar.gz",
@@ -171,10 +168,7 @@ func TestCheckForUpdates_Wrapper(t *testing.T) {
 			Body:        "Release notes",
 			Prerelease:  false,
 			PublishedAt: time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC),
-			Assets: []struct {
-				Name               string `json:"name"`
-				BrowserDownloadURL string `json:"browser_download_url"`
-			}{
+			Assets: []ReleaseAsset{
 				{
 					Name:               "pulse-v99.1.0-linux-amd64.tar.gz",
 					BrowserDownloadURL: "https://example.com/pulse-v99.1.0-linux-amd64.tar.gz",

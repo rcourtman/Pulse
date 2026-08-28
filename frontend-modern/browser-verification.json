@@ -1,61 +1,36 @@
 {
   "version": 1,
-  "base_sha": "3916854c18daea76b47e82cd8498016559c7ebaf",
-  "verified_at": "2026-08-28T10:37:02Z",
+  "base_sha": "9e820355b60b68954a2c03cfaf77ba81ca9e4a59",
+  "verified_at": "2026-08-28T13:49:59Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
-    "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
-    "frontend-modern/src/components/Settings/GuestDockerDiscoverySettingsCard.tsx",
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
-    "frontend-modern/src/components/shared/FeatureGateSection.tsx",
-    "frontend-modern/src/components/shared/SettingsPanel.tsx",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/index.css",
-    "frontend-modern/src/utils/settingsShellPresentation.ts"
+    "frontend-modern/src/stores/updates.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/APIAccessPanel.tsx": "dfd5915a945b4d423e0c050c66593130dc82129fe08dbc071fe8386b85f6dc27",
-    "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx": "8f5f2696eeb3145470d5b7ac3aa286f91a678b6c431dfe960c2f482dff0540ba",
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx": "7d28d2273109578c1718d7e6c1ed1fd3703c5caed9243f542be902ec5654a082",
-    "frontend-modern/src/components/Settings/GuestDockerDiscoverySettingsCard.tsx": "16abc50db9e865da1baf25151bfe7d81fcac79f62afd90564b73dbd3e58483a4",
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "5b8b67a82b2b50beb9a8d2f89b2787782e783aec55c1e6103e022a68b5b51273",
-    "frontend-modern/src/components/shared/FeatureGateSection.tsx": "c825da12b250926cf6ab2919fc211cab11ce6826553cb263d59341c09a2b94c7",
-    "frontend-modern/src/components/shared/SettingsPanel.tsx": "4e28b98fc8534c9ed2be7a43a11b0850707563e1c29af550302bba03e39141bd",
-    "frontend-modern/src/i18n/messages.de.ts": "4e73e3ad3f51f90f681983b00226ff808e27385f75e5f4e11a4d1b410d91d8d4",
-    "frontend-modern/src/i18n/messages.es.ts": "33449bd9f58debb62855bda140eff6b233a9c0c9e468f3efaa954532c03fbbee",
-    "frontend-modern/src/i18n/messages.ts": "8b1cf9a69df51c32e9c23c831edfa8149653d505f630c709b531271c53908085",
-    "frontend-modern/src/index.css": "f73a414a7e4bc0ab3806653859216e2404ac33d9f38f4bbbad426a778a062ca0",
-    "frontend-modern/src/utils/settingsShellPresentation.ts": "1e35ac7e362ee8745a4dbe83e3bddc8c65c2944bfa58d039a4bd0fa7685ad2c3"
+    "frontend-modern/src/stores/updates.ts": "3f193c0427338f8f12fe7275b7fc691a7c90a65fd4e47ee972673e370bd5e9b6"
   },
   "routes": [
-    "/proxmox/overview",
-    "/settings/system-general",
-    "/settings/api",
     "/settings/system-updates"
   ],
   "viewports": [
-    { "width": 1440, "height": 900 },
-    { "width": 390, "height": 844 },
-    { "width": 320, "height": 844 }
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
   ],
   "states": [
-    "Proxmox overview reference density on a 390 pixel phone",
-    "General settings at the top of the page and after a long scroll",
-    "searchable grouped settings index with a filtered API Access result",
-    "API Access content at desktop, 390 pixel, and 320 pixel widths",
-    "Updates content with the shared compact section framing",
-    "capability-filtered index with an explicit close affordance"
+    "update available with the confirmation dialog open and acknowledgement unchecked",
+    "update confirmation acknowledged with an intentionally missing download URL",
+    "failed update start with the error notification visible while the dialog remains open"
   ],
   "interactions": [
-    "opened the settings index from the sticky mobile section bar",
-    "searched the settings index for API and selected API Access",
-    "closed the settings index without selecting a different section",
-    "scrolled General settings and confirmed the section bar remained sticky above content",
-    "confirmed Pulse mobile navigation remained visible and interactive above settings content",
-    "resized Settings between desktop, 390 pixel, and 320 pixel widths and confirmed no horizontal overflow"
+    "opened the confirmation dialog from the update banner",
+    "acknowledged the temporary-unavailability warning and selected Start Update",
+    "confirmed the missing download URL produced a visible error without starting an update",
+    "repeated the failed-start state at desktop and 390 pixel widths and confirmed no horizontal overflow"
   ]
 }

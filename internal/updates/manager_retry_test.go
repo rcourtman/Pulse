@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -166,6 +168,67 @@ func TestGetLatestReleaseForChannelRetriesTransientStatus(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&hits); got != 2 {
 		t.Fatalf("request count = %d, want 2", got)
+	}
+}
+
+func TestGetLatestReleaseForChannelRateLimitFallbackIncludesRuntimeAsset(t *testing.T) {
+	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
+	withBuildVersion(t, "6.4.0-rc.10")
+
+	releaseTime := time.Date(2026, 8, 28, 12, 52, 29, 0, time.UTC)
+	feed := `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Pulse v6.4.0-rc.11</title>
+    <updated>2026-08-28T12:52:29Z</updated>
+  </entry>
+</feed>`
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		status := http.StatusNotFound
+		body := "not found"
+		header := http.Header{"Content-Type": []string{"text/plain"}}
+		switch req.URL.String() {
+		case "https://api.github.com/repos/rcourtman/Pulse/releases":
+			status = http.StatusForbidden
+			body = `{"message":"API rate limit exceeded"}`
+			header.Set("X-RateLimit-Remaining", "0")
+		case "https://github.com/rcourtman/Pulse/releases.atom":
+			status = http.StatusOK
+			body = feed
+			header.Set("Content-Type", "application/atom+xml")
+		}
+		return &http.Response{
+			StatusCode: status,
+			Status:     http.StatusText(status),
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     header,
+			Request:    req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	manager := NewManager(&config.Config{UpdateChannel: "rc"})
+	info, err := manager.CheckForUpdatesWithChannel(context.Background(), "rc")
+	if err != nil {
+		t.Fatalf("CheckForUpdatesWithChannel error: %v", err)
+	}
+	if !info.Available || info.LatestVersion != "6.4.0-rc.11" {
+		t.Fatalf("fallback update = %+v, want available v6.4.0-rc.11", info)
+	}
+	expectedAsset, supported := updateReleaseAssetForRuntime("v6.4.0-rc.11")
+	if !supported {
+		t.Fatalf("test runner architecture %q must map to a release asset", runtime.GOARCH)
+	}
+	if info.DownloadURL != expectedAsset.BrowserDownloadURL {
+		t.Fatalf("fallback DownloadURL = %q, want %q", info.DownloadURL, expectedAsset.BrowserDownloadURL)
+	}
+	if !info.ReleaseDate.Equal(releaseTime) {
+		t.Fatalf("fallback ReleaseDate = %s, want %s", info.ReleaseDate, releaseTime)
+	}
+	if target, err := ValidateApplyTargetVersion("rc", info.DownloadURL); err != nil || target != "v6.4.0-rc.11" {
+		t.Fatalf("fallback apply target = %q, err=%v", target, err)
 	}
 }
 

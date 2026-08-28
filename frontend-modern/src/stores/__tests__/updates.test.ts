@@ -163,13 +163,14 @@ describe('updateStore', () => {
       expect(persisted.pendingApply).toBeUndefined();
     });
 
-    it('does nothing without a download URL', async () => {
+    it('reports an error without a download URL', async () => {
       const updateStore = await loadUpdateStore();
 
       const started = await updateStore.applyUpdate();
 
       expect(started).toBe(false);
       expect(mockApplyUpdate).not.toHaveBeenCalled();
+      expect(mockNotifyError).toHaveBeenCalledWith('Unable to start the update. Please try again.');
     });
   });
 

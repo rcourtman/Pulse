@@ -2880,6 +2880,14 @@ moves its installs forward instead of stranding them. Proof:
 `internal/updates/manager_stranded_upgrade_test.go` and
 `scripts/installtests/pulse_auto_update_test.go`
 (`TestGetLatestStableVersionPrefersHighestVersion`).
+When GitHub's release API is rate-limited, the Atom fallback must also return
+an installable current-platform archive URL and the entry's release timestamp,
+not merely a version string. The archive URL may be derived only from the
+validated Pulse tag and the governed deterministic release-asset naming
+contract; the normal apply pipeline must still verify its pinned SSHSIG and
+checksum before installation. A fallback response that advertises an update
+with an empty download URL is a release-blocking defect because the UI cannot
+start the apply request. Proof: `internal/updates/manager_retry_test.go`.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, `main`, or any later branch literal inline; when a stable

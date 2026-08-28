@@ -251,7 +251,14 @@ const confirmPendingApply = (currentVersion: string, state: UpdateState) => {
 // backend accepted the apply request.
 const applyUpdate = async (): Promise<boolean> => {
   const info = updateInfo();
-  if (!info?.downloadUrl) return false;
+  if (!info?.downloadUrl) {
+    logger.error(
+      'Failed to start update',
+      new Error('The update check did not return an installable download URL'),
+    );
+    notificationStore.error(getStartUpdateErrorMessage());
+    return false;
+  }
 
   markApplyStarted(versionInfo()?.version || info.currentVersion, info.latestVersion);
   try {

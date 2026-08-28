@@ -33,10 +33,7 @@ func makeRelease(tag string, prerelease bool) ReleaseInfo {
 		PublishedAt: time.Date(2026, 7, 9, 14, 36, 38, 0, time.UTC),
 	}
 	for _, arch := range []string{"amd64", "arm64", "armv7", "386"} {
-		release.Assets = append(release.Assets, struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-		}{
+		release.Assets = append(release.Assets, ReleaseAsset{
 			Name:               fmt.Sprintf("pulse-%s-linux-%s.tar.gz", tag, arch),
 			BrowserDownloadURL: fmt.Sprintf("https://example.com/%s/pulse-%s-linux-%s.tar.gz", tag, tag, arch),
 		})
