@@ -5,13 +5,16 @@ import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import {
   HISTORY_CHART_RANGES,
+  HISTORY_CHART_MIN_LEFT_INSET,
   createHistoryChartGeometry,
   findHistoryChartClosestPoint,
   formatHistoryChartTimeLabel,
   getHistoryChartDataMax,
   getHistoryChartDataMin,
   getHistoryChartDefaultColor,
+  getHistoryChartLeftInset,
   getHistoryChartRefreshIntervalMs,
+  getHistoryChartRightInset,
   getHistoryChartScale,
   getHistoryChartYAxisLabels,
   type HistoryChartProps,
@@ -38,6 +41,8 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
   const [chartWidth, setChartWidth] = createSignal(300);
   const chartHeight = createMemo(() => props.height || 200);
+  let chartLeftInset = HISTORY_CHART_MIN_LEFT_INSET;
+  let chartRightInset = 0;
 
   const refreshIntervalMs = createMemo(() => getHistoryChartRefreshIntervalMs(range()));
 
@@ -185,21 +190,42 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     const axisTextColor = isDark ? '#9ca3af' : '#6b7280';
     const mainColor = getHistoryChartDefaultColor(props.metric, props.color);
     const scale = getHistoryChartScale(points, props.unit);
+    const yAxisTicks = getHistoryChartYAxisLabels(scale, props.unit);
+    const labelCount = 4;
+    const timeAxisTicks =
+      points.length > 0
+        ? Array.from({ length: labelCount }, (_, index) => {
+            const timestamp =
+              points[0].timestamp +
+              ((points[points.length - 1].timestamp - points[0].timestamp) * index) /
+                (labelCount - 1);
+            return { timestamp, label: formatHistoryChartTimeLabel(timestamp, range()) };
+          })
+        : [];
+
+    ctx.font = '10px sans-serif';
+    chartLeftInset = getHistoryChartLeftInset(
+      yAxisTicks.map((tick) => ctx.measureText(tick.label).width),
+    );
+    chartRightInset = getHistoryChartRightInset(
+      timeAxisTicks.length > 0
+        ? ctx.measureText(timeAxisTicks[timeAxisTicks.length - 1].label).width
+        : 0,
+    );
 
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
-    for (const tick of getHistoryChartYAxisLabels(scale)) {
+    for (const tick of yAxisTicks) {
       const y = height - 20 - tick.pct * (height - 40);
       ctx.beginPath();
-      ctx.moveTo(40, y);
-      ctx.lineTo(width, y);
+      ctx.moveTo(chartLeftInset, y);
+      ctx.lineTo(width - chartRightInset, y);
       ctx.stroke();
 
       ctx.fillStyle = textColor;
-      ctx.font = '10px sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(tick.label, 35, y);
+      ctx.fillText(tick.label, chartLeftInset - 5, y);
     }
 
     if (points.length === 0) {
@@ -213,6 +239,8 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
       endTime: points[points.length - 1].timestamp,
       minValue: scale.minValue,
       maxValue: scale.maxValue,
+      leftInset: chartLeftInset,
+      rightInset: chartRightInset,
     });
 
     ctx.beginPath();
@@ -241,15 +269,18 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
 
-    const labelCount = 4;
-    for (let index = 0; index < labelCount; index++) {
-      const timestamp = points[0].timestamp + (geometry.timeSpan * index) / (labelCount - 1);
-      const x = geometry.getX(timestamp);
-      ctx.fillText(formatHistoryChartTimeLabel(timestamp, range()), x, height - 2);
+    for (const tick of timeAxisTicks) {
+      ctx.fillText(tick.label, geometry.getX(tick.timestamp), height - 2);
     }
 
     const cursor = cursorX();
-    if (cursor === null || cursor < 40 || points.length === 0) return;
+    if (
+      cursor === null ||
+      cursor < chartLeftInset ||
+      cursor > width - chartRightInset ||
+      points.length === 0
+    )
+      return;
 
     ctx.save();
     ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)';
@@ -261,7 +292,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     ctx.stroke();
     ctx.restore();
 
-    const ratio = (cursor - 40) / (width - 40);
+    const ratio = (cursor - chartLeftInset) / (width - chartLeftInset - chartRightInset);
     const hoverTimestamp = points[0].timestamp + ratio * geometry.timeSpan;
     const closest = findHistoryChartClosestPoint(points, hoverTimestamp);
     const pointX = geometry.getX(closest.timestamp);
@@ -326,16 +357,18 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
       endTime: points[points.length - 1].timestamp,
       minValue: getHistoryChartScale(points, props.unit).minValue,
       maxValue: getHistoryChartScale(points, props.unit).maxValue,
+      leftInset: chartLeftInset,
+      rightInset: chartRightInset,
     });
 
-    if (x < 40) {
+    if (x < chartLeftInset || x > width - chartRightInset) {
       setCursorX(null);
       setHoveredPoint(null);
       return;
     }
 
     setCursorX(x);
-    const ratio = (x - 40) / (width - 40);
+    const ratio = (x - chartLeftInset) / (width - chartLeftInset - chartRightInset);
     const hoverTimestamp = points[0].timestamp + ratio * geometry.timeSpan;
     const closest = findHistoryChartClosestPoint(points, hoverTimestamp);
     const pointX = geometry.getX(closest.timestamp);

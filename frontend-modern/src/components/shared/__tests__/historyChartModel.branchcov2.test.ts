@@ -8,7 +8,9 @@ import {
   getHistoryChartDataMax,
   getHistoryChartDataMin,
   getHistoryChartDefaultColor,
+  getHistoryChartLeftInset,
   getHistoryChartRefreshIntervalMs,
+  getHistoryChartRightInset,
   getHistoryChartScale,
   getHistoryChartTooltipLayout,
   getHistoryChartYAxisLabels,
@@ -207,18 +209,36 @@ describe('getHistoryChartYAxisLabels', () => {
     ]);
   });
 
-  it('renders byte-like 0/avg/max labels', () => {
+  it('renders byte-rate scale values with units at every tick', () => {
+    expect(
+      getHistoryChartYAxisLabels(
+        {
+          minValue: 0,
+          maxValue: 2 * 1024 * 1024,
+          isPercentLike: false,
+          isByteLike: true,
+        },
+        'B/s',
+      ),
+    ).toStrictEqual([
+      { pct: 0, label: '0 B/s' },
+      { pct: 0.5, label: '1.00 MB/s' },
+      { pct: 1, label: '2.00 MB/s' },
+    ]);
+  });
+
+  it('uses the actual percent scale values when the scale exceeds 100', () => {
     expect(
       getHistoryChartYAxisLabels({
         minValue: 0,
-        maxValue: 100,
-        isPercentLike: false,
-        isByteLike: true,
+        maxValue: 150,
+        isPercentLike: true,
+        isByteLike: false,
       }),
     ).toStrictEqual([
-      { pct: 0, label: '0' },
-      { pct: 0.5, label: 'Avg' },
-      { pct: 1, label: 'Max' },
+      { pct: 0, label: '0%' },
+      { pct: 0.5, label: '75%' },
+      { pct: 1, label: '150%' },
     ]);
   });
 
@@ -231,10 +251,30 @@ describe('getHistoryChartYAxisLabels', () => {
         isByteLike: false,
       }),
     ).toStrictEqual([
-      { pct: 0, label: '0' },
+      { pct: 0, label: '10' },
       { pct: 0.5, label: '60' },
       { pct: 1, label: '110' },
     ]);
+  });
+});
+
+describe('getHistoryChartLeftInset', () => {
+  it('keeps the existing minimum inset for short labels', () => {
+    expect(getHistoryChartLeftInset([8, 18, 24])).toBe(40);
+  });
+
+  it('expands the inset to fit the widest numeric label plus spacing', () => {
+    expect(getHistoryChartLeftInset([20.2, 49.1, 61.4])).toBe(70);
+  });
+});
+
+describe('getHistoryChartRightInset', () => {
+  it('reserves half the final time-label width plus breathing room', () => {
+    expect(getHistoryChartRightInset(37.2)).toBe(21);
+  });
+
+  it('does not return a negative inset', () => {
+    expect(getHistoryChartRightInset(-10)).toBe(0);
   });
 });
 
@@ -306,6 +346,37 @@ describe('createHistoryChartGeometry', () => {
 
     expect(geo.getX(1000)).toBe(40);
     expect(geo.getX(1100)).toBe(200);
+  });
+
+  it('uses a measured left inset for wider y-axis labels', () => {
+    const geo = createHistoryChartGeometry({
+      width: 200,
+      height: 100,
+      startTime: 1000,
+      endTime: 1100,
+      minValue: 0,
+      maxValue: 10,
+      leftInset: 70,
+    });
+
+    expect(geo.getX(1000)).toBe(70);
+    expect(geo.getX(1100)).toBe(200);
+  });
+
+  it('keeps the final time label inside a measured right inset', () => {
+    const geo = createHistoryChartGeometry({
+      width: 200,
+      height: 100,
+      startTime: 1000,
+      endTime: 1100,
+      minValue: 0,
+      maxValue: 10,
+      leftInset: 70,
+      rightInset: 22,
+    });
+
+    expect(geo.getX(1000)).toBe(70);
+    expect(geo.getX(1100)).toBe(178);
   });
 
   it('inverts the value axis so the max sits at the top padding', () => {

@@ -42,6 +42,8 @@ export const HISTORY_CHART_RANGES: HistoryTimeRange[] = [
   '90d',
 ];
 
+export const HISTORY_CHART_MIN_LEFT_INSET = 40;
+
 export function formatHistoryChartTooltipValue(value: number, unit?: string): string {
   if (unit === '%') return `${value.toFixed(1)}%`;
   if (unit === 'B/s') return `${formatBytes(value)}/s`;
@@ -110,29 +112,41 @@ export function getHistoryChartScale(points: AggregatedMetricPoint[], unit?: str
   };
 }
 
-export function getHistoryChartYAxisLabels({
-  minValue,
-  maxValue,
-  isPercentLike,
-  isByteLike,
-}: {
-  minValue: number;
-  maxValue: number;
-  isPercentLike: boolean;
-  isByteLike: boolean;
-}) {
+export function getHistoryChartYAxisLabels(
+  {
+    minValue,
+    maxValue,
+    isPercentLike,
+    isByteLike,
+  }: {
+    minValue: number;
+    maxValue: number;
+    isPercentLike: boolean;
+    isByteLike: boolean;
+  },
+  unit?: string,
+) {
   return [0, 0.5, 1].map((pct) => {
-    let label = '';
+    const scaleValue = minValue + pct * (maxValue - minValue);
+    let label: string;
     if (isPercentLike) {
-      label = pct === 0 ? '0%' : pct === 1 ? '100%' : '50%';
+      label = `${Math.round(scaleValue)}%`;
     } else if (isByteLike) {
-      label = pct === 0 ? '0' : pct === 1 ? 'Max' : 'Avg';
+      label = formatHistoryChartTooltipValue(scaleValue, unit);
     } else {
-      const scaleValue = Math.round(minValue + pct * (maxValue - minValue));
-      label = pct === 0 ? '0' : `${scaleValue}`;
+      label = `${Math.round(scaleValue)}`;
     }
     return { pct, label };
   });
+}
+
+export function getHistoryChartLeftInset(labelWidths: number[]) {
+  const widestLabel = Math.max(0, ...labelWidths);
+  return Math.max(HISTORY_CHART_MIN_LEFT_INSET, Math.ceil(widestLabel) + 8);
+}
+
+export function getHistoryChartRightInset(lastTimeLabelWidth: number) {
+  return Math.max(0, Math.ceil(lastTimeLabelWidth / 2) + 2);
 }
 
 export function formatHistoryChartTimeLabel(timestamp: number, range: HistoryTimeRange) {
@@ -150,6 +164,8 @@ export function createHistoryChartGeometry({
   endTime,
   minValue,
   maxValue,
+  leftInset = HISTORY_CHART_MIN_LEFT_INSET,
+  rightInset = 0,
 }: {
   width: number;
   height: number;
@@ -157,9 +173,12 @@ export function createHistoryChartGeometry({
   endTime: number;
   minValue: number;
   maxValue: number;
+  leftInset?: number;
+  rightInset?: number;
 }) {
   const timeSpan = Math.max(1, endTime - startTime);
-  const getX = (timestamp: number) => 40 + ((timestamp - startTime) / timeSpan) * (width - 40);
+  const getX = (timestamp: number) =>
+    leftInset + ((timestamp - startTime) / timeSpan) * (width - leftInset - rightInset);
   const getY = (value: number) =>
     height - 20 - ((value - minValue) / (maxValue - minValue)) * (height - 40);
 

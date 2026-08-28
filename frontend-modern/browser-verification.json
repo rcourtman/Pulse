@@ -1,41 +1,30 @@
 {
   "version": 1,
-  "base_sha": "bf1b81700bc08a53cc36afcf4049e16e71d8b37c",
-  "verified_at": "2026-08-28T08:08:14Z",
+  "base_sha": "79206d340a655d376225779d73e0dae426804804",
+  "verified_at": "2026-08-28T08:27:50Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/useDialogState.ts",
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
-    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx",
-    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx"
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/useDialogState.ts": "cf9fd26fe5fe4697351e8cb523b736c955b9d11ff5b7c6256355ab85051a2bd9",
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx": "794c1bae95735fc6bda600932d9429f1b9964f8168154d95f831967b797a5084",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "7187798541822ae85897dfa03c2bfc9fdb0bc3c83ad8d97d347cef612baa5bda",
-    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx": "38225bfcf8f80a0f1fdb46edf96fcc706f45517c9a540964fef12c7a1ab577ea",
-    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx": "b9eaeb9e7bf30334c25ddccf9f8bc4d465dc138fe65d61270c575de79dbe9ce5"
+    "frontend-modern/src/components/shared/historyChartModel.ts": "d8742753465cb7d976ab118ef45e0a9e4065fa49789d5d5ec022a60a58df38f1",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "42f076d388da20b95392188e6bb5246f069547ef5aecf8c74c1140cdc2bd74da"
   },
-  "routes": ["/alerts/history"],
+  "routes": ["/proxmox/storage"],
   "viewports": [
     { "width": 1440, "height": 900 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "desktop Alert History default table and contextual inline resource panel",
-    "narrow Alert History default and search-filtered virtualized card lists",
-    "narrow full-height Resource incidents drawer with empty, single-incident, and multiple-incident results",
-    "narrow resource event timeline collapsed and expanded with reactive event cards",
-    "narrow direct Incident timeline drawer with loaded incident, event filters, note field, and disabled save action",
-    "closed investigation with the history scroll position retained underneath"
+    "Proxmox Physical Disks filtered to nvme2 with Samsung 980 PRO 2TB expanded",
+    "disk History tab with live byte-rate, percent, and temperature charts loaded",
+    "read chart hovered with point marker and tooltip visible"
   ],
   "interactions": [
-    "opened Resource investigation from cards near the top and deep inside virtualized mobile history",
-    "expanded resource Events timelines and scrolled the drawer evidence while confirming the background app scroll position stayed fixed",
-    "changed resource event disclosure state and confirmed event cards appeared without changing the virtualized history row height",
-    "opened the direct Incident timeline and dismissed mobile investigations through the explicit close action and Escape",
-    "confirmed explicit dismissal returns focus to the originating Resource or Timeline action without scrolling it into view",
-    "opened and closed the existing desktop inline Resource investigation and inspected the desktop table pixels"
+    "selected Physical Disks, searched for nvme2, expanded Samsung 980 PRO 2TB, and opened History",
+    "confirmed desktop byte-rate ticks show numeric MB/s scale values aligned with all three gridlines",
+    "confirmed 390px byte-rate labels and the final time tick remain fully visible without clipping while cards retain useful plot width",
+    "hovered the narrow Read chart and confirmed cursor, data point, and tooltip remain aligned after the measured axis inset"
   ]
 }

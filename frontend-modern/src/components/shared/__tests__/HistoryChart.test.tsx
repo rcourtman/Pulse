@@ -37,6 +37,7 @@ HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
   createLinearGradient: vi.fn(() => ({
     addColorStop: vi.fn(),
   })),
+  measureText: vi.fn(() => ({ width: 40 })),
 })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
 vi.mock('@/stores/license', () => ({

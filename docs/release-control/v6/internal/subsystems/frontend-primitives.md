@@ -119,6 +119,11 @@ populate the legend while history is still being collected, but it must never
 be expanded into synthetic timestamps or chart geometry. An empty stored
 series renders the shared collecting-history state; zero remains a valid
 reported reading, while an absent metric remains unavailable.
+Shared history-chart gridlines must carry numeric labels derived from the
+plotted scale rather than semantic `Avg` / `Max` placeholders. Byte and
+byte-rate axes include their human-readable unit at each gridline, and the
+canvas measures both value and time labels into the same plot bounds used by
+geometry and hover selection so neither edge clips or drifts from the data.
 Object-detail navigation follows that same canonical split across platform and
 feature owners. `Overview` is the stable landing tab for current operational
 facts, while stored metric charts appear only after selecting an evidence-gated
