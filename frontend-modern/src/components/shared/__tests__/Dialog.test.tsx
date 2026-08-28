@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import dialogSource from '@/components/shared/Dialog.tsx?raw';
@@ -66,10 +67,14 @@ describe('Dialog', () => {
         <div class="p-4">Body</div>
       </Dialog>
     ));
+    const laterDocumentHandler = vi.fn();
+    document.addEventListener('keydown', laterDocumentHandler);
 
     expect(document.body.style.overflow).toBe('hidden');
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(laterDocumentHandler).not.toHaveBeenCalled();
+    document.removeEventListener('keydown', laterDocumentHandler);
     unmount();
     expect(document.body.style.overflow).toBe('');
   });
@@ -123,5 +128,30 @@ describe('Dialog', () => {
 
     await Promise.resolve();
     expect(screen.getByRole('textbox', { name: 'Outcome' })).toHaveFocus();
+  });
+
+  it('restores trigger focus without moving the background scroll position', async () => {
+    const [isOpen, setIsOpen] = createSignal(false);
+    render(() => (
+      <>
+        <button type="button" onClick={() => setIsOpen(true)}>
+          Open investigation
+        </button>
+        <Dialog isOpen={isOpen()} onClose={() => setIsOpen(false)}>
+          <button type="button" onClick={() => setIsOpen(false)}>
+            Close investigation
+          </button>
+        </Dialog>
+      </>
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Open investigation' });
+    trigger.focus();
+    const focusSpy = vi.spyOn(trigger, 'focus');
+    await fireEvent.click(trigger);
+    await fireEvent.click(screen.getByRole('button', { name: 'Close investigation' }));
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(trigger).toHaveFocus();
   });
 });

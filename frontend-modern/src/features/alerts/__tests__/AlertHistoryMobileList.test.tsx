@@ -1,12 +1,11 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AlertHistoryMobileList } from '../AlertHistoryMobileList';
 import type { AlertHistoryState } from '../useAlertHistoryState';
 
-function createState(openRowKey: string | null = null) {
-  const toggleIncidentTimeline = vi.fn();
-  const openResourceIncidentPanel = vi.fn();
+function createState() {
   const alert = {
     id: 'alert-1',
     source: 'alert',
@@ -23,6 +22,26 @@ function createState(openRowKey: string | null = null) {
     nodeDisplayName: 'Production cluster',
     rawAlertType: 'backup_failed',
   };
+  const [expandedIncidents, setExpandedIncidents] = createSignal(new Set<string>());
+  const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{
+    resourceId: string;
+    resourceName: string;
+    rowKey: string;
+  } | null>(null);
+  const toggleIncidentTimeline = vi.fn((rowKey: string) => {
+    setExpandedIncidents((current) => {
+      const next = new Set(current);
+      if (next.has(rowKey)) next.delete(rowKey);
+      else next.add(rowKey);
+      return next;
+    });
+  });
+  const openResourceIncidentPanel = vi.fn(
+    (resourceId: string, resourceName: string, rowKey: string) => {
+      setResourceIncidentPanel({ resourceId, resourceName, rowKey });
+    },
+  );
+  const closeResourceIncidentPanel = vi.fn(() => setResourceIncidentPanel(null));
 
   const state = {
     groupedAlerts: () => [
@@ -33,11 +52,11 @@ function createState(openRowKey: string | null = null) {
       },
     ],
     getIncidentRowKey: () => 'alert-1-row',
-    expandedIncidents: () => new Set<string>(),
+    expandedIncidents,
     incidentLoading: () => ({}),
     incidentErrors: () => ({}),
     incidentTimelines: () => ({}),
-    historyIncidentEventFilters: () => [],
+    historyIncidentEventFilters: () => new Set<string>(),
     setHistoryIncidentEventFilters: vi.fn(),
     incidentNoteDrafts: () => ({}),
     setIncidentNoteDraft: vi.fn(),
@@ -46,22 +65,24 @@ function createState(openRowKey: string | null = null) {
     loadIncidentTimeline: vi.fn(),
     toggleIncidentTimeline,
     openResourceIncidentPanel,
-    resourceIncidentPanel: () =>
-      openRowKey
-        ? { resourceId: 'node-1', resourceName: 'pve-production-01', rowKey: openRowKey }
-        : null,
+    resourceIncidentPanel,
     resourceIncidents: () => ({ 'node-1': [] }),
     resourceIncidentLoading: () => ({}),
     resourceIncidentEventFilters: () => new Set<string>(),
     setResourceIncidentEventFilters: vi.fn(),
     refreshResourceIncidentPanel: vi.fn(),
-    setResourceIncidentPanel: vi.fn(),
+    setResourceIncidentPanel: closeResourceIncidentPanel,
     getResource: () => undefined,
     formatAlertRowTime: () => '14:30',
     formatAlertRowTimestamp: () => 'Tuesday, 4 August 2026 at 14:30:00',
   } as unknown as AlertHistoryState;
 
-  return { openResourceIncidentPanel, state, toggleIncidentTimeline };
+  return {
+    closeResourceIncidentPanel,
+    openResourceIncidentPanel,
+    state,
+    toggleIncidentTimeline,
+  };
 }
 
 describe('AlertHistoryMobileList', () => {
@@ -95,6 +116,10 @@ describe('AlertHistoryMobileList', () => {
       'alert-1',
       '2026-08-04T14:30:00.000Z',
     );
+    expect(
+      screen.getByRole('dialog', { name: 'Incident timeline for pve-production-01' }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Close incident timeline' }));
 
     await fireEvent.click(screen.getByRole('button', { name: 'Resource' }));
     expect(openResourceIncidentPanel).toHaveBeenCalledWith(
@@ -102,25 +127,46 @@ describe('AlertHistoryMobileList', () => {
       'pve-production-01',
       'alert-1-row',
     );
+    expect(
+      screen.getByRole('dialog', { name: 'Resource incidents for pve-production-01' }),
+    ).toBeInTheDocument();
   });
 
-  // #1687: the panel used to render at page level, so on a phone it opened far
-  // above whatever card the reader had tapped and the button looked inert.
-  it('renders the resource incidents panel inside the card that opened it', () => {
-    const { state } = createState('alert-1-row');
+  it('keeps resource investigation scrolling outside the virtualized history row', async () => {
+    const { state } = createState();
 
     const { container } = render(() => <AlertHistoryMobileList state={state} />);
+    await fireEvent.click(screen.getByRole('button', { name: 'Resource' }));
 
     const card = container.querySelector('article');
+    const dialog = screen.getByRole('dialog', {
+      name: 'Resource incidents for pve-production-01',
+    });
     expect(card).not.toBeNull();
-    expect(card?.textContent).toContain('No incidents recorded for this resource yet.');
+    expect(card?.textContent).not.toContain('No incidents recorded for this resource yet.');
+    expect(dialog).not.toBeNull();
+    expect(card?.contains(dialog)).toBe(false);
+    expect(screen.getByTestId('mobile-alert-investigation-scroll')).toHaveClass(
+      'overflow-y-auto',
+      'overscroll-contain',
+    );
+    expect(screen.getByText('No incidents recorded for this resource yet.')).toBeVisible();
   });
 
-  it('leaves the card alone while a different row owns the panel', () => {
-    const { state } = createState('some-other-row');
+  it('dismisses the mobile investigation with Escape and restores the history surface', async () => {
+    const { closeResourceIncidentPanel, state } = createState();
 
-    const { container } = render(() => <AlertHistoryMobileList state={state} />);
+    render(() => <AlertHistoryMobileList state={state} />);
+    const resourceButton = screen.getByRole('button', { name: 'Resource' });
+    resourceButton.focus();
+    await fireEvent.click(resourceButton);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-    expect(container.textContent).not.toContain('No incidents recorded for this resource yet.');
+    await fireEvent.keyDown(document, { key: 'Escape' });
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(closeResourceIncidentPanel).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Resource' })).toHaveFocus();
   });
 });

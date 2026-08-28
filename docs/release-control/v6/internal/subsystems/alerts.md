@@ -583,16 +583,25 @@ links to the retired top-level routes, and the supporting
 `buildResolvedResourceSurfaceLinks` helper was deleted from
 `frontend-modern/src/routing/resourceLinks.ts` as part of the same pass.
 
-That panel renders inline under the history row that opened it, in both the
-desktop table (`AlertHistoryTableAlertRow.tsx`) and the phone card list
-(`AlertHistoryMobileList.tsx`). It must not go back to being a page-level
-sibling in `tabs/HistoryTab.tsx`: the alert history is a long scroller, so a
-page-level panel opened thousands of pixels above a reader scrolled into the
-list and the row-level button read as inert (#1687). Because several alerts
-can share one resource, `resourceIncidentPanel` carries the originating
-`rowKey` and each row renders the panel only when that key matches, which also
-keeps exactly one panel open at a time. Re-triggering the same row closes it,
-matching the neighbouring Timeline toggle.
+On desktop that panel renders inline under the history table row that opened
+it (`AlertHistoryTableAlertRow.tsx`). On phone layouts, Resource and Timeline
+investigations render through
+`MobileAlertHistoryInvestigationDialog.tsx` as one full-height, independently
+scrollable investigation drawer. They must not expand inside
+`AlertHistoryMobileList.tsx`: the history is a fixed-estimate virtualized list,
+so changing one mounted card to incident-timeline height invalidates its spacer
+math and makes the app scroll shell jump or pull the operator back up the page.
+The mobile drawer keeps that list height and scroll position stable, contains
+overscroll within the evidence surface, supports Escape and explicit close,
+and returns focus to the originating action or the history list fallback.
+It must not become a page-level sibling in `tabs/HistoryTab.tsx`, which would
+again open away from a reader deep in history (#1687). Because several alerts
+can share one resource, `resourceIncidentPanel` still carries the originating
+`rowKey`, and the mobile investigation state allows exactly one Timeline or
+Resource surface at a time. Resource incident expansion and filtering remain
+reactive accessors inside each keyed incident row; snapshotting the expanded
+set or filter set would let state update while the visible Events timeline
+stays closed or stale.
 
 The alert history filter bar carries no saved-views affordance.
 `AlertHistoryFiltersCard.tsx` must not pass a `savedViewsKey` to the shared

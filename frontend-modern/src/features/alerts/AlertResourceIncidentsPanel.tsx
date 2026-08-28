@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
@@ -34,6 +34,8 @@ import type { AlertHistoryState } from './useAlertHistoryState';
 interface AlertResourceIncidentsPanelProps {
   state: AlertHistoryState;
   getResource?: (resourceId: string) => Resource | undefined;
+  onClose?: () => void;
+  showCloseAction?: boolean;
 }
 
 export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelProps) {
@@ -78,13 +80,17 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                 >
                   {getAlertResourceIncidentRefreshLabel(isLoading())}
                 </button>
-                <button
-                  type="button"
-                  class="px-2 py-1 text-xs border rounded-md border-border text-muted hover:bg-surface-hover"
-                  onClick={() => props.state.setResourceIncidentPanel(null)}
-                >
-                  Close
-                </button>
+                <Show when={props.showCloseAction ?? true}>
+                  <button
+                    type="button"
+                    class="px-2 py-1 text-xs border rounded-md border-border text-muted hover:bg-surface-hover"
+                    onClick={() =>
+                      props.onClose ? props.onClose() : props.state.setResourceIncidentPanel(null)
+                    }
+                  >
+                    Close
+                  </button>
+                </Show>
               </div>
             </div>
             <Show when={isLoading()}>
@@ -114,24 +120,27 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                         incident.status,
                         incident.acknowledged,
                       );
-                      const isExpanded = props.state.expandedResourceIncidentIds().has(incident.id);
                       const events = incident.events || [];
-                      const filteredEvents = filterIncidentEvents(
-                        events,
-                        props.state.resourceIncidentEventFilters(),
+                      const isExpanded = () =>
+                        props.state.expandedResourceIncidentIds().has(incident.id);
+                      const filteredEvents = createMemo(() =>
+                        filterIncidentEvents(events, props.state.resourceIncidentEventFilters()),
                       );
-                      const eventSummary = summarizeIncidentEvents(filteredEvents);
-                      const recentEvents =
-                        filteredEvents.length > 6
-                          ? filteredEvents.slice(filteredEvents.length - 6)
-                          : filteredEvents;
-                      const lastEvent =
-                        filteredEvents.length > 0
-                          ? filteredEvents[filteredEvents.length - 1]
+                      const eventSummary = createMemo(() =>
+                        summarizeIncidentEvents(filteredEvents()),
+                      );
+                      const recentEvents = createMemo(() =>
+                        filteredEvents().length > 6
+                          ? filteredEvents().slice(filteredEvents().length - 6)
+                          : filteredEvents(),
+                      );
+                      const lastEvent = () =>
+                        filteredEvents().length > 0
+                          ? filteredEvents()[filteredEvents().length - 1]
                           : undefined;
-                      const filteredLabel =
-                        filteredEvents.length !== events.length
-                          ? `${filteredEvents.length}/${events.length}`
+                      const filteredLabel = () =>
+                        filteredEvents().length !== events.length
+                          ? `${filteredEvents().length}/${events.length}`
                           : `${events.length}`;
 
                       return (
@@ -167,7 +176,7 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                           <Show when={events.length > 0}>
                             <div class={getAlertResourceIncidentSummaryRowClass()}>
                               <Show
-                                when={filteredEvents.length > 0}
+                                when={filteredEvents().length > 0}
                                 fallback={
                                   <span>
                                     {getAlertResourceIncidentFilteredEventsEmptyState().text}
@@ -178,7 +187,7 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                                   <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
                                     Activity
                                   </span>
-                                  <For each={eventSummary}>
+                                  <For each={eventSummary()}>
                                     {(summary) => (
                                       <span class={getAlertResourceIncidentActivityChipClass()}>
                                         {summary.label} {summary.count}
@@ -186,12 +195,12 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                                     )}
                                   </For>
                                   <span>
-                                    {filteredEvents.length !== events.length
-                                      ? `${filteredEvents.length}/${events.length} events`
+                                    {filteredEvents().length !== events.length
+                                      ? `${filteredEvents().length}/${events.length} events`
                                       : `${events.length} event${events.length === 1 ? '' : 's'}`}
                                   </span>
-                                  <Show when={lastEvent}>
-                                    <span>Latest: {lastEvent?.summary}</span>
+                                  <Show when={lastEvent()}>
+                                    <span>Latest: {lastEvent()?.summary}</span>
                                   </Show>
                                 </div>
                               </Show>
@@ -202,30 +211,30 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                                   props.state.toggleResourceIncidentDetails(incident.id)
                                 }
                               >
-                                {getAlertResourceIncidentToggleLabel(isExpanded, filteredLabel)}
+                                {getAlertResourceIncidentToggleLabel(isExpanded(), filteredLabel())}
                               </button>
                             </div>
                           </Show>
-                          <Show when={isExpanded}>
+                          <Show when={isExpanded()}>
                             <div class="mt-2 space-y-2">
                               <Show
-                                when={filteredEvents.length > 0}
+                                when={filteredEvents().length > 0}
                                 fallback={
                                   <p class="text-[10px] text-muted">
                                     {getAlertResourceIncidentFilteredEventsEmptyState().text}
                                   </p>
                                 }
                               >
-                                <For each={recentEvents}>
+                                <For each={recentEvents()}>
                                   {(event) => (
                                     <IncidentTimelineEventCard event={event} variant="alt" />
                                   )}
                                 </For>
-                                <Show when={filteredEvents.length > 0}>
+                                <Show when={filteredEvents().length > 0}>
                                   <p class="text-[10px] text-muted">
                                     {getAlertResourceIncidentTruncatedEventsLabel(
-                                      recentEvents.length,
-                                      filteredEvents.length,
+                                      recentEvents().length,
+                                      filteredEvents().length,
                                     )}
                                   </p>
                                 </Show>

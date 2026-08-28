@@ -12,6 +12,8 @@ interface AlertHistoryItemActionsProps {
   state: AlertHistoryState;
   class?: string;
   touchSized?: boolean;
+  onTimelineClick?: () => void;
+  onResourceClick?: () => void;
 }
 
 export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
@@ -25,7 +27,12 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
           class={`rounded-md border border-border px-2 py-1 text-[10px] text-muted hover:bg-surface-hover ${
             props.touchSized ? 'min-h-11' : ''
           }`}
+          data-alert-history-action="timeline"
           onClick={() => {
+            if (props.onTimelineClick) {
+              props.onTimelineClick();
+              return;
+            }
             void props.state.toggleIncidentTimeline(
               rowKey(),
               props.alert.id,
@@ -42,8 +49,13 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
           class={`rounded-md border border-border px-2 py-1 text-[10px] text-muted hover:bg-surface-hover ${
             props.touchSized ? 'min-h-11' : ''
           }`}
+          data-alert-history-action="resource"
           title={getAlertResourceIncidentViewTitle()}
           onClick={() => {
+            if (props.onResourceClick) {
+              props.onResourceClick();
+              return;
+            }
             void props.state.openResourceIncidentPanel(
               props.alert.resourceId as string,
               props.alert.resourceName,

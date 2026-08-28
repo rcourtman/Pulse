@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertResourceIncidentsPanel } from '../AlertResourceIncidentsPanel';
@@ -162,5 +162,83 @@ describe('AlertResourceIncidentsPanel', () => {
     });
     expect(JSON.stringify(context)).not.toContain('zpool clear tank');
     expect(JSON.stringify(context)).not.toContain('secret-output');
+  });
+
+  it('reactively reveals and hides the selected resource incident timeline', async () => {
+    const [expandedIncidentIds, setExpandedIncidentIds] = createSignal(new Set<string>());
+    const [eventFilters, setEventFilters] = createSignal(new Set<string>(['opened', 'resolved']));
+    const toggleResourceIncidentDetails = vi.fn((incidentId: string) => {
+      setExpandedIncidentIds((current) => {
+        const next = new Set(current);
+        if (next.has(incidentId)) next.delete(incidentId);
+        else next.add(incidentId);
+        return next;
+      });
+    });
+
+    render(() => (
+      <AlertResourceIncidentsPanel
+        state={
+          {
+            resourceIncidentPanel: () => ({
+              resourceId: 'node-1',
+              resourceName: 'Production node',
+              rowKey: 'alert-1-row',
+            }),
+            resourceIncidents: () => ({
+              'node-1': [
+                {
+                  id: 'incident-1',
+                  alertType: 'connectivity',
+                  level: 'critical',
+                  status: 'resolved',
+                  acknowledged: false,
+                  openedAt: '2026-08-21T09:00:00Z',
+                  closedAt: '2026-08-21T09:05:00Z',
+                  message: 'Connection lost',
+                  events: [
+                    {
+                      id: 'event-1',
+                      type: 'opened',
+                      timestamp: '2026-08-21T09:00:00Z',
+                      summary: 'Connectivity incident opened',
+                    },
+                    {
+                      id: 'event-2',
+                      type: 'resolved',
+                      timestamp: '2026-08-21T09:05:00Z',
+                      summary: 'Connectivity restored',
+                    },
+                  ],
+                },
+              ],
+            }),
+            resourceIncidentLoading: () => ({ 'node-1': false }),
+            expandedResourceIncidentIds: expandedIncidentIds,
+            resourceIncidentEventFilters: eventFilters,
+            setResourceIncidentEventFilters: setEventFilters,
+            refreshResourceIncidentPanel: vi.fn(),
+            setResourceIncidentPanel: vi.fn(),
+            toggleResourceIncidentDetails,
+          } as any
+        }
+        getResource={() => undefined}
+      />
+    ));
+
+    expect(screen.queryByText('Connectivity incident opened')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Events (2)' }));
+
+    expect(toggleResourceIncidentDetails).toHaveBeenCalledWith('incident-1');
+    expect(screen.getByRole('button', { name: 'Hide events' })).toBeInTheDocument();
+    expect(screen.getByText('Connectivity incident opened')).toBeVisible();
+
+    setEventFilters(new Set<string>(['resolved']));
+    expect(screen.queryByText('Connectivity incident opened')).not.toBeInTheDocument();
+    expect(screen.getByText('Connectivity restored')).toBeVisible();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Hide events' }));
+    expect(screen.queryByText('Connectivity incident opened')).not.toBeInTheDocument();
   });
 });

@@ -951,6 +951,16 @@ warnings remain visible before expansion. The responsive route must preserve
 named tabs, keyboard focus, dialog focus containment, and phone-width overflow
 checks; journey 83 is the desktop/browser accessibility proof and is not
 mobile-device proof.
+The shared `Dialog` runtime in `useDialogState.ts` owns focus containment,
+body-scroll locking, and focus restoration for every modal and drawer. Closing
+an overlay must restore its previous trigger with `preventScroll`; a plain
+`focus()` may make the app scroll shell jump to a virtualized or previously
+off-screen trigger just as the operator dismisses the overlay. Escape belongs
+to the top dialog and must stop the same keydown from reaching later global or
+shell listeners before it closes. Feature-owned
+dialogs may provide a stable fallback target when their original virtual row
+has unmounted, but they must use the same scroll-neutral focus contract rather
+than compensating with page-level scroll writes.
 
 Assistant shell entry changes must keep Assistant contextual rather than
 generic: `AppLayout.tsx` and the command palette may expose a compact launcher,
@@ -4686,6 +4696,20 @@ not overlap or create horizontal overflow. The 390px operator qualification
 must assert three visible labels, non-overlapping client rectangles, keyboard
 reachability, and a contained document before its actual-pixels receipt is
 recorded.
+Alert History investigation detail is also responsive by interaction model,
+not only by CSS. Desktop may keep Timeline and Resource incident detail inline
+with its table row, while the virtualized phone card list must open the shared
+detail components inside the feature-owned full-height `Dialog` drawer in
+`frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx`.
+The drawer owns a bounded `overflow-y-auto` and `overscroll-contain` evidence
+scrollport, while the app scroll shell and the fixed-estimate history window
+remain unchanged underneath it. Escape and the explicit close action dismiss
+the drawer and restore focus to the originating row action when that
+virtualized row still exists, falling back to the phone history list when it
+does not. Future expandable content inside a fixed-estimate list must use the
+same independent-detail boundary or move to a variable-height virtualizer; it
+must not change a mounted virtual row's height and compensate with ad hoc page
+scroll writes.
 Because that popover combines view application, default selection, removal,
 and an inline naming form, it is a labelled non-modal dialog rather than an
 ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus

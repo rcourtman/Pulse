@@ -69,6 +69,7 @@ export function useDialogState(options: DialogStateOptions): {
       if (!panelRef) return;
       if (event.key === 'Escape') {
         event.preventDefault();
+        event.stopImmediatePropagation();
         options.onClose();
         return;
       }
@@ -105,7 +106,7 @@ export function useDialogState(options: DialogStateOptions): {
       document.removeEventListener('keydown', onKeyDown);
       unlockBodyScroll();
       if (previousFocus && document.contains(previousFocus)) {
-        previousFocus.focus();
+        previousFocus.focus({ preventScroll: true });
       }
     });
   });
