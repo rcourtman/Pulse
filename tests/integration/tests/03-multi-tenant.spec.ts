@@ -290,7 +290,7 @@ test.describe('Multi-tenant E2E flows', () => {
     expect(payload.code).toBe('self_modification_denied');
   });
 
-  test('Scenario 6: cross-org share preserves intended access role and requires target acceptance', async ({ page }) => {
+  test('Scenario 6: cross-org share preserves intended access role and requires target acceptance', async ({ page, isMobile }) => {
     await ensureAuthenticated(page);
 
     const mtEnabled = await isMultiTenantEnabled(page);
@@ -363,7 +363,12 @@ test.describe('Multi-tenant E2E flows', () => {
       await page.goto('/settings/organization/sharing', { waitUntil: 'domcontentloaded' });
       await page.waitForURL(/\/settings\/organization\/sharing/, { timeout: 15_000 });
 
-      await expect(page.getByRole('heading', { level: 1, name: 'Organization Sharing' })).toBeVisible();
+      if (isMobile) {
+        await expect(page.getByRole('heading', { level: 1, name: 'Sharing', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 2, name: 'Organization Sharing' })).toBeVisible();
+      } else {
+        await expect(page.getByRole('heading', { level: 1, name: 'Organization Sharing' })).toBeVisible();
+      }
       await expect(page.getByText(outboundResourceName, { exact: true })).toBeVisible();
       await expect(page.getByText(inboundResourceName, { exact: true })).toBeVisible();
       await expect(page.getByText('Pending approval')).toHaveCount(2);
