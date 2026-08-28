@@ -212,6 +212,7 @@ func (a *Agent) adoptRuntimeConnection(cli dockerClient, info systemtypes.Info, 
 		a.cfg.IncludeTasks = false
 	}
 	a.cfg.Runtime = string(runtimeKind)
+	a.clearDockerCollectionCaches()
 
 	return previous
 }

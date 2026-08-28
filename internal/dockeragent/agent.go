@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	containertypes "github.com/moby/moby/api/types/container"
 	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/client"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
@@ -135,6 +136,8 @@ type Agent struct {
 	cpuMu               sync.Mutex // protects prevContainerCPU
 	storageUsageMu      sync.Mutex
 	storageUsageCache   dockerStorageUsageCache
+	inactiveInspectMu   sync.Mutex
+	inactiveInspects    map[string]inactiveContainerInspectCacheEntry
 	reportBuffer        *utils.Queue[agentsdocker.Report]
 	reportBuffers       map[string]*utils.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
@@ -161,6 +164,13 @@ type dockerStorageUsageCache struct {
 	result      client.DiskUsageResult
 	usage       *agentsdocker.StorageUsage
 	valid       bool
+}
+
+type inactiveContainerInspectCacheEntry struct {
+	inspect     containertypes.InspectResponse
+	fingerprint string
+	withSize    bool
+	expiresAt   time.Time
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.

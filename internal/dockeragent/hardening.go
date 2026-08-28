@@ -22,10 +22,17 @@ const (
 	// daemons such as Synology DSM may traverse every stopped container layer
 	// for this call, so immediate repetition can saturate dockerd (#1729).
 	dockerStorageUsageRefreshInterval = 15 * time.Minute
-	dockerSwarmListCallTimeout        = 20 * time.Second
-	dockerCleanupCallTimeout          = 15 * time.Second
-	dockerUpdateCallTimeout           = 2 * time.Minute
-	dockerUpdateOverallTimeout        = 15 * time.Minute
+	// dockerInactiveInspectRefreshInterval keeps immutable container detail off
+	// the live telemetry cadence. A stopped-container-heavy NAS otherwise pays
+	// one /containers/{id}/json request per historical container every 30
+	// seconds even though only running/paused containers need live state and
+	// stats. Summary changes invalidate the entry immediately; this ceiling
+	// bounds staleness for out-of-band network changes (#1729).
+	dockerInactiveInspectRefreshInterval = 15 * time.Minute
+	dockerSwarmListCallTimeout           = 20 * time.Second
+	dockerCleanupCallTimeout             = 15 * time.Second
+	dockerUpdateCallTimeout              = 2 * time.Minute
+	dockerUpdateOverallTimeout           = 15 * time.Minute
 
 	// dockerCollectCycleTimeout bounds one whole collection cycle
 	// (buildReport). Every docker call inside the cycle already carries its

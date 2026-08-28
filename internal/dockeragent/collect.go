@@ -314,6 +314,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		containers = append(containers, container)
 	}
 	a.pruneStaleCPUSamples(active)
+	a.pruneInactiveContainerInspectCache(active)
 	return containers, nil
 }
 
@@ -557,7 +558,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	defer cancel()
 
 	requestSize := a.cfg.CollectDiskMetrics
-	inspect, _, err := a.docker.ContainerInspectWithRaw(containerCtx, summary.ID, requestSize)
+	inspect, err := a.inspectContainer(containerCtx, summary, requestSize)
 	if err != nil {
 		return agentsdocker.Container{}, fmt.Errorf("inspect: %w", err)
 	}
@@ -792,6 +793,82 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	}
 
 	return container, nil
+}
+
+func (a *Agent) inspectContainer(ctx context.Context, summary containertypes.Summary, requestSize bool) (containertypes.InspectResponse, error) {
+	// Empty IDs/statuses do not provide enough evidence to detect a lifecycle
+	// change between reports (some Podman compatibility endpoints omit Status),
+	// so keep those on the live path rather than accepting bounded stale state.
+	cacheable := strings.TrimSpace(summary.ID) != "" && strings.TrimSpace(summary.Status) != "" && isInactiveContainerState(summary.State)
+	fingerprint := inactiveContainerInspectFingerprint(summary)
+	if cacheable {
+		a.inactiveInspectMu.Lock()
+		entry, ok := a.inactiveInspects[summary.ID]
+		if ok && entry.withSize == requestSize && entry.fingerprint == fingerprint && time.Now().Before(entry.expiresAt) {
+			inspect := entry.inspect
+			a.inactiveInspectMu.Unlock()
+			return inspect, nil
+		}
+		a.inactiveInspectMu.Unlock()
+	}
+
+	inspect, _, err := a.docker.ContainerInspectWithRaw(ctx, summary.ID, requestSize)
+	if err != nil {
+		return containertypes.InspectResponse{}, err
+	}
+
+	a.inactiveInspectMu.Lock()
+	defer a.inactiveInspectMu.Unlock()
+	if !cacheable || inspect.State == nil || inspect.State.Running || inspect.State.Paused || inspect.State.Restarting {
+		delete(a.inactiveInspects, summary.ID)
+		return inspect, nil
+	}
+	if a.inactiveInspects == nil {
+		a.inactiveInspects = make(map[string]inactiveContainerInspectCacheEntry)
+	}
+	a.inactiveInspects[summary.ID] = inactiveContainerInspectCacheEntry{
+		inspect:     inspect,
+		fingerprint: fingerprint,
+		withSize:    requestSize,
+		expiresAt:   time.Now().Add(dockerInactiveInspectRefreshInterval),
+	}
+	return inspect, nil
+}
+
+func isInactiveContainerState(state containertypes.ContainerState) bool {
+	switch strings.ToLower(strings.TrimSpace(string(state))) {
+	case "created", "exited", "dead":
+		return true
+	default:
+		return false
+	}
+}
+
+func inactiveContainerInspectFingerprint(summary containertypes.Summary) string {
+	// Status includes the latest exit result/time, so an inactive container
+	// that ran and stopped entirely between two reports cannot reuse its old
+	// exit code, restart count, or lifecycle timestamps.
+	return strings.ToLower(strings.TrimSpace(string(summary.State))) + "\x00" + strings.TrimSpace(summary.Status)
+}
+
+func (a *Agent) pruneInactiveContainerInspectCache(active map[string]struct{}) {
+	a.inactiveInspectMu.Lock()
+	defer a.inactiveInspectMu.Unlock()
+	for containerID := range a.inactiveInspects {
+		if _, ok := active[containerID]; !ok {
+			delete(a.inactiveInspects, containerID)
+		}
+	}
+}
+
+func (a *Agent) clearDockerCollectionCaches() {
+	a.storageUsageMu.Lock()
+	a.storageUsageCache = dockerStorageUsageCache{}
+	a.storageUsageMu.Unlock()
+
+	a.inactiveInspectMu.Lock()
+	a.inactiveInspects = nil
+	a.inactiveInspectMu.Unlock()
 }
 
 var (
