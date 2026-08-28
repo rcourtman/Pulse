@@ -10,6 +10,7 @@ import {
   getSettingsNavItem,
   SETTINGS_NAV_GROUPS,
 } from '../settingsNavCatalog';
+import { getSettingsShellCopy } from '@/utils/settingsShellPresentation';
 
 describe('settings localization catalog', () => {
   afterEach(() => {
@@ -47,6 +48,12 @@ describe('settings localization catalog', () => {
     expect(getSettingsNavItem('system-ai-assistant', 'es')?.label).toBe('Assistant');
     expect(getSettingsNavItem('system-ai-discovery', 'es')).toBeUndefined();
     expect(getSettingsNavItem('support-diagnostics', 'es')?.label).toBe('Diagnóstico y salud');
+  });
+
+  it('localizes the mobile settings index close action', () => {
+    expect(getSettingsShellCopy('en').mobileCloseLabel).toBe('Close settings navigation');
+    expect(getSettingsShellCopy('de').mobileCloseLabel).toBe('Einstellungsnavigation schließen');
+    expect(getSettingsShellCopy('es').mobileCloseLabel).toBe('Cerrar navegación de ajustes');
   });
 
   it('localizes the value-first Remote Access header in every catalog locale', () => {

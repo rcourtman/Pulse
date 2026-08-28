@@ -33,18 +33,20 @@ export interface FeatureGateSectionProps {
  * stay identical across every surface that gates a feature.
  */
 export const FeatureGateSection: Component<FeatureGateSectionProps> = (props) => (
-  <div class="flex flex-col sm:flex-row items-center gap-4">
-    <div class="flex flex-1 items-start gap-3 text-center sm:text-left">
+  <div class="flex items-center gap-2.5 sm:gap-4">
+    <div class="flex min-w-0 flex-1 items-start gap-2 text-left sm:gap-3">
       <Show when={props.icon}>
         <span class="mt-0.5 flex-shrink-0 text-blue-500">{props.icon}</span>
       </Show>
-      <div class="flex-1">
-        <h4 class="text-base font-semibold text-base-content">{props.title}</h4>
-        <p class="mt-1 text-sm text-muted">{props.body}</p>
+      <div class="min-w-0 flex-1">
+        <h4 class="text-sm font-semibold text-base-content sm:text-base">{props.title}</h4>
+        <p class="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted sm:mt-1 sm:text-sm sm:leading-normal">
+          {props.body}
+        </p>
       </div>
     </div>
     <Show when={props.showUpgradePrompts}>
-      <div class="flex flex-col sm:flex-row items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <UpgradeButtonLink destination={props.upgradeDestination} tone={props.upgradeButtonTone}>
           {props.upgradeLabel ?? UPGRADE_ACTION_LABEL}
         </UpgradeButtonLink>

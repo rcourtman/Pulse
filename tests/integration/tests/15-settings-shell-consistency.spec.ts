@@ -109,8 +109,9 @@ test.describe('Settings shell consistency', () => {
       await page.waitForURL(/\/settings/, { timeout: 15_000 });
 
       if (isMobile) {
-        // Mobile keeps the settings navigation behind the Settings drawer
-        // trigger instead of a persistent sidebar.
+        // Mobile is a two-level workspace: the compact section header opens
+        // the full settings index, and selecting the active section returns
+        // to its content without leaving the route.
         await page
           .getByRole('main')
           .getByRole('button', { name: 'Settings', exact: true })
@@ -124,6 +125,24 @@ test.describe('Settings shell consistency', () => {
       const searchInput = page.getByPlaceholder('Search settings...');
       await expect(searchInput, `${panel.route} should keep the shared settings search`).toBeVisible();
 
+      if (isMobile) {
+        await expect(
+          navigation.getByRole('heading', { level: 1, name: 'Settings' }),
+          `${panel.route} should label the mobile settings index`,
+        ).toBeVisible();
+
+        const activeSection = navigation.locator('button[aria-current="page"]');
+        if ((await activeSection.count()) === 1) {
+          await activeSection.click();
+        } else {
+          // A valid direct route can be omitted from the index by capability
+          // or feature visibility. The index must still be dismissible.
+          await navigation
+            .getByRole('button', { name: 'Close settings navigation', exact: true })
+            .click();
+        }
+        await expect(navigation).toBeHidden();
+      }
 
       const pageHeading = page.getByRole('heading', { level: 1, name: panel.title });
       await expect(pageHeading, `${panel.route} should render the canonical page-shell heading`).toBeVisible();

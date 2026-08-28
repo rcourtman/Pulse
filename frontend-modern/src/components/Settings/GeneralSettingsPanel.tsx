@@ -114,18 +114,18 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
   };
 
   return (
-    <div class="space-y-6">
+    <div class="space-y-3 sm:space-y-6">
       {/* Appearance Card */}
       <SettingsPanel
         title={t('settings.general.appearance.title')}
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-center justify-between gap-2 p-2 sm:gap-4 sm:p-6">
+          <div class="flex min-w-0 items-center gap-3">
             {/* Animated theme icon */}
             <div
-              class={`shrink-0 relative p-2.5 rounded-md border border-border bg-surface transition-all duration-300`}
+              class={`relative hidden shrink-0 rounded-md border border-border bg-surface p-2.5 transition-all duration-300 sm:block`}
             >
               <div class="relative w-5 h-5">
                 <Sun
@@ -138,17 +138,17 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 />
               </div>
             </div>
-            <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">
+            <div class="min-w-0 text-sm text-muted">
+              <p class="text-[10px] font-medium leading-tight text-base-content sm:truncate sm:text-sm">
                 {t('settings.general.theme.title')}
               </p>
-              <p class="text-xs text-muted line-clamp-2">
+              <p class="hidden text-xs text-muted sm:line-clamp-2">
                 {t('settings.general.theme.description')}
               </p>
             </div>
           </div>
           <FilterButtonGroup
-            class="w-full sm:w-auto sm:shrink-0 max-w-full"
+            class="max-w-[72%] shrink-0 [&_button]:px-1.5 [&_svg]:hidden sm:w-auto sm:max-w-full sm:[&_button]:px-3 sm:[&_svg]:block"
             options={getThemePreferenceOptions()}
             value={props.themePreference()}
             onChange={props.setThemePreference}
@@ -157,22 +157,22 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Language Selector */}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+        <div class="flex items-center justify-between gap-2 p-2 sm:gap-4 sm:p-6">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="hidden shrink-0 rounded-md border border-border bg-surface p-2.5 sm:block">
               <Languages class="w-5 h-5 text-slate-500" strokeWidth={2} />
             </div>
-            <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">
+            <div class="min-w-0 text-sm text-muted">
+              <p class="truncate text-xs font-medium text-base-content sm:text-sm">
                 {t('settings.general.language.title')}
               </p>
-              <p class="text-xs text-muted line-clamp-2">
+              <p class="hidden text-xs text-muted sm:line-clamp-2">
                 {t('settings.general.language.description')}
               </p>
             </div>
           </div>
           <FilterButtonGroup
-            class="w-full sm:w-auto sm:shrink-0 max-w-full"
+            class="max-w-[72%] shrink-0 [&_button]:px-1.5 sm:w-auto sm:max-w-full sm:[&_button]:px-3"
             options={getLocalePreferenceOptions()}
             value={activeLocale()}
             onChange={setLocalePreference}
@@ -182,22 +182,22 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Temperature Unit Selector */}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+        <div class="flex items-center justify-between gap-2 p-2 sm:gap-4 sm:p-6">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="hidden shrink-0 rounded-md border border-border bg-surface p-2.5 sm:block">
               <Thermometer class="w-5 h-5" strokeWidth={2} />
             </div>
-            <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">
+            <div class="min-w-0 text-sm text-muted">
+              <p class="text-[10px] font-medium leading-tight text-base-content sm:truncate sm:text-sm">
                 {t('settings.general.temperature.title')}
               </p>
-              <p class="text-xs text-muted line-clamp-2">
+              <p class="hidden text-xs text-muted sm:line-clamp-2">
                 {t('settings.general.temperature.description')}
               </p>
             </div>
           </div>
           <FilterButtonGroup
-            class="w-full sm:w-auto sm:shrink-0 max-w-full"
+            class="max-w-[72%] shrink-0 [&_button]:px-1.5 sm:w-auto sm:max-w-full sm:[&_button]:px-3"
             options={TEMPERATURE_UNIT_OPTIONS}
             value={temperatureStore.unit()}
             onChange={(value) => temperatureStore.setUnit(value)}
@@ -206,16 +206,16 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Full-width Mode Toggle */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+        <div class="flex items-center justify-between gap-2 p-2 sm:gap-4 sm:p-6">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="hidden shrink-0 rounded-md border border-border bg-surface p-2.5 sm:block">
               <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
             </div>
-            <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">
+            <div class="min-w-0 text-sm text-muted">
+              <p class="truncate text-xs font-medium text-base-content sm:text-sm">
                 {t('settings.general.fullWidth.title')}
               </p>
-              <p class="text-xs text-muted line-clamp-2">
+              <p class="hidden text-xs text-muted sm:line-clamp-2">
                 {t('settings.general.fullWidth.description')}
               </p>
             </div>
@@ -227,7 +227,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="p-4 sm:p-6">
+        <div class="p-2 sm:p-6">
           <BrandingSettingsCard
             displayName={props.reportBrandDisplayName}
             setDisplayName={props.setReportBrandDisplayName}
@@ -248,7 +248,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="p-4 sm:p-6 space-y-4">
+        <div class="space-y-3 p-2.5 sm:space-y-4 sm:p-6">
           <div class="flex items-center justify-between gap-4">
             <div class="flex-1 min-w-0 space-y-1">
               <div class="flex items-center gap-2">
@@ -259,12 +259,19 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                   <EnvironmentLockBadge envVar={TELEMETRY_ENV_VAR} />
                 </Show>
               </div>
-              <p class="text-xs text-muted leading-relaxed">
+              <p class="hidden text-xs leading-relaxed text-muted sm:block">
                 {t('settings.general.telemetry.description')}{' '}
                 <ExternalTextLink href={PRIVACY_DOC_URL} variant="muted">
                   {t('settings.general.telemetry.fullDetails')}
                 </ExternalTextLink>
               </p>
+              <ExternalTextLink
+                href={PRIVACY_DOC_URL}
+                variant="muted"
+                class="text-[11px] sm:hidden"
+              >
+                {t('settings.general.telemetry.fullDetails')}
+              </ExternalTextLink>
             </div>
             <Toggle
               checked={props.telemetryEnabled()}
@@ -274,7 +281,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             />
           </div>
 
-          <div class="flex flex-wrap gap-3">
+          <div class="flex flex-wrap gap-2 sm:gap-3">
             <Button
               variant="secondary"
               size="settingsActionXs"
@@ -348,8 +355,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <div class="p-4 sm:p-6">
-          <div class="space-y-4">
+        <div class="p-2.5 sm:p-6">
+          <div class="space-y-3 sm:space-y-4">
             <div class="space-y-2">
               <p class="text-[10px] font-bold uppercase tracking-wider text-muted">
                 {getPvePollingCadenceSummary(props.pvePollingInterval())}
@@ -362,7 +369,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <div class="space-y-4 pt-2">
               {/* Preset buttons */}
               <FilterButtonGroup
-                class="sm:grid-cols-2 xl:grid-cols-5"
+                class="grid-cols-2 xl:grid-cols-5"
                 options={getPvePollingOptions()}
                 value={props.pvePollingSelection()}
                 onChange={handlePVEPollingSelection}

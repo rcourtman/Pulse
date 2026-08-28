@@ -312,6 +312,7 @@ import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?
 import filterBarOptionPresentationSource from '@/components/shared/FilterBar/filterOptionPresentation.tsx?raw';
 import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
 import viewOptionsDisclosureSource from '@/components/shared/FilterBar/ViewOptionsDisclosure.tsx?raw';
+import settingsPanelSource from '@/components/shared/SettingsPanel.tsx?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 import orgSwitcherSource from '@/components/OrgSwitcher.tsx?raw';
 import resourceDetailDrawerOverviewTabSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
@@ -8709,6 +8710,15 @@ describe('shared primitive guardrails', () => {
     expect(searchFieldSource).toContain('min-h-11');
     expect(filterToolbarSource).toContain('min-h-11');
     expect(inlineDetailTableRowSource).toContain('max-w-[calc(100vw-3.5rem)]');
+  });
+
+  it('keeps shared settings panels dense without forking their desktop framing', () => {
+    expect(settingsPanelSource).toContain('data-settings-panel');
+    expect(settingsPanelSource).toContain('px-2.5 py-2 sm:px-6 sm:py-4');
+    expect(settingsPanelSource).toContain("'p-2.5 sm:p-6'");
+    expect(settingsPanelSource).toContain("'space-y-3 sm:space-y-6'");
+    expect(featureGateSectionSource).toContain('flex items-center gap-2.5 sm:gap-4');
+    expect(featureGateSectionSource).toContain('line-clamp-2 text-[11px]');
   });
 
   it('keeps object drawers operator-first across platform implementations', () => {

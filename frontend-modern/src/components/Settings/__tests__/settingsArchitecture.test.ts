@@ -156,11 +156,13 @@ describe('settings architecture guardrails', () => {
     expect(settingsPageShellSource).toContain(
       '<PageHeader title={props.headerMeta().title} description={props.headerMeta().description} />',
     );
-    expect(settingsPageShellSource).toContain('max-h-[calc(100dvh-12rem)]');
+    expect(settingsPageShellSource).toContain('max-h-[calc(100dvh-8rem)]');
     expect(settingsPageShellSource).toContain('overflow-y-auto overscroll-contain');
     expect(settingsPageShellSource).toContain('lg:min-h-[600px]');
     expect(settingsPageShellSource).toContain('data-settings-content');
-    expect(settingsPageShellSource).toContain('class={`min-w-0 flex-1 overflow-hidden');
+    expect(settingsPageShellSource).toContain(
+      'class={`min-w-0 flex-1 overflow-visible lg:overflow-hidden',
+    );
     expect(settingsPageShellSource).not.toContain('animate-slideInRight');
     expect(settingsPageShellSource).not.toContain('min-h-[600px]">');
     expect(settingsDialogsSource).toContain('export const SettingsDialogs');

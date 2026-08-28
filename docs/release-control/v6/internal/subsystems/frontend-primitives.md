@@ -5600,6 +5600,17 @@ The settings shell is now also a governed frontend primitive boundary.
 customer-facing settings-shell framing copy for navigation, search, loading,
 and unsaved-change banners so `SettingsPageShell.tsx` stays a render shell
 instead of re-accumulating product wording inline.
+At phone widths that shell is a two-level preference workspace rather than a
+compressed desktop card: the searchable grouped Settings index owns level one,
+the sticky back/title bar owns level two, and content uses edge-to-edge shallow
+section framing with 44-pixel interactive targets. Preference labels and their
+current controls should remain in one scan row where they fit; verbose trust,
+environment, and explanatory copy must be subordinated through a short summary,
+bounded line clamp, or explicit detail/documentation action instead of consuming
+the default viewport. Desktop retains the persistent sidebar, page description,
+and roomier panel spacing. Future top-level Settings work must extend
+`SettingsPageShell.tsx` and `SettingsPanel.tsx` rather than recreating a second
+mobile shell or returning to nested desktop padding.
 
 The alerts page shell now follows that same page-shell rule for feature tabs:
 `frontend-modern/src/pages/Alerts.tsx` owns navigation and cross-surface

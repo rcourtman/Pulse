@@ -16,6 +16,7 @@ describe('settingsShellPresentation', () => {
       searchPlaceholder: 'Search settings...',
       searchShortcutHint: undefined,
       mobileBackLabel: 'Settings',
+      mobileCloseLabel: 'Close settings navigation',
       collapseSidebarLabel: 'Collapse settings navigation',
       expandSidebarLabel: 'Expand settings navigation',
     };
@@ -52,6 +53,7 @@ describe('settingsShellPresentation', () => {
       navigationAriaLabel: 'Einstellungsnavigation',
       navigationTitle: 'Einstellungen',
       searchPlaceholder: 'Einstellungen suchen...',
+      mobileCloseLabel: 'Einstellungsnavigation schließen',
     });
     expect(getSettingsUnsavedChangesBanner('de')).toMatchObject({
       title: 'Nicht gespeicherte Aenderungen',

@@ -242,6 +242,15 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Settings uses the same compact mobile rhythm as the platform overviews:
+     the route shell owns the inter-section spacing so panel implementations do
+     not each recreate a phone breakpoint. Desktop keeps the authored spacing. */
+  @media (max-width: 39.999rem) {
+    [data-settings-content-body] > .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 0.75rem;
+    }
+  }
+
   .table-scroll-shell {
     container-type: inline-size;
     contain: paint;

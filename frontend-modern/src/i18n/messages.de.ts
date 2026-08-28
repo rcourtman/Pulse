@@ -525,6 +525,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.shell.expandSidebarLabel': 'Einstellungsnavigation ausklappen',
   'settings.shell.loading': 'Einstellungen werden geladen...',
   'settings.shell.mobileBackLabel': 'Einstellungen',
+  'settings.shell.mobileCloseLabel': 'Einstellungsnavigation schließen',
   'settings.shell.navigationAriaLabel': 'Einstellungsnavigation',
   'settings.shell.navigationTitle': 'Einstellungen',
   'settings.shell.saveChangesLabel': 'Aenderungen speichern',

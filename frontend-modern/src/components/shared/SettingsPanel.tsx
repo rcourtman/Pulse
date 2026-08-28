@@ -28,32 +28,35 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   return (
     <Card
+      data-settings-panel
       padding="none"
       tone={local.tone ?? 'default'}
       class={`overflow-hidden border border-border ${local.class ?? ''}`.trim()}
       border={false}
       {...rest}
     >
-      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-border bg-surface-alt">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div class="flex min-w-0 flex-col gap-1 flex-1">
+      <div class="border-b border-border bg-surface-alt px-2.5 py-2 sm:px-6 sm:py-4">
+        <div class="flex items-start gap-2 sm:items-center sm:gap-3">
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5 sm:gap-1">
             <h2
               id={local.titleId}
-              class="text-sm sm:text-base tracking-tight font-semibold text-base-content dark:text-slate-100"
+              class="text-[11px] font-semibold uppercase tracking-wide text-base-content dark:text-slate-100 sm:text-base sm:normal-case sm:tracking-tight"
             >
               {local.title}
             </h2>
             <Show when={local.description}>
-              <p class="text-xs sm:text-sm text-muted dark:text-slate-200">{local.description}</p>
+              <p class="line-clamp-1 text-[11px] text-muted dark:text-slate-200 sm:text-sm">
+                {local.description}
+              </p>
             </Show>
           </div>
           <Show when={local.action}>
-            <div class="w-full sm:w-auto">{local.action}</div>
+            <div class="w-auto shrink-0">{local.action}</div>
           </Show>
         </div>
       </div>
       <div
-        class={`${local.noPadding ? '' : 'p-4 sm:p-6'} ${local.bodyClass ?? (local.noPadding ? '' : 'space-y-6')}`}
+        class={`${local.noPadding ? '' : 'p-2.5 sm:p-6'} ${local.bodyClass ?? (local.noPadding ? '' : 'space-y-3 sm:space-y-6')}`}
       >
         {local.children}
       </div>

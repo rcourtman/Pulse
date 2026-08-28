@@ -145,6 +145,9 @@ with missing, unknown, or unrelated scopes fail closed.
    copy. The scope-reference action may compose frontend-primitives'
    `ButtonLink` info variant for external docs-link chrome and new-tab safety;
    security-privacy owns the scope trust copy, not the anchor shell.
+   Phone layouts may tighten this intro into the shared compact settings frame,
+   but scope-reference access, token inventory semantics, and credential-safety
+   guidance must remain visible and unchanged.
 3. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `api-contracts`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
    Token-management table rows are security-facing content, but the visual
    table frame and scroll shell belong to `frontend-primitives`
@@ -182,6 +185,11 @@ with missing, unknown, or unrelated scopes fail closed.
    governed privacy guarantees and leave machine-facing tokens such as
    `PULSE_TELEMETRY`, API fields, config keys, commands, logs, and product or
    source identifiers untranslated.
+   At phone widths, the expanded privacy explanation may collapse to a
+   localized details link to the same canonical privacy document. The
+   telemetry state, environment override, and outbound-data control meaning
+   must remain directly visible; density must never imply weaker disclosure or
+   a different telemetry default.
 8. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 9. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    Security guide links compose `ExternalTextLink`; security-privacy owns the

@@ -7,6 +7,7 @@ export function getSettingsShellCopy(locale?: SupportedLocale) {
     searchPlaceholder: t('settings.shell.searchPlaceholder', {}, locale),
     searchShortcutHint: undefined,
     mobileBackLabel: t('settings.shell.mobileBackLabel', {}, locale),
+    mobileCloseLabel: t('settings.shell.mobileCloseLabel', {}, locale),
     collapseSidebarLabel: t('settings.shell.collapseSidebarLabel', {}, locale),
     expandSidebarLabel: t('settings.shell.expandSidebarLabel', {}, locale),
   } as const;

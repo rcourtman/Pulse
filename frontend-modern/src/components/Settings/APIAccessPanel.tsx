@@ -14,10 +14,12 @@ interface APIAccessPanelProps {
 
 export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
   return (
-    <div class="space-y-6">
+    <div class="space-y-3 sm:space-y-6">
       <SettingsPanel title="API Access" noPadding>
-        <div class="space-y-3 p-4 sm:p-6 pb-6">
-          <p class="text-sm text-muted">{API_TOKEN_ACCESS_PANEL_DESCRIPTION}</p>
+        <div class="space-y-2.5 p-2.5 sm:space-y-3 sm:p-6">
+          <p class="text-xs leading-relaxed text-muted sm:text-sm">
+            {API_TOKEN_ACCESS_PANEL_DESCRIPTION}
+          </p>
           <ButtonLink
             href={API_TOKEN_SCOPES_DOC_URL}
             target="_blank"

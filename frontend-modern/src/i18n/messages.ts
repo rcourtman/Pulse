@@ -509,6 +509,7 @@ export const EN_MESSAGES = {
   'settings.shell.expandSidebarLabel': 'Expand settings navigation',
   'settings.shell.loading': 'Loading settings...',
   'settings.shell.mobileBackLabel': 'Settings',
+  'settings.shell.mobileCloseLabel': 'Close settings navigation',
   'settings.shell.navigationAriaLabel': 'Settings navigation',
   'settings.shell.navigationTitle': 'Settings',
   'settings.shell.saveChangesLabel': 'Save Changes',

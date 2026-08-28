@@ -233,6 +233,14 @@ describe('App architecture', () => {
     expect(appStylesSource).not.toContain('white-space: normal;\n    -webkit-box-orient');
   });
 
+  it('keeps compact phone settings spacing scoped to the settings content shell', () => {
+    expect(appStylesSource).toContain('@media (max-width: 39.999rem)');
+    expect(appStylesSource).toContain(
+      '[data-settings-content-body] > .space-y-6 > :not([hidden]) ~ :not([hidden])',
+    );
+    expect(appStylesSource).toContain('margin-top: 0.75rem;');
+  });
+
   it('keeps manual workload widths inside the existing horizontal table shell', () => {
     expect(appStylesSource).toContain('.table-scroll-shell > table.workload-table--manual-widths');
     expect(appStylesSource).toContain('.workload-col-resizer');

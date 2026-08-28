@@ -519,6 +519,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.shell.expandSidebarLabel': 'Expandir navegación de ajustes',
   'settings.shell.loading': 'Cargando ajustes...',
   'settings.shell.mobileBackLabel': 'Ajustes',
+  'settings.shell.mobileCloseLabel': 'Cerrar navegación de ajustes',
   'settings.shell.navigationAriaLabel': 'Navegación de ajustes',
   'settings.shell.navigationTitle': 'Ajustes',
   'settings.shell.saveChangesLabel': 'Guardar cambios',
