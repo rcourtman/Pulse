@@ -9678,6 +9678,13 @@ carrying no typed cause exports nothing rather than free text, and a disabled,
 active, or mid-run Patrol exports an empty value even when a stale cause is
 still recorded.
 
+The Settings `TelemetryPingPreview` projection is part of that exact schema,
+not a partial display model. It includes node-test attempt/failure counts, the
+typed Patrol blocked cause, and the uncoded approved-action refusal count so
+the operator preview cannot silently omit fields that the sender will export.
+The frontend keeps those additions optional only where the Go wire field is
+optional; numeric counters remain required and default to zero in fixtures.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

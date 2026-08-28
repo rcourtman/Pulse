@@ -2192,7 +2192,10 @@ column. Incoming draft-field values are ignored and can never enter adoption
 reporting. `TestTelemetryPing_IgnoresRetiredBusinessEstateField` pins that
 boundary, while `scripts/check_telemetry_schema_parity.py` requires the public
 sender, frontend preview, and active private receiver struct to stay exact apart
-from the two named legacy compatibility inputs.
+from the named receiver-only inputs. `license_tier` and `api_tokens` remain
+receiver-derived compatibility inputs, while `deployment_proof` is a
+receiver-only marker for synthetic operator verification traffic. None is
+accepted as an outbound public heartbeat field.
 
 ### Adoption reporting aggregates high-cardinality history in one pass
 
@@ -2217,6 +2220,13 @@ history lists or sort those lists before producing the outcome cohorts and
 operations funnel. The production-scale guard exercises 120,000 rows across
 12,000 installs, verifies exactly one timestamp parse per row, and keeps the
 cohort plus funnel aggregation inside the bounded runtime budget.
+
+Reporting must remain usable while an operator upgrades an older receiver
+database. The report inspects `telemetry_pings` before building its explicit
+projection, substitutes zero only for known requested fields that are absent,
+and emits the absent-field list as a source-schema warning. It must not expand
+to unknown columns, hide a missing field without that warning, or reinterpret
+an unavailable counter as positive adoption evidence.
 
 ### Licensed-feature adoption fields must discriminate
 
