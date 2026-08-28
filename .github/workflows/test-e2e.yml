@@ -144,6 +144,12 @@ jobs:
         id: probation
         if: ${{ !cancelled() && steps.stable.conclusion != 'skipped' }}
         continue-on-error: true
+        # A broken probation surface can otherwise consume the entire 60m job
+        # budget through retries and cancel the job before continue-on-error
+        # can make the observational result non-gating. Playwright's own
+        # global timeout preserves its reports; the step timeout is a backstop
+        # for runner/process failures outside Playwright.
+        timeout-minutes: 12
         working-directory: tests/integration
         env:
           PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
@@ -155,7 +161,9 @@ jobs:
           PULSE_E2E_REPORT_DIR: playwright-report-probation
           PULSE_E2E_RESULTS_DIR: test-results-probation
           PULSE_MULTI_TENANT_ENABLED: "true"
-        run: npm test -- --shard=${{ matrix.shard }}/8 --pass-with-no-tests
+        run: >-
+          npm test -- --shard=${{ matrix.shard }}/8 --pass-with-no-tests
+          --max-failures=5 --global-timeout=600000
 
       - name: Report probation-tier outcome
         if: ${{ !cancelled() && steps.probation.outcome != 'skipped' }}
