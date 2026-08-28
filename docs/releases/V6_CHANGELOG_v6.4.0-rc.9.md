@@ -31,6 +31,7 @@ _The `v6.4.0-rc.8` qualification attempt stopped before a public tag or GitHub r
 - Proxmox backup health, inventory refresh, offline fixtures, and drawer detail presentation retain complete current context.
 - Informational active-alert cards use the blue severity palette, while unknown severity values fail safe to warning presentation.
 - Empty Unraid storage slots no longer make an otherwise healthy array report a degraded state.
+- Release qualification reserves enough backend-runner headroom to record a completed race suite instead of cancelling during post-step accounting.
 
 ## Release Metadata
 

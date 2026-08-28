@@ -756,7 +756,9 @@ artifact-selection behaviour.
    `TestServerInfoEndpointMethodNotAllowed`. The planner fails closed if those
    anchors disappear or reorder, and the manifest records them while
    continuing to prove exact ordered, complete, disjoint coverage. The backend
-   job owns a 20-minute ceiling, while each
+   job owns a 30-minute ceiling, preserving post-step and runner-cleanup
+   headroom above the 1,106-second slowest API shard observed during the first
+   `v6.4.0-rc.9` qualification attempt, while each
    invocation retains the canonical 30-minute Go timeout as protection against
    a stuck package.
    The warm-path release-control performance objective is 15 minutes or less
@@ -1850,6 +1852,18 @@ published-digest, and Unknown Publisher disclosure controls. Signing returns
 only after the release owner explicitly confirms that production credentials
 and certificate authorization are ready and a reviewed policy/code change
 restores it.
+
+The initial `v6.4.0-rc.9` qualification attempt used exact source SHA
+`dac72894a2ccaa6af2458ff88f38344cd5ce1abd`. Release run `33130438386`
+passed immutable candidate assembly, exact-version container and Helm smoke,
+asset validation, installer smoke, private Pro staging, and every backend API
+shard. The slowest shard completed in 1,106 seconds, but the 20-minute backend
+job ceiling cancelled the passing step during post-step accounting. That made
+the canonical readiness join skip and kept release `378204006` in draft
+quarantine; convergence run `33131402971` then failed closed without moving
+customer aliases or the paid-runtime broker. The governed backend ceiling is
+30 minutes before the same unpublished `v6.4.0-rc.9` draft is retried from the
+current release-line head.
 
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`

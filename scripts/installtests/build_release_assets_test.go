@@ -2961,6 +2961,9 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 	if !strings.Contains(backendJob, "timeout-minutes: 30") {
 		t.Fatal("release backend job must retain headroom above the measured PVE execution time")
 	}
+	if strings.Contains(backendJob, "timeout-minutes: 20") {
+		t.Fatal("release backend job must not restore the ceiling that cancelled a passing rc.9 suite")
+	}
 	if !strings.Contains(backendJob, "pulse-pve-tests") || !strings.Contains(backendJob, "run-release-backend-tests.sh") {
 		t.Fatal("release backend job must use the dedicated PVE partition runner")
 	}

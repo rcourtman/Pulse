@@ -359,7 +359,7 @@ jobs:
       - frontend_bundle
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-tests"]') }}
-    # The race-enabled API shards can consume more than 18 minutes on the PVE
+    # The rc.9 race-enabled API shards consumed more than 18 minutes on the PVE
     # runner before post-step accounting. Keep enough headroom for runner and
     # checkout cleanup so a passing suite is not recorded as cancelled.
     timeout-minutes: 30
