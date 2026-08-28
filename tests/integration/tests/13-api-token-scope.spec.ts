@@ -11,6 +11,7 @@ import {
 
 type APITokenRecord = {
   id: string;
+  name?: string;
   scopes?: string[];
   ownerUserId?: string;
 };
@@ -18,6 +19,10 @@ type APITokenRecord = {
 type APITokenCreateResponse = {
   token?: string;
   record?: APITokenRecord;
+};
+
+type APITokenListResponse = {
+  tokens?: APITokenRecord[];
 };
 
 const bearerHeaders = (token: string, extraHeaders: Record<string, string> = {}) => ({
@@ -89,6 +94,58 @@ test.describe.serial('API token scope and assignment gate', () => {
       headers: bearerHeaders(token),
     });
     expect(staleReadRes.status()).toBe(401);
+  });
+
+  test('keeps rename and revoke reflected across fresh inventory reads', async ({ page }) => {
+    await ensureSessionAuthenticated(page);
+
+    let tokenID = '';
+    const createRes = await apiRequest(page, '/api/security/tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      data: {
+        name: `e2e-refresh-original-${Date.now()}`,
+        scopes: ['settings:read'],
+      },
+    });
+    expect(createRes.ok(), await createRes.text()).toBeTruthy();
+
+    const createPayload = (await createRes.json()) as APITokenCreateResponse;
+    tokenID = createPayload.record?.id || '';
+    expect(tokenID).toBeTruthy();
+
+    try {
+      const renamedToken = `e2e-refresh-renamed-${Date.now()}`;
+      const renameRes = await apiRequest(page, `/api/security/tokens/${encodeURIComponent(tokenID)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        data: { name: renamedToken },
+      });
+      expect(renameRes.ok(), await renameRes.text()).toBeTruthy();
+      expect(((await renameRes.json()) as APITokenCreateResponse).record?.name).toBe(renamedToken);
+
+      const listAfterRenameRes = await apiRequest(page, '/api/security/tokens');
+      expect(listAfterRenameRes.ok(), await listAfterRenameRes.text()).toBeTruthy();
+      const listAfterRename = (await listAfterRenameRes.json()) as APITokenListResponse;
+      expect(listAfterRename.tokens?.find((candidate) => candidate.id === tokenID)?.name).toBe(renamedToken);
+
+      const deleteRes = await apiRequest(page, `/api/security/tokens/${encodeURIComponent(tokenID)}`, {
+        method: 'DELETE',
+      });
+      expect(deleteRes.status()).toBe(204);
+
+      const listAfterRevokeRes = await apiRequest(page, '/api/security/tokens');
+      expect(listAfterRevokeRes.ok(), await listAfterRevokeRes.text()).toBeTruthy();
+      const listAfterRevoke = (await listAfterRevokeRes.json()) as APITokenListResponse;
+      expect(listAfterRevoke.tokens?.some((candidate) => candidate.id === tokenID)).toBe(false);
+      tokenID = '';
+    } finally {
+      if (tokenID) {
+        await apiRequest(page, `/api/security/tokens/${encodeURIComponent(tokenID)}`, {
+          method: 'DELETE',
+        });
+      }
+    }
   });
 
   test('org-bound token stays inside the issuing org', async ({ page }) => {
