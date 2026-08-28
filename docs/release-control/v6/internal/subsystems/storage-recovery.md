@@ -5660,6 +5660,14 @@ describing credential state that the next restart would undo. The creation,
 exact-token deletion, and forced-write-failure proofs live in
 `internal/api/security_tokens_lifecycle_test.go`.
 
+Monitoring-owned agent removal uses that same commit boundary when it cleans
+up dedicated host, Docker, or Kubernetes credentials. Failed persistence
+restores the complete live inventory and primary-token projection while the
+resource tombstone remains authoritative. This is credential-state recovery,
+not storage recovery authority: it prevents restart from reactivating a token
+that the live process had already discarded. The shared proof is
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`.
+
 ### Dead-man persistence is availability evidence, not recovery authority
 
 The shared configuration persistence and alert API now store the encrypted

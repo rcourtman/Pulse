@@ -268,17 +268,11 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 
 	// Revoke the API token associated with this Docker host
 	if host.TokenID != "" {
-		tokenRemoved := m.config.RemoveAPIToken(host.TokenID)
-		if tokenRemoved != nil {
-			m.config.SortAPITokens()
-
-			if m.persistence != nil {
-				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("failed to persist API token revocation after Docker host removal")
-				} else {
-					log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed Docker host")
-				}
-			}
+		tokenRemoved, err := m.revokeAPIToken(host.TokenID)
+		if err != nil {
+			log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("API token revocation rolled back after Docker host removal")
+		} else if tokenRemoved != nil {
+			log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed Docker host")
 		}
 	}
 
@@ -470,17 +464,12 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 
 	var tokenRemoved *config.APITokenRecord
 	if tokenID != "" && !tokenStillUsed {
-		tokenRemoved = m.config.RemoveAPIToken(tokenID)
-		if tokenRemoved != nil {
-			m.config.SortAPITokens()
-
-			if m.persistence != nil {
-				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", tokenID).Msg("failed to persist API token revocation after host agent removal")
-				} else {
-					log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
-				}
-			}
+		var err error
+		tokenRemoved, err = m.revokeAPIToken(tokenID)
+		if err != nil {
+			log.Warn().Err(err).Str("tokenID", tokenID).Msg("API token revocation rolled back after host agent removal")
+		} else if tokenRemoved != nil {
+			log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
 		}
 	} else if tokenID != "" && tokenStillUsed {
 		log.Info().

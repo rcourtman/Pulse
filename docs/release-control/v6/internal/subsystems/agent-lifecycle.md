@@ -6702,6 +6702,15 @@ The lifecycle proofs cover failed creation, delete one exact token from a
 three-token inventory, and force failed persistence commits in
 `internal/api/security_tokens_lifecycle_test.go`.
 
+Agent-owned removal follows the same revocation boundary for host agents,
+Docker hosts, and Kubernetes clusters. The resource tombstone may still
+commit when credential persistence is unavailable, but token removal occurs
+under the shared configuration lock and rolls the complete inventory back if
+its write fails. The credential therefore remains consistently active rather
+than appearing revoked until restart silently restores it. Shared success and
+forced-write-failure proofs live in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`.
+
 ### External watchdog wiring does not widen agent lifecycle authority
 
 `internal/monitoring/monitor.go` now starts and stops the external dead-man

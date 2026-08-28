@@ -2386,6 +2386,15 @@ will survive restart. Creation rollback, exact multi-token removal, and
 revocation persistence-failure rollback are exercised in
 `internal/api/security_tokens_lifecycle_test.go`.
 
+Automatic credential cleanup after host-agent, Docker-host, or Kubernetes
+cluster removal obeys the same rule. One shared lock protects mutation and
+persistence; a failed reduced-inventory write restores all prior records and
+the primary-token projection. The resource remains removed, but Pulse keeps
+the orphaned credential visibly active so restart cannot silently reverse a
+claimed revocation.
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go` proves both
+commit and rollback outcomes.
+
 ### Deploy enrollment never exposes an uncommitted credential
 
 The deploy bootstrap secret is single-use only at the durable API-token commit

@@ -1071,17 +1071,11 @@ func (m *Monitor) RemoveKubernetesCluster(clusterID string) (models.KubernetesCl
 
 	// Revoke the API token associated with this Kubernetes cluster
 	if cluster.TokenID != "" {
-		tokenRemoved := m.config.RemoveAPIToken(cluster.TokenID)
-		if tokenRemoved != nil {
-			m.config.SortAPITokens()
-
-			if m.persistence != nil {
-				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", cluster.TokenID).Msg("failed to persist API token revocation after Kubernetes cluster removal")
-				} else {
-					log.Info().Str("tokenID", cluster.TokenID).Str("tokenName", cluster.TokenName).Msg("API token revoked for removed Kubernetes cluster")
-				}
-			}
+		tokenRemoved, err := m.revokeAPIToken(cluster.TokenID)
+		if err != nil {
+			log.Warn().Err(err).Str("tokenID", cluster.TokenID).Msg("API token revocation rolled back after Kubernetes cluster removal")
+		} else if tokenRemoved != nil {
+			log.Info().Str("tokenID", cluster.TokenID).Str("tokenName", cluster.TokenName).Msg("API token revoked for removed Kubernetes cluster")
 		}
 	}
 

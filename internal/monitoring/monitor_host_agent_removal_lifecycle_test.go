@@ -197,6 +197,82 @@ func TestHostAgentRemovalLifecycleRevokesDedicatedCredentialAndRetainsDenial(t *
 	}
 }
 
+func TestRevokeAPITokenRollsBackCompleteInventoryWhenPersistenceFails(t *testing.T) {
+	now := time.Now().UTC()
+	tokens := []config.APITokenRecord{
+		{ID: "newest", Name: "newest", Hash: "hash-newest", CreatedAt: now, Scopes: []string{config.ScopeWildcard}},
+		{ID: "target", Name: "target", Hash: "hash-target", CreatedAt: now.Add(-time.Minute), Scopes: []string{config.ScopeAgentReport}},
+		{ID: "oldest", Name: "oldest", Hash: "hash-oldest", CreatedAt: now.Add(-2 * time.Minute), Scopes: []string{config.ScopeMonitoringRead}},
+	}
+	stateDir := filepath.Join(t.TempDir(), "state")
+	persistence := config.NewConfigPersistence(stateDir)
+	if err := persistence.SaveAPITokens(tokens); err != nil {
+		t.Fatalf("save initial tokens: %v", err)
+	}
+	if err := os.RemoveAll(stateDir); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(stateDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+
+	monitor := &Monitor{
+		config:      &config.Config{APITokens: append([]config.APITokenRecord(nil), tokens...)},
+		persistence: persistence,
+	}
+	monitor.config.SortAPITokens()
+
+	removed, err := monitor.revokeAPIToken("target")
+	if err == nil {
+		t.Fatal("revokeAPIToken succeeded despite persistence failure")
+	}
+	if removed != nil {
+		t.Fatalf("failed revocation returned removed token: %#v", removed)
+	}
+	if len(monitor.config.APITokens) != len(tokens) {
+		t.Fatalf("token count = %d, want %d: %#v", len(monitor.config.APITokens), len(tokens), monitor.config.APITokens)
+	}
+	for index, want := range tokens {
+		if monitor.config.APITokens[index].ID != want.ID {
+			t.Fatalf("token[%d].ID = %q, want %q", index, monitor.config.APITokens[index].ID, want.ID)
+		}
+	}
+	if monitor.config.APIToken != "hash-newest" {
+		t.Fatalf("legacy primary token = %q, want %q", monitor.config.APIToken, "hash-newest")
+	}
+}
+
+func TestRevokeAPITokenCommitsExactReducedInventory(t *testing.T) {
+	stateDir := t.TempDir()
+	persistence := config.NewConfigPersistence(stateDir)
+	monitor := &Monitor{
+		config: &config.Config{APITokens: []config.APITokenRecord{
+			{ID: "keep", Name: "keep", Hash: "hash-keep", CreatedAt: time.Now().UTC(), Scopes: []string{config.ScopeWildcard}},
+			{ID: "remove", Name: "remove", Hash: "hash-remove", CreatedAt: time.Now().UTC().Add(-time.Minute), Scopes: []string{config.ScopeAgentReport}},
+		}},
+		persistence: persistence,
+	}
+	monitor.config.SortAPITokens()
+
+	removed, err := monitor.revokeAPIToken("remove")
+	if err != nil {
+		t.Fatalf("revokeAPIToken: %v", err)
+	}
+	if removed == nil || removed.ID != "remove" {
+		t.Fatalf("removed token = %#v", removed)
+	}
+	if len(monitor.config.APITokens) != 1 || monitor.config.APITokens[0].ID != "keep" {
+		t.Fatalf("live token inventory = %#v", monitor.config.APITokens)
+	}
+	persisted, err := persistence.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens: %v", err)
+	}
+	if len(persisted) != 1 || persisted[0].ID != "keep" {
+		t.Fatalf("persisted token inventory = %#v", persisted)
+	}
+}
+
 func TestHostAgentRemovalLifecycleRepublishesUnifiedReadState(t *testing.T) {
 	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
 	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))

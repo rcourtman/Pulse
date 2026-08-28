@@ -3371,6 +3371,19 @@ revoked endpoint receives no trailing heartbeat and a removed destination
 becomes disabled immediately. State corruption and write failure are visible
 system conditions rather than silent loss of future outage evidence.
 
+### Agent removal keeps credential truth continuous across restart
+
+Host-agent, Docker-host, and Kubernetes-cluster removal may clean up a
+dedicated API token only through the shared monitoring revocation boundary.
+That boundary holds the global configuration lock across mutation and
+persistence, snapshots the complete prior inventory, and restores both the
+records and legacy primary-token projection if the reduced inventory cannot
+commit. Resource tombstones remain authoritative when credential persistence
+fails, but the token stays consistently active instead of disappearing only
+from the live process and silently returning after restart. Success and
+forced-write-failure coverage lives in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`.
+
 ### Escalation callbacks preserve exact routing intent
 
 The monitoring callback resolves the configured escalation level and forwards

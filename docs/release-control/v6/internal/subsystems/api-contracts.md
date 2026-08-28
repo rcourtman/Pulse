@@ -10032,6 +10032,14 @@ and returns `500`; it must not report a revocation that will reverse on restart.
 `internal/api/security_tokens_lifecycle_test.go` pin both the multi-token
 identity boundary and the failed-commit response.
 
+The host-agent, Docker-host, and Kubernetes-cluster removal endpoints use the
+same durable token-revocation primitive. Resource removal can complete even
+when token persistence fails, but the live token inventory is then restored
+to its restart-time state and the failure is logged rather than reporting a
+credential revocation.
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go` forces that
+write failure and pins the exact successful reduced inventory.
+
 ### External watchdog configuration and status are separate secret boundaries
 
 `GET /api/alerts/deadman/config` requires monitoring-read scope and returns
