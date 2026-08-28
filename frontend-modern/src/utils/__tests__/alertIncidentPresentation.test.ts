@@ -13,6 +13,7 @@ import {
   getAlertHistoryStatusPresentation,
   getAlertIncidentLevelBadgeClass,
   getAlertIncidentTimelineDialogTitle,
+  getAlertHistoryInvestigationDialogTitle,
   getAlertResourceIncidentAcknowledgedByLabel,
   getAlertResourceIncidentCountLabel,
   getAlertResourceIncidentEmptyState,
@@ -120,6 +121,8 @@ describe('alertIncidentPresentation', () => {
     expect(ALERT_RESOURCE_INCIDENT_SAVING_NOTE_LABEL).toBe('Saving...');
     expect(getAlertResourceIncidentPanelTitle()).toBe('Resource incidents');
     expect(getAlertIncidentTimelineDialogTitle()).toBe('Incident timeline');
+    expect(getAlertHistoryInvestigationDialogTitle('resource')).toBe('Resource incidents');
+    expect(getAlertHistoryInvestigationDialogTitle('timeline')).toBe('Incident timeline');
     expect(getAlertResourceIncidentLoadingState()).toEqual({
       text: 'Loading incidents...',
     });

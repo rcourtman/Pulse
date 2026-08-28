@@ -1,30 +1,28 @@
 {
   "version": 1,
-  "base_sha": "79206d340a655d376225779d73e0dae426804804",
-  "verified_at": "2026-08-28T08:27:50Z",
+  "base_sha": "11cbc303d6f9d4abc5d33708d5ccafc82ccec306",
+  "verified_at": "2026-08-28T08:44:24Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/historyChartModel.ts",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/historyChartModel.ts": "d8742753465cb7d976ab118ef45e0a9e4065fa49789d5d5ec022a60a58df38f1",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "42f076d388da20b95392188e6bb5246f069547ef5aecf8c74c1140cdc2bd74da"
+    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx": "b88c28b9e00787aa17f8e714d0066fa201925ef3a492339c501e86bb74947594",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts": "4055b32de5e6401dcbb3cd79903d4a8afdb31f3e74645877732bcd416ec2ab45"
   },
-  "routes": ["/proxmox/storage"],
+  "routes": ["/alerts/history"],
   "viewports": [
-    { "width": 1440, "height": 900 },
-    { "width": 390, "height": 844 }
+    { "width": 1280, "height": 720 },
+    { "width": 390, "height": 664 }
   ],
   "states": [
-    "Proxmox Physical Disks filtered to nvme2 with Samsung 980 PRO 2TB expanded",
-    "disk History tab with live byte-rate, percent, and temperature charts loaded",
-    "read chart hovered with point marker and tooltip visible"
+    "desktop VMware alert-history row with its inline resource-incidents panel loaded",
+    "narrow VMware alert-history card with its resource-incidents drawer loaded"
   ],
   "interactions": [
-    "selected Physical Disks, searched for nvme2, expanded Samsung 980 PRO 2TB, and opened History",
-    "confirmed desktop byte-rate ticks show numeric MB/s scale values aligned with all three gridlines",
-    "confirmed 390px byte-rate labels and the final time tick remain fully visible without clipping while cards retain useful plot width",
-    "hovered the narrow Read chart and confirmed cursor, data point, and tooltip remain aligned after the measured axis inset"
+    "opened Resource investigation from the VMware alert-history row and card",
+    "confirmed the incident message, Resource Health label, and canonical Resource incidents heading were visible",
+    "confirmed the narrow drawer exposed exactly one matching accessible Resource incidents heading"
   ]
 }

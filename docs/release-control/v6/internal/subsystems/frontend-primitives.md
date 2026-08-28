@@ -26,6 +26,11 @@ Feature-owned warning cards, including notification delivery health, compose
 the shared `Button` variants for retry, dismiss, refresh, loading, and disabled
 states. Feature code owns the action copy and confirmation consequences, but
 must not recreate local button chrome for those controls.
+Feature panels embedded in a shared `Dialog` or drawer must not duplicate the
+overlay's accessible heading. A reusable panel may suppress its standalone
+title when the owning overlay supplies the canonical title, while preserving
+that title in inline and desktop contexts; the overlay remains responsible for
+one visible heading, its accessible label, dismissal, and focus return.
 The alert schedule's initial-delivery selector composes `SettingsPanel` and
 `FormSelect`, uses the shared alert-configuration presentation vocabulary, and
 exposes the same email, webhook, Apprise, and all-destination labels used by

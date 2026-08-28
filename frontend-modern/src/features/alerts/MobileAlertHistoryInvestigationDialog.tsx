@@ -4,10 +4,7 @@ import { Match, Switch } from 'solid-js';
 import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel';
 import { ActionIconButton } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
-import {
-  getAlertIncidentTimelineDialogTitle,
-  getAlertResourceIncidentPanelTitle,
-} from '@/utils/alertIncidentPresentation';
+import { getAlertHistoryInvestigationDialogTitle } from '@/utils/alertIncidentPresentation';
 
 import { AlertResourceIncidentsPanel } from './AlertResourceIncidentsPanel';
 import type { AlertHistoryState } from './useAlertHistoryState';
@@ -29,10 +26,7 @@ interface MobileAlertHistoryInvestigationDialogProps {
 export function MobileAlertHistoryInvestigationDialog(
   props: MobileAlertHistoryInvestigationDialogProps,
 ) {
-  const dialogTitle = () =>
-    props.investigation.kind === 'timeline'
-      ? getAlertIncidentTimelineDialogTitle()
-      : getAlertResourceIncidentPanelTitle();
+  const dialogTitle = () => getAlertHistoryInvestigationDialogTitle(props.investigation.kind);
   const dialogLabel = () => `${dialogTitle()} for ${props.investigation.alert.resourceName}`;
   const rowKey = () => props.investigation.rowKey;
   const alert = () => props.investigation.alert;

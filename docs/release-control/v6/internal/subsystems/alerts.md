@@ -17,6 +17,11 @@
 
 Own alert identity, alert specs, evaluation, persistence semantics, and
 operator-facing alert routing behavior for live runtime alerts.
+Alert-history investigations on narrow layouts render in a shared drawer
+outside the virtualized history row. The drawer title comes from the canonical
+alert-incident presentation vocabulary. A resource-incidents panel embedded in
+that drawer suppresses its standalone panel title so the investigation has one
+accessible heading, while the desktop inline panel retains its own title.
 Alert schedule delivery routing is one persisted, normalized contract.
 `schedule.initialNotify` accepts `all`, `email`, `webhook`, or `apprise`;
 missing, legacy, and unknown values preserve the backward-compatible `all`

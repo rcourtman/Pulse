@@ -126,6 +126,12 @@ export function getAlertIncidentTimelineDialogTitle() {
   return ALERT_INCIDENT_TIMELINE_DIALOG_TITLE;
 }
 
+export function getAlertHistoryInvestigationDialogTitle(kind: 'timeline' | 'resource') {
+  return kind === 'timeline'
+    ? getAlertIncidentTimelineDialogTitle()
+    : getAlertResourceIncidentPanelTitle();
+}
+
 export function getAlertResourceIncidentCountLabel(count: number) {
   return `${count} incident${count === 1 ? '' : 's'}`;
 }

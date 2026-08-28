@@ -20,6 +20,7 @@ import alertHistoryTableAlertRowSource from '@/features/alerts/AlertHistoryTable
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertResourceIncidentsPanelSource from '@/features/alerts/AlertResourceIncidentsPanel.tsx?raw';
+import mobileAlertHistoryInvestigationDialogSource from '@/features/alerts/MobileAlertHistoryInvestigationDialog.tsx?raw';
 import alertAssistantHandoffModelSource from '@/components/Alerts/alertAssistantHandoffModel.ts?raw';
 import incidentAssistantHandoffButtonSource from '@/components/Alerts/IncidentAssistantHandoffButton.tsx?raw';
 import incidentAssistantHandoffModelSource from '@/components/Alerts/incidentAssistantHandoffModel.ts?raw';
@@ -486,6 +487,12 @@ describe('tab path helpers', () => {
     );
     expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
+    expect(mobileAlertHistoryInvestigationDialogSource).toContain(
+      'getAlertHistoryInvestigationDialogTitle',
+    );
+    expect(mobileAlertHistoryInvestigationDialogSource).toContain('showTitle={false}');
+    expect(alertResourceIncidentsPanelSource).toContain('showTitle?: boolean');
+    expect(alertResourceIncidentsPanelSource).toContain('props.showTitle ?? true');
     // Broad cross-jump chips into Infrastructure or aggregate workspaces were
     // retired with the platform-first migration; the incidents panel no
     // longer renders surface-link chips.
