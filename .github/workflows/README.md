@@ -9,7 +9,7 @@
 Issue intake is split deliberately:
 
 - `issue-version-label-sync.yml` is the silent metadata path. It runs on `opened`, `edited`, and `reopened` issue events so version labels, `needs-version-info`, and `needs-retest-on-latest` stay correct when maintainers tidy issue metadata.
-- `issue-version-retest-comment.yml` is the public guidance path. It only runs on `opened` and `reopened`, and only posts reporter-facing retest guidance when the issue is an older-version bug report from a non-maintainer.
+- `issue-version-retest-comment.yml` is the scheduled public guidance path. It gives maintainers a grace window, then posts reporter-facing retest guidance only when an older-version bug report from a non-maintainer has no existing maintainer response. This prevents generic stable-version advice from contradicting a specific maintainer fix or prerelease boundary.
 - Both workflows load the shared helper at `.github/scripts/issue-version-triage.cjs` so parsing and classification logic lives in one place instead of drifting across duplicated inline scripts.
 
 ## Update Demo Server

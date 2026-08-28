@@ -127,14 +127,25 @@ async function ensureLabel(github, context, name, color, description) {
   }
 }
 
-async function hasRetestComment(github, context, issueNumber) {
-  const comments = await github.paginate(github.rest.issues.listComments, {
+async function getIssueComments(github, context, issueNumber) {
+  return github.paginate(github.rest.issues.listComments, {
     owner: context.repo.owner,
     repo: context.repo.repo,
     issue_number: issueNumber,
     per_page: 100,
   });
+}
+
+function hasRetestComment(comments) {
   return comments.some((comment) => (comment.body || "").includes(RETEST_COMMENT_MARKER));
+}
+
+function hasMaintainerResponse(comments) {
+  return comments.some((comment) =>
+    MAINTAINER_AUTHOR_ASSOCIATIONS.has(
+      String(comment.author_association || "").toUpperCase()
+    )
+  );
 }
 
 async function getLatestStableVersion(github, context, core) {
@@ -324,8 +335,15 @@ async function postRetestCommentForIssue({
     core.info("Issue is already on the latest stable core or newer. Skipping public retest guidance.");
     return false;
   }
-  if (await hasRetestComment(github, context, issue.number)) {
+  const comments = await getIssueComments(github, context, issue.number);
+  if (hasRetestComment(comments)) {
     core.info("Retest guidance comment already exists.");
+    return false;
+  }
+  if (hasMaintainerResponse(comments)) {
+    core.info(
+      "A maintainer has already responded. Skipping generic retest guidance."
+    );
     return false;
   }
 

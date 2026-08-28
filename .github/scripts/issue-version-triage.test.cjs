@@ -217,6 +217,40 @@ test("scheduled retest guidance posts once after the grace window", async () => 
   );
 });
 
+test("scheduled retest guidance defers to an existing maintainer response", async () => {
+  const issues = [
+    {
+      number: 1790,
+      title: "TrueNAS SMART evidence is hidden",
+      body: "## Feedback type\nBug / regression\n\n## Pulse version\n6.3.1\n",
+      labels: [{ name: "bug" }],
+      author_association: "NONE",
+      created_at: "2026-08-28T08:01:33Z",
+    },
+  ];
+  const existingComments = [
+    {
+      body: "Fixed on main; wait for a release containing the fix before retesting.",
+      author_association: "OWNER",
+    },
+  ];
+  const { github, calls } = createGithub({
+    latestVersion: "6.3.2",
+    existingComments,
+    issues,
+  });
+
+  const result = await triage.postEligibleRetestComments({
+    github,
+    context: createContext({ issue: null }),
+    core: createCore(),
+    nowMs: Date.parse("2026-08-28T08:10:00Z"),
+  });
+
+  assert.deepEqual(result, { eligibleCount: 1, postedCount: 0 });
+  assert.equal(calls.createComment.length, 0);
+});
+
 test("timeout close comments use the canonical triage footer", () => {
   const { buildTimeoutCloseCommentBody, CLOSE_COMMENT_MARKER, TRIAGE_FOOTER } =
     triage.internals;
