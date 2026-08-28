@@ -462,6 +462,11 @@ passphrase-encrypted configuration bundle, and represented to API clients by a
 redacted sentinel. URLs are bounded to HTTP(S), exclude userinfo, fragments,
 localhost, loopback, unspecified, and link-local targets, and must name the
 base success endpoint rather than `/start`, `/fail`, or `/log`.
+Literal addresses are also compared against every Pulse host interface, while
+the monitoring dialer repeats that comparison after DNS resolution. Failure to
+enumerate local interfaces fails closed. A private LAN watchdog remains valid
+only when its resolved address belongs to a different machine; pointing a
+hostname or normal LAN address back at Pulse is rejected as same-host.
 
 The monitoring-owned sender uses a dedicated transport that bypasses ambient
 HTTP proxies, revalidates DNS answers at dial time, never follows redirects,

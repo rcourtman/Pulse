@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -287,4 +288,27 @@ func TestDeadManDialRejectsLoopbackResolution(t *testing.T) {
 	if err == nil {
 		t.Fatal("loopback watchdog dial unexpectedly returned no error")
 	}
+}
+
+func TestDeadManDialRejectsPulseInterfaceAddress(t *testing.T) {
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatalf("enumerate local interfaces: %v", err)
+	}
+	for _, address := range addresses {
+		ip, _, err := net.ParseCIDR(address.String())
+		if err != nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			continue
+		}
+		connection, dialErr := deadManDialContext(context.Background(), "tcp", net.JoinHostPort(ip.String(), "80"))
+		if connection != nil {
+			_ = connection.Close()
+			t.Fatalf("same-host watchdog dial to %s unexpectedly succeeded", ip)
+		}
+		if dialErr == nil {
+			t.Fatalf("same-host watchdog dial to %s unexpectedly returned no error", ip)
+		}
+		return
+	}
+	t.Skip("no non-loopback interface address available")
 }

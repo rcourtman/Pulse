@@ -758,7 +758,11 @@ func deadManDialContext(ctx context.Context, network, address string) (net.Conn,
 	}
 	for _, candidate := range addresses {
 		ip := candidate.IP
-		if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		sameHost, localErr := notifications.IsDeadManSameHostIP(ip)
+		if localErr != nil {
+			return nil, fmt.Errorf("verify watchdog host separation")
+		}
+		if sameHost {
 			return nil, fmt.Errorf("watchdog host resolved to a same-host address")
 		}
 	}

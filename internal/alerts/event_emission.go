@@ -150,13 +150,26 @@ func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reas
 	if event.AlertID == "" {
 		return
 	}
+	if eventCarriesAlertSnapshot(eventType) {
+		if eventType == eventlog.TypeResolved {
+			m.removeActiveRecoveryAlert(alert, event.AlertID)
+		} else if alert != nil {
+			m.setActiveRecoveryAlert(alert, event.AlertID)
+		}
+	}
 
 	persisted := false
 	if store := m.eventLogStore(); store != nil {
 		if eventCarriesAlertSnapshot(eventType) {
 			if err := store.AppendDurable(event); err != nil {
 				m.eventHistoryAuthoritative.Store(false)
-				m.markActiveStateDegraded(err)
+				m.activeStateFailureEpoch.Add(1)
+				if mirrorErr := m.checkpointActiveRecoveryAfterDurableFailure(err); mirrorErr != nil {
+					log.Error().Err(mirrorErr).
+						Str("alertID", event.AlertID).
+						Str("eventType", eventType).
+						Msg("failed to checkpoint active alert recovery after lifecycle write failure")
+				}
 				log.Error().Err(err).
 					Str("alertID", event.AlertID).
 					Str("eventType", eventType).

@@ -34,14 +34,20 @@ import (
 type Manager struct {
 	mu               sync.RWMutex
 	saveMu           sync.Mutex
+	recoveryMirrorMu sync.Mutex
+	activeRecoveryMu sync.RWMutex
 	callbacks        callbackBus
 	alertsDir        string
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	activeAlertAlias map[string]string
-	historyManager   *HistoryManager
-	escalationStop   chan struct{}
-	alertRateLimit   map[string][]time.Time // Track alert times for rate limiting
+	// activeRecoveryState is a lock-independent projection of activeAlerts.
+	// Lifecycle emission can run while m.mu is held, so durable-store failure
+	// recovery must never reacquire m.mu to produce the JSON recovery mirror.
+	activeRecoveryState map[string]*Alert
+	historyManager      *HistoryManager
+	escalationStop      chan struct{}
+	alertRateLimit      map[string][]time.Time // Track alert times for rate limiting
 	// New fields for deduplication and suppression
 	recentAlerts    map[string]*Alert    // Track recent alerts for deduplication
 	suppressedUntil map[string]time.Time // Track suppression windows
@@ -117,6 +123,7 @@ type Manager struct {
 	// active-alerts.json remains an atomic recovery mirror, never a competing
 	// source while the SQLite projection is healthy.
 	activeStateAuthoritative atomic.Bool
+	activeStateFailureEpoch  atomic.Uint64
 	skipPersistedRestore     bool
 	activeRecoveryReadable   atomic.Bool
 	activeRecoveryWriteBlock atomic.Bool
@@ -197,6 +204,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		alertsDir:                       alertsDir,
 		activeAlerts:                    make(map[string]*Alert),
 		activeAlertAlias:                make(map[string]string),
+		activeRecoveryState:             make(map[string]*Alert),
 		historyManager:                  NewHistoryManager(alertsDir),
 		callbacks:                       newCallbackBus(),
 		escalationStop:                  make(chan struct{}),

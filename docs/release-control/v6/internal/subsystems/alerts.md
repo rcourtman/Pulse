@@ -1063,6 +1063,13 @@ read authority. A new or recreated database imports the readable mirror. A
 failed SQLite checkpoint writes a durable degraded marker, and the next startup
 uses the mirror once to repair SQLite before clearing that marker. Without a
 degraded marker, an initialized SQLite projection wins over a stale mirror.
+Lifecycle append failure first checkpoints a lock-independent active-state
+projection to the recovery mirror synchronously, then writes the degraded
+marker. The projection is updated at the canonical set/remove and lifecycle
+event seams so event emission remains safe even when its caller holds the
+manager lock. A checkpoint that overlaps a lifecycle failure must observe the
+failure epoch and retry before it can restore SQLite authority or clear the
+marker; stale periodic work can never overwrite the failure recovery snapshot.
 An unreadable or malformed mirror is write-blocked and preserved for manual
 recovery even when healthy SQLite can continue serving current state; startup
 must never silently replace a recoverable source with an empty snapshot.

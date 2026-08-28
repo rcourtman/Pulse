@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -53,6 +54,7 @@ func (m *Manager) SaveActiveAlerts() error {
 
 	const maxCheckpointAttempts = 8
 	for attempt := 0; attempt < maxCheckpointAttempts; attempt++ {
+		failureEpoch := m.activeStateFailureEpoch.Load()
 		store := m.eventLogStore()
 		revision := int64(0)
 		if store != nil {
@@ -94,6 +96,12 @@ func (m *Manager) SaveActiveAlerts() error {
 			// the manager's current state instead of overwriting that newer event.
 			continue
 		}
+		if m.activeStateFailureEpoch.Load() != failureEpoch {
+			// A lifecycle append failed while this checkpoint was in flight.
+			// Retry from current manager state so a stale snapshot cannot clear
+			// the degradation marker or replace the recovery projection.
+			continue
+		}
 		m.activeStateAuthoritative.Store(true)
 		m.clearActiveStateDegraded()
 		if err := errors.Join(mirrorErr, intentErr); err != nil {
@@ -123,6 +131,12 @@ func (m *Manager) snapshotActiveAlerts() []*Alert {
 }
 
 func (m *Manager) writeActiveAlertsRecoveryMirror(alerts []*Alert) error {
+	m.recoveryMirrorMu.Lock()
+	defer m.recoveryMirrorMu.Unlock()
+	return m.writeActiveAlertsRecoveryMirrorLocked(alerts)
+}
+
+func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert) error {
 	if m.activeRecoveryWriteBlock.Load() {
 		return fmt.Errorf("active alert recovery mirror is write-blocked because its startup source was unreadable")
 	}
@@ -191,6 +205,85 @@ func (m *Manager) writeActiveAlertsRecoveryMirror(alerts []*Alert) error {
 	if err := syncActiveAlertsDirectory(alertsDir); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (m *Manager) setActiveRecoveryAlert(alert *Alert, fallback string) {
+	if m == nil || alert == nil {
+		return
+	}
+	clone := alert.Clone()
+	backfillCanonicalIdentity(clone)
+	clone.ID = exportedAlertID(clone, clone.ID)
+	storageKey := activeAlertStorageKey(clone, fallback)
+	if storageKey == "" {
+		return
+	}
+
+	m.activeRecoveryMu.Lock()
+	if m.activeRecoveryState == nil {
+		m.activeRecoveryState = make(map[string]*Alert)
+	}
+	identity := effectiveAlertID(clone, storageKey)
+	for key, existing := range m.activeRecoveryState {
+		if key == storageKey || key == fallback ||
+			(existing != nil && effectiveAlertID(existing, key) == identity) {
+			delete(m.activeRecoveryState, key)
+		}
+	}
+	m.activeRecoveryState[storageKey] = clone
+	m.activeRecoveryMu.Unlock()
+}
+
+func (m *Manager) removeActiveRecoveryAlert(alert *Alert, fallback string) {
+	if m == nil {
+		return
+	}
+	identity := effectiveAlertID(alert, fallback)
+	canonicalState := ""
+	if alert != nil {
+		canonicalState = deriveCanonicalIdentity(alert).State
+	}
+
+	m.activeRecoveryMu.Lock()
+	for key, existing := range m.activeRecoveryState {
+		if key == fallback || key == identity || key == canonicalState ||
+			(existing != nil && effectiveAlertID(existing, key) == identity) {
+			delete(m.activeRecoveryState, key)
+		}
+	}
+	m.activeRecoveryMu.Unlock()
+}
+
+func (m *Manager) activeRecoverySnapshot() []*Alert {
+	m.activeRecoveryMu.RLock()
+	keys := make([]string, 0, len(m.activeRecoveryState))
+	for key := range m.activeRecoveryState {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	alerts := make([]*Alert, 0, len(keys))
+	for _, key := range keys {
+		if alert := m.activeRecoveryState[key]; alert != nil {
+			alerts = append(alerts, alert.Clone())
+		}
+	}
+	m.activeRecoveryMu.RUnlock()
+	return alerts
+}
+
+func (m *Manager) checkpointActiveRecoveryAfterDurableFailure(cause error) error {
+	if m == nil {
+		return nil
+	}
+	m.recoveryMirrorMu.Lock()
+	alerts := m.activeRecoverySnapshot()
+	err := m.writeActiveAlertsRecoveryMirrorLocked(alerts)
+	m.recoveryMirrorMu.Unlock()
+	if err != nil {
+		return err
+	}
+	m.markActiveStateDegraded(cause)
 	return nil
 }
 

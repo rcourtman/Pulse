@@ -178,6 +178,7 @@ func (m *Manager) migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, 
 	oldTrackingKey := canonicalTrackingKeyOrFallback(matchedAlert, matchedStorageKey)
 	delete(m.activeAlerts, matchedStorageKey)
 	m.unregisterActiveAlertAliasNoLock(matchedStorageKey, matchedAlert)
+	m.removeActiveRecoveryAlert(matchedAlert, matchedStorageKey)
 
 	matchedAlert.ID = storageKey
 	matchedAlert.ResourceID = resourceID

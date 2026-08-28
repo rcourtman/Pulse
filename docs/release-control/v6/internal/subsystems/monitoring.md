@@ -3367,6 +3367,11 @@ watchdog. A separate worker emits one success signal per minute, while a
 proves that the polling scheduler itself is still progressing. A stale marker
 causes the worker to send the provider's `/fail` signal and raise a critical
 system alert; the worker's own timer can never count as monitoring progress.
+Every DNS answer is compared with all Pulse host interface addresses before
+dialing, in addition to the loopback, unspecified, and link-local exclusions.
+Local-interface enumeration failure rejects the signal rather than weakening
+the different-host guarantee, so a hostname or LAN address that resolves back
+to Pulse cannot masquerade as an external watchdog.
 
 The runtime persists a privacy-minimized `alerts/deadman-state.json` record
 through fsync, atomic replacement, and directory sync. It stores endpoint

@@ -118,10 +118,12 @@ func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) {
 		if existing, ok := m.activeAlerts[staleKey]; ok {
 			delete(m.activeAlerts, staleKey)
 			m.unregisterActiveAlertAliasNoLock(staleKey, existing)
+			m.removeActiveRecoveryAlert(existing, staleKey)
 		}
 	}
 	m.activeAlerts[storageKey] = alert
 	m.registerActiveAlertAliasNoLock(storageKey, alert)
+	m.setActiveRecoveryAlert(alert, storageKey)
 	if m.historyManager != nil {
 		m.historyManager.UpdateAlertOperationalContractForAlert(alert)
 	}

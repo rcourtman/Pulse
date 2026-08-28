@@ -663,6 +663,7 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	}
 	if exists {
 		delete(m.activeAlerts, key)
+		m.removeActiveRecoveryAlert(currentAlert, key)
 	}
 
 	// Preserve acknowledgement state so quick alert rebuilds keep user intent.

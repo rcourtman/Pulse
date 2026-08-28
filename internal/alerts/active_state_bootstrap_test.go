@@ -103,6 +103,85 @@ func TestAtomicResolutionBeatsStaleRecoveryMirror(t *testing.T) {
 	}
 }
 
+func TestDurableLifecycleFailureSynchronouslyCheckpointsRecoveryMirror(t *testing.T) {
+	t.Run("fired while manager lock is held", func(t *testing.T) {
+		dataDir := t.TempDir()
+		m := NewManagerWithDataDir(dataDir)
+		m.EnableEventLog()
+		store := m.eventLogStore()
+		if store == nil {
+			t.Fatal("event log was not enabled")
+		}
+		store.Close()
+
+		alert := durableRestoreAlert(time.Now().UTC())
+		m.mu.Lock()
+		m.setActiveAlertNoLock(alert.ID, alert)
+		m.recordAlertEvent(eventlog.TypeFired, alert, alert.ID, "threshold", "Alert fired.", nil)
+		m.mu.Unlock()
+
+		data, err := os.ReadFile(filepath.Join(dataDir, "alerts", "active-alerts.json"))
+		if err != nil {
+			t.Fatalf("read recovery mirror: %v", err)
+		}
+		var recovered []*Alert
+		if err := json.Unmarshal(data, &recovered); err != nil {
+			t.Fatalf("decode recovery mirror: %v", err)
+		}
+		if len(recovered) != 1 || recovered[0].ID != alert.ID {
+			t.Fatalf("recovery mirror after failed fire = %+v", recovered)
+		}
+		if _, err := os.Stat(filepath.Join(dataDir, "alerts", activeStateDegradedMarker)); err != nil {
+			t.Fatalf("degraded marker missing after failed fire: %v", err)
+		}
+
+		m.SetEventLog(nil)
+		m.Stop()
+	})
+
+	t.Run("resolved before restart", func(t *testing.T) {
+		dataDir := t.TempDir()
+		alert := durableRestoreAlert(time.Now().Add(-2 * time.Hour).UTC())
+		writeActiveRecoveryFixture(t, dataDir, []*Alert{alert})
+
+		m := NewManagerWithDataDir(dataDir)
+		m.EnableEventLog()
+		if err := m.SaveActiveAlerts(); err != nil {
+			t.Fatalf("seed active state: %v", err)
+		}
+		store := m.eventLogStore()
+		if store == nil {
+			t.Fatal("event log was not enabled")
+		}
+		store.Close()
+
+		m.clearAlert(alert.ID)
+		data, err := os.ReadFile(filepath.Join(dataDir, "alerts", "active-alerts.json"))
+		if err != nil {
+			t.Fatalf("read recovery mirror: %v", err)
+		}
+		var recovered []*Alert
+		if err := json.Unmarshal(data, &recovered); err != nil {
+			t.Fatalf("decode recovery mirror: %v", err)
+		}
+		if len(recovered) != 0 {
+			t.Fatalf("failed resolution remained in recovery mirror: %+v", recovered)
+		}
+
+		m.SetEventLog(nil)
+		m.Stop()
+		restarted := NewManagerWithDataDir(dataDir)
+		t.Cleanup(restarted.Stop)
+		restarted.EnableEventLog()
+		restarted.mu.RLock()
+		_, exists := testLookupActiveAlert(t, restarted, alert.ID)
+		restarted.mu.RUnlock()
+		if exists {
+			t.Fatal("failed durable resolution was resurrected after restart")
+		}
+	})
+}
+
 func TestDegradedMarkerRepairsSQLiteFromRecoveryMirror(t *testing.T) {
 	dataDir := t.TempDir()
 	original := durableRestoreAlert(time.Now().Add(-2 * time.Hour).UTC())
