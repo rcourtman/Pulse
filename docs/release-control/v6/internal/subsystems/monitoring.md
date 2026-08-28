@@ -1574,11 +1574,17 @@ not reported as missing or disabled media. Unraid topology labels such as
 `disk6` and `parity2` are not assignment evidence by themselves: a
 `DISK_NP`/`DISK_NP_DSBL` member remains reportable as genuinely missing only
 when device, model/serial identity, filesystem, or size evidence shows that a
-disk was assigned. After filtering, structured member statuses override stale
+disk was assigned. Unraid's transport-only `ata-_` identity and the `ata -`
+model artifact emitted by older Pulse parsers are also placeholders, not disk
+identity. The distinct provider status `DISK_NP_MISSING` is authoritative
+assigned-member evidence and must never be removed merely because those
+identity fields are empty or placeholders. After filtering, structured member statuses override stale
 aggregate missing/disabled/invalid counters, and structured parity status
 overrides the aggregate protected-parity count. This normalization belongs at
 server ingest as well as agent collection so deployed older agents stop
-creating false health alerts without waiting for an agent upgrade. An Unraid
+creating false health alerts without waiting for an agent upgrade. The focused
+compatibility proof lives in `internal/monitoring/monitor_host_agents_test.go`
+and `internal/unraid/status_test.go`. An Unraid
 array with assigned data disks but no configured parity is an attention/warning
 posture with the machine-readable `unraid_no_parity` reason, while active parity
 check/sync state remains a separate `unraid_sync_active` reason. Realtime resource

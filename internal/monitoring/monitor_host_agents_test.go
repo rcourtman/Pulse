@@ -2411,8 +2411,8 @@ func TestApplyHostReportFiltersLegacyUnraidEmptySlots(t *testing.T) {
 			Disks: []agentshost.UnraidDisk{
 				{Name: "parity", Device: "/dev/sdb", Role: "parity", RawStatus: "DISK_OK", SizeBytes: 5860522532},
 				{Name: "disk1", Device: "/dev/sde", Role: "data", RawStatus: "DISK_OK", SizeBytes: 5860522532},
-				{Name: "disk6", Role: "data", RawStatus: "DISK_NP", Slot: 6},
-				{Name: "parity2", Role: "parity", RawStatus: "DISK_NP_DSBL", Slot: 29},
+				{Name: "disk6", Role: "data", RawStatus: "DISK_NP", Model: "ata -", Serial: "ata-_", Slot: 6},
+				{Name: "parity2", Role: "parity", RawStatus: "DISK_NP_DSBL", Model: "ata -", Serial: "ata-_", Slot: 29},
 			},
 		},
 		Timestamp: time.Now().UTC(),
@@ -2444,6 +2444,23 @@ func TestApplyHostReportFiltersLegacyUnraidEmptySlots(t *testing.T) {
 		if reason.Code == "unraid_missing_disks" || reason.Code == "unraid_disabled_disks" || reason.Code == "unraid_invalid_disks" {
 			t.Fatalf("named empty slots produced a failure assessment: %+v", assessment.Reasons)
 		}
+	}
+}
+
+func TestLegacyUnraidEmptySlotPreservesExplicitMissingMember(t *testing.T) {
+	t.Parallel()
+
+	disk := agentshost.UnraidDisk{
+		Name:      "disk6",
+		Role:      "data",
+		Status:    "missing",
+		RawStatus: "DISK_NP_MISSING",
+		Model:     "ata -",
+		Serial:    "ata-_",
+		Slot:      6,
+	}
+	if isLegacyUnraidEmptySlot(disk, disk.Status) {
+		t.Fatal("explicit assigned-but-missing member was classified as an empty slot")
 	}
 }
 

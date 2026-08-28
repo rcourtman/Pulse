@@ -153,17 +153,17 @@ rdevId.1=WDC_DATA
 diskNumber.5=5
 diskName.5=disk5
 diskSize.5=0
-diskId.5=
+diskId.5=ata-_
 rdevStatus.5=DISK_NP
 rdevName.5=
-rdevId.5=
+rdevId.5=ata-_
 diskNumber.29=29
 diskName.29=parity2
 diskSize.29=0
-diskId.29=
+diskId.29=ata-_
 rdevStatus.29=DISK_NP_DSBL
 rdevName.29=
-rdevId.29=
+rdevId.29=ata-_
 `
 
 	storage, err := parseUnraidStatusOutput(output)
@@ -175,6 +175,28 @@ rdevId.29=
 	}
 	if got := storage.Disks[0]; got.Name != "md1p1" || got.Role != "data" || got.Status != "online" || got.Serial != "WDC_DATA" {
 		t.Fatalf("unexpected assigned disk: %+v", got)
+	}
+}
+
+func TestParseUnraidStatusOutputPreservesExplicitMissingMember(t *testing.T) {
+	storage, err := parseUnraidStatusOutput(`
+mdState=STARTED
+mdNumMissing=1
+diskName.6=disk6
+diskSize.6=0
+diskId.6=ata-_
+rdevStatus.6=DISK_NP_MISSING
+rdevName.6=
+rdevId.6=ata-_
+`)
+	if err != nil {
+		t.Fatalf("parseUnraidStatusOutput() error = %v", err)
+	}
+	if len(storage.Disks) != 1 {
+		t.Fatalf("disk count = %d, want explicit missing member: %+v", len(storage.Disks), storage.Disks)
+	}
+	if got := storage.Disks[0]; got.Name != "disk6" || got.Status != "missing" {
+		t.Fatalf("unexpected missing member: %+v", got)
 	}
 }
 
@@ -260,7 +282,7 @@ fsUsed="166957852"
 idx="6"
 name="disk6"
 device=""
-id=""
+id="ata-_"
 size="0"
 status="DISK_NP"
 type="Data"
@@ -268,7 +290,7 @@ type="Data"
 idx="29"
 name="parity2"
 device=""
-id=""
+id="ata-_"
 size="0"
 status="DISK_NP_DSBL"
 type="Parity"

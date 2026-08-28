@@ -1220,13 +1220,21 @@ Unraid array collection belongs to that same runtime-normalized agent path:
 `internal/hostagent/unraid.go` must treat empty `DISK_NP`/`DISK_NP_DSBL`
 slots with no device, id, filesystem, or size as unassigned topology
 placeholders rather than failed disks, even when Unraid gives those slots
-topology labels such as `disk6` or `parity2`. Assigned disks may use
+topology labels such as `disk6` or `parity2`. Transport-only native identity
+sentinels such as `ata-_` are empty-slot metadata, not assignment evidence;
+the collector must discard them before native-inventory merge and report
+projection. Conversely, provider status `DISK_NP_MISSING` is explicit evidence
+of an assigned-but-absent member and must remain reportable even when its
+identity fields are unavailable. Assigned disks may use
 `diskId`/`rdevId` as the serial fallback when Unraid does not expose a separate
 serial field, so monitoring receives stable disk identity without inventing
 host-profile or platform state from optional storage probe success.
 Monitoring ingest must apply the same evidence filter to reports from deployed
 older agents, then make the remaining structured member and parity statuses
-authoritative over stale aggregate failure and protection counters.
+authoritative over stale aggregate failure and protection counters. Focused
+provider-boundary proof lives in `internal/hostagent/unraid_test.go`,
+`internal/unraid/status_test.go`, and
+`internal/monitoring/monitor_host_agents_test.go`.
 That Unraid runtime path must also prefer native appliance topology over
 generic block-device inference. The Unified Agent should best-effort merge
 `/var/local/emhttp/disks.ini` into the `mdcmd status` view and carry disk

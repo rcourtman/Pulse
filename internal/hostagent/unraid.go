@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	unraidstatus "github.com/rcourtman/pulse-go-rewrite/internal/unraid"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog/log"
 )
@@ -187,11 +188,12 @@ func parseUnraidStatusOutput(output string) (*agentshost.UnraidStorage, error) {
 	indexes := collectUnraidIndexes(fields)
 	disks := make([]agentshost.UnraidDisk, 0, len(indexes))
 	for _, idx := range indexes {
+		nativeIdentity := unraidstatus.NormalizeNativeIdentity(firstNonEmpty(fields[fmt.Sprintf("rdevSerial.%d", idx)], fields[fmt.Sprintf("diskSerial.%d", idx)], fields[fmt.Sprintf("rdevId.%d", idx)], fields[fmt.Sprintf("diskId.%d", idx)]))
 		disk := agentshost.UnraidDisk{
 			Name:       strings.TrimSpace(fields[fmt.Sprintf("diskName.%d", idx)]),
 			Device:     normalizeBlockDevice(firstNonEmpty(fields[fmt.Sprintf("rdevName.%d", idx)], fields[fmt.Sprintf("diskDevice.%d", idx)])),
 			RawStatus:  strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("rdevStatus.%d", idx)], fields[fmt.Sprintf("diskState.%d", idx)])),
-			Serial:     strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("rdevSerial.%d", idx)], fields[fmt.Sprintf("diskSerial.%d", idx)], fields[fmt.Sprintf("rdevId.%d", idx)], fields[fmt.Sprintf("diskId.%d", idx)])),
+			Serial:     nativeIdentity,
 			Filesystem: strings.TrimSpace(firstNonEmpty(fields[fmt.Sprintf("diskFsType.%d", idx)], fields[fmt.Sprintf("fsType.%d", idx)])),
 			SizeBytes:  parseUnraidKiBAsBytes(firstNonEmpty(fields[fmt.Sprintf("diskSize.%d", idx)], fields[fmt.Sprintf("rdevSize.%d", idx)])),
 			Slot:       idx,
@@ -272,9 +274,10 @@ func parseUnraidDisksINI(input string) []agentshost.UnraidDisk {
 			ErrorCount:  parseFirstInt64(fields["numErrors"]),
 			Slot:        idx,
 		}
-		disk.Model, disk.Serial = parseUnraidDiskIdentity(firstNonEmpty(fields["id"], fields["idSb"]))
+		nativeIdentity := unraidstatus.NormalizeNativeIdentity(firstNonEmpty(fields["id"], fields["idSb"]))
+		disk.Model, disk.Serial = parseUnraidDiskIdentity(nativeIdentity)
 		if disk.Serial == "" {
-			disk.Serial = strings.TrimSpace(firstNonEmpty(fields["id"], fields["idSb"]))
+			disk.Serial = nativeIdentity
 		}
 		if isUnraidEmptySlot(disk) {
 			continue
@@ -510,6 +513,9 @@ func defaultUnraidDiskName(role string, idx int) string {
 func isUnraidEmptySlot(disk agentshost.UnraidDisk) bool {
 	rawStatus := strings.ToUpper(strings.TrimSpace(disk.RawStatus))
 	status := strings.ToLower(strings.TrimSpace(disk.Status))
+	if unraidstatus.IsExplicitMissingMember(rawStatus) {
+		return false
+	}
 	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
 		return false
 	}
@@ -518,8 +524,7 @@ func isUnraidEmptySlot(disk agentshost.UnraidDisk) bool {
 	// membership evidence. Preserve DISK_NP members only when native identity,
 	// device, filesystem, or size evidence shows that a disk was assigned.
 	return strings.TrimSpace(disk.Device) == "" &&
-		strings.TrimSpace(disk.Model) == "" &&
-		strings.TrimSpace(disk.Serial) == "" &&
+		!unraidstatus.HasMeaningfulIdentity(disk.Model, disk.Serial) &&
 		strings.TrimSpace(disk.Filesystem) == "" &&
 		disk.SizeBytes == 0
 }

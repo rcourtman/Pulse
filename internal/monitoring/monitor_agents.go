@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	unraidstatus "github.com/rcourtman/pulse-go-rewrite/internal/unraid"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
@@ -3654,12 +3655,14 @@ func normalizeLegacyUnraidDiskStatus(rawStatus, device string) string {
 func isLegacyUnraidEmptySlot(disk agentshost.UnraidDisk, normalizedStatus string) bool {
 	rawStatus := strings.ToUpper(strings.TrimSpace(disk.RawStatus))
 	status := strings.ToLower(strings.TrimSpace(normalizedStatus))
+	if unraidstatus.IsExplicitMissingMember(rawStatus) {
+		return false
+	}
 	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
 		return false
 	}
 	return strings.TrimSpace(disk.Device) == "" &&
-		strings.TrimSpace(disk.Model) == "" &&
-		strings.TrimSpace(disk.Serial) == "" &&
+		!unraidstatus.HasMeaningfulIdentity(disk.Model, disk.Serial) &&
 		strings.TrimSpace(disk.Filesystem) == "" &&
 		disk.SizeBytes == 0
 }
