@@ -151,6 +151,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.4.0-rc.8", want: "6.3.2"},
 		{version: "6.4.0-rc.9", want: "6.3.2"},
 		{version: "6.4.0-rc.10", want: "6.3.2"},
+		{version: "6.4.0-rc.11", want: "6.3.2"},
 	}
 
 	for _, test := range tests {

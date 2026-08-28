@@ -1824,14 +1824,11 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The active prerelease `v6.4.0-rc.10` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.0-rc.11` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.0-rc.10` release version. The
-`v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version
-artifacts but did not activate publicly; `v6.4.0-rc.8` stopped before creating
-a public tag or GitHub release; and `v6.4.0-rc.7` remains an immutable failed
-candidate. Consequently `v6.4.0-rc.10` follows `v6.4.0-rc.6` as the next
-publicly activated candidate. This prerelease keeps
+Helm chart release metadata to the same `6.4.0-rc.11` release version. It
+follows `v6.4.0-rc.10` on the published `v6.4.0` candidate line. This
+prerelease keeps
 `rollback_version=v6.3.2`, publishes a versioned public GitHub prerelease
 plus versioned Docker and Helm artifacts, and does not move stable/latest
 install pointers or stable semver aliases. The candidate makes the append-only
@@ -1845,7 +1842,12 @@ makes host SMART policy configurable without duplicating Proxmox disk risk;
 keeps empty Unraid storage slots neutral instead of degrading array health;
 converges infrastructure detail presentation; and strengthens independently
 verified Docker actions plus atomic deployment enrollment and credential
-persistence. The changes since `v6.4.0-rc.6` add the canonical `alert_fired`
+persistence. The rc.11 corrective set extends that boundary to token creation,
+agent-install issuance, and agent-removal revocation; corrects version-specific
+Anthropic cost estimates; merges complete cross-source disk identities; retains
+uniquely resolved dismissed TrueNAS SMART risk; and stabilizes narrow alert
+investigation plus shared chart interaction. The changes since `v6.4.0-rc.6`
+add the canonical `alert_fired`
 mobile push type, but preserve the existing `view_alert` navigation action and
 all route, request/response, pairing, and authorization contracts. Published
 Pulse Mobile iOS build 12 and Android versionCode 9 already route
@@ -1883,7 +1885,7 @@ retaining the per-invocation 30-minute Go timeout, so setup, bundle transfer,
 planning, and cleanup overhead could no longer cancel a successfully completed
 suite. `v6.4.0-rc.10` fixed forward from that infrastructure failure.
 
-The active `v6.4.0-rc.10` qualification used exact source SHA
+The preceding `v6.4.0-rc.10` qualification used exact source SHA
 `827017e196ede706d27876d27637712b5b165dcc` and release run `33132798478`.
 Its first attempt staged the immutable tag, draft, 217 exact-version assets,
 container images, Helm chart, and private runtime, while every non-backend
@@ -2393,8 +2395,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.0-rc.10` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.10` until the next
+For the active prerelease `v6.4.0-rc.11` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.0-rc.11` until the next
 governed stable cut moves them forward. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
