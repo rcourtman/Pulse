@@ -18,7 +18,10 @@ TYPESCRIPT_FIELD_RE = re.compile(
     re.MULTILINE,
 )
 TYPESCRIPT_TO_GO = {"string": "string", "number": "int", "boolean": "bool"}
-LEGACY_RECEIVER_ONLY_FIELDS = {"license_tier", "api_tokens"}
+# Receiver-only operational fields are deliberately excluded from the public
+# heartbeat. deployment_proof marks synthetic operator verification traffic;
+# license_tier and api_tokens are receiver-derived compatibility inputs.
+RECEIVER_ONLY_FIELDS = {"license_tier", "api_tokens", "deployment_proof"}
 
 
 def struct_body(source: str, marker: str) -> str:
@@ -76,9 +79,9 @@ def parity_errors(
     if missing:
         errors.append("receiver missing public fields: " + ", ".join(missing))
 
-    unexpected = sorted(set(receiver) - set(public) - LEGACY_RECEIVER_ONLY_FIELDS)
+    unexpected = sorted(set(receiver) - set(public) - RECEIVER_ONLY_FIELDS)
     if unexpected:
-        errors.append("receiver-only fields outside the legacy allowlist: " + ", ".join(unexpected))
+        errors.append("receiver-only fields outside the allowlist: " + ", ".join(unexpected))
 
     mismatched = sorted(
         name

@@ -76,6 +76,8 @@ export interface TelemetryPingPreview {
   update_successes_30d: number;
   update_failures_30d: number;
   update_last_failure_category?: string;
+  node_test_attempts_30d: number;
+  node_test_failures_30d: number;
   alerts_fired_30d: number;
   alerts_acknowledged_30d: number;
   alerts_resolved_30d: number;
@@ -129,6 +131,7 @@ export interface TelemetryPingPreview {
   pulse_intelligence_patrol_new_findings_30d: number;
   pulse_intelligence_patrol_investigations_30d: number;
   pulse_intelligence_patrol_resolved_findings_30d: number;
+  pulse_intelligence_patrol_blocked_cause?: string;
   pulse_intelligence_external_agent_enabled: boolean;
   pulse_intelligence_external_agent_used_30d: boolean;
   pulse_intelligence_mcp_adapter_used_30d: boolean;
@@ -163,6 +166,7 @@ export interface TelemetryPingPreview {
   pulse_intelligence_approved_action_refusals_prerequisite_30d: number;
   pulse_intelligence_approved_action_refusals_contract_30d: number;
   pulse_intelligence_approved_action_refusals_other_30d: number;
+  pulse_intelligence_approved_action_refusals_uncoded_30d: number;
   pulse_intelligence_verified_finding_resolutions_30d: number;
   pulse_intelligence_approved_action_last_failure_reason_30d?: string;
 }

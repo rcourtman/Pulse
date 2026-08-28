@@ -71,6 +71,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                     {
                         "db_stats": db_stats,
                         "row_columns": list(report.REPORT_ROW_COLUMNS),
+                        "unavailable_columns": [],
                     }
                 ),
                 *(
@@ -140,6 +141,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "rows": expanded_rows,
                 "pulse_intelligence_analysis_facts": analysis_facts,
                 "target_release_analysis_facts": target_release_facts,
+                "unavailable_columns": [],
             },
         )
         remote_script = run_mock.call_args.kwargs["input"].decode("utf-8")
@@ -163,6 +165,8 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("GROUP BY install_id", remote_script)
         self.assertIn("MIN(CASE WHEN paid_license = 0", remote_script)
         self.assertIn("target_analysis_sql", remote_script)
+        self.assertIn("PRAGMA table_info(telemetry_pings)", remote_script)
+        self.assertIn("0 AS \" + name", remote_script)
         compile(remote_script, "<telemetry-remote-fetch>", "exec")
 
     def test_report_projection_and_signal_specs_cover_recent_schema_fields(self) -> None:

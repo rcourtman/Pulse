@@ -5124,7 +5124,7 @@ projection (intentionally offline, never auto-remediate, active
 maintenance window) and a `FindingOperationalMemory` projection
 (regression count, previous resolved fix summary, times raised)
 populated from fields the internal `Finding` already carries. The
-orchestrator (in pulse-pro) consumes these fields when reasoning
+orchestrator (in pulse-enterprise) consumes these fields when reasoning
 about the next move — it does not need a separate read to get
 the situated picture, and it can avoid proposing fixes the
 operator has locked the resource against.
@@ -5142,6 +5142,12 @@ save, a transition into Watch Only, an unavailable orchestrator, or an
 effective mode still clamped to `monitor`; activation must never create an
 unbounded model-work burst or bypass suppression, snooze, cooldown, attempt,
 terminal-outcome, operator-state, and concurrency gates.
+The enterprise orchestrator owns authoritative concurrency admission: it
+atomically checks and reserves a slot before beginning an investigation, while
+`CanStartInvestigation` remains advisory. Its running-count projection includes
+both in-memory reservations and persisted running sessions, so simultaneous
+activation, scheduled, alert-triggered, and manual callers cannot oversubscribe
+`MaxConcurrent` through a check-then-increment race.
 
 `ResourceOperatorStateProjection` carries `NeverAutoRemediate`
 and `Criticality` alongside `IntentionallyOffline` and `MaintenanceWindow` so the

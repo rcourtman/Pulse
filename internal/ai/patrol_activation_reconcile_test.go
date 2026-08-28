@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -66,5 +67,29 @@ func TestReconcileActionableFindingBacklogDoesNothingInWatchOnly(t *testing.T) {
 	case id := <-orchestrator.investigateCh:
 		t.Fatalf("Watch Only started investigation %q", id)
 	default:
+	}
+}
+
+func TestReconcileActionableFindingBacklogUsesRemainingAdmissionCapacity(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	service := NewService(persistence, nil)
+	service.cfg = &config.AIConfig{Enabled: true, PatrolAutonomyLevel: config.PatrolAutonomyApproval}
+	patrol := NewPatrolService(service, nil)
+	orchestrator := newIntegrationOrchestrator(true)
+	atomic.StoreInt32(&orchestrator.runningCount, maxPatrolActivationBacklogInvestigations-1)
+	patrol.SetInvestigationOrchestrator(orchestrator)
+
+	for _, id := range []string{"warning-1", "warning-2", "warning-3"} {
+		patrol.findings.Add(&Finding{
+			ID: id, Severity: FindingSeverityWarning, ResourceID: "vm-1", DetectedAt: time.Now().UTC(),
+		})
+	}
+
+	if got := patrol.ReconcileActionableFindingBacklog(); got != 1 {
+		t.Fatalf("ReconcileActionableFindingBacklog() = %d, want 1 remaining slot", got)
+	}
+	patrol.investigationWg.Wait()
+	if got := len(orchestrator.investigateCh); got != 1 {
+		t.Fatalf("started investigations = %d, want 1", got)
 	}
 }

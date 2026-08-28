@@ -1677,6 +1677,14 @@ if any(name not in column_names for name in target_activity_columns):
     raise ValueError("invalid target release activity projection")
 conn = sqlite3.connect(db_path)
 conn.row_factory = sqlite3.Row
+available_columns = {
+    row[1] for row in conn.execute("PRAGMA table_info(telemetry_pings)")
+}
+missing_columns = sorted(set(column_names) - available_columns)
+row_projections = [
+    name if name in available_columns else "0 AS " + name
+    for name in column_names
+]
 db_stats_sql = (
     "SELECT MAX(received_at) AS latest_ping, "
     "COUNT(*) AS total_rows, "
@@ -1685,7 +1693,7 @@ db_stats_sql = (
 )
 rows_sql = (
     "WITH ranked AS ("
-    "SELECT " + ", ".join(column_names) + ", "
+    "SELECT " + ", ".join(row_projections) + ", "
     "ROW_NUMBER() OVER ("
     "PARTITION BY install_id ORDER BY received_at DESC, rowid DESC"
     ") AS latest_rank "
@@ -1701,11 +1709,12 @@ analysis_selects = [
     "MIN(CASE WHEN paid_license = 1 THEN received_at END)",
 ]
 for name in intelligence_columns:
+    signal_expression = name if name in available_columns else "0"
     analysis_selects.append(
-        "MAX(CASE WHEN " + name + " <> 0 THEN 1 ELSE 0 END)"
+        "MAX(CASE WHEN " + signal_expression + " <> 0 THEN 1 ELSE 0 END)"
     )
     analysis_selects.append(
-        "MIN(CASE WHEN paid_license = 0 AND " + name +
+        "MIN(CASE WHEN paid_license = 0 AND " + signal_expression +
         " <> 0 THEN received_at END)"
     )
 analysis_sql = (
@@ -1743,11 +1752,15 @@ if target_version:
         "received_at",
         "rowid AS source_rowid",
         "TRIM(version) AS ordered_version",
-        *target_activity_columns,
+        *(
+            name if name in available_columns else "0 AS " + name
+            for name in target_activity_columns
+        ),
         "LAG(received_at) OVER install_order AS previous_received_at",
         "LAG(TRIM(version)) OVER install_order AS previous_version",
         *(
-            "LAG(COALESCE(" + name + ", 0)) OVER install_order AS previous_" + name
+            "LAG(COALESCE(" + (name if name in available_columns else "0") +
+            ", 0)) OVER install_order AS previous_" + name
             for name in target_activity_columns
         ),
     ]
@@ -1785,7 +1798,11 @@ def emit(value):
 
 try:
     db_stats = dict(conn.execute(db_stats_sql).fetchone())
-    emit({"db_stats": db_stats, "row_columns": column_names})
+    emit({
+        "db_stats": db_stats,
+        "row_columns": column_names,
+        "unavailable_columns": missing_columns,
+    })
     cutoff = f"-{since_days} days"
     for row in conn.execute(analysis_sql, (cutoff,)):
         first_paid_at = row[3]
@@ -1912,6 +1929,7 @@ finally:
         "rows": rows,
         "pulse_intelligence_analysis_facts": analysis_facts,
         "target_release_analysis_facts": target_release_facts,
+        "unavailable_columns": header.get("unavailable_columns", []),
     }
 
 
@@ -3122,6 +3140,13 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         f"total distinct installs: {summary['db_stats'].get('total_distinct_installs', 0)}",
     ]
 
+    unavailable_columns = summary.get("source_schema", {}).get("unavailable_columns", [])
+    if unavailable_columns:
+        lines.append(
+            "source schema warning: unavailable fields defaulted to zero: "
+            + ", ".join(unavailable_columns)
+        )
+
     exclusions = summary.get("mock_fleet_exclusions")
     if exclusions:
         if exclusions.get("enabled"):
@@ -3523,6 +3548,9 @@ def main(argv: list[str] | None = None) -> int:
             "target_release_analysis_facts"
         ),
     )
+    summary["source_schema"] = {
+        "unavailable_columns": source.get("unavailable_columns", []),
+    }
 
     if args.format == "json":
         print(json.dumps(summary, indent=2, sort_keys=True))

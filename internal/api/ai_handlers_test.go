@@ -288,6 +288,29 @@ func TestMutatePatrolAutopilotConfigReconcilesBacklogOnlyWhenLeavingMonitor(t *t
 		t.Fatalf("no-op paid-mode save retriggered finding %q", findingID)
 	case <-time.After(50 * time.Millisecond):
 	}
+
+	setMonitor := func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		changed := cfg.PatrolAutonomyLevel != config.PatrolAutonomyMonitor
+		cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+		return changed, nil
+	}
+	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), setMonitor))
+	select {
+	case findingID := <-orchestrator.investigateCh:
+		t.Fatalf("demotion to Watch Only retriggered finding %q", findingID)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	updateBudget := func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		cfg.PatrolInvestigationBudget++
+		return true, nil
+	}
+	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), updateBudget))
+	select {
+	case findingID := <-orchestrator.investigateCh:
+		t.Fatalf("Watch Only control update retriggered finding %q", findingID)
+	case <-time.After(50 * time.Millisecond):
+	}
 }
 
 func TestAISettingsProvidersProjectionCarriesSuggestedModelWireShape(t *testing.T) {
