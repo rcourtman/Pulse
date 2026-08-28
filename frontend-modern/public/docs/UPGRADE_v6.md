@@ -19,10 +19,12 @@ For the preceding stable v6 packet, see:
 
 For the preceding v6.4 release candidate packet, see:
 
-- `docs/releases/RELEASE_NOTES_v6.4.0-rc.10.md`
-- `docs/releases/V6_CHANGELOG_v6.4.0-rc.10.md`
+- `docs/releases/RELEASE_NOTES_v6.4.0-rc.11.md`
+- `docs/releases/V6_CHANGELOG_v6.4.0-rc.11.md`
 
 For earlier v6.4 release candidate packets, see:
+- `docs/releases/RELEASE_NOTES_v6.4.0-rc.10.md`
+- `docs/releases/V6_CHANGELOG_v6.4.0-rc.10.md`
 - `docs/releases/RELEASE_NOTES_v6.4.0-rc.9.md`
 - `docs/releases/V6_CHANGELOG_v6.4.0-rc.9.md`
 
