@@ -21,6 +21,37 @@ import (
 
 const maxResponseBodyBytes int64 = 8 << 20 // 8 MiB
 
+type apiErrorLogLevel uint8
+
+const (
+	apiErrorLogNone apiErrorLogLevel = iota
+	apiErrorLogDebug
+	apiErrorLogWarn
+)
+
+func isNodeScopedAPIPath(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, part := range parts {
+		if part == "nodes" && i+1 < len(parts) {
+			return true
+		}
+	}
+	return false
+}
+
+func classifyAPIErrorLog(status int, path string) (apiErrorLogLevel, string) {
+	if status == http.StatusForbidden && strings.Contains(path, "/apt/update") {
+		return apiErrorLogDebug, "Proxmox permission error (optional endpoint)"
+	}
+	if status == 595 && isNodeScopedAPIPath(path) {
+		return apiErrorLogDebug, "Proxmox node resource unavailable"
+	}
+	if status == 595 || status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return apiErrorLogWarn, "Proxmox authentication error"
+	}
+	return apiErrorLogNone, ""
+}
+
 func readResponseBodyLimited(r io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
 	if err != nil {
@@ -559,7 +590,7 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 		} else if resp.StatusCode == 595 {
 			// 595 can mean authentication failed OR trying to access an offline node in a cluster
 			// Check if this is a node-specific endpoint
-			if strings.Contains(req.URL.Path, "/nodes/") && strings.Count(req.URL.Path, "/") > 3 {
+			if isNodeScopedAPIPath(req.URL.Path) {
 				// This looks like a node-specific resource request
 				apiErr = fmt.Errorf("API error 595: Cannot access node resource - node may be offline or credentials may be invalid")
 			} else {
@@ -571,17 +602,14 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 			apiErr = fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 		}
 
-		// Log auth issues for debugging (595 is Proxmox "no ticket" error)
-		if resp.StatusCode == 595 || resp.StatusCode == 401 || resp.StatusCode == 403 {
-			// Some endpoints are optional and may return 403 if the token is intentionally
-			// scoped read-only. Avoid warning-level log spam for those.
+		// Classify the failed operation by its expected impact. A node-scoped 595
+		// is the normal pveproxy response when a cluster member is offline; the
+		// successful cluster request already proves the credential is usable.
+		if level, msg := classifyAPIErrorLog(resp.StatusCode, req.URL.Path); level != apiErrorLogNone {
 			event := log.Warn()
-			msg := "Proxmox authentication error"
-			if resp.StatusCode == 403 && strings.Contains(req.URL.Path, "/apt/update") {
+			if level == apiErrorLogDebug {
 				event = log.Debug()
-				msg = "Proxmox permission error (optional endpoint)"
 			}
-
 			event.
 				Str("url", req.URL.String()).
 				Int("status", resp.StatusCode).
@@ -591,7 +619,8 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 				Msg(msg)
 		}
 
-		// Wrap with appropriate error type
+		// Preserve the established returned-error classification for callers;
+		// this distinction changes only the emitted diagnostic severity.
 		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 595 {
 			// Import errors package at top of file
 			return nil, fmt.Errorf("authentication error: %w", apiErr)

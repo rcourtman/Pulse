@@ -3422,3 +3422,13 @@ levels continue to route by channel, including Apprise; this compatibility path
 must not silently skip a supported destination. Monitoring broadcasts the
 escalated alert after dispatch but does not reinterpret destination identity,
 retry semantics, acknowledgement, or the critical-repeat cadence.
+
+### Proxmox node unavailability is not credential evidence
+
+The Proxmox client treats HTTP 595 from a node-scoped API path as a resource
+availability failure. This is the pveproxy response when a cluster member is
+offline or unreachable, so it remains available at debug level without
+emitting the repeated authentication warning used for cluster-scoped 595,
+401, and 403 responses. Returned errors retain their compatibility shape;
+`pkg/proxmox/client_request_test.go` pins both sides of the log classification
+(#1794).

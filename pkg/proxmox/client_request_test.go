@@ -70,6 +70,63 @@ func TestClientRequest_595NodeSpecific(t *testing.T) {
 	}
 }
 
+func TestClassifyAPIErrorLog(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		status    int
+		path      string
+		wantLevel apiErrorLogLevel
+		wantMsg   string
+	}{
+		{
+			name:      "offline node resource is diagnostic",
+			status:    595,
+			path:      "/api2/json/nodes/proxmox1/lxc/217/config",
+			wantLevel: apiErrorLogDebug,
+			wantMsg:   "Proxmox node resource unavailable",
+		},
+		{
+			name:      "cluster scoped 595 remains authentication warning",
+			status:    595,
+			path:      "/api2/json/cluster/status",
+			wantLevel: apiErrorLogWarn,
+			wantMsg:   "Proxmox authentication error",
+		},
+		{
+			name:      "unauthorized remains authentication warning",
+			status:    http.StatusUnauthorized,
+			path:      "/api2/json/nodes",
+			wantLevel: apiErrorLogWarn,
+			wantMsg:   "Proxmox authentication error",
+		},
+		{
+			name:      "optional apt permission remains diagnostic",
+			status:    http.StatusForbidden,
+			path:      "/api2/json/nodes/proxmox1/apt/update",
+			wantLevel: apiErrorLogDebug,
+			wantMsg:   "Proxmox permission error (optional endpoint)",
+		},
+		{
+			name:      "server error is not logged here",
+			status:    http.StatusInternalServerError,
+			path:      "/api2/json/nodes",
+			wantLevel: apiErrorLogNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotLevel, gotMsg := classifyAPIErrorLog(tt.status, tt.path)
+			if gotLevel != tt.wantLevel || gotMsg != tt.wantMsg {
+				t.Fatalf("classifyAPIErrorLog(%d, %q) = (%v, %q), want (%v, %q)", tt.status, tt.path, gotLevel, gotMsg, tt.wantLevel, tt.wantMsg)
+			}
+		})
+	}
+}
+
 func TestClientRequest_595Auth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(595)
