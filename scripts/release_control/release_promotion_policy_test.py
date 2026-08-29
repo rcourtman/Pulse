@@ -2069,7 +2069,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("PULSE_DEMO_AUTH_PASS", demo_smoke)
         self.assertIn("getByRole('button', { name: 'Sign in to Pulse' }).click()", demo_smoke)
         self.assertIn("page.locator('main').waitFor({ state: 'visible', timeout: 60000 })", demo_smoke)
-        self.assertIn("getByText('Connected', { exact: true }).first().waitFor({ state: 'visible', timeout: 60000 })", demo_smoke)
+        self.assertIn("getByRole('status', { name: 'Backend and live data stream are connected.' })", demo_smoke)
+        self.assertNotIn("getByText('Connected', { exact: true })", demo_smoke)
         self.assertIn("Public demo remained on the authenticated loading shell", demo_smoke)
         self.assertNotIn("waitUntil: 'networkidle'", demo_smoke)
 

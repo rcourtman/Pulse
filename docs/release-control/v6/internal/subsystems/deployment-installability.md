@@ -2059,6 +2059,10 @@ sources that otherwise repopulate the cleared event log, before restart. A
 failed bounded restart restores that archive;
 success discards it. Customer configuration, active-alert recovery state,
 metrics history, the binary, unit, and Relay remain outside this reset.
+The authenticated browser proof waits on the visible connection-status role
+and its accessible backend/stream detail, not on the `Connected` label itself:
+the responsive header deliberately keeps that text visually collapsed until
+hover even when the live stream is healthy.
 
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`

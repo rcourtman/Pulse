@@ -52,7 +52,9 @@ async function main() {
       await page.getByRole('button', { name: 'Sign in to Pulse' }).click();
 
       await page.locator('main').waitFor({ state: 'visible', timeout: 60000 });
-      await page.getByText('Connected', { exact: true }).first().waitFor({ state: 'visible', timeout: 60000 });
+      await page
+        .getByRole('status', { name: 'Backend and live data stream are connected.' })
+        .waitFor({ state: 'visible', timeout: 60000 });
 
       const authenticatedBody = normalizeText(await page.locator('body').innerText());
       assert(authenticatedBody !== 'Loading...', 'Public demo remained on the authenticated loading shell');
