@@ -342,7 +342,11 @@ export function ProxmoxBackupServersTable(props: {
           }
           body={
             <>
-              <PlatformWindowedRows items={rows} estimatedRowHeight={32}>
+              <PlatformWindowedRows
+                items={rows}
+                keyExtractor={(row) => row.key}
+                estimatedRowHeight={32}
+              >
                 {(row) => {
                   const pct = () => (row.datastore ? usagePercent(row.datastore) : undefined);
                   const rowIdentity = { id: row.key };

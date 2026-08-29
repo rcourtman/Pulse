@@ -1,27 +1,33 @@
-import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { ProxmoxBackupServersTable } from '../ProxmoxBackupServersTable';
+
+const resourceDetailDrawerMount = vi.hoisted(() => vi.fn());
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: {
     resource: Resource;
     initialShowHostDetails?: boolean;
     onClose?: () => void;
-  }) => (
-    <div
-      data-testid="pbs-resource-detail"
-      data-resource-id={props.resource.id}
-      data-host-details-open={String(props.initialShowHostDetails === true)}
-      data-agent-id={props.resource.agent?.agentId}
-      data-metrics-resource-id={props.resource.metricsTarget?.resourceId}
-    >
-      <button type="button" onClick={props.onClose}>
-        Close details
-      </button>
-    </div>
-  ),
+  }) => {
+    resourceDetailDrawerMount(props.resource.id);
+    return (
+      <div
+        data-testid="pbs-resource-detail"
+        data-resource-id={props.resource.id}
+        data-host-details-open={String(props.initialShowHostDetails === true)}
+        data-agent-id={props.resource.agent?.agentId}
+        data-metrics-resource-id={props.resource.metricsTarget?.resourceId}
+      >
+        <button type="button" onClick={props.onClose}>
+          Close details
+        </button>
+      </div>
+    );
+  },
 }));
 
 const makePbsResource = (): Resource =>
@@ -56,6 +62,26 @@ const makePbsResource = (): Resource =>
   }) as Resource;
 
 describe('ProxmoxBackupServersTable details', () => {
+  beforeEach(() => {
+    resourceDetailDrawerMount.mockClear();
+  });
+
+  it('keeps the open detail drawer mounted across refreshed PBS snapshots', async () => {
+    const [servers, setServers] = createSignal<Resource[]>([makePbsResource()]);
+    render(() => <ProxmoxBackupServersTable servers={servers()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
+
+    const refreshed = makePbsResource();
+    refreshed.pbs = { ...refreshed.pbs!, version: '3.2.2' };
+    setServers([refreshed]);
+
+    await waitFor(() => expect(screen.getByText('3.2.2')).toBeInTheDocument());
+    expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('pbs-resource-detail')).toBeInTheDocument();
+  });
+
   it('opens the canonical resource drawer with merged host details expanded', () => {
     render(() => <ProxmoxBackupServersTable servers={[makePbsResource()]} />);
 
