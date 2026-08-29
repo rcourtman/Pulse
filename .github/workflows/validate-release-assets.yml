@@ -137,7 +137,7 @@ jobs:
             --validate-body-file "$RELEASE_BODY_FILE"
 
       - name: Quarantine malformed release body
-        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'failure'
+        if: steps.context.outputs.should_run == 'true' && steps.context.outputs.draft == 'true' && steps.body_integrity.outcome == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -365,7 +365,7 @@ jobs:
             }'
 
       - name: Update release body - Success
-        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && steps.validate.outputs.validation_passed == 'true'
+        if: steps.context.outputs.should_run == 'true' && steps.context.outputs.draft == 'true' && steps.body_integrity.outcome == 'success' && steps.validate.outputs.validation_passed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -472,36 +472,11 @@ jobs:
             }'
 
       - name: Delete all release assets on failure
-        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        if: steps.context.outputs.should_run == 'true' && steps.context.outputs.draft == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "❌ Validation failed - deleting all release assets"
-
-          INITIAL_STATE="${{ steps.context.outputs.draft }}"
-          if [ "$INITIAL_STATE" != "true" ]; then
-            echo "Release was published; reverting to draft before deleting assets..."
-            RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
-              -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-              -d "$(jq -n \
-                --arg tag "${{ steps.context.outputs.tag }}" \
-                --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
-                '{draft: true, tag_name: $tag, target_commitish: $target_commitish}')")
-            ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
-            ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
-            if [ "$ACTUAL_RELEASE_TAG" != "${{ steps.context.outputs.tag }}" ]; then
-              echo "::error::Validation failure draft update detached release tag ${ACTUAL_RELEASE_TAG}; expected ${{ steps.context.outputs.tag }}."
-              exit 1
-            fi
-            if [ "$ACTUAL_TARGET_COMMITISH" != "${{ steps.context.outputs.target_commitish }}" ]; then
-              echo "::error::Validation failure draft update changed target_commitish ${ACTUAL_TARGET_COMMITISH}; expected ${{ steps.context.outputs.target_commitish }}."
-              exit 1
-            fi
-            echo "Release marked as draft to block downloads during remediation."
-            sleep 5
-          fi
 
           ASSET_IDS=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets" \
@@ -522,23 +497,16 @@ jobs:
           fi
 
       - name: Update release body - Failure
-        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        if: steps.context.outputs.should_run == 'true' && steps.context.outputs.draft == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           echo "❌ Validation failed - updating release description"
 
-          INITIAL_STATE="${{ steps.context.outputs.draft }}"
-          if [ "$INITIAL_STATE" = "true" ]; then
-              HEADER_LINE="## ❌ Release Asset Validation: FAILED"
-              STATUS_LINE="**Status**: ⛔ Draft release blocked until validation passes"
-              INTRO_LINE="Release assets failed validation checks. All assets have been deleted to prevent publishing an invalid release."
-          else
-              HEADER_LINE="## ❌ Release Asset Validation (Post-Publish): FAILED"
-              STATUS_LINE="**Status**: ⛔ Release reverted to draft while assets are rebuilt"
-              INTRO_LINE="A published release edit introduced invalid assets. The release has been reverted to draft and assets were deleted to stop further downloads."
-          fi
+          HEADER_LINE="## ❌ Release Asset Validation: FAILED"
+          STATUS_LINE="**Status**: ⛔ Draft release blocked until validation passes"
+          INTRO_LINE="Release assets failed validation checks. All assets have been deleted to prevent publishing an invalid release."
 
           CURRENT_RELEASE_JSON=$(mktemp)
           CURRENT_BODY_FILE=$(mktemp)
@@ -638,11 +606,11 @@ jobs:
       - name: Fail the workflow
         if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
-          echo "::error::Release asset validation failed. All assets have been deleted."
+          echo "::error::Release asset validation failed. Draft assets are deleted; published releases remain immutable for explicit remediation."
           exit 1
 
       - name: Fail malformed release body
         if: always() && steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'failure'
         run: |
-          echo "::error::Release body integrity failed. The release was quarantined as a draft without deleting its assets."
+          echo "::error::Release body integrity failed. Draft releases are quarantined; published releases remain immutable for explicit remediation."
           exit 1

@@ -1484,7 +1484,27 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("--expected-body-file \"$CLEAN_BODY_FILE\"", validation_workflow)
         self.assertIn("Quarantine malformed release body", validation_workflow)
         self.assertIn(
-            "The release was quarantined as a draft without deleting its assets.",
+            "Draft releases are quarantined; published releases remain immutable for explicit remediation.",
+            validation_workflow,
+        )
+        for step in (
+            "Quarantine malformed release body",
+            "Update release body - Success",
+            "Delete all release assets on failure",
+            "Update release body - Failure",
+        ):
+            self.assertIn(
+                f"- name: {step}\n"
+                "        if: steps.context.outputs.should_run == 'true' && "
+                "steps.context.outputs.draft == 'true'",
+                validation_workflow,
+            )
+        self.assertNotIn(
+            "Release was published; reverting to draft before deleting assets",
+            validation_workflow,
+        )
+        self.assertNotIn(
+            "A published release edit introduced invalid assets",
             validation_workflow,
         )
         self.assertIn(

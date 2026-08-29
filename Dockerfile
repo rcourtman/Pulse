@@ -401,6 +401,8 @@ COPY --from=release_payload /amd64/bin/pulse-agent-* /opt/pulse/bin/
 COPY --from=release_payload /amd64/bin/pulse /opt/pulse/bin/pulse-linux-amd64
 COPY --from=release_payload /arm64/bin/pulse /opt/pulse/bin/pulse-linux-arm64
 RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1 && \
+    find /opt/pulse/bin -maxdepth 1 -type f -name 'pulse-agent-*' \
+        ! -name '*.sig' ! -name '*.sshsig' -exec chmod 755 {} + && \
     if [ "$TARGETARCH" = "arm64" ]; then \
         ln -sf pulse-linux-arm64 /opt/pulse/bin/pulse; \
         ln -sf /opt/pulse/bin/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent; \

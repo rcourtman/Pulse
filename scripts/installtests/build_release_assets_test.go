@@ -202,6 +202,7 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 		"FROM prebuilt-runtime-base AS runtime_prebuilt",
 		"COPY --from=release_payload /amd64/bin/pulse /opt/pulse/bin/pulse-linux-amd64",
 		"COPY --from=release_payload /arm64/bin/pulse /opt/pulse/bin/pulse-linux-arm64",
+		"! -name '*.sig' ! -name '*.sshsig' -exec chmod 755 {} +",
 		"FROM alpine:3.20@sha256:",
 		"AS agent_runtime_prebuilt",
 	} {
@@ -716,11 +717,25 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`--validate-body-file "$RELEASE_BODY_FILE"`,
 		`--expected-body-file "$CLEAN_BODY_FILE"`,
 		`Quarantine malformed release body`,
-		`The release was quarantined as a draft without deleting its assets.`,
+		`Draft releases are quarantined; published releases remain immutable for explicit remediation.`,
+		`name: Update release body - Success
+        if: steps.context.outputs.should_run == 'true' && steps.context.outputs.draft == 'true'`,
+		`name: Delete all release assets on failure
+        if: steps.context.outputs.should_run == 'true' && steps.context.outputs.draft == 'true'`,
+		`name: Update release body - Failure
+        if: steps.context.outputs.should_run == 'true' && steps.context.outputs.draft == 'true'`,
 	}
 	for _, needle := range validationRequired {
 		if !strings.Contains(validationWorkflow, needle) {
 			t.Fatalf("validate-release-assets.yml missing required status publication contract: %s", needle)
+		}
+	}
+	for _, forbidden := range []string{
+		"Release was published; reverting to draft before deleting assets",
+		"A published release edit introduced invalid assets",
+	} {
+		if strings.Contains(validationWorkflow, forbidden) {
+			t.Fatalf("published release validation must not retain mutation path %q", forbidden)
 		}
 	}
 }

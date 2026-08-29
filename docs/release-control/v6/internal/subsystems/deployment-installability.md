@@ -110,6 +110,15 @@ container. The promotion resolver, manual release trigger, rendered release
 body, current release packet, and shipped upgrade guide must agree on those
 deployment-specific paths.
 
+Images assembled from immutable release payload contexts must restore
+executable mode on copied Unified Agent binaries before creating the
+architecture-resolved `/usr/local/bin/pulse-agent` link. Detached signature
+sidecars remain non-executable. Release validation may delete invalid assets
+and rewrite validation annotations only while a release is still a draft. A
+post-publication edit is observation, not authority to mutate or destroy an
+immutable release; failed revalidation records a failing status and requires an
+explicit corrective release path.
+
 The accelerated exact-SHA release worker must preserve release-gate fidelity
 under its own resource envelope. Bounded frontend static checks and integration
 image preparation may overlap, but the full frontend test suite and the
