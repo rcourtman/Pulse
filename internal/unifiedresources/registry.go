@@ -3682,8 +3682,18 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	if len(incoming.LoadAverage) > 0 {
 		merged.LoadAverage = append([]float64(nil), incoming.LoadAverage...)
 	}
-	if incoming.PendingUpdates != 0 {
+	// Update evidence is one authoritative observation. A checked zero must
+	// clear an older positive count, while unavailable/not-checked evidence
+	// must not silently inherit an older "checked" status.
+	if incoming.PendingUpdatesStatus != "" {
 		merged.PendingUpdates = incoming.PendingUpdates
+		merged.PendingUpdatesCheckedAt = cloneTimePtr(incoming.PendingUpdatesCheckedAt)
+		merged.PendingUpdatesStatus = incoming.PendingUpdatesStatus
+		merged.PendingUpdatesReason = incoming.PendingUpdatesReason
+	} else if incoming.PendingUpdates != 0 {
+		// Compatibility for sources produced before explicit evidence states.
+		merged.PendingUpdates = incoming.PendingUpdates
+		merged.PendingUpdatesCheckedAt = cloneTimePtr(incoming.PendingUpdatesCheckedAt)
 	}
 	if len(incoming.Disks) > 0 {
 		merged.Disks = append([]DiskInfo(nil), incoming.Disks...)

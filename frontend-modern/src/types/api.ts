@@ -172,6 +172,9 @@ export interface Node {
   temperatureMonitoringEnabled?: boolean | null; // Per-node temperature monitoring override
   pendingUpdates?: number; // Number of pending apt updates
   pendingUpdatesCheckedAt?: string; // When updates were last checked
+  pendingUpdatesStatus?: 'checked' | 'stale' | 'unavailable' | 'not_checked';
+  pendingUpdatesReason?:
+    'permission_denied' | 'source_unavailable' | 'check_failed' | 'node_offline';
   lastSeen: string;
   connectionHealth: string;
   isClusterMember?: boolean; // True if part of a cluster

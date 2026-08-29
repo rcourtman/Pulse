@@ -1339,6 +1339,8 @@ export const nodeFromResource = (resource: Resource): Node | null => {
       null,
     pendingUpdates: asNumber(proxmox?.pendingUpdates),
     pendingUpdatesCheckedAt: asString(proxmox?.pendingUpdatesCheckedAt),
+    pendingUpdatesStatus: asString(proxmox?.pendingUpdatesStatus) as Node['pendingUpdatesStatus'],
+    pendingUpdatesReason: asString(proxmox?.pendingUpdatesReason) as Node['pendingUpdatesReason'],
     lastSeen: toISOTime(undefined, resource.lastSeen),
     connectionHealth: asString(proxmox?.connectionHealth) || resource.status || 'unknown',
     isClusterMember: asBoolean(proxmox?.isClusterMember),

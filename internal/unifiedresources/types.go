@@ -388,6 +388,8 @@ type ProxmoxData struct {
 	PendingUpdates               int                 `json:"pendingUpdates,omitempty"`
 	TemperatureMonitoringEnabled *bool               `json:"temperatureMonitoringEnabled,omitempty"`
 	PendingUpdatesCheckedAt      *time.Time          `json:"pendingUpdatesCheckedAt,omitempty"`
+	PendingUpdatesStatus         string              `json:"pendingUpdatesStatus,omitempty"`
+	PendingUpdatesReason         string              `json:"pendingUpdatesReason,omitempty"`
 	Disks                        []DiskInfo          `json:"disks,omitempty"`
 	SwapUsed                     int64               `json:"swapUsed,omitempty"`
 	SwapTotal                    int64               `json:"swapTotal,omitempty"`

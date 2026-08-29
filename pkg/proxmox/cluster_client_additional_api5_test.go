@@ -54,10 +54,10 @@ func TestClusterClient_GetNodePendingUpdates_PermissionDenied(t *testing.T) {
 	cc := NewClusterClient("test", cfg, []string{server.URL}, nil)
 
 	updates, err := cc.GetNodePendingUpdates(context.Background(), "node1")
-	if err != nil {
-		t.Fatalf("expected permission error to be swallowed, got %v", err)
+	if err == nil {
+		t.Fatal("expected permission error to remain distinguishable from a confirmed empty update list")
 	}
 	if len(updates) != 0 {
-		t.Fatalf("expected empty updates on permission error, got %+v", updates)
+		t.Fatalf("expected no updates on permission error, got %+v", updates)
 	}
 }

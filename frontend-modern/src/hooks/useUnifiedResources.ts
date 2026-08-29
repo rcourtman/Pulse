@@ -269,6 +269,9 @@ type APIResource = {
     pendingUpdates?: number;
     temperatureMonitoringEnabled?: boolean;
     pendingUpdatesCheckedAt?: string;
+    pendingUpdatesStatus?: 'checked' | 'stale' | 'unavailable' | 'not_checked';
+    pendingUpdatesReason?:
+      'permission_denied' | 'source_unavailable' | 'check_failed' | 'node_offline';
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;

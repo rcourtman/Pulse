@@ -73,6 +73,8 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		PendingUpdates:               node.PendingUpdates,
 		TemperatureMonitoringEnabled: cloneBoolPtr(node.TemperatureMonitoringEnabled),
 		PendingUpdatesCheckedAt:      zeroTimeToPtr(node.PendingUpdatesCheckedAt),
+		PendingUpdatesStatus:         node.PendingUpdatesStatus,
+		PendingUpdatesReason:         node.PendingUpdatesReason,
 		MemoryCache:                  node.Memory.Cache,
 		Memory:                       &node.Memory,
 		SwapUsed:                     node.Memory.SwapUsed,

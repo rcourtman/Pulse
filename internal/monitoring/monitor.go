@@ -3452,6 +3452,8 @@ func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
 		ClusterName:                  view.ClusterName(),
 		PendingUpdates:               view.PendingUpdates(),
 		PendingUpdatesCheckedAt:      view.PendingUpdatesCheckedAt(),
+		PendingUpdatesStatus:         view.PendingUpdatesStatus(),
+		PendingUpdatesReason:         view.PendingUpdatesReason(),
 		LinkedAgentID:                view.LinkedAgentID(),
 	}
 }

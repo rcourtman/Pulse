@@ -752,6 +752,9 @@ export interface ResourceProxmoxMeta {
   loadAverage?: number[];
   temperatureMonitoringEnabled?: boolean;
   pendingUpdatesCheckedAt?: string;
+  pendingUpdatesStatus?: 'checked' | 'stale' | 'unavailable' | 'not_checked';
+  pendingUpdatesReason?:
+    'permission_denied' | 'source_unavailable' | 'check_failed' | 'node_offline';
   lock?: string;
   pveVersion?: string;
   kernelVersion?: string;

@@ -52,6 +52,7 @@ import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workload
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
 import type { Disk, Node as LegacyNode } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { hasCurrentProxmoxUpdateEvidence } from '@/utils/proxmoxUpdateEvidence';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   getResourceClusterLabel,
@@ -451,6 +452,10 @@ export const ProxmoxNodesTable: Component<{
                   return shimmed ? getNodeExternalUrl(shimmed) : '';
                 };
                 const pendingUpdates = () => drawerNode()?.pendingUpdates ?? 0;
+                const pendingUpdatesAreCurrent = () => {
+                  const currentNode = drawerNode();
+                  return currentNode ? hasCurrentProxmoxUpdateEvidence(currentNode) : false;
+                };
                 const alertStyles = createMemo(() =>
                   getAlertStyles(node.id, activeAlerts, alertsEnabled(), node.name),
                 );
@@ -514,7 +519,11 @@ export const ProxmoxNodesTable: Component<{
                                 {availabilityLabel()}
                               </span>
                             </Show>
-                            <Show when={isOnline() && pendingUpdates() > 0}>
+                            <Show
+                              when={
+                                isOnline() && pendingUpdatesAreCurrent() && pendingUpdates() > 0
+                              }
+                            >
                               <span
                                 class={`hidden rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap sm:inline-flex ${
                                   pendingUpdates() >= 10

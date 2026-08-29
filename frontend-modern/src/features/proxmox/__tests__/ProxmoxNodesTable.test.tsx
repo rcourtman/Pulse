@@ -383,8 +383,6 @@ describe('ProxmoxNodesTable', () => {
         nodes={[
           makeNodeResource({
             uptime: 187_200, // 2d 4h
-            // pendingUpdates rides the raw proxmox payload; the narrow
-            // ResourceProxmoxMeta type does not declare it yet.
             proxmox: {
               clusterName: 'homelab',
               nodeName: 'pve-node-1',
@@ -415,6 +413,30 @@ describe('ProxmoxNodesTable', () => {
     expect(offlineRow?.className).toContain('opacity-60');
     expect(offlineRow).not.toHaveAttribute('data-workload-alert-accent');
     expect(offlineRow).toHaveTextContent('Offline');
+  });
+
+  it('does not present a retained stale update count as current in the node row', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            proxmox: {
+              clusterName: 'homelab',
+              nodeName: 'pve-node-1',
+              pendingUpdates: 12,
+              pendingUpdatesStatus: 'stale',
+              pendingUpdatesReason: 'source_unavailable',
+            },
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.queryByTitle('12 pending apt updates')).not.toBeInTheDocument();
   });
 
   it('labels stale provider telemetry and does not present old metrics as current', () => {

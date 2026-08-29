@@ -344,6 +344,12 @@ func (m *Monitor) applyNodePendingUpdates(ctx context.Context, instanceName stri
 	if modelNode == nil {
 		return
 	}
+	modelNode.PendingUpdatesStatus = "not_checked"
+	modelNode.PendingUpdatesReason = ""
+	if effectiveStatus != "online" {
+		modelNode.PendingUpdatesReason = "node_offline"
+		return
+	}
 
 	// Poll pending apt updates (less frequently - every 30 minutes)
 	// Only for online nodes to avoid wasting API calls on offline nodes
@@ -366,20 +372,26 @@ func (m *Monitor) applyNodePendingUpdates(ctx context.Context, instanceName stri
 			// Time to check for updates
 			pendingPkgs, err := client.GetNodePendingUpdates(ctx, node.Node)
 			if err != nil {
-				// API call failed - preserve cached value if available, don't spam logs
+				// Preserve the last successful value, but mark it stale rather than
+				// presenting a permission or reachability failure as a confirmed zero.
 				log.Debug().
 					Err(err).
 					Str("node", node.Node).
 					Str("instance", instanceName).
 					Msg("Could not check pending apt updates (may require Sys.Audit permission)")
+				modelNode.PendingUpdatesReason = pendingUpdatesFailureReason(err)
 				if hasCached {
 					modelNode.PendingUpdates = cached.count
 					modelNode.PendingUpdatesCheckedAt = cached.checkedAt
+					modelNode.PendingUpdatesStatus = "stale"
+				} else {
+					modelNode.PendingUpdatesStatus = "unavailable"
 				}
 			} else {
 				updateCount := len(pendingPkgs)
 				modelNode.PendingUpdates = updateCount
 				modelNode.PendingUpdatesCheckedAt = now
+				modelNode.PendingUpdatesStatus = "checked"
 
 				// Cache the result
 				m.mu.Lock()
@@ -399,7 +411,25 @@ func (m *Monitor) applyNodePendingUpdates(ctx context.Context, instanceName stri
 			// Use cached value
 			modelNode.PendingUpdates = cached.count
 			modelNode.PendingUpdatesCheckedAt = cached.checkedAt
+			modelNode.PendingUpdatesStatus = "checked"
 		}
+	}
+}
+
+func pendingUpdatesFailureReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "403"), strings.Contains(message, "permission"):
+		return "permission_denied"
+	case strings.Contains(message, "no healthy nodes"), strings.Contains(message, "595"),
+		strings.Contains(message, "offline"), strings.Contains(message, "unavailable"),
+		strings.Contains(message, "connection"), strings.Contains(message, "timeout"):
+		return "source_unavailable"
+	default:
+		return "check_failed"
 	}
 }
 

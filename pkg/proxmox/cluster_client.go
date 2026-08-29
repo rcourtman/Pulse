@@ -1594,17 +1594,6 @@ func (cc *ClusterClient) GetNodePendingUpdates(ctx context.Context, node string)
 		return nil
 	})
 
-	// Don't return error for transient connectivity issues or permission issues
-	if err != nil && (strings.Contains(err.Error(), "no healthy nodes available") ||
-		strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "permission")) {
-		log.Debug().
-			Str("cluster", cc.name).
-			Str("node", node).
-			Err(err).
-			Msg("Could not get pending updates - returning empty list")
-		return []AptPackage{}, nil
-	}
-
 	return result, err
 }
 

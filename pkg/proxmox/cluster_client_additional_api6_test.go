@@ -23,8 +23,8 @@ func TestClusterClient_GetNodePendingUpdates_NoHealthyNodes(t *testing.T) {
 	}
 
 	updates, err := cc.GetNodePendingUpdates(context.Background(), "node1")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	if err == nil {
+		t.Fatal("expected unavailable cluster error to remain distinguishable from a confirmed empty update list")
 	}
 	if len(updates) != 0 {
 		t.Fatalf("expected empty updates on no healthy nodes, got %+v", updates)

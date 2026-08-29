@@ -852,6 +852,20 @@ func (v NodeView) PendingUpdatesCheckedAt() time.Time {
 	return *v.r.Proxmox.PendingUpdatesCheckedAt
 }
 
+func (v NodeView) PendingUpdatesStatus() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.PendingUpdatesStatus)
+}
+
+func (v NodeView) PendingUpdatesReason() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.PendingUpdatesReason)
+}
+
 func (v NodeView) CPUPercent() float64 {
 	if v.r == nil {
 		return 0

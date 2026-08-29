@@ -11,6 +11,7 @@ import type { Alert, Disk, Node, Temperature } from '@/types/api';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { formatBytes, normalizeDiskArray } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
+import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 import { buildDrawerDiskListItems } from './DrawerDiskListCard';
@@ -146,6 +147,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     return clock && clock !== '0' ? clock : '';
   };
   const loadAverageLabel = () => formatLoadAverage(props.node.loadAverage);
+  const updateEvidence = () => getProxmoxUpdateEvidencePresentation(props.node);
 
   const platformRows = (): NodeOverviewRow[] => [
     ...(cleanText(props.node.kernelVersion)
@@ -282,6 +284,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
 
   const overviewSections = () => {
     const primaryTemperature = getCpuTemperature(props.node.temperature);
+    const updates = updateEvidence();
     const temperatureClass =
       typeof primaryTemperature === 'number'
         ? getTemperatureTextClass(primaryTemperature, props.temperatureThresholds)
@@ -295,8 +298,11 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
             'Pulse coverage',
             linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'PVE API only',
           ),
-          typeof props.node.pendingUpdates === 'number' && props.node.pendingUpdates > 0
-            ? makeDetailRow('Updates', `${props.node.pendingUpdates} pending`, { tone: 'warning' })
+          updates
+            ? makeDetailRow('Updates', updates.value, {
+                tone: updates.tone,
+                title: updates.title,
+              })
             : null,
           typeof primaryTemperature === 'number' &&
           (temperatureClass.includes('yellow') || temperatureClass.includes('red'))

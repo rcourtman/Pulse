@@ -557,6 +557,8 @@ func TestView_NodeViewAccessors(t *testing.T) {
 			PendingUpdates:               7,
 			TemperatureMonitoringEnabled: &tempEnabled,
 			PendingUpdatesCheckedAt:      &updatesCheckedAt,
+			PendingUpdatesStatus:         "stale",
+			PendingUpdatesReason:         "source_unavailable",
 			LinkedAgentID:                " agent-123 ",
 			CPUs:                         4, // should be ignored when CPUInfo is valid
 		},
@@ -604,6 +606,9 @@ func TestView_NodeViewAccessors(t *testing.T) {
 	}
 	if !v.PendingUpdatesCheckedAt().Equal(updatesCheckedAt) {
 		t.Fatalf("expected PendingUpdatesCheckedAt %v, got %v", updatesCheckedAt, v.PendingUpdatesCheckedAt())
+	}
+	if v.PendingUpdatesStatus() != "stale" || v.PendingUpdatesReason() != "source_unavailable" {
+		t.Fatalf("expected update evidence state to survive the view, got status=%q reason=%q", v.PendingUpdatesStatus(), v.PendingUpdatesReason())
 	}
 	if v.LinkedAgentID() != "agent-123" {
 		t.Fatalf("expected LinkedAgentID %q, got %q", "agent-123", v.LinkedAgentID())

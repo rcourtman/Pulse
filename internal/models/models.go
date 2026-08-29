@@ -153,7 +153,9 @@ type Node struct {
 
 	// Package updates - polled less frequently (every 30 mins)
 	PendingUpdates          int       `json:"pendingUpdates"`                    // Number of pending apt updates
-	PendingUpdatesCheckedAt time.Time `json:"pendingUpdatesCheckedAt,omitempty"` // When updates were last checked
+	PendingUpdatesCheckedAt time.Time `json:"pendingUpdatesCheckedAt,omitempty"` // When updates were last successfully checked
+	PendingUpdatesStatus    string    `json:"pendingUpdatesStatus,omitempty"`    // checked, stale, unavailable, or not_checked
+	PendingUpdatesReason    string    `json:"pendingUpdatesReason,omitempty"`    // Fixed diagnostic category; never a raw provider error
 
 	// Linking: When a host agent is running on this PVE node, link them together
 	LinkedAgentID string `json:"linkedAgentId,omitempty"` // ID of the host agent running on this node
