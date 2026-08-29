@@ -1297,6 +1297,13 @@ export interface Stats {
 }
 
 // Alert types
+export interface AlertCorrelation {
+  key: string;
+  kind: 'shared-system';
+  role: 'primary' | 'supporting';
+  reason: string;
+}
+
 export interface Alert {
   id: string;
   type: string;
@@ -1317,6 +1324,7 @@ export interface Alert {
   acknowledged: boolean;
   ackTime?: string;
   ackUser?: string;
+  correlation?: AlertCorrelation;
   metadata?: Record<string, unknown>;
   operationalRecord?: OperationalRecord;
   latestTransition?: LifecycleTransition;

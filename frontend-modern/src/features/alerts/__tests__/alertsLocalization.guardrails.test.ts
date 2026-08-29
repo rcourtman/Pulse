@@ -73,6 +73,7 @@ describe('alerts overview localization guardrails', () => {
 
     expect(alertsPageSource).toContain('alerts.nav.toggleAlerts');
     expect(activeAlertsSectionSource).toContain('getAlertOverviewActiveSectionTitle');
+    expect(activeAlertsSectionSource).toContain('getAlertOverviewGroupDisclosureLabel');
     expect(alertCardSource).toContain('getAlertOverviewPrimaryActionLabel');
     expect(statsCardsSource).toContain('getAlertOverviewStatsLabels');
     expect(acknowledgementStateSource).toContain('getAlertOverviewAcknowledgedNotification');

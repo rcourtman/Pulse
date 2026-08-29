@@ -160,4 +160,91 @@ describe('useAlertOverviewState', () => {
     expect(stats.total24h).toBe(3);
     expect(stats.acknowledged).toBe(0);
   });
+
+  it('groups only explicit shared-system correlations across resources', () => {
+    const startTime = new Date(Date.now() - 60_000).toISOString();
+    const connection = {
+      ...makeAlert('connection', startTime),
+      resourceId: 'pve:delly',
+      correlation: {
+        key: 'pve:delly',
+        kind: 'shared-system' as const,
+        role: 'primary' as const,
+        reason: 'proxmox-connection-ownership',
+      },
+    };
+    const node = {
+      ...makeAlert('node', startTime),
+      resourceId: 'node/delly/pve-1',
+      level: 'critical' as const,
+      correlation: {
+        key: 'pve:delly',
+        kind: 'shared-system' as const,
+        role: 'supporting' as const,
+        reason: 'proxmox-node-membership',
+      },
+    };
+    const [activeAlerts] = createSignal<Record<string, Alert>>({ connection, node });
+
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+
+    expect(result.groupedAlerts()).toEqual([
+      expect.objectContaining({
+        key: 'correlation:shared-system:pve:delly',
+        primary: connection,
+        related: [node],
+        correlated: true,
+      }),
+    ]);
+  });
+
+  it('does not infer correlation by truncating resource paths', () => {
+    const startTime = new Date(Date.now() - 60_000).toISOString();
+    const first = { ...makeAlert('first', startTime), resourceId: 'host/one/disk:sda' };
+    const second = { ...makeAlert('second', startTime), resourceId: 'host/one/disk:sdb' };
+    const [activeAlerts] = createSignal<Record<string, Alert>>({ first, second });
+
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+
+    expect(result.groupedAlerts()).toHaveLength(2);
+    expect(result.groupedAlerts().every((group) => !group.correlated)).toBe(true);
+  });
+
+  it('still groups multiple detector signals for the exact same resource', () => {
+    const startTime = new Date(Date.now() - 60_000).toISOString();
+    const first = { ...makeAlert('first', startTime), resourceId: 'vm/delly/100' };
+    const second = { ...makeAlert('second', startTime), resourceId: 'vm/delly/100' };
+    const [activeAlerts] = createSignal<Record<string, Alert>>({ first, second });
+
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+
+    expect(result.groupedAlerts()).toEqual([
+      expect.objectContaining({
+        key: 'resource:vm/delly/100',
+        related: [second],
+        correlated: false,
+      }),
+    ]);
+  });
 });

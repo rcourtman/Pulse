@@ -10136,3 +10136,21 @@ inside schema-aware version cohorts. New schema v15 classifications enter
 pre-upgrade rows can preserve the schema v5-v14 4xx-or-5xx meaning for up to
 seven days, so the first rolling snapshot is a baseline rather than attributed
 same-version activity.
+
+### Alert correlation is additive presentation context
+
+Canonical active and resolved alert payloads may add an optional `correlation`
+object. Its closed current shape is `{key, kind: "shared-system", role,
+reason}`, where `role` is `primary` or `supporting`. Absence means the client
+must keep the alert independent except for exact-resource grouping. Clients
+must not reconstruct cross-resource correlation from resource path segments,
+hostnames, message text, or timestamps.
+
+The object does not replace alert ID, canonical spec ID, resource ID,
+acknowledgement, transitions, or evidence. Bulk and group acknowledgement
+still submit every underlying alert identifier, and older clients may ignore
+the additive object. Go cloning and persistence preserve the object without
+sharing mutable pointers; the frontend API type mirrors the optional wire
+shape exactly. `internal/alerts/correlation_test.go` and
+`frontend-modern/src/features/alerts/__tests__/useAlertOverviewState.test.tsx`
+are the focused transport-consumer proofs.

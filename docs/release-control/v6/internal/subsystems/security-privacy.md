@@ -2495,3 +2495,21 @@ floor but never the Relay private key, and omitted or invalid floors fail open
 to `all` rather than silently suppressing warnings. Payload-shape and config
 normalization proofs live in `internal/relay/push_test.go` and
 `internal/api/relay_hosted_runtime_test.go`.
+
+### Alert correlation stays inside authenticated incident context
+
+The optional alert `correlation` object carries only a bounded shared-system
+key, kind, presentation role, and auditable reason. It is available through the
+same authenticated alert read surfaces as the resource and instance identity
+already present on the alert; it must not be copied into public telemetry,
+lock-screen push copy, notification destination configuration, or
+unauthenticated status output. The overview uses only the typed role and group
+membership and does not render the raw key or reason.
+
+Malformed, unsupported, or incomplete persisted correlation fails open during
+alert cloning and is omitted from client payloads. Clients likewise require
+the closed `shared-system` kind and a non-empty key before cross-resource
+grouping, and they never infer identity from hostnames, message text,
+timestamps, or resource-path truncation. `internal/alerts/correlation_test.go`
+and the alerts overview state tests pin these disclosure and fail-open
+boundaries.

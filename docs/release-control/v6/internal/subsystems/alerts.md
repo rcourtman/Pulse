@@ -2415,3 +2415,30 @@ usable filesystem evidence exists. OS-managed transient mounts, including
 macOS Gatekeeper App Translocation volumes, are removed at the shared
 filesystem collection boundary before they can enter capacity inventory or
 alert evaluation.
+
+### Shared-system correlation never merges detector lifecycles
+
+An active alert may carry the optional typed `correlation` object with a
+`shared-system` kind, stable key, `primary` or `supporting` role, and an
+auditable reason. This is presentation-only incident context. Every correlated
+signal retains its own canonical spec, confirmation state, acknowledgement,
+recovery evidence, history, and notification decision; recovery of one signal
+must never clear another.
+
+Proxmox connection availability is the primary signal for its `pve:<instance>`
+system. PVE node connectivity is a supporting signal through provider-owned
+instance membership. A linked host-agent connectivity alert is supporting only
+when monitoring proves the reciprocal node ID and agent ID relationship and
+the node supplies the same non-empty instance. Missing, one-sided, duplicate,
+or conflicting identity fails open and leaves alerts separate. Resource-path
+truncation, hostname similarity, and timing coincidence are forbidden as
+correlation evidence.
+
+The overview groups exact-resource detector signals and explicit shared-system
+signals. It selects a declared primary when one is present, describes the rest
+as linked signals, and acknowledges each underlying alert individually. Older
+alerts and clients remain compatible because the field is additive and
+optional. `internal/alerts/correlation_test.go`,
+`internal/monitoring/alert_correlation_test.go`, and
+`frontend-modern/src/features/alerts/__tests__/useAlertOverviewState.test.tsx`
+pin lifecycle independence, fail-open identity, and client grouping.

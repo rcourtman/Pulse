@@ -1049,6 +1049,28 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 	m.mu.RUnlock()
 }
 
+func TestHandleHostOfflineWithCorrelationPreservesHostLifecycleIdentity(t *testing.T) {
+	m := newTestManager(t)
+	host := models.Host{ID: "host-correlated", Hostname: "pve-1"}
+	correlation := NewSharedSystemAlertCorrelation(
+		"pve:delly",
+		AlertCorrelationRoleSupporting,
+		"verified-proxmox-node-agent-link",
+	)
+
+	for range 3 {
+		m.HandleHostOfflineWithCorrelation(host, correlation)
+	}
+
+	alert := testRequireActiveAlert(t, m, canonicalConnectivityStateID(hostResourceID(host.ID)))
+	if alert.ResourceID != hostResourceID(host.ID) {
+		t.Fatalf("host lifecycle resource = %q, want %q", alert.ResourceID, hostResourceID(host.ID))
+	}
+	if alert.Correlation == nil || alert.Correlation.Key != "pve:delly" {
+		t.Fatalf("host alert missing correlation: %+v", alert.Correlation)
+	}
+}
+
 func TestCheckHostDisabledOverrideClearsAlerts(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

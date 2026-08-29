@@ -221,6 +221,14 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		"connectionType": string(snap.Type),
 		"state":          string(snap.State),
 	}
+	var correlation *AlertCorrelation
+	if snap.Type == ConnectionTypePVE {
+		correlation = NewSharedSystemAlertCorrelation(
+			snap.ID,
+			AlertCorrelationRolePrimary,
+			"proxmox-connection-ownership",
+		)
+	}
 	if policyResourceID := strings.TrimSpace(snap.PolicyResourceID); policyResourceID != "" {
 		metadata["policyResourceID"] = policyResourceID
 	}
@@ -259,6 +267,7 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		ResourceName:  snap.Name,
 		Instance:      snap.Name,
 		Message:       message,
+		Correlation:   correlation,
 		Metadata:      metadata,
 		AddToRecent:   true,
 		AddToHistory:  true,

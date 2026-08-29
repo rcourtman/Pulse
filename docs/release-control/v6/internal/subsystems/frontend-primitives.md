@@ -6804,3 +6804,18 @@ and states every lifecycle condition that stops paging. Desktop and mobile
 layouts must retain associated labels and avoid horizontal overflow. Escalation
 level delays and repeat intervals share the rendered 5–180 minute bounds; the
 feature state clamps typed values before they can leave the control surface.
+
+### Alert groups use the shared localization boundary
+
+Alert group disclosure and group acknowledgement copy routes through
+`alertOverviewPresentation` and the shared English, German, and Spanish
+catalogs. The presentation distinguishes a backend-declared shared-system
+relationship (`linked signal(s)`) from multiple detectors on the exact same
+resource (`related`) while keeping expansion and acknowledgement controls in
+the existing alert surface. Components must not hardcode this vocabulary or
+render the backend correlation reason or key as operator copy.
+
+The labels retain singular/plural behavior, use the existing responsive button
+primitives, and introduce no parallel group component. Localization and
+presentation proofs live in `frontend-modern/src/i18n/__tests__/i18n.test.ts`
+and `frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts`.

@@ -6812,3 +6812,19 @@ authority; it only prevents the first accepted agent observation from losing
 its alert consequence. `TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart`
 in `internal/monitoring/monitor_host_agents_test.go` pins the pre-`Start`
 warning path.
+
+### Alert correlation consumes links without gaining lifecycle authority
+
+Monitoring may read the canonical reciprocal `Host.LinkedNodeID` and
+`Node.LinkedAgentID` relationship to attach alerts-owned shared-system context
+to a host connectivity signal. Both sides must match exactly and the node must
+identify one non-empty PVE instance; incomplete or conflicting evidence yields
+no correlation. This adapter cannot create, heal, persist, remove, or otherwise
+reinterpret an agent link, and it cannot merge the host detector lifecycle
+with the PVE connection or node lifecycle.
+
+The correlation contains no credential, enrollment, command, token, or
+authority state. Agent lifecycle remains the sole owner of the relationship;
+alerts receives only a bounded presentation identity after that relationship
+has already been established. The reciprocal and fail-open cases are pinned in
+`internal/monitoring/monitor_host_agents_test.go`.

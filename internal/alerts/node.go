@@ -242,6 +242,11 @@ func (m *Manager) resolveNodeDisplayName(instance, node string) string {
 // checkNodeOffline creates an alert for offline nodes after confirmation
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
+	correlation := NewSharedSystemAlertCorrelation(
+		"pve:"+strings.TrimSpace(node.Instance),
+		AlertCorrelationRoleSupporting,
+		"proxmox-node-membership",
+	)
 
 	m.mu.Lock()
 	m.mu.Unlock()
@@ -267,6 +272,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		Node:         node.Name,
 		Instance:     node.Instance,
 		Message:      fmt.Sprintf("Node '%s' is offline", node.Name),
+		Correlation:  correlation,
 		Metadata: map[string]interface{}{
 			"resourceType":     "node",
 			"status":           node.Status,

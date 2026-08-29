@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
@@ -4502,6 +4503,7 @@ func hostAgentHealthWindow(interval int) time.Duration {
 // evaluateHostAgents updates health for host agents based on last report time.
 func (m *Monitor) evaluateHostAgents(now time.Time) {
 	hosts := m.state.GetHosts()
+	nodes := m.NodesSnapshot()
 	liveHostIDs := make(map[string]struct{}, len(hosts))
 	resourceRefreshNeeded := false
 	for _, host := range hosts {
@@ -4551,7 +4553,10 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 				hostCopy.Status = "offline"
 			}
 			if m.alertManager != nil {
-				m.alertManager.HandleHostOffline(hostCopy)
+				m.alertManager.HandleHostOfflineWithCorrelation(
+					hostCopy,
+					sharedSystemAlertCorrelationForHost(hostCopy, nodes),
+				)
 			}
 		}
 	}
@@ -4573,13 +4578,46 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 		host := hostFromContinuityEntry(entry)
 		host.Status = "offline"
 		if m.alertManager != nil {
-			m.alertManager.HandleHostOffline(host)
+			m.alertManager.HandleHostOfflineWithCorrelation(
+				host,
+				sharedSystemAlertCorrelationForHost(host, nodes),
+			)
 		}
 	}
 
 	if resourceRefreshNeeded {
 		m.refreshUnifiedResourceStoreAfterAgentStateChange()
 	}
+}
+
+func sharedSystemAlertCorrelationForHost(host models.Host, nodes []models.Node) *alerts.AlertCorrelation {
+	linkedNodeID := strings.TrimSpace(host.LinkedNodeID)
+	hostID := strings.TrimSpace(host.ID)
+	if linkedNodeID == "" || hostID == "" {
+		return nil
+	}
+
+	correlationKey := ""
+	for _, node := range nodes {
+		if strings.TrimSpace(node.ID) != linkedNodeID || strings.TrimSpace(node.LinkedAgentID) != hostID {
+			continue
+		}
+		instance := strings.TrimSpace(node.Instance)
+		if instance == "" {
+			return nil
+		}
+		candidate := "pve:" + instance
+		if correlationKey != "" && correlationKey != candidate {
+			return nil
+		}
+		correlationKey = candidate
+	}
+
+	return alerts.NewSharedSystemAlertCorrelation(
+		correlationKey,
+		alerts.AlertCorrelationRoleSupporting,
+		"verified-proxmox-node-agent-link",
+	)
 }
 
 // sortContent sorts comma-separated content values for consistent display

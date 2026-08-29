@@ -1,19 +1,31 @@
 {
   "version": 1,
-  "base_sha": "974f102333d5e394ce6ddf966ad2759d1888386f",
-  "verified_at": "2026-08-29T15:34:14Z",
+  "base_sha": "d671f05408c909dc1e418ac149192c5db01d3d84",
+  "verified_at": "2026-08-29T17:05:39Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx"
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "9164c52fe67c6e6504a961a48e562479613d498d8d12ae10411d5b193dba36b5"
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "396b3b8eb61f094bf2c57a46d45751fd349469c0d153074f1af9b01742dfab78",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "1eea31a6a8c4a6e181fa478c7b578590d26e1c9219b8ed9c3cfc8b76ae9bb370",
+    "frontend-modern/src/i18n/messages.de.ts": "c5e5f16d3e7c6d7a741e84fc2217e08aa6b257c4a6a7fa0e9009c993534eb8e7",
+    "frontend-modern/src/i18n/messages.es.ts": "048749c66b51d3c063e94b4742dfb21b20de70d13ad09216ef7d73b4fd98c13a",
+    "frontend-modern/src/i18n/messages.ts": "b1af1ee4f56039e6263685df8d776f7e14e32fe8fb7d84cd2f03992c01d09c18",
+    "frontend-modern/src/types/api.ts": "6f118c6c43b4ccc5cb11c440267797bee0c36a8e5ffa95aa94112419d28d56fa",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "00aab1c0a3f2bdb78c4efb6effdb5fa4a95560f0f73f9e5e7f084e4db98e2057"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": ["/alerts/overview"],
   "viewports": [
     {
-      "width": 1920,
-      "height": 900
+      "width": 1440,
+      "height": 1000
     },
     {
       "width": 390,
@@ -21,13 +33,14 @@
     }
   ],
   "states": [
-    "mock-backed Proxmox Overview with a seven-section node drawer expanded",
-    "desktop node details aligned to four shared column tracks across both rows",
-    "compact mobile node details retained as one full-width bordered table"
+    "mock-backed Alerts Overview with forty or more active detector signals",
+    "same-resource alert group collapsed with the localized related-signal disclosure",
+    "same-resource alert group expanded with its underlying alert card and group acknowledgement action",
+    "desktop and narrow layouts with unacknowledged critical and warning cards"
   ],
   "interactions": [
-    "opened Proxmox Overview at 1920x900, expanded Analytics A, and confirmed the four first-row cards share equal quarter-width tracks",
-    "confirmed Network spans two desktop tracks while Storage and Telemetry each span one, filling the final row with aligned card edges",
-    "repeated the expanded drawer at 390x844 and confirmed every section remains a full-width table row group with adjacent labels and values"
+    "opened Alerts Overview at 1440x1000 and confirmed active cards, group disclosure, and acknowledgement controls are aligned and unclipped",
+    "expanded and collapsed a two-signal alert group and confirmed the nested alert remains visually subordinate while retaining its own controls",
+    "repeated the expanded and collapsed group at 390x844 and confirmed the document and body remain exactly 390 pixels wide with no horizontal overflow"
   ]
 }

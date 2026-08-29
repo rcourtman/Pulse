@@ -715,6 +715,13 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 
 // HandleHostOffline raises an alert when a host agent stops reporting.
 func (m *Manager) HandleHostOffline(host models.Host) {
+	m.HandleHostOfflineWithCorrelation(host, nil)
+}
+
+// HandleHostOfflineWithCorrelation raises a host connectivity alert with
+// optional verified shared-system context. The correlation affects only
+// presentation; the host alert retains its independent canonical lifecycle.
+func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation *AlertCorrelation) {
 	if host.ID == "" {
 		return
 	}
@@ -781,6 +788,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		Node:         nodeName,
 		Instance:     instanceName,
 		Message:      fmt.Sprintf("Host '%s' is offline", resourceName),
+		Correlation:  correlation,
 		Metadata: map[string]interface{}{
 			"resourceType":      "agent",
 			"hostId":            host.ID,

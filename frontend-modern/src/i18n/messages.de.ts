@@ -69,6 +69,11 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.action.timeline': 'Zeitleiste',
   'alerts.overview.action.snooze': 'Zurueckstellen',
   'alerts.overview.action.unacknowledge': 'Bestaetigung aufheben',
+  'alerts.overview.group.acknowledge': 'Alle bestaetigen ({count})',
+  'alerts.overview.group.hide': 'Ausblenden',
+  'alerts.overview.group.linkedSignal': '+{count} verknuepftes Signal',
+  'alerts.overview.group.linkedSignals': '+{count} verknuepfte Signale',
+  'alerts.overview.group.related': '+{count} zugehoerig',
   'alerts.overview.acknowledgedBadge': 'Bestaetigt',
   'alerts.overview.empty.description':
     'Warnmeldungen erscheinen hier, wenn Schwellwerte ueberschritten werden',

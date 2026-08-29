@@ -3460,3 +3460,19 @@ emitting the repeated authentication warning used for cluster-scoped 595,
 401, and 403 responses. Returned errors retain their compatibility shape;
 `pkg/proxmox/client_request_test.go` pins both sides of the log classification
 (#1794).
+
+### Monitoring supplies fail-open shared-system alert identity
+
+Host-agent availability evaluation may attach alerts-owned shared-system
+context only from monitoring's canonical reciprocal PVE node-agent link. The
+host `linkedNodeId` and node `linkedAgentId` must name each other exactly, and
+the matched node must supply one unambiguous non-empty PVE instance. Missing,
+one-sided, or conflicting evidence returns no correlation. Monitoring does not
+use hostnames, resource-path prefixes, or observation timing to manufacture a
+relationship, and it does not merge alert lifecycle state.
+
+This adapter is read-only and bounded to the host evaluation snapshot. Alerts
+owns the correlation wire type and presentation semantics; monitoring owns the
+identity evidence that permits the host signal to join that system.
+`internal/monitoring/alert_correlation_test.go` pins reciprocal-link admission
+and every fail-open case.

@@ -26,6 +26,7 @@ type canonicalLifecycleAlertParams struct {
 	Message                      string
 	Value                        float64
 	Threshold                    float64
+	Correlation                  *AlertCorrelation
 	Metadata                     map[string]interface{}
 	AddToRecent                  bool
 	AddToHistory                 bool
@@ -470,6 +471,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Threshold:    params.Threshold,
 			StartTime:    incident.StartedAt,
 			LastSeen:     params.Evidence.ObservedAt,
+			Correlation:  cloneAlertCorrelation(params.Correlation),
 			Metadata:     cloneMetadata(params.Metadata),
 		}
 		if alert.Metadata == nil {

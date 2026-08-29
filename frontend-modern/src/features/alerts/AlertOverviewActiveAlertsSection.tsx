@@ -8,6 +8,8 @@ import {
   getAlertOverviewActiveSectionTitle,
   getAlertOverviewBulkAcknowledgeLabel,
   getAlertOverviewEmptyState,
+  getAlertOverviewGroupAcknowledgeLabel,
+  getAlertOverviewGroupDisclosureLabel,
   getAlertOverviewPausedState,
   getAlertListEmptyState,
 } from '@/utils/alertOverviewPresentation';
@@ -140,7 +142,11 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                         class="text-xs text-muted hover:text-base-content transition-colors"
                         onClick={() => toggleGroup(group.key)}
                       >
-                        {isGroupExpanded(group.key) ? 'Hide' : `+${group.related.length} related`}
+                        {getAlertOverviewGroupDisclosureLabel({
+                          count: group.related.length,
+                          correlated: group.correlated,
+                          expanded: isGroupExpanded(group.key),
+                        })}
                       </button>
                       <Show when={[group.primary, ...group.related].some((a) => !a.acknowledged)}>
                         <button
@@ -153,7 +159,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                             ]);
                           }}
                         >
-                          Ack all ({group.related.length + 1})
+                          {getAlertOverviewGroupAcknowledgeLabel(group.related.length + 1)}
                         </button>
                       </Show>
                     </div>

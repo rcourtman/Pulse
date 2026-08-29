@@ -41,6 +41,8 @@ import {
   getAlertOverviewBulkAcknowledgedNotification,
   getAlertOverviewCardPresentation,
   getAlertOverviewEmptyState,
+  getAlertOverviewGroupAcknowledgeLabel,
+  getAlertOverviewGroupDisclosureLabel,
   getAlertOverviewHydrationState,
   getAlertOverviewNodeLabel,
   getAlertOverviewPausedState,
@@ -83,6 +85,26 @@ import {
   getAlertListEmptyState,
   getAlertsPageHeaderMeta,
 } from '@/utils/alertOverviewPresentation';
+
+describe('alert overview grouping presentation', () => {
+  afterEach(() => setActiveLocale(DEFAULT_LOCALE));
+
+  it('distinguishes explicit linked signals from same-resource related alerts', () => {
+    expect(
+      getAlertOverviewGroupDisclosureLabel({ count: 1, correlated: true, expanded: false }),
+    ).toBe('+1 linked signal');
+    expect(
+      getAlertOverviewGroupDisclosureLabel({ count: 2, correlated: true, expanded: false }),
+    ).toBe('+2 linked signals');
+    expect(
+      getAlertOverviewGroupDisclosureLabel({ count: 1, correlated: false, expanded: false }),
+    ).toBe('+1 related');
+    expect(
+      getAlertOverviewGroupDisclosureLabel({ count: 1, correlated: true, expanded: true }),
+    ).toBe('Hide');
+    expect(getAlertOverviewGroupAcknowledgeLabel(3)).toBe('Acknowledge all (3)');
+  });
+});
 
 describe('alertOverviewPresentation', () => {
   beforeEach(() => {

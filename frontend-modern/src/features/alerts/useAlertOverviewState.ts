@@ -11,15 +11,16 @@ export interface AlertGroup {
   key: string;
   primary: Alert;
   related: Alert[];
+  correlated: boolean;
 }
 
 export function computeAlertGroupKey(alert: Alert): string {
-  const rid = alert.resourceId ?? '';
-  const segments = rid.split('/');
-  if (segments.length > 2) {
-    return segments.slice(0, -1).join('/');
+  const correlation = alert.correlation;
+  if (correlation?.kind === 'shared-system' && correlation.key.trim() !== '') {
+    return `correlation:${correlation.kind}:${correlation.key.trim()}`;
   }
-  return rid;
+  const resourceId = alert.resourceId?.trim();
+  return resourceId ? `resource:${resourceId}` : `alert:${alert.id}`;
 }
 
 export interface UseAlertOverviewStateProps {
@@ -146,7 +147,14 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     }
     const result: AlertGroup[] = [];
     for (const [key, alerts] of groups) {
-      result.push({ key, primary: alerts[0], related: alerts.slice(1) });
+      const primaryIndex = alerts.findIndex((alert) => alert.correlation?.role === 'primary');
+      const primary = primaryIndex >= 0 ? alerts[primaryIndex] : alerts[0];
+      result.push({
+        key,
+        primary,
+        related: alerts.filter((_, index) => index !== (primaryIndex >= 0 ? primaryIndex : 0)),
+        correlated: key.startsWith('correlation:'),
+      });
     }
     return result;
   });

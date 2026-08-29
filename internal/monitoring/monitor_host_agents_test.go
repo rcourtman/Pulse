@@ -1378,6 +1378,33 @@ func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	}
 }
 
+func TestSharedSystemAlertCorrelationForHostRequiresReciprocalNodeLink(t *testing.T) {
+	host := models.Host{ID: "agent-1", LinkedNodeID: "node-1"}
+	correlation := sharedSystemAlertCorrelationForHost(host, []models.Node{{
+		ID:            "node-1",
+		Instance:      "delly",
+		LinkedAgentID: "agent-1",
+	}})
+	if correlation == nil || correlation.Key != "pve:delly" {
+		t.Fatalf("expected reciprocal node-agent correlation, got %+v", correlation)
+	}
+
+	for _, nodes := range [][]models.Node{
+		nil,
+		{{ID: "node-1", Instance: "delly"}},
+		{{ID: "node-1", Instance: "delly", LinkedAgentID: "agent-2"}},
+		{{ID: "node-1", LinkedAgentID: "agent-1"}},
+		{
+			{ID: "node-1", Instance: "delly-a", LinkedAgentID: "agent-1"},
+			{ID: "node-1", Instance: "delly-b", LinkedAgentID: "agent-1"},
+		},
+	} {
+		if got := sharedSystemAlertCorrelationForHost(host, nodes); got != nil {
+			t.Fatalf("incomplete or conflicting link must fail open, got %+v", got)
+		}
+	}
+}
+
 func TestEvaluateHostAgentsClearsAlertWhenHostReturns(t *testing.T) {
 	t.Helper()
 

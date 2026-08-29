@@ -132,6 +132,27 @@ export function getAlertOverviewBulkAcknowledgeLabel(count: number, processing: 
     : t('alerts.overview.action.acknowledgeAll', { count });
 }
 
+export function getAlertOverviewGroupDisclosureLabel({
+  count,
+  correlated,
+  expanded,
+}: {
+  count: number;
+  correlated: boolean;
+  expanded: boolean;
+}): string {
+  if (expanded) return t('alerts.overview.group.hide');
+  if (!correlated) return t('alerts.overview.group.related', { count });
+  return t(
+    count === 1 ? 'alerts.overview.group.linkedSignal' : 'alerts.overview.group.linkedSignals',
+    { count },
+  );
+}
+
+export function getAlertOverviewGroupAcknowledgeLabel(count: number): string {
+  return t('alerts.overview.group.acknowledge', { count });
+}
+
 export function getAlertOverviewAcknowledgedBadgeLabel(): string {
   return t('alerts.overview.acknowledgedBadge');
 }

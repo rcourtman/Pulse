@@ -4,9 +4,52 @@ import (
 	"testing"
 	"time"
 
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+func TestCanonicalLifecycleCopiesValidatedAlertCorrelation(t *testing.T) {
+	m := newTestManager(t)
+	spec, err := buildCanonicalConnectivitySpec(
+		"node-1",
+		"Node 1",
+		unifiedresources.ResourceType("node"),
+		AlertLevelCritical,
+		1,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("build connectivity spec: %v", err)
+	}
+	correlation := NewSharedSystemAlertCorrelation(
+		"pve:delly",
+		AlertCorrelationRoleSupporting,
+		"proxmox-node-membership",
+	)
+
+	_, ok := m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
+		AlertID:      canonicalConnectivityStateID("node-1"),
+		AlertType:    "connectivity",
+		ResourceID:   "node-1",
+		ResourceName: "Node 1",
+		Correlation:  correlation,
+	})
+	if !ok {
+		t.Fatal("expected canonical lifecycle evaluation")
+	}
+
+	alert := testRequireActiveAlert(t, m, canonicalConnectivityStateID("node-1"))
+	if alert.Correlation == nil || alert.Correlation.Key != "pve:delly" {
+		t.Fatalf("canonical alert missing correlation: %+v", alert.Correlation)
+	}
+	correlation.Key = "pve:changed"
+	if alert.Correlation.Key != "pve:delly" {
+		t.Fatal("canonical alert retained the caller's mutable correlation pointer")
+	}
+}
 
 func TestStatefulAlertReFireCooldown(t *testing.T) {
 	t.Run("re-fire within cooldown does not create duplicate history entry", func(t *testing.T) {

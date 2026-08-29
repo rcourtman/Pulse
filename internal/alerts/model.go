@@ -1,10 +1,60 @@
 package alerts
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
+
+type AlertCorrelationKind string
+
+const (
+	AlertCorrelationKindSharedSystem AlertCorrelationKind = "shared-system"
+)
+
+type AlertCorrelationRole string
+
+const (
+	AlertCorrelationRolePrimary    AlertCorrelationRole = "primary"
+	AlertCorrelationRoleSupporting AlertCorrelationRole = "supporting"
+)
+
+// AlertCorrelation is presentation-only incident context. It lets clients
+// present independently evaluated alerts as signals from one verified system
+// without merging their canonical detector lifecycles.
+type AlertCorrelation struct {
+	Key    string               `json:"key"`
+	Kind   AlertCorrelationKind `json:"kind"`
+	Role   AlertCorrelationRole `json:"role"`
+	Reason string               `json:"reason"`
+}
+
+// NewSharedSystemAlertCorrelation returns a bounded shared-system correlation.
+// Invalid or incomplete identity fails open so unrelated alerts remain separate.
+func NewSharedSystemAlertCorrelation(key string, role AlertCorrelationRole, reason string) *AlertCorrelation {
+	key = strings.TrimSpace(key)
+	reason = strings.TrimSpace(reason)
+	if key == "" || reason == "" {
+		return nil
+	}
+	if role != AlertCorrelationRolePrimary && role != AlertCorrelationRoleSupporting {
+		return nil
+	}
+	return &AlertCorrelation{
+		Key:    key,
+		Kind:   AlertCorrelationKindSharedSystem,
+		Role:   role,
+		Reason: reason,
+	}
+}
+
+func cloneAlertCorrelation(correlation *AlertCorrelation) *AlertCorrelation {
+	if correlation == nil || correlation.Kind != AlertCorrelationKindSharedSystem {
+		return nil
+	}
+	return NewSharedSystemAlertCorrelation(correlation.Key, correlation.Role, correlation.Reason)
+}
 
 // Alert represents an active alert
 type Alert struct {
@@ -27,6 +77,7 @@ type Alert struct {
 	Acknowledged      bool                                   `json:"acknowledged"`
 	AckTime           *time.Time                             `json:"ackTime,omitempty"`
 	AckUser           string                                 `json:"ackUser,omitempty"`
+	Correlation       *AlertCorrelation                      `json:"correlation,omitempty"`
 	Metadata          map[string]interface{}                 `json:"metadata,omitempty"`
 	LastNotified      *time.Time                             `json:"lastNotified,omitempty"`
 	LastEscalation    int                                    `json:"lastEscalation,omitempty"`
@@ -53,6 +104,10 @@ func (a *Alert) Clone() *Alert {
 	if a.LastNotified != nil {
 		t := *a.LastNotified
 		clone.LastNotified = &t
+	}
+
+	if a.Correlation != nil {
+		clone.Correlation = cloneAlertCorrelation(a.Correlation)
 	}
 
 	if len(a.EscalationTimes) > 0 {

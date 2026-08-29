@@ -115,6 +115,18 @@ describe('i18n foundation', () => {
     }
   });
 
+  it('localizes alert group correlation labels across every supported locale', () => {
+    expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'en')).toBe('+1 linked signal');
+    expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'de')).toBe(
+      '+1 verknuepftes Signal',
+    );
+    expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'es')).toBe('+1 senal vinculada');
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(t('alerts.overview.group.linkedSignals', { count: 2 }, locale)).toBeTruthy();
+      expect(t('alerts.overview.group.acknowledge', { count: 3 }, locale)).toBeTruthy();
+    }
+  });
+
   it('captures the first and next localization waves without enabling unsupported locales', () => {
     expect(FIRST_LOCALIZATION_LOCALES).toEqual(['de', 'es']);
     expect(NEXT_LOCALIZATION_LOCALES).toEqual(['fr', 'pt-BR', 'ja', 'zh-Hans', 'ko']);
