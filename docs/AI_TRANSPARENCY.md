@@ -29,8 +29,11 @@ released builds still go through Pulse's release qualification process.
   and the evidence used to qualify a release.
 - **Issue triage and support.** Automated issue and discussion replies post
   under the dedicated `pulse-triage` bot identity and link back to this page.
-  Automated issue state changes use that identity as well. Automated support
-  replies are sent as Pulse Triage and link here as well.
+  Automated issue state changes use that identity as well. Mixed reports follow
+  the [topic-integrity triage contract](ISSUE_TRIAGE.md): automation can surface
+  declared secondary topics, but a maintainer or triage agent must give every
+  actionable topic a linked disposition. Automated support replies are sent as
+  Pulse Triage and link here as well.
 - **Change provenance.** Commits made by the continuously running maintainer
   carry a dedicated bot author and committer identity. Issue-driven changes
   link back to the originating report where applicable.

@@ -1,6 +1,7 @@
 const VERSION_LABEL_PREFIX = "affects-";
 const NEEDS_VERSION_LABEL = "needs-version-info";
 const RETEST_LABEL = "needs-retest-on-latest";
+const NEEDS_DECOMPOSITION_LABEL = "needs-decomposition";
 const RETEST_COMMENT_MARKER = "<!-- issue-version-triage:v1 -->";
 const CLOSE_COMMENT_MARKER = "<!-- issue-timeout-close:v1 -->";
 const TRIAGE_FOOTER =
@@ -26,6 +27,28 @@ function extractSectionValue(body, heading) {
   if (!match) return null;
   const value = match[1].trim();
   return value || null;
+}
+
+function classifyAdditionalActionableTopics(body) {
+  const value = extractSectionValue(body, "Additional actionable topics");
+  if (value === null) return null;
+
+  const normalized = value
+    .replace(/<!--([\s\S]*?)-->/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!]+$/g, "");
+  if (!normalized) return false;
+
+  return !new Set([
+    "_no response_",
+    "n/a",
+    "na",
+    "no",
+    "none",
+    "none known",
+    "not applicable",
+  ]).has(normalized);
 }
 
 function normalizeVersion(value) {
@@ -170,6 +193,14 @@ function buildTriageState(issue, core, latestVersion) {
     nextLabels.add(v6FeedbackClass);
   }
 
+  const hasAdditionalActionableTopics = classifyAdditionalActionableTopics(issue.body);
+  if (hasAdditionalActionableTopics === true) {
+    core.info("Issue declares additional actionable topics; decomposition is required.");
+    nextLabels.add(NEEDS_DECOMPOSITION_LABEL);
+  } else if (hasAdditionalActionableTopics === false) {
+    nextLabels.delete(NEEDS_DECOMPOSITION_LABEL);
+  }
+
   const reportedVersion = extractPulseVersion(issue.title, issue.body);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
   core.info(`Latest stable release: ${latestVersion || "unknown"}`);
@@ -179,6 +210,7 @@ function buildTriageState(issue, core, latestVersion) {
     nextLabels,
     reportedVersion,
     v6FeedbackClass,
+    hasAdditionalActionableTopics,
     isBugLike: nextLabels.has(BUG_LABEL),
     comparison:
       reportedVersion && latestVersion ? compareCore(reportedVersion, latestVersion) : null,
@@ -248,13 +280,27 @@ async function syncLabels({ github, context, core }) {
     nextLabels,
     reportedVersion,
     v6FeedbackClass,
+    hasAdditionalActionableTopics,
     isBugLike,
     comparison,
   } = buildTriageState(issue, core, latestVersion);
 
+  if (hasAdditionalActionableTopics === true) {
+    await ensureLabel(
+      github,
+      context,
+      NEEDS_DECOMPOSITION_LABEL,
+      "fbca04",
+      "Issue declares additional actionable topics that need linked dispositions"
+    );
+  }
+
   if (!isBugLike) {
     core.info("Issue is not bug-like after classification. Skipping version triage.");
-    if (v6FeedbackClass && !labelNames.has(v6FeedbackClass)) {
+    const labelsChanged =
+      labelNames.size !== nextLabels.size ||
+      [...labelNames].some((label) => !nextLabels.has(label));
+    if (labelsChanged) {
       await github.rest.issues.setLabels({
         owner: context.repo.owner,
         repo: context.repo.repo,
@@ -433,6 +479,7 @@ module.exports = {
     CLOSE_COMMENT_MARKER,
     DOCS_LABEL,
     ENHANCEMENT_LABEL,
+    NEEDS_DECOMPOSITION_LABEL,
     NEEDS_VERSION_LABEL,
     RETEST_COMMENT_MARKER,
     RETEST_COMMENT_GRACE_MS,
@@ -444,6 +491,7 @@ module.exports = {
     buildTimeoutCloseCommentBody,
     buildTriageState,
     canPostRetestComment,
+    classifyAdditionalActionableTopics,
     classifyV6FeedbackType,
     compareCore,
     extractPulseVersion,

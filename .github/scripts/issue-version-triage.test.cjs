@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const triage = require("./issue-version-triage.cjs");
 
@@ -122,6 +124,92 @@ test("syncLabels only adds documentation classification for non-bug v6 feedback"
 
   assert.equal(calls.setLabels.length, 1);
   assert.deepEqual(calls.setLabels[0].labels, ["documentation"]);
+});
+
+test("syncLabels marks declared secondary topics for decomposition", async () => {
+  const { github, calls } = createGithub({ latestVersion: "6.4.1" });
+  const issue = {
+    number: 1796,
+    title: "Availability workflow feedback",
+    body: [
+      "## Problem",
+      "Machine availability is hard to scan.",
+      "",
+      "## Additional actionable topics",
+      "The triage bot should preserve secondary requests.",
+    ].join("\n"),
+    labels: [{ name: "enhancement" }],
+  };
+
+  await triage.syncLabels({
+    github,
+    context: createContext({ issue }),
+    core: createCore(),
+  });
+
+  assert.deepEqual(calls.createLabel.map((call) => call.name), [
+    "needs-decomposition",
+  ]);
+  assert.deepEqual(calls.setLabels[0].labels, [
+    "enhancement",
+    "needs-decomposition",
+  ]);
+});
+
+test("syncLabels clears decomposition after every declared topic has a disposition", async () => {
+  const { github, calls } = createGithub({ latestVersion: "6.4.1" });
+  const issue = {
+    number: 1796,
+    title: "Availability workflow feedback",
+    body: "## Additional actionable topics\nNone.\n",
+    labels: [{ name: "enhancement" }, { name: "needs-decomposition" }],
+  };
+
+  await triage.syncLabels({
+    github,
+    context: createContext({ action: "edited", issue }),
+    core: createCore(),
+  });
+
+  assert.equal(calls.createLabel.length, 0);
+  assert.deepEqual(calls.setLabels[0].labels, ["enhancement"]);
+});
+
+test("additional topic classification is explicit and fail-quiet for legacy forms", () => {
+  const { classifyAdditionalActionableTopics } = triage.internals;
+
+  assert.equal(classifyAdditionalActionableTopics("## Problem\nOne thing\n"), null);
+  assert.equal(
+    classifyAdditionalActionableTopics("## Additional actionable topics\n_No response_\n"),
+    false
+  );
+  assert.equal(
+    classifyAdditionalActionableTopics("## Additional actionable topics\nNone known.\n"),
+    false
+  );
+  assert.equal(
+    classifyAdditionalActionableTopics(
+      "## Additional actionable topics\n- Add a storage filter\n- Reduce log noise\n"
+    ),
+    true
+  );
+});
+
+test("every actionable issue form exposes the decomposition signal", () => {
+  const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
+  for (const name of [
+    "bug_report.yml",
+    "feature_request.yml",
+    "v6_rc_feedback.yml",
+  ]) {
+    const form = fs.readFileSync(path.join(templateDir, name), "utf8");
+    assert.match(form, /id: additional_topics/);
+    assert.match(form, /label: Additional actionable topics/);
+    assert.match(
+      form,
+      /id: additional_topics[\s\S]*?validations:\s*\n\s+required: true/
+    );
+  }
 });
 
 test("postRetestComment comments once for older non-maintainer bug reports", async () => {

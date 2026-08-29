@@ -124,6 +124,15 @@ body:
       required: true
 
   - type: textarea
+    id: additional_topics
+    attributes:
+      label: Additional actionable topics
+      description: Enter "None" for a single topic. If this report also raises another bug, feature, or workflow, list each topic here; triage will preserve it with a separate linked disposition.
+      placeholder: None
+    validations:
+      required: true
+
+  - type: textarea
     id: evidence
     attributes:
       label: Logs, screenshots, or diagnostics

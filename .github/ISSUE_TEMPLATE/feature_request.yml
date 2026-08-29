@@ -1,0 +1,65 @@
+name: Feature request
+description: Describe one operator problem or workflow Pulse could improve
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lead with one primary operator outcome. If context exposes another actionable topic, list it in the dedicated field below; triage will preserve it rather than silently folding it into the primary request.
+
+        Do not include credentials, tokens, private keys, or unsanitized configuration files.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to accomplish, and what makes it difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_workflow
+    attributes:
+      label: Current workflow
+      description: Describe how you handle this now. Include the relevant platform, Pulse page, deployment type, and constraints.
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired_outcome
+    attributes:
+      label: Desired outcome
+      description: What would a successful Pulse workflow let you do? Focus on the outcome rather than prescribing an implementation when possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds, other tools, or different approaches have you tried?
+
+  - type: textarea
+    id: additional_topics
+    attributes:
+      label: Additional actionable topics
+      description: Enter "None" for a single request. If the context also raises another bug, feature, or workflow, list each topic here; triage will preserve it with a separate linked disposition.
+      placeholder: None
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add screenshots, examples, or related issues. Do not include credentials, tokens, private keys, or unsanitized configuration files.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
