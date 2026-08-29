@@ -52,7 +52,7 @@ import {
 // Nodes section of the Overview stack; the page model filters them down to
 // those tagged kubernetes.
 const KUBERNETES_RESOURCE_QUERY =
-  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-endpoint-slice,k8s-network-policy,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class,k8s-configmap,k8s-secret,k8s-serviceaccount,k8s-role,k8s-cluster-role,k8s-role-binding,k8s-cluster-role-binding,k8s-resource-quota,k8s-limit-range,k8s-pod-disruption-budget,k8s-horizontal-pod-autoscaler,k8s-event,agent';
+  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-endpoint-slice,k8s-network-policy,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class,k8s-configmap,k8s-secret,k8s-serviceaccount,k8s-role,k8s-cluster-role,k8s-role-binding,k8s-cluster-role-binding,k8s-resource-quota,k8s-limit-range,k8s-pod-disruption-budget,k8s-horizontal-pod-autoscaler,k8s-event,agent&source=kubernetes';
 
 const KubernetesIcon = getPlatformIcon('kubernetes');
 const k8sIcon = () => <KubernetesIcon class="h-6 w-6 text-slate-400" />;

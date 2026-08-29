@@ -1,18 +1,23 @@
 {
   "version": 1,
-  "base_sha": "6d4ee48000f9266d161af000f88d9d1f10042328",
-  "verified_at": "2026-08-29T22:35:09Z",
+  "base_sha": "d607d5cf4616e52b2fc7a576846dbe7204e9a7cf",
+  "verified_at": "2026-08-29T23:04:06Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
-    "frontend-modern/src/hooks/useUnifiedResources.ts"
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "659851ff4111f53d15f74d7959ab9e3f21683eecf0e5c55d91e477f47ad93540",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "0b5cca6992ae17575e5f689268e152cbdd47f61b3169043cec314b27c11d8c97"
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "013f32dc0201ed993a68763a53e88374fe9b08892e321806fb5dbb9aa51bf77f",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "c8ab6ff8abdf7c61a5c75f0d024a682c1b83a10efa46278c87b946afe654ef60",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "2158aed352e98b2fc1f0d308b494d0a8d387aefc28fbf90bbc92a498e49e161a"
   },
   "routes": [
-    "/vmware/overview"
+    "/proxmox/overview",
+    "/proxmox/backups/date",
+    "/docker/overview",
+    "/kubernetes/overview"
   ],
   "viewports": [
     {
@@ -25,14 +30,18 @@
     }
   ],
   "states": [
-    "vSphere overview with seven ESXi hosts and eighteen VMs loaded from one source-scoped canonical inventory snapshot",
-    "desktop host table, workload filters, grouped VM table, and live-connection status",
-    "narrow host and VM table projections with the responsive filter control and fixed mobile navigation"
+    "Proxmox Overview with the node table and paginated guest inventory populated from only the source-scoped Overview owner",
+    "Proxmox Backups with PBS servers, backup-health summary, activity chart, filters, and workload rows composed from the existing guest snapshot plus PBS rows",
+    "Docker Overview with provider-owned hosts and containers populated from one source-scoped inventory request",
+    "Kubernetes Overview with provider-owned clusters, deployments, and pods populated from one source-scoped inventory request",
+    "all four provider states at desktop and narrow viewport widths"
   ],
   "interactions": [
-    "reloaded the vSphere overview with browser request tracing enabled and verified the only resource-list request was the page-owned type-and-source-scoped snapshot",
-    "verified the embedded VM filter and table populated from the owner snapshot without a generic workload or infrastructure resource request",
-    "set a 390 by 844 viewport and verified the host rows, VM search, Filters action, grouped VM rows, and mobile navigation remained visible and usable",
-    "reset the temporary viewport override to the browser default after responsive verification"
+    "reloaded Proxmox Overview with browser request tracing and verified that only its ten paginated source=proxmox Overview requests ran, with no inactive Storage, Backups, Replication, Ceph, or Mail hydration",
+    "navigated from Proxmox Overview to Backups and verified that the transition added exactly one source=pbs request without repeating the paginated guest inventory",
+    "reloaded Docker Overview and verified that its only inventory request included source=docker and populated the host and container surfaces",
+    "reloaded Kubernetes Overview and verified that its only inventory request included source=kubernetes and populated the cluster and workload surfaces",
+    "repeated the provider route and transition checks at 390 by 844 and verified the tables, navigation, filters, status summaries, and workload rows remained present",
+    "reset the temporary viewport override and closed the verification tab"
   ]
 }

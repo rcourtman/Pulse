@@ -14,6 +14,7 @@ const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockStorageProps = vi.hoisted(() => vi.fn());
 const mockTotalStats = vi.hoisted(() => vi.fn());
 const mockNodesTableProps = vi.hoisted(() => vi.fn());
+const mockBackupsTableProps = vi.hoisted(() => vi.fn());
 const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
@@ -112,7 +113,10 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
 }));
 
 vi.mock('../ProxmoxBackupsTable', () => ({
-  ProxmoxBackupsTable: () => <div data-testid="backups-table" />,
+  ProxmoxBackupsTable: (props: { workloads: Resource[]; servers: Resource[] }) => {
+    mockBackupsTableProps(props);
+    return <div data-testid="backups-table" />;
+  },
 }));
 
 vi.mock('../ProxmoxCephTable', () => ({
@@ -364,7 +368,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxRecoverableTableSource).not.toContain('class="truncate text-[10px] text-muted"');
   });
 
-  it('hydrates route-scoped resource families instead of one broad estate request', () => {
+  it('hydrates only the active source-scoped resource family', () => {
     setResources([
       makeResource({
         id: 'agent:pve-1',
@@ -392,18 +396,60 @@ describe('ProxmoxPageSurface contract', () => {
       'proxmox-mail',
     ]);
     expect(options.map((value) => value.query)).toEqual([
-      'type=agent,vm,system-container,oci-container',
-      'type=agent,pbs,storage,physical_disk,ceph',
-      'type=agent',
-      'type=agent,vm,system-container,pbs',
-      'type=ceph',
-      'type=pmg',
+      'type=agent,vm,system-container,oci-container&source=proxmox',
+      'type=agent,pbs,storage,physical_disk,ceph&source=proxmox,pbs,agent',
+      'type=agent&source=proxmox',
+      'type=pbs&source=pbs',
+      'type=ceph&source=proxmox',
+      'type=pmg&source=pmg',
     ]);
     expect(options[0].enabled()).toBe(true);
     expect(options.slice(1).every((value) => value.enabled() === false)).toBe(true);
-    expect(proxmoxPageSurfaceSource).toContain('requestIdleCallback');
-    expect(proxmoxPageSurfaceSource).toContain("phoneViewport\n      ? ['storage']");
+    expect(proxmoxPageSurfaceSource).not.toContain('backgroundHydrationTabs');
+    expect(proxmoxPageSurfaceSource).not.toContain('requestIdleCallback');
     expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
+  });
+
+  it('reuses the overview guest snapshot and fetches only PBS rows for Backups', () => {
+    mockPathname.mockReturnValue('/proxmox/backups');
+    const guest = makeResource({ id: 'vm-100', type: 'vm', proxmox: { vmid: 100 } });
+    const server = makeResource({
+      id: 'pbs-1',
+      type: 'pbs',
+      platformType: 'proxmox-pbs',
+      sources: ['pbs'],
+    });
+    mockUseUnifiedResources.mockImplementation((options: { cacheKey: string }) => ({
+      resources: () => {
+        if (options.cacheKey === 'proxmox-overview') return [guest];
+        if (options.cacheKey === 'proxmox-backups-shell') return [server];
+        return [];
+      },
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    }));
+
+    renderSurface();
+
+    const options = mockUseUnifiedResources.mock.calls.map(
+      ([value]) => value as { cacheKey: string; query: string; enabled: () => boolean },
+    );
+    expect(options.map((value) => value.enabled())).toEqual([
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+    ]);
+    expect(options[3]).toMatchObject({
+      cacheKey: 'proxmox-backups-shell',
+      query: 'type=pbs&source=pbs',
+    });
+    expect(mockBackupsTableProps).toHaveBeenCalledWith(
+      expect.objectContaining({ workloads: [guest], servers: [server] }),
+    );
   });
 
   it('places workload controls beside the workload table they affect', () => {

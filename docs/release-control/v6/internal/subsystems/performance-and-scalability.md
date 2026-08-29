@@ -1379,6 +1379,24 @@ reduction adds no polling fallback or freshness regression. Contract tests pin
 the request shape, realtime projection, snapshot injection, and refresh
 handoff.
 
+### Provider routes hydrate only the inventory they own
+
+The Proxmox shell enables only the active tab's unified-resource query. An
+Overview visit must not eagerly start Storage, Backups, Replication, Ceph, and
+Mail inventory in idle callbacks: those independent page families can fan out
+dozens of paged requests and compete with the visible node and guest snapshot.
+Backups reuses the Overview guest owner and adds a bounded PBS-only query, so
+moving between Overview and Backups never downloads the same large PVE guest
+estate twice. A direct Backups visit enables both owners because both resource
+families are visible there; other inactive routes remain dormant.
+
+Docker and Kubernetes page queries include their canonical provider source as
+well as their type family. Merged provider/agent rows remain eligible while
+unrelated standalone or other-platform agents are rejected at the API and
+local WebSocket projection boundaries. Focused page contracts must pin the
+exact query ownership, and browser verification must show only the active
+route's resource request before first paint at desktop and phone widths.
+
 ### Command-session liveness lookup stays bounded and in-memory
 
 The connections ledger's command-channel liveness check

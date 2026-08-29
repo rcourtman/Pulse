@@ -57,7 +57,7 @@ import type { Resource } from '@/types/resource';
 import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 
 const DOCKER_RESOURCE_QUERY =
-  'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
+  'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config&source=docker';
 
 const DockerIcon = getPlatformIcon('docker');
 const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;

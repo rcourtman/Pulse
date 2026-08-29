@@ -80,6 +80,14 @@ overview must invalidate that owner snapshot and update both the host/node and
 guest regions from the same result, so a large estate cannot render
 contradictory counts, flash a false empty workload state, or pay duplicate
 transport and reconciliation costs.
+Provider workspaces must also constrain their canonical query at the source
+boundary instead of downloading same-type rows from unrelated platforms and
+discarding them in the page model. Docker and Kubernetes use their provider
+source directly, including merged agent rows that carry that source. Proxmox
+keeps separate route-family queries, but only the active route may enable its
+query: inactive desktop and phone tabs must not create a background inventory
+burst. The Backups route composes the existing Overview guest snapshot with a
+PBS-only addition rather than issuing a second guest-estate request.
 The overview's bounded structural summary remains ahead of its long virtualized
 inventory at desktop and narrow widths. In particular, Proxmox must show up to
 six phone rows or twelve larger-layout rows before the guest list instead of

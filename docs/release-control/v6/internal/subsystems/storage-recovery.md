@@ -620,15 +620,15 @@ complete client-side result set; windowing must not become pagination, a partial
 count, or a recovery-local `Next` / `Load more` control. Expanded coverage
 evidence remains owned by the visible workload row.
 The Proxmox shell hydrates Overview, Storage, Replication, Backups, Ceph, and
-Mail from route-scoped resource families. Only the visible tab consumes
-realtime reconciliation. Desktop background hydration may prefetch the other
-route families, while phone background hydration is bounded to Storage because
-the phone shell retains at most the two most-recent tab trees. Storage reuses
+Mail from source-scoped route resource families. Only the visible tab enables
+its query and consumes realtime reconciliation; desktop and phone shells must
+not prefetch inactive resource families behind the active route. Storage reuses
 the shell's bounded agent/PBS/storage/physical-disk/Ceph source instead of
-opening a duplicate page query or an all-estate subscription, and is prewarmed
-for the common Overview/Storage transition; hidden route-state effects remain
-dormant and a forced Proxmox storage scope is not serialized as redundant URL
-state.
+opening a duplicate page query or an all-estate subscription; hidden route
+state effects remain dormant and a forced Proxmox storage scope is not
+serialized as redundant URL state. Backups reuses the source-scoped Overview
+guest snapshot and adds only the PBS resource family, so it cannot repeat the
+large VM/LXC enumeration under a second request owner.
 PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation. The table owns which PBS artifact count is

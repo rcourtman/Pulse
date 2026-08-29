@@ -5,8 +5,6 @@ import {
   createMemo,
   createResource,
   createSignal,
-  onCleanup,
-  onMount,
   type Accessor,
 } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
@@ -66,23 +64,22 @@ import {
   type ProxmoxPageTabId,
 } from './proxmoxPageModel';
 
-// Each workflow hydrates only the resource families it consumes. The first
-// REST page also carries global type aggregations, so evidence-gated tabs do
-// not require the old 1,000+ row workspace request.
+// Each workflow hydrates only the source-scoped resource families it consumes.
+// Backups reuse the Overview guest snapshot and add only PBS rows, so opening
+// that workflow never downloads the same large guest inventory twice.
 const PROXMOX_RESOURCE_QUERY_BY_TAB: Record<ProxmoxPageTabId, string> = {
-  overview: 'type=agent,vm,system-container,oci-container',
-  storage: 'type=agent,pbs,storage,physical_disk,ceph',
-  replication: 'type=agent',
-  backups: 'type=agent,vm,system-container,pbs',
-  ceph: 'type=ceph',
-  mail: 'type=pmg',
+  overview: 'type=agent,vm,system-container,oci-container&source=proxmox',
+  storage: 'type=agent,pbs,storage,physical_disk,ceph&source=proxmox,pbs,agent',
+  replication: 'type=agent&source=proxmox',
+  backups: 'type=pbs&source=pbs',
+  ceph: 'type=ceph&source=proxmox',
+  mail: 'type=pmg&source=pmg',
 };
 
 const PROXMOX_PLATFORM_FILTER = 'proxmox-all';
 const PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE = 'proxmox';
 const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const;
 const PHONE_MOUNTED_TAB_LIMIT = 2;
-const PHONE_BACKGROUND_HYDRATION_INTERVAL_MS = 750;
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));
 const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },
@@ -127,57 +124,12 @@ export function ProxmoxPageSurface() {
     const requested = requestedTab();
     return visibleTabIds().has(requested) ? requested : 'overview';
   });
-  const [backgroundHydrationTabs, setBackgroundHydrationTabs] = createSignal<Set<ProxmoxPageTabId>>(
-    new Set(),
-  );
-  onMount(() => {
-    // A phone retains only two tab trees, so downloading every route in the
-    // background spends memory and main-thread time on views that will be
-    // evicted before they are likely to be used. Storage is the common
-    // Overview transition and the only worthwhile phone prewarm.
-    const hydrationQueue: ProxmoxPageTabId[] = phoneViewport
-      ? ['storage']
-      : ['storage', 'backups', 'replication', 'ceph', 'mail', 'overview'];
-    const idleHandles: number[] = [];
-    const timeoutHandles: number[] = [];
-
-    const hydrateNext = (index: number) => {
-      if (index >= hydrationQueue.length) return;
-      const hydrate = () => {
-        setBackgroundHydrationTabs((current) => {
-          const next = new Set(current);
-          next.add(hydrationQueue[index]);
-          return next;
-        });
-        if (phoneViewport) {
-          timeoutHandles.push(
-            window.setTimeout(() => hydrateNext(index + 1), PHONE_BACKGROUND_HYDRATION_INTERVAL_MS),
-          );
-        } else {
-          hydrateNext(index + 1);
-        }
-      };
-
-      if (typeof window.requestIdleCallback === 'function') {
-        idleHandles.push(window.requestIdleCallback(hydrate, { timeout: 1_000 }));
-      } else {
-        timeoutHandles.push(window.setTimeout(hydrate, 250));
-      }
-    };
-
-    hydrateNext(0);
-    onCleanup(() => {
-      idleHandles.forEach((handle) => window.cancelIdleCallback(handle));
-      timeoutHandles.forEach((handle) => window.clearTimeout(handle));
-    });
-  });
-  const shouldHydrateTab = (tab: ProxmoxPageTabId) =>
-    activeTab() === tab || backgroundHydrationTabs().has(tab);
+  const shouldHydrateTab = (tab: ProxmoxPageTabId) => activeTab() === tab;
   const overviewResources = useUnifiedResources({
     query: PROXMOX_RESOURCE_QUERY_BY_TAB.overview,
     cacheKey: 'proxmox-overview',
-    enabled: () => shouldHydrateTab('overview'),
-    realtimeEnabled: () => activeTab() === 'overview',
+    enabled: () => shouldHydrateTab('overview') || shouldHydrateTab('backups'),
+    realtimeEnabled: () => activeTab() === 'overview' || activeTab() === 'backups',
   });
   const storageResources = useUnifiedResources({
     query: PROXMOX_RESOURCE_QUERY_BY_TAB.storage,
@@ -232,25 +184,6 @@ export function ProxmoxPageSurface() {
   createEffect(() => {
     mountTab(activeTab());
   });
-  let storagePrewarmScheduled = false;
-  createEffect(() => {
-    if (
-      storagePrewarmScheduled ||
-      activeTab() !== 'overview' ||
-      !backgroundHydrationTabs().has('storage') ||
-      storageResources.resources().length === 0
-    ) {
-      return;
-    }
-    storagePrewarmScheduled = true;
-    if (typeof window.requestIdleCallback === 'function') {
-      const idleHandle = window.requestIdleCallback(() => mountTab('storage'), { timeout: 2_000 });
-      onCleanup(() => window.cancelIdleCallback(idleHandle));
-      return;
-    }
-    const timeoutHandle = window.setTimeout(() => mountTab('storage'), 250);
-    onCleanup(() => window.clearTimeout(timeoutHandle));
-  });
   const resourceState = createMemo(() => {
     switch (activeTab()) {
       case 'storage':
@@ -267,18 +200,36 @@ export function ProxmoxPageSurface() {
         return overviewResources;
     }
   });
-  const loading = () => resourceState().loading();
-  const error = () => resourceState().error();
-  const refetch = () => resourceState().refetch();
+  const loading = () =>
+    activeTab() === 'backups'
+      ? overviewResources.loading() || backupResources.loading()
+      : resourceState().loading();
+  const error = () =>
+    activeTab() === 'backups'
+      ? (overviewResources.error() ?? backupResources.error())
+      : resourceState().error();
+  const refetch = () =>
+    activeTab() === 'backups'
+      ? Promise.all([overviewResources.refetch(), backupResources.refetch()])
+      : resourceState().refetch();
   createEffect(() => {
     const next = resourceState().aggregations?.();
     if (next) setResourceAggregations(next);
   });
+  const normalizeSnapshot = (snapshot: Resource[] | undefined) =>
+    Array.isArray(snapshot) ? snapshot : [];
   const buildModel = (snapshot: Resource[] | undefined) =>
-    buildProxmoxPageModel(Array.isArray(snapshot) ? snapshot : []);
+    buildProxmoxPageModel(normalizeSnapshot(snapshot));
   const overviewModel = createMemo(() => buildModel(overviewResources.resources()));
+  const backupModel = createMemo(() =>
+    buildModel([
+      ...normalizeSnapshot(overviewResources.resources()),
+      ...normalizeSnapshot(backupResources.resources()),
+    ]),
+  );
   const model = createMemo(() => {
     if (activeTab() === 'overview') return overviewModel();
+    if (activeTab() === 'backups') return backupModel();
     return buildModel(resourceState().resources());
   });
   const agentUpdateTargetVersion = createMemo(

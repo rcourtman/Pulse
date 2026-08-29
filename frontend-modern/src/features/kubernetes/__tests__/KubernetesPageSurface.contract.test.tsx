@@ -191,6 +191,11 @@ describe('KubernetesPageSurface contract', () => {
         query: expect.stringContaining('k8s-statefulset'),
       }),
     );
+    expect(mockUseUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('&source=kubernetes'),
+      }),
+    );
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
       'data-tabs',
       'overview,workloads',

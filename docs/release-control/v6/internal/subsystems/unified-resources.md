@@ -2053,6 +2053,14 @@ the raw `vmware` source, rather than degrading a source-scoped page to periodic
 REST refreshes. VMware Overview passes that same source-scoped snapshot into
 the embedded Workloads state, so hosts and VMs share one inventory generation
 and one explicit refresh path.
+Docker and Kubernetes page owners use the same source-aware projection for
+their complete provider type families. Their linked agent rows remain visible
+because canonical merge preserves the provider source beside the agent source;
+the pages must not admit every agent merely to recover those merged rows.
+Proxmox route queries likewise declare their exact PVE, PBS, PMG, or agent
+source boundary. Backups extend the source-scoped Overview guest snapshot with
+a PBS-only snapshot, so a route transition composes canonical resources rather
+than repeating the guest enumeration under another cache key.
 
 ### Agent libvirt domains use a provider-neutral VM facet
 

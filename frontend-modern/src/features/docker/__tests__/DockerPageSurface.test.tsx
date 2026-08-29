@@ -277,6 +277,11 @@ describe('DockerPageSurface', () => {
         query: expect.stringContaining('docker-config'),
       }),
     );
+    expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining('&source=docker'),
+      }),
+    );
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-show-toolbar', 'false');
     expect(screen.getByRole('link', { name: 'View all machines' })).toHaveAttribute(
