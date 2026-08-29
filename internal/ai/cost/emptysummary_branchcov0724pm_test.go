@@ -32,7 +32,7 @@ func TestBranchcov0724pmEmptySummaryTable(t *testing.T) {
 	// pricingAsOf is the build-embedded pricing-table date (pricing.go:39).
 	// Asserted as a concrete observable value, not via PricingAsOf(), so the
 	// test would still catch a regression if both moved together.
-	const wantPricingAsOf = "2026-06-04"
+	const wantPricingAsOf = "2026-08-29"
 
 	cases := []struct {
 		name          string
