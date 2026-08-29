@@ -10,6 +10,7 @@ import {
 import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const EXPECTED_TELEMETRY_SCHEMA_VERSION = 15;
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -126,7 +127,9 @@ test.describe("Telemetry disclosure", () => {
     const initialPreview = await readTelemetryPreview(page);
     expect(initialPreview.event).toBe("heartbeat");
     expect(initialPreview.install_id).toBeTruthy();
-    expect(initialPreview.schema_version).toBe(14);
+    expect(initialPreview.schema_version).toBe(
+      EXPECTED_TELEMETRY_SCHEMA_VERSION,
+    );
     expect(initialPreview.active_alerts_warning).toBeGreaterThanOrEqual(0);
     expect(
       initialPreview.alerts_resolution_under_15m_30d,

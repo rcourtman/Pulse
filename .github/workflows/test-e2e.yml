@@ -50,6 +50,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: tests/integration/package-lock.json
 
+      - name: Validate telemetry schema version parity
+        working-directory: tests/integration
+        run: |
+          npm run check:telemetry-schema-version
+          node --test scripts/check-telemetry-schema-version.test.mjs
+
       - name: Install integration dependencies
         working-directory: tests/integration
         run: npm ci
