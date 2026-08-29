@@ -74,9 +74,11 @@ Normal stable publication and stable dry runs select `signpath` directly.
 - Release checksums and detached signatures are published alongside artifacts
   and verified independently after publication.
 - Release activation requires GitHub CLI 2.97.0 or newer, which includes the
-  literal signer-identity matcher fix. The published checksum manifest must
-  carry build provenance from the exact `create-release.yml` workflow and
-  release source commit; repository-level provenance is not sufficient.
+  literal signer-identity matcher fix. The shared
+  `scripts/require-safe-gh-attestation.sh` guard enforces this floor. The
+  published checksum manifest must carry build provenance from the exact
+  `create-release.yml` workflow and release source commit; repository-level
+  provenance is not sufficient.
 - Every new release is assembled and validated as a draft. Its activation
   marker is uploaded and digest-checked before publication; GitHub must then
   report the published release as immutable, protecting its tag and complete

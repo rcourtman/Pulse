@@ -4742,6 +4742,7 @@ func TestPublicDownloadEndpointsBypassAuth(t *testing.T) {
 		"/install.sh",
 		"/install.ps1",
 		"/download/pulse-agent",
+		"/download/pulse-agent-helper?arch=linux-amd64",
 	}
 
 	for idx, path := range paths {

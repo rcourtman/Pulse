@@ -4522,3 +4522,10 @@ the customer-promotion lease or mutate a floating image tag, Helm index,
 paid-runtime pointer, or live environment until the check passes. Repository
 release immutability must therefore be enabled before merging or running this
 activation path.
+
+Attestation policy decisions require GitHub CLI 2.97.0 or newer so signer
+repository and workflow names are matched literally. The shared verifier must
+also bind the downloaded `checksums.txt` bytes to the immutable release and to
+SLSA v1 provenance from the exact `create-release.yml` workflow and expected
+source SHA. Multi-asset download retries clear both the activation marker and
+checksum manifest first so a partial attempt cannot poison every later retry.

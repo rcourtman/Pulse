@@ -25,6 +25,7 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         asset_verification_succeeds: bool = True,
         provenance_verification_succeeds: bool = True,
         gh_version: str = "2.97.0",
+        partial_download_once: bool = False,
     ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -54,6 +55,14 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                       while [ "$#" -gt 0 ]; do
                         if [ "$1" = --dir ]; then
                           mkdir -p "$2"
+                          if [ "$PARTIAL_DOWNLOAD_ONCE" = true ] && [ ! -e "$DOWNLOAD_STATE" ]; then
+                            touch "$DOWNLOAD_STATE"
+                            printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$2/checksums.txt"
+                            exit 1
+                          fi
+                          if [ -e "$2/release-activation.json" ] || [ -e "$2/checksums.txt" ]; then
+                            exit 66
+                          fi
                           printf '%s\\n' '{{"schema_version": 1}}' > "$2/release-activation.json"
                           printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$2/checksums.txt"
                           exit 0
@@ -79,9 +88,13 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
             env.update(
                 {
                     "PATH": f"{root}:{env['PATH']}",
-                    "PULSE_RELEASE_ATTESTATION_ATTEMPTS": "1",
+                    "PULSE_RELEASE_ATTESTATION_ATTEMPTS": (
+                        "2" if partial_download_once else "1"
+                    ),
                     "PULSE_RELEASE_ATTESTATION_RETRY_DELAY": "0",
                     "GH_VERSION": gh_version,
+                    "PARTIAL_DOWNLOAD_ONCE": str(partial_download_once).lower(),
+                    "DOWNLOAD_STATE": str(root / "download-state"),
                 }
             )
             result = subprocess.run(
@@ -165,6 +178,13 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("checksum manifest build provenance verification failed", result.stderr)
         self.assertIn("attestation verify", calls)
+
+    def test_recovers_from_a_partial_multi_asset_download(self) -> None:
+        result, calls = self.run_verifier(
+            self.release(), partial_download_once=True
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls.count("release download"), 2)
 
     def test_rejects_an_unsafe_github_cli_before_release_lookup(self) -> None:
         result, calls = self.run_verifier(self.release(), gh_version="2.96.1")

@@ -10253,6 +10253,23 @@ func TestContract_AgentHelperDownloadIsLinuxOnlyAndSeparatelySigned(t *testing.T
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("non-Linux helper status = %d, want %d", response.Code, http.StatusBadRequest)
 	}
+
+	// The installer fetches this artifact before it has an API credential, so
+	// the full router must preserve the documented public download boundary.
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	publicRouter := NewRouter(cfg, nil, nil, nil, nil, "v6.0.0")
+	request = httptest.NewRequest(
+		http.MethodPost,
+		"/download/pulse-agent-helper?arch=linux-amd64",
+		nil,
+	)
+	response = httptest.NewRecorder()
+	publicRouter.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("public helper download status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+	}
 }
 
 func TestContract_AgentRunnerDownloadIsLinuxOnlyAndSeparatelySigned(t *testing.T) {

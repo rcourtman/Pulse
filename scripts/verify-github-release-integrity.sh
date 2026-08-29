@@ -124,7 +124,10 @@ fi
 # release attestation rather than trusting filename and JSON identity alone.
 downloaded=false
 for attempt in $(seq 1 "$ATTESTATION_ATTEMPTS"); do
-    rm -f "$activation_asset"
+    # A previous attempt can leave either asset behind after a partial
+    # download. Clear both because gh release download refuses to overwrite
+    # existing files unless explicitly told to do so.
+    rm -f "$activation_asset" "$checksums_asset"
     if gh release download "$TAG" \
         --repo "$REPO" \
         --pattern release-activation.json \
