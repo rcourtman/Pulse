@@ -156,11 +156,11 @@ describe('AppLayout navigation icons', () => {
     cleanup();
   });
 
-  const getInfrastructureTab = (name: string) => {
-    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+  const getInfrastructureLink = (name: string) => {
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
     expect(infrastructureGroup).toBeTruthy();
-    return within(infrastructureGroup as HTMLElement).getByRole('tab', { name });
+    return within(infrastructureGroup as HTMLElement).getByRole('link', { name });
   };
 
   const platformResources = () => [
@@ -177,26 +177,27 @@ describe('AppLayout navigation icons', () => {
     expect(container.querySelector('main')).toHaveClass('mb-1', 'sm:mb-2');
     expect(container.querySelector('footer')).toHaveClass('pulse-footer', 'px-2', 'sm:px-4');
 
-    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();
 
-    const desktopTabs = within(systemGroup as HTMLElement).getAllByRole('tab');
+    const desktopTabs = within(systemGroup as HTMLElement).getAllByRole('link');
     expect(desktopTabs).toHaveLength(4);
     desktopTabs.forEach((tab) => {
+      expect(tab.tagName).toBe('A');
       expect(tab.querySelector('svg')).toBeTruthy();
     });
-    const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('tab', {
+    const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('link', {
       name: 'Patrol',
     });
     expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
-    expect(within(systemGroup as HTMLElement).getByRole('tab', { name: '1 Alerts' })).toBeTruthy();
+    expect(within(systemGroup as HTMLElement).getByRole('link', { name: '1 Alerts' })).toBeTruthy();
     expect(
-      within(systemGroup as HTMLElement).queryByRole('tab', {
+      within(systemGroup as HTMLElement).queryByRole('link', {
         name: 'Pulse Patrol Patrol',
       }),
     ).toBeNull();
-    expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Patrol P' })).toBeNull();
+    expect(within(systemGroup as HTMLElement).queryByRole('link', { name: 'Patrol P' })).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     ['alerts', 'ai', 'actions'].forEach((tabId) => {
@@ -221,11 +222,11 @@ describe('AppLayout navigation icons', () => {
     patrolAttentionMockState.activeCount = 2;
     renderLayout();
 
-    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();
 
-    const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('tab', {
+    const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('link', {
       name: 'Patrol: 2 active attention items',
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
@@ -245,14 +246,16 @@ describe('AppLayout navigation icons', () => {
     actionInboxMockState.pendingActionCount = 3;
     renderLayout([], '/actions');
 
-    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();
-    const actionsTab = within(systemGroup as HTMLElement).getByRole('tab', {
+    const actionsTab = within(systemGroup as HTMLElement).getByRole('link', {
       name: 'Actions: 3 actions await approval',
     });
     expect(actionsTab.className).toContain('text-blue-600');
-    expect(within(systemGroup as HTMLElement).getByRole('tab', { name: 'Patrol' })).toBeTruthy();
+    expect(actionsTab).toHaveAttribute('href', '/actions');
+    expect(actionsTab).toHaveAttribute('aria-current', 'page');
+    expect(within(systemGroup as HTMLElement).getByRole('link', { name: 'Patrol' })).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(
@@ -280,32 +283,32 @@ describe('AppLayout navigation icons', () => {
       makeResource({ id: 'vcenter-1', type: 'vm', platformType: 'vmware-vsphere' }),
     ]);
 
-    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
     expect(infrastructureGroup).toBeTruthy();
 
     expect(
       within(infrastructureGroup as HTMLElement)
-        .getAllByRole('tab')
+        .getAllByRole('link')
         .map((tab) => tab.getAttribute('aria-label')),
     ).toEqual(['Proxmox', 'Docker', 'vSphere', 'Machines']);
     expect(
-      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Machines' }),
+      within(infrastructureGroup as HTMLElement).getByRole('link', { name: 'Machines' }),
     ).toBeTruthy();
     expect(
-      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Proxmox' }),
+      within(infrastructureGroup as HTMLElement).getByRole('link', { name: 'Proxmox' }),
+    ).toHaveAttribute('href', '/proxmox/overview');
+    expect(
+      within(infrastructureGroup as HTMLElement).getByRole('link', { name: 'Docker' }),
     ).toBeTruthy();
     expect(
-      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'Docker' }),
-    ).toBeTruthy();
-    expect(
-      within(infrastructureGroup as HTMLElement).queryByRole('tab', { name: 'Kubernetes' }),
+      within(infrastructureGroup as HTMLElement).queryByRole('link', { name: 'Kubernetes' }),
     ).toBeNull();
     expect(
-      within(infrastructureGroup as HTMLElement).queryByRole('tab', { name: 'TrueNAS' }),
+      within(infrastructureGroup as HTMLElement).queryByRole('link', { name: 'TrueNAS' }),
     ).toBeNull();
     expect(
-      within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'vSphere' }),
+      within(infrastructureGroup as HTMLElement).getByRole('link', { name: 'vSphere' }),
     ).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -334,22 +337,22 @@ describe('AppLayout navigation icons', () => {
       },
     );
 
-    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
     expect(infrastructureGroup).toBeTruthy();
-    expect(within(infrastructureGroup as HTMLElement).queryByRole('tab')).toBeNull();
+    expect(within(infrastructureGroup as HTMLElement).queryByRole('link')).toBeNull();
   });
 
   it('restores the previous Proxmox route state when returning from another platform tab', async () => {
     renderLayout(platformResources(), '/proxmox/overview?status=running');
 
-    await fireEvent.click(getInfrastructureTab('Docker'));
+    await fireEvent.click(getInfrastructureLink('Docker'));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/docker/overview');
       expect(window.location.search).toBe('');
     });
 
-    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await fireEvent.click(getInfrastructureLink('Proxmox'));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/overview');
       expect(window.location.search).toBe('?status=running');
@@ -365,13 +368,13 @@ describe('AppLayout navigation icons', () => {
       expect(window.location.search).toBe('?status=running');
     });
 
-    await fireEvent.click(getInfrastructureTab('Docker'));
+    await fireEvent.click(getInfrastructureLink('Docker'));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/docker/overview');
       expect(window.location.search).toBe('');
     });
 
-    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await fireEvent.click(getInfrastructureLink('Proxmox'));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/overview');
       expect(window.location.search).toBe('?status=running');
@@ -381,13 +384,13 @@ describe('AppLayout navigation icons', () => {
   it('keeps remembered route state scoped to the platform tab that owns it', async () => {
     renderLayout(platformResources(), '/docker/overview?host=docker-1');
 
-    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await fireEvent.click(getInfrastructureLink('Proxmox'));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/overview');
       expect(window.location.search).toBe('');
     });
 
-    await fireEvent.click(getInfrastructureTab('Docker'));
+    await fireEvent.click(getInfrastructureLink('Docker'));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/docker/overview');
       expect(window.location.search).toBe('?host=docker-1');
@@ -397,7 +400,7 @@ describe('AppLayout navigation icons', () => {
   it('uses the canonical platform root route when there is no remembered route state', async () => {
     renderLayout(platformResources(), '/settings/infrastructure');
 
-    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await fireEvent.click(getInfrastructureLink('Proxmox'));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/overview');
       expect(window.location.search).toBe('');
@@ -569,7 +572,7 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
     expect(isKioskMode()).toBe(true);
-    expect(screen.queryByRole('tablist', { name: 'Primary navigation' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Primary navigation' })).toBeNull();
     expect(headerIsRevealed(container)).toBe(true);
 
     // The peek is temporary, exactly like the hover and touch affordances.
@@ -585,7 +588,7 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
     expect(isKioskMode()).toBe(false);
-    expect(screen.getByRole('tablist', { name: 'Primary navigation' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeTruthy();
   });
 
   it('redirects a scope-limited session away from settings even when kiosk is off', async () => {
@@ -597,9 +600,9 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
       expect(window.location.pathname).toBe('/docker/overview');
     });
     const systemGroup = screen
-      .getByRole('tablist', { name: 'Primary navigation' })
+      .getByRole('navigation', { name: 'Primary navigation' })
       .querySelector('[aria-label="System"]');
-    expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Settings' })).toBeNull();
+    expect(within(systemGroup as HTMLElement).queryByRole('link', { name: 'Settings' })).toBeNull();
   });
 
   it('leaves settings reachable with kiosk off for a session that has settings access', async () => {
@@ -607,7 +610,7 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     renderLayout([], '/settings/infrastructure', DOCKER_ONLY_VISIBILITY, ['settings:read']);
 
     await waitFor(() => {
-      expect(screen.getByRole('tablist', { name: 'Primary navigation' })).toBeTruthy();
+      expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeTruthy();
     });
     expect(window.location.pathname).toBe('/settings/infrastructure');
   });

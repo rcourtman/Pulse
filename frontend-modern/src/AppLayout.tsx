@@ -1,7 +1,7 @@
 import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { JSX } from 'solid-js';
-import { useLocation, useNavigate } from '@solidjs/router';
+import { A, useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
 import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -256,6 +256,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
   const [skipLinkFocused, setSkipLinkFocused] = createSignal(false);
+  const [primaryRouteMemoryVersion, setPrimaryRouteMemoryVersion] = createSignal(0);
   let headerEl: HTMLDivElement | undefined;
   let assistantLauncherEl: HTMLButtonElement | undefined;
   let restoreAssistantLauncherFocus = false;
@@ -358,6 +359,7 @@ export function AppLayout(props: AppLayoutProps) {
     if (!routeBelongsToPrimaryTab(route, activeTab)) return;
     if (primaryRouteMemory[activeTab] === route) return;
     primaryRouteMemory = { ...primaryRouteMemory, [activeTab]: route };
+    setPrimaryRouteMemoryVersion((version) => version + 1);
   });
 
   createEffect(() => {
@@ -665,12 +667,17 @@ export function AppLayout(props: AppLayoutProps) {
   };
 
   const getPrimaryTargetRoute = (tab: PrimaryTab) => {
+    // Route memory lives across AppLayout remounts. Track local writes with a
+    // signal so link hrefs update as users move within a platform, including
+    // for native middle-click and context-menu navigation.
+    void primaryRouteMemoryVersion();
     return resolvePrimaryNavigationRoute(tab, primaryRouteMemory);
   };
 
   const renderPrimaryNavigationTab = (tab: PrimaryTab) => {
     const isActive = () => getActiveTabDesktop() === tab.id;
-    const disabled = () => !tab.enabled;
+    const needsSetup = () => !tab.enabled;
+    const targetRoute = () => getPrimaryTargetRoute(tab);
     const Icon = tab.icon;
     const baseClasses =
       'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none';
@@ -679,30 +686,23 @@ export function AppLayout(props: AppLayoutProps) {
       if (isActive()) {
         return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
       }
-      if (disabled()) {
-        return `${baseClasses} cursor-not-allowed text-muted opacity-70 bg-base`;
+      if (needsSetup()) {
+        return `${baseClasses} text-muted opacity-70 bg-base hover:bg-surface-hover`;
       }
       return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
     };
 
     const title = () =>
-      disabled() ? `${tab.label} is not configured yet. Click to open settings.` : tab.tooltip;
+      needsSetup() ? `${tab.label} is not configured yet. Click to open settings.` : tab.tooltip;
 
     return (
-      <div
+      <A
+        href={targetRoute()}
         class={className()}
-        role="tab"
-        tabIndex={0}
         aria-label={tab.label}
-        aria-disabled={disabled()}
-        onMouseEnter={() => warmNavigationTarget(getPrimaryTargetRoute(tab))}
-        onClick={() => handlePrimaryClick(tab)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            handlePrimaryClick(tab);
-          }
-        }}
+        aria-current={isActive() ? 'page' : undefined}
+        onMouseEnter={() => warmNavigationTarget(targetRoute())}
+        onFocus={() => warmNavigationTarget(targetRoute())}
         title={title()}
       >
         <span aria-hidden="true" class="inline-flex items-center justify-center">
@@ -717,7 +717,7 @@ export function AppLayout(props: AppLayoutProps) {
           </Show>
         </span>
         <span class="xs:hidden">{tab.label.charAt(0)}</span>
-      </div>
+      </A>
     );
   };
 
@@ -889,9 +889,8 @@ export function AppLayout(props: AppLayoutProps) {
       </div>
 
       <Show when={!kioskMode()}>
-        <div
+        <nav
           class="tabs mb-2 hidden xl:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
-          role="tablist"
           aria-label="Primary navigation"
         >
           <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
@@ -914,20 +913,13 @@ export function AppLayout(props: AppLayoutProps) {
                   };
 
                   return (
-                    <div
+                    <A
+                      href={tab.route}
                       class={className()}
-                      role="tab"
-                      tabIndex={0}
                       aria-label={getDesktopUtilityTabAriaLabel(tab)}
-                      aria-disabled={false}
+                      aria-current={isActive() ? 'page' : undefined}
                       onMouseEnter={() => warmNavigationTarget(tab.route)}
-                      onClick={() => handleUtilityClick(tab)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          handleUtilityClick(tab);
-                        }
-                      }}
+                      onFocus={() => warmNavigationTarget(tab.route)}
                       title={tab.tooltip}
                     >
                       <span aria-hidden="true" class="inline-flex items-center justify-center">
@@ -978,13 +970,13 @@ export function AppLayout(props: AppLayoutProps) {
                           Pro
                         </span>
                       </Show>
-                    </div>
+                    </A>
                   );
                 }}
               </For>
             </div>
           </div>
-        </div>
+        </nav>
       </Show>
 
       <main
