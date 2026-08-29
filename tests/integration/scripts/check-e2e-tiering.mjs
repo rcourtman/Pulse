@@ -9,6 +9,7 @@ import {
   PROBATION_SPECS,
   QUARANTINED_SPECS,
 } from '../e2e-tiering.mjs';
+import { parsePlaywrightTestIdentity } from './e2e-tier-identity.mjs';
 
 const integrationRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const testsRoot = path.join(integrationRoot, 'tests');
@@ -79,12 +80,12 @@ function listPlaywrightTests(tier) {
 
   const tests = new Map();
   for (const rawLine of result.stdout.split('\n')) {
-    const line = rawLine.replace(/\x1b\[[0-9;]*m/g, '');
-    const match = line.match(/^\s*\[([^\]]+)\] › ((.+?\.spec\.ts):\d+:\d+ › .+)$/);
-    if (!match) continue;
-    const key = `[${match[1]}] › ${match[2]}`;
-    if (tests.has(key)) throw new Error(`Playwright listed a duplicate test: ${key}`);
-    tests.set(key, match[3]);
+    const identity = parsePlaywrightTestIdentity(rawLine);
+    if (!identity) continue;
+    if (tests.has(identity.key)) {
+      throw new Error(`Playwright listed a duplicate test: ${identity.key}`);
+    }
+    tests.set(identity.key, identity.specFile);
   }
   return tests;
 }
