@@ -101,6 +101,7 @@ runtime_profile_matches() {
     sudo grep -Fxq "PULSE_MOCK_K8S_NODES=${MOCK_K8S_NODES}" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_K8S_PODS=${MOCK_K8S_PODS}" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_K8S_DEPLOYMENTS=${MOCK_K8S_DEPLOYMENTS}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_SEED_METRICS_STORE=false" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_TRENDS_SEED_DURATION=${MOCK_SEED_DURATION}" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_UPDATE_INTERVAL=${MOCK_UPDATE_INTERVAL}" /etc/pulse/.env
 }
@@ -277,6 +278,10 @@ set_env_value PULSE_MOCK_K8S_CLUSTERS "$MOCK_K8S_CLUSTERS"
 set_env_value PULSE_MOCK_K8S_NODES "$MOCK_K8S_NODES"
 set_env_value PULSE_MOCK_K8S_PODS "$MOCK_K8S_PODS"
 set_env_value PULSE_MOCK_K8S_DEPLOYMENTS "$MOCK_K8S_DEPLOYMENTS"
+# Persistent mock-store backfill is reserved for the isolated local-dev data
+# directory. The governed demo already has persistent runtime data, so a stale
+# opt-in here can turn startup into an unbounded SQLite backfill.
+set_env_value PULSE_MOCK_SEED_METRICS_STORE false
 set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"
 set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
 sudo chown pulse:pulse /etc/pulse/.env

@@ -674,6 +674,9 @@ jobs:
           set_env_value PULSE_MOCK_K8S_DEPLOYMENTS "$MOCK_K8S_DEPLOYMENTS"
           set_env_value PULSE_MOCK_RANDOM_METRICS true
           set_env_value PULSE_MOCK_STOPPED_PERCENT 6
+          # Never carry the isolated local-dev metrics-store opt-in onto the
+          # persistent public demo data directory.
+          set_env_value PULSE_MOCK_SEED_METRICS_STORE false
           set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"
           set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
 

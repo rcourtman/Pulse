@@ -1867,6 +1867,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`set_env_value PULSE_MOCK_LXCS_PER_NODE "$MOCK_LXCS_PER_NODE"`,
 		`set_env_value PULSE_MOCK_DOCKER_HOSTS "$MOCK_DOCKER_HOSTS"`,
 		`set_env_value PULSE_MOCK_K8S_PODS "$MOCK_K8S_PODS"`,
+		`set_env_value PULSE_MOCK_SEED_METRICS_STORE false`,
 		`set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"`,
 		`set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"`,
 		`ensure_demo_fixture_entitlement`,
