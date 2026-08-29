@@ -31,6 +31,7 @@ export type MobileNavBarProps = {
   activeTab: () => string | null;
   primaryTabs: () => MobileNavBarPrimaryTab[];
   utilityTabs: () => MobileNavBarUtilityTab[];
+  getPrimaryHref?: (tab: MobileNavBarPrimaryTab) => string;
   onPrimaryClick: (tab: MobileNavBarPrimaryTab) => void;
   onUtilityClick: (tab: MobileNavBarUtilityTab) => void;
 };
@@ -127,6 +128,15 @@ export function buildMobileNavBarLayout(
 
 export function getMobileNavDestinationKey(destination: MobileNavBarDestination): string {
   return `${destination.kind}:${destination.tab.id}`;
+}
+
+export function getMobileNavDestinationHref(
+  destination: MobileNavBarDestination,
+  getPrimaryHref?: (tab: MobileNavBarPrimaryTab) => string,
+): string {
+  if (destination.kind === 'utility') return destination.tab.route;
+  if (getPrimaryHref) return getPrimaryHref(destination.tab);
+  return destination.tab.enabled ? destination.tab.route : destination.tab.settingsRoute;
 }
 
 export function isMobileNavDestinationActive(

@@ -3,6 +3,7 @@ import {
   buildMobileNavBarLayout,
   buildOrderedMobileNavTabs,
   getMobileNavAlertBadgeCounts,
+  getMobileNavDestinationHref,
   getMobileNavTabAriaLabel,
   getMobileNavTabButtonClass,
 } from '@/components/shared/mobileNavBarModel';
@@ -262,6 +263,39 @@ describe('mobileNavBarModel.branchcov2', () => {
         'ai',
       ]);
       expect(layout.overflowDestinations).toEqual([]);
+    });
+  });
+
+  describe('getMobileNavDestinationHref', () => {
+    it('uses the utility route directly', () => {
+      expect(
+        getMobileNavDestinationHref({ kind: 'utility', tab: makeUtilityTab({ route: '/alerts' }) }),
+      ).toBe('/alerts');
+    });
+
+    it('uses the canonical route for an enabled primary destination by default', () => {
+      expect(getMobileNavDestinationHref({ kind: 'primary', tab: makePrimaryTab('proxmox') })).toBe(
+        '/proxmox',
+      );
+    });
+
+    it('sends an unconfigured primary destination to infrastructure settings by default', () => {
+      expect(
+        getMobileNavDestinationHref({
+          kind: 'primary',
+          tab: makePrimaryTab('docker', { enabled: false }),
+        }),
+      ).toBe('/settings/infrastructure');
+    });
+
+    it('prefers the shell route resolver so remembered state is exposed in the href', () => {
+      const tab = makePrimaryTab('proxmox');
+      expect(
+        getMobileNavDestinationHref(
+          { kind: 'primary', tab },
+          (primary) => `${primary.route}?status=running`,
+        ),
+      ).toBe('/proxmox?status=running');
     });
   });
 

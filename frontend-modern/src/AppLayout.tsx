@@ -995,6 +995,7 @@ export function AppLayout(props: AppLayoutProps) {
           activeTab={getActiveTabMobile}
           primaryTabs={primaryTabs}
           utilityTabs={utilityTabs}
+          getPrimaryHref={getPrimaryTargetRoute}
           onPrimaryClick={handlePrimaryClick}
           onUtilityClick={handleUtilityClick}
         />

@@ -5,6 +5,7 @@ import { type MobileNavBarProps, useMobileNavBarState } from './useMobileNavBarS
 import {
   getMobileNavAlertBadgeCounts,
   getMobileNavDestinationKey,
+  getMobileNavDestinationHref,
   getMobileNavTabAriaLabel,
   getMobileNavTabButtonClass,
   isMobileNavDestinationActive,
@@ -139,6 +140,24 @@ export function MobileNavBar(props: MobileNavBarProps) {
   });
   const overflowHasBadge = () =>
     mobileNav.overflowDestinations().some(mobileNavDestinationHasBadge);
+  const destinationHref = (destination: MobileNavBarDestination) =>
+    getMobileNavDestinationHref(destination, props.getPrimaryHref);
+  const handleDestinationLinkClick = (event: MouseEvent, destination: MobileNavBarDestination) => {
+    // Preserve native link behavior for new tabs/windows and context-menu
+    // actions. Plain activation stays in the SPA and retains route memory.
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    mobileNav.handleDestinationClick(destination);
+  };
 
   const renderOverflowGroup = (options: {
     label: string;
@@ -156,8 +175,8 @@ export function MobileNavBar(props: MobileNavBarProps) {
               destination.kind === 'primary' ? destination.tab.enabled : undefined;
 
             return (
-              <button
-                type="button"
+              <a
+                href={destinationHref(destination)}
                 role="menuitem"
                 tabIndex={-1}
                 data-tab-id={destination.tab.id}
@@ -168,7 +187,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     ? getMobileNavTabAriaLabel(destination.tab)
                     : undefined
                 }
-                onClick={() => mobileNav.handleDestinationClick(destination)}
+                onClick={(event) => handleDestinationLinkClick(event, destination)}
                 title={destination.tab.tooltip}
                 class={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
                   active()
@@ -177,7 +196,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                 } ${enabled() === false ? 'opacity-70' : ''}`.trim()}
               >
                 <MobileNavDestinationContent destination={destination} iconClass={tabIconClass} />
-              </button>
+              </a>
             );
           }}
         </For>
@@ -229,35 +248,55 @@ export function MobileNavBar(props: MobileNavBarProps) {
             const canSwitch = () => mobileNav.platformDestinations().length > 1;
             const currentLabel = () => destination().tab.label;
 
+            const content = () => (
+              <MobileNavDestinationContent destination={destination()} iconClass={tabIconClass} />
+            );
+            const className = () =>
+              getMobileNavTabButtonClass({
+                active: mobileNav.platformIsActive(),
+                enabled: destination().tab.enabled,
+              });
+
             return (
-              <button
-                ref={mobileNav.setPlatformTriggerRef}
-                type="button"
-                data-tab-id="platform-switcher"
-                data-mobile-nav-destination="platform-switcher"
-                aria-label={
-                  canSwitch() ? `Switch platform, current ${currentLabel()}` : currentLabel()
+              <Show
+                when={canSwitch()}
+                fallback={
+                  <a
+                    href={destinationHref(destination())}
+                    data-tab-id="platform-switcher"
+                    data-mobile-nav-destination="platform-switcher"
+                    aria-label={currentLabel()}
+                    aria-current={mobileNav.platformIsActive() ? 'page' : undefined}
+                    onClick={(event) => handleDestinationLinkClick(event, destination())}
+                    title={destination().tab.tooltip}
+                    class={className()}
+                  >
+                    {content()}
+                  </a>
                 }
-                aria-haspopup={canSwitch() ? 'menu' : undefined}
-                aria-expanded={canSwitch() ? mobileNav.isPlatformMenuOpen() : undefined}
-                aria-controls={canSwitch() ? MOBILE_NAV_PLATFORM_SWITCHER_ID : undefined}
-                aria-current={mobileNav.platformIsActive() ? 'page' : undefined}
-                onClick={mobileNav.handlePlatformTriggerClick}
-                onKeyDown={mobileNav.handlePlatformTriggerKeyDown}
-                title={canSwitch() ? 'Switch platform' : destination().tab.tooltip}
-                class={getMobileNavTabButtonClass({
-                  active: mobileNav.platformIsActive(),
-                  enabled: destination().tab.enabled,
-                })}
               >
-                <MobileNavDestinationContent destination={destination()} iconClass={tabIconClass} />
-                <Show when={canSwitch()}>
+                <button
+                  ref={mobileNav.setPlatformTriggerRef}
+                  type="button"
+                  data-tab-id="platform-switcher"
+                  data-mobile-nav-destination="platform-switcher"
+                  aria-label={`Switch platform, current ${currentLabel()}`}
+                  aria-haspopup="menu"
+                  aria-expanded={mobileNav.isPlatformMenuOpen()}
+                  aria-controls={MOBILE_NAV_PLATFORM_SWITCHER_ID}
+                  aria-current={mobileNav.platformIsActive() ? 'page' : undefined}
+                  onClick={mobileNav.handlePlatformTriggerClick}
+                  onKeyDown={mobileNav.handlePlatformTriggerKeyDown}
+                  title="Switch platform"
+                  class={className()}
+                >
+                  {content()}
                   <ChevronsUpDownIcon
                     aria-hidden="true"
                     class="absolute right-1 top-1 h-2.5 w-2.5 text-muted"
                   />
-                </Show>
-              </button>
+                </button>
+              </Show>
             );
           }}
         </Show>
@@ -269,8 +308,8 @@ export function MobileNavBar(props: MobileNavBarProps) {
               destination.kind === 'primary' ? destination.tab.enabled : undefined;
 
             return (
-              <button
-                type="button"
+              <a
+                href={destinationHref(destination)}
                 data-tab-id={destination.tab.id}
                 data-mobile-nav-destination={getMobileNavDestinationKey(destination)}
                 aria-current={active() ? 'page' : undefined}
@@ -279,12 +318,12 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     ? getMobileNavTabAriaLabel(destination.tab)
                     : undefined
                 }
-                onClick={() => mobileNav.handleDestinationClick(destination)}
+                onClick={(event) => handleDestinationLinkClick(event, destination)}
                 title={destination.tab.tooltip}
                 class={getMobileNavTabButtonClass({ active: active(), enabled: enabled() })}
               >
                 <MobileNavDestinationContent destination={destination} iconClass={tabIconClass} />
-              </button>
+              </a>
             );
           }}
         </For>

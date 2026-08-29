@@ -61,6 +61,7 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarSource).toContain('useMobileNavBarState');
     expect(mobileNavBarSource).toContain('getMobileNavTabButtonClass');
     expect(mobileNavBarSource).toContain('role="menu"');
+    expect(mobileNavBarSource).toContain('<a');
     expect(mobileNavBarSource).toContain('pb-safe xl:hidden');
     expect(mobileNavBarSource).not.toContain('createSignal');
     expect(mobileNavBarSource).not.toContain('requestAnimationFrame');
@@ -110,8 +111,8 @@ describe('MobileNavBar', () => {
     expect(fixedRail).toHaveClass('px-0.5', 'py-0.5');
     expect(fixedRail).not.toHaveClass('py-1');
     expect(
-      Array.from(fixedRail?.querySelectorAll('button[data-tab-id]') ?? []).map((button) =>
-        button.getAttribute('data-tab-id'),
+      Array.from(fixedRail?.querySelectorAll('[data-tab-id]') ?? []).map((item) =>
+        item.getAttribute('data-tab-id'),
       ),
     ).toEqual(['platform-switcher', 'alerts', 'ai', 'actions', 'more']);
 
@@ -121,6 +122,9 @@ describe('MobileNavBar', () => {
     expect(platformSwitcher).toHaveAttribute('aria-haspopup', 'menu');
     expect(platformSwitcher).toHaveAttribute('aria-expanded', 'false');
     expect(platformSwitcher).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Alerts' })).toHaveAttribute('href', '/alerts');
+    expect(screen.getByRole('link', { name: 'Patrol' })).toHaveAttribute('href', '/patrol');
+    expect(screen.getByRole('link', { name: 'Actions' })).toHaveAttribute('href', '/actions');
     fireEvent.click(platformSwitcher);
 
     const platformMenu = await screen.findByRole('menu', { name: 'Switch platform' });
@@ -133,6 +137,11 @@ describe('MobileNavBar', () => {
     expect(within(platformMenu).getByRole('menuitem', { name: 'Machines' })).toHaveAttribute(
       'aria-current',
       'page',
+    );
+    expect(within(platformMenu).getByRole('menuitem', { name: 'Machines' }).tagName).toBe('A');
+    expect(within(platformMenu).getByRole('menuitem', { name: 'Machines' })).toHaveAttribute(
+      'href',
+      '/standalone/overview',
     );
 
     const more = screen.getByRole('button', { name: 'More navigation' });
@@ -149,6 +158,10 @@ describe('MobileNavBar', () => {
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('data-tab-id')),
     ).toEqual(['settings']);
+    expect(within(menu).getByRole('menuitem', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
 
     expect(platformSwitcher).toHaveClass('min-h-10', 'gap-0', 'py-0.5', 'text-[9px]');
   });
@@ -169,7 +182,7 @@ describe('MobileNavBar', () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Alerts' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Alerts' }));
     expect(onUtilityClick).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'alerts', route: '/alerts' }),
     );
@@ -216,12 +229,12 @@ describe('MobileNavBar', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(
-      within(nav).getByRole('button', { name: 'Alerts: 2 critical, 3 warning' }),
+      within(nav).getByRole('link', { name: 'Alerts: 2 critical, 3 warning' }),
     ).toHaveTextContent('23');
-    expect(
-      within(nav).getByRole('button', { name: 'Patrol: 2 open work items' }),
-    ).toHaveTextContent('Patrol2');
-    expect(within(nav).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
+    expect(within(nav).getByRole('link', { name: 'Patrol: 2 open work items' })).toHaveTextContent(
+      'Patrol2',
+    );
+    expect(within(nav).queryByRole('link', { name: 'Pulse Patrol Patrol' })).toBeNull();
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Switch platform, current Proxmox' }));
     const menu = await screen.findByRole('menu', { name: 'Switch platform' });
@@ -287,12 +300,16 @@ describe('MobileNavBar', () => {
     ));
 
     expect(screen.queryByRole('button', { name: 'More navigation' })).toBeNull();
-    screen.getAllByRole('button').forEach((button) => {
-      expect(button).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Proxmox' })).toHaveAttribute(
+      'href',
+      '/proxmox/overview',
+    );
+    screen.getAllByRole('link').forEach((link) => {
+      expect(link).not.toHaveAttribute('aria-current');
     });
   });
 
-  it('keeps destination button DOM identity when tab arrays are rebuilt with equal content', async () => {
+  it('keeps destination DOM identity when tab arrays are rebuilt with equal content', async () => {
     const buildTabs = () => [
       makeUtility('alerts', 'Alerts', { count: 3, breakdown: { warning: 2, critical: 1 } }),
       makeUtility('ai', 'Patrol'),
@@ -310,24 +327,24 @@ describe('MobileNavBar', () => {
       />
     ));
 
-    const buttonsBefore = [
-      ...container.querySelectorAll<HTMLButtonElement>('[data-mobile-nav-destination]'),
+    const destinationsBefore = [
+      ...container.querySelectorAll<HTMLElement>('[data-mobile-nav-destination]'),
     ];
-    expect(buttonsBefore.length).toBeGreaterThan(0);
+    expect(destinationsBefore.length).toBeGreaterThan(0);
 
     // A state frame carrying an unchanged alerts array rebuilds the tab
-    // objects; identical content must not recreate the rendered buttons.
+    // objects; identical content must not recreate the rendered destinations.
     setRawTabs(buildTabs());
     await waitFor(() => {
-      const buttonsAfter = [
-        ...container.querySelectorAll<HTMLButtonElement>('[data-mobile-nav-destination]'),
+      const destinationsAfter = [
+        ...container.querySelectorAll<HTMLElement>('[data-mobile-nav-destination]'),
       ];
-      expect(buttonsAfter).toHaveLength(buttonsBefore.length);
-      buttonsAfter.forEach((button, index) => {
-        expect(button).toBe(buttonsBefore[index]);
+      expect(destinationsAfter).toHaveLength(destinationsBefore.length);
+      destinationsAfter.forEach((destination, index) => {
+        expect(destination).toBe(destinationsBefore[index]);
       });
-      buttonsBefore.forEach((button) => {
-        expect(button.isConnected).toBe(true);
+      destinationsBefore.forEach((destination) => {
+        expect(destination.isConnected).toBe(true);
       });
     });
   });

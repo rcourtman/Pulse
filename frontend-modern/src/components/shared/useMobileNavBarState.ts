@@ -57,7 +57,7 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
   const activeTriggerRef = () =>
     openMenu() === 'platform' ? platformTriggerRef() : overflowTriggerRef();
   const activeMenuItems = () =>
-    Array.from(activeMenuRef()?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    Array.from(activeMenuRef()?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
 
   const focusMenuItem = (target: 'active' | 'first' | 'last') => {
     queueMicrotask(() => {
@@ -177,7 +177,7 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
     const items = activeMenuItems();
     if (items.length === 0) return;
     event.preventDefault();
-    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
     let nextIndex = 0;
     if (event.key === 'End') {
       nextIndex = items.length - 1;

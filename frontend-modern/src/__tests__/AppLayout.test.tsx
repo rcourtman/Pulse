@@ -205,7 +205,7 @@ describe('AppLayout navigation icons', () => {
       expect(button).toBeTruthy();
       expect(button?.querySelector('svg')).toBeTruthy();
     });
-    const mobilePatrolTab = within(mobileNav).getByRole('button', {
+    const mobilePatrolTab = within(mobileNav).getByRole('link', {
       name: 'Patrol',
     });
     expect(mobilePatrolTab.querySelector('svg')).toBeTruthy();
@@ -234,7 +234,7 @@ describe('AppLayout navigation icons', () => {
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    const mobilePatrolTab = within(mobileNav).getByRole('button', {
+    const mobilePatrolTab = within(mobileNav).getByRole('link', {
       name: 'Patrol: 2 active attention items',
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
@@ -259,7 +259,7 @@ describe('AppLayout navigation icons', () => {
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(
-      within(mobileNav).getByRole('button', { name: 'Actions: 3 actions await approval' }),
+      within(mobileNav).getByRole('link', { name: 'Actions: 3 actions await approval' }),
     ).toHaveAttribute('aria-current', 'page');
     expect(document.title).toContain('Actions');
   });
@@ -270,7 +270,7 @@ describe('AppLayout navigation icons', () => {
     renderLayout([], '/alerts');
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    fireEvent.click(within(mobileNav).getByRole('button', { name: 'Actions' }));
+    fireEvent.click(within(mobileNav).getByRole('link', { name: 'Actions' }));
 
     await waitFor(() => expect(window.location.pathname).toBe('/actions'));
   });
@@ -345,6 +345,16 @@ describe('AppLayout navigation icons', () => {
 
   it('restores the previous Proxmox route state when returning from another platform tab', async () => {
     renderLayout(platformResources(), '/proxmox/overview?status=running');
+
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    fireEvent.click(
+      within(mobileNav).getByRole('button', { name: 'Switch platform, current Proxmox' }),
+    );
+    const platformMenu = await screen.findByRole('menu', { name: 'Switch platform' });
+    const rememberedMobileLink = within(platformMenu).getByRole('menuitem', { name: 'Proxmox' });
+    expect(rememberedMobileLink.tagName).toBe('A');
+    expect(rememberedMobileLink).toHaveAttribute('href', '/proxmox/overview?status=running');
+    fireEvent.keyDown(rememberedMobileLink, { key: 'Escape' });
 
     await fireEvent.click(getInfrastructureLink('Docker'));
     await waitFor(() => {
