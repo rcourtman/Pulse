@@ -473,14 +473,20 @@ Supported protocols:
 | `icmp` | Ping-only reachability for devices, computers, and appliances | `address` |
 | `ping` | API input alias for `icmp`; saved targets return `icmp` | `address` |
 | `tcp` | A reachable port such as MQTT, SSH, or a custom service | `address`, `port` |
+| `udp` | A request/response UDP service, or an open-or-filtered observation | `address`, `port`, UDP result policy |
 | `http` / `https` | Web UI or health endpoint availability | `address`, optional `port`, optional `path` |
 
 Saved targets include `name`, `targetKind` (`machine`, `service`, or
 `device`), `address`, `protocol`, `enabled`, polling interval, timeout,
-failure threshold, and an optional `linkedResourceId`. ICMP ping is the
-default probe for new targets. Availability targets publish
-`network-endpoint` resources and can raise downtime alerts after the configured
-failure threshold.
+failure threshold, and an optional `linkedResourceId`. UDP targets select
+`response_required` (send up to 512 UTF-8 bytes and require a response) or
+`open_or_filtered` (silence is indeterminate, not proof of reachability); an
+optional expected response must match exactly. HTTPS targets monitor
+certificate validity by default and warn 30 days before expiry unless the
+target overrides or disables that check. ICMP ping is the default probe for
+new targets. Availability targets publish `network-endpoint` resources and can
+raise downtime alerts after the configured failure threshold and certificate
+alerts inside the configured expiry window.
 
 Example API payload for simple ping monitoring:
 

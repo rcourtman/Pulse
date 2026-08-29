@@ -257,6 +257,33 @@ class DocumentationCurrentnessTest(unittest.TestCase):
             for fragment in expected_fragments:
                 self.assertIn(fragment, prose)
 
+    def test_availability_docs_include_runtime_protocols_and_controls(self) -> None:
+        for rel in (
+            "docs/CONFIGURATION.md",
+            "frontend-modern/public/docs/CONFIGURATION.md",
+        ):
+            content = normalize_prose(read(rel))
+            self.assertIn("| `udp` |", content, msg=f"{rel} omits UDP availability checks")
+            self.assertIn("`response_required`", content)
+            self.assertIn("`open_or_filtered`", content)
+            self.assertIn("certificate validity by default", content)
+            self.assertIn("warn 30 days before expiry", content)
+
+        for rel in (
+            "docs/API.md",
+            "frontend-modern/public/docs/API.md",
+        ):
+            content = normalize_prose(read(rel))
+            for field in (
+                "`udpMode`",
+                "`udpRequest`",
+                "`udpExpectedResponse`",
+                "`certificateMonitoringDisabled`",
+                "`certificateExpiryWarningDays`",
+                "`probeAgentId`",
+            ):
+                self.assertIn(field, content, msg=f"{rel} omits {field}")
+
     def test_webhook_docs_make_ntfy_service_picker_discoverable(self) -> None:
         webhook_doc = normalize_prose(read("docs/WEBHOOKS.md"))
 

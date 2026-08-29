@@ -1397,7 +1397,7 @@ These routes manage Docker / Podman telemetry and container actions reported by 
 ## Availability Checks
 
 Agentless availability checks monitor endpoint-only devices and services with
-ICMP ping, TCP port, HTTP, or HTTPS probes. They are managed from
+ICMP ping, TCP port, UDP, HTTP, or HTTPS probes. They are managed from
 **Settings -> Monitoring -> Availability checks** and are also exposed through
 the API for automation.
 
@@ -1415,14 +1415,20 @@ Target payload fields:
 - `name` - Display name.
 - `targetKind` - `machine`, `service`, or `device`; defaults to `service`.
 - `address` - Hostname, IP address, or URL.
-- `protocol` - `icmp`, `tcp`, `http`, or `https`. The input alias `ping` is accepted and is stored/returned as canonical `icmp`.
-- `port` - Required for `tcp`, optional for `http`/`https`, and omitted for `icmp`.
+- `protocol` - `icmp`, `tcp`, `udp`, `http`, or `https`. The input alias `ping` is accepted and is stored/returned as canonical `icmp`.
+- `port` - Required for `tcp`/`udp`, optional for `http`/`https`, and omitted for `icmp`.
 - `path` - Optional HTTP path.
+- `udpMode` - For UDP, `response_required` (default) or `open_or_filtered`. The latter reports silence as indeterminate and fails only on an explicit rejection.
+- `udpRequest` - UTF-8 request bytes, up to 512 bytes. Required by `response_required`; optional in `open_or_filtered` mode.
+- `udpExpectedResponse` - Optional exact UTF-8 response, up to 4096 bytes.
 - `enabled` - Whether the target is scheduled.
 - `pollIntervalSeconds` - Minimum 10 seconds; defaults to 60.
 - `timeoutMillis` - Minimum 250 milliseconds; defaults to 2000.
 - `failureThreshold` - Number of consecutive failures before alerting; defaults to 2.
 - `linkedResourceId` - Optional resource id hint for attaching the probe facet to an existing resource.
+- `certificateMonitoringDisabled` - Explicit HTTPS-only opt-out; certificate validity monitoring is enabled by default.
+- `certificateExpiryWarningDays` - HTTPS certificate expiry warning window; defaults to 30 days.
+- `probeAgentId` - Optional registered host-agent ID that runs the check instead of the Pulse server; requires the Pro `external_probe` entitlement. Send an explicit empty string on update to return the check to local execution.
 
 An explicit `linkedResourceId` is authoritative and fails closed when it
 cannot resolve. Without it, Pulse correlates only on one exact normalized IP
