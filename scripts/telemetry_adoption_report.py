@@ -114,6 +114,15 @@ USER_BASE_COUNT_FIELDS = (
     ("notification_failures_rejected_7d", "Notification destination rejections (7d, schema v5+)"),
     ("notification_failures_unknown_7d", "Notification unknown failures (7d, schema v5+)"),
 )
+SERVICE_HEALTH_ROW_FIELDS = (
+    "service_health_observed",
+    "service_health_healthy",
+    "service_health_failure_category",
+    "service_health_cohort",
+    "service_health_previous_version",
+    "service_health_previous_observed",
+    "service_health_previous_healthy",
+)
 NOTIFICATION_FAILURE_COUNT_SIGNALS = (
     (
         "notification_attempt_failures_7d_schema_v2",
@@ -1034,6 +1043,7 @@ REPORT_ROW_COLUMNS = tuple(
             *(key for key, _ in USER_BASE_CATEGORY_FIELDS),
             *(key for key, _ in USER_BASE_BOOL_FIELDS),
             *(key for key, _ in USER_BASE_COUNT_FIELDS),
+            *SERVICE_HEALTH_ROW_FIELDS,
             *(key for key, _ in PULSE_INTELLIGENCE_BOOL_FIELDS),
             *(key for key, _ in PULSE_INTELLIGENCE_COUNT_FIELDS),
         )
@@ -2961,6 +2971,82 @@ def summarize_target_version_coverage(
     }
 
 
+def summarize_target_release_service_health(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str],
+    target_version: str,
+    *,
+    now: datetime | None = None,
+    window: timedelta = timedelta(days=7),
+) -> dict[str, Any]:
+    current_time = now or datetime.now(timezone.utc)
+    normalized_target = normalize_release_tag(target_version)
+    target_rows = [
+        row
+        for row in latest_by_install.values()
+        if current_time - parse_received_at(str(row["received_at"])) <= window
+        and classify_row_version(row, published_versions).version == normalized_target
+    ]
+
+    failure_categories: Counter[str] = Counter()
+    cohorts: Counter[str] = Counter()
+    previous_versions: Counter[str] = Counter()
+    transitions: Counter[str] = Counter()
+    observed = 0
+    healthy = 0
+    comparable_version_changes = 0
+
+    for row in target_rows:
+        if not parse_optional_bool(row.get("service_health_observed")):
+            continue
+        observed += 1
+        current_healthy = parse_optional_bool(row.get("service_health_healthy"))
+        if current_healthy:
+            healthy += 1
+            failure_categories["healthy"] += 1
+        else:
+            category = str(row.get("service_health_failure_category") or "unknown").strip() or "unknown"
+            failure_categories[category] += 1
+
+        cohort = str(row.get("service_health_cohort") or "unknown").strip() or "unknown"
+        cohorts[cohort] += 1
+        if not parse_optional_bool(row.get("service_health_previous_observed")):
+            continue
+
+        previous_version = normalize_release_tag(str(row.get("service_health_previous_version") or ""))
+        if not previous_version or previous_version == normalized_target:
+            continue
+        comparable_version_changes += 1
+        previous_versions[previous_version] += 1
+        previous_healthy = parse_optional_bool(row.get("service_health_previous_healthy"))
+        transition = (
+            ("healthy" if previous_healthy else "unhealthy")
+            + "_to_"
+            + ("healthy" if current_healthy else "unhealthy")
+        )
+        transitions[transition] += 1
+
+    return {
+        "version": normalized_target,
+        "window": "7d",
+        "target_installs": len(target_rows),
+        "observed_installs": observed,
+        "unobserved_installs": len(target_rows) - observed,
+        "healthy_installs": healthy,
+        "unhealthy_installs": observed - healthy,
+        "failure_categories": counter_entries(failure_categories, "category"),
+        "cohorts": counter_entries(cohorts, "cohort"),
+        "comparable_version_change_installs": comparable_version_changes,
+        "previous_versions": counter_entries(previous_versions, "version"),
+        "transitions": counter_entries(transitions, "transition"),
+        "interpretation": (
+            "These are direct latest per-install local service observations. "
+            "Version-change transitions compare the retained immediately previous release observation "
+            "with the target release and do not attribute rolling historical counters to the target."
+        ),
+    }
+
+
 def summarize_rows(
     db_stats: dict[str, Any],
     rows: Iterable[dict[str, Any]],
@@ -3064,6 +3150,14 @@ def summarize_rows(
             analysis_by_install=pulse_intelligence_analysis,
         ),
         "target_release_coverage_7d": summarize_target_version_coverage(
+            latest_by_install,
+            published_versions,
+            target_version,
+            now=current_time,
+        )
+        if target_version
+        else None,
+        "target_release_service_health_7d": summarize_target_release_service_health(
             latest_by_install,
             published_versions,
             target_version,
@@ -3318,6 +3412,46 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             lines.extend(f"  - {format_pulse_intelligence_cohort(entry)}" for entry in stages)
         else:
             lines.append("  - none")
+
+    service_health = summary.get("target_release_service_health_7d")
+    if service_health:
+        lines.extend(
+            [
+                "",
+                f"Target release local service health ({service_health['version']}, {service_health['window']}):",
+                f"- target installs: {service_health['target_installs']}",
+                f"- direct observations: {service_health['observed_installs']}",
+                f"- no schema-v13 observation: {service_health['unobserved_installs']}",
+                f"- healthy: {service_health['healthy_installs']}",
+                f"- unhealthy: {service_health['unhealthy_installs']}",
+                "- latest direct result categories:",
+            ]
+        )
+        categories = service_health.get("failure_categories", [])
+        if categories:
+            lines.extend(
+                f"  - {entry['category']}: {entry['installs']} install(s)"
+                for entry in categories
+            )
+        else:
+            lines.append("  - none")
+        lines.append(
+            "- comparable version-change observations: "
+            f"{service_health['comparable_version_change_installs']}"
+        )
+        transitions = service_health.get("transitions", [])
+        if transitions:
+            lines.extend(
+                f"  - {entry['transition']}: {entry['installs']} install(s)"
+                for entry in transitions
+            )
+        else:
+            lines.append("  - none")
+        lines.append(
+            "- interpretation: direct local API/UI/asset observations only; the before/after "
+            "cohort uses the immediately previous release observation and never rolls historical "
+            "usage or update counters into the target release"
+        )
 
     target_followup = summary.get("target_release_followup")
     if target_followup:

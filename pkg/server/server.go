@@ -149,7 +149,7 @@ func bindRuntimeVersion(version string) {
 }
 
 // Run starts the Pulse monitoring server.
-func Run(ctx context.Context, version string) error {
+func Run(ctx context.Context, version string) (runErr error) {
 	bindRuntimeVersion(version)
 
 	// Initialize logger with baseline defaults for early startup logs
@@ -193,9 +193,37 @@ func Run(ctx context.Context, version string) error {
 	// Initialize license public key for Pro feature validation
 	pkglicensing.InitEmbeddedPublicKey()
 
+	// Resolve telemetry identity before binding so a listener/startup failure can
+	// still report the same privacy-bounded service-health contract before exit.
+	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
+	baseDataDir := mtPersistence.BaseDataDir()
+	isDocker := os.Getenv("PULSE_DOCKER") == "true"
+	failureTelemetryCfg := telemetry.Config{
+		Version:  version,
+		DataDir:  baseDataDir,
+		IsDocker: isDocker,
+		Enabled:  cfg.TelemetryEnabled,
+	}
+	failureCategory := telemetry.ServiceHealthFailureStartup
+	defer func() {
+		if runErr == nil {
+			return
+		}
+		reportCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		observation := telemetry.ServiceHealthObservation{
+			Observed:        true,
+			FailureCategory: failureCategory,
+		}
+		if err := telemetry.SendServiceHealthEvent(reportCtx, failureTelemetryCfg, "startup", observation); err != nil {
+			log.Debug().Err(err).Str("category", failureCategory).Msg("Could not send bounded service-health failure telemetry")
+		}
+	}()
+
 	mainAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.FrontendPort)
 	mainListener, err := net.Listen("tcp", mainAddr)
 	if err != nil {
+		failureCategory = telemetry.ServiceHealthFailureListener
 		return fmt.Errorf("failed to bind UI/API server on %s: %w", mainAddr, err)
 	}
 	defer mainListener.Close()
@@ -208,15 +236,11 @@ func Run(ctx context.Context, version string) error {
 		agentAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.AgentIngestPort)
 		agentListener, err = net.Listen("tcp", agentAddr)
 		if err != nil {
+			failureCategory = telemetry.ServiceHealthFailureListener
 			return fmt.Errorf("failed to bind agent ingest server on %s: %w", agentAddr, err)
 		}
 		defer agentListener.Close()
 	}
-
-	// Multi-tenant persistence is the canonical way to resolve the base data directory.
-	// It uses cfg.DataPath, which already includes PULSE_DATA_DIR overrides.
-	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
-	baseDataDir := mtPersistence.BaseDataDir()
 
 	// Run multi-tenant data migration only when the feature is explicitly enabled.
 	// This prevents any on-disk layout changes for default (single-tenant) users.
@@ -484,13 +508,13 @@ func Run(ctx context.Context, version string) error {
 	// Start pseudonymous telemetry (enabled by default; opt out via PULSE_TELEMETRY=false or Settings toggle).
 	// Persistence is created once here (outside the closure) to avoid NewConfigPersistence's
 	// fatal-on-error path running inside the telemetry goroutine.
-	isDocker := os.Getenv("PULSE_DOCKER") == "true"
 	telemetryPersistence := config.NewConfigPersistence(baseDataDir)
 	telemetryCfg := telemetry.Config{
-		Version:  version,
-		DataDir:  baseDataDir,
-		IsDocker: isDocker,
-		Enabled:  cfg.TelemetryEnabled,
+		Version:          version,
+		DataDir:          baseDataDir,
+		IsDocker:         isDocker,
+		Enabled:          cfg.TelemetryEnabled,
+		GetServiceHealth: newServiceHealthProbe(mainListener, cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != ""),
 		GetSnapshot: func() telemetry.Snapshot {
 			// Use the latest config (may have been swapped by a reload).
 			currentCfg := cfg
@@ -626,6 +650,7 @@ func Run(ctx context.Context, version string) error {
 			return snap
 		},
 	}
+	failureTelemetryCfg = telemetryCfg
 	telemetry.Start(ctx, telemetryCfg)
 	defer telemetry.Stop()
 
@@ -788,6 +813,7 @@ func Run(ctx context.Context, version string) error {
 			serverErr <- err
 		}
 	}()
+	failureCategory = telemetry.ServiceHealthFailureRuntime
 
 	if agentSrv != nil {
 		go func() {
@@ -822,7 +848,6 @@ func Run(ctx context.Context, version string) error {
 	defer signal.Stop(sigChan)
 	defer signal.Stop(reloadChan)
 
-	var runErr error
 	for {
 		select {
 		case err := <-serverErr:

@@ -9685,6 +9685,21 @@ the operator preview cannot silently omit fields that the sender will export.
 The frontend keeps those additions optional only where the Go wire field is
 optional; numeric counters remain required and default to zero in fixtures.
 
+### Telemetry payload parity spans three surfaces at schema v13
+
+Schema v13 preserves the same sender, receiver, and Settings-preview parity
+rule while adding the direct local release service-health observation. The
+preview must expose the observed and healthy booleans, fixed failure category,
+fixed first/same/version-change cohort, normalized immediately previous
+release, and its observed and healthy booleans exactly as the Go sender would
+transmit them. Optional failure, cohort, and previous-version strings follow
+the Go JSON omission contract; observation booleans remain required. Neither
+the API response nor the TypeScript interface may add a listener address, URL,
+IP address, asset path, response content, raw error, or account/customer
+identity. The schema parity checker remains the executable cross-repository
+proof that the browser preview and private allowlisted receiver cannot drift
+from the public runtime payload.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

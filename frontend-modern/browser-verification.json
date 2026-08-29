@@ -1,23 +1,19 @@
 {
   "version": 1,
-  "base_sha": "ea3f6388f3eb00381b02f33a78bca403dafa6dd7",
-  "verified_at": "2026-08-29T08:24:25Z",
+  "base_sha": "db7e26deac2a77dd5eff1dfb5bf2f1546683d5d6",
+  "verified_at": "2026-08-29T10:03:51Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/hooks/useUnifiedResources.ts",
-    "frontend-modern/src/hooks/useWorkloads.ts",
-    "frontend-modern/src/types/resource.ts"
+    "frontend-modern/src/api/settings.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "9a30ba0035976f356abad5b9803bbddfdbafe28a77ef9d461c7ed3f8e70c7595",
-    "frontend-modern/src/hooks/useWorkloads.ts": "405e74ddd3cb490b54661fe6cd2d603adf47a56b1737f99c384f6a27cce2446c",
-    "frontend-modern/src/types/resource.ts": "0effa6ccaa032a106e9194d3f2c4665061aeb72abe31b062c0c8a5f002a7f5c1"
+    "frontend-modern/src/api/settings.ts": "e54e7adfb7c66c8626e2cb0abcf20c1c7903b3d26e2f0050750a97a89811eab2"
   },
-  "routes": ["/proxmox/overview", "/proxmox/backups/date"],
+  "routes": ["/settings/general"],
   "viewports": [
     {
-      "width": 1600,
-      "height": 1000
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
@@ -25,15 +21,14 @@
     }
   ],
   "states": [
-    "mock-backed Proxmox Overview first paint with completed, running, and genuinely absent backup states plus populated guest uptime",
-    "full-page Overview refresh retaining backup and uptime evidence without an interim unknown state",
-    "Overview revisited after navigating through the Proxmox backup workflow",
-    "desktop and narrow layouts contained within the viewport without horizontal document overflow"
+    "authenticated General settings with outbound telemetry locked off by PULSE_TELEMETRY",
+    "current heartbeat preview rendered from the schema-v13 backend at desktop width",
+    "current heartbeat preview rendered from the schema-v13 backend at narrow width"
   ],
   "interactions": [
-    "opened Proxmox Overview at 1600x1000 and confirmed 140 rendered backup indicators included completed, running, and no-backup states with no unknown uptime",
-    "refreshed Overview at 1600x1000 and confirmed the same 140 backup indicators and populated uptime remained on first paint",
-    "navigated to Proxmox Backups By date and back to Overview at 1600x1000, then confirmed backup and uptime evidence remained complete",
-    "repeated direct load, full-page refresh, and Backups-to-Overview route switching at 390x844; each state rendered 36 backup indicators, populated uptime, and no horizontal overflow"
+    "opened General settings and selected Preview payload",
+    "confirmed the preview explains that telemetry is disabled while still showing the exact payload Pulse would send",
+    "confirmed schema_version 13 plus service_health_observed, service_health_healthy, and service_health_cohort in the rendered payload at 1280x800",
+    "confirmed the same service-health payload fields remained visible and readable at 390x844"
   ]
 }

@@ -16,7 +16,7 @@ third-party analytics, support diagnostics, or ordinary Settings surfaces.
 
 Pulse includes outbound usage telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours with a rotating pseudonymous install ID to help me understand how many active installations exist, which releases are actually deployed, which features are in use, and whether Patrol control and governed Pulse Intelligence operations are being adopted.
 
-The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, URLs, paths, locale, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. Lifecycle and outcome signals are deliberately limited to closed buckets, booleans, and aggregate counts. Pulse does not send browser events or an event-level clickstream. See the full field list below.
+The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, URLs, paths, locale, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. Lifecycle and outcome signals are deliberately limited to closed buckets, booleans, and aggregate counts. Local service-health signals are likewise limited to closed buckets, booleans, and normalized release versions. Pulse does not send browser events or an event-level clickstream. The local service-health probe requests only Pulse's own bound listener and never transmits the listener address, request URL, response content, or raw failure text. See the full field list below.
 
 While mock/demo fixture mode is enabled, Pulse suppresses outbound telemetry entirely: a mock-mode instance reports a synthetic fixture fleet rather than a real installation, so it never pings.
 
@@ -37,7 +37,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `3` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `13` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -120,6 +120,13 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Update successes 30d | `1` | Count successful update attempts in the current 30-day telemetry window |
 | Update failures 30d | `1` | Count failed or rolled-back update attempts in the current 30-day telemetry window without sending raw errors, logs, URLs, or command output |
 | Update last failure category | `download` | Send only a coarse category for the latest update failure, such as `download`, `signature`, `checksum`, `disk_space`, `extract`, `backup`, `apply`, `restart`, `rolled_back`, or `unknown` |
+| Service health observed | `true`/`false` | Distinguish a release that performed the bounded local UI/API self-check from an older release with no signal |
+| Service health healthy | `true`/`false` | Report whether Pulse's locally bound listener served a healthy API response, UI document, and every referenced local frontend asset without sending an address, URL, response, or error text |
+| Service health failure category | `listener`, `startup`, `runtime`, `api_connectivity`, `api_status`, `ui_status`, `frontend_assets`, or `unknown` | Classify a failed local self-check or startup path into one fixed category without sending the listener address, request URL, HTTP body, asset name, IP address, or raw error |
+| Service health cohort | `first_observation`, `same_version`, or `version_change` | Mark whether this direct observation is the first schema-v13 observation, another observation of the same release, or the first observed state after a release-version change |
+| Service health previous version | `6.4.0` | Retain only the normalized immediately previous Pulse release identity so aggregate reporting can compare a post-upgrade before/after cohort without treating rolling counters as new-release activity |
+| Service health previous observed | `true`/`false` | State whether the immediately previous release recorded the bounded local service-health signal |
+| Service health previous healthy | `true`/`false` | State whether that immediately previous release's last bounded local observation was healthy, without retaining its address, URL, response, asset names, or failure text |
 | Node test attempts 30d | `3` | Count node connection tests that reached the connection stage in the current 30-day telemetry window, without sending hostnames, addresses, credentials, or error text |
 | Node test failures 30d | `2` | Count those connection tests that could not reach or authenticate against the target, so an install that tried to add a node and failed is distinguishable from one that never attempted it, without sending hostnames, addresses, credentials, or error text |
 | Pulse Intelligence loop configured | `true`/`false` | See whether Assistant, Patrol, governed actions, or external-agent access is configured so adoption can be measured without sending configuration details |
@@ -219,6 +226,15 @@ configuration, destination rejection, and unknown failures. Classification is
 performed locally; raw error text and destination/provider identity are never
 included in the payload.
 
+Telemetry schema v13 adds a direct local UI/API service observation. Pulse
+checks its own bound listener, `/api/health`, the UI document, and the local
+frontend assets referenced by that document. It retains only the current and
+immediately previous normalized release observation, so a version-change
+cohort can compare before and after health without attributing rolling update
+or usage counters to the new release. Listener, startup, runtime, API, UI, and
+asset failures collapse into fixed categories. Addresses, URLs, IP addresses,
+asset names, response bodies, and raw errors are neither sent nor stored.
+
 #### Server-side handling and retention
 
 - Telemetry pings are stored on the Pulse license server only for aggregate install/use analysis.
@@ -226,6 +242,7 @@ included in the payload.
 - Pulse may derive aggregate Pulse Intelligence adoption reports from those same rows, including whether an install reached Patrol issue activity, Patrol resolution, Assistant, direct external-agent, or MCP collaboration, Patrol mode starter use, paid Patrol mode cohorts, governed-action activity, approved or rejected action decisions, approved action success, completed Patrol control work, recent retention, and observed free-to-paid movement within the source window. Those reports do not add prompts, findings, resource identifiers, tool names, tool inputs, tool outputs, command payloads, action outputs, account links, or exact commercial tiers.
 - Aggregate reports preserve the closed deployment-method buckets, but treat them as best-effort current-runtime evidence. In particular, `container_other` and `binary_other` are unknown fallbacks for many upgraded installs, not precise original installation provenance.
 - Aggregate reports describe the known-age bucket as time since Pulse first created the schema-v2 lifecycle record. It is only a lower bound for an upgraded install and must not be presented as original installation age.
+- Aggregate release-health reports use the direct schema-v13 current and immediately previous observations. They do not infer new-release health from rolling update, feature, alert, or action counters.
 - External-agent/MCP activity is stored only as a coarse adapter-origin flag plus capability-class counters: context, event stream, provisioning, operator state, findings, and action requests.
 - The receiver stores only fields in its versioned telemetry allowlist. A cross-repository parity check prevents client fields from being silently dropped and prevents the storage contract from growing beyond the disclosed payload.
 - Telemetry rows older than **90 days** are purged automatically.

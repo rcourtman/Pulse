@@ -106,28 +106,30 @@ promise visible inside the product cannot drift from the repository policy.
 26. `internal/config/config.go`
 27. `internal/config/watcher.go`
 28. `internal/telemetry/telemetry.go`
-29. `pkg/server/telemetry_pulse_intelligence.go`
-30. `internal/api/router_routes_auth_security.go`
-31. `internal/crypto/crypto.go`
-32. `internal/securityutil/secure_storage_dir.go`
-33. `internal/cloudcp/auth/magiclink.go`
-34. `internal/cloudcp/auth/magiclink_store.go`
-35. `pkg/tlsutil/fingerprint.go`
-36. `pkg/audit/audit.go`
-37. `pkg/audit/async_logger.go`
-38. `pkg/audit/sqlite_logger.go`
-39. `pkg/audit/signer.go`
-40. `pkg/audit/sqlite_factory.go`
-41. `pkg/extensions/audit_admin.go`
-42. `scripts/telemetry_adoption_report.py`
-43. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-44. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-45. `internal/api/agent_exec_token_binding.go`
-46. `internal/logging/logging.go`
-47. `pkg/auth/rbac.go`
-48. `pkg/auth/rbac_manager.go`
-49. `pkg/auth/sqlite_manager.go`
-50. `pkg/server/server.go`
+29. `internal/telemetry/service_health.go`
+30. `pkg/server/service_health.go`
+31. `pkg/server/telemetry_pulse_intelligence.go`
+32. `internal/api/router_routes_auth_security.go`
+33. `internal/crypto/crypto.go`
+34. `internal/securityutil/secure_storage_dir.go`
+35. `internal/cloudcp/auth/magiclink.go`
+36. `internal/cloudcp/auth/magiclink_store.go`
+37. `pkg/tlsutil/fingerprint.go`
+38. `pkg/audit/audit.go`
+39. `pkg/audit/async_logger.go`
+40. `pkg/audit/sqlite_logger.go`
+41. `pkg/audit/signer.go`
+42. `pkg/audit/sqlite_factory.go`
+43. `pkg/extensions/audit_admin.go`
+44. `scripts/telemetry_adoption_report.py`
+45. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+46. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+47. `internal/api/agent_exec_token_binding.go`
+48. `internal/logging/logging.go`
+49. `pkg/auth/rbac.go`
+50. `pkg/auth/rbac_manager.go`
+51. `pkg/auth/sqlite_manager.go`
+52. `pkg/server/server.go`
 
 ## Shared Boundaries
 
@@ -436,6 +438,14 @@ the `white_label` branding entitlement.
    credentials, recipient details, alert evidence, or other tenant-private
    notification configuration into the resource or incident timeline.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
+   Release service-health telemetry must come from a bounded loopback probe of
+   the listener Pulse actually bound. It may report only whether the API, UI,
+   and referenced frontend assets were served, a fixed failure category, and
+   the immediately previous normalized release observation. It must not report
+   listener addresses, URLs, asset names, response bodies, errors, hostnames,
+   customer identity, or account identity. Adoption reporting must interpret
+   those direct current/previous observations as release cohorts rather than
+   attributing rolling historical counters to the current release.
    The adoption report excludes mock-fixture-fleet-signature rows (120×N
    Kubernetes pods with 7×N VMware hosts, the `internal/mock` template) from
    adoption reads by default and must disclose the excluded row/install
@@ -1205,6 +1215,18 @@ identify only the governed class (`download`, `signature`, `checksum`,
 `cancelled`, or `unknown`). It must not export raw updater error text,
 download URLs, command output, log lines, paths, hostnames, release asset URLs,
 checksums, signatures, or operator-entered values.
+Schema v13 adds a direct local service-health observation so a process-level
+telemetry heartbeat is not mistaken for proof that the installed UI and API
+are being served. The runtime probes its bound listener through loopback and
+reports only observed/healthy booleans, one fixed failure class (`listener`,
+`startup`, `runtime`, `api_connectivity`, `api_status`, `ui_status`,
+`frontend_assets`, or `unknown`), a fixed observation cohort, and the
+immediately previous normalized release's observed/healthy booleans. No probe
+target, listener address, URL, IP address, asset path, response content, raw
+error, account, customer, or infrastructure identity may enter the payload or
+persisted receiver row. The previous-release fields are direct adjacent-release
+observations, not 30-day update counters, and are the only valid basis for a
+before/after release-health cohort in the adoption report.
 That same outbound usage telemetry floor now also permits only content-free Pulse
 Patrol control and governed Pulse Intelligence operations adoption flags and
 counters inside the same rotating 30-day telemetry window:

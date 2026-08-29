@@ -18,6 +18,8 @@
 //   - Known install age, highest activation stage, time to first monitored resource, and estate-size buckets
 //   - Whether authentication is configured, number of configured connections, and whether monitoring is active
 //   - Whether a core outcome was observed in the current aggregate windows
+//   - Whether the local API, UI document, and referenced frontend assets are
+//     being served, plus the immediately previous release observation
 //
 // Scale (counts only, no names):
 //   - Number of PVE nodes, PBS instances, PMG instances
@@ -58,6 +60,7 @@
 //   - No alert content, AI prompts, chat messages, command text, action output, or token values
 //   - No action targets, resource IDs, finding IDs, approval actors, or approval reasons
 //   - No names, email addresses, account identifiers, or other intentionally identifying personal content
+//   - No listener addresses, self-check URLs, response bodies, asset names, or raw startup/self-check errors
 //
 // # How to disable
 //
@@ -123,6 +126,11 @@ const (
 	// identifiers and is intentionally independent from the rotating install ID.
 	lifecycleStateFile = ".telemetry_lifecycle"
 
+	// serviceHealthStateFile retains only the current and immediately previous
+	// release observation. It lets a post-upgrade ping describe a before/after
+	// cohort without exporting listener addresses, URLs, errors, or request data.
+	serviceHealthStateFile = ".telemetry_service_health"
+
 	// installIDRotationWindow limits how long the same pseudonymous identifier
 	// can be reused before it is rotated locally.
 	installIDRotationWindow = 30 * 24 * time.Hour
@@ -168,7 +176,11 @@ const (
 	// Schema v12 adds Patrol-origin action funnel counters so detection and
 	// investigation activity can be separated from proposal, decision,
 	// execution, and successful completion without exporting action identity.
-	TelemetrySchemaVersion = 12
+	// Schema v13 adds a local UI/API service observation and the immediately
+	// previous release observation. This separates a process that can emit
+	// telemetry from one that is actually serving its API and frontend assets,
+	// while retaining only fixed categories and release identity.
+	TelemetrySchemaVersion = 13
 )
 
 type installIDRecord struct {
@@ -181,6 +193,31 @@ type lifecycleRecord struct {
 	FirstMonitoredResourceAt  *time.Time `json:"first_monitored_resource_at,omitempty"`
 	HighestObservedActivation string     `json:"highest_observed_activation"`
 }
+
+// ServiceHealthObservation is the bounded result of Pulse's local UI/API
+// self-check. FailureCategory must be one of the fixed ServiceHealthFailure*
+// values. Callers must never put an address, URL, error string, or response
+// content into this shape.
+type ServiceHealthObservation struct {
+	Observed        bool
+	Healthy         bool
+	FailureCategory string
+}
+
+const (
+	ServiceHealthFailureListener        = "listener"
+	ServiceHealthFailureStartup         = "startup"
+	ServiceHealthFailureRuntime         = "runtime"
+	ServiceHealthFailureAPIConnectivity = "api_connectivity"
+	ServiceHealthFailureAPIStatus       = "api_status"
+	ServiceHealthFailureUIStatus        = "ui_status"
+	ServiceHealthFailureFrontendAssets  = "frontend_assets"
+	ServiceHealthFailureUnknown         = "unknown"
+
+	ServiceHealthCohortFirstObservation = "first_observation"
+	ServiceHealthCohortSameVersion      = "same_version"
+	ServiceHealthCohortVersionChange    = "version_change"
+)
 
 // Ping is the payload sent to the telemetry endpoint.
 // Every field is documented here so users can audit exactly what leaves their server.
@@ -270,6 +307,17 @@ type Ping struct {
 	UpdateFailures30d      int `json:"update_failures_30d"`
 	// Last coarse update failure category; never raw error text.
 	UpdateLastFailureCategory string `json:"update_last_failure_category,omitempty"`
+
+	// Local release-service observation. The probe checks the local API, UI
+	// document, and referenced frontend assets. Only booleans, a fixed failure
+	// category, and normalized release versions leave the instance.
+	ServiceHealthObserved         bool   `json:"service_health_observed"`
+	ServiceHealthHealthy          bool   `json:"service_health_healthy"`
+	ServiceHealthFailureCategory  string `json:"service_health_failure_category,omitempty"`
+	ServiceHealthCohort           string `json:"service_health_cohort,omitempty"`
+	ServiceHealthPreviousVersion  string `json:"service_health_previous_version,omitempty"`
+	ServiceHealthPreviousObserved bool   `json:"service_health_previous_observed"`
+	ServiceHealthPreviousHealthy  bool   `json:"service_health_previous_healthy"`
 
 	// Node connection test outcomes over the install-ID rotation window.
 	// ConfiguredConnections counts only connections that were saved, so an
@@ -836,6 +884,7 @@ type Config struct {
 	DeploymentMethod string
 	Enabled          bool // From cfg.TelemetryEnabled (system settings or env var)
 	GetSnapshot      SnapshotFunc
+	GetServiceHealth func() ServiceHealthObservation
 }
 
 // runner holds the state for the background heartbeat goroutine.
@@ -878,7 +927,7 @@ func Start(ctx context.Context, cfg Config) {
 
 	log.Info().
 		Str("platform", platformName(cfg.IsDocker)).
-		Msg("Outbound usage telemetry enabled — sends a rotating pseudonymous install ID, version identity, coarse lifecycle buckets, aggregate resource/outcome counts, feature flags, and content-free Patrol, Assistant, and capability-API usage counters")
+		Msg("Outbound usage telemetry enabled: sends a rotating pseudonymous install ID, version identity, coarse lifecycle and local service-health buckets, aggregate resource/outcome counts, feature flags, and content-free Patrol, Assistant, and capability-API usage counters")
 
 	r.wg.Add(1)
 	go func() {
@@ -926,6 +975,22 @@ func Stop() {
 // BuildPreview returns the current heartbeat payload without sending it.
 func BuildPreview(cfg Config) (Ping, error) {
 	return buildPingAt(cfg, "heartbeat", time.Now().UTC())
+}
+
+// SendServiceHealthEvent sends one immediate bounded service-health ping. It
+// is used for listener/startup/runtime failures that would otherwise exit
+// before the normal delayed startup heartbeat. Disabled telemetry and mock
+// mode remain fully suppressed.
+func SendServiceHealthEvent(ctx context.Context, cfg Config, event string, observation ServiceHealthObservation) error {
+	if !cfg.Enabled || mock.IsMockEnabled() {
+		return nil
+	}
+	cfg.GetServiceHealth = func() ServiceHealthObservation { return observation }
+	ping, err := buildPingAt(cfg, event, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	return send(ctx, ping)
 }
 
 // ResetInstallID rotates the locally stored telemetry install ID immediately
@@ -1462,6 +1527,7 @@ func buildPingAt(cfg Config, event string, now time.Time) (Ping, error) {
 	ping.Event = event
 	ping.SentAt = now.Format(time.RFC3339)
 	applyLifecycle(&ping, cfg.DataDir, now)
+	applyServiceHealth(&ping, cfg.DataDir, cfg.GetServiceHealth)
 	return ping, nil
 }
 

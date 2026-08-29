@@ -188,6 +188,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertTrue(recent_count_fields <= projected)
         self.assertIn("alert_ai_enabled", projected)
         self.assertIn("update_last_failure_category", projected)
+        self.assertTrue(set(report.SERVICE_HEALTH_ROW_FIELDS) <= projected)
         self.assertNotIn("business_estate", projected)
 
         specs = {entry["field"]: entry for entry in report.telemetry_signal_specs()}
@@ -518,6 +519,72 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertGreater(report.compare_semver_precedence("6.3.0", "6.3.0-rc.3"), 0)
         self.assertLess(report.compare_semver_precedence("6.2.1", "6.3.0-rc.3"), 0)
         self.assertEqual(report.compare_semver_precedence("6.3.0+build.2", "6.3.0"), 0)
+
+    def test_target_release_service_health_uses_direct_version_change_observations(self) -> None:
+        now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+        rows = {
+            "healthy-upgrade": {
+                "install_id": "healthy-upgrade",
+                "received_at": "2026-08-29 11:00:00",
+                "version": "6.5.0",
+                "service_health_observed": 1,
+                "service_health_healthy": 1,
+                "service_health_cohort": "version_change",
+                "service_health_previous_version": "6.4.0",
+                "service_health_previous_observed": 1,
+                "service_health_previous_healthy": 1,
+            },
+            "broken-upgrade": {
+                "install_id": "broken-upgrade",
+                "received_at": "2026-08-29 10:00:00",
+                "version": "6.5.0",
+                "service_health_observed": 1,
+                "service_health_healthy": 0,
+                "service_health_failure_category": "frontend_assets",
+                "service_health_cohort": "version_change",
+                "service_health_previous_version": "6.4.0",
+                "service_health_previous_observed": 1,
+                "service_health_previous_healthy": 1,
+                # Rolling counters are deliberately irrelevant to this summary.
+                "update_successes_30d": 99,
+            },
+            "legacy-target": {
+                "install_id": "legacy-target",
+                "received_at": "2026-08-29 09:00:00",
+                "version": "6.5.0",
+                "service_health_observed": 0,
+            },
+            "other-release": {
+                "install_id": "other-release",
+                "received_at": "2026-08-29 11:30:00",
+                "version": "6.4.0",
+                "service_health_observed": 1,
+                "service_health_healthy": 0,
+                "service_health_failure_category": "listener",
+            },
+        }
+
+        summary = report.summarize_target_release_service_health(
+            rows,
+            {"6.4.0", "6.5.0"},
+            "6.5.0",
+            now=now,
+        )
+
+        self.assertEqual(summary["target_installs"], 3)
+        self.assertEqual(summary["observed_installs"], 2)
+        self.assertEqual(summary["unobserved_installs"], 1)
+        self.assertEqual(summary["healthy_installs"], 1)
+        self.assertEqual(summary["unhealthy_installs"], 1)
+        self.assertEqual(summary["comparable_version_change_installs"], 2)
+        self.assertEqual(
+            {entry["transition"]: entry["installs"] for entry in summary["transitions"]},
+            {"healthy_to_healthy": 1, "healthy_to_unhealthy": 1},
+        )
+        self.assertEqual(
+            {entry["category"]: entry["installs"] for entry in summary["failure_categories"]},
+            {"healthy": 1, "frontend_assets": 1},
+        )
 
     def test_target_release_followup_excludes_first_heartbeat_baselines_and_flags_rollbacks(self) -> None:
         now = datetime(2026, 8, 19, 12, tzinfo=timezone.utc)
