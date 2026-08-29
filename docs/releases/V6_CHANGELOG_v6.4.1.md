@@ -20,6 +20,9 @@ _This changelog describes stable `v6.4.1` compared with stable `v6.4.0`._
 - Proxmox VM and LXC REST resources preserve source-authored backup, uptime, and
   guest metadata on first paint instead of waiting for a WebSocket update
   ([#1792](https://github.com/rcourtman/Pulse/issues/1792)).
+- TrueNAS SMART spare-block reserve evidence accepts supported scalar and nested
+  integer representations without overflowing or projecting malformed,
+  fractional, or out-of-range values as percentages.
 - API token creation, whole-inventory regeneration, migration, and container
   runtime preparation restore complete prior live state when persistence fails.
 - First-run credential reset no longer commits a password change when the
