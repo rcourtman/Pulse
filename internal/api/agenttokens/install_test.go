@@ -74,6 +74,88 @@ func TestIssueActionRunnerAndPersistRejectsIncompleteBinding(t *testing.T) {
 	}
 }
 
+func TestIssueActionRunnerAndPersistReplacesMatchingBoundCredential(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, first, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-123", Hostname: "Node.EXAMPLE",
+	})
+	if err != nil {
+		t.Fatalf("first IssueActionRunnerAndPersist: %v", err)
+	}
+	_, otherHost, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-456", Hostname: "other.example",
+	})
+	if err != nil {
+		t.Fatalf("other-host IssueActionRunnerAndPersist: %v", err)
+	}
+	_, replacement, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+		// Canonical agent identity survives a host rename. The old binding can no
+		// longer admit that host and must not remain as an orphaned secret.
+		OrgID: "org-a", AgentID: "machine-123", Hostname: "renamed.example",
+	})
+	if err != nil {
+		t.Fatalf("replacement IssueActionRunnerAndPersist: %v", err)
+	}
+	if replacement.ID == first.ID {
+		t.Fatalf("replacement reused token id %q", replacement.ID)
+	}
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("token inventory = %#v, want one replacement plus other host", cfg.APITokens)
+	}
+	foundReplacement, foundOther, foundFirst := false, false, false
+	for _, record := range cfg.APITokens {
+		foundReplacement = foundReplacement || record.ID == replacement.ID
+		foundOther = foundOther || record.ID == otherHost.ID
+		foundFirst = foundFirst || record.ID == first.ID
+	}
+	if !foundReplacement || !foundOther || foundFirst {
+		t.Fatalf("replacement inventory = %#v", cfg.APITokens)
+	}
+}
+
+func TestIssueActionRunnerAndPersistRestoresReplacedCredentialOnPersistenceFailure(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, prior, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example",
+	})
+	if err != nil {
+		t.Fatalf("seed action credential: %v", err)
+	}
+	_, unrelated, err := IssueAndPersist(cfg, nil, IssueOptions{TokenName: "collector", OrgID: "org-a"})
+	if err != nil {
+		t.Fatalf("seed unrelated credential: %v", err)
+	}
+
+	statePath := filepath.Join(t.TempDir(), "blocked-state")
+	persistence := config.NewConfigPersistence(statePath)
+	if err := os.RemoveAll(statePath); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+	raw, replacement, err := IssueActionRunnerAndPersist(cfg, persistence, ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example",
+	})
+	if !errors.Is(err, ErrPersist) {
+		t.Fatalf("replacement error = %v, want ErrPersist", err)
+	}
+	if raw != "" || replacement != nil {
+		t.Fatalf("failed replacement returned credential: raw=%q record=%#v", raw, replacement)
+	}
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("restored inventory = %#v", cfg.APITokens)
+	}
+	foundPrior, foundUnrelated := false, false
+	for _, record := range cfg.APITokens {
+		foundPrior = foundPrior || record.ID == prior.ID
+		foundUnrelated = foundUnrelated || record.ID == unrelated.ID
+	}
+	if !foundPrior || !foundUnrelated {
+		t.Fatalf("full prior inventory was not restored: %#v", cfg.APITokens)
+	}
+}
+
 func TestIssueAndPersistRejectsMonitoringRoleWithExecAuthority(t *testing.T) {
 	_, _, err := IssueAndPersist(&config.Config{}, nil, IssueOptions{
 		TokenName: "invalid",

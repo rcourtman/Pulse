@@ -54,4 +54,32 @@ describe('AgentDiagnosticsAPI', () => {
       summary: { total: 0, healthy: 0, warning: 0, critical: 0, removed: 0 },
     });
   });
+
+  it('issues a separately scoped host-bound action-runner credential', async () => {
+    mockedApiFetchJSON.mockResolvedValueOnce({
+      token: 'runner-secret',
+      tokenId: 'token-1',
+      organizationId: 'org-1',
+      agentId: 'host-1',
+      hostname: 'host-1.local',
+      runtimeRole: 'action-runner',
+      actionCapability: 'typed_actions.v1',
+    });
+
+    await expect(
+      AgentDiagnosticsAPI.issueActionRunnerCredential({
+        agentId: 'host-1',
+        hostname: 'host-1.local',
+        name: 'host-1 action runner',
+      }),
+    ).resolves.toMatchObject({ token: 'runner-secret', agentId: 'host-1' });
+    expect(mockedApiFetchJSON).toHaveBeenCalledWith('/api/agents/action-runner/credential', {
+      method: 'POST',
+      body: JSON.stringify({
+        agentId: 'host-1',
+        hostname: 'host-1.local',
+        name: 'host-1 action runner',
+      }),
+    });
+  });
 });

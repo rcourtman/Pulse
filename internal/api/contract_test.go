@@ -20798,7 +20798,8 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
 		t.Error("agent fleet diagnostics route must remain admin settings:read only")
 	}
-	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, time.Now().UTC())") {
+	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, now)") ||
+		!strings.Contains(handlerSrc, "applyAgentFleetActionRunnerState(&diagnostics") {
 		t.Error("agent fleet diagnostics handler must delegate to the monitoring-owned read-only producer")
 	}
 	for _, required := range []struct {
@@ -20818,6 +20819,15 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "AgentModules", reflect.TypeOf([]monitoring.AgentFleetDiagnosticModule(nil)), "agentModules,omitempty"},
 		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "Reasons", reflect.TypeOf([]monitoring.AgentFleetDiagnosticReason(nil)), "reasons"},
 		{reflect.TypeOf(monitoring.AgentFleetAgentDiagnostic{}), "RepairActions", reflect.TypeOf([]monitoring.AgentFleetDiagnosticRepair(nil)), "repairActions,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "TypedHelper", reflect.TypeOf(false), "typedHelper,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerCredentialIssued", reflect.TypeOf(false), "actionRunnerCredentialIssued,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerCredentialActive", reflect.TypeOf(false), "actionRunnerCredentialActive,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerRuntimeRole", reflect.TypeOf(""), "actionRunnerRuntimeRole,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerCapability", reflect.TypeOf(""), "actionRunnerCapability,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerConnected", reflect.TypeOf(false), "actionRunnerConnected,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerReceiptProtocol", reflect.TypeOf(0), "actionRunnerReceiptProtocol,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerPreflightProtocol", reflect.TypeOf(0), "actionRunnerPreflightProtocol,omitempty"},
+		{reflect.TypeOf(monitoring.AgentFleetDiagnosticPrivilege{}), "ActionRunnerDockerObservationProtocol", reflect.TypeOf(0), "actionRunnerDockerObservationProtocol,omitempty"},
 	} {
 		field, ok := required.typeOf.FieldByName(required.name)
 		if !ok {

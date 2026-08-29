@@ -200,6 +200,29 @@ The safe runner accepts only versioned host update/storage-cleanup, Proxmox
 guest lifecycle, and container lifecycle/update requests. Generic shell,
 `exec`, unrestricted `read_file`, and deploy operations are rejected.
 
+**Settings → Infrastructure → Agent Doctor** presents this boundary as
+evidence, not an inferred security grade. The collector reports whether it is
+root, its service user and local command-authority ceiling, and whether the
+typed helper, SMART helper, and `pct` helper are configured. Pulse separately
+joins the current tenant's token inventory and admitted command sessions to
+show whether the collector credential is known and execution-scoped, whether
+a host-bound runner credential is active, and whether a compatible
+`action-runner` / `typed_actions.v1` session is actually connected. Missing
+evidence remains unknown; collector health never proves remediation readiness.
+
+Runner enrollment is one host at a time. The issuance request must resolve to
+exactly one non-conflicted monitored agent ID and normalized hostname in the
+current tenant. The returned secret is shown once and held only in the open
+Agent Doctor page's memory; it is not written to browser storage, a URL, a
+diagnostic report, or an installer command. The generated handoff first prompts
+for the secret through `/dev/tty` into the root-owned
+`/etc/pulse-agent-runner/token` file with mode `0600`, then passes only that
+file path through `--action-token-file`. Issuing again rotates the credential
+for that tenant/host binding: Pulse durably replaces the previous record as one
+transaction and restores it if persistence fails. A successful rotation makes
+the previous secret invalid, so complete the new token-file handoff before
+expecting a disconnected runner to reconnect.
+
 The existing combined collector command path remains available only as the
 explicit legacy/full-trust migration profile. It is not part of the typed
 helper/runner security claim and will remain until supported command-enabled
@@ -217,6 +240,16 @@ install.sh --safe-profile-rollback ...
 Inspection makes no changes. Apply snapshots collector/helper files and
 identity before switching profiles, and rollback restores that snapshot. The
 separately installed action runner is not changed by either operation.
+Inspection reports platform support, the current unit user and groups, ambient
+capabilities, collector-binary owner and mode, enabled provider flags, helper
+and collector-command state, independent runner presence, and the calculated
+typed-helper target and degraded Docker/action differences. Apply is supported
+only on reviewed standard Linux systemd hosts: it retains the monitoring token
+and agent identity, lowers the collector to monitoring-only, removes legacy
+sudo/Docker-group/ambient authority, requires collector health, helper socket
+health, and declared server registration before commit, and automatically
+restores the exact snapshot on failure. Ordinary `--update` preserves the
+installed profile and never performs this migration.
 
 The older `--least-privilege` profile without `--enable-privileged-helper`
 remains available for compatibility. Its trade-offs are documented below.

@@ -54,8 +54,36 @@ export interface AgentFleetDiagnosticPrivilege {
   commandAuthority?: 'monitoring-only' | 'command-capable' | 'legacy' | string;
   credentialKnown?: boolean;
   credentialExec?: boolean;
+  typedHelper?: boolean;
   smartctlHelper?: boolean;
   pctHelper?: boolean;
+  actionRunnerCredentialIssued?: boolean;
+  actionRunnerCredentialActive?: boolean;
+  actionRunnerRuntimeRole?: string;
+  actionRunnerCapability?: string;
+  actionRunnerBindingVersion?: string;
+  actionRunnerConnected?: boolean;
+  actionRunnerVersion?: string;
+  actionRunnerConnectedAt?: number;
+  actionRunnerReceiptProtocol?: number;
+  actionRunnerPreflightProtocol?: number;
+  actionRunnerDockerObservationProtocol?: number;
+}
+
+export interface ActionRunnerCredentialRequest {
+  agentId: string;
+  hostname: string;
+  name?: string;
+}
+
+export interface ActionRunnerCredentialResponse {
+  token: string;
+  tokenId: string;
+  organizationId: string;
+  agentId: string;
+  hostname: string;
+  runtimeRole: 'action-runner';
+  actionCapability: 'typed_actions.v1';
 }
 
 export interface AgentFleetAgentDiagnostic {
@@ -129,5 +157,14 @@ export class AgentDiagnosticsAPI {
       summary: { ...EMPTY_SUMMARY, ...response.summary },
       agents: response.agents ?? [],
     };
+  }
+
+  static issueActionRunnerCredential(
+    request: ActionRunnerCredentialRequest,
+  ): Promise<ActionRunnerCredentialResponse> {
+    return apiFetchJSON('/api/agents/action-runner/credential', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   }
 }

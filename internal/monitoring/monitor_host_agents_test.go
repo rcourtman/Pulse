@@ -5488,6 +5488,7 @@ func TestApplyHostReportCarriesAgentPrivilegeProfile(t *testing.T) {
 			Privilege: &agentshost.PrivilegeStatus{
 				RunningAsRoot:  false,
 				ServiceUser:    "  pulse-agent  ",
+				TypedHelper:    true,
 				SmartctlHelper: true,
 			},
 		},
@@ -5503,6 +5504,7 @@ func TestApplyHostReportCarriesAgentPrivilegeProfile(t *testing.T) {
 	if host.AgentPrivilege == nil ||
 		host.AgentPrivilege.RunningAsRoot ||
 		host.AgentPrivilege.ServiceUser != "pulse-agent" ||
+		!host.AgentPrivilege.TypedHelper ||
 		!host.AgentPrivilege.SmartctlHelper ||
 		host.AgentPrivilege.PctHelper {
 		t.Fatalf("ingested privilege = %+v", host.AgentPrivilege)

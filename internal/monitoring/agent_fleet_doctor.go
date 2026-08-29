@@ -116,18 +116,31 @@ type AgentFleetDiagnosticModule struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// AgentFleetDiagnosticPrivilege is the agent-reported privilege profile,
-// surfaced descriptively beside modules and update state. It is deliberately
-// not a Reason: a least-privilege install is an intentional hardening choice,
-// so it must never degrade the agent's health status by itself.
+// AgentFleetDiagnosticPrivilege combines the collector-reported privilege
+// profile with server-observed action-runner connection state. It is surfaced
+// descriptively beside modules and update state. It is deliberately not a
+// Reason: a least-privilege install or a disconnected optional runner must
+// never degrade monitoring health by itself.
 type AgentFleetDiagnosticPrivilege struct {
-	RunningAsRoot    bool   `json:"runningAsRoot"`
-	ServiceUser      string `json:"serviceUser,omitempty"`
-	CommandAuthority string `json:"commandAuthority,omitempty"`
-	CredentialKnown  bool   `json:"credentialKnown,omitempty"`
-	CredentialExec   bool   `json:"credentialExec,omitempty"`
-	SmartctlHelper   bool   `json:"smartctlHelper,omitempty"`
-	PctHelper        bool   `json:"pctHelper,omitempty"`
+	RunningAsRoot                         bool   `json:"runningAsRoot"`
+	ServiceUser                           string `json:"serviceUser,omitempty"`
+	CommandAuthority                      string `json:"commandAuthority,omitempty"`
+	CredentialKnown                       bool   `json:"credentialKnown,omitempty"`
+	CredentialExec                        bool   `json:"credentialExec,omitempty"`
+	TypedHelper                           bool   `json:"typedHelper,omitempty"`
+	SmartctlHelper                        bool   `json:"smartctlHelper,omitempty"`
+	PctHelper                             bool   `json:"pctHelper,omitempty"`
+	ActionRunnerCredentialIssued          bool   `json:"actionRunnerCredentialIssued,omitempty"`
+	ActionRunnerCredentialActive          bool   `json:"actionRunnerCredentialActive,omitempty"`
+	ActionRunnerRuntimeRole               string `json:"actionRunnerRuntimeRole,omitempty"`
+	ActionRunnerCapability                string `json:"actionRunnerCapability,omitempty"`
+	ActionRunnerBindingVersion            string `json:"actionRunnerBindingVersion,omitempty"`
+	ActionRunnerConnected                 bool   `json:"actionRunnerConnected,omitempty"`
+	ActionRunnerVersion                   string `json:"actionRunnerVersion,omitempty"`
+	ActionRunnerConnectedAt               int64  `json:"actionRunnerConnectedAt,omitempty"`
+	ActionRunnerReceiptProtocol           int    `json:"actionRunnerReceiptProtocol,omitempty"`
+	ActionRunnerPreflightProtocol         int    `json:"actionRunnerPreflightProtocol,omitempty"`
+	ActionRunnerDockerObservationProtocol int    `json:"actionRunnerDockerObservationProtocol,omitempty"`
 }
 
 type AgentFleetDiagnosticReason struct {
@@ -964,6 +977,7 @@ func agentFleetPrivilegeForSubject(subject agentFleetSubject, inventory agentFle
 		RunningAsRoot:    privilege.RunningAsRoot,
 		ServiceUser:      strings.TrimSpace(privilege.ServiceUser),
 		CommandAuthority: strings.TrimSpace(privilege.CommandAuthority),
+		TypedHelper:      privilege.TypedHelper,
 		SmartctlHelper:   privilege.SmartctlHelper,
 		PctHelper:        privilege.PctHelper,
 	}

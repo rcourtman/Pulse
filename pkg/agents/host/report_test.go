@@ -136,6 +136,7 @@ func TestAgentInfoPrivilegeStatusRoundTrip(t *testing.T) {
 			RunningAsRoot:    false,
 			ServiceUser:      "pulse-agent",
 			CommandAuthority: "monitoring-only",
+			TypedHelper:      true,
 			SmartctlHelper:   true,
 			PctHelper:        false,
 		},
@@ -152,6 +153,7 @@ func TestAgentInfoPrivilegeStatusRoundTrip(t *testing.T) {
 		decoded.Privilege.RunningAsRoot ||
 		decoded.Privilege.ServiceUser != "pulse-agent" ||
 		decoded.Privilege.CommandAuthority != "monitoring-only" ||
+		!decoded.Privilege.TypedHelper ||
 		!decoded.Privilege.SmartctlHelper ||
 		decoded.Privilege.PctHelper {
 		t.Fatalf("privilege round trip = %+v", decoded.Privilege)

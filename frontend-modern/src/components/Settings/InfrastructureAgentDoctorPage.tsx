@@ -15,12 +15,17 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
 import { MonitoringAPI } from '@/api/monitoring';
+import { AgentDiagnosticsAPI } from '@/api/agentDiagnostics';
 import {
   getUnifiedAgentClipboardCopyErrorMessage,
   getUnifiedAgentClipboardCopySuccessMessage,
 } from '@/utils/unifiedAgentInventoryPresentation';
 import {
   formatInfrastructureAgentDoctorReport,
+  buildActionRunnerInstallCommand,
+  buildActionRunnerTokenFileCommand,
+  buildSafeCollectorApplyCommand,
+  buildSafeCollectorInspectCommand,
   getInfrastructureAgentDoctorUninstallHandoff,
   summarizeInfrastructureAgentDoctorTargets,
   type InfrastructureAgentDoctorStatus,
@@ -192,6 +197,61 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
     new Map(),
   );
   const [reenrollPendingId, setReenrollPendingId] = createSignal('');
+  const [runnerCredentialPendingKey, setRunnerCredentialPendingKey] = createSignal('');
+  const [issuedRunnerCredentialKeys, setIssuedRunnerCredentialKeys] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
+  const [runnerCredentialReveal, setRunnerCredentialReveal] = createSignal<{
+    targetKey: string;
+    token: string;
+  } | null>(null);
+
+  const issueActionRunnerCredential = async (target: InfrastructureAgentDoctorTarget) => {
+    if (
+      !target.actionRunnerCredentialEligible ||
+      !target.actionRunnerAgentId ||
+      !target.actionRunnerHostname
+    ) {
+      return;
+    }
+    setRunnerCredentialReveal(null);
+    setRunnerCredentialPendingKey(target.key);
+    try {
+      const response = await AgentDiagnosticsAPI.issueActionRunnerCredential({
+        agentId: target.actionRunnerAgentId,
+        hostname: target.actionRunnerHostname,
+        name: `${target.displayName} action runner`,
+      });
+      const normalizedHostname = (value: string) => value.trim().toLowerCase().replace(/\.+$/, '');
+      if (
+        response.agentId !== target.actionRunnerAgentId ||
+        normalizedHostname(response.hostname) !== normalizedHostname(target.actionRunnerHostname) ||
+        response.runtimeRole !== 'action-runner' ||
+        response.actionCapability !== 'typed_actions.v1' ||
+        !response.token
+      ) {
+        throw new Error(
+          'Pulse returned an unexpected action-runner credential identity or authority.',
+        );
+      }
+      setRunnerCredentialReveal({ targetKey: target.key, token: response.token });
+      setIssuedRunnerCredentialKeys((previous) => new Set(previous).add(target.key));
+      notificationStore.success('Action-runner credential issued. Save it now. It is shown once.');
+      try {
+        await props.onRetryDiagnostics?.();
+      } catch {
+        notificationStore.error(
+          'The credential was issued, but Pulse could not refresh its runner posture.',
+        );
+      }
+    } catch (error) {
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to issue action-runner credential.',
+      );
+    } finally {
+      setRunnerCredentialPendingKey('');
+    }
+  };
   const allowReenroll = async (target: InfrastructureAgentDoctorTarget) => {
     const separator = target.connectionId.indexOf(':');
     const type = separator > 0 ? target.connectionId.slice(0, separator) : '';
@@ -551,6 +611,205 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 </Show>
                               </Show>
                             </p>
+
+                            <div class="space-y-2 rounded-md border border-border bg-surface px-3 py-3 text-xs">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-medium text-base-content">Security posture</span>
+                                <Show when={target.safeCollector}>
+                                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                                    Safe collector confirmed
+                                  </span>
+                                </Show>
+                              </div>
+                              <Show when={target.safeProfileGuidance}>
+                                <p class="leading-5 text-muted">{target.safeProfileGuidance}</p>
+                              </Show>
+                              <Show
+                                when={
+                                  !target.safeCollector &&
+                                  target.status !== 'removed' &&
+                                  target.commandPlatform === 'linux' &&
+                                  target.actionRunnerAgentId &&
+                                  target.actionRunnerHostname
+                                }
+                              >
+                                <div class="space-y-2">
+                                  <div>
+                                    <div class="mb-1 font-medium text-base-content">
+                                      Inspect current service profile
+                                    </div>
+                                    <div class="relative">
+                                      <CommandCopyButton
+                                        onClick={() =>
+                                          void copyCommand(
+                                            buildSafeCollectorInspectCommand({
+                                              pulseUrl: operations.selectedAgentUrl(),
+                                              insecure: operations.insecureMode(),
+                                              customCaPath: operations.customCaPath(),
+                                            }),
+                                          )
+                                        }
+                                        label="Copy safe-profile inspection command"
+                                      />
+                                      <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <code>
+                                          {buildSafeCollectorInspectCommand({
+                                            pulseUrl: operations.selectedAgentUrl(),
+                                            insecure: operations.insecureMode(),
+                                            customCaPath: operations.customCaPath(),
+                                          })}
+                                        </code>
+                                      </pre>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div class="mb-1 font-medium text-base-content">
+                                      Apply reviewed safe collector profile
+                                    </div>
+                                    <div class="relative">
+                                      <CommandCopyButton
+                                        onClick={() =>
+                                          void copyCommand(
+                                            buildSafeCollectorApplyCommand({
+                                              pulseUrl: operations.selectedAgentUrl(),
+                                              insecure: operations.insecureMode(),
+                                              customCaPath: operations.customCaPath(),
+                                            }),
+                                          )
+                                        }
+                                        label="Copy safe-profile apply command"
+                                      />
+                                      <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <code>
+                                          {buildSafeCollectorApplyCommand({
+                                            pulseUrl: operations.selectedAgentUrl(),
+                                            insecure: operations.insecureMode(),
+                                            customCaPath: operations.customCaPath(),
+                                          })}
+                                        </code>
+                                      </pre>
+                                    </div>
+                                  </div>
+                                </div>
+                              </Show>
+                              <Show when={target.actionRunnerPosture.length > 0}>
+                                <ul class="list-disc space-y-1 pl-5 text-muted">
+                                  <For each={target.actionRunnerPosture}>
+                                    {(fact) => <li>{fact}</li>}
+                                  </For>
+                                </ul>
+                              </Show>
+                              <Show
+                                when={target.actionRunnerCredentialEligible}
+                                fallback={
+                                  <Show when={target.actionRunnerCredentialBlockReason}>
+                                    <p class="text-muted">
+                                      Action runner: {target.actionRunnerCredentialBlockReason}
+                                    </p>
+                                  </Show>
+                                }
+                              >
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  isLoading={runnerCredentialPendingKey() === target.key}
+                                  disabled={
+                                    Boolean(runnerCredentialReveal()) ||
+                                    issuedRunnerCredentialKeys().has(target.key)
+                                  }
+                                  onClick={() => void issueActionRunnerCredential(target)}
+                                >
+                                  {issuedRunnerCredentialKeys().has(target.key)
+                                    ? 'Credential issued for this page session'
+                                    : target.actionRunnerCredentialAction === 'rotate'
+                                      ? 'Rotate action-runner credential'
+                                      : 'Issue one-time action-runner credential'}
+                                </Button>
+                              </Show>
+                            </div>
+
+                            <Show
+                              when={
+                                runnerCredentialReveal()?.targetKey === target.key
+                                  ? runnerCredentialReveal()
+                                  : null
+                              }
+                            >
+                              {(reveal) => {
+                                const tokenFileCommand = () => buildActionRunnerTokenFileCommand();
+                                const installCommand = () =>
+                                  buildActionRunnerInstallCommand({
+                                    pulseUrl: operations.selectedAgentUrl(),
+                                    agentId: target.actionRunnerAgentId!,
+                                    hostname: target.actionRunnerHostname!,
+                                    insecure: operations.insecureMode(),
+                                    customCaPath: operations.customCaPath(),
+                                  });
+                                return (
+                                  <section class="space-y-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+                                    <div class="font-semibold">Save this credential now</div>
+                                    <p class="leading-5">
+                                      This secret is held only in this page's memory and cannot be
+                                      recovered after you clear or leave it. It is never placed in a
+                                      URL, diagnostic report, installer command, or process
+                                      argument.
+                                    </p>
+                                    <div>
+                                      <div class="mb-1 font-medium">
+                                        1. Start a private token prompt
+                                      </div>
+                                      <div class="relative">
+                                        <CommandCopyButton
+                                          onClick={() => void copyCommand(tokenFileCommand())}
+                                          label="Copy private token-file command"
+                                        />
+                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                          <code>{tokenFileCommand()}</code>
+                                        </pre>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div class="mb-1 font-medium">
+                                        2. Copy this credential and paste it at the prompt
+                                      </div>
+                                      <div class="relative">
+                                        <CommandCopyButton
+                                          onClick={() => void copyCommand(reveal().token)}
+                                          title="Copy one-time action-runner credential"
+                                          label={`Copy action-runner credential for ${target.displayName}`}
+                                        />
+                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                          <code>{reveal().token}</code>
+                                        </pre>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div class="mb-1 font-medium">
+                                        3. Install the separate runner
+                                      </div>
+                                      <div class="relative">
+                                        <CommandCopyButton
+                                          onClick={() => void copyCommand(installCommand())}
+                                          label="Copy action-runner installer command"
+                                        />
+                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                          <code>{installCommand()}</code>
+                                        </pre>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setRunnerCredentialReveal(null)}
+                                    >
+                                      Clear credential from this page
+                                    </Button>
+                                  </section>
+                                );
+                              }}
+                            </Show>
 
                             <Show
                               when={target.reasons.length > 0}

@@ -32,15 +32,19 @@ and its two signature sidecars.
 The action runner has a parallel Linux-only, rate-limited signed-binary
 contract at `GET|HEAD /download/pulse-agent-runner?arch=linux-*`; it never
 falls back to a collector or helper asset. `POST
-/api/agents/action-runner/credential` is an admin and `actions:execute`
-operation that accepts one canonical monitored host identity and returns a
-new, separately persisted `agent:exec` credential bound to organization,
-agent ID, normalized hostname, runtime role `action-runner`, and capability
-`typed_actions.v1`. Monitoring credentials cannot call the issuance route or
-authenticate an action-runner session, and action-runner credentials are not
-collector report/config credentials. Unknown request fields, ambiguous or
-conflicted host identities, and persistence failures fail before any usable
-credential is returned.
+/api/agents/action-runner/credential` is an operator-only admin,
+`settings:write`, and `actions:execute` operation. It accepts one canonical
+monitored `agentId` / `hostname` pair and returns a new, separately persisted
+`agent:exec` credential bound to organization, agent ID, normalized hostname,
+runtime role `action-runner`, binding version 1, and capability
+`typed_actions.v1`. The route re-resolves the pair against exactly one live,
+non-conflicted, non-integration host in the request tenant. Issuing again
+atomically replaces only the earlier action-runner record for that tenant and
+agent ID; a persistence failure restores the complete token inventory and
+returns no usable new secret. Monitoring credentials cannot call the issuance
+route or authenticate an action-runner session, and action-runner credentials
+cannot report, read agent configuration, or manage collectors. Unknown request
+fields and ambiguous, mismatched, or conflicted host identities fail closed.
 
 The API runtime is decomposed along production domain boundaries so Go can
 compile and execute domain qualification packages concurrently. Shared tenant
@@ -10042,14 +10046,29 @@ execution-profile projection; neither external clients nor model output can
 select or widen the surface.
 
 The agent fleet diagnostics payload (`GET /api/agents/diagnostics`) now
-carries an optional per-agent `privilege` object — `runningAsRoot`,
-`serviceUser`, `smartctlHelper`, `pctHelper` — mirrored by the frontend
-transport in `frontend-modern/src/api/agentDiagnostics.ts`
-(`AgentFleetDiagnosticPrivilege`). The field is descriptive fleet evidence:
-it appears only when the agent reported a profile, it never carries
-credentials or paths, and consumers must not derive health status from it.
-The unified agent report contract (`pkg/agents/host/report.go`) gains the
-matching agent-authored `privilege` block with the same fields.
+carries an optional per-agent `privilege` object mirrored by
+`frontend-modern/src/api/agentDiagnostics.ts`
+(`AgentFleetDiagnosticPrivilege`). The agent-authored portion is
+`runningAsRoot`, `serviceUser`, `commandAuthority`, `typedHelper`,
+`smartctlHelper`, and `pctHelper`. The server may add `credentialKnown` and
+`credentialExec` from the reporting-token inventory plus
+`actionRunnerCredentialIssued`, `actionRunnerCredentialActive`,
+`actionRunnerRuntimeRole`, `actionRunnerCapability`,
+`actionRunnerBindingVersion`, `actionRunnerConnected`,
+`actionRunnerVersion`, `actionRunnerConnectedAt`, and the receipt, preflight,
+and Docker-observation protocol versions from the organization-scoped
+credential and admitted-session registries. The unified agent report contract
+(`pkg/agents/host/report.go`) carries only the agent-authored subset.
+
+These fields are descriptive fleet evidence, not authorization and not a
+health reason. They never contain raw credentials, credential paths, helper
+paths, unit groups/capabilities, or binary ownership. Consumers must not infer
+those host-local facts, safe-profile completion, or action readiness from an
+absent field, collector health, or the mere existence of a runner credential.
+Agent Doctor may show the raw `token` returned by the issuance response only as
+a one-time component-memory reveal; it must not persist that value in browser
+storage, URLs, diagnostics, installer commands, or process arguments. The
+generated installer handoff carries only a private `--action-token-file` path.
 
 ### Proxmox node network inventory is an optional canonical facet
 

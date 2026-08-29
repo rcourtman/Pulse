@@ -38,6 +38,14 @@ command-capable runtime whose monitoring credential cannot re-enable commands
 is a scope-mismatch warning; an actively command-enabled runtime without
 `agent:exec` remains critical. These facts do not change collection truth or
 make a least-privilege service unhealthy by themselves.
+Action-runner posture is a server-side join, not collector-reported monitoring
+truth. The collector may report only that its typed local helper is configured;
+Agent Doctor separately overlays the current tenant's host-bound runner-token
+inventory and admitted command-session inventory. A runner is connected only
+when the canonical agent ID matches an admitted `action-runner` session with
+the closed `typed_actions.v1` capability. Credential presence, expiry,
+connection, version, and protocol facts remain distinct, and none may be
+inferred from collector health or helper configuration.
 Monitor construction also applies the persisted alert schedule's normalized
 initial-delivery target to the tenant notification manager. This is runtime
 wiring only: monitoring does not choose destinations or own notification

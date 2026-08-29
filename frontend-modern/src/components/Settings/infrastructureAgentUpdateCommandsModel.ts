@@ -5,8 +5,12 @@ import {
   formatAgentVersionDisplay,
   parseAgentVersion,
 } from '@/utils/agentVersion';
-import type { AgentCommandPlatform } from '@/utils/agentInstallCommand';
+import {
+  buildUnixAgentInstallCommand,
+  type AgentCommandPlatform,
+} from '@/utils/agentInstallCommand';
 import type { InfrastructureSystemRow } from './connectionsTableModel';
+import { shellQuoteArg } from './infrastructureOperationsModel';
 
 export type InfrastructureAgentUpdateTarget = {
   key: string;
@@ -39,6 +43,14 @@ export type InfrastructureAgentDoctorTarget = Omit<
   profileLabel?: string;
   profileVersionLabel?: string;
   privilegeLabel?: string;
+  safeCollector: boolean;
+  safeProfileGuidance?: string;
+  actionRunnerPosture: string[];
+  actionRunnerCredentialEligible: boolean;
+  actionRunnerCredentialAction: 'issue' | 'rotate';
+  actionRunnerCredentialBlockReason?: string;
+  actionRunnerAgentId?: string;
+  actionRunnerHostname?: string;
   lastSeen?: number | string | null;
   source: 'diagnostics' | 'ledger-fallback' | 'removed';
 };
@@ -603,6 +615,7 @@ const doctorTargetFromBinding = (
   const profileLabel =
     diagnostic?.profileName?.trim() || diagnostic?.profileId?.trim() || undefined;
   const profileVersionLabel = diagnosticProfileVersionLabel(diagnostic);
+  const actionRunner = actionRunnerPresentation(diagnostic, commandPlatform, connection);
 
   return {
     key: connection.id,
@@ -625,6 +638,7 @@ const doctorTargetFromBinding = (
     profileLabel,
     profileVersionLabel,
     privilegeLabel: diagnosticPrivilegeLabel(diagnostic),
+    ...actionRunner,
     lastSeen: connection.lastSeen ?? diagnostic?.lastSeen,
     source: diagnosticsAvailable && diagnostic ? 'diagnostics' : 'ledger-fallback',
   };
@@ -685,15 +699,170 @@ const diagnosticPrivilegeLabel = (diagnostic?: AgentFleetAgentDiagnostic): strin
   if (privilege.credentialKnown) {
     helpers.push(privilege.credentialExec ? 'credential grants exec' : 'monitoring credential');
   }
+  if (privilege.typedHelper) helpers.push('typed helper configured');
   if (privilege.smartctlHelper) helpers.push('SMART helper active');
   if (privilege.pctHelper) helpers.push('pct helper active');
   return helpers.length > 0 ? `${base} · ${helpers.join(' · ')}` : base;
 };
 
+const isSafeCollectorPrivilege = (diagnostic?: AgentFleetAgentDiagnostic): boolean => {
+  const privilege = diagnostic?.privilege;
+  return Boolean(
+    privilege &&
+    !privilege.runningAsRoot &&
+    privilege.commandAuthority?.trim() === 'monitoring-only' &&
+    privilege.credentialKnown &&
+    !privilege.credentialExec &&
+    privilege.typedHelper,
+  );
+};
+
+const actionRunnerPresentation = (
+  diagnostic: AgentFleetAgentDiagnostic | undefined,
+  commandPlatform: AgentCommandPlatform | null,
+  connection?: Connection,
+  removed = false,
+) => {
+  const privilege = diagnostic?.privilege;
+  const safeCollector = isSafeCollectorPrivilege(diagnostic);
+  const agentId =
+    diagnostic?.agentId?.trim() || normalizeAgentConnectionID(connection?.id).slice(6);
+  const hostname =
+    diagnostic?.hostname?.trim() || connection?.agentIdentity?.hostname?.trim() || undefined;
+  const systemdLooking =
+    commandPlatform === 'linux' && Boolean(privilege?.serviceUser?.trim()) && Boolean(hostname);
+  const posture: string[] = [];
+  if (privilege) {
+    posture.push(
+      privilege.actionRunnerCredentialIssued
+        ? `Credential issued (${privilege.actionRunnerCredentialActive ? 'active' : 'inactive'})`
+        : 'Credential not issued',
+    );
+    posture.push(
+      privilege.actionRunnerConnected
+        ? `Runner connected${privilege.actionRunnerVersion?.trim() ? ` · ${privilege.actionRunnerVersion.trim()}` : ''}`
+        : 'Runner not connected',
+    );
+    const authority = [
+      privilege.actionRunnerRuntimeRole?.trim(),
+      privilege.actionRunnerCapability?.trim(),
+      privilege.actionRunnerBindingVersion?.trim(),
+    ].filter(Boolean);
+    if (authority.length > 0) posture.push(`Authority ${authority.join(' · ')}`);
+    const protocols = [
+      privilege.actionRunnerReceiptProtocol
+        ? `receipt v${privilege.actionRunnerReceiptProtocol}`
+        : '',
+      privilege.actionRunnerPreflightProtocol
+        ? `preflight v${privilege.actionRunnerPreflightProtocol}`
+        : '',
+      privilege.actionRunnerDockerObservationProtocol
+        ? `Docker observation v${privilege.actionRunnerDockerObservationProtocol}`
+        : '',
+    ].filter(Boolean);
+    if (protocols.length > 0) posture.push(`Protocols ${protocols.join(' · ')}`);
+    if (privilege.actionRunnerConnectedAt) {
+      posture.push(`Connected at ${new Date(privilege.actionRunnerConnectedAt).toLocaleString()}`);
+    }
+  }
+
+  let safeProfileGuidance: string | undefined;
+  if (!safeCollector) {
+    safeProfileGuidance =
+      commandPlatform === 'linux'
+        ? 'Safe collector profile is not confirmed. Inspect the host service and apply --least-privilege --enable-privileged-helper only on a reviewed standard Linux systemd host.'
+        : 'The safe collector profile is supported only on reviewed standard Linux systemd hosts. Inspect this installation. Pulse will not default or guess a migration for this platform.';
+  }
+
+  let blockReason: string | undefined;
+  if (removed) blockReason = 'Removed agents cannot enroll an action runner.';
+  else if (!safeCollector) blockReason = 'Confirm the safe collector profile first.';
+  else if (!systemdLooking)
+    blockReason = 'The diagnostic does not prove a standard Linux systemd installation.';
+  else if (privilege?.actionRunnerConnected)
+    blockReason = 'The action runner is already connected.';
+  else if (!agentId || !hostname) blockReason = 'Canonical host identity is incomplete.';
+
+  return {
+    safeCollector,
+    safeProfileGuidance,
+    actionRunnerPosture: posture,
+    actionRunnerCredentialEligible: !blockReason,
+    actionRunnerCredentialAction: privilege?.actionRunnerCredentialIssued
+      ? ('rotate' as const)
+      : ('issue' as const),
+    actionRunnerCredentialBlockReason: blockReason,
+    actionRunnerAgentId: agentId || undefined,
+    actionRunnerHostname: hostname,
+  };
+};
+
+const ACTION_RUNNER_TOKEN_FILE = '/etc/pulse-agent-runner/token';
+
+export const buildActionRunnerTokenFileCommand = (): string =>
+  `sudo bash -c ${shellQuoteArg(
+    [
+      'set -e',
+      `install -d -m 0700 ${shellQuoteArg(ACTION_RUNNER_TOKEN_FILE.slice(0, ACTION_RUNNER_TOKEN_FILE.lastIndexOf('/')))}`,
+      'umask 077',
+      `IFS= read -rsp 'Action runner token: ' token </dev/tty`,
+      `printf '\\n' >/dev/tty`,
+      `printf '%s\\n' "$token" > ${shellQuoteArg(ACTION_RUNNER_TOKEN_FILE)}`,
+      `chmod 0600 ${shellQuoteArg(ACTION_RUNNER_TOKEN_FILE)}`,
+      'unset token',
+    ].join('\n'),
+  )}`;
+
+export const buildActionRunnerInstallCommand = (options: {
+  pulseUrl: string;
+  agentId: string;
+  hostname: string;
+  insecure?: boolean;
+  customCaPath?: string;
+}): string =>
+  buildUnixAgentInstallCommand({
+    baseUrl: options.pulseUrl,
+    insecure: options.insecure,
+    caCertPath: options.customCaPath,
+    extraArgs: [
+      '--update',
+      '--least-privilege',
+      '--enable-privileged-helper',
+      '--enable-action-runner',
+      `--action-token-file ${shellQuoteArg(ACTION_RUNNER_TOKEN_FILE)}`,
+      `--agent-id ${shellQuoteArg(options.agentId)}`,
+      `--hostname ${shellQuoteArg(options.hostname)}`,
+    ],
+  });
+
+type SafeCollectorCommandOptions = {
+  pulseUrl: string;
+  insecure?: boolean;
+  customCaPath?: string;
+};
+
+export const buildSafeCollectorInspectCommand = (options: SafeCollectorCommandOptions): string =>
+  buildUnixAgentInstallCommand({
+    baseUrl: options.pulseUrl,
+    insecure: options.insecure,
+    caCertPath: options.customCaPath,
+    extraArgs: ['--safe-profile-inspect'],
+  });
+
+export const buildSafeCollectorApplyCommand = (options: SafeCollectorCommandOptions): string =>
+  buildUnixAgentInstallCommand({
+    baseUrl: options.pulseUrl,
+    insecure: options.insecure,
+    caCertPath: options.customCaPath,
+    extraArgs: ['--safe-profile-apply'],
+  });
+
 const diagnosticOnlyDoctorTarget = (
   diagnostic: AgentFleetAgentDiagnostic,
 ): InfrastructureAgentDoctorTarget => {
   const removed = diagnostic.status === 'removed';
+  const commandPlatform = resolveKnownAgentCommandPlatform(diagnostic.platform);
+  const actionRunner = actionRunnerPresentation(diagnostic, commandPlatform, undefined, removed);
   return {
     key: `${removed ? 'removed' : 'diagnostic'}:${diagnostic.rowKey || diagnostic.id}`,
     connectionId: diagnosticConnectionID(diagnostic),
@@ -707,10 +876,11 @@ const diagnosticOnlyDoctorTarget = (
     evidence: evidenceFor(undefined, diagnostic),
     needsUpdate: false,
     needsCredentialRepair: false,
-    commandPlatform: resolveKnownAgentCommandPlatform(diagnostic.platform),
+    commandPlatform,
     profileLabel: diagnostic.profileName?.trim() || diagnostic.profileId?.trim() || undefined,
     profileVersionLabel: diagnosticProfileVersionLabel(diagnostic),
     privilegeLabel: diagnosticPrivilegeLabel(diagnostic),
+    ...actionRunner,
     lastSeen: diagnostic.lastSeen,
     source: removed ? 'removed' : 'diagnostics',
   };
@@ -872,6 +1042,8 @@ export const formatInfrastructureAgentDoctorReport = (
     if (lastSeen) lines.push(`  Last seen ${lastSeen}`);
     if (target.updaterLabel) lines.push(`  Updater ${target.updaterLabel}`);
     if (target.privilegeLabel) lines.push(`  Privilege ${target.privilegeLabel}`);
+    lines.push(`  Safe collector ${target.safeCollector ? 'confirmed' : 'not confirmed'}`);
+    for (const fact of target.actionRunnerPosture ?? []) lines.push(`  Action runner ${fact}`);
     if (target.profileLabel) {
       lines.push(
         `  Profile ${target.profileLabel}${

@@ -18,6 +18,7 @@ func collectPrivilegeStatus(commandAuthority CommandAuthorityProfile) *agentshos
 	status := &agentshost.PrivilegeStatus{
 		RunningAsRoot:    os.Geteuid() == 0,
 		CommandAuthority: string(commandAuthority),
+		TypedHelper:      strings.TrimSpace(os.Getenv("PULSE_AGENT_HELPER_SOCKET")) != "",
 		SmartctlHelper:   strings.TrimSpace(os.Getenv("PULSE_SMARTCTL_PATH")) != "",
 		PctHelper:        strings.TrimSpace(os.Getenv("PULSE_PCT_PATH")) != "",
 	}

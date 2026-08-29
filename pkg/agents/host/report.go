@@ -179,6 +179,10 @@ type PrivilegeStatus struct {
 	RunningAsRoot    bool   `json:"runningAsRoot"`
 	ServiceUser      string `json:"serviceUser,omitempty"`
 	CommandAuthority string `json:"commandAuthority,omitempty"`
+	// TypedHelper reports that the collector is configured to use the local
+	// no-network privilege helper socket. It reports posture only and grants no
+	// authority by itself.
+	TypedHelper bool `json:"typedHelper,omitempty"`
 	// SmartctlHelper reports that a PULSE_SMARTCTL_PATH override is in effect,
 	// which a least-privilege install uses to route SMART reads through a
 	// scoped privilege helper.

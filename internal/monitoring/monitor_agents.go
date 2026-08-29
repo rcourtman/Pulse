@@ -3469,6 +3469,7 @@ func convertAgentPrivilegeStatus(value *agentshost.PrivilegeStatus) *models.Agen
 		RunningAsRoot:    value.RunningAsRoot,
 		ServiceUser:      strings.TrimSpace(value.ServiceUser),
 		CommandAuthority: strings.TrimSpace(value.CommandAuthority),
+		TypedHelper:      value.TypedHelper,
 		SmartctlHelper:   value.SmartctlHelper,
 		PctHelper:        value.PctHelper,
 	}

@@ -1,28 +1,26 @@
 {
   "version": 1,
-  "base_sha": "d607d5cf4616e52b2fc7a576846dbe7204e9a7cf",
-  "verified_at": "2026-08-29T23:04:06Z",
+  "base_sha": "28be70071e8a7c2d0b9663f5d2eab5f5ba2f6528",
+  "verified_at": "2026-08-29T23:37:43Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/api/agentDiagnostics.ts",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "013f32dc0201ed993a68763a53e88374fe9b08892e321806fb5dbb9aa51bf77f",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "c8ab6ff8abdf7c61a5c75f0d024a682c1b83a10efa46278c87b946afe654ef60",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "2158aed352e98b2fc1f0d308b494d0a8d387aefc28fbf90bbc92a498e49e161a"
+    "frontend-modern/src/api/agentDiagnostics.ts": "1e3c207615fd27fedf811b40830789f779b80b570085c54970cfb277f54eb07f",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "0053b3fa0be0fbf463a6569c4fef4d977401647fe7c717a27543eb023a69e8ff",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "5157fd513d3d149fdd844e0e807d0d73879661ab165cf2850efa8286a888ecbf"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/backups/date",
-    "/docker/overview",
-    "/kubernetes/overview"
+    "/settings/infrastructure/agent-doctor",
+    "/settings/infrastructure/agent-doctor?agents=host-node-mock-cluster-4-pve22"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 1000
     },
     {
       "width": 390,
@@ -30,18 +28,17 @@
     }
   ],
   "states": [
-    "Proxmox Overview with the node table and paginated guest inventory populated from only the source-scoped Overview owner",
-    "Proxmox Backups with PBS servers, backup-health summary, activity chart, filters, and workload rows composed from the existing guest snapshot plus PBS rows",
-    "Docker Overview with provider-owned hosts and containers populated from one source-scoped inventory request",
-    "Kubernetes Overview with provider-owned clusters, deployments, and pods populated from one source-scoped inventory request",
-    "all four provider states at desktop and narrow viewport widths"
+    "full fleet summary and expanded legacy Linux agent with explicit safe-profile inspect and apply guidance",
+    "eligible monitoring-only collector with typed-helper configuration and no action-runner credential or session",
+    "one-time host-bound action-runner credential reveal with private token prompt and separate runner installer handoff",
+    "credential-cleared page-session state with repeat issuance disabled",
+    "eligible safe collector at desktop and narrow viewport widths"
   ],
   "interactions": [
-    "reloaded Proxmox Overview with browser request tracing and verified that only its ten paginated source=proxmox Overview requests ran, with no inactive Storage, Backups, Replication, Ceph, or Mail hydration",
-    "navigated from Proxmox Overview to Backups and verified that the transition added exactly one source=pbs request without repeating the paginated guest inventory",
-    "reloaded Docker Overview and verified that its only inventory request included source=docker and populated the host and container surfaces",
-    "reloaded Kubernetes Overview and verified that its only inventory request included source=kubernetes and populated the cluster and workload surfaces",
-    "repeated the provider route and transition checks at 390 by 844 and verified the tables, navigation, filters, status summaries, and workload rows remained present",
-    "reset the temporary viewport override and closed the verification tab"
+    "expanded a legacy Linux agent and copied the standalone safe-profile inspection command",
+    "issued an isolated non-persistent action-runner credential fixture and verified the normalized host identity, closed runtime role, and typed capability before reveal",
+    "verified the revealed secret was absent from the private token-file command, installer command, URL, and diagnostic report",
+    "cleared the one-time credential and verified the secret disappeared while repeat issuance stayed disabled for the page session",
+    "verified the 390 by 844 layout had no document overflow, checked the rendered pixels, reset the viewport override, and removed the temporary request fixture"
   ]
 }

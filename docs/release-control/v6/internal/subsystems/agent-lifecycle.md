@@ -815,6 +815,44 @@ only while Agent Doctor is open, enriches canonical connection-ledger rows by
 stable `connectionId`, and retains ledger-only fallback rows when structured
 evidence is absent.
 
+Secure-runtime posture on that read model is factual and split by authority
+source. The collector-authored report supplies effective-root state, service
+user, local `commandAuthority`, and configured typed/SMART/`pct` helpers. The
+server adds only evidence it can independently observe: whether the reporting
+token is present and carries `agent:exec`, whether the current organization has
+an active action-runner credential bound to the canonical agent ID, and whether
+the organization-scoped live-session registry contains that agent under the
+closed `action-runner` role and `typed_actions.v1` capability. Connected
+runner version, connection time, binding version, receipt protocol, preflight
+protocol, and Docker-observation protocol remain separate optional facts.
+Absence is not projected as safe, and neither collector liveness nor a healthy
+fleet verdict may stand in for action-session readiness.
+
+Agent Doctor may issue or rotate an action-runner credential only after the
+selected diagnostic proves a non-root, monitoring-only collector with a known
+non-exec credential and typed helper, resolves to a standard-looking Linux
+systemd installation, and has one complete canonical agent ID/hostname pair.
+The operator-only endpoint re-resolves that pair against exactly one live,
+non-conflicted, non-integration host in the request tenant. The resulting
+credential has only `agent:exec`, the explicit `action-runner` role,
+`typed_actions.v1`, binding version 1, organization ID, canonical agent ID, and
+normalized hostname. Rotation replaces only the earlier action-runner record
+for that organization/agent binding; the token inventory is saved atomically,
+and a failed save restores the complete previous inventory before the secret
+can be returned.
+
+The raw secret is a one-time UI reveal, not a diagnostic field. The page keeps
+it in component memory only, permits at most one successful issuance for that
+target in the page session, and clears it explicitly or on navigation. The
+host handoff prompts through `/dev/tty`, writes
+`/etc/pulse-agent-runner/token` under a root-owned `0700` directory with file
+mode `0600`, and puts only `--action-token-file` plus canonical identity in the
+installer command. Secrets must not enter URLs, browser storage, diagnostics,
+command arguments, or logs. A successful rotation invalidates the prior
+credential immediately; the UI therefore blocks enrollment while a compatible
+runner session is already connected and presents rotation only for an issued
+but disconnected binding.
+
 Repair entries remain handoffs to existing lifecycle operations:
 `copy_upgrade_command` renders a local operator command and
 `allow_reenroll` invokes the existing removed-agent flow. Agent Doctor exposes
@@ -6719,6 +6757,38 @@ The rate-limited public `/download/pulse-agent-helper?arch=linux-*` endpoint is
 the only server delivery path: it rejects non-Linux targets, serves the exact
 separate helper artifact with checksum plus detached signatures, and requires a
 published signed release asset when no local binary exists.
+
+### Safe collector profile migration is an explicit transaction
+
+`scripts/install.sh --safe-profile-inspect` is a standalone no-write action.
+It reports platform support, detected current profile, unit user and groups,
+ambient capabilities, collector-binary owner/mode, host/Docker/Kubernetes/
+Proxmox provider flags, typed-helper and collector-command state, independent
+runner presence, and the calculated typed-helper target plus Docker/action
+degradation. Those host-local facts are broader than the remote Agent Doctor
+projection and must not be guessed from it.
+
+`--safe-profile-apply` is supported only for an existing collector on reviewed
+standard Linux systemd hosts. It snapshots exact collector and helper binaries,
+units, legacy sudoers/wrappers, service enable/active state, Docker-group
+membership, credential-directory metadata, monitoring token files, agent ID,
+and connection state before mutation. It then installs root-owned collector
+and helper artifacts, lowers the collector to monitoring-only, removes legacy
+sudo, Docker-group, and ambient authority, and commits an atomic current/prior
+profile record only after collector health, helper-socket health, and declared
+server registration succeed. Any pre-commit failure restores the snapshot;
+`--safe-profile-rollback` restores the retained committed snapshot explicitly.
+Rollback may restore only privilege recorded in that explicit prior profile and
+must never invent sudo, Docker-group, ambient, root, or command authority. The
+action runner is independently installed and is never snapshotted, stopped,
+rewritten, or restored by this transaction. Ordinary `--update` preserves the
+installed profile and cannot trigger migration.
+
+This remains candidate-lane evidence, not a product-wide default flip. The
+secure collector profile stays explicit until representative real Linux hosts
+qualify migration and failure rollback, typed-helper update activation,
+provider parity and documented degradation, and separately credentialed live
+action sessions. Unsupported platforms continue to fail closed on migration.
 
 ### Command dispatch is context-honest and abandoned executions are canceled
 

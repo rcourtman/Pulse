@@ -28,8 +28,8 @@ root read access:
 
 - install it only on hosts you trust Pulse to monitor;
 - keep the agent token scoped to that Pulse server;
-- keep command execution disabled unless you explicitly need governed
-  remediation;
+- keep the local command-authority profile `monitoring-only` unless you
+  explicitly accept the transitional combined command runtime;
 - update from signed release assets rather than arbitrary branch snapshots.
 
 The agent is primarily an outbound reporter to your Pulse server. By default it
@@ -52,12 +52,16 @@ capacity monitoring, for example a log2ram `/var/log` mount. This reports
 filesystem capacity and usage metadata. It does not read or transmit file
 contents. Local `--disk-exclude` rules still take precedence.
 
-Command execution is disabled by default. It can be enabled with
-`--enable-commands`, `PULSE_ENABLE_COMMANDS=true`, or the centralized agent
-command setting after enrollment. Leave it disabled for read-only monitoring.
-When enabled, commands still flow through Pulse's command policy and approval
-surfaces instead of silently turning every agent into an unrestricted remote
-shell.
+Fresh installs use a local `monitoring-only` command-authority ceiling and a
+credential without `agent:exec`. Remote configuration cannot promote that
+service. Selecting the advanced legacy combined command profile at install time
+adds `--enable-commands`, records `command-capable`, and issues an execution-
+scoped credential. The root monitoring process can then also accept server
+command requests through the existing policy and approval surfaces. Existing
+unmarked services upgrade as `legacy` during the migration window so upgrades
+do not silently revoke an operator's prior command choice. Agent Doctor shows
+the process privilege, local authority ceiling, and credential execution scope
+separately and warns about mismatches.
 
 Custom numeric sensors are a separate, local configuration boundary. Enabling
 them with `--custom-sensors-file` does not enable remote commands and
@@ -139,6 +143,117 @@ user and token.
 
 ## Least-Privilege Agent Profile
 
+For a standard Linux systemd host, the stronger opt-in profile is:
+
+```bash
+install.sh --least-privilege --enable-privileged-helper ...
+```
+
+This profile keeps the networked collector unprivileged and keeps both the
+collector and helper binaries root-owned. Its installer token lives under the
+root-owned `/etc/pulse-agent` directory with `root:pulse-agent` group-read
+access; mutable identity, buffering, and enrolled monitoring-token state remain
+under the collector-owned state directory. The collector is not added to the
+rootful Docker group and cannot enable command execution. Automatic binary
+replacement uses a separate typed transaction: the collector downloads and
+self-tests a signed artifact inside its fixed quarantine, while the helper
+revalidates ownership, digest, ELF shape, and signature before promoting it to
+root-only staging and atomically activating it. A failed process restart asks
+the helper to restore the identity-bound last-known-good binary; there is no
+collector-writable direct-replacement fallback.
+
+Exceptional telemetry crosses `/run/pulse-agent/helper.sock` to a separate
+root process. The socket admits only the `pulse-agent` UID, and the helper has
+no Pulse URL, API token, or network namespace. Its protocol exposes bounded,
+versioned SMART and Proxmox LXC filesystem snapshots, not a shell, executable
+path, device path, VMID, environment, or caller-selected arguments. The helper
+service keeps `PrivateNetwork=true`, `RestrictAddressFamilies=AF_UNIX`,
+`NoNewPrivileges=true`, `ProtectSystem=strict`, and `ProtectHome=true`.
+`PrivateDevices` is intentionally not enabled because SMART needs the host
+block devices. If the helper is missing, incompatible, or rejects a request,
+only the affected telemetry disappears; the collector does not fall back to
+sudo, root, or a broader local command path.
+
+The typed-helper profile cannot be combined with `--grant-smart` or
+`--grant-pct`. Rootful Docker-socket monitoring is also unavailable because
+membership in the Docker group is root-equivalent; API monitoring or a
+separately scoped rootless runtime socket is required instead. The profile is
+currently explicit rather than the installer default. Its inspect, apply, and
+rollback transaction is implemented for Linux systemd, but representative
+live-host migration and helper update staging/activation/rollback exercises,
+container-runtime parity, and appliance qualification are still required
+before the profile can become the general default.
+
+Monitoring never implies remediation. On the supported Linux systemd profile,
+an operator may separately enroll the typed action runner:
+
+```bash
+install.sh --least-privilege --enable-privileged-helper \
+  --enable-action-runner --action-token-file /root/pulse-runner.token ...
+```
+
+Create that token through the authenticated action-runner credential endpoint
+for the exact monitored host; do not reuse the collector token. The installer
+keeps the runner binary, service, credential, health record, and receipts
+root-owned. Disabling or uninstalling the runner leaves monitoring active.
+The safe runner accepts only versioned host update/storage-cleanup, Proxmox
+guest lifecycle, and container lifecycle/update requests. Generic shell,
+`exec`, unrestricted `read_file`, and deploy operations are rejected.
+
+**Settings → Infrastructure → Agent Doctor** presents this boundary as
+evidence, not an inferred security grade. The collector reports whether it is
+root, its service user and local command-authority ceiling, and whether the
+typed helper, SMART helper, and `pct` helper are configured. Pulse separately
+joins the current tenant's token inventory and admitted command sessions to
+show whether the collector credential is known and execution-scoped, whether
+a host-bound runner credential is active, and whether a compatible
+`action-runner` / `typed_actions.v1` session is actually connected. Missing
+evidence remains unknown; collector health never proves remediation readiness.
+
+Runner enrollment is one host at a time. The issuance request must resolve to
+exactly one non-conflicted monitored agent ID and normalized hostname in the
+current tenant. The returned secret is shown once and held only in the open
+Agent Doctor page's memory; it is not written to browser storage, a URL, a
+diagnostic report, or an installer command. The generated handoff first prompts
+for the secret through `/dev/tty` into the root-owned
+`/etc/pulse-agent-runner/token` file with mode `0600`, then passes only that
+file path through `--action-token-file`. Issuing again rotates the credential
+for that tenant/host binding: Pulse durably replaces the previous record as one
+transaction and restores it if persistence fails. A successful rotation makes
+the previous secret invalid, so complete the new token-file handoff before
+expecting a disconnected runner to reconnect.
+
+The existing combined collector command path remains available only as the
+explicit legacy/full-trust migration profile. It is not part of the typed
+helper/runner security claim and will remain until supported command-enabled
+installs have a runner enrollment path and live action-session parity has been
+qualified.
+
+Safe-profile conversion is always deliberate:
+
+```bash
+install.sh --safe-profile-inspect ...
+install.sh --safe-profile-apply ...
+install.sh --safe-profile-rollback ...
+```
+
+Inspection makes no changes. Apply snapshots collector/helper files and
+identity before switching profiles, and rollback restores that snapshot. The
+separately installed action runner is not changed by either operation.
+Inspection reports platform support, the current unit user and groups, ambient
+capabilities, collector-binary owner and mode, enabled provider flags, helper
+and collector-command state, independent runner presence, and the calculated
+typed-helper target and degraded Docker/action differences. Apply is supported
+only on reviewed standard Linux systemd hosts: it retains the monitoring token
+and agent identity, lowers the collector to monitoring-only, removes legacy
+sudo/Docker-group/ambient authority, requires collector health, helper socket
+health, and declared server registration before commit, and automatically
+restores the exact snapshot on failure. Ordinary `--update` preserves the
+installed profile and never performs this migration.
+
+The older `--least-privilege` profile without `--enable-privileged-helper`
+remains available for compatibility. Its trade-offs are documented below.
+
 On standard Linux systemd hosts, `install.sh --least-privilege` is a supported
 alternative to the root profile. It runs the service as a dedicated
 `pulse-agent` system user (nologin shell, owning only its state directory and
@@ -172,9 +287,10 @@ platforms (TrueNAS, Synology, QNAP, Unraid) and non-systemd init systems keep
 the root profile; the installer refuses `--least-privilege` there rather than
 silently falling back to root.
 
-`--update` preserves an existing least-privilege profile and its grants
-without the flags being repeated. Uninstall removes the sudoers file and
-helpers; the inert system user is left behind deliberately.
+`--update` preserves either installed least-privilege profile without the flags
+being repeated. Uninstall removes the typed helper socket/service and its
+installer credential directory, or the legacy sudoers file and wrappers; the
+inert system user is left behind deliberately.
 
 ## Supply-Chain Boundary
 

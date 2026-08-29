@@ -80,6 +80,32 @@ func TestIssueActionRunnerCredentialRejectsUnknownOrMismatchedHost(t *testing.T)
 	}
 }
 
+func TestIssueActionRunnerCredentialRouteRotatesExistingHostBinding(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
+	issue := func() actionRunnerCredentialResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/agents/action-runner/credential", actionRunnerCredentialBody(hostID, "HOST-1"))
+		rec := httptest.NewRecorder()
+		router.handleIssueActionRunnerCredential(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var response actionRunnerCredentialResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return response
+	}
+	first := issue()
+	second := issue()
+	if first.TokenID == second.TokenID || first.Token == second.Token {
+		t.Fatalf("re-enrollment did not rotate credential: first=%#v second=%#v", first, second)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != second.TokenID {
+		t.Fatalf("route accumulated host-bound credentials: %#v", cfg.APITokens)
+	}
+}
+
 func TestActionRunnerCredentialRouteAuthSupportsAdminSessionAndScopedToken(t *testing.T) {
 	for _, mode := range []string{"api-token", "admin-session"} {
 		t.Run(mode, func(t *testing.T) {

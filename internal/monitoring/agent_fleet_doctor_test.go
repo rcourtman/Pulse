@@ -442,6 +442,7 @@ func TestAgentFleetDiagnosticsSurfacesPrivilegeProfileWithoutDegradingHealth(t *
 			RunningAsRoot:    false,
 			ServiceUser:      "pulse-agent",
 			CommandAuthority: "monitoring-only",
+			TypedHelper:      true,
 			SmartctlHelper:   true,
 			PctHelper:        false,
 		},
@@ -455,6 +456,7 @@ func TestAgentFleetDiagnosticsSurfacesPrivilegeProfileWithoutDegradingHealth(t *
 	}
 	if agent.Privilege.RunningAsRoot || agent.Privilege.ServiceUser != "pulse-agent" ||
 		agent.Privilege.CommandAuthority != "monitoring-only" ||
+		!agent.Privilege.TypedHelper ||
 		!agent.Privilege.SmartctlHelper || agent.Privilege.PctHelper {
 		t.Fatalf("privilege profile = %+v", agent.Privilege)
 	}

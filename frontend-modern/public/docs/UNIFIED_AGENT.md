@@ -90,6 +90,58 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
 
+The opt-in Linux typed-helper collector profile keeps auto-update enabled
+without making its root-owned binary writable by the service account. The
+collector downloads and self-tests the signed artifact in a fixed
+collector-owned quarantine; the no-network helper revalidates it, promotes it
+to root-only staging, atomically activates it, and owns identity-bound rollback
+if restart fails. There is no fallback to direct unprivileged replacement.
+This transaction is covered by unit, race, release-build, and installer
+contract tests; live-host restart/health and rollback qualification remains
+required before the profile becomes the general default.
+See [Agent Security](AGENT_SECURITY.md#least-privilege-agent-profile).
+
+On Linux systemd, the safe monitoring profile and remediation lifecycle are
+separate install choices. `--least-privilege --enable-privileged-helper`
+selects the opt-in unprivileged collector and no-network helper. Adding
+`--enable-action-runner --action-token-file <private-file>` installs the
+root-owned runner with a separately issued, host-bound action credential.
+`--disable-action-runner` and `--uninstall-action-runner` remove remediation
+without removing the collector. The runner accepts only the documented typed
+host, Proxmox guest, and container operations; shell, generic exec,
+unrestricted file reads, and deploy requests remain forbidden.
+
+Agent Doctor shows the reported collector service user, command-authority
+ceiling, collector credential scope, and typed-helper configuration separately
+from the tenant- and host-bound action-runner credential and connected-session
+state. It does not treat a healthy collector as proof that actions are ready.
+For an eligible Linux systemd host, enrollment returns one credential reveal
+kept only in the open page's memory. Start the generated `/dev/tty` prompt,
+copy and paste the secret into that prompt to write the private root-owned
+token file, and then run the installer command, which carries only
+`--action-token-file <private-file>` in its arguments. Re-enrollment atomically
+replaces the prior credential for the same tenant and canonical agent ID; a
+failed persistence write retains the previous credential, while a successful
+rotation invalidates it.
+
+Use `--safe-profile-inspect` to report the current profile and calculated
+differences without changing the host. `--safe-profile-apply` performs the
+explicit collector/helper migration and retains a rollback snapshot;
+`--safe-profile-rollback` restores it. These commands are proven only for
+Linux systemd and fail closed elsewhere. Appliance, non-systemd, Windows, and
+macOS installs remain explicit legacy/full-trust profiles until their own
+runtime and migration boundaries are qualified.
+Inspection includes unit identity/groups, ambient capabilities, binary
+ownership/mode, provider flags, helper/command state, independent runner
+presence, and the expected telemetry/action degradation. Apply preserves the
+collector token and agent identity, commits only after local health, helper
+socket, and server registration checks, and restores the exact prior
+collector/helper profile on failure. It never changes a separately installed
+runner, and ordinary `--update` never implies a profile migration. The secure
+runtime separation remains a proposed hardening lane; the product-wide default
+does not change until representative real Linux hosts pass migration,
+activation, rollback, provider-parity, and action-session qualification.
+
 On Linux, the host module automatically checks for `virsh`. When the agent can
 open the default libvirt connection read-only, defined domains appear as VM
 workloads under that host. Collection uses libvirt's bounded bulk statistics

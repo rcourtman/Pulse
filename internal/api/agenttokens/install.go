@@ -109,6 +109,15 @@ func ParseCommandPolicyIntent(record *config.APITokenRecord) (bool, bool) {
 }
 
 func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, opts IssueOptions) (string, *config.APITokenRecord, error) {
+	return issueAndPersistReplacing(cfg, persistence, opts, nil)
+}
+
+func issueAndPersistReplacing(
+	cfg *config.Config,
+	persistence *config.ConfigPersistence,
+	opts IssueOptions,
+	replace func(config.APITokenRecord) bool,
+) (string, *config.APITokenRecord, error) {
 	if cfg == nil {
 		return "", nil, fmt.Errorf("config is required")
 	}
@@ -147,7 +156,17 @@ func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, 
 	defer config.Mu.Unlock()
 
 	previousTokens := append([]config.APITokenRecord(nil), cfg.APITokens...)
-	cfg.APITokens = append(cfg.APITokens, *record)
+	if replace == nil {
+		cfg.APITokens = append(cfg.APITokens, *record)
+	} else {
+		nextTokens := make([]config.APITokenRecord, 0, len(cfg.APITokens)+1)
+		for _, existing := range cfg.APITokens {
+			if !replace(existing) {
+				nextTokens = append(nextTokens, existing)
+			}
+		}
+		cfg.APITokens = append(nextTokens, *record)
+	}
 	cfg.SortAPITokens()
 	if persistence != nil {
 		if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
@@ -187,7 +206,7 @@ func IssueActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigP
 	if tokenName == "" {
 		tokenName = "action-runner:" + hostname
 	}
-	return IssueAndPersist(cfg, persistence, IssueOptions{
+	return issueAndPersistReplacing(cfg, persistence, IssueOptions{
 		TokenName:   tokenName,
 		OrgID:       organizationID,
 		OwnerUserID: opts.OwnerUserID,
@@ -200,6 +219,10 @@ func IssueActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigP
 			"bound_hostname":                hostname,
 			"bound_at":                      time.Now().UTC().Format(time.RFC3339),
 		},
+	}, func(record config.APITokenRecord) bool {
+		return strings.TrimSpace(record.OrgID) == organizationID &&
+			strings.TrimSpace(record.Metadata[CredentialKindMetadataKey]) == CredentialKindActionRunner &&
+			strings.TrimSpace(record.Metadata["bound_agent_id"]) == agentID
 	})
 }
 

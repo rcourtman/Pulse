@@ -3,6 +3,10 @@ import type { AgentFleetAgentDiagnostic } from '@/api/agentDiagnostics';
 import type { Connection } from '@/api/connections';
 import type { InfrastructureSystemRow } from '../connectionsTableModel';
 import {
+  buildActionRunnerInstallCommand,
+  buildActionRunnerTokenFileCommand,
+  buildSafeCollectorApplyCommand,
+  buildSafeCollectorInspectCommand,
   collectInfrastructureAgentDoctorTargets,
   diagnosticConnectionID,
   formatInfrastructureAgentDoctorReport,
@@ -181,6 +185,182 @@ describe('Agent Doctor model', () => {
     });
 
     expect(target.privilegeLabel).toBe('root · commands monitoring-only · credential grants exec');
+  });
+
+  it('classifies a safe collector only from the complete reported boundary', () => {
+    const connection = connectionFixture();
+    const safePrivilege = {
+      runningAsRoot: false,
+      serviceUser: 'pulse-agent',
+      commandAuthority: 'monitoring-only',
+      credentialKnown: true,
+      credentialExec: false,
+      typedHelper: true,
+    };
+    const [safe] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [diagnosticFixture({ privilege: safePrivilege })],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+    expect(safe).toMatchObject({
+      safeCollector: true,
+      actionRunnerCredentialEligible: true,
+      actionRunnerAgentId: 'host-1',
+      actionRunnerHostname: 'host-1',
+    });
+    expect(safe.privilegeLabel).toContain('typed helper configured');
+
+    for (const privilege of [
+      { ...safePrivilege, runningAsRoot: true },
+      { ...safePrivilege, commandAuthority: 'legacy' },
+      { ...safePrivilege, credentialExec: true },
+      { ...safePrivilege, typedHelper: false },
+    ]) {
+      const [notSafe] = collectInfrastructureAgentDoctorTargets({
+        rows: [rowFixture(connection)],
+        connections: [connection],
+        diagnostics: [diagnosticFixture({ privilege })],
+        diagnosticsAvailable: true,
+        targetVersion: '6.2.0',
+      });
+      expect(notSafe.safeCollector).toBe(false);
+      expect(notSafe.actionRunnerCredentialEligible).toBe(false);
+      expect(notSafe.safeProfileGuidance).toContain('not confirmed');
+    }
+  });
+
+  it('presents runner credential, connection, authority, and protocol facts', () => {
+    const connection = connectionFixture();
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          privilege: {
+            runningAsRoot: false,
+            serviceUser: 'pulse-agent',
+            commandAuthority: 'monitoring-only',
+            credentialKnown: true,
+            typedHelper: true,
+            actionRunnerCredentialIssued: true,
+            actionRunnerCredentialActive: true,
+            actionRunnerConnected: true,
+            actionRunnerVersion: '6.3.0',
+            actionRunnerRuntimeRole: 'action-runner',
+            actionRunnerCapability: 'typed-v1',
+            actionRunnerBindingVersion: 'host-v1',
+            actionRunnerReceiptProtocol: 1,
+            actionRunnerPreflightProtocol: 2,
+            actionRunnerDockerObservationProtocol: 3,
+          },
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target.actionRunnerCredentialEligible).toBe(false);
+    expect(target.actionRunnerPosture).toEqual(
+      expect.arrayContaining([
+        'Credential issued (active)',
+        'Runner connected · 6.3.0',
+        'Authority action-runner · typed-v1 · host-v1',
+        'Protocols receipt v1 · preflight v2 · Docker observation v3',
+      ]),
+    );
+
+    const [disconnected] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          privilege: {
+            runningAsRoot: false,
+            serviceUser: 'pulse-agent',
+            commandAuthority: 'monitoring-only',
+            credentialKnown: true,
+            typedHelper: true,
+            actionRunnerCredentialIssued: true,
+            actionRunnerCredentialActive: true,
+            actionRunnerConnected: false,
+          },
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+    expect(disconnected.actionRunnerCredentialEligible).toBe(true);
+    expect(disconnected.actionRunnerCredentialAction).toBe('rotate');
+  });
+
+  it('never offers runner enrollment for a removed diagnostic', () => {
+    const [removed] = collectInfrastructureAgentDoctorTargets({
+      rows: [],
+      connections: [],
+      diagnostics: [
+        diagnosticFixture({
+          status: 'removed',
+          privilege: {
+            runningAsRoot: false,
+            serviceUser: 'pulse-agent',
+            commandAuthority: 'monitoring-only',
+            credentialKnown: true,
+            typedHelper: true,
+          },
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(removed.status).toBe('removed');
+    expect(removed.actionRunnerCredentialEligible).toBe(false);
+    expect(removed.actionRunnerCredentialBlockReason).toContain('Removed agents');
+  });
+
+  it('builds a secret-free prompt-to-file handoff and explicit safe-profile migration commands', () => {
+    const secret = 'must-not-appear';
+    const prompt = buildActionRunnerTokenFileCommand();
+    expect(prompt).toContain('sudo bash -c');
+    expect(prompt).toContain('read -rsp');
+    expect(prompt).toContain('Action runner token: ');
+    expect(prompt).toContain('</dev/tty');
+    expect(prompt).toContain('chmod 0600');
+    expect(prompt).not.toContain(secret);
+
+    const install = buildActionRunnerInstallCommand({
+      pulseUrl: 'https://pulse.example.test',
+      agentId: 'host-1',
+      hostname: 'host-1.local',
+      customCaPath: '/etc/pulse/ca.pem',
+    });
+    expect(install).toContain('--preflight-only');
+    expect(install).toContain('--update');
+    expect(install).toContain('--non-interactive');
+    expect(install).toContain('--least-privilege');
+    expect(install).toContain('--enable-privileged-helper');
+    expect(install).toContain('--enable-action-runner');
+    expect(install).toContain('--action-token-file');
+    expect(install).toContain("--agent-id 'host-1'");
+    expect(install).toContain("--hostname 'host-1.local'");
+    expect(install).toContain("--cacert '/etc/pulse/ca.pem'");
+    expect(install).not.toContain(secret);
+    expect(install).not.toContain('--action-token ');
+
+    const inspect = buildSafeCollectorInspectCommand({
+      pulseUrl: 'https://pulse.example.test',
+    });
+    expect(inspect).toContain('--preflight-only');
+    expect(inspect).toContain('--safe-profile-inspect');
+    expect(inspect).not.toContain('--update');
+    const apply = buildSafeCollectorApplyCommand({
+      pulseUrl: 'https://pulse.example.test',
+    });
+    expect(apply).toContain('--preflight-only');
+    expect(apply).toContain('--safe-profile-apply');
+    expect(apply).not.toContain('--update');
   });
 
   it('turns a missing credential into a token-gated authentication repair', () => {
@@ -779,6 +959,10 @@ describe('Agent Doctor model', () => {
       needsUpdate: false,
       needsCredentialRepair: false,
       commandPlatform: null,
+      safeCollector: false,
+      actionRunnerPosture: [],
+      actionRunnerCredentialEligible: false,
+      actionRunnerCredentialAction: 'issue',
       source: 'diagnostics',
       ...overrides,
     });

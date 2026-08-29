@@ -65,6 +65,13 @@ shell/exec, unrestricted `read_file`, deploy, and trusted-origin bypasses are
 forbidden. The legacy combined command channel remains a disclosed full-trust
 migration boundary only until runner enrollment and live session parity are
 qualified; it is not safe-profile authority.
+Action-runner issuance and rotation are one durable host-bound transition per
+organization and canonical agent ID. Re-issuance replaces the prior runner
+record even when the monitored hostname has changed, returns the new plaintext
+secret only after persistence succeeds, and restores the complete prior token
+inventory if persistence fails. A successful rotation invalidates the previous
+secret immediately; it never widens the collector credential or turns a
+monitoring session into an action session.
 
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,

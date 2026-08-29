@@ -431,6 +431,7 @@ type AgentPrivilegeStatus struct {
 	RunningAsRoot    bool   `json:"runningAsRoot"`
 	ServiceUser      string `json:"serviceUser,omitempty"`
 	CommandAuthority string `json:"commandAuthority,omitempty"`
+	TypedHelper      bool   `json:"typedHelper,omitempty"`
 	SmartctlHelper   bool   `json:"smartctlHelper,omitempty"`
 	PctHelper        bool   `json:"pctHelper,omitempty"`
 }

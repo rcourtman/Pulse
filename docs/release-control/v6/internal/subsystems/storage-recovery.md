@@ -34,6 +34,12 @@ preserves collector identity and installation files only; it must not rewrite
 storage/recovery evidence or reinterpret a restored legacy collector profile as
 recovery success. Typed `host.storage_cleanup` remains governed remediation,
 not storage-recovery authority inferred from the credential itself.
+Runner credential rotation follows the shared token-inventory commit boundary:
+failed persistence restores the complete prior inventory and returns no new
+secret, while successful persistence replaces the previous organization/agent
+binding and makes its secret unusable. That rollback protects restart-time
+credential truth only; it is not a customer backup, recovery point, restore
+operation, or storage-cleanup grant.
 The helper-backed collector updater likewise retains only one fixed
 last-known-good executable and an identity-bound activation receipt. That
 binary rollback is agent lifecycle state, not a Pulse storage snapshot,

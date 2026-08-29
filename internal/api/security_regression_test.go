@@ -696,6 +696,36 @@ func TestActionRunnerCredentialAdmissionRejectsWrongIdentityAndUnboundOrganizati
 	}
 }
 
+func TestActionRunnerCredentialRotationRevokesPreviousSession(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	firstToken, firstRecord, err := agenttokens.IssueActionRunnerAndPersist(cfg, nil, agenttokens.ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-a", Hostname: "node.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &Router{config: cfg}
+	if _, ok := router.admitAgentExecToken(firstToken, "machine-a", "node.example"); !ok {
+		t.Fatal("initial action runner credential was rejected")
+	}
+
+	secondToken, secondRecord, err := agenttokens.IssueActionRunnerAndPersist(cfg, nil, agenttokens.ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-a", Hostname: "renamed.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstRecord.ID == secondRecord.ID || firstToken == secondToken || len(cfg.APITokens) != 1 {
+		t.Fatalf("rotation did not replace the prior credential: %#v", cfg.APITokens)
+	}
+	if _, ok := router.admitAgentExecToken(firstToken, "machine-a", "node.example"); ok {
+		t.Fatal("replaced action runner credential remained admissible")
+	}
+	if _, ok := router.admitAgentExecToken(secondToken, "machine-a", "renamed.example"); !ok {
+		t.Fatal("replacement action runner credential was rejected")
+	}
+}
+
 func TestAgentExecTokenRejectsAmbiguousMultiOrganizationAuthority(t *testing.T) {
 	rawToken := "multi-org-agent-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{
