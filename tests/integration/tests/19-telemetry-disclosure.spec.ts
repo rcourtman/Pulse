@@ -61,6 +61,10 @@ async function readTelemetryPreview(page: Page) {
   return JSON.parse((await preview.textContent()) ?? "{}") as {
     install_id: string;
     event: string;
+    schema_version: number;
+    active_alerts_warning: number;
+    alerts_resolution_under_15m_30d: number;
+    alert_active_state_persistence_degraded_tenants: number;
   };
 }
 
@@ -75,6 +79,7 @@ test.describe("Telemetry disclosure", () => {
       "Desktop-only telemetry disclosure coverage",
     );
 
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/settings/system-general", {
       waitUntil: "domcontentloaded",
     });
@@ -121,6 +126,26 @@ test.describe("Telemetry disclosure", () => {
     const initialPreview = await readTelemetryPreview(page);
     expect(initialPreview.event).toBe("heartbeat");
     expect(initialPreview.install_id).toBeTruthy();
+    expect(initialPreview.schema_version).toBe(14);
+    expect(initialPreview.active_alerts_warning).toBeGreaterThanOrEqual(0);
+    expect(
+      initialPreview.alerts_resolution_under_15m_30d,
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      initialPreview.alert_active_state_persistence_degraded_tenants,
+    ).toBeGreaterThanOrEqual(0);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page.locator('pre[aria-label="Telemetry payload preview"]'),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
 
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Reset ID" }).click();

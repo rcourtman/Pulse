@@ -88,6 +88,7 @@ export interface TelemetryPingPreview {
   alerts_fired_30d: number;
   alerts_acknowledged_30d: number;
   alerts_resolved_30d: number;
+  // Coarse lifecycle aggregates only: no alert text, resource identity, or tenant identity.
   active_alerts_info: number;
   active_alerts_warning: number;
   active_alerts_critical: number;

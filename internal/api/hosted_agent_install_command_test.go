@@ -279,7 +279,6 @@ func TestHostedTenantAgentInstallTokenCannotReportToOtherTenant(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, monitorA.GetLiveHostsSnapshot(), 1)
 
-	monitorB, ok := mtm.PeekMonitor("client-b")
-	require.True(t, ok)
-	require.Empty(t, monitorB.GetLiveHostsSnapshot(), "retargeted client-a token must not write into client-b")
+	_, ok = mtm.PeekMonitor("client-b")
+	require.False(t, ok, "retargeted client-a token must be denied before client-b runtime initialization")
 }

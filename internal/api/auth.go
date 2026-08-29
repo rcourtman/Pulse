@@ -1322,6 +1322,21 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 	if cfg.HasAPITokens() || mtm != nil {
 		// Determine which config to use for validation (Global vs Tenant)
 		targetConfig := cfg
+		providedToken, explicitTokenProvided := explicitAPITokenFromRequest(r)
+
+		// Global tokens are the common control-plane credential. Authenticate
+		// them before resolving the header-selected tenant monitor: resolving a
+		// cold tenant can initialize its complete monitoring runtime, even when
+		// the already-known global token is bound to another organization and
+		// tenant authorization will reject the request. Besides wasting work on
+		// an unauthorized request, that initialization can exceed an API client
+		// timeout and leave cleanup queued behind the same cold start.
+		if explicitTokenProvided {
+			if record, ok := validateGlobalAPITokenLocked(cfg, providedToken); ok {
+				attachAPITokenRecord(r, record)
+				return attachUserContext(r, apiTokenAuthenticatedUser(record))
+			}
+		}
 
 		if mtm != nil {
 			// Check for Tenant ID in header or cookie
@@ -1351,7 +1366,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			return nil, false
 		}
 
-		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
+		if explicitTokenProvided {
 			if req, ok := validateToken(providedToken); ok {
 				return req
 			}

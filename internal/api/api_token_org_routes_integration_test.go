@@ -166,8 +166,19 @@ func TestOrgScopedAPITokenCannotReadOtherOrgMembersWithSessionCookiePresent(t *t
 		"X-Org-ID":       "org-a",
 	}
 	assertMembersStatus("/api/orgs/org-a/members", headers, http.StatusOK)
-	body := assertMembersStatus("/api/orgs/org-b/members", headers, http.StatusForbidden)
+	if _, initialized := router.mtMonitor.PeekMonitor("org-b"); initialized {
+		t.Fatal("cross-org target monitor initialized before the denied request")
+	}
+	crossOrgHeaders := map[string]string{
+		"Authorization":  "Bearer " + created.Token,
+		"X-Pulse-Org-ID": "org-b",
+		"X-Org-ID":       "org-b",
+	}
+	body := assertMembersStatus("/api/orgs/org-b/members", crossOrgHeaders, http.StatusForbidden)
 	if !strings.Contains(body, "access_denied") {
 		t.Fatalf("expected cross-org denial payload, got %q", body)
+	}
+	if _, initialized := router.mtMonitor.PeekMonitor("org-b"); initialized {
+		t.Fatal("denied global token request initialized the cross-org target monitor")
 	}
 }
