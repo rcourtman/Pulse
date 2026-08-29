@@ -318,6 +318,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
                         "internal/monitoring/pve_protection_observation_test.go",
                         "internal/monitoring/ratetracker_test.go",
+                        "internal/monitoring/reload_test.go",
                         "internal/monitoring/truenas_poller_test.go",
                         "internal/unifiedresources/code_standards_test.go",
                     ],
