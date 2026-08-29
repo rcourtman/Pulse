@@ -187,7 +187,9 @@ const (
 	// Schema v14 adds identity-free alert quality outcomes and their tenant
 	// denominators. It uses closed severity, age, and resolution-time buckets,
 	// and reports only aggregate lifecycle, adoption, and persistence health.
-	TelemetrySchemaVersion = 14
+	// Schema v15 separates destination HTTP 5xx server failures from rejected
+	// HTTP 4xx responses. Both remain aggregate terminal-failure counters.
+	TelemetrySchemaVersion = 15
 )
 
 type installIDRecord struct {
@@ -383,6 +385,7 @@ type Ping struct {
 	NotificationFailuresTLS7d            int `json:"notification_failures_tls_7d"`
 	NotificationFailuresConfiguration7d  int `json:"notification_failures_configuration_7d"`
 	NotificationFailuresRejected7d       int `json:"notification_failures_rejected_7d"`
+	NotificationFailuresServerError7d    int `json:"notification_failures_server_error_7d"`
 	NotificationFailuresUnknown7d        int `json:"notification_failures_unknown_7d"`
 
 	// Pulse Intelligence usage (30-day counts/booleans — no prompts, commands, outputs, resource IDs, or token values)
@@ -566,6 +569,7 @@ type Snapshot struct {
 	NotificationFailuresTLS7d                                      int
 	NotificationFailuresConfiguration7d                            int
 	NotificationFailuresRejected7d                                 int
+	NotificationFailuresServerError7d                              int
 	NotificationFailuresUnknown7d                                  int
 	PulseIntelligenceLoopConfigured                                bool
 	PulseIntelligenceLoopActive30d                                 bool
@@ -1232,6 +1236,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.NotificationFailuresTLS7d = s.NotificationFailuresTLS7d
 	ping.NotificationFailuresConfiguration7d = s.NotificationFailuresConfiguration7d
 	ping.NotificationFailuresRejected7d = s.NotificationFailuresRejected7d
+	ping.NotificationFailuresServerError7d = s.NotificationFailuresServerError7d
 	ping.NotificationFailuresUnknown7d = s.NotificationFailuresUnknown7d
 	ping.PulseIntelligenceLoopConfigured = s.PulseIntelligenceLoopConfigured
 	ping.PulseIntelligenceLoopActive30d = s.PulseIntelligenceLoopActive30d

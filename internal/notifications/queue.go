@@ -59,6 +59,7 @@ const (
 	NotificationFailureTLS            NotificationFailureClass = "tls"
 	NotificationFailureConfiguration  NotificationFailureClass = "configuration"
 	NotificationFailureRejected       NotificationFailureClass = "rejected"
+	NotificationFailureServerError    NotificationFailureClass = "server_error"
 	NotificationFailureUnknown        NotificationFailureClass = "unknown"
 )
 
@@ -70,6 +71,7 @@ type NotificationFailureClassCounts struct {
 	TLS            int
 	Configuration  int
 	Rejected       int
+	ServerError    int
 	Unknown        int
 }
 
@@ -81,6 +83,7 @@ func (counts NotificationFailureClassCounts) AsMap() map[string]int {
 		string(NotificationFailureTLS):            counts.TLS,
 		string(NotificationFailureConfiguration):  counts.Configuration,
 		string(NotificationFailureRejected):       counts.Rejected,
+		string(NotificationFailureServerError):    counts.ServerError,
 		string(NotificationFailureUnknown):        counts.Unknown,
 	}
 }
@@ -109,6 +112,11 @@ func ClassifyNotificationFailure(errorMessage string) NotificationFailureClass {
 	case containsAny("rate limit", "too many requests", "status 429", "http 429"):
 		return NotificationFailureRateLimited
 	case containsAny(
+		"internal server error", "bad gateway", "service unavailable",
+		"gateway timeout", "status 5", "http 5",
+	):
+		return NotificationFailureServerError
+	case containsAny(
 		"x509", "certificate", "tls", "ssl", "starttls",
 	):
 		return NotificationFailureTLS
@@ -131,7 +139,7 @@ func ClassifyNotificationFailure(errorMessage string) NotificationFailureClass {
 		"status 400", "http 400", "status 404", "http 404",
 		"status 405", "http 405", "status 410", "http 410",
 		"status 413", "http 413", "status 415", "http 415",
-		"status 422", "http 422", "status 4", "http 4", "status 5", "http 5",
+		"status 422", "http 422", "status 4", "http 4",
 	):
 		return NotificationFailureRejected
 	default:
@@ -1577,10 +1585,11 @@ func (nq *NotificationQueue) GetTelemetryStats(since time.Time) (TelemetryStats,
 			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'tls' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'configuration' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'rejected' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'server_error' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE
 				WHEN success = 0
 					AND status IN ('failed', 'dlq')
-					AND COALESCE(failure_class, '') NOT IN ('authentication', 'rate_limited', 'connectivity', 'tls', 'configuration', 'rejected')
+					AND COALESCE(failure_class, '') NOT IN ('authentication', 'rate_limited', 'connectivity', 'tls', 'configuration', 'rejected', 'server_error')
 				THEN 1 ELSE 0
 			END), 0)
 		FROM notification_audit
@@ -1595,6 +1604,7 @@ func (nq *NotificationQueue) GetTelemetryStats(since time.Time) (TelemetryStats,
 		&stats.FailureClasses.TLS,
 		&stats.FailureClasses.Configuration,
 		&stats.FailureClasses.Rejected,
+		&stats.FailureClasses.ServerError,
 		&stats.FailureClasses.Unknown,
 	)
 	if err != nil {

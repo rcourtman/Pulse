@@ -111,7 +111,8 @@ USER_BASE_COUNT_FIELDS = (
     ("notification_failures_connectivity_7d", "Notification connectivity failures (7d, schema v5+)"),
     ("notification_failures_tls_7d", "Notification TLS failures (7d, schema v5+)"),
     ("notification_failures_configuration_7d", "Notification configuration failures (7d, schema v5+)"),
-    ("notification_failures_rejected_7d", "Notification destination rejections (7d, schema v5+)"),
+    ("notification_failures_rejected_7d", "Notification destination rejections (7d; new schema v15+ classifications are HTTP 4xx)"),
+    ("notification_failures_server_error_7d", "Notification destination server errors (7d, schema v15+)"),
     ("notification_failures_unknown_7d", "Notification unknown failures (7d, schema v5+)"),
 )
 SERVICE_HEALTH_ROW_FIELDS = (
@@ -1106,6 +1107,7 @@ TARGET_RELEASE_ACTIVITY_COUNT_FIELDS = tuple(
             "notification_failures_tls_7d",
             "notification_failures_configuration_7d",
             "notification_failures_rejected_7d",
+            "notification_failures_server_error_7d",
             "notification_failures_unknown_7d",
             "audit_reads_30d",
             "report_schedules_run_30d",

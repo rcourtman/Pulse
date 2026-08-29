@@ -613,6 +613,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 			snap.NotificationFailuresTLS7d = counts.NotificationFailuresTLS7d
 			snap.NotificationFailuresConfiguration7d = counts.NotificationFailuresConfiguration7d
 			snap.NotificationFailuresRejected7d = counts.NotificationFailuresRejected7d
+			snap.NotificationFailuresServerError7d = counts.NotificationFailuresServerError7d
 			snap.NotificationFailuresUnknown7d = counts.NotificationFailuresUnknown7d
 			snap.DiscoveryEnabled = currentCfg.DiscoveryEnabled
 

@@ -107,6 +107,7 @@ export type NotificationFailureClass =
   | 'tls'
   | 'configuration'
   | 'rejected'
+  | 'server_error'
   | 'unknown';
 
 export type NotificationFailureClassCounts = Record<NotificationFailureClass, number>;
@@ -194,6 +195,7 @@ const notificationFailureClasses: NotificationFailureClass[] = [
   'tls',
   'configuration',
   'rejected',
+  'server_error',
   'unknown',
 ];
 
@@ -338,6 +340,7 @@ export class NotificationsAPI {
             tls: 0,
             configuration: 0,
             rejected: 0,
+            server_error: 0,
             unknown: 0,
           } satisfies NotificationFailureClassCounts),
         failureClassesAvailable,

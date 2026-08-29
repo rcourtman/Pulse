@@ -10122,3 +10122,17 @@ reported as success. Handler failure proofs live in
 `internal/api/alerting/notifications_test.go`, and
 `TestContract_NotificationDestinationWritesPublishOnlyAfterPersistence` pins
 the API publication ordering.
+
+### Notification failure-class and telemetry schema v15 projection
+
+The notification health and delivery-log APIs admit the closed local failure
+class `server_error` for destination HTTP 5xx responses. Existing clients must
+continue treating unknown future class strings defensively. The telemetry
+preview adds the required numeric field
+`notification_failures_server_error_7d` and advances `schema_version` to `15`;
+the receiver persists the same field and the adoption report compares it only
+inside schema-aware version cohorts. New schema v15 classifications enter
+`notification_failures_rejected_7d` only for HTTP 4xx responses. Retained
+pre-upgrade rows can preserve the schema v5-v14 4xx-or-5xx meaning for up to
+seven days, so the first rolling snapshot is a baseline rather than attributed
+same-version activity.

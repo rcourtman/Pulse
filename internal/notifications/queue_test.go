@@ -1551,6 +1551,8 @@ func TestClassifyNotificationFailureUsesBoundedPrivacySafeBuckets(t *testing.T) 
 		{"dial tcp 10.0.0.1:443: i/o timeout", NotificationFailureConnectivity},
 		{"apprise server URL is not configured", NotificationFailureConfiguration},
 		{"webhook returned status 413: Payload Too Large", NotificationFailureRejected},
+		{"webhook returned status 500: Internal Server Error", NotificationFailureServerError},
+		{"webhook returned HTTP 504: Gateway Timeout", NotificationFailureServerError},
 		{"provider-specific secret detail", NotificationFailureUnknown},
 	}
 
@@ -1573,6 +1575,7 @@ func TestGetTelemetryStatsClassifiesTerminalFailuresOnly(t *testing.T) {
 		{ID: "auth-dlq", Type: "webhook", Status: QueueStatusDLQ, Attempts: 3, Config: []byte(`{}`), CreatedAt: now},
 		{ID: "rate-retry", Type: "webhook", Status: QueueStatusPending, Attempts: 1, Config: []byte(`{}`), CreatedAt: now},
 		{ID: "tls-failed", Type: "email", Status: QueueStatusFailed, Attempts: 3, Config: []byte(`{}`), CreatedAt: now},
+		{ID: "server-error-dlq", Type: "webhook", Status: QueueStatusDLQ, Attempts: 3, Config: []byte(`{}`), CreatedAt: now},
 	}
 	for _, entry := range entries {
 		status := entry.Status
@@ -1591,16 +1594,20 @@ func TestGetTelemetryStatsClassifiesTerminalFailuresOnly(t *testing.T) {
 	if err := nq.RecordAudit(entries[2], false, "x509 certificate failure"); err != nil {
 		t.Fatalf("record TLS audit: %v", err)
 	}
+	if err := nq.RecordAudit(entries[3], false, "HTTP 503 Service Unavailable"); err != nil {
+		t.Fatalf("record server-error audit: %v", err)
+	}
 
 	stats, err := nq.GetTelemetryStats(now.Add(-time.Hour))
 	if err != nil {
 		t.Fatalf("GetTelemetryStats: %v", err)
 	}
-	if stats.Attempts != 3 || stats.Failures != 2 {
-		t.Fatalf("telemetry totals = %#v, want 3 attempts and 2 terminal failures", stats)
+	if stats.Attempts != 4 || stats.Failures != 3 {
+		t.Fatalf("telemetry totals = %#v, want 4 attempts and 3 terminal failures", stats)
 	}
-	if stats.FailureClasses.Authentication != 1 || stats.FailureClasses.TLS != 1 {
-		t.Fatalf("failure classes = %#v, want authentication=1 tls=1", stats.FailureClasses)
+	if stats.FailureClasses.Authentication != 1 || stats.FailureClasses.TLS != 1 ||
+		stats.FailureClasses.ServerError != 1 || stats.FailureClasses.Unknown != 0 {
+		t.Fatalf("failure classes = %#v, want authentication=1 tls=1 server_error=1 unknown=0", stats.FailureClasses)
 	}
 	if stats.FailureClasses.RateLimited != 0 {
 		t.Fatalf("retry failure leaked into terminal class counts: %#v", stats.FailureClasses)

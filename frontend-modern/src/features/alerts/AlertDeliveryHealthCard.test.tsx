@@ -27,6 +27,7 @@ const degradedHealth: NotificationQueueHealth = {
     tls: 0,
     configuration: 0,
     rejected: 0,
+    server_error: 0,
     unknown: 0,
   },
   failureClassesAvailable: true,

@@ -124,6 +124,7 @@ const mockTelemetryPreviewPayload = {
   notification_failures_tls_7d: 0,
   notification_failures_configuration_7d: 0,
   notification_failures_rejected_7d: 0,
+  notification_failures_server_error_7d: 0,
   notification_failures_unknown_7d: 0,
   pulse_intelligence_loop_configured: false,
   pulse_intelligence_loop_active_30d: false,

@@ -2455,6 +2455,20 @@ claimed revocation.
 `internal/monitoring/monitor_host_agent_removal_lifecycle_test.go` proves both
 commit and rollback outcomes.
 
+### Schema v15 separates destination server failures from rejections
+
+Telemetry schema v15 adds only the bounded integer field
+`notification_failures_server_error_7d`. It counts terminal notification jobs
+whose locally classified response was HTTP 5xx. New schema v15 terminal
+failures enter `notification_failures_rejected_7d` only for HTTP 4xx responses
+after the dedicated authentication and rate-limit buckets. Retained pre-upgrade
+rows can preserve the v5-v14 mixed 4xx/5xx meaning for up to seven days, so
+first heartbeats are baseline-only and reports must use consecutive
+same-version deltas. No raw error, response, destination, provider,
+notification, alert, tenant, account, or infrastructure identity is sent.
+Sender, receiver, local preview, adoption report, and the public privacy copies
+must remain in lockstep.
+
 ### Deploy enrollment never exposes an uncommitted credential
 
 The deploy bootstrap secret is single-use only at the durable API-token commit

@@ -505,3 +505,18 @@ untouched so configuration drift cannot masquerade as successful paging.
 Destination IDs never contain endpoint URLs, credentials, or Apprise targets.
 All retry, queue, receipt, grouping, and recovery semantics remain owned by the
 selected notification job after routing.
+
+### Terminal destination failures distinguish rejection from server failure
+
+The closed notification failure-class contract uses `rejected` for newly
+recorded destination HTTP 4xx responses after the dedicated authentication and
+rate-limit classes, and `server_error` for newly recorded HTTP 5xx responses.
+Explicit HTTP 5xx status evidence is classified before generic timeout wording
+so a 504 remains a destination server failure rather than connectivity.
+Pre-upgrade audit rows retain their original class until retention removes them.
+Both classes are recorded only on local audit rows and exported, when telemetry
+is enabled, as identity-free aggregate terminal failure counts; raw response
+content and destination identity never leave Pulse.
+
+`internal/notifications/queue_test.go` pins the local classification order and
+the terminal-only retry/dead-letter accounting boundary.

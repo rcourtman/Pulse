@@ -37,7 +37,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `14` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `15` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -129,7 +129,8 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notification failures connectivity 7d (schema v5) | `2` | Count terminal failures classified locally as DNS, timeout, or connection failures without sending addresses, hosts, or raw errors |
 | Notification failures TLS 7d (schema v5) | `0` | Count terminal failures classified locally as certificate or TLS failures without sending certificates, hostnames, or raw errors |
 | Notification failures configuration 7d (schema v5) | `0` | Count terminal failures classified locally as missing or invalid destination configuration without sending configuration values |
-| Notification failures rejected 7d (schema v5) | `0` | Count terminal failures classified locally as destination request or payload rejection without sending response or payload content |
+| Notification failures rejected 7d (schema v5; new schema v15 classifications are HTTP 4xx) | `0` | Count terminal failures classified locally as destination request or payload rejection without sending response or payload content; schema v5-v14 included destination HTTP 5xx responses, and those locally retained rows can remain in this rolling count for up to seven days after upgrade |
+| Notification failures server error 7d (schema v15) | `0` | Count terminal failures classified locally as destination HTTP 5xx server errors without sending response content, destination identity, or provider identity |
 | Notification failures unknown 7d (schema v5) | `0` | Count terminal failures that do not match another fixed class without sending raw errors |
 | Alert AI enabled | `true`/`false` | See whether AI analysis on alert firing is switched on, without sending alert content, resource identifiers, or analysis text |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
@@ -253,6 +254,15 @@ fleet health can distinguish authentication, rate limiting, connectivity, TLS,
 configuration, destination rejection, and unknown failures. Classification is
 performed locally; raw error text and destination/provider identity are never
 included in the payload.
+
+The current telemetry contract is schema version 15. Schema v15 adds an eighth
+fixed notification terminal-failure counter for destination HTTP 5xx server
+errors. From v15 onward,
+new terminal failures enter `notification_failures_rejected_7d` only for HTTP
+4xx destination or payload rejections. Locally retained v5-v14 rows may still
+include HTTP 5xx responses for up to seven days after upgrade; first-heartbeat
+rolling counters therefore remain baseline-only. The new counter remains an
+aggregate count and adds no destination, provider, response, or error content.
 
 Telemetry schema v13 adds a direct local UI/API service observation. Pulse
 checks its own bound listener, `/api/health`, the UI document, and the local

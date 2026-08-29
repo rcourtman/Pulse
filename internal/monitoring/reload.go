@@ -53,6 +53,7 @@ type InstallSnapshotCounts struct {
 	NotificationFailuresTLS7d            int
 	NotificationFailuresConfiguration7d  int
 	NotificationFailuresRejected7d       int
+	NotificationFailuresServerError7d    int
 	NotificationFailuresUnknown7d        int
 	AlertQuality                         alerts.AlertQualitySnapshot
 }
@@ -305,6 +306,7 @@ func accumulateInstallOutcomeCounts(counts *InstallSnapshotCounts, monitor *Moni
 		counts.NotificationFailuresTLS7d += stats.FailureClasses.TLS
 		counts.NotificationFailuresConfiguration7d += stats.FailureClasses.Configuration
 		counts.NotificationFailuresRejected7d += stats.FailureClasses.Rejected
+		counts.NotificationFailuresServerError7d += stats.FailureClasses.ServerError
 		counts.NotificationFailuresUnknown7d += stats.FailureClasses.Unknown
 	}
 }

@@ -126,6 +126,7 @@ export interface TelemetryPingPreview {
   notification_failures_tls_7d: number;
   notification_failures_configuration_7d: number;
   notification_failures_rejected_7d: number;
+  notification_failures_server_error_7d: number;
   notification_failures_unknown_7d: number;
   pulse_intelligence_loop_configured: boolean;
   pulse_intelligence_loop_active_30d: boolean;
