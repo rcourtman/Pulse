@@ -1839,6 +1839,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`Resolve target-compatible demo runtime profile`,
 		`git grep -q 'mockEagerHistoryPVEGuestLimit'`,
 		`git grep -q 'UpdateMetricCohort'`,
+		`git grep -q 'mockLargeEstateStartupReady'`,
 		`PROFILE="large-estate"`,
 		`MOCK_NODES=50`,
 		`MOCK_VMS_PER_NODE=10`,

@@ -14,9 +14,12 @@ git rev-parse -q --verify "${TAG_REF}^{commit}" >/dev/null || {
 
 # Reusable workflows execute from the caller revision, while the installed
 # binary comes from TAG_REF. The large-estate profile is safe only when that
-# exact runtime implements both required scaling boundaries.
+# exact runtime implements both scaling boundaries and carries an explicit
+# startup-readiness marker earned by the complete governed profile. Source
+# structure alone is not proof that health becomes responsive at that scale.
 if git grep -q 'mockEagerHistoryPVEGuestLimit' "${TAG_REF}" -- internal/monitoring/mock_metrics_history.go && \
-   git grep -q 'UpdateMetricCohort' "${TAG_REF}" -- internal/mock/integration.go; then
+   git grep -q 'UpdateMetricCohort' "${TAG_REF}" -- internal/mock/integration.go && \
+   git grep -q 'mockLargeEstateStartupReady' "${TAG_REF}" -- internal/monitoring/mock_metrics_history.go; then
   PROFILE="large-estate"
   MOCK_NODES=50
   MOCK_VMS_PER_NODE=10

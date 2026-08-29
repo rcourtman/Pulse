@@ -2023,6 +2023,21 @@ release-note screenshots referenced by the validated body, and reject every
 unreferenced asset. Recovery remains activation-only and may not rebuild or
 replace the qualified candidate.
 
+Activation recovery run `33227705135` published stable `v6.4.0` and bound
+customer convergence to run `33227719830`. Docker aliases, Helm Pages, and the
+paid-runtime broker converged, but the stable demo's large-estate restore left
+the v6.4.0 process unresponsive and the public health endpoint unavailable.
+The convergence owner was cancelled after the restore exceeded its bounded
+health window; its global promotion lease released successfully. Dedicated
+demo recovery run `33228777096` reproduced the failure with the exact installed
+binary and unit, preserved the Relay process, restored the prior runtime
+configuration, and compensated by stopping only `pulse.service`. A tagged
+runtime may therefore enter the 50-node, 48-hour-seed public demo profile only
+when it carries an explicit `mockLargeEstateStartupReady` marker earned by that
+complete startup and browser proof. The eager-history and update-cohort source
+markers remain necessary but are not sufficient. Runtimes without the explicit
+proof marker use the governed 8-node, two-hour-seed legacy-bounded profile.
+
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
 passed preparation, frontend bundle, Windows installer smoke, release smoke,

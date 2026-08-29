@@ -1943,6 +1943,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Resolve target-compatible demo runtime profile", demo)
         self.assertIn("mockEagerHistoryPVEGuestLimit", demo_profile)
         self.assertIn("UpdateMetricCohort", demo_profile)
+        self.assertIn("mockLargeEstateStartupReady", demo_profile)
         self.assertIn('PROFILE="legacy-bounded"', demo_profile)
         self.assertIn("MOCK_NODES=8", demo_profile)
         self.assertIn("MOCK_VMS_PER_NODE=6", demo_profile)
