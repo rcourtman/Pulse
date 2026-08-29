@@ -5630,3 +5630,151 @@ func TestInstallSHLeastPrivilegeProfile(t *testing.T) {
 		t.Fatal("install.sh must document that the pct grant excludes pct exec")
 	}
 }
+
+func TestInstallSHTypedPrivilegedHelperUnits(t *testing.T) {
+	root := t.TempDir()
+	socketUnit := filepath.Join(root, "pulse-agent-helper.socket")
+	serviceUnit := filepath.Join(root, "pulse-agent-helper.service")
+
+	script := `
+		set -euo pipefail
+		PRIVILEGED_HELPER_NAME="pulse-agent-helper"
+		PRIVILEGED_HELPER_SOCKET_PATH="/run/pulse-agent/helper.sock"
+		LEAST_PRIVILEGE_USER="pulse-agent"
+` + extractInstallShellFunction(t, "render_privileged_helper_socket_unit") + `
+` + extractInstallShellFunction(t, "render_privileged_helper_service_unit") + `
+		render_privileged_helper_socket_unit "` + socketUnit + `"
+		render_privileged_helper_service_unit "` + serviceUnit + `" "/usr/local/lib/pulse-agent/pulse-agent-helper"
+	`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("render helper units: %v\n%s", err, out)
+	}
+
+	socketBytes, err := os.ReadFile(socketUnit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := string(socketBytes)
+	for _, required := range []string{
+		"ListenStream=/run/pulse-agent/helper.sock",
+		"SocketUser=root",
+		"SocketGroup=pulse-agent",
+		"SocketMode=0660",
+		"DirectoryMode=0755",
+		"RemoveOnStop=true",
+	} {
+		if !strings.Contains(socket, required) {
+			t.Fatalf("typed helper socket unit missing %q:\n%s", required, socket)
+		}
+	}
+
+	serviceBytes, err := os.ReadFile(serviceUnit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := string(serviceBytes)
+	for _, required := range []string{
+		"ExecStart=/usr/local/lib/pulse-agent/pulse-agent-helper",
+		"User=root",
+		"Group=root",
+		"NoNewPrivileges=true",
+		"PrivateNetwork=true",
+		"RestrictAddressFamilies=AF_UNIX",
+		"ProtectSystem=strict",
+		"ProtectHome=true",
+	} {
+		if !strings.Contains(service, required) {
+			t.Fatalf("typed helper service unit missing %q:\n%s", required, service)
+		}
+	}
+	if strings.Contains(service, "PrivateDevices") {
+		t.Fatalf("typed helper service must retain host device visibility for SMART:\n%s", service)
+	}
+}
+
+func TestInstallSHTypedPrivilegedHelperProfileIsOptInAndFailClosed(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+
+	for _, required := range []string{
+		`PRIVILEGED_HELPER_ENABLED="false"`,
+		`--enable-privileged-helper) PRIVILEGED_HELPER_ENABLED="true"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;`,
+		`--disable-privileged-helper) PRIVILEGED_HELPER_ENABLED="false"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;`,
+		`--enable-privileged-helper requires --least-privilege`,
+		`--enable-privileged-helper cannot be combined with legacy --grant-smart/--grant-pct sudo paths`,
+		`--enable-privileged-helper is supported only on standard Linux systemd hosts; no broader-privilege fallback was applied`,
+		`Preserving existing typed privileged-helper profile`,
+		`PULSE_AGENT_HELPER_SOCKET`,
+		`EXEC_ARG_ITEMS+=(--disable-auto-update)`,
+		`chown root:root "${INSTALL_DIR}/${BINARY_NAME}"`,
+		`chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"`,
+		`chown -R "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "$STATE_DIR"`,
+		`protect_typed_profile_credentials`,
+		`PRIVILEGED_HELPER_CREDENTIAL_DIR="/etc/pulse-agent"`,
+		`chown "root:${LEAST_PRIVILEGE_USER}" "$PRIVILEGED_HELPER_CREDENTIAL_DIR"`,
+		`chmod 0750 "$PRIVILEGED_HELPER_CREDENTIAL_DIR"`,
+		`chown "root:${LEAST_PRIVILEGE_USER}" "$RUNTIME_TOKEN_FILE"`,
+		`chmod 0640 "$RUNTIME_TOKEN_FILE"`,
+		`if [[ "$PRIVILEGED_HELPER_ENABLED" != "true" && "$ENABLE_DOCKER" != "false" ]]`,
+		`/download/${PRIVILEGED_HELPER_BINARY_NAME}?${DOWNLOAD_QUERY}`,
+		`verify_download_signature "$TMP_HELPER_BIN" "$helper_signature"`,
+		`teardown_privileged_helper_service`,
+		`socket_owner=$(stat -c '%u:%g' "$PRIVILEGED_HELPER_SOCKET_PATH"`,
+		`socket_mode=$(stat -c '%a' "$PRIVILEGED_HELPER_SOCKET_PATH"`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("install.sh missing typed-helper invariant: %s", required)
+		}
+	}
+}
+
+func TestInstallSHTypedPrivilegedHelperProtectsCredentialsAfterStateChown(t *testing.T) {
+	stateDir := t.TempDir()
+	credentialDir := t.TempDir()
+	legacyToken := filepath.Join(stateDir, "token")
+	protectedToken := filepath.Join(credentialDir, "token")
+	for _, path := range []string{legacyToken, protectedToken} {
+		if err := os.WriteFile(path, []byte("secret"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	callLog := filepath.Join(t.TempDir(), "calls")
+	script := `
+		set -euo pipefail
+		STATE_DIR="` + stateDir + `"
+		PRIVILEGED_HELPER_CREDENTIAL_DIR="` + credentialDir + `"
+		RUNTIME_TOKEN_FILE="` + protectedToken + `"
+		LEAST_PRIVILEGE_USER="pulse-agent"
+		EXIT_GENERAL=1
+		CALL_LOG="` + callLog + `"
+		fail() { printf 'fail:%s\n' "$1" >> "$CALL_LOG"; return "$2"; }
+		chown() { printf 'chown:%s:%s\n' "$1" "$2" >> "$CALL_LOG"; }
+		chmod() { printf 'chmod:%s:%s\n' "$1" "$2" >> "$CALL_LOG"; }
+		rm() { printf 'rm:%s\n' "$2" >> "$CALL_LOG"; }
+` + extractInstallShellFunction(t, "protect_typed_profile_credentials") + `
+		protect_typed_profile_credentials
+	`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("protect typed-profile credentials: %v\n%s", err, out)
+	}
+
+	logBytes, err := os.ReadFile(callLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(logBytes)
+	for _, want := range []string{
+		"chown:root:pulse-agent:" + credentialDir,
+		"chmod:0750:" + credentialDir,
+		"chown:root:pulse-agent:" + protectedToken,
+		"chmod:0640:" + protectedToken,
+		"rm:" + legacyToken,
+	} {
+		if !strings.Contains(log, want) {
+			t.Fatalf("credential protection log missing %q:\n%s", want, log)
+		}
+	}
+}

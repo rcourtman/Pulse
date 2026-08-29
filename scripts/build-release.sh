@@ -126,6 +126,7 @@ agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}" "${u
 # Build unified agents for every supported platform/architecture
 echo "Building unified agents for all platforms..."
 agent_build_order=("${PULSE_RELEASE_AGENT_TARGETS[@]}")
+agent_helper_build_order=("${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}")
 
 if [[ -n "${compiled_payload_dir:-}" ]]; then
     test -d "${compiled_payload_dir}/binaries" || {
@@ -142,6 +143,16 @@ else
             "${release_go_build_args[@]}" \
             -o "${output_path}" \
             ./cmd/pulse-agent
+    done
+
+    echo "Building privileged agent helpers for Linux..."
+    for target in "${agent_helper_build_order[@]}"; do
+        build_env="$(pulse_release_target_env "${target}")"
+        output_path="${BUILD_DIR}/$(pulse_release_binary_filename agent-helper "${target}")"
+        env ${build_env} go build \
+            "${release_go_build_args[@]}" \
+            -o "${output_path}" \
+            ./cmd/pulse-agent-helper
     done
 fi
 
@@ -231,6 +242,12 @@ for target in "${agent_build_order[@]}"; do
         exit 1
     }
 done
+for target in "${agent_helper_build_order[@]}"; do
+    test -f "${BUILD_DIR}/$(pulse_release_binary_filename agent-helper "${target}")" || {
+        echo "Error: release payload is missing agent helper binary for ${target}." >&2
+        exit 1
+    }
+done
 for target in "${build_order[@]}"; do
     test -f "${BUILD_DIR}/$(pulse_release_binary_filename server "${target}")" || {
         echo "Error: release payload is missing server binary for ${target}." >&2
@@ -297,6 +314,9 @@ mkdir -p "$universal_dir/scripts"
 for build_name in "${build_order[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
     cp "$BUILD_DIR/pulse-agent-$build_name" "$universal_dir/bin/pulse-agent-${build_name}"
+done
+for target in "${agent_helper_build_order[@]}"; do
+    cp "$BUILD_DIR/pulse-agent-helper-${target}" "$universal_dir/bin/pulse-agent-helper-${target}"
 done
 
 cp "scripts/install-container-agent.sh" "$universal_dir/scripts/install-container-agent.sh"
@@ -379,6 +399,11 @@ zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/puls
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-agent-windows-386.exe"
 
+# Package standalone privileged agent helpers (Linux only).
+for target in "${agent_helper_build_order[@]}"; do
+    tar -czf "$RELEASE_DIR/pulse-agent-helper-v${VERSION}-${target}.tar.gz" -C "$BUILD_DIR" "pulse-agent-helper-${target}"
+done
+
 # Package standalone pulse-mcp binaries (all platforms). Mirrors
 # the pulse-agent packaging shape exactly so the release-asset
 # upload step does not need per-binary special cases.
@@ -412,6 +437,11 @@ cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-freebsd-amd64" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-freebsd-arm64" "$RELEASE_DIR/"
+
+# Copy bare privileged helper binaries for installer/download compatibility.
+for target in "${agent_helper_build_order[@]}"; do
+    cp "$BUILD_DIR/pulse-agent-helper-${target}" "$RELEASE_DIR/"
+done
 
 # Copy bare pulse-mcp binaries for /releases/latest/download/ redirect
 # compatibility. The install-mcp.sh installer fetches these directly from

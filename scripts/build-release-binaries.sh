@@ -105,7 +105,7 @@ frontend_pid=$!
 if [[ "${PROFILE}" == "full" ]]; then
     echo "Building frontend bundle concurrently with the release binary matrix."
 else
-    echo "Using Pro packaging profile: build the required frontend embed locally; transfer public Unified Agent binaries only."
+    echo "Using Pro packaging profile: build the required frontend embed locally; transfer public agent-side binaries only."
 fi
 
 export CGO_ENABLED=0
@@ -140,6 +140,10 @@ for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do
         task_targets+=("${target}")
     fi
 done
+for target in "${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}"; do
+    task_components+=(agent-helper)
+    task_targets+=("${target}")
+done
 if [[ "${PROFILE}" == "full" ]]; then
     for target in "${PULSE_RELEASE_SERVER_TARGETS[@]}"; do
         task_components+=(server)
@@ -162,6 +166,10 @@ build_one() {
         agent)
             package=./cmd/pulse-agent
             ldflags="${agent_ldflags}"
+            ;;
+        agent-helper)
+            package=./cmd/pulse-agent-helper
+            ldflags=""
             ;;
         mcp)
             package=./cmd/pulse-mcp

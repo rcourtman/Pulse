@@ -1295,6 +1295,7 @@
       "contract": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
       "owned_prefixes": [
         "internal/agentexec/",
+        "internal/agenthelper/",
         "internal/agenttarget/",
         "internal/agentupdate/",
         "internal/hostagent/",
@@ -1302,6 +1303,7 @@
       ],
       "owned_files": [
         ".github/workflows/unified-agent-native.yml",
+        "cmd/pulse-agent-helper/main.go",
         "cmd/pulse-agent/main.go",
         "cmd/pulse-agent/service_windows.go",
         "frontend-modern/src/api/agentProfiles.ts",
@@ -1389,6 +1391,23 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "agent-privilege-helper-runtime",
+            "label": "typed no-network agent privilege helper proof",
+            "match_prefixes": [
+              "internal/agenthelper/"
+            ],
+            "match_files": [
+              "cmd/pulse-agent-helper/main.go"
+            ],
+            "allow_same_subsystem_tests": true,
+            "test_prefixes": [
+              "internal/agenthelper/"
+            ],
+            "exact_files": [
+              "cmd/pulse-agent-helper/main_test.go"
+            ]
+          },
           {
             "id": "patrol-autonomy-colima-real-lab",
             "label": "RG-06 server-owned limited-unattended-autonomy Colima proof",
@@ -1589,8 +1608,9 @@
               "internal/hostagent/docker_lifecycle_test.go",
               "internal/hostagent/issue1595_sas_collection_test.go",
               "internal/hostagent/observer_delivery_test.go",
-              "internal/hostagent/package_updates_test.go",
-              "internal/hostagent/send_report_test.go",
+            "internal/hostagent/package_updates_test.go",
+            "internal/hostagent/privilege_helper_client_test.go",
+            "internal/hostagent/send_report_test.go",
               "internal/hostagent/smartctl_standby_guard_test.go",
               "internal/hostagent/storage_cleanup_test.go",
               "internal/hostagent/unraid_test.go",

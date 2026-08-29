@@ -101,6 +101,11 @@ type Config struct {
 	OnServerVersion func(version string)
 
 	Collector SystemCollector // Optional: override default system information collector (for testing)
+	// PrivilegedTelemetry routes the exceptional SMART and Proxmox LXC
+	// filesystem snapshots through the typed no-network helper. When present,
+	// helper failure degrades those snapshots and never falls back to a broader
+	// local privilege path.
+	PrivilegedTelemetry PrivilegedTelemetry
 
 	// DockerContainerUpdater bridges typed container update operations to the
 	// Docker / Podman module when the unified agent runs both. Nil when the
@@ -179,6 +184,7 @@ type Agent struct {
 	commandAuthorityProfile     CommandAuthorityProfile
 	commandAuthorityWarningSeen bool
 	collector                   SystemCollector
+	privilegedTelemetry         PrivilegedTelemetry
 	newCommandClient            func(Config, string, string, string, string) *CommandClient
 	runCommandClient            func(*CommandClient, context.Context) error
 	packageUpdates              *packageUpdateManager
@@ -432,6 +438,7 @@ func New(cfg Config) (*Agent, error) {
 		reportBuffer:            utils.New[agentshost.Report](bufferCapacity),
 		observerReporters:       observerReporters,
 		collector:               collector,
+		privilegedTelemetry:     cfg.PrivilegedTelemetry,
 		newCommandClient:        newCommandClientFn,
 		runCommandClient:        runCommandClientFn,
 		commandAuthorityProfile: commandAuthorityProfile,
@@ -1160,7 +1167,16 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 
 	// Proxmox VE exposes per-mount LXC usage only through the node-local pct
 	// CLI. Query running containers on an independent bounded deadline.
-	proxmoxLXCData := a.collectProxmoxLXCFilesystems(ctx)
+	var proxmoxLXCData *agentshost.ProxmoxLXCInventory
+	if a.privilegedTelemetry != nil {
+		proxmoxLXCData, err = a.privilegedTelemetry.ProxmoxLXCFilesystems(ctx)
+		if err != nil {
+			a.logger.Debug().Err(err).Msg("Typed helper could not collect Proxmox LXC filesystems")
+			proxmoxLXCData = nil
+		}
+	} else {
+		proxmoxLXCData = a.collectProxmoxLXCFilesystems(ctx)
+	}
 
 	// Collect S.M.A.R.T. disk data after topology owners. Enumeration and each
 	// device probe have their own deadlines; a single shared 10-second budget
@@ -2198,7 +2214,24 @@ func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string, unra
 		return nil
 	}
 
-	smartData, err := a.collector.SMARTLocal(ctx, diskExclude, unraid)
+	var smartData []DiskSMART
+	var err error
+	if a.privilegedTelemetry != nil {
+		smartData, err = a.privilegedTelemetry.SMARTSnapshot(ctx)
+		if err == nil && len(diskExclude) > 0 {
+			filtered := smartData[:0]
+			for _, disk := range smartData {
+				deviceName := filepath.Base(disk.Device)
+				if matchesDeviceExclude(deviceName, disk.Device, diskExclude) {
+					continue
+				}
+				filtered = append(filtered, disk)
+			}
+			smartData = filtered
+		}
+	} else {
+		smartData, err = a.collector.SMARTLocal(ctx, diskExclude, unraid)
+	}
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect S.M.A.R.T. data (smartctl may not be installed)")
 		return nil

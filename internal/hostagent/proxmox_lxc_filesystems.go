@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rs/zerolog"
 )
 
 // resolvePctPath mirrors resolveSmartctlPath: PULSE_PCT_PATH lets a
@@ -74,6 +75,19 @@ type proxmoxLXCConfigMount struct {
 	Key    string
 	Volume string
 	Path   string
+}
+
+// CollectProxmoxLXCFilesystemsLocal runs the bounded, node-local Proxmox LXC
+// filesystem collector with the production system collector. It exists for
+// the root-only typed helper, whose caller cannot supply VMIDs, paths, command
+// names, or arguments.
+func CollectProxmoxLXCFilesystemsLocal(ctx context.Context) *agentshost.ProxmoxLXCInventory {
+	logger := zerolog.Nop()
+	agent := &Agent{
+		collector: NewDefaultCollector(),
+		logger:    logger,
+	}
+	return agent.collectProxmoxLXCFilesystems(ctx)
 }
 
 // collectProxmoxLXCFilesystems auto-detects the local Proxmox Container

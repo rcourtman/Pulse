@@ -745,6 +745,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/hostagent/issue1595_sas_collection_test.go",
                         "internal/hostagent/observer_delivery_test.go",
                         "internal/hostagent/package_updates_test.go",
+                        "internal/hostagent/privilege_helper_client_test.go",
                         "internal/hostagent/send_report_test.go",
                         "internal/hostagent/smartctl_standby_guard_test.go",
                         "internal/hostagent/storage_cleanup_test.go",

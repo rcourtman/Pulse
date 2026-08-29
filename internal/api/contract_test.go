@@ -10220,6 +10220,41 @@ func TestContract_DownloadInstallScriptReleaseAssetIncludesSignatureHeader(t *te
 	}
 }
 
+func TestContract_AgentHelperDownloadIsLinuxOnlyAndSeparatelySigned(t *testing.T) {
+	router, tempDir := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0"
+	binaryPath := filepath.Join(tempDir, "bin", "pulse-agent-helper-linux-amd64")
+	if err := os.WriteFile(binaryPath, []byte("helper"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binaryPath+".sig", []byte("helper-signature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binaryPath+".sshsig", []byte("helper-ssh-signature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-amd64", nil)
+	response := httptest.NewRecorder()
+	router.handleDownloadAgentHelper(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("helper download status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get(signatureHeaderName); got != "helper-signature" {
+		t.Fatalf("helper signature = %q", got)
+	}
+	if got := response.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("helper-ssh-signature") {
+		t.Fatalf("helper SSH signature = %q", got)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=windows-amd64", nil)
+	response = httptest.NewRecorder()
+	router.handleDownloadAgentHelper(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("non-Linux helper status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+}
+
 func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 	payload := EmptySystemSettingsResponse()
 	payload.SystemSettings = config.SystemSettings{

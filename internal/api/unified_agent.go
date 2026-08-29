@@ -157,6 +157,33 @@ func unifiedAgentLocalBuildCommand(normalized string) string {
 	return fmt.Sprintf("%s go build -o bin/pulse-agent-%s ./cmd/pulse-agent", strings.Join(env, " "), normalized)
 }
 
+func normalizeAgentHelperArch(arch string) string {
+	normalized := normalizeUnifiedAgentArch(arch)
+	if !strings.HasPrefix(normalized, "linux-") {
+		return ""
+	}
+	return normalized
+}
+
+func agentHelperLocalBuildCommand(normalized string) string {
+	goos, goarch, ok := strings.Cut(strings.TrimSpace(normalized), "-")
+	if !ok || goos != "linux" || goarch == "" {
+		goos = "linux"
+		goarch = "amd64"
+		normalized = "linux-amd64"
+	}
+	env := []string{"CGO_ENABLED=0", "GOOS=" + goos}
+	switch goarch {
+	case "armv7":
+		env = append(env, "GOARCH=arm", "GOARM=7")
+	case "armv6":
+		env = append(env, "GOARCH=arm", "GOARM=6")
+	default:
+		env = append(env, "GOARCH="+goarch)
+	}
+	return fmt.Sprintf("%s go build -o bin/pulse-agent-helper-%s ./cmd/pulse-agent-helper", strings.Join(env, " "), normalized)
+}
+
 // handleDownloadUnifiedAgent serves the pulse-agent binary
 func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -283,6 +310,115 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		return
 	}
 	http.Error(w, "Agent binary not found. Specify ?arch=linux-amd64 (or your architecture)", http.StatusNotFound)
+}
+
+// handleDownloadAgentHelper serves the separately signed Linux privilege
+// helper. The helper is never substituted with the networked collector binary
+// and unsupported operating systems fail closed.
+func (r *Router) handleDownloadAgentHelper(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
+	normalized := normalizeAgentHelperArch(archParam)
+	if normalized == "" {
+		http.Error(w, "A supported Linux architecture is required", http.StatusBadRequest)
+		return
+	}
+
+	binaryName := "pulse-agent-helper-" + normalized
+	searchPaths := []string{
+		filepath.Join(pulseBinDir(), binaryName),
+		filepath.Join("/opt/pulse", binaryName),
+		filepath.Join("/app", binaryName),
+		filepath.Join(r.projectRoot, "bin", binaryName),
+	}
+	for _, candidate := range searchPaths {
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		checksum, err := r.cachedSHA256(candidate, info)
+		if err != nil {
+			continue
+		}
+		signature, sigErr := readReleaseAssetSignature(candidate)
+		sshSignature, sshSigErr := readReleaseAssetSSHSignature(candidate)
+		if (sigErr != nil || sshSigErr != nil) && isPublishedReleaseAssetVersion(r.serverVersion) {
+			continue
+		}
+		file, err := os.Open(candidate)
+		if err != nil {
+			continue
+		}
+		defer file.Close()
+		w.Header().Set(checksumHeaderName, checksum)
+		if signature != "" {
+			w.Header().Set(signatureHeaderName, signature)
+		}
+		if sshSignature != "" {
+			w.Header().Set(sshSignatureHeaderName, sshSignature)
+		}
+		http.ServeContent(w, req, binaryName, info.ModTime(), file)
+		return
+	}
+
+	if !isPublishedReleaseAssetVersion(r.serverVersion) {
+		http.Error(w, "Agent helper binary not found for "+normalized+" in dev mode.\nBuild with:\n  "+agentHelperLocalBuildCommand(normalized), http.StatusNotFound)
+		return
+	}
+	r.proxyAgentHelperFromGitHub(w, req, normalized)
+}
+
+func (r *Router) proxyAgentHelperFromGitHub(w http.ResponseWriter, req *http.Request, normalized string) {
+	assetName := "pulse-agent-helper-" + normalized
+	assetURL, err := r.releaseAssetURL(assetName)
+	if err != nil {
+		http.Error(w, "Agent helper binary unavailable for current server build", http.StatusServiceUnavailable)
+		return
+	}
+	client := r.installScriptClient
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Minute}
+	}
+	response, err := client.Get(assetURL)
+	if err != nil {
+		http.Error(w, "Failed to fetch agent helper binary", http.StatusServiceUnavailable)
+		return
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		http.Error(w, "Agent helper binary not found on GitHub", http.StatusNotFound)
+		return
+	}
+	content, checksum, err := readBinaryWithChecksum(response.Body)
+	if err != nil {
+		http.Error(w, "Failed to read agent helper binary", http.StatusInternalServerError)
+		return
+	}
+	signature, err := fetchReleaseAssetContent(req.Context(), client, assetURL+".sig", 16*1024)
+	if err != nil {
+		http.Error(w, "Failed to fetch agent helper binary signature", http.StatusServiceUnavailable)
+		return
+	}
+	sshSignature, err := fetchReleaseAssetContent(req.Context(), client, assetURL+".sshsig", 64*1024)
+	if err != nil {
+		http.Error(w, "Failed to fetch agent helper binary SSH signature", http.StatusServiceUnavailable)
+		return
+	}
+	serveProxiedAgentBinaryWithSignatures(
+		w,
+		content,
+		checksum,
+		strings.TrimSpace(string(signature)),
+		encodeSSHSignatureForHeader(sshSignature),
+		"github-proxy",
+	)
 }
 
 // validateUnifiedAgentBinary rejects a local agent binary that this server must

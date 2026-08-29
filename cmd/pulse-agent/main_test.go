@@ -1738,6 +1738,41 @@ func TestRun_PassesStateDirToUpdaterAndHostAgent(t *testing.T) {
 	}
 }
 
+func TestRunConfiguresTypedPrivilegeHelperFromInstallerEnvironment(t *testing.T) {
+	originalHelper := newPrivilegeHelperTelemetry
+	originalHost := newHostAgent
+	defer func() {
+		newPrivilegeHelperTelemetry = originalHelper
+		newHostAgent = originalHost
+	}()
+
+	const socketPath = "/run/pulse-agent/helper.sock"
+	t.Setenv("PULSE_AGENT_HELPER_SOCKET", socketPath)
+	configuredPath := ""
+	newPrivilegeHelperTelemetry = func(path string) (hostagent.PrivilegedTelemetry, error) {
+		configuredPath = path
+		return nil, nil
+	}
+	newHostAgent = func(hostagent.Config) (Runnable, error) {
+		return &mockRunnable{}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := run(ctx, []string{
+		"-token", "deadbeef",
+		"-enable-docker=false",
+		"-enable-kubernetes=false",
+		"-health-addr", "",
+	}, func(string) string { return "" })
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("run returned error: %v", err)
+	}
+	if configuredPath != socketPath {
+		t.Fatalf("helper socket path = %q, want %q", configuredPath, socketPath)
+	}
+}
+
 func TestRun_AgentFailure(t *testing.T) {
 	origDocker := newDockerAgent
 	defer func() {

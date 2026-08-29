@@ -90,6 +90,12 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
 
+The opt-in Linux typed-helper collector profile deliberately disables
+in-process auto-update because its collector binary is root-owned and not
+writable by the service account. Update that profile through the signed
+installer until update activation is moved behind its own typed privileged
+transaction. See [Agent Security](AGENT_SECURITY.md#least-privilege-agent-profile).
+
 On Linux, the host module automatically checks for `virsh`. When the agent can
 open the default libvirt connection read-only, defined domains appear as VM
 workloads under that host. Collection uses libvirt's bounded bulk statistics

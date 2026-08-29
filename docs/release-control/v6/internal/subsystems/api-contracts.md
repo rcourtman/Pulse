@@ -20,6 +20,15 @@
 
 ## Purpose
 
+The Unified Agent helper artifact has a distinct rate-limited public download
+contract at `GET|HEAD /download/pulse-agent-helper?arch=linux-*`. The route
+rejects missing and non-Linux architectures, never substitutes the collector
+binary, and returns the same checksum, Ed25519 signature, and SSH signature
+headers used by the signed agent installer boundary. Development builds fail
+with an exact local build command when the helper is absent; published builds
+may proxy only the exact versioned `pulse-agent-helper-linux-*` release asset
+and its two signature sidecars.
+
 The API runtime is decomposed along production domain boundaries so Go can
 compile and execute domain qualification packages concurrently. Shared tenant
 identity and scope enforcement live in `internal/api/apicontext/` and

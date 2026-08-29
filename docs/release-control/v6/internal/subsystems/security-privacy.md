@@ -36,6 +36,15 @@ independent ceiling: a credential with `agent:exec` cannot promote a service
 installed as `monitoring-only`, and Agent Doctor must warn when such excess
 scope remains attached to that runtime.
 
+Privileged host telemetry crosses only the local typed helper boundary owned by
+`internal/agenthelper/` and `cmd/pulse-agent-helper/main.go`. That root process
+has no network or Pulse credential, admits only the configured collector UID
+through Linux peer credentials, and exposes named versioned collection
+operations rather than command, path, argument, environment, or shell input.
+Protocol decoding is bounded and strict, request deadlines are mandatory, and
+audit records contain metadata only. SMART and Proxmox LXC filesystem payloads
+remain local collector data and must never be copied into helper audit output.
+
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,
 token-management visibility, and privacy controls to operators. Customer-facing

@@ -110,6 +110,19 @@ PVE profile; fresh monitoring PVE, PBS/PMG, and least-privilege units retain no
 such ambient capabilities. Windows service replacement recovers the same
 authority marker from the existing service command line before reinstalling it.
 
+The safe Linux collector profile packages `pulse-agent-helper` as a separate
+root-owned binary and activates it through a root-owned systemd socket/service
+pair. `/run/pulse-agent/helper.sock` is `root:pulse-agent` mode `0660`; the
+service has no Pulse URL or token and is sandboxed with `PrivateNetwork=true`,
+`RestrictAddressFamilies=AF_UNIX`, `NoNewPrivileges=true`,
+`ProtectSystem=strict`, and `ProtectHome=true`. `PrivateDevices=true` is
+forbidden because it would hide the block devices required for SMART telemetry.
+The collector binary and unit remain root-owned and non-writable by the service
+account, while mutable state is confined to the collector-owned state
+directory. Ordinary updates preserve an installed profile and may not migrate a
+legacy root/full-trust service implicitly; safe-profile migration, health
+verification, and rollback are explicit transactions.
+
 Published exact-version install and rollback guidance must preserve the server
 and Unified Agent installer boundary. Supported systemd and Proxmox LXC
 deployments use the signed `/bin/update --version vX.Y.Z` server helper;

@@ -117,6 +117,15 @@ for arch in amd64 arm64; do
             exit 1
         fi
     done
+    for helper_target in linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386; do
+        for suffix in "" .sig .sshsig; do
+            required="bin/pulse-agent-helper-${helper_target}${suffix}"
+            if [[ ! -f "${output_dir}/${arch}/${required}" ]]; then
+                echo "Error: ${archive} is missing candidate container input ${required}." >&2
+                exit 1
+            fi
+        done
+    done
 done
 
 if ! diff -qr \

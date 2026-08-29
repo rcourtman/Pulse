@@ -161,7 +161,7 @@ func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) 
 		`finish_frontend`,
 		`wait -n -p completed_pid "${active_pids[@]}"`,
 		`completed release compilation child is not in the active task set`,
-		`transfer public Unified Agent binaries only`,
+		`transfer public agent-side binaries only`,
 	} {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("build-release-binaries.sh missing Pro frontend embed contract: %s", needle)
@@ -181,6 +181,133 @@ func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) 
 	if serverGate < 0 || serverLaunch < 0 || serverGate > serverLaunch ||
 		!strings.Contains(script[serverGate:serverLaunch], "finish_frontend") {
 		t.Fatal("server and control-plane tasks must join the frontend build before launch")
+	}
+}
+
+func TestBuildReleasePackagesPulseAgentHelperForLinux(t *testing.T) {
+	targetScriptPath := repoFile("scripts", "release_build_targets.sh")
+	targetCmd := exec.Command("bash", "-c", `
+source "$1"
+for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do
+    if [[ "${target}" == linux-* ]]; then
+        printf 'agent:%s\n' "${target}"
+    fi
+done
+for target in "${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}"; do
+    printf 'helper:%s:%s\n' "${target}" "$(pulse_release_binary_filename agent-helper "${target}")"
+done
+`, "pulse-agent-helper-target-test", targetScriptPath)
+	targetOutput, err := targetCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect release helper target matrix: %v\n%s", err, targetOutput)
+	}
+
+	var linuxAgentTargets []string
+	var helperTargets []string
+	for _, line := range strings.Split(strings.TrimSpace(string(targetOutput)), "\n") {
+		switch {
+		case strings.HasPrefix(line, "agent:"):
+			linuxAgentTargets = append(linuxAgentTargets, strings.TrimPrefix(line, "agent:"))
+		case strings.HasPrefix(line, "helper:"):
+			parts := strings.Split(line, ":")
+			if len(parts) != 3 {
+				t.Fatalf("unexpected helper target output %q", line)
+			}
+			helperTargets = append(helperTargets, parts[1])
+			wantFilename := "pulse-agent-helper-" + parts[1]
+			if parts[2] != wantFilename {
+				t.Fatalf("helper target %s filename = %s, want %s", parts[1], parts[2], wantFilename)
+			}
+		}
+	}
+	if got, want := strings.Join(helperTargets, ","), strings.Join(linuxAgentTargets, ","); got != want {
+		t.Fatalf("helper target matrix = %s, want Linux Unified Agent matrix %s", got, want)
+	}
+
+	buildBytes, err := os.ReadFile(repoFile("scripts", "build-release.sh"))
+	if err != nil {
+		t.Fatalf("read build-release.sh: %v", err)
+	}
+	compileBytes, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
+	if err != nil {
+		t.Fatalf("read build-release-binaries.sh: %v", err)
+	}
+	commonBytes, err := os.ReadFile(repoFile("scripts", "release_asset_common.sh"))
+	if err != nil {
+		t.Fatalf("read release_asset_common.sh: %v", err)
+	}
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+	buildScript := string(buildBytes)
+	compileScript := string(compileBytes)
+	commonScript := string(commonBytes)
+	workflow := string(workflowBytes)
+
+	for _, needle := range []string{
+		`agent_helper_build_order=("${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}")`,
+		`output_path="${BUILD_DIR}/$(pulse_release_binary_filename agent-helper "${target}")"`,
+		`./cmd/pulse-agent-helper`,
+		`cp "$BUILD_DIR/pulse-agent-helper-${target}" "$universal_dir/bin/pulse-agent-helper-${target}"`,
+		`tar -czf "$RELEASE_DIR/pulse-agent-helper-v${VERSION}-${target}.tar.gz" -C "$BUILD_DIR" "pulse-agent-helper-${target}"`,
+		`cp "$BUILD_DIR/pulse-agent-helper-${target}" "$RELEASE_DIR/"`,
+	} {
+		if !strings.Contains(buildScript, needle) {
+			t.Fatalf("build-release.sh missing agent helper release wiring: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`for target in "${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}"; do`,
+		`task_components+=(agent-helper)`,
+		`package=./cmd/pulse-agent-helper`,
+	} {
+		if !strings.Contains(compileScript, needle) {
+			t.Fatalf("build-release-binaries.sh missing agent helper compilation wiring: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`if [[ ${#PULSE_RELEASE_AGENT_HELPER_TARGETS[@]} -eq 0 ]]; then`,
+		`src="${agent_binary_dir}/pulse-agent-helper-${target}"`,
+		`dest="${staging_dir}/bin/pulse-agent-helper-${target}"`,
+		`if compgen -G "pulse-agent-helper-linux-*" > /dev/null; then`,
+	} {
+		if !strings.Contains(commonScript, needle) {
+			t.Fatalf("release_asset_common.sh missing agent helper packaging wiring: %s", needle)
+		}
+	}
+	helperStage := strings.Index(commonScript, `src="${agent_binary_dir}/pulse-agent-helper-${target}"`)
+	binSigning := strings.Index(commonScript, `pulse_release_sign_directory_assets "${staging_dir}/bin"`)
+	if helperStage < 0 || binSigning < 0 || helperStage > binSigning {
+		t.Fatal("server archives must stage helper binaries before signing their bin payload")
+	}
+
+	releaseDir := t.TempDir()
+	helperAsset := "pulse-agent-helper-linux-amd64"
+	if err := os.WriteFile(filepath.Join(releaseDir, helperAsset), []byte("helper"), 0o755); err != nil {
+		t.Fatalf("write helper checksum fixture: %v", err)
+	}
+	checksumCmd := exec.Command("bash", "-c", `source "$1"; pulse_release_collect_checksum_files "$2"`, "pulse-agent-helper-checksum-test", repoFile("scripts", "release_asset_common.sh"), releaseDir)
+	checksumOutput, err := checksumCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("collect helper release checksum files: %v\n%s", err, checksumOutput)
+	}
+	if !strings.Contains(string(checksumOutput), helperAsset) {
+		t.Fatalf("helper release asset missing from checksum/signature input:\n%s", checksumOutput)
+	}
+	for _, target := range helperTargets {
+		asset := "release/pulse-agent-helper-" + target
+		if !strings.Contains(workflow, asset) {
+			t.Fatalf("create-release.yml missing bare helper upload: %s", asset)
+		}
+	}
+	for _, signatureGlob := range []string{
+		`release_upload_with_retry "${TAG}" release/*.sig --clobber`,
+		`release_upload_with_retry "${TAG}" release/*.sshsig --clobber`,
+	} {
+		if !strings.Contains(workflow, signatureGlob) {
+			t.Fatalf("create-release.yml missing helper-compatible signature upload: %s", signatureGlob)
+		}
 	}
 }
 
@@ -272,6 +399,12 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 			"scripts/install.sh.sig":             "shared-installer-minisign",
 			"scripts/install.sh.sshsig":          "shared-installer-sshsig",
 			"VERSION":                            version,
+		}
+		for _, helperTarget := range []string{"linux-amd64", "linux-arm64", "linux-armv7", "linux-armv6", "linux-386"} {
+			name := "bin/pulse-agent-helper-" + helperTarget
+			files[name] = "shared-helper-" + helperTarget
+			files[name+".sig"] = "shared-helper-signature-" + helperTarget
+			files[name+".sshsig"] = "shared-helper-ssh-signature-" + helperTarget
 		}
 		if driftUniversalPayload {
 			files["scripts/install.sh"] = "drifted-agent-installer"
@@ -597,6 +730,11 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`release/pulse-agent-linux-armv7`,
 		`release/pulse-agent-linux-armv6`,
 		`release/pulse-agent-linux-386`,
+		`release/pulse-agent-helper-linux-amd64`,
+		`release/pulse-agent-helper-linux-arm64`,
+		`release/pulse-agent-helper-linux-armv7`,
+		`release/pulse-agent-helper-linux-armv6`,
+		`release/pulse-agent-helper-linux-386`,
 		`release/pulse-agent-freebsd-amd64`,
 		`release/pulse-agent-freebsd-arm64`,
 		`release/pulse-agent-windows-amd64.exe`,

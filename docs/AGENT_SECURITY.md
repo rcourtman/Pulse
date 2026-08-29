@@ -143,6 +143,45 @@ user and token.
 
 ## Least-Privilege Agent Profile
 
+For a standard Linux systemd host, the stronger opt-in profile is:
+
+```bash
+install.sh --least-privilege --enable-privileged-helper ...
+```
+
+This profile keeps the networked collector unprivileged and keeps both the
+collector and helper binaries root-owned. Its installer token lives under the
+root-owned `/etc/pulse-agent` directory with `root:pulse-agent` group-read
+access; mutable identity, buffering, and enrolled monitoring-token state remain
+under the collector-owned state directory. The collector is not added to the
+rootful Docker group and cannot enable command execution. Automatic binary
+replacement is disabled until signed update activation moves behind a separate
+typed transaction, so operators must use an explicit signed installer update
+for this opt-in profile.
+
+Exceptional telemetry crosses `/run/pulse-agent/helper.sock` to a separate
+root process. The socket admits only the `pulse-agent` UID, and the helper has
+no Pulse URL, API token, or network namespace. Its protocol exposes bounded,
+versioned SMART and Proxmox LXC filesystem snapshots, not a shell, executable
+path, device path, VMID, environment, or caller-selected arguments. The helper
+service keeps `PrivateNetwork=true`, `RestrictAddressFamilies=AF_UNIX`,
+`NoNewPrivileges=true`, `ProtectSystem=strict`, and `ProtectHome=true`.
+`PrivateDevices` is intentionally not enabled because SMART needs the host
+block devices. If the helper is missing, incompatible, or rejects a request,
+only the affected telemetry disappears; the collector does not fall back to
+sudo, root, or a broader local command path.
+
+The typed-helper profile cannot be combined with `--grant-smart` or
+`--grant-pct`. Rootful Docker-socket monitoring is also unavailable because
+membership in the Docker group is root-equivalent; API monitoring or a
+separately scoped rootless runtime socket is required instead. The profile is
+currently explicit rather than the installer default while migration,
+rollback, update activation, appliance qualification, and the separate action
+runner are completed.
+
+The older `--least-privilege` profile without `--enable-privileged-helper`
+remains available for compatibility. Its trade-offs are documented below.
+
 On standard Linux systemd hosts, `install.sh --least-privilege` is a supported
 alternative to the root profile. It runs the service as a dedicated
 `pulse-agent` system user (nologin shell, owning only its state directory and
@@ -176,9 +215,10 @@ platforms (TrueNAS, Synology, QNAP, Unraid) and non-systemd init systems keep
 the root profile; the installer refuses `--least-privilege` there rather than
 silently falling back to root.
 
-`--update` preserves an existing least-privilege profile and its grants
-without the flags being repeated. Uninstall removes the sudoers file and
-helpers; the inert system user is left behind deliberately.
+`--update` preserves either installed least-privilege profile without the flags
+being repeated. Uninstall removes the typed helper socket/service and its
+installer credential directory, or the legacy sudoers file and wrappers; the
+inert system user is left behind deliberately.
 
 ## Supply-Chain Boundary
 

@@ -21,6 +21,11 @@
 
 ## Purpose
 
+The shared `internal/api/` helper-binary download route is isolated from
+storage and recovery semantics. `/download/pulse-agent-helper` serves a signed
+Linux runtime artifact only; it cannot read, mutate, restore, export, or select
+storage state, recovery timelines, backup providers, or repository scope.
+
 First-run authentication always writes the canonical `.env` persistence
 artifact before runtime state changes. Root systemd installation may also
 write a service override, but reload, restart, backup, and recovery remain

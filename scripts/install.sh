@@ -27,6 +27,7 @@
 #   --observers-file <path> Report to additional observer Pulse instances
 #   --enable-commands   Enable Pulse command execution on agent (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
 #   --least-privilege   Run the agent as the dedicated 'pulse-agent' system user instead of root (Linux systemd only; SMART, Proxmox LXC filesystems, and command execution need root or an explicit grant)
+#   --enable-privileged-helper Install the typed root helper for an explicitly selected least-privilege Linux systemd profile
 #   --grant-smart       With --least-privilege: allow SMART collection through an exact-command sudoers grant for smartctl
 #   --grant-pct         With --least-privilege: allow Proxmox LXC filesystem capacity through a sudoers grant restricted to 'pct list' and 'pct df'
 #   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
@@ -135,6 +136,17 @@ SERVICE_USER="root"
 LEAST_PRIVILEGE_USER="pulse-agent"
 PRIVILEGE_HELPER_DIR="/usr/local/lib/pulse-agent"
 PRIVILEGE_SUDOERS_FILE="/etc/sudoers.d/pulse-agent"
+PRIVILEGED_HELPER_ENABLED="false"
+PRIVILEGED_HELPER_EXPLICIT="false"
+PRIVILEGED_HELPER_NAME="pulse-agent-helper"
+PRIVILEGED_HELPER_BINARY_NAME="pulse-agent-helper"
+PRIVILEGED_HELPER_BINARY_PATH="${PRIVILEGE_HELPER_DIR}/${PRIVILEGED_HELPER_BINARY_NAME}"
+PRIVILEGED_HELPER_SERVICE_UNIT="/etc/systemd/system/${PRIVILEGED_HELPER_NAME}.service"
+PRIVILEGED_HELPER_SOCKET_UNIT="/etc/systemd/system/${PRIVILEGED_HELPER_NAME}.socket"
+PRIVILEGED_HELPER_SOCKET_DIR="/run/pulse-agent"
+PRIVILEGED_HELPER_SOCKET_PATH="${PRIVILEGED_HELPER_SOCKET_DIR}/helper.sock"
+PRIVILEGED_HELPER_CREDENTIAL_DIR="/etc/pulse-agent"
+TMP_HELPER_BIN=""
 
 SYSTEMD_ENV_LINES=""
 SHELL_EXPORT_LINES=""
@@ -502,6 +514,8 @@ Options:
   --enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
   --command-authority <profile> Local command ceiling: monitoring-only, command-capable, or legacy
   --least-privilege       Run the agent as the 'pulse-agent' system user instead of root (Linux systemd only)
+  --enable-privileged-helper Install the typed root helper (requires --least-privilege on standard Linux systemd)
+  --disable-privileged-helper Remove/disable an existing typed helper profile during this install
   --grant-smart           With --least-privilege: exact-command sudoers grant so SMART collection keeps working
   --grant-pct             With --least-privilege: sudoers grant restricted to 'pct list'/'pct df' so Proxmox LXC filesystem capacity keeps working
   --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
@@ -535,12 +549,18 @@ restore_selinux_contexts() {
     if command -v restorecon >/dev/null 2>&1; then
         log_info "Restoring SELinux contexts for installed binaries..."
         restorecon -v "${INSTALL_DIR}/${BINARY_NAME}" >/dev/null 2>&1 || true
+        if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+            restorecon -v "$PRIVILEGED_HELPER_BINARY_PATH" >/dev/null 2>&1 || true
+        fi
         log_info "SELinux context restored"
     else
         # Fallback to chcon if restorecon isn't available
         if command -v chcon >/dev/null 2>&1; then
             log_info "Setting SELinux context for installed binary..."
             chcon -t bin_t "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+            if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+                chcon -t bin_t "$PRIVILEGED_HELPER_BINARY_PATH" 2>/dev/null || true
+            fi
         fi
     fi
 }
@@ -837,6 +857,20 @@ teardown_systemd_agent_service() {
     systemctl daemon-reload 2>/dev/null || true
 }
 
+teardown_privileged_helper_service() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+    systemctl stop "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null || true
+    systemctl stop "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
+    systemctl disable "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null || true
+    rm -f "$PRIVILEGED_HELPER_SOCKET_UNIT" "$PRIVILEGED_HELPER_SERVICE_UNIT"
+    rm -f "$PRIVILEGED_HELPER_SOCKET_PATH"
+    rm -rf "$PRIVILEGED_HELPER_CREDENTIAL_DIR"
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl reset-failed "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
+}
+
 teardown_openrc_agent_service() {
     local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
     rc-service "${AGENT_NAME}" stop 2>/dev/null || true
@@ -1008,6 +1042,57 @@ EOF
 ensure_freebsd_agent_enabled() {
     eval "$(freebsd_enable_snippet)"
     apply_freebsd_agent_enablement
+}
+
+render_privileged_helper_socket_unit() {
+    local unit_path="$1"
+
+    cat > "$unit_path" <<EOF
+[Unit]
+Description=Pulse Agent typed privileged helper socket
+
+[Socket]
+ListenStream=${PRIVILEGED_HELPER_SOCKET_PATH}
+SocketUser=root
+SocketGroup=${LEAST_PRIVILEGE_USER}
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target
+EOF
+}
+
+render_privileged_helper_service_unit() {
+    local unit_path="$1"
+    local helper_binary="$2"
+
+    cat > "$unit_path" <<EOF
+[Unit]
+Description=Pulse Agent typed privileged helper
+Requires=${PRIVILEGED_HELPER_NAME}.socket
+After=${PRIVILEGED_HELPER_NAME}.socket
+
+[Service]
+Type=simple
+ExecStart=${helper_binary}
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+EOF
 }
 
 render_systemd_agent_unit() {
@@ -2024,6 +2109,11 @@ build_exec_arg_items() {
     if [[ -n "$OBSERVERS_FILE" ]]; then EXEC_ARG_ITEMS+=(--observers-file "$OBSERVERS_FILE"); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
     EXEC_ARG_ITEMS+=(--command-authority "${COMMAND_AUTHORITY:-legacy}")
+    if [[ "${PRIVILEGED_HELPER_ENABLED:-false}" == "true" ]]; then
+        # The collector cannot replace its root-owned binary. Keep in-process
+        # updates off until signed activation moves behind the typed helper.
+        EXEC_ARG_ITEMS+=(--disable-auto-update)
+    fi
     if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi
     if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-pods); fi
@@ -3032,6 +3122,8 @@ while [[ $# -gt 0 ]]; do
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --command-authority) COMMAND_AUTHORITY="$2"; COMMAND_AUTHORITY_SOURCE="explicit"; shift 2 ;;
         --least-privilege) LEAST_PRIVILEGE="true"; shift ;;
+        --enable-privileged-helper) PRIVILEGED_HELPER_ENABLED="true"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
+        --disable-privileged-helper) PRIVILEGED_HELPER_ENABLED="false"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
         --grant-smart) GRANT_SMART="true"; shift ;;
         --grant-pct) GRANT_PCT="true"; shift ;;
         --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
@@ -3095,6 +3187,18 @@ if [[ "$GRANT_SMART" == "true" || "$GRANT_PCT" == "true" ]] && [[ "$LEAST_PRIVIL
 fi
 if [[ "$LEAST_PRIVILEGE" == "true" && "$ENABLE_COMMANDS" == "true" ]]; then
     fail "--least-privilege and --enable-commands are mutually exclusive: governed command execution requires the root profile" "$EXIT_MISSING_ARGS"
+fi
+if [[ "$PRIVILEGED_HELPER_EXPLICIT" != "true" ]] &&
+   { [[ -f "$PRIVILEGED_HELPER_SOCKET_UNIT" ]] || [[ -f "$PRIVILEGED_HELPER_SERVICE_UNIT" ]]; }; then
+    PRIVILEGED_HELPER_ENABLED="true"
+    LEAST_PRIVILEGE="true"
+    log_info "Preserving existing typed privileged-helper profile"
+fi
+if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" && "$LEAST_PRIVILEGE" != "true" ]]; then
+    fail "--enable-privileged-helper requires --least-privilege" "$EXIT_MISSING_ARGS"
+fi
+if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" && ( "$GRANT_SMART" == "true" || "$GRANT_PCT" == "true" ) ]]; then
+    fail "--enable-privileged-helper cannot be combined with legacy --grant-smart/--grant-pct sudo paths" "$EXIT_MISSING_ARGS"
 fi
 
 # --- Check Root ---
@@ -3399,6 +3503,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
 
     # Systemd - unified agent
     if command -v systemctl >/dev/null 2>&1; then
+        teardown_privileged_helper_service
         teardown_systemd_agent_service
     fi
 
@@ -3599,9 +3704,19 @@ if [[ "$LEAST_PRIVILEGE" == "true" && "$UNINSTALL" != "true" ]]; then
     fi
 fi
 
+if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" && "$UNINSTALL" != "true" ]]; then
+    if [[ "$(uname -s)" != "Linux" ]] || ! command -v systemctl >/dev/null 2>&1 ||
+        is_truenas || [[ -d /usr/syno ]] || [[ -f /etc/unraid-version ]] ||
+        [[ -d /boot/config/plugins ]] || [[ -x /sbin/getcfg ]]; then
+        fail "--enable-privileged-helper is supported only on standard Linux systemd hosts; no broader-privilege fallback was applied" "$EXIT_MISSING_ARGS"
+    fi
+fi
+
 # Create the dedicated service account for the least-privilege profile and
-# hand it the state directory plus the agent binary (self-update swaps the
-# binary in place, so the service user must own it).
+# hand it the mutable state directory. The legacy least-privilege profile also
+# owns its agent binary so its in-process updater keeps working. The typed
+# helper profile instead keeps both executables root-owned and disables direct
+# collector activation until the helper owns that operation.
 provision_least_privilege_user() {
     if ! id -u "$LEAST_PRIVILEGE_USER" >/dev/null 2>&1; then
         if ! command -v useradd >/dev/null 2>&1; then
@@ -3622,12 +3737,45 @@ provision_least_privilege_user() {
 
     # Docker/Podman socket reads need group membership, not root. Auto-detect
     # mirrors the module default: only an explicit --disable-docker skips it.
-    if [[ "$ENABLE_DOCKER" != "false" ]] && getent group docker >/dev/null 2>&1; then
+    if [[ "$PRIVILEGED_HELPER_ENABLED" != "true" && "$ENABLE_DOCKER" != "false" ]] && getent group docker >/dev/null 2>&1; then
         usermod -aG docker "$LEAST_PRIVILEGE_USER" 2>/dev/null || true
     fi
 
     chown -R "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "$STATE_DIR" 2>/dev/null || true
-    chown "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+    if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+        chown root:root "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
+    else
+        chown "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+    fi
+}
+
+# Keep the installer token in a root-owned directory outside the service
+# account's write authority while leaving runtime state mutable by the
+# collector. The enrolled runtime token remains collector-owned because the
+# agent rotates it; it is monitoring-only and carries no execution scope.
+protect_typed_profile_credentials() {
+    local legacy_token="${STATE_DIR}/token"
+
+    if [[ -L "$PRIVILEGED_HELPER_CREDENTIAL_DIR" || ! -d "$PRIVILEGED_HELPER_CREDENTIAL_DIR" ]]; then
+        fail "Refusing unsafe typed-profile credential directory: ${PRIVILEGED_HELPER_CREDENTIAL_DIR}" "$EXIT_GENERAL"
+    fi
+    chown "root:${LEAST_PRIVILEGE_USER}" "$PRIVILEGED_HELPER_CREDENTIAL_DIR" ||
+        fail "Failed to protect typed-profile credential directory ownership" "$EXIT_GENERAL"
+    chmod 0750 "$PRIVILEGED_HELPER_CREDENTIAL_DIR" ||
+        fail "Failed to protect typed-profile credential directory mode" "$EXIT_GENERAL"
+
+    if [[ -L "$RUNTIME_TOKEN_FILE" || ! -f "$RUNTIME_TOKEN_FILE" ]]; then
+        fail "Refusing unsafe typed-profile credential path: ${RUNTIME_TOKEN_FILE}" "$EXIT_GENERAL"
+    fi
+    chown "root:${LEAST_PRIVILEGE_USER}" "$RUNTIME_TOKEN_FILE" ||
+        fail "Failed to protect typed-profile credential ownership: ${RUNTIME_TOKEN_FILE}" "$EXIT_GENERAL"
+    chmod 0640 "$RUNTIME_TOKEN_FILE" ||
+        fail "Failed to protect typed-profile credential mode: ${RUNTIME_TOKEN_FILE}" "$EXIT_GENERAL"
+
+    if [[ "$legacy_token" != "$RUNTIME_TOKEN_FILE" ]]; then
+        rm -f "$legacy_token"
+    fi
 }
 
 # Write one privilege helper: a root-owned wrapper that execs the real binary
@@ -3699,6 +3847,35 @@ provision_privilege_helpers() {
     install -o root -g root -m 0440 "$sudoers_tmp" "$PRIVILEGE_SUDOERS_FILE"
     rm -f "$sudoers_tmp"
     log_info "Installed scoped sudoers grants at ${PRIVILEGE_SUDOERS_FILE}"
+}
+
+verify_privileged_helper_socket() {
+    local helper_gid socket_owner socket_mode
+
+    helper_gid=$(id -g "$LEAST_PRIVILEGE_USER")
+    if [[ ! -S "$PRIVILEGED_HELPER_SOCKET_PATH" ]]; then
+        fail "Typed privileged helper socket was not created at ${PRIVILEGED_HELPER_SOCKET_PATH}" "$EXIT_GENERAL"
+    fi
+    socket_owner=$(stat -c '%u:%g' "$PRIVILEGED_HELPER_SOCKET_PATH" 2>/dev/null || true)
+    socket_mode=$(stat -c '%a' "$PRIVILEGED_HELPER_SOCKET_PATH" 2>/dev/null || true)
+    if [[ "$socket_owner" != "0:${helper_gid}" || "$socket_mode" != "660" ]]; then
+        fail "Typed privileged helper socket has unsafe ownership or mode (${socket_owner:-unknown} ${socket_mode:-unknown}); expected root:${LEAST_PRIVILEGE_USER} 0660" "$EXIT_GENERAL"
+    fi
+}
+
+provision_typed_privileged_helper() {
+    render_privileged_helper_socket_unit "$PRIVILEGED_HELPER_SOCKET_UNIT"
+    render_privileged_helper_service_unit "$PRIVILEGED_HELPER_SERVICE_UNIT" "$PRIVILEGED_HELPER_BINARY_PATH"
+    chown root:root "$PRIVILEGED_HELPER_SOCKET_UNIT" "$PRIVILEGED_HELPER_SERVICE_UNIT"
+    chmod 0644 "$PRIVILEGED_HELPER_SOCKET_UNIT" "$PRIVILEGED_HELPER_SERVICE_UNIT"
+    append_service_env "PULSE_AGENT_HELPER_SOCKET" "$PRIVILEGED_HELPER_SOCKET_PATH"
+
+    systemctl daemon-reload
+    if ! systemctl enable --now "${PRIVILEGED_HELPER_NAME}.socket"; then
+        fail "Failed to enable the typed privileged helper socket" "$EXIT_GENERAL"
+    fi
+    verify_privileged_helper_socket
+    log_info "Typed privileged helper socket active at ${PRIVILEGED_HELPER_SOCKET_PATH} (root:${LEAST_PRIVILEGE_USER} 0660)"
 }
 
 if [[ "$(uname -s)" == "Linux" ]] && is_truenas; then
@@ -3807,6 +3984,23 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
             json_event "preflight" "agent_download_unavailable" "Agent binary unavailable for ${PF_ARCH_PARAM}" "$EXIT_DOWNLOAD_FAILED"
             PREFLIGHT_EXIT="$EXIT_DOWNLOAD_FAILED"
         fi
+
+        if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+            : > "$PREFLIGHT_HEADERS"
+            HELPER_DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?arch=${PF_ARCH_PARAM}"
+            if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$HELPER_DOWNLOAD_CHECK_URL"; then
+                PREFLIGHT_HELPER_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
+                if [[ -n "$PREFLIGHT_HELPER_SHA" ]]; then
+                    json_event "preflight" "helper_download_available" "Typed helper binary available for ${PF_ARCH_PARAM}"
+                else
+                    json_event "preflight" "helper_download_checksum_missing" "Typed helper download did not include checksum header" "$EXIT_CHECKSUM_FAILED"
+                    PREFLIGHT_EXIT="$EXIT_CHECKSUM_FAILED"
+                fi
+            else
+                json_event "preflight" "helper_download_unavailable" "Typed helper binary unavailable for ${PF_ARCH_PARAM}" "$EXIT_DOWNLOAD_FAILED"
+                PREFLIGHT_EXIT="$EXIT_DOWNLOAD_FAILED"
+            fi
+        fi
     fi
 
     # Output summary
@@ -3903,6 +4097,53 @@ read_magic_hex() {
         return 1
     fi
 }
+
+download_verified_privileged_helper() {
+    local helper_headers helper_url helper_magic helper_expected_sha helper_signature helper_actual_sha
+    local -a helper_curl_args
+
+    TMP_HELPER_BIN=$(mktemp)
+    helper_headers=$(mktemp)
+    TMP_FILES+=("$TMP_HELPER_BIN" "$helper_headers")
+    helper_curl_args=(-fsSL --connect-timeout 30 --max-time 300 -D "$helper_headers" -o "$TMP_HELPER_BIN")
+    if [[ "$INSECURE" == "true" ]]; then helper_curl_args+=(-k); fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then helper_curl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
+
+    helper_url="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?${DOWNLOAD_QUERY}"
+    log_info "Downloading typed privileged helper from ${helper_url}..."
+    if ! curl "${helper_curl_args[@]}" "$helper_url"; then
+        fail "Typed privileged helper download failed; the safe profile was not installed." "$EXIT_DOWNLOAD_FAILED"
+    fi
+    if [[ ! -s "$TMP_HELPER_BIN" ]]; then
+        fail "Downloaded typed privileged helper is empty; the safe profile was not installed." "$EXIT_DOWNLOAD_FAILED"
+    fi
+    if helper_magic=$(read_magic_hex "$TMP_HELPER_BIN"); then
+        if [[ "$helper_magic" != "7f454c46" ]]; then
+            fail "Downloaded typed privileged helper is not a Linux ELF executable." "$EXIT_DOWNLOAD_FAILED"
+        fi
+    else
+        log_warn "No od/hexdump/xxd available to inspect the typed helper; relying on checksum verification."
+    fi
+
+    helper_expected_sha=$(final_response_header_value "$helper_headers" "X-Checksum-Sha256" || true)
+    helper_signature=$(final_response_header_value "$helper_headers" "X-Signature-SSHSIG" || true)
+    if [[ -z "$helper_expected_sha" ]]; then
+        fail "Typed privileged helper download omitted its checksum; refusing install." "$EXIT_CHECKSUM_FAILED"
+    fi
+    if has_pinned_installer_signature_key && [[ -z "$helper_signature" ]]; then
+        fail "Typed privileged helper download omitted its signature; refusing install." "$EXIT_SIGNATURE_FAILED"
+    fi
+    helper_actual_sha=$(sha256sum "$TMP_HELPER_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_HELPER_BIN" 2>/dev/null | awk '{print $1}')
+    if [[ -z "$helper_actual_sha" ]]; then
+        fail "Could not compute typed privileged helper checksum." "$EXIT_CHECKSUM_FAILED"
+    fi
+    if [[ "$helper_actual_sha" != "$helper_expected_sha" ]]; then
+        fail "Typed privileged helper checksum verification failed." "$EXIT_CHECKSUM_FAILED"
+    fi
+    verify_download_signature "$TMP_HELPER_BIN" "$helper_signature"
+    chmod 0755 "$TMP_HELPER_BIN"
+    log_info "Typed privileged helper binary verified"
+}
 if [[ "$OS" == "linux" || "$OS" == "freebsd" ]]; then
     if MAGIC=$(read_magic_hex "$TMP_BIN"); then
         if [[ "$MAGIC" != "7f454c46" ]]; then
@@ -3944,6 +4185,10 @@ json_event "download" "checksum_ok" "Binary checksum verified"
 log_info "Binary checksum verified"
 
 verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"
+
+if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+    download_verified_privileged_helper
+fi
 
 chmod +x "$TMP_BIN"
 NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
@@ -4010,6 +4255,16 @@ log_info "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mkdir -p "$INSTALL_DIR"
 mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
 chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+
+if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+    mkdir -p "$PRIVILEGE_HELPER_DIR"
+    chown root:root "$PRIVILEGE_HELPER_DIR"
+    chmod 0755 "$PRIVILEGE_HELPER_DIR"
+    mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"
+    TMP_HELPER_BIN=""
+    chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"
+    chmod 0755 "$PRIVILEGED_HELPER_BINARY_PATH"
+fi
 
 if [[ "$UPGRADE_MODE" == "true" ]]; then
     log_info "Binary upgraded successfully. Updating service configuration..."
@@ -4643,14 +4898,29 @@ if command -v systemctl >/dev/null 2>&1; then
         fi
     fi
 
-    ensure_runtime_token_file "$STATE_DIR"
+    if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+        ensure_runtime_token_file "$PRIVILEGED_HELPER_CREDENTIAL_DIR"
+    else
+        ensure_runtime_token_file "$STATE_DIR"
+    fi
     clear_proxmox_state_if_needed
+
+    if [[ "$PRIVILEGED_HELPER_EXPLICIT" == "true" && "$PRIVILEGED_HELPER_ENABLED" != "true" ]]; then
+        teardown_privileged_helper_service
+        rm -f "$PRIVILEGED_HELPER_BINARY_PATH"
+    fi
 
     if [[ "$LEAST_PRIVILEGE" == "true" ]]; then
         SERVICE_USER="$LEAST_PRIVILEGE_USER"
         provision_least_privilege_user
-        provision_privilege_helpers
-        log_info "Least-privilege profile: service runs as ${SERVICE_USER}. SMART $( [[ "$GRANT_SMART" == "true" ]] && echo "via scoped sudo helper" || echo "unavailable without --grant-smart" ); Proxmox LXC filesystems $( [[ "$GRANT_PCT" == "true" ]] && echo "via scoped sudo helper" || echo "unavailable without --grant-pct" )."
+        if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+            protect_typed_profile_credentials
+            provision_typed_privileged_helper
+            log_info "Typed-helper collector profile: service runs as ${SERVICE_USER}; binaries and credential files remain root-owned while mutable state remains ${SERVICE_USER}-owned."
+        else
+            provision_privilege_helpers
+            log_info "Least-privilege profile: service runs as ${SERVICE_USER}. SMART $( [[ "$GRANT_SMART" == "true" ]] && echo "via scoped sudo helper" || echo "unavailable without --grant-smart" ); Proxmox LXC filesystems $( [[ "$GRANT_PCT" == "true" ]] && echo "via scoped sudo helper" || echo "unavailable without --grant-pct" )."
+        fi
     fi
 
     # Build command line args with --token-file instead of the raw token.
@@ -4666,7 +4936,11 @@ if command -v systemctl >/dev/null 2>&1; then
     restart_systemd_agent_service
     complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"
     if [[ "$UPGRADE_MODE" != "true" && -n "$PULSE_TOKEN" ]]; then
-        log_info "Token file: $TOKEN_FILE (mode 600, root only)"
+        if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+            log_info "Token file: ${RUNTIME_TOKEN_FILE} (mode 640, root:${LEAST_PRIVILEGE_USER})"
+        else
+            log_info "Token file: ${RUNTIME_TOKEN_FILE} (mode 600, root only)"
+        fi
     fi
     exit 0
 fi

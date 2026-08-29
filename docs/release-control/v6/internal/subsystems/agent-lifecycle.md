@@ -6644,6 +6644,41 @@ server can present the profile descriptively. Uninstall removes the sudoers
 file and helpers. `scripts/installtests/install_sh_test.go`
 (`TestInstallSHLeastPrivilegeProfile`) pins the profile's invariants.
 
+### Typed local privilege helper boundary
+
+`cmd/pulse-agent-helper/main.go` and `internal/agenthelper/` own the Linux
+collector's replacement for command-shaped sudo wrappers. The helper is a
+standalone root process with no Pulse URL, API credential, outbound transport,
+or generic command/path operation. It accepts exactly one protocol-v1 request
+per local Unix-socket connection, uses a four-byte big-endian JSON frame with a
+64 KiB request ceiling and 10 MiB response ceiling, rejects unknown fields,
+trailing JSON, unsupported versions, and expired deadlines, and returns typed
+errors correlated by request ID.
+
+Admission is local and fail closed: Linux peer credentials must resolve to the
+configured collector UID before dispatch. The registry exposes only named,
+versioned operations whose providers own all executable paths and arguments.
+The first collection operations are `smart.snapshot.v1` and
+`proxmox.lxc_filesystems.v1`; callers cannot supply a binary path, arbitrary
+filesystem path, environment, or command arguments. A health/capabilities
+operation reports protocol and operation availability without widening the
+allow-list. Provider execution inherits a bounded request context. Audit hooks
+receive operation, request ID, peer identity, duration, outcome, and response
+size metadata only, never collected payloads or secrets.
+
+The packaged service listens on `/run/pulse-agent/helper.sock` with
+`root:pulse-agent` ownership and mode `0660`. Its systemd sandbox is root-owned,
+networkless (`PrivateNetwork=true`, `RestrictAddressFamilies=AF_UNIX`), and
+retains `NoNewPrivileges=true`, `ProtectSystem=strict`, and `ProtectHome=true`.
+It must not use `PrivateDevices=true`, because SMART collection requires access
+to host block devices. Helper absence, incompatibility, or an unavailable
+operation degrades only the affected telemetry and must never reactivate a sudo
+wrapper, Docker-group membership, ambient capability, or root collector.
+The rate-limited public `/download/pulse-agent-helper?arch=linux-*` endpoint is
+the only server delivery path: it rejects non-Linux targets, serves the exact
+separate helper artifact with checksum plus detached signatures, and requires a
+published signed release asset when no local binary exists.
+
 ### Command dispatch is context-honest and abandoned executions are canceled
 
 The agent command transport now refuses to dispatch work its caller has

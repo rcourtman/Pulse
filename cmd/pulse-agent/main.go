@@ -98,9 +98,10 @@ var (
 	newHostAgent func(hostagent.Config) (Runnable, error) = func(c hostagent.Config) (Runnable, error) {
 		return hostagent.New(c)
 	}
-	newUpdater              func(agentupdate.Config) *agentupdate.Updater = agentupdate.New
-	lookPath                                                              = exec.LookPath
-	runAsWindowsServiceFunc                                               = runAsWindowsService
+	newPrivilegeHelperTelemetry                                               = hostagent.NewPrivilegeHelperTelemetry
+	newUpdater                  func(agentupdate.Config) *agentupdate.Updater = agentupdate.New
+	lookPath                                                                  = exec.LookPath
+	runAsWindowsServiceFunc                                                   = runAsWindowsService
 
 	// For testing
 	retryInitialDelay           = 5 * time.Second
@@ -405,6 +406,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 	// 8. Start Host Agent (if enabled)
 	if cfg.EnableHost {
+		privilegedTelemetry, err := newPrivilegeHelperTelemetry(os.Getenv("PULSE_AGENT_HELPER_SOCKET"))
+		if err != nil {
+			return fmt.Errorf("configure typed privilege helper: %w", err)
+		}
 		hostCfg := hostagent.Config{
 			PulseURL:                cfg.PulseURL,
 			APIToken:                cfg.APIToken,
@@ -435,6 +440,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AppliedConfig:           cfg.AppliedConfig,
 			ModuleStatus:            runtimeStatus.moduleStatuses,
 			Observers:               hostObserverTargets(cfg.Observers),
+			PrivilegedTelemetry:     privilegedTelemetry,
 
 			DockerContainerUpdater:           dockerUpdaterBridge,
 			DockerContainerLifecycleOperator: dockerUpdaterBridge,

@@ -1,13 +1,105 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestDownloadAgentHelperRejectsUnsupportedArchitecture(t *testing.T) {
+	router := &Router{}
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=darwin-arm64", nil)
+	response := httptest.NewRecorder()
+
+	router.handleDownloadAgentHelper(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+}
+
+func TestDownloadAgentHelperServesSignedLocalLinuxBinary(t *testing.T) {
+	router, root := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0"
+	content := []byte("linux helper")
+	path := filepath.Join(root, "bin", "pulse-agent-helper-linux-amd64")
+	if err := os.WriteFile(path, content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".sig", []byte("helper-signature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".sshsig", []byte("helper-ssh-signature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-amd64", nil)
+	response := httptest.NewRecorder()
+	router.handleDownloadAgentHelper(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	wantChecksum := sha256.Sum256(content)
+	if got := response.Header().Get(checksumHeaderName); got != hex.EncodeToString(wantChecksum[:]) {
+		t.Fatalf("checksum = %q", got)
+	}
+	if got := response.Header().Get(signatureHeaderName); got != "helper-signature" {
+		t.Fatalf("signature = %q", got)
+	}
+	if got := response.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("helper-ssh-signature") {
+		t.Fatalf("SSH signature = %q", got)
+	}
+}
+
+func TestDownloadAgentHelperMissingDevBinaryReturnsExactBuildCommand(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "dev"
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-armv7", nil)
+	response := httptest.NewRecorder()
+
+	router.handleDownloadAgentHelper(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+	want := "CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o bin/pulse-agent-helper-linux-armv7 ./cmd/pulse-agent-helper"
+	if !strings.Contains(response.Body.String(), want) {
+		t.Fatalf("body missing build command: %s", response.Body.String())
+	}
+}
+
+func TestDownloadAgentHelperProxiesPublishedSignedAsset(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0-rc.1"
+	assetURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-agent-helper-linux-amd64"
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: assetURL, Status: http.StatusOK, Body: "helper"},
+		{Method: http.MethodGet, URL: assetURL + ".sig", Status: http.StatusOK, Body: "helper-signature"},
+		{Method: http.MethodGet, URL: assetURL + ".sshsig", Status: http.StatusOK, Body: "helper-ssh-signature"},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-amd64", nil)
+	response := httptest.NewRecorder()
+
+	router.handleDownloadAgentHelper(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("X-Served-From"); got != "github-proxy" {
+		t.Fatalf("served from = %q", got)
+	}
+	if got := response.Header().Get(signatureHeaderName); got != "helper-signature" {
+		t.Fatalf("signature = %q", got)
+	}
+}
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
