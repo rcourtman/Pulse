@@ -32,6 +32,7 @@ if git grep -q 'mockEagerHistoryPVEGuestLimit' "${TAG_REF}" -- internal/monitori
   MOCK_K8S_PODS=40
   MOCK_K8S_DEPLOYMENTS=14
   MOCK_SEED_DURATION=48h
+  MOCK_SAMPLE_INTERVAL=1m
   MOCK_UPDATE_INTERVAL=2s
 else
   PROFILE="legacy-bounded"
@@ -50,6 +51,10 @@ else
   MOCK_K8S_PODS=12
   MOCK_K8S_DEPLOYMENTS=4
   MOCK_SEED_DURATION=2h
+  # The compatibility runtime seeds history synchronously before binding the
+  # HTTP listener. Bound the point density as well as the duration so a small
+  # demo host can reach health without changing the installed release bits.
+  MOCK_SAMPLE_INTERVAL=5m
   MOCK_UPDATE_INTERVAL=15s
 fi
 
@@ -65,4 +70,5 @@ printf 'mock_k8s_nodes=%s\n' "$MOCK_K8S_NODES"
 printf 'mock_k8s_pods=%s\n' "$MOCK_K8S_PODS"
 printf 'mock_k8s_deployments=%s\n' "$MOCK_K8S_DEPLOYMENTS"
 printf 'mock_seed_duration=%s\n' "$MOCK_SEED_DURATION"
+printf 'mock_sample_interval=%s\n' "$MOCK_SAMPLE_INTERVAL"
 printf 'mock_update_interval=%s\n' "$MOCK_UPDATE_INTERVAL"

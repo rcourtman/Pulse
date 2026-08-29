@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -ne 15 ]; then
-  echo "usage: recover-demo-runtime.sh EXPECTED_HOSTNAME LOCAL_BASE_URL EXPECTED_VERSION MOCK_NODES MOCK_VMS_PER_NODE MOCK_LXCS_PER_NODE MOCK_DOCKER_HOSTS MOCK_DOCKER_CONTAINERS MOCK_GENERIC_HOSTS MOCK_K8S_CLUSTERS MOCK_K8S_NODES MOCK_K8S_PODS MOCK_K8S_DEPLOYMENTS MOCK_SEED_DURATION MOCK_UPDATE_INTERVAL" >&2
+if [ "$#" -ne 16 ]; then
+  echo "usage: recover-demo-runtime.sh EXPECTED_HOSTNAME LOCAL_BASE_URL EXPECTED_VERSION MOCK_NODES MOCK_VMS_PER_NODE MOCK_LXCS_PER_NODE MOCK_DOCKER_HOSTS MOCK_DOCKER_CONTAINERS MOCK_GENERIC_HOSTS MOCK_K8S_CLUSTERS MOCK_K8S_NODES MOCK_K8S_PODS MOCK_K8S_DEPLOYMENTS MOCK_SEED_DURATION MOCK_SAMPLE_INTERVAL MOCK_UPDATE_INTERVAL" >&2
   exit 2
 fi
 
@@ -20,7 +20,8 @@ MOCK_K8S_NODES="${11}"
 MOCK_K8S_PODS="${12}"
 MOCK_K8S_DEPLOYMENTS="${13}"
 MOCK_SEED_DURATION="${14}"
-MOCK_UPDATE_INTERVAL="${15}"
+MOCK_SAMPLE_INTERVAL="${15}"
+MOCK_UPDATE_INTERVAL="${16}"
 SERVICE_NAME="pulse"
 RELAY_SERVICE_NAME="pulse-relay"
 EXPECTED_BINARY="/opt/pulse/bin/pulse"
@@ -42,6 +43,7 @@ for fixture_count in \
   [[ "$fixture_count" =~ ^[1-9][0-9]*$ ]]
 done
 [[ "$MOCK_SEED_DURATION" =~ ^[1-9][0-9]*[smhd]$ ]]
+[[ "$MOCK_SAMPLE_INTERVAL" =~ ^[1-9][0-9]*[smh]$ ]]
 [[ "$MOCK_UPDATE_INTERVAL" =~ ^[1-9][0-9]*[smh]$ ]]
 
 log() {
@@ -103,6 +105,7 @@ runtime_profile_matches() {
     sudo grep -Fxq "PULSE_MOCK_K8S_DEPLOYMENTS=${MOCK_K8S_DEPLOYMENTS}" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_SEED_METRICS_STORE=false" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_TRENDS_SEED_DURATION=${MOCK_SEED_DURATION}" /etc/pulse/.env &&
+    sudo grep -Fxq "PULSE_MOCK_TRENDS_SAMPLE_INTERVAL=${MOCK_SAMPLE_INTERVAL}" /etc/pulse/.env &&
     sudo grep -Fxq "PULSE_MOCK_UPDATE_INTERVAL=${MOCK_UPDATE_INTERVAL}" /etc/pulse/.env
 }
 
@@ -178,6 +181,7 @@ emit_evidence() {
     --arg mock_k8s_pods "$MOCK_K8S_PODS" \
     --arg mock_k8s_deployments "$MOCK_K8S_DEPLOYMENTS" \
     --arg mock_seed_duration "$MOCK_SEED_DURATION" \
+    --arg mock_sample_interval "$MOCK_SAMPLE_INTERVAL" \
     --arg mock_update_interval "$MOCK_UPDATE_INTERVAL" \
     '{schema_version: 1, status: $status, mutated: $mutated,
       hostname: $hostname, service: $service,
@@ -207,6 +211,7 @@ emit_evidence() {
         mock_k8s_pods: $mock_k8s_pods,
         mock_k8s_deployments: $mock_k8s_deployments,
         mock_seed_duration: $mock_seed_duration,
+        mock_sample_interval: $mock_sample_interval,
         mock_update_interval: $mock_update_interval}}'
 }
 
@@ -293,6 +298,7 @@ set_env_value PULSE_MOCK_K8S_DEPLOYMENTS "$MOCK_K8S_DEPLOYMENTS"
 # opt-in here can turn startup into an unbounded SQLite backfill.
 set_env_value PULSE_MOCK_SEED_METRICS_STORE false
 set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"
+set_env_value PULSE_MOCK_TRENDS_SAMPLE_INTERVAL "$MOCK_SAMPLE_INTERVAL"
 set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
 sudo chown pulse:pulse /etc/pulse/.env
 sudo chmod 600 /etc/pulse/.env

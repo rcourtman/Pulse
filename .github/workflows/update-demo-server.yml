@@ -60,6 +60,7 @@ jobs:
       mock_k8s_pods: ${{ steps.runtime_profile.outputs.mock_k8s_pods }}
       mock_k8s_deployments: ${{ steps.runtime_profile.outputs.mock_k8s_deployments }}
       mock_seed_duration: ${{ steps.runtime_profile.outputs.mock_seed_duration }}
+      mock_sample_interval: ${{ steps.runtime_profile.outputs.mock_sample_interval }}
       mock_update_interval: ${{ steps.runtime_profile.outputs.mock_update_interval }}
 
     steps:
@@ -564,6 +565,7 @@ jobs:
           MOCK_K8S_PODS="${{ needs.resolve.outputs.mock_k8s_pods }}"
           MOCK_K8S_DEPLOYMENTS="${{ needs.resolve.outputs.mock_k8s_deployments }}"
           MOCK_SEED_DURATION="${{ needs.resolve.outputs.mock_seed_duration }}"
+          MOCK_SAMPLE_INTERVAL="${{ needs.resolve.outputs.mock_sample_interval }}"
           MOCK_UPDATE_INTERVAL="${{ needs.resolve.outputs.mock_update_interval }}"
           REMOTE_SCRIPT=$(cat <<'EOF'
           set -euo pipefail
@@ -580,7 +582,8 @@ jobs:
           MOCK_K8S_PODS="${11}"
           MOCK_K8S_DEPLOYMENTS="${12}"
           MOCK_SEED_DURATION="${13}"
-          MOCK_UPDATE_INTERVAL="${14}"
+          MOCK_SAMPLE_INTERVAL="${14}"
+          MOCK_UPDATE_INTERVAL="${15}"
           CONFIG_DIR="/etc/${SERVICE_NAME:-pulse}"
           SERVICE_USER="$(systemctl show "$SERVICE_NAME" --property=User --value 2>/dev/null || true)"
           SERVICE_GROUP="$(systemctl show "$SERVICE_NAME" --property=Group --value 2>/dev/null || true)"
@@ -678,6 +681,7 @@ jobs:
           # persistent public demo data directory.
           set_env_value PULSE_MOCK_SEED_METRICS_STORE false
           set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"
+          set_env_value PULSE_MOCK_TRENDS_SAMPLE_INTERVAL "$MOCK_SAMPLE_INTERVAL"
           set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
 
           ensure_demo_fixture_entitlement
@@ -700,7 +704,7 @@ jobs:
           EOF
           )
           ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "bash -s -- $(printf '%q ' "$SERVICE_NAME" "$DEMO_LOCAL_BASE_URL" "$MOCK_NODES" "$MOCK_VMS_PER_NODE" "$MOCK_LXCS_PER_NODE" "$MOCK_DOCKER_HOSTS" "$MOCK_DOCKER_CONTAINERS" "$MOCK_GENERIC_HOSTS" "$MOCK_K8S_CLUSTERS" "$MOCK_K8S_NODES" "$MOCK_K8S_PODS" "$MOCK_K8S_DEPLOYMENTS" "$MOCK_SEED_DURATION" "$MOCK_UPDATE_INTERVAL")" <<<"$REMOTE_SCRIPT"
+            "bash -s -- $(printf '%q ' "$SERVICE_NAME" "$DEMO_LOCAL_BASE_URL" "$MOCK_NODES" "$MOCK_VMS_PER_NODE" "$MOCK_LXCS_PER_NODE" "$MOCK_DOCKER_HOSTS" "$MOCK_DOCKER_CONTAINERS" "$MOCK_GENERIC_HOSTS" "$MOCK_K8S_CLUSTERS" "$MOCK_K8S_NODES" "$MOCK_K8S_PODS" "$MOCK_K8S_DEPLOYMENTS" "$MOCK_SEED_DURATION" "$MOCK_SAMPLE_INTERVAL" "$MOCK_UPDATE_INTERVAL")" <<<"$REMOTE_SCRIPT"
 
       - name: Verify demo runtime
         env:

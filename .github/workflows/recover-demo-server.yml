@@ -105,6 +105,7 @@ jobs:
           MOCK_K8S_PODS: ${{ steps.runtime_profile.outputs.mock_k8s_pods }}
           MOCK_K8S_DEPLOYMENTS: ${{ steps.runtime_profile.outputs.mock_k8s_deployments }}
           MOCK_SEED_DURATION: ${{ steps.runtime_profile.outputs.mock_seed_duration }}
+          MOCK_SAMPLE_INTERVAL: ${{ steps.runtime_profile.outputs.mock_sample_interval }}
           MOCK_UPDATE_INTERVAL: ${{ steps.runtime_profile.outputs.mock_update_interval }}
         run: |
           set -euo pipefail
@@ -113,7 +114,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "bash -s -- $(printf '%q ' "$DEMO_EXPECTED_HOSTNAME" "$DEMO_LOCAL_BASE_URL" "$EXPECTED_VERSION" "$MOCK_NODES" "$MOCK_VMS_PER_NODE" "$MOCK_LXCS_PER_NODE" "$MOCK_DOCKER_HOSTS" "$MOCK_DOCKER_CONTAINERS" "$MOCK_GENERIC_HOSTS" "$MOCK_K8S_CLUSTERS" "$MOCK_K8S_NODES" "$MOCK_K8S_PODS" "$MOCK_K8S_DEPLOYMENTS" "$MOCK_SEED_DURATION" "$MOCK_UPDATE_INTERVAL")" \
+            "bash -s -- $(printf '%q ' "$DEMO_EXPECTED_HOSTNAME" "$DEMO_LOCAL_BASE_URL" "$EXPECTED_VERSION" "$MOCK_NODES" "$MOCK_VMS_PER_NODE" "$MOCK_LXCS_PER_NODE" "$MOCK_DOCKER_HOSTS" "$MOCK_DOCKER_CONTAINERS" "$MOCK_GENERIC_HOSTS" "$MOCK_K8S_CLUSTERS" "$MOCK_K8S_NODES" "$MOCK_K8S_PODS" "$MOCK_K8S_DEPLOYMENTS" "$MOCK_SEED_DURATION" "$MOCK_SAMPLE_INTERVAL" "$MOCK_UPDATE_INTERVAL")" \
             < .github/scripts/recover-demo-runtime.sh \
             > demo-runtime-recovery.json
           jq -e '.schema_version == 1 and (.status == "recovered" or .status == "healthy_noop")' \

@@ -3079,8 +3079,9 @@ bounded compatibility profile across every fixture family: 8 Proxmox nodes
 with 6 VMs and 4 LXCs per node, 2 Docker hosts with 8 containers each, 2
 generic hosts, and 1 Kubernetes cluster with 3 nodes, 12 pods, and 4
 deployments. That profile retains two hours of eager history and uses a
-15-second full-estate update cadence, preventing newer workflow defaults from
-imposing an unqualified bootstrap, memory, and CPU load on an older binary.
+five-minute history sample interval plus a 15-second full-estate update cadence,
+preventing newer workflow defaults from imposing an unqualified synchronous
+bootstrap, memory, and CPU load on an older binary before it binds health.
 The manually dispatched stable-demo recovery path consumes that same resolver
 and may mutate only the resolver-owned bounded mock-profile values before
 restarting the already-installed `pulse` service. It must retain the current stable binary,
