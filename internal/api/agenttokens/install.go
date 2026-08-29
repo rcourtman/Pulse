@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -18,6 +19,15 @@ const (
 	CommandPolicyAppliedAgentIDMetadataKey = "command_policy_applied_agent_id"
 	CommandPolicyIntentEnabled             = "enabled"
 	CommandPolicyIntentDisabled            = "disabled"
+	RuntimeRoleMetadataKey                 = "runtime_role"
+	CredentialKindMetadataKey              = RuntimeRoleMetadataKey
+	CredentialKindMonitoringCollector      = "monitoring-collector"
+	CredentialKindActionRunner             = "action-runner"
+	CredentialKindLegacyFullTrust          = "legacy-full-trust"
+	ActionCapabilityMetadataKey            = "agent_action_capability"
+	ActionCapabilityTypedV1                = "typed_actions.v1"
+	ActionBindingVersionMetadataKey        = "action_runner_binding_version"
+	ActionBindingVersion                   = "1"
 )
 
 var (
@@ -32,6 +42,17 @@ type IssueOptions struct {
 	OwnerUserID string
 	Metadata    map[string]string
 	Scopes      []string
+}
+
+// ActionRunnerIssueOptions binds a separately issued remediation credential to
+// one tenant and one canonical host identity. The credential is intentionally
+// unusable for collector report and configuration endpoints.
+type ActionRunnerIssueOptions struct {
+	TokenName   string
+	OrgID       string
+	OwnerUserID string
+	AgentID     string
+	Hostname    string
 }
 
 func ProxmoxScopes(enableCommands bool) []string {
@@ -58,6 +79,12 @@ func HostScopes(enableCommands bool) []string {
 		scopes = append(scopes, config.ScopeAgentExec)
 	}
 	return scopes
+}
+
+// ActionRunnerScopes is the complete authority granted to the separate action
+// runtime. Monitoring scopes must be added only by a distinct, explicit grant.
+func ActionRunnerScopes() []string {
+	return []string{config.ScopeAgentExec}
 }
 
 func CommandPolicyIntent(enableCommands bool) string {
@@ -111,6 +138,9 @@ func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, 
 	if record.Metadata == nil {
 		record.Metadata = make(map[string]string)
 	}
+	if err := normalizeCredentialKind(record); err != nil {
+		return "", nil, fmt.Errorf("%w: %w", ErrRecord, err)
+	}
 	record.Metadata[IssuedAtMetadataKey] = record.CreatedAt.UTC().Format(time.RFC3339)
 
 	config.Mu.Lock()
@@ -131,6 +161,82 @@ func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, 
 	}
 
 	return rawToken, record, nil
+}
+
+// IssueActionRunnerAndPersist mints the host-bound credential used by the
+// separate action runner. It fails closed on missing tenant/host identity and
+// never grants collector report, lookup, configuration, or management scopes.
+func IssueActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, opts ActionRunnerIssueOptions) (string, *config.APITokenRecord, error) {
+	agentID := strings.TrimSpace(opts.AgentID)
+	hostname := unifiedresources.NormalizeFullHostname(opts.Hostname)
+	organizationID := strings.TrimSpace(opts.OrgID)
+	if organizationID == "" {
+		return "", nil, fmt.Errorf("%w: organization id is required", ErrRecord)
+	}
+	if agentID == "" {
+		return "", nil, fmt.Errorf("%w: canonical agent id is required", ErrRecord)
+	}
+	if hostname == "" {
+		return "", nil, fmt.Errorf("%w: canonical hostname is required", ErrRecord)
+	}
+	if len(agentID) > 128 || len(hostname) > 253 {
+		return "", nil, fmt.Errorf("%w: action runner identity exceeds maximum length", ErrRecord)
+	}
+
+	tokenName := strings.TrimSpace(opts.TokenName)
+	if tokenName == "" {
+		tokenName = "action-runner:" + hostname
+	}
+	return IssueAndPersist(cfg, persistence, IssueOptions{
+		TokenName:   tokenName,
+		OrgID:       organizationID,
+		OwnerUserID: opts.OwnerUserID,
+		Scopes:      ActionRunnerScopes(),
+		Metadata: map[string]string{
+			CredentialKindMetadataKey:       CredentialKindActionRunner,
+			ActionCapabilityMetadataKey:     ActionCapabilityTypedV1,
+			ActionBindingVersionMetadataKey: ActionBindingVersion,
+			"bound_agent_id":                agentID,
+			"bound_hostname":                hostname,
+			"bound_at":                      time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func normalizeCredentialKind(record *config.APITokenRecord) error {
+	if record == nil {
+		return nil
+	}
+	kind := strings.TrimSpace(record.Metadata[CredentialKindMetadataKey])
+	hasExec := record.HasScope(config.ScopeAgentExec)
+	switch kind {
+	case "":
+		if hasExec {
+			// Existing combined collector/command issuance remains available only
+			// as an explicit compatibility class while deployments migrate.
+			record.Metadata[CredentialKindMetadataKey] = CredentialKindLegacyFullTrust
+		} else {
+			record.Metadata[CredentialKindMetadataKey] = CredentialKindMonitoringCollector
+		}
+	case CredentialKindMonitoringCollector:
+		if hasExec {
+			return errors.New("monitoring collector credential cannot carry agent:exec")
+		}
+	case CredentialKindActionRunner:
+		if !hasExec {
+			return errors.New("action runner credential requires agent:exec")
+		}
+		if strings.TrimSpace(record.Metadata[ActionCapabilityMetadataKey]) != ActionCapabilityTypedV1 {
+			return errors.New("action runner credential requires the typed action capability")
+		}
+	case CredentialKindLegacyFullTrust:
+		if !hasExec {
+			return errors.New("legacy full-trust credential requires agent:exec")
+		}
+	default:
+		return fmt.Errorf("unsupported agent credential kind %q", kind)
+	}
+	return nil
 }
 
 func OwnerUserID(record config.APITokenRecord) string {

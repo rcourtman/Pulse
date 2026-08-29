@@ -99,6 +99,7 @@ var (
 		return hostagent.New(c)
 	}
 	newPrivilegeHelperTelemetry                                               = hostagent.NewPrivilegeHelperTelemetry
+	newPrivilegeHelperUpdate                                                  = agentupdate.NewPrivilegeHelperUpdate
 	newUpdater                  func(agentupdate.Config) *agentupdate.Updater = agentupdate.New
 	lookPath                                                                  = exec.LookPath
 	runAsWindowsServiceFunc                                                   = runAsWindowsService
@@ -381,6 +382,13 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 
 	// 7. Start Auto-Updater
+	var privilegedUpdate agentupdate.PrivilegedUpdate
+	if helperSocket := strings.TrimSpace(os.Getenv("PULSE_AGENT_HELPER_SOCKET")); helperSocket != "" {
+		privilegedUpdate, err = newPrivilegeHelperUpdate(helperSocket)
+		if err != nil {
+			return fmt.Errorf("configure typed privilege-helper updates: %w", err)
+		}
+	}
 	updater := newUpdater(agentupdate.Config{
 		PulseURL:           cfg.PulseURL,
 		APIToken:           cfg.APIToken,
@@ -393,6 +401,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		ServerFingerprint:  cfg.ServerFingerprint,
 		Logger:             &logger,
 		Disabled:           cfg.DisableAutoUpdate,
+		PrivilegedUpdate:   privilegedUpdate,
 	})
 
 	g.Go(func() error {

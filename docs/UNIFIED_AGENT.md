@@ -90,11 +90,34 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
 
-The opt-in Linux typed-helper collector profile deliberately disables
-in-process auto-update because its collector binary is root-owned and not
-writable by the service account. Update that profile through the signed
-installer until update activation is moved behind its own typed privileged
-transaction. See [Agent Security](AGENT_SECURITY.md#least-privilege-agent-profile).
+The opt-in Linux typed-helper collector profile keeps auto-update enabled
+without making its root-owned binary writable by the service account. The
+collector downloads and self-tests the signed artifact in a fixed
+collector-owned quarantine; the no-network helper revalidates it, promotes it
+to root-only staging, atomically activates it, and owns identity-bound rollback
+if restart fails. There is no fallback to direct unprivileged replacement.
+This transaction is covered by unit, race, release-build, and installer
+contract tests; live-host restart/health and rollback qualification remains
+required before the profile becomes the general default.
+See [Agent Security](AGENT_SECURITY.md#least-privilege-agent-profile).
+
+On Linux systemd, the safe monitoring profile and remediation lifecycle are
+separate install choices. `--least-privilege --enable-privileged-helper`
+selects the opt-in unprivileged collector and no-network helper. Adding
+`--enable-action-runner --action-token-file <private-file>` installs the
+root-owned runner with a separately issued, host-bound action credential.
+`--disable-action-runner` and `--uninstall-action-runner` remove remediation
+without removing the collector. The runner accepts only the documented typed
+host, Proxmox guest, and container operations; shell, generic exec,
+unrestricted file reads, and deploy requests remain forbidden.
+
+Use `--safe-profile-inspect` to report the current profile and calculated
+differences without changing the host. `--safe-profile-apply` performs the
+explicit collector/helper migration and retains a rollback snapshot;
+`--safe-profile-rollback` restores it. These commands are proven only for
+Linux systemd and fail closed elsewhere. Appliance, non-systemd, Windows, and
+macOS installs remain explicit legacy/full-trust profiles until their own
+runtime and migration boundaries are qualified.
 
 On Linux, the host module automatically checks for `virsh`. When the agent can
 open the default libvirt connection read-only, defined domains appear as VM

@@ -28,9 +28,16 @@
 #   --enable-commands   Enable Pulse command execution on agent (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
 #   --least-privilege   Run the agent as the dedicated 'pulse-agent' system user instead of root (Linux systemd only; SMART, Proxmox LXC filesystems, and command execution need root or an explicit grant)
 #   --enable-privileged-helper Install the typed root helper for an explicitly selected least-privilege Linux systemd profile
+#   --enable-action-runner Install the separately credentialed typed remediation runner (requires the typed-helper profile)
+#   --disable-action-runner Disable and remove the action runner while leaving monitoring active
+#   --uninstall-action-runner Remove only the action runner while leaving monitoring active
+#   --action-token-file <path> Read the separate action-runner credential from a file
 #   --grant-smart       With --least-privilege: allow SMART collection through an exact-command sudoers grant for smartctl
 #   --grant-pct         With --least-privilege: allow Proxmox LXC filesystem capacity through a sudoers grant restricted to 'pct list' and 'pct df'
 #   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
+#   --safe-profile-inspect Report the effective collector privilege profile and migration differences without changing the host
+#   --safe-profile-apply Explicitly migrate an existing Linux systemd collector to the typed-helper monitoring-only profile
+#   --safe-profile-rollback Restore the collector/helper snapshot retained by the last successful safe-profile migration
 #   --update            Update an existing agent using saved connection state
 #   --uninstall         Remove the agent
 #
@@ -51,6 +58,14 @@ main() {
 TMP_FILES=()
 # shellcheck disable=SC2317  # Invoked by trap, not directly
 cleanup() {
+    if [[ "${SAFE_PROFILE_TRANSACTION_ACTIVE:-false}" == "true" &&
+          "${SAFE_PROFILE_TRANSACTION_COMMITTED:-false}" != "true" &&
+          -n "${SAFE_PROFILE_TRANSACTION_DIR:-}" ]] &&
+       declare -F safe_profile_restore_transaction >/dev/null 2>&1; then
+        log_error "Safe-profile migration did not commit; restoring the previous collector/helper profile."
+        safe_profile_restore_transaction "$SAFE_PROFILE_TRANSACTION_DIR" "automatic-failure" ||
+            log_error "Automatic safe-profile rollback failed; run --safe-profile-rollback before retrying."
+    fi
     # Use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u
     for f in ${TMP_FILES[@]+"${TMP_FILES[@]}"}; do
         rm -f "$f" 2>/dev/null || true
@@ -146,7 +161,38 @@ PRIVILEGED_HELPER_SOCKET_UNIT="/etc/systemd/system/${PRIVILEGED_HELPER_NAME}.soc
 PRIVILEGED_HELPER_SOCKET_DIR="/run/pulse-agent"
 PRIVILEGED_HELPER_SOCKET_PATH="${PRIVILEGED_HELPER_SOCKET_DIR}/helper.sock"
 PRIVILEGED_HELPER_CREDENTIAL_DIR="/etc/pulse-agent"
+PRIVILEGED_HELPER_STATE_DIR="/var/lib/pulse-agent-helper"
+PRIVILEGED_HELPER_UPDATE_STAGING_DIR="${PRIVILEGED_HELPER_STATE_DIR}/update-staging"
+PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR="/var/lib/pulse-agent/update-quarantine"
 TMP_HELPER_BIN=""
+
+# Typed remediation is a separate root service and credential lifecycle. It is
+# never inferred from the collector profile or from the collector token.
+ACTION_RUNNER_ENABLED="false"
+ACTION_RUNNER_EXPLICIT="false"
+UNINSTALL_ACTION_RUNNER="false"
+ACTION_RUNNER_NAME="pulse-agent-runner"
+ACTION_RUNNER_BINARY_NAME="pulse-agent-runner"
+ACTION_RUNNER_BINARY_PATH="${PRIVILEGE_HELPER_DIR}/${ACTION_RUNNER_BINARY_NAME}"
+ACTION_RUNNER_SERVICE_UNIT="/etc/systemd/system/${ACTION_RUNNER_NAME}.service"
+ACTION_RUNNER_CONFIG_DIR="/etc/pulse-agent-runner"
+ACTION_RUNNER_ENV_FILE="${ACTION_RUNNER_CONFIG_DIR}/runner.env"
+ACTION_RUNNER_TOKEN_FILE="${ACTION_RUNNER_CONFIG_DIR}/token"
+ACTION_RUNNER_STATE_DIR="/var/lib/pulse-agent-runner"
+ACTION_RUNNER_HEALTH_FILE="${ACTION_RUNNER_STATE_DIR}/health.json"
+ACTION_TOKEN=""
+ACTION_TOKEN_FILE_PATH=""
+TMP_ACTION_RUNNER_BIN=""
+
+# Explicit safe-profile migration lifecycle. Ordinary --update deliberately
+# leaves these unset and therefore never enters a migration transaction.
+SAFE_PROFILE_ACTION=""
+SAFE_PROFILE_STATE_DIR="/var/lib/pulse-agent-profile"
+SAFE_PROFILE_CURRENT_FILE="${SAFE_PROFILE_STATE_DIR}/current.env"
+SAFE_PROFILE_COLLECTOR_UNIT="/etc/systemd/system/${AGENT_NAME}.service"
+SAFE_PROFILE_TRANSACTION_DIR=""
+SAFE_PROFILE_TRANSACTION_ACTIVE="false"
+SAFE_PROFILE_TRANSACTION_COMMITTED="false"
 
 SYSTEMD_ENV_LINES=""
 SHELL_EXPORT_LINES=""
@@ -516,9 +562,16 @@ Options:
   --least-privilege       Run the agent as the 'pulse-agent' system user instead of root (Linux systemd only)
   --enable-privileged-helper Install the typed root helper (requires --least-privilege on standard Linux systemd)
   --disable-privileged-helper Remove/disable an existing typed helper profile during this install
+  --enable-action-runner  Install the separate typed remediation service (requires --least-privilege and --enable-privileged-helper)
+  --disable-action-runner Remove the action runner during this install; monitoring remains active
+  --uninstall-action-runner Remove only the action runner and exit; monitoring remains active
+  --action-token-file <path> Read the separate action credential from a private file (required on first enable; never placed in argv)
   --grant-smart           With --least-privilege: exact-command sudoers grant so SMART collection keeps working
   --grant-pct             With --least-privilege: sudoers grant restricted to 'pct list'/'pct df' so Proxmox LXC filesystem capacity keeps working
   --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
+  --safe-profile-inspect  Read-only report of current authority, providers, platform support, and calculated migration differences
+  --safe-profile-apply    Explicitly migrate an existing Linux systemd collector to typed-helper monitoring-only (never implied by --update)
+  --safe-profile-rollback Restore the prior collector/helper snapshot from the last committed safe-profile migration
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
   --update                Update an existing agent using saved connection state
   --uninstall             Remove the agent
@@ -552,6 +605,9 @@ restore_selinux_contexts() {
         if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
             restorecon -v "$PRIVILEGED_HELPER_BINARY_PATH" >/dev/null 2>&1 || true
         fi
+        if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
+            restorecon -v "$ACTION_RUNNER_BINARY_PATH" >/dev/null 2>&1 || true
+        fi
         log_info "SELinux context restored"
     else
         # Fallback to chcon if restorecon isn't available
@@ -560,6 +616,9 @@ restore_selinux_contexts() {
             chcon -t bin_t "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
             if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
                 chcon -t bin_t "$PRIVILEGED_HELPER_BINARY_PATH" 2>/dev/null || true
+            fi
+            if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
+                chcon -t bin_t "$ACTION_RUNNER_BINARY_PATH" 2>/dev/null || true
             fi
         fi
     fi
@@ -871,6 +930,18 @@ teardown_privileged_helper_service() {
     systemctl reset-failed "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
 }
 
+teardown_action_runner_service() {
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+        systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+        rm -f "$ACTION_RUNNER_SERVICE_UNIT"
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl reset-failed "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+    fi
+    rm -f "$ACTION_RUNNER_BINARY_PATH"
+    rm -rf "$ACTION_RUNNER_CONFIG_DIR" "$ACTION_RUNNER_STATE_DIR"
+}
+
 teardown_openrc_agent_service() {
     local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
     rc-service "${AGENT_NAME}" stop 2>/dev/null || true
@@ -1092,7 +1163,571 @@ ProtectControlGroups=true
 LockPersonality=true
 RestrictSUIDSGID=true
 SystemCallArchitectures=native
+ReadOnlyPaths=${PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR}
+ReadWritePaths=${PRIVILEGED_HELPER_STATE_DIR} /usr/local/bin
 EOF
+}
+
+render_action_runner_service_unit() {
+    local unit_path="$1"
+    local runner_binary="$2"
+
+    cat > "$unit_path" <<EOF
+[Unit]
+Description=Pulse Agent typed action runner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${runner_binary}
+EnvironmentFile=${ACTION_RUNNER_ENV_FILE}
+User=root
+Group=root
+UMask=0077
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=${ACTION_RUNNER_STATE_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+write_action_runner_config() {
+    if [[ -L "$ACTION_RUNNER_CONFIG_DIR" || -L "$ACTION_RUNNER_STATE_DIR" ||
+          -L "$ACTION_RUNNER_TOKEN_FILE" || -L "$ACTION_RUNNER_ENV_FILE" ]]; then
+        fail "Refusing unsafe symlink in the action-runner config or state boundary" "$EXIT_GENERAL"
+    fi
+    install -d -o root -g root -m 0700 "$ACTION_RUNNER_CONFIG_DIR"
+    install -d -o root -g root -m 0700 "$ACTION_RUNNER_STATE_DIR"
+
+    if [[ -n "$ACTION_TOKEN" ]]; then
+        printf '%s\n' "$ACTION_TOKEN" > "$ACTION_RUNNER_TOKEN_FILE"
+    elif [[ ! -s "$ACTION_RUNNER_TOKEN_FILE" ]]; then
+        fail "--enable-action-runner requires a separate --action-token-file on first install" "$EXIT_MISSING_ARGS"
+    fi
+    chown root:root "$ACTION_RUNNER_TOKEN_FILE"
+    chmod 0600 "$ACTION_RUNNER_TOKEN_FILE"
+    ACTION_TOKEN=""
+
+    : > "$ACTION_RUNNER_ENV_FILE"
+    chmod 0600 "$ACTION_RUNNER_ENV_FILE"
+    write_action_runner_env_value "PULSE_URL" "$PULSE_URL"
+    write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"
+    write_action_runner_env_value "PULSE_AGENT_RUNNER_STATE_DIR" "$ACTION_RUNNER_STATE_DIR"
+    write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"
+    write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"
+    if [[ -n "$SERVER_FINGERPRINT" ]]; then
+        write_action_runner_env_value "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"
+    fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then
+        write_action_runner_env_value "SSL_CERT_FILE" "$CURL_CA_BUNDLE"
+    fi
+    if [[ "$INSECURE" == "true" ]]; then
+        write_action_runner_env_value "PULSE_INSECURE" "true"
+    fi
+    chown root:root "$ACTION_RUNNER_ENV_FILE"
+}
+
+write_action_runner_env_value() {
+    local key="$1"
+    local value="$2"
+    if [[ "$value" == *$'\r'* || "$value" == *$'\n'* ]]; then
+        fail "Refusing newline in action-runner environment value for ${key}" "$EXIT_MISSING_ARGS"
+    fi
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    printf '%s="%s"\n' "$key" "$value" >> "$ACTION_RUNNER_ENV_FILE"
+}
+
+provision_action_runner() {
+    local backup_suffix=".pulse-install-backup.$$"
+    local path=""
+    local had_binary="false"
+    local had_unit="false"
+    local had_state_dir="false"
+    local had_config_dir="false"
+    local runner_active="false"
+    local apply_succeeded="false"
+    local activation_started_at=""
+
+    if [[ -d "$ACTION_RUNNER_STATE_DIR" ]]; then
+        had_state_dir="true"
+    fi
+    if [[ -d "$ACTION_RUNNER_CONFIG_DIR" ]]; then
+        had_config_dir="true"
+    fi
+    for path in "$ACTION_RUNNER_BINARY_PATH" "$ACTION_RUNNER_SERVICE_UNIT" "$ACTION_RUNNER_ENV_FILE" "$ACTION_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_HEALTH_FILE"; do
+        if [[ -e "$path" ]]; then
+            cp -a "$path" "${path}${backup_suffix}"
+            case "$path" in
+                "$ACTION_RUNNER_BINARY_PATH") had_binary="true" ;;
+                "$ACTION_RUNNER_SERVICE_UNIT") had_unit="true" ;;
+            esac
+        fi
+    done
+
+    activation_started_at=$(date +%s)
+    if (
+        set -e
+        mkdir -p "$PRIVILEGE_HELPER_DIR"
+        install -o root -g root -m 0755 "$TMP_ACTION_RUNNER_BIN" "${ACTION_RUNNER_BINARY_PATH}.new"
+        mv "${ACTION_RUNNER_BINARY_PATH}.new" "$ACTION_RUNNER_BINARY_PATH"
+        restore_selinux_contexts
+        write_action_runner_config
+        render_action_runner_service_unit "${ACTION_RUNNER_SERVICE_UNIT}.new" "$ACTION_RUNNER_BINARY_PATH"
+        chown root:root "${ACTION_RUNNER_SERVICE_UNIT}.new"
+        chmod 0644 "${ACTION_RUNNER_SERVICE_UNIT}.new"
+        mv "${ACTION_RUNNER_SERVICE_UNIT}.new" "$ACTION_RUNNER_SERVICE_UNIT"
+        systemctl daemon-reload
+        systemctl enable "${ACTION_RUNNER_NAME}.service"
+        systemctl restart "${ACTION_RUNNER_NAME}.service"
+    ); then
+        apply_succeeded="true"
+    fi
+    ACTION_TOKEN=""
+
+    if [[ "$apply_succeeded" == "true" ]]; then
+        local attempt=0
+        while [[ "$attempt" -lt 30 ]]; do
+            local expected_agent_id="${AGENT_ID}"
+            local health_agent_id=""
+            local health_mtime=""
+            local health_owner=""
+            local health_mode=""
+            if [[ -s "${STATE_DIR%/}/agent-id" ]]; then
+                expected_agent_id=$(head -1 "${STATE_DIR%/}/agent-id" 2>/dev/null || true)
+            fi
+            if [[ -n "$expected_agent_id" && -f "$ACTION_RUNNER_HEALTH_FILE" && ! -L "$ACTION_RUNNER_HEALTH_FILE" ]]; then
+                health_mtime=$(stat -c '%Y' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
+                health_owner=$(stat -c '%u' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
+                health_mode=$(stat -c '%a' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
+                health_agent_id=$(sed -n 's/.*"host_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACTION_RUNNER_HEALTH_FILE" | head -1)
+            fi
+            if systemctl is-active --quiet "${ACTION_RUNNER_NAME}.service" &&
+               [[ "$health_mtime" =~ ^[0-9]+$ ]] && [[ "$health_mtime" -ge "$activation_started_at" ]] &&
+               [[ "$health_owner" == "0" ]] && [[ "$health_mode" =~ ^(400|600)$ ]] &&
+               grep -Eq '"registered"[[:space:]]*:[[:space:]]*true([[:space:],}]|$)' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null &&
+               [[ "$health_agent_id" == "$expected_agent_id" ]]; then
+                runner_active="true"
+                break
+            fi
+            attempt=$((attempt + 1))
+            sleep 1
+        done
+    fi
+
+    if [[ "$runner_active" != "true" ]]; then
+        log_error "New action runner did not become healthy; rolling back runner-only files while leaving monitoring active."
+        systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+        systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+        rm -f "${ACTION_RUNNER_BINARY_PATH}.new" "${ACTION_RUNNER_SERVICE_UNIT}.new"
+        for path in "$ACTION_RUNNER_BINARY_PATH" "$ACTION_RUNNER_SERVICE_UNIT" "$ACTION_RUNNER_ENV_FILE" "$ACTION_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_HEALTH_FILE"; do
+            rm -f "$path"
+            if [[ -e "${path}${backup_suffix}" ]]; then
+                mv "${path}${backup_suffix}" "$path"
+            fi
+        done
+        if [[ "$had_state_dir" != "true" ]]; then
+            rm -rf "$ACTION_RUNNER_STATE_DIR"
+        fi
+        if [[ "$had_config_dir" != "true" ]]; then
+            rm -rf "$ACTION_RUNNER_CONFIG_DIR"
+        fi
+        systemctl daemon-reload 2>/dev/null || true
+        if [[ "$had_unit" == "true" && "$had_binary" == "true" ]]; then
+            systemctl enable --now "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+        fi
+        fail "Action runner activation failed and its previous installation was restored; collector monitoring was not stopped or removed" "$EXIT_GENERAL"
+    fi
+
+    rm -f \
+        "${ACTION_RUNNER_BINARY_PATH}${backup_suffix}" \
+        "${ACTION_RUNNER_SERVICE_UNIT}${backup_suffix}" \
+        "${ACTION_RUNNER_ENV_FILE}${backup_suffix}" \
+        "${ACTION_RUNNER_TOKEN_FILE}${backup_suffix}" \
+        "${ACTION_RUNNER_HEALTH_FILE}${backup_suffix}"
+    TMP_ACTION_RUNNER_BIN=""
+    log_info "Typed action runner enabled as a separate root service with its own credential; collector monitoring remains independently active."
+}
+
+# --- Safe collector profile migration transaction ---
+# These operations intentionally cover only the collector and typed helper.
+# The independently installed action runner has its own lifecycle and is never
+# snapshotted, stopped, rewritten, or restored here.
+safe_profile_platform_supported() {
+    [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+    command -v systemctl >/dev/null 2>&1 || return 1
+    [[ ! -d /usr/syno ]] || return 1
+    [[ ! -f /etc/unraid-version ]] || return 1
+    [[ ! -d /boot/config/plugins ]] || return 1
+    [[ ! -x /sbin/getcfg ]] || return 1
+    [[ ! -f /etc/truenas-version ]] || return 1
+    [[ ! -d /data/ix-applications ]] || return 1
+    [[ ! -d /etc/ix-apps.d ]] || return 1
+    [[ ! -d /etc/ix.rc.d ]] || return 1
+    if declare -F is_truenas >/dev/null 2>&1 && is_truenas; then
+        return 1
+    fi
+    return 0
+}
+
+safe_profile_detect_current_profile() {
+    local unit_path="$SAFE_PROFILE_COLLECTOR_UNIT"
+    if [[ ! -f "$unit_path" ]]; then
+        printf 'absent\n'
+    elif grep -q "^User=${LEAST_PRIVILEGE_USER}$" "$unit_path" 2>/dev/null &&
+         grep -q 'PULSE_AGENT_HELPER_SOCKET=' "$unit_path" 2>/dev/null; then
+        printf 'typed-helper-monitoring-only\n'
+    elif grep -q "^User=${LEAST_PRIVILEGE_USER}$" "$unit_path" 2>/dev/null; then
+        printf 'legacy-least-privilege\n'
+    elif grep -Eq -- '(^|[[:space:]])--enable-commands([[:space:]]|$)' "$unit_path" 2>/dev/null; then
+        printf 'legacy-root-command-capable\n'
+    else
+        printf 'legacy-root-monitoring\n'
+    fi
+}
+
+safe_profile_unit_property() {
+    local property="$1"
+    local unit_path="$SAFE_PROFILE_COLLECTOR_UNIT"
+    local value=""
+    value=$(systemctl show "${AGENT_NAME}.service" --property "$property" --value 2>/dev/null || true)
+    if [[ -n "$value" ]]; then
+        printf '%s\n' "$value"
+        return 0
+    fi
+    case "$property" in
+        User) sed -n 's/^User=//p' "$unit_path" 2>/dev/null | tail -1 ;;
+        AmbientCapabilities) sed -n 's/^AmbientCapabilities=//p' "$unit_path" 2>/dev/null | tail -1 ;;
+    esac
+}
+
+safe_profile_inspect() {
+    local unit_path="$SAFE_PROFILE_COLLECTOR_UNIT"
+    local binary_path="${INSTALL_DIR}/${BINARY_NAME}"
+    local supported="false"
+    local profile=""
+    local unit_user="root"
+    local groups="unavailable"
+    local ambient="none"
+    local binary_owner="missing"
+    local binary_mode="missing"
+    local host="false" docker="false" kubernetes="false" proxmox="false"
+    local helper="false" commands="false" runner="false"
+
+    if safe_profile_platform_supported; then supported="true"; fi
+    profile=$(safe_profile_detect_current_profile)
+    if [[ -f "$unit_path" ]]; then
+        unit_user=$(safe_profile_unit_property User)
+        unit_user="${unit_user:-root}"
+        ambient=$(safe_profile_unit_property AmbientCapabilities)
+        ambient="${ambient:-none}"
+        if id "$unit_user" >/dev/null 2>&1; then
+            groups=$(id -nG "$unit_user" 2>/dev/null || printf 'unavailable')
+        fi
+        grep -Eq -- '(^|[[:space:]])--disable-host([[:space:]]|$)' "$unit_path" 2>/dev/null || host="true"
+        grep -Eq -- '(^|[[:space:]])--enable-docker([[:space:]]|$)' "$unit_path" 2>/dev/null && docker="true"
+        grep -Eq -- '(^|[[:space:]])--enable-kubernetes([[:space:]]|$)' "$unit_path" 2>/dev/null && kubernetes="true"
+        grep -Eq -- '(^|[[:space:]])--enable-proxmox([[:space:]]|$)' "$unit_path" 2>/dev/null && proxmox="true"
+        grep -Eq -- '(^|[[:space:]])--enable-commands([[:space:]]|$)' "$unit_path" 2>/dev/null && commands="true"
+        grep -q 'PULSE_AGENT_HELPER_SOCKET=' "$unit_path" 2>/dev/null && helper="true"
+    fi
+    if [[ -e "$binary_path" && ! -L "$binary_path" ]]; then
+        binary_owner=$(stat -c '%U:%G' "$binary_path" 2>/dev/null || printf 'unknown')
+        binary_mode=$(stat -c '%a' "$binary_path" 2>/dev/null || printf 'unknown')
+    fi
+    if [[ -f "$ACTION_RUNNER_SERVICE_UNIT" ]]; then runner="true"; fi
+
+    printf '%s\n' \
+        "Pulse safe-profile migration inspection (read-only)" \
+        "platform_supported=${supported}" \
+        "current_profile=${profile}" \
+        "unit_user=${unit_user}" \
+        "unit_groups=${groups}" \
+        "ambient_capabilities=${ambient}" \
+        "collector_binary_owner=${binary_owner}" \
+        "collector_binary_mode=${binary_mode}" \
+        "provider_host=${host}" \
+        "provider_docker=${docker}" \
+        "provider_kubernetes=${kubernetes}" \
+        "provider_proxmox=${proxmox}" \
+        "typed_helper=${helper}" \
+        "collector_commands=${commands}" \
+        "action_runner_independent=${runner}" \
+        "target_profile=typed-helper-monitoring-only" \
+        "target_unit_user=${LEAST_PRIVILEGE_USER}" \
+        "target_groups=no-rootful-docker-group" \
+        "target_ambient_capabilities=none" \
+        "target_binary_owner=root:root" \
+        "target_commands=false" \
+        "target_smart=typed-helper" \
+        "target_proxmox_filesystems=typed-helper" \
+        "target_action_runner=unchanged"
+    if [[ "$docker" == "true" ]]; then
+        printf '%s\n' "degraded_docker=rootful daemon access is removed unless an independently usable rootless socket is configured"
+    else
+        printf '%s\n' "degraded_docker=none (Docker provider is not enabled in the current unit)"
+    fi
+    if [[ "$commands" == "true" ]]; then
+        printf '%s\n' "degraded_actions=collector command authority is removed; remediation requires the separately enrolled action runner"
+    else
+        printf '%s\n' "degraded_actions=none (collector command authority is already disabled)"
+    fi
+    if [[ "$supported" != "true" ]]; then
+        log_error "Safe-profile migration is unsupported on this platform; no root or broader-privilege fallback is available."
+        return 1
+    fi
+}
+
+safe_profile_snapshot_entry() {
+    local source_path="$1"
+    local snapshot_name="$2"
+    local manifest_key="$3"
+    local manifest_file="${SAFE_PROFILE_TRANSACTION_DIR}/manifest.env"
+    if [[ -L "$source_path" ]]; then
+        fail "Refusing safe-profile migration across symlinked ${source_path}" "$EXIT_GENERAL"
+    fi
+    if [[ -e "$source_path" ]]; then
+        [[ -f "$source_path" ]] ||
+            fail "Refusing non-regular safe-profile migration artifact: ${source_path}" "$EXIT_GENERAL"
+        cp -a "$source_path" "${SAFE_PROFILE_TRANSACTION_DIR}/${snapshot_name}"
+        printf '%s=true\n' "$manifest_key" >> "$manifest_file"
+    else
+        printf '%s=false\n' "$manifest_key" >> "$manifest_file"
+    fi
+}
+
+safe_profile_manifest_value() {
+    local manifest_file="$1"
+    local key="$2"
+    sed -n "s/^${key}=//p" "$manifest_file" 2>/dev/null | tail -1
+}
+
+safe_profile_begin_transaction() {
+    local unit_path="$SAFE_PROFILE_COLLECTOR_UNIT"
+    local prior_profile=""
+    local transaction_id=""
+    local manifest_file=""
+    local docker_member="false"
+
+    [[ -x "${INSTALL_DIR}/${BINARY_NAME}" && -f "$unit_path" ]] ||
+        fail "--safe-profile-apply requires an existing Linux systemd Pulse collector installation" "$EXIT_MISSING_ARGS"
+    [[ ! -L "$SAFE_PROFILE_STATE_DIR" ]] ||
+        fail "Refusing symlinked safe-profile transaction directory: ${SAFE_PROFILE_STATE_DIR}" "$EXIT_GENERAL"
+    mkdir -p "$SAFE_PROFILE_STATE_DIR"
+    chmod 0700 "$SAFE_PROFILE_STATE_DIR"
+    transaction_id="transaction-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    SAFE_PROFILE_TRANSACTION_DIR="${SAFE_PROFILE_STATE_DIR}/${transaction_id}"
+    mkdir "$SAFE_PROFILE_TRANSACTION_DIR"
+    chmod 0700 "$SAFE_PROFILE_TRANSACTION_DIR"
+    manifest_file="${SAFE_PROFILE_TRANSACTION_DIR}/manifest.env"
+    : > "$manifest_file"
+    chmod 0600 "$manifest_file"
+
+    prior_profile=$(safe_profile_detect_current_profile)
+    printf '%s\n' \
+        "FORMAT_VERSION=1" \
+        "PRIOR_PROFILE=${prior_profile}" \
+        "TARGET_PROFILE=typed-helper-monitoring-only" \
+        "STATE_DIR=${STATE_DIR}" \
+        "COLLECTOR_ACTIVE=$(systemctl is-active --quiet "${AGENT_NAME}.service" 2>/dev/null && printf true || printf false)" \
+        "COLLECTOR_ENABLED=$(systemctl is-enabled --quiet "${AGENT_NAME}.service" 2>/dev/null && printf true || printf false)" \
+        "HELPER_ACTIVE=$(systemctl is-active --quiet "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null && printf true || printf false)" \
+        "HELPER_ENABLED=$(systemctl is-enabled --quiet "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null && printf true || printf false)" >> "$manifest_file"
+    if id -nG "$LEAST_PRIVILEGE_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+        docker_member="true"
+    fi
+    printf 'DOCKER_MEMBER=%s\n' "$docker_member" >> "$manifest_file"
+    if [[ -L "$PRIVILEGED_HELPER_CREDENTIAL_DIR" ]]; then
+        fail "Refusing symlinked safe-profile credential directory: ${PRIVILEGED_HELPER_CREDENTIAL_DIR}" "$EXIT_GENERAL"
+    elif [[ -d "$PRIVILEGED_HELPER_CREDENTIAL_DIR" ]]; then
+        printf '%s\n' \
+            "PROTECTED_DIR=true" \
+            "PROTECTED_DIR_UID=$(stat -c '%u' "$PRIVILEGED_HELPER_CREDENTIAL_DIR")" \
+            "PROTECTED_DIR_GID=$(stat -c '%g' "$PRIVILEGED_HELPER_CREDENTIAL_DIR")" \
+            "PROTECTED_DIR_MODE=$(stat -c '%a' "$PRIVILEGED_HELPER_CREDENTIAL_DIR")" >> "$manifest_file"
+    else
+        printf 'PROTECTED_DIR=false\n' >> "$manifest_file"
+    fi
+
+    safe_profile_snapshot_entry "${INSTALL_DIR}/${BINARY_NAME}" collector-binary COLLECTOR_BINARY
+    safe_profile_snapshot_entry "$unit_path" collector-unit COLLECTOR_UNIT
+    safe_profile_snapshot_entry "$PRIVILEGED_HELPER_BINARY_PATH" helper-binary HELPER_BINARY
+    safe_profile_snapshot_entry "$PRIVILEGED_HELPER_SERVICE_UNIT" helper-service-unit HELPER_SERVICE_UNIT
+    safe_profile_snapshot_entry "$PRIVILEGED_HELPER_SOCKET_UNIT" helper-socket-unit HELPER_SOCKET_UNIT
+    safe_profile_snapshot_entry "$PRIVILEGE_SUDOERS_FILE" legacy-sudoers LEGACY_SUDOERS
+    safe_profile_snapshot_entry "${PRIVILEGE_HELPER_DIR}/smartctl" legacy-smartctl-wrapper LEGACY_SMARTCTL_WRAPPER
+    safe_profile_snapshot_entry "${PRIVILEGE_HELPER_DIR}/pct" legacy-pct-wrapper LEGACY_PCT_WRAPPER
+    safe_profile_snapshot_entry "${STATE_DIR%/}/token" state-token STATE_TOKEN
+    safe_profile_snapshot_entry "${STATE_DIR%/}/runtime.token" runtime-token RUNTIME_TOKEN
+    safe_profile_snapshot_entry "${STATE_DIR%/}/agent-id" agent-id AGENT_ID_FILE
+    safe_profile_snapshot_entry "${STATE_DIR%/}/connection.env" connection-env CONNECTION_ENV
+    safe_profile_snapshot_entry "${PRIVILEGED_HELPER_CREDENTIAL_DIR}/token" protected-token PROTECTED_TOKEN
+
+    SAFE_PROFILE_TRANSACTION_ACTIVE="true"
+    SAFE_PROFILE_TRANSACTION_COMMITTED="false"
+    log_info "Snapshotted ${prior_profile} collector/helper profile before migration."
+}
+
+safe_profile_restore_entry() {
+    local transaction_dir="$1"
+    local snapshot_name="$2"
+    local destination="$3"
+    local manifest_key="$4"
+    local present=""
+    present=$(safe_profile_manifest_value "${transaction_dir}/manifest.env" "$manifest_key")
+    rm -f "$destination"
+    if [[ "$present" == "true" ]]; then
+        mkdir -p "$(dirname "$destination")"
+        cp -a "${transaction_dir}/${snapshot_name}" "$destination"
+    fi
+}
+
+safe_profile_restore_transaction() {
+    local transaction_dir="$1"
+    local reason="${2:-explicit}"
+    local manifest_file="${transaction_dir}/manifest.env"
+    local snapshot_state_dir=""
+    local prior_profile=""
+    local docker_member="false"
+    local current_tmp=""
+
+    SAFE_PROFILE_TRANSACTION_ACTIVE="false"
+    case "$transaction_dir" in
+        "${SAFE_PROFILE_STATE_DIR}"/transaction-*) ;;
+        *) log_error "Refusing untrusted safe-profile transaction path: ${transaction_dir}"; return 1 ;;
+    esac
+    [[ -d "$transaction_dir" && ! -L "$transaction_dir" && -f "$manifest_file" && ! -L "$manifest_file" ]] || return 1
+    [[ "$(safe_profile_manifest_value "$manifest_file" FORMAT_VERSION)" == "1" ]] || return 1
+    snapshot_state_dir=$(safe_profile_manifest_value "$manifest_file" STATE_DIR)
+    [[ -n "$snapshot_state_dir" && "$snapshot_state_dir" == /* && "$snapshot_state_dir" != "/" ]] || return 1
+    prior_profile=$(safe_profile_manifest_value "$manifest_file" PRIOR_PROFILE)
+
+    systemctl stop "${AGENT_NAME}.service" 2>/dev/null || true
+    systemctl stop "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null || true
+    systemctl stop "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
+    safe_profile_restore_entry "$transaction_dir" collector-binary "${INSTALL_DIR}/${BINARY_NAME}" COLLECTOR_BINARY
+    safe_profile_restore_entry "$transaction_dir" collector-unit "$SAFE_PROFILE_COLLECTOR_UNIT" COLLECTOR_UNIT
+    safe_profile_restore_entry "$transaction_dir" helper-binary "$PRIVILEGED_HELPER_BINARY_PATH" HELPER_BINARY
+    safe_profile_restore_entry "$transaction_dir" helper-service-unit "$PRIVILEGED_HELPER_SERVICE_UNIT" HELPER_SERVICE_UNIT
+    safe_profile_restore_entry "$transaction_dir" helper-socket-unit "$PRIVILEGED_HELPER_SOCKET_UNIT" HELPER_SOCKET_UNIT
+    safe_profile_restore_entry "$transaction_dir" legacy-sudoers "$PRIVILEGE_SUDOERS_FILE" LEGACY_SUDOERS
+    safe_profile_restore_entry "$transaction_dir" legacy-smartctl-wrapper "${PRIVILEGE_HELPER_DIR}/smartctl" LEGACY_SMARTCTL_WRAPPER
+    safe_profile_restore_entry "$transaction_dir" legacy-pct-wrapper "${PRIVILEGE_HELPER_DIR}/pct" LEGACY_PCT_WRAPPER
+    safe_profile_restore_entry "$transaction_dir" state-token "${snapshot_state_dir%/}/token" STATE_TOKEN
+    safe_profile_restore_entry "$transaction_dir" runtime-token "${snapshot_state_dir%/}/runtime.token" RUNTIME_TOKEN
+    safe_profile_restore_entry "$transaction_dir" agent-id "${snapshot_state_dir%/}/agent-id" AGENT_ID_FILE
+    safe_profile_restore_entry "$transaction_dir" connection-env "${snapshot_state_dir%/}/connection.env" CONNECTION_ENV
+    safe_profile_restore_entry "$transaction_dir" protected-token "${PRIVILEGED_HELPER_CREDENTIAL_DIR}/token" PROTECTED_TOKEN
+    if [[ "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR)" == "true" ]]; then
+        chown "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_UID):$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_GID)" "$PRIVILEGED_HELPER_CREDENTIAL_DIR" || return 1
+        chmod "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_MODE)" "$PRIVILEGED_HELPER_CREDENTIAL_DIR" || return 1
+    else
+        rmdir "$PRIVILEGED_HELPER_CREDENTIAL_DIR" 2>/dev/null || true
+    fi
+    rm -f "$PRIVILEGED_HELPER_SOCKET_PATH"
+
+    docker_member=$(safe_profile_manifest_value "$manifest_file" DOCKER_MEMBER)
+    if getent group docker >/dev/null 2>&1 && id "$LEAST_PRIVILEGE_USER" >/dev/null 2>&1; then
+        if [[ "$docker_member" == "true" ]]; then
+            gpasswd -a "$LEAST_PRIVILEGE_USER" docker >/dev/null 2>&1 || return 1
+        else
+            gpasswd -d "$LEAST_PRIVILEGE_USER" docker >/dev/null 2>&1 || true
+        fi
+    fi
+
+    systemctl daemon-reload 2>/dev/null || return 1
+    if [[ "$(safe_profile_manifest_value "$manifest_file" HELPER_ENABLED)" == "true" ]]; then
+        systemctl enable "${PRIVILEGED_HELPER_NAME}.socket" >/dev/null 2>&1 || return 1
+    else
+        systemctl disable "${PRIVILEGED_HELPER_NAME}.socket" >/dev/null 2>&1 || true
+    fi
+    if [[ "$(safe_profile_manifest_value "$manifest_file" HELPER_ACTIVE)" == "true" ]]; then
+        systemctl start "${PRIVILEGED_HELPER_NAME}.socket" >/dev/null 2>&1 || return 1
+    fi
+    if [[ "$(safe_profile_manifest_value "$manifest_file" COLLECTOR_ENABLED)" == "true" ]]; then
+        systemctl enable "${AGENT_NAME}.service" >/dev/null 2>&1 || return 1
+    else
+        systemctl disable "${AGENT_NAME}.service" >/dev/null 2>&1 || true
+    fi
+    if [[ "$(safe_profile_manifest_value "$manifest_file" COLLECTOR_ACTIVE)" == "true" ]]; then
+        systemctl start "${AGENT_NAME}.service" >/dev/null 2>&1 || return 1
+    fi
+
+    mkdir -p "$SAFE_PROFILE_STATE_DIR"
+    chmod 0700 "$SAFE_PROFILE_STATE_DIR"
+    current_tmp=$(mktemp "${SAFE_PROFILE_STATE_DIR}/.current.XXXXXX")
+    chmod 0600 "$current_tmp"
+    printf '%s\n' \
+        "FORMAT_VERSION=1" \
+        "CURRENT_PROFILE=${prior_profile}" \
+        "PREVIOUS_PROFILE=typed-helper-monitoring-only" \
+        "LAST_ROLLBACK_TRANSACTION=${transaction_dir}" \
+        "ROLLBACK_REASON=${reason}" > "$current_tmp"
+    mv "$current_tmp" "$SAFE_PROFILE_CURRENT_FILE"
+    SAFE_PROFILE_TRANSACTION_COMMITTED="false"
+    log_info "Restored collector/helper profile ${prior_profile}; the action runner was left unchanged."
+}
+
+safe_profile_remove_legacy_authority() {
+    rm -f "$PRIVILEGE_SUDOERS_FILE"
+    rm -f "${PRIVILEGE_HELPER_DIR}/smartctl" "${PRIVILEGE_HELPER_DIR}/pct"
+    if getent group docker >/dev/null 2>&1 && id "$LEAST_PRIVILEGE_USER" >/dev/null 2>&1; then
+        gpasswd -d "$LEAST_PRIVILEGE_USER" docker >/dev/null 2>&1 || true
+    fi
+}
+
+safe_profile_verify_declared_health() {
+    local health_url=""
+    health_url=$(resolve_agent_health_url || true)
+    [[ -n "$health_url" ]] || return 1
+    curl -sf --max-time 2 "$health_url" >/dev/null 2>&1 || return 1
+    systemctl is-active --quiet "${AGENT_NAME}.service" || return 1
+    systemctl is-active --quiet "${PRIVILEGED_HELPER_NAME}.socket" || return 1
+    verify_agent_server_registration_with_retry
+}
+
+safe_profile_commit_transaction() {
+    local current_tmp=""
+    local prior_profile=""
+    [[ "$SAFE_PROFILE_TRANSACTION_ACTIVE" == "true" && -n "$SAFE_PROFILE_TRANSACTION_DIR" ]] || return 1
+    prior_profile=$(safe_profile_manifest_value "${SAFE_PROFILE_TRANSACTION_DIR}/manifest.env" PRIOR_PROFILE)
+    current_tmp=$(mktemp "${SAFE_PROFILE_STATE_DIR}/.current.XXXXXX")
+    chmod 0600 "$current_tmp"
+    printf '%s\n' \
+        "FORMAT_VERSION=1" \
+        "PRIOR_PROFILE=${prior_profile}" \
+        "CURRENT_PROFILE=typed-helper-monitoring-only" \
+        "TRANSACTION_DIR=${SAFE_PROFILE_TRANSACTION_DIR}" \
+        "COMMITTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$current_tmp"
+    mv "$current_tmp" "$SAFE_PROFILE_CURRENT_FILE"
+    SAFE_PROFILE_TRANSACTION_COMMITTED="true"
+    SAFE_PROFILE_TRANSACTION_ACTIVE="false"
+    log_info "Committed typed-helper monitoring-only profile; rollback snapshot retained at ${SAFE_PROFILE_TRANSACTION_DIR}."
+}
+
+safe_profile_rollback_last() {
+    local transaction_dir=""
+    [[ -f "$SAFE_PROFILE_CURRENT_FILE" && ! -L "$SAFE_PROFILE_CURRENT_FILE" ]] ||
+        fail "No committed safe-profile migration is available to roll back" "$EXIT_MISSING_ARGS"
+    transaction_dir=$(safe_profile_manifest_value "$SAFE_PROFILE_CURRENT_FILE" TRANSACTION_DIR)
+    [[ -n "$transaction_dir" ]] ||
+        fail "The current profile record has no active migration snapshot to roll back" "$EXIT_MISSING_ARGS"
+    safe_profile_restore_transaction "$transaction_dir" "explicit-operator-rollback" ||
+        fail "Safe-profile rollback failed closed; the action runner was not changed" "$EXIT_GENERAL"
 }
 
 render_systemd_agent_unit() {
@@ -2109,11 +2744,6 @@ build_exec_arg_items() {
     if [[ -n "$OBSERVERS_FILE" ]]; then EXEC_ARG_ITEMS+=(--observers-file "$OBSERVERS_FILE"); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
     EXEC_ARG_ITEMS+=(--command-authority "${COMMAND_AUTHORITY:-legacy}")
-    if [[ "${PRIVILEGED_HELPER_ENABLED:-false}" == "true" ]]; then
-        # The collector cannot replace its root-owned binary. Keep in-process
-        # updates off until signed activation moves behind the typed helper.
-        EXEC_ARG_ITEMS+=(--disable-auto-update)
-    fi
     if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi
     if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-pods); fi
@@ -3124,9 +3754,16 @@ while [[ $# -gt 0 ]]; do
         --least-privilege) LEAST_PRIVILEGE="true"; shift ;;
         --enable-privileged-helper) PRIVILEGED_HELPER_ENABLED="true"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
         --disable-privileged-helper) PRIVILEGED_HELPER_ENABLED="false"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
+        --enable-action-runner) ACTION_RUNNER_ENABLED="true"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
+        --disable-action-runner) ACTION_RUNNER_ENABLED="false"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
+        --uninstall-action-runner) UNINSTALL_ACTION_RUNNER="true"; shift ;;
+        --action-token-file) ACTION_TOKEN_FILE_PATH="$2"; shift 2 ;;
         --grant-smart) GRANT_SMART="true"; shift ;;
         --grant-pct) GRANT_PCT="true"; shift ;;
         --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
+        --safe-profile-inspect) SAFE_PROFILE_ACTION="inspect"; shift ;;
+        --safe-profile-apply) SAFE_PROFILE_ACTION="apply"; shift ;;
+        --safe-profile-rollback) SAFE_PROFILE_ACTION="rollback"; shift ;;
         --enroll) ENROLL="true"; shift ;;
         --update) UPDATE_ONLY="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
@@ -3146,6 +3783,37 @@ while [[ $# -gt 0 ]]; do
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+case "$SAFE_PROFILE_ACTION" in
+    "") ;;
+    inspect)
+        if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" || "$UNINSTALL_ACTION_RUNNER" == "true" ]]; then
+            fail "--safe-profile-inspect is a standalone read-only action" "$EXIT_MISSING_ARGS"
+        fi
+        ;;
+    apply)
+        if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" || "$UNINSTALL_ACTION_RUNNER" == "true" ||
+              "$ACTION_RUNNER_EXPLICIT" == "true" ]]; then
+            fail "--safe-profile-apply is an explicit collector/helper transaction and cannot be combined with another lifecycle action" "$EXIT_MISSING_ARGS"
+        fi
+        UPDATE_ONLY="true"
+        LEAST_PRIVILEGE="true"
+        PRIVILEGED_HELPER_ENABLED="true"
+        PRIVILEGED_HELPER_EXPLICIT="true"
+        ENABLE_COMMANDS="false"
+        COMMAND_AUTHORITY="monitoring-only"
+        COMMAND_AUTHORITY_SOURCE="explicit"
+        GRANT_SMART="false"
+        GRANT_PCT="false"
+        ;;
+    rollback)
+        if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" || "$UNINSTALL_ACTION_RUNNER" == "true" ||
+              "$ACTION_RUNNER_EXPLICIT" == "true" ]]; then
+            fail "--safe-profile-rollback is a standalone collector/helper lifecycle action" "$EXIT_MISSING_ARGS"
+        fi
+        ;;
+    *) fail "Internal safe-profile action is invalid" "$EXIT_GENERAL" ;;
+esac
 
 discover_state_dir_from_saved_installer "$0" || true
 
@@ -3178,6 +3846,25 @@ if [[ -n "$TOKEN_FILE_PATH" ]]; then
     fi
 fi
 
+if [[ -n "$ACTION_TOKEN_FILE_PATH" ]]; then
+    if [[ ! -f "$ACTION_TOKEN_FILE_PATH" || -L "$ACTION_TOKEN_FILE_PATH" ]]; then
+        fail "Action token file must be a regular non-symlink file: ${ACTION_TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
+    fi
+    ACTION_TOKEN_MODE=$(stat -c '%a' "$ACTION_TOKEN_FILE_PATH" 2>/dev/null || true)
+    if [[ ! "$ACTION_TOKEN_MODE" =~ ^[0-7]{3,4}$ ]] || (( (8#$ACTION_TOKEN_MODE & 8#077) != 0 )); then
+        fail "Action token file must be inaccessible to group and other users (mode 0600 or stricter)" "$EXIT_MISSING_ARGS"
+    fi
+    ACTION_TOKEN_SIZE=$(wc -c < "$ACTION_TOKEN_FILE_PATH" 2>/dev/null | tr -d ' ' || true)
+    if [[ ! "$ACTION_TOKEN_SIZE" =~ ^[0-9]+$ || "$ACTION_TOKEN_SIZE" -lt 1 || "$ACTION_TOKEN_SIZE" -gt 4096 ]]; then
+        fail "Action token file must contain between 1 and 4096 bytes" "$EXIT_MISSING_ARGS"
+    fi
+    ACTION_TOKEN=$(cat "$ACTION_TOKEN_FILE_PATH")
+    if [[ -z "$ACTION_TOKEN" || "$ACTION_TOKEN" == *$'\r'* || "$ACTION_TOKEN" == *$'\n'* ]]; then
+        fail "Action token file must contain one non-empty token value" "$EXIT_MISSING_ARGS"
+    fi
+    ACTION_TOKEN_FILE_PATH=""
+fi
+
 if [[ -n "$PROXMOX_TYPE" && "$PROXMOX_TYPE" != "pve" && "$PROXMOX_TYPE" != "pbs" ]]; then
     fail "Invalid --proxmox-type value: ${PROXMOX_TYPE} (expected 'pve' or 'pbs')"
 fi
@@ -3200,11 +3887,56 @@ fi
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" && ( "$GRANT_SMART" == "true" || "$GRANT_PCT" == "true" ) ]]; then
     fail "--enable-privileged-helper cannot be combined with legacy --grant-smart/--grant-pct sudo paths" "$EXIT_MISSING_ARGS"
 fi
+if [[ "$ACTION_RUNNER_EXPLICIT" != "true" && "$UNINSTALL" != "true" &&
+      "$SAFE_PROFILE_ACTION" != "apply" &&
+      "$UNINSTALL_ACTION_RUNNER" != "true" && -f "$ACTION_RUNNER_SERVICE_UNIT" ]]; then
+    ACTION_RUNNER_ENABLED="true"
+    log_info "Preserving existing separately enabled action-runner profile"
+fi
+if [[ "$ACTION_RUNNER_ENABLED" == "true" &&
+      ( "$LEAST_PRIVILEGE" != "true" || "$PRIVILEGED_HELPER_ENABLED" != "true" ) ]]; then
+    fail "--enable-action-runner requires the safe --least-privilege --enable-privileged-helper collector profile" "$EXIT_MISSING_ARGS"
+fi
+if [[ "$ACTION_RUNNER_ENABLED" == "true" && "$ENABLE_COMMANDS" == "true" ]]; then
+    fail "--enable-action-runner cannot be combined with legacy collector --enable-commands" "$EXIT_MISSING_ARGS"
+fi
+if [[ -n "$ACTION_TOKEN" && "$ACTION_RUNNER_ENABLED" != "true" ]]; then
+    fail "--action-token-file requires --enable-action-runner (or an existing preserved runner profile)" "$EXIT_MISSING_ARGS"
+fi
+if [[ "$ACTION_RUNNER_ENABLED" == "true" && "$PREFLIGHT_ONLY" != "true" &&
+      -z "$ACTION_TOKEN" && ! -s "$ACTION_RUNNER_TOKEN_FILE" ]]; then
+    fail "--enable-action-runner requires a separate --action-token-file on first install" "$EXIT_MISSING_ARGS"
+fi
+if [[ -n "$ACTION_TOKEN" && -n "$PULSE_TOKEN" && "$ACTION_TOKEN" == "$PULSE_TOKEN" ]]; then
+    fail "The action runner must use a separate credential from the collector token" "$EXIT_MISSING_ARGS"
+fi
 
 # --- Check Root ---
 if [[ $EUID -ne 0 && "$PREFLIGHT_ONLY" != "true" ]]; then
-   echo "This script must be run as root. Please use sudo." 
-   exit 1
+    if [[ "$SAFE_PROFILE_ACTION" != "inspect" ]]; then
+        echo "This script must be run as root. Please use sudo."
+        exit 1
+    fi
+fi
+
+if [[ "$SAFE_PROFILE_ACTION" == "inspect" ]]; then
+    safe_profile_inspect
+    exit $?
+fi
+if [[ "$SAFE_PROFILE_ACTION" == "rollback" ]]; then
+    safe_profile_platform_supported ||
+        fail "Safe-profile rollback is supported only on standard Linux systemd hosts; no broader-privilege fallback was applied" "$EXIT_MISSING_ARGS"
+    safe_profile_rollback_last
+    exit 0
+fi
+
+if [[ "$UNINSTALL_ACTION_RUNNER" == "true" ]]; then
+    if [[ "$UNINSTALL" == "true" || "$UPDATE_ONLY" == "true" || "$ACTION_RUNNER_ENABLED" == "true" ]]; then
+        fail "--uninstall-action-runner is a standalone runner-only lifecycle action" "$EXIT_MISSING_ARGS"
+    fi
+    teardown_action_runner_service
+    log_info "Pulse action runner removed. Collector monitoring was left installed and running."
+    exit 0
 fi
 
 # --- URL Normalization ---
@@ -3244,6 +3976,21 @@ if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" ]]; then
     if [[ "$UPDATE_ONLY" == "true" && ( -z "$PULSE_URL" || -z "$PULSE_TOKEN" ) ]]; then
         fail "No existing Pulse Agent connection state found. Use the install command instead." "$EXIT_MISSING_ARGS"
     fi
+fi
+
+if [[ -n "$ACTION_TOKEN" && -n "$PULSE_TOKEN" && "$ACTION_TOKEN" == "$PULSE_TOKEN" ]]; then
+    fail "The action runner must use a separate credential from the collector token" "$EXIT_MISSING_ARGS"
+fi
+
+if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+    # Recovered legacy service arguments may include command authority. The
+    # explicit migration always lowers the collector ceiling and never carries
+    # command execution or sudo grants into the safe profile.
+    ENABLE_COMMANDS="false"
+    COMMAND_AUTHORITY="monitoring-only"
+    COMMAND_AUTHORITY_SOURCE="explicit"
+    GRANT_SMART="false"
+    GRANT_PCT="false"
 fi
 
 resolve_command_authority_profile
@@ -3503,6 +4250,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
 
     # Systemd - unified agent
     if command -v systemctl >/dev/null 2>&1; then
+        teardown_action_runner_service
         teardown_privileged_helper_service
         teardown_systemd_agent_service
     fi
@@ -3712,6 +4460,12 @@ if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" && "$UNINSTALL" != "true" ]]; then
     fi
 fi
 
+if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+    safe_profile_platform_supported ||
+        fail "Safe-profile migration is supported only on standard Linux systemd hosts; no broader-privilege fallback was applied" "$EXIT_MISSING_ARGS"
+    safe_profile_begin_transaction
+fi
+
 # Create the dedicated service account for the least-privilege profile and
 # hand it the mutable state directory. The legacy least-privilege profile also
 # owns its agent binary so its in-process updater keeps working. The typed
@@ -3864,6 +4618,23 @@ verify_privileged_helper_socket() {
 }
 
 provision_typed_privileged_helper() {
+    # The collector may write only into its quarantine. The root helper may
+    # read that tree, but activation and rollback state live in a separate
+    # root-only boundary. The helper's protocol fixes the sole activation
+    # target at /usr/local/bin/pulse-agent.
+    install -d -o "$LEAST_PRIVILEGE_USER" -g "$LEAST_PRIVILEGE_USER" -m 0700 \
+        "$PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR"
+    install -d -o root -g root -m 0700 \
+        "$PRIVILEGED_HELPER_STATE_DIR" "$PRIVILEGED_HELPER_UPDATE_STAGING_DIR"
+    if [[ -L "${INSTALL_DIR}/${BINARY_NAME}" || ! -f "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
+        fail "Typed privileged-helper updates require a regular installed agent binary" "$EXIT_GENERAL"
+    fi
+    if [[ "${INSTALL_DIR}/${BINARY_NAME}" != "/usr/local/bin/pulse-agent" ]]; then
+        fail "Typed privileged-helper updates require the fixed /usr/local/bin/pulse-agent target" "$EXIT_GENERAL"
+    fi
+    chown root:root "${INSTALL_DIR}/${BINARY_NAME}"
+    chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
+
     render_privileged_helper_socket_unit "$PRIVILEGED_HELPER_SOCKET_UNIT"
     render_privileged_helper_service_unit "$PRIVILEGED_HELPER_SERVICE_UNIT" "$PRIVILEGED_HELPER_BINARY_PATH"
     chown root:root "$PRIVILEGED_HELPER_SOCKET_UNIT" "$PRIVILEGED_HELPER_SERVICE_UNIT"
@@ -3998,6 +4769,22 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
                 fi
             else
                 json_event "preflight" "helper_download_unavailable" "Typed helper binary unavailable for ${PF_ARCH_PARAM}" "$EXIT_DOWNLOAD_FAILED"
+                PREFLIGHT_EXIT="$EXIT_DOWNLOAD_FAILED"
+            fi
+        fi
+        if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
+            : > "$PREFLIGHT_HEADERS"
+            RUNNER_DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?arch=${PF_ARCH_PARAM}"
+            if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$RUNNER_DOWNLOAD_CHECK_URL"; then
+                PREFLIGHT_RUNNER_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
+                if [[ -n "$PREFLIGHT_RUNNER_SHA" ]]; then
+                    json_event "preflight" "runner_download_available" "Typed action runner binary available for ${PF_ARCH_PARAM}"
+                else
+                    json_event "preflight" "runner_download_checksum_missing" "Typed action runner download did not include checksum header" "$EXIT_CHECKSUM_FAILED"
+                    PREFLIGHT_EXIT="$EXIT_CHECKSUM_FAILED"
+                fi
+            else
+                json_event "preflight" "runner_download_unavailable" "Typed action runner binary unavailable for ${PF_ARCH_PARAM}" "$EXIT_DOWNLOAD_FAILED"
                 PREFLIGHT_EXIT="$EXIT_DOWNLOAD_FAILED"
             fi
         fi
@@ -4144,6 +4931,49 @@ download_verified_privileged_helper() {
     chmod 0755 "$TMP_HELPER_BIN"
     log_info "Typed privileged helper binary verified"
 }
+
+download_verified_action_runner() {
+    local runner_headers runner_url runner_magic runner_expected_sha runner_signature runner_actual_sha
+    local -a runner_curl_args
+
+    TMP_ACTION_RUNNER_BIN=$(mktemp)
+    runner_headers=$(mktemp)
+    TMP_FILES+=("$TMP_ACTION_RUNNER_BIN" "$runner_headers")
+    runner_curl_args=(-fsSL --connect-timeout 30 --max-time 300 -D "$runner_headers" -o "$TMP_ACTION_RUNNER_BIN")
+    if [[ "$INSECURE" == "true" ]]; then runner_curl_args+=(-k); fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then runner_curl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
+
+    runner_url="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}"
+    log_info "Downloading typed action runner from ${runner_url}..."
+    if ! curl "${runner_curl_args[@]}" "$runner_url"; then
+        fail "Typed action runner download failed; the existing runner and collector were not changed." "$EXIT_DOWNLOAD_FAILED"
+    fi
+    if [[ ! -s "$TMP_ACTION_RUNNER_BIN" ]]; then
+        fail "Downloaded typed action runner is empty; the existing runner and collector were not changed." "$EXIT_DOWNLOAD_FAILED"
+    fi
+    if runner_magic=$(read_magic_hex "$TMP_ACTION_RUNNER_BIN"); then
+        if [[ "$runner_magic" != "7f454c46" ]]; then
+            fail "Downloaded typed action runner is not a Linux ELF executable." "$EXIT_DOWNLOAD_FAILED"
+        fi
+    else
+        log_warn "No od/hexdump/xxd available to inspect the typed action runner; relying on checksum verification."
+    fi
+    runner_expected_sha=$(final_response_header_value "$runner_headers" "X-Checksum-Sha256" || true)
+    runner_signature=$(final_response_header_value "$runner_headers" "X-Signature-SSHSIG" || true)
+    if [[ -z "$runner_expected_sha" ]]; then
+        fail "Typed action runner download omitted its checksum; refusing install." "$EXIT_CHECKSUM_FAILED"
+    fi
+    if has_pinned_installer_signature_key && [[ -z "$runner_signature" ]]; then
+        fail "Typed action runner download omitted its signature; refusing install." "$EXIT_SIGNATURE_FAILED"
+    fi
+    runner_actual_sha=$(sha256sum "$TMP_ACTION_RUNNER_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_ACTION_RUNNER_BIN" 2>/dev/null | awk '{print $1}')
+    if [[ -z "$runner_actual_sha" || "$runner_actual_sha" != "$runner_expected_sha" ]]; then
+        fail "Typed action runner checksum verification failed." "$EXIT_CHECKSUM_FAILED"
+    fi
+    verify_download_signature "$TMP_ACTION_RUNNER_BIN" "$runner_signature"
+    chmod 0755 "$TMP_ACTION_RUNNER_BIN"
+    log_info "Typed action runner binary verified"
+}
 if [[ "$OS" == "linux" || "$OS" == "freebsd" ]]; then
     if MAGIC=$(read_magic_hex "$TMP_BIN"); then
         if [[ "$MAGIC" != "7f454c46" ]]; then
@@ -4188,6 +5018,9 @@ verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"
 
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
     download_verified_privileged_helper
+fi
+if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
+    download_verified_action_runner
 fi
 
 chmod +x "$TMP_BIN"
@@ -4253,14 +5086,28 @@ fi
 # Install Binary
 log_info "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mkdir -p "$INSTALL_DIR"
-mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
-chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+    SAFE_PROFILE_STAGED_COLLECTOR="${INSTALL_DIR}/.${BINARY_NAME}.safe-profile-new.$$"
+    TMP_FILES+=("$SAFE_PROFILE_STAGED_COLLECTOR")
+    install -o root -g root -m 0755 "$TMP_BIN" "$SAFE_PROFILE_STAGED_COLLECTOR"
+    mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"
+else
+    mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
+    chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+fi
 
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
     mkdir -p "$PRIVILEGE_HELPER_DIR"
     chown root:root "$PRIVILEGE_HELPER_DIR"
     chmod 0755 "$PRIVILEGE_HELPER_DIR"
-    mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"
+    if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+        SAFE_PROFILE_STAGED_HELPER="${PRIVILEGED_HELPER_BINARY_PATH}.safe-profile-new.$$"
+        TMP_FILES+=("$SAFE_PROFILE_STAGED_HELPER")
+        install -o root -g root -m 0755 "$TMP_HELPER_BIN" "$SAFE_PROFILE_STAGED_HELPER"
+        mv "$SAFE_PROFILE_STAGED_HELPER" "$PRIVILEGED_HELPER_BINARY_PATH"
+    else
+        mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"
+    fi
     TMP_HELPER_BIN=""
     chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"
     chmod 0755 "$PRIVILEGED_HELPER_BINARY_PATH"
@@ -4888,7 +5735,7 @@ if command -v systemctl >/dev/null 2>&1; then
             LEAST_PRIVILEGE="true"
             log_info "Preserving existing least-privilege profile (User=${LEAST_PRIVILEGE_USER})"
         fi
-        if [[ "$LEAST_PRIVILEGE" == "true" ]]; then
+        if [[ "$LEAST_PRIVILEGE" == "true" && "$SAFE_PROFILE_ACTION" != "apply" ]]; then
             if [[ "$GRANT_SMART" != "true" ]] && grep -q "PULSE_SMARTCTL_PATH=${PRIVILEGE_HELPER_DIR}/" "$UNIT"; then
                 GRANT_SMART="true"
             fi
@@ -4916,6 +5763,9 @@ if command -v systemctl >/dev/null 2>&1; then
         if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
             protect_typed_profile_credentials
             provision_typed_privileged_helper
+            if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+                safe_profile_remove_legacy_authority
+            fi
             log_info "Typed-helper collector profile: service runs as ${SERVICE_USER}; binaries and credential files remain root-owned while mutable state remains ${SERVICE_USER}-owned."
         else
             provision_privilege_helpers
@@ -4934,6 +5784,19 @@ if command -v systemctl >/dev/null 2>&1; then
     restore_selinux_contexts
 
     restart_systemd_agent_service
+    if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+        if ! safe_profile_verify_declared_health; then
+            fail "Safe-profile collector did not satisfy local readiness, helper availability, and server registration; restoring the previous profile" "$EXIT_GENERAL"
+        fi
+        safe_profile_commit_transaction ||
+            fail "Safe-profile health passed but its atomic profile record could not be committed; restoring the previous profile" "$EXIT_GENERAL"
+    fi
+    if [[ "$ACTION_RUNNER_EXPLICIT" == "true" && "$ACTION_RUNNER_ENABLED" != "true" ]]; then
+        teardown_action_runner_service
+        log_info "Typed action runner removed; collector monitoring remains active."
+    elif [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
+        provision_action_runner
+    fi
     complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"
     if [[ "$UPGRADE_MODE" != "true" && -n "$PULSE_TOKEN" ]]; then
         if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then

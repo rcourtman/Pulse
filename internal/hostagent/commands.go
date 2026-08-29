@@ -113,6 +113,7 @@ type CommandClient struct {
 	storageCleanup            *storageCleanupManager
 	dockerLifecycle           dockerLifecycleManager
 	dockerUpdater             DockerContainerUpdater
+	proxmoxGuestLifecycle     *proxmoxGuestLifecycleManager
 	operationReceipts         *operationreceipt.Store
 	operationReceiptErr       error
 	operationReceiptCloseOnce sync.Once
@@ -132,6 +133,15 @@ type CommandClient struct {
 	// enforces unique in-flight request IDs on its side.
 	activeCommandsMu sync.Mutex
 	activeCommands   map[string]context.CancelFunc
+
+	// actionRunnerOnly is an immutable constructor-selected protocol ceiling.
+	// It permits only the closed typed action families and their receipt,
+	// preflight, observation, cancellation, and liveness messages.
+	actionRunnerOnly   bool
+	runtimeRole        string
+	actionCapability   string
+	healthPath         string
+	healthCapabilities []string
 }
 
 // NewCommandClient creates a new command execution client
@@ -152,26 +162,27 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 			Msg("Operation receipt store unavailable — Pulse will refuse reviewed actions for this agent until its state directory is writable")
 	}
 	return &CommandClient{
-		pulseURL:            strings.TrimRight(cfg.PulseURL, "/"),
-		apiToken:            cfg.APIToken,
-		agentID:             agentID,
-		hostname:            hostname,
-		platform:            platform,
-		version:             version,
-		stateDir:            stateDir,
-		insecureSkipVerify:  cfg.InsecureSkipVerify,
-		caCertPath:          cfg.CACertPath,
-		serverFingerprint:   cfg.ServerFingerprint,
-		deploySSHUser:       cfg.DeploySSHUser,
-		commandPolicy:       agentexec.DefaultPolicy(),
-		packageUpdates:      cfg.packageUpdates,
-		storageCleanup:      cfg.storageCleanup,
-		dockerLifecycle:     newLocalDockerLifecycleManager(cfg.DockerContainerLifecycleOperator),
-		dockerUpdater:       cfg.DockerContainerUpdater,
-		operationReceipts:   receipts,
-		operationReceiptErr: receiptErr,
-		logger:              logger,
-		done:                make(chan struct{}),
+		pulseURL:              strings.TrimRight(cfg.PulseURL, "/"),
+		apiToken:              cfg.APIToken,
+		agentID:               agentID,
+		hostname:              hostname,
+		platform:              platform,
+		version:               version,
+		stateDir:              stateDir,
+		insecureSkipVerify:    cfg.InsecureSkipVerify,
+		caCertPath:            cfg.CACertPath,
+		serverFingerprint:     cfg.ServerFingerprint,
+		deploySSHUser:         cfg.DeploySSHUser,
+		commandPolicy:         agentexec.DefaultPolicy(),
+		packageUpdates:        cfg.packageUpdates,
+		storageCleanup:        cfg.storageCleanup,
+		dockerLifecycle:       newLocalDockerLifecycleManager(cfg.DockerContainerLifecycleOperator),
+		dockerUpdater:         cfg.DockerContainerUpdater,
+		proxmoxGuestLifecycle: newProxmoxGuestLifecycleManager(),
+		operationReceipts:     receipts,
+		operationReceiptErr:   receiptErr,
+		logger:                logger,
+		done:                  make(chan struct{}),
 	}
 }
 
@@ -201,6 +212,8 @@ const (
 	msgTypeHostStorageCleanupResult       messageType = "host_storage_cleanup_result"
 	msgTypeHostUpdate                     messageType = "host_update"
 	msgTypeHostUpdateResult               messageType = "host_update_result"
+	msgTypeProxmoxGuestLifecycle          messageType = "proxmox_guest_lifecycle"
+	msgTypeProxmoxGuestLifecycleResult    messageType = "proxmox_guest_lifecycle_result"
 	msgTypeDockerContainerLifecycle       messageType = "docker_container_lifecycle"
 	msgTypeDockerContainerLifecycleResult messageType = "docker_container_lifecycle_result"
 	msgTypeDockerContainerUpdate          messageType = "docker_container_update"
@@ -232,6 +245,8 @@ type registerPayload struct {
 	Platform                 string   `json:"platform"`
 	Tags                     []string `json:"tags,omitempty"`
 	Token                    string   `json:"token"`
+	RuntimeRole              string   `json:"runtime_role,omitempty"`
+	ActionCapability         string   `json:"action_capability,omitempty"`
 	OperationReceiptVersion  int      `json:"operation_receipt_version,omitempty"`
 	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
 	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
@@ -403,6 +418,11 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	if err := c.waitForRegistration(conn); err != nil {
 		return fmt.Errorf("registration failed: %w", err)
 	}
+	if c.actionRunnerOnly {
+		if err := c.writeActionRunnerHealth(); err != nil {
+			return fmt.Errorf("write action-runner health: %w", err)
+		}
+	}
 
 	c.logger.Info().Msg("Connected and registered with Pulse command server")
 
@@ -465,6 +485,8 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 		Version:                  c.version,
 		Platform:                 c.platform,
 		Token:                    c.apiToken,
+		RuntimeRole:              c.runtimeRole,
+		ActionCapability:         c.actionCapability,
 		OperationReceiptVersion:  c.operationReceiptVersion(),
 		ActionPreflightVersion:   agentexec.ActionPreflightProtocolVersion,
 		DockerObservationVersion: agentexec.DockerContainerObservationProtocolVersion,
@@ -565,6 +587,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 		if err := conn.ReadJSON(&msg); err != nil {
 			return fmt.Errorf("read message: %w", err)
 		}
+		if c.actionRunnerOnly && !allowedActionRunnerMessage(msg.Type) {
+			return fmt.Errorf("action-runner rejected forbidden message type %q", msg.Type)
+		}
 
 		switch msg.Type {
 		case msgTypePong:
@@ -596,6 +621,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				continue
 			}
 			go c.handleHostUpdate(ctx, conn, payload)
+
+		case msgTypeProxmoxGuestLifecycle:
+			payload, err := agentexec.DecodeProxmoxGuestLifecyclePayload(msg.Payload)
+			if err != nil {
+				c.logger.Warn().Err(err).Msg("Dropping invalid Proxmox guest lifecycle request")
+				continue
+			}
+			go c.handleProxmoxGuestLifecycle(ctx, conn, payload)
 
 		case msgTypeActionPreflight:
 			payload, err := agentexec.DecodeActionPreflightPayload(msg.Payload)
@@ -829,7 +862,11 @@ func (c *CommandClient) beginHostAPTOperation(ctx context.Context, conn *websock
 		timeout = defaultTimeout
 	}
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
-	return opCtx, cancel, true
+	c.registerActiveCommand(requestID, cancel)
+	return opCtx, func() {
+		c.unregisterActiveCommand(requestID)
+		cancel()
+	}, true
 }
 
 // completeHostAPTOperation persists the sanitized terminal receipt and sends
@@ -909,6 +946,8 @@ func (c *CommandClient) handleDockerContainerLifecycle(ctx context.Context, conn
 		timeout = 2 * time.Minute
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, timeout)
+	c.registerActiveCommand(payload.RequestID, cancel)
+	defer c.unregisterActiveCommand(payload.RequestID)
 	defer cancel()
 	result := agentexec.DockerContainerLifecycleResultPayload{
 		RequestID: payload.RequestID, ActionID: payload.ActionID, Operation: payload.Operation,
@@ -1064,6 +1103,16 @@ func hostOperationReceiptConfig() operationreceipt.Config {
 		}},
 		agentexec.DockerContainerUpdateReceiptKind: {agentexec.DockerContainerUpdateReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
 			result, err := agentexec.DecodeDockerContainerUpdateResultPayload(payload)
+			if err != nil {
+				return err
+			}
+			if result.RequestID != identity.AttemptID || result.ActionID != identity.ActionID || result.Operation != identity.OperationKind || result.OperationVersion != identity.OperationVersion || result.RequestDigest != identity.RequestDigest {
+				return operationreceipt.ErrBindingConflict
+			}
+			return nil
+		}},
+		agentexec.ProxmoxGuestLifecycleReceiptKind: {agentexec.ProxmoxGuestLifecycleReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
+			result, err := agentexec.DecodeProxmoxGuestLifecycleResultPayload(payload)
 			if err != nil {
 				return err
 			}

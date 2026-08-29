@@ -1542,6 +1542,12 @@ type errorReader struct {
 	sent bool
 }
 
+func TestCoveragePrivilegeHelperUpdateRejectsMissingSocket(t *testing.T) {
+	if _, err := NewPrivilegeHelperUpdate(""); err == nil {
+		t.Fatal("expected an empty helper socket path to fail closed")
+	}
+}
+
 func (e *errorReader) Read(p []byte) (int, error) {
 	if e.sent {
 		return 0, errors.New("read fail")

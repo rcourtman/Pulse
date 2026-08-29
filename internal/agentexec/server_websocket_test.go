@@ -209,6 +209,88 @@ func TestHandleWebSocket_RegistrationSuccessAndDisconnectRemovesAgent(t *testing
 	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
 }
 
+func TestActionRunnerRegistrationRequiresCredentialBoundRuntimeRoleAndCapability(t *testing.T) {
+	admission := AgentAdmission{
+		OrganizationID:   "org-a",
+		TokenID:          "runner-token",
+		AgentID:          "machine-a",
+		Hostname:         "node.example",
+		RuntimeRole:      RuntimeRoleActionRunner,
+		ActionCapability: ActionCapabilityTypedV1,
+	}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		return admission, token == admission.TokenID
+	}, func(candidate AgentAdmission) bool { return candidate == admission })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	register := func(role, capability string) (*websocket.Conn, RegisteredPayload) {
+		t.Helper()
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			t.Fatalf("Dial: %v", err)
+		}
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+			AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID,
+			RuntimeRole: role, ActionCapability: capability,
+		}))
+		return conn, wsReadRegisteredPayload(t, conn)
+	}
+
+	for _, invalid := range []struct{ role, capability string }{
+		{"", ""},
+		{RuntimeRoleActionRunner, ""},
+		{RuntimeRoleActionRunner, "shell.v1"},
+		{RuntimeRoleLegacyFullTrust, ActionCapabilityTypedV1},
+	} {
+		conn, ack := register(invalid.role, invalid.capability)
+		conn.Close()
+		if ack.Success {
+			t.Fatalf("unbound runner assertion admitted: role=%q capability=%q", invalid.role, invalid.capability)
+		}
+	}
+
+	conn, ack := register(RuntimeRoleActionRunner, ActionCapabilityTypedV1)
+	defer conn.Close()
+	if !ack.Success {
+		t.Fatalf("bound action runner registration rejected: %s", ack.Message)
+	}
+	connected := s.GetConnectedAgentsForOrganization("org-a")
+	if len(connected) != 1 || connected[0].RuntimeRole != RuntimeRoleActionRunner || connected[0].ActionCapability != ActionCapabilityTypedV1 {
+		t.Fatalf("connected action runner = %#v", connected)
+	}
+
+	ctx := WithOrganizationID(context.Background(), "org-a")
+	if _, err := s.ExecuteCommand(ctx, admission.AgentID, ExecuteCommandPayload{RequestID: "shell", Command: "true", TargetType: "agent", Trusted: true}); err == nil || !strings.Contains(err.Error(), "typed action-runner") {
+		t.Fatalf("action runner accepted arbitrary command: %v", err)
+	}
+	if _, err := s.ReadFile(ctx, admission.AgentID, ReadFilePayload{RequestID: "read", Path: "/etc/hosts", TargetType: "agent"}); err == nil || !strings.Contains(err.Error(), "typed action-runner") {
+		t.Fatalf("action runner accepted unrestricted read: %v", err)
+	}
+	if err := s.SendDeployCancel(ctx, admission.AgentID, DeployCancelPayload{RequestID: "deploy", JobID: "job"}); err == nil || !strings.Contains(err.Error(), "typed action-runner") {
+		t.Fatalf("action runner accepted deploy protocol: %v", err)
+	}
+}
+
+func TestLegacyCredentialCannotAssertActionRunnerRole(t *testing.T) {
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		return AgentAdmission{TokenID: token, AgentID: "a1", Hostname: "host1", RuntimeRole: RuntimeRoleLegacyFullTrust}, token == "legacy"
+	}, nil)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "a1", Hostname: "host1", Token: "legacy", RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1,
+	}))
+	if ack := wsReadRegisteredPayload(t, conn); ack.Success {
+		t.Fatal("legacy credential self-promoted into action-runner role")
+	}
+}
+
 func TestHandleWebSocket_RejectsMissingOrigin(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)

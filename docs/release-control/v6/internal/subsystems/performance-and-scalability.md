@@ -30,6 +30,12 @@ It must aggregate to one alert and at most one mobile notification per agent
 outage, retain only bounded target identifiers needed for diagnosis, and never
 start a goroutine, timer, or notification lifecycle per target.
 
+The public helper and action-runner download routes reuse the bounded release
+asset cache/proxy path in `internal/api/router.go`. They may add no background
+poller, per-agent goroutine, inventory scan, or action-session lookup to normal
+request routing; local assets are streamed once and published fallbacks retain
+the existing bounded HTTP client and artifact-size checks.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`

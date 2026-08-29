@@ -11,12 +11,17 @@ import (
 type MessageType string
 
 const (
+	RuntimeRoleActionRunner    = "action-runner"
+	RuntimeRoleLegacyFullTrust = "legacy-full-trust"
+	ActionCapabilityTypedV1    = "typed_actions.v1"
+
 	// Agent -> Server messages
 	MsgTypeAgentRegister                  MessageType = "agent_register"
 	MsgTypeAgentPing                      MessageType = "agent_ping"
 	MsgTypeCommandResult                  MessageType = "command_result"
 	MsgTypeHostStorageCleanupResult       MessageType = "host_storage_cleanup_result"
 	MsgTypeHostUpdateResult               MessageType = "host_update_result"
+	MsgTypeProxmoxGuestLifecycleResult    MessageType = "proxmox_guest_lifecycle_result"
 	MsgTypeDockerContainerLifecycleResult MessageType = "docker_container_lifecycle_result"
 	MsgTypeDockerContainerUpdateResult    MessageType = "docker_container_update_result"
 	MsgTypeDockerContainerObserveResult   MessageType = "docker_container_observe_result"
@@ -30,6 +35,7 @@ const (
 	MsgTypeHostStorageCleanup       MessageType = "host_storage_cleanup"
 	MsgTypeReadFile                 MessageType = "read_file"
 	MsgTypeHostUpdate               MessageType = "host_update"
+	MsgTypeProxmoxGuestLifecycle    MessageType = "proxmox_guest_lifecycle"
 	MsgTypeDockerContainerLifecycle MessageType = "docker_container_lifecycle"
 	MsgTypeDockerContainerUpdate    MessageType = "docker_container_update"
 	MsgTypeDockerContainerObserve   MessageType = "docker_container_observe"
@@ -96,6 +102,8 @@ type AgentRegisterPayload struct {
 	Platform                 string   `json:"platform"` // "linux", "windows", "darwin"
 	Tags                     []string `json:"tags,omitempty"`
 	Token                    string   `json:"token"` // API token for authentication
+	RuntimeRole              string   `json:"runtime_role,omitempty"`
+	ActionCapability         string   `json:"action_capability,omitempty"`
 	OperationReceiptVersion  int      `json:"operation_receipt_version,omitempty"`
 	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
 	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
@@ -335,6 +343,52 @@ type DockerContainerUpdateOutcome struct {
 	Error             string
 }
 
+// ProxmoxGuestLifecyclePayload is a closed guest lifecycle operation. GuestKind
+// selects one fixed Proxmox tool, Operation selects one fixed verb, and VMID is
+// numeric. No command text or caller-supplied argument vector crosses the wire.
+type ProxmoxGuestLifecyclePayload struct {
+	RequestID        string `json:"request_id"`
+	ActionID         string `json:"action_id"`
+	Operation        string `json:"operation"`
+	OperationVersion int    `json:"operation_version"`
+	RequestDigest    string `json:"request_digest"`
+	GuestKind        string `json:"guest_kind"`
+	VMID             int    `json:"vmid"`
+	ExpectedStatus   string `json:"expected_status"`
+	Timeout          int    `json:"timeout,omitempty"`
+}
+
+type ProxmoxGuestLifecycleSnapshot struct {
+	Status     string    `json:"status,omitempty"`
+	ObservedAt time.Time `json:"observed_at,omitempty"`
+}
+
+type ProxmoxGuestLifecycleResultPayload struct {
+	RequestID         string                        `json:"request_id"`
+	ActionID          string                        `json:"action_id"`
+	Operation         string                        `json:"operation"`
+	OperationVersion  int                           `json:"operation_version"`
+	RequestDigest     string                        `json:"request_digest"`
+	GuestKind         string                        `json:"guest_kind"`
+	VMID              int                           `json:"vmid"`
+	ExecutionPhase    string                        `json:"execution_phase"`
+	MutationStarted   bool                          `json:"mutation_started"`
+	MutationCompleted bool                          `json:"mutation_completed"`
+	ReadbackRan       bool                          `json:"readback_ran"`
+	Before            ProxmoxGuestLifecycleSnapshot `json:"before"`
+	After             ProxmoxGuestLifecycleSnapshot `json:"after"`
+	ReasonCode        string                        `json:"reason_code,omitempty"`
+	Error             string                        `json:"error,omitempty"`
+	Duration          int64                         `json:"duration_ms"`
+}
+
+const (
+	ProxmoxGuestPhasePreflight = "preflight"
+	ProxmoxGuestPhaseMutate    = "mutate"
+	ProxmoxGuestPhaseVerify    = "verify"
+	ProxmoxGuestPhaseComplete  = "complete"
+)
+
 // HostUpdatePayload is the closed, typed host-package operation sent to a
 // Unified Agent. It intentionally has no command or package-name fields: the
 // agent owns the package-manager command catalog and always updates the whole
@@ -528,6 +582,8 @@ type ConnectedAgent struct {
 	Version                  string
 	Platform                 string
 	Tags                     []string
+	RuntimeRole              string
+	ActionCapability         string
 	ConnectedAt              time.Time
 	OperationReceiptVersion  int
 	ActionPreflightVersion   int

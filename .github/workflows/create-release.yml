@@ -1116,6 +1116,11 @@ jobs:
             release/pulse-agent-helper-linux-armv7 \
             release/pulse-agent-helper-linux-armv6 \
             release/pulse-agent-helper-linux-386 \
+            release/pulse-agent-runner-linux-amd64 \
+            release/pulse-agent-runner-linux-arm64 \
+            release/pulse-agent-runner-linux-armv7 \
+            release/pulse-agent-runner-linux-armv6 \
+            release/pulse-agent-runner-linux-386 \
             release/pulse-agent-freebsd-amd64 \
             release/pulse-agent-freebsd-arm64 \
             release/pulse-agent-windows-amd64.exe \

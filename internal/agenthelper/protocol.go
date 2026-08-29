@@ -26,6 +26,8 @@ const (
 	ErrorUnauthorizedPeer     = "unauthorized_peer"
 	ErrorDeadlineExceeded     = "deadline_exceeded"
 	ErrorProviderUnavailable  = "provider_unavailable"
+	ErrorArtifactInvalid      = "artifact_invalid"
+	ErrorStateConflict        = "state_conflict"
 	ErrorResponseTooLarge     = "response_too_large"
 	ErrorInternal             = "internal_error"
 )
@@ -35,6 +37,10 @@ const (
 	OperationCapabilities          = "helper.capabilities"
 	OperationSMARTSnapshot         = "smart.snapshot"
 	OperationProxmoxLXCFilesystems = "proxmox.lxc_filesystems"
+	OperationContainerInventory    = "container.inventory"
+	OperationAgentUpdateStage      = "agent_update.stage"
+	OperationAgentUpdateActivate   = "agent_update.activate"
+	OperationAgentUpdateRollback   = "agent_update.rollback"
 	OperationVersion1              = 1
 )
 

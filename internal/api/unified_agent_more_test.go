@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -98,6 +99,68 @@ func TestDownloadAgentHelperProxiesPublishedSignedAsset(t *testing.T) {
 	}
 	if got := response.Header().Get(signatureHeaderName); got != "helper-signature" {
 		t.Fatalf("signature = %q", got)
+	}
+}
+
+func TestDownloadAgentRunnerRejectsUnsupportedArchitecture(t *testing.T) {
+	router := &Router{}
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-runner?arch=darwin-arm64", nil)
+	response := httptest.NewRecorder()
+	router.handleDownloadAgentRunner(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+}
+
+func TestDownloadAgentRunnerServesSignedLocalLinuxBinary(t *testing.T) {
+	root := t.TempDir()
+	binDir := filepath.Join(root, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(binDir, "pulse-agent-runner-linux-amd64")
+	content := []byte("runner")
+	if err := os.WriteFile(path, content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".sig", []byte("detached"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".sshsig", []byte("ssh-signature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	router := &Router{projectRoot: root, serverVersion: "6.5.0"}
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-runner?arch=linux-amd64", nil)
+	response := httptest.NewRecorder()
+	router.handleDownloadAgentRunner(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if got := response.Header().Get(checksumHeaderName); got == "" {
+		t.Fatal("missing checksum header")
+	}
+	if got := response.Header().Get(signatureHeaderName); got != "detached" {
+		t.Fatalf("signature = %q", got)
+	}
+	if got := response.Header().Get(sshSignatureHeaderName); got == "" {
+		t.Fatal("missing SSH signature header")
+	}
+	if !bytes.Equal(response.Body.Bytes(), content) {
+		t.Fatalf("body = %q", response.Body.Bytes())
+	}
+}
+
+func TestDownloadAgentRunnerMissingDevBinaryReturnsExactBuildCommand(t *testing.T) {
+	router := &Router{projectRoot: t.TempDir(), serverVersion: "dev"}
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-runner?arch=linux-armv7", nil)
+	response := httptest.NewRecorder()
+	router.handleDownloadAgentRunner(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+	want := "CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o bin/pulse-agent-runner-linux-armv7 ./cmd/pulse-agent-runner"
+	if !strings.Contains(response.Body.String(), want) {
+		t.Fatalf("response missing build command %q: %s", want, response.Body.String())
 	}
 }
 

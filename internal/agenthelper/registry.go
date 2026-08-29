@@ -45,7 +45,16 @@ type HealthResult struct {
 
 type emptyOperationRequest struct{}
 
+type Providers struct {
+	Containers ContainerProvider
+	Updates    UpdateProvider
+}
+
 func NewRegistry(smart SMARTProvider, proxmox ProxmoxProvider) *Registry {
+	return NewRegistryWithProviders(smart, proxmox, Providers{})
+}
+
+func NewRegistryWithProviders(smart SMARTProvider, proxmox ProxmoxProvider, providers Providers) *Registry {
 	registry := &Registry{operations: make(map[operationKey]registeredOperation)}
 	registry.add(OperationHealth, OperationVersion1, true, func(_ context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
 		var request emptyOperationRequest
@@ -82,6 +91,59 @@ func NewRegistry(smart SMARTProvider, proxmox ProxmoxProvider) *Registry {
 		}
 		result, err := proxmox.LXCFilesystems(ctx)
 		return validateProviderResult(result, err)
+	})
+	registry.add(OperationContainerInventory, OperationVersion1, providers.Containers != nil, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
+		var request emptyOperationRequest
+		if err := decodePayload(payload, &request); err != nil {
+			return nil, invalidPayloadError(err)
+		}
+		if providers.Containers == nil {
+			return nil, unavailableError("container runtime inventory provider is not configured")
+		}
+		result, err := providers.Containers.Inventory(ctx)
+		return validateProviderResult(result, err)
+	})
+	registry.add(OperationAgentUpdateStage, OperationVersion1, providers.Updates != nil, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
+		var request UpdateStageRequest
+		if err := decodePayload(payload, &request); err != nil {
+			return nil, invalidPayloadError(err)
+		}
+		if providers.Updates == nil {
+			return nil, unavailableError("agent update provider is not configured")
+		}
+		result, err := providers.Updates.Stage(ctx, request)
+		if err != nil {
+			return nil, providerError(err)
+		}
+		return marshalOperationResult(result)
+	})
+	registry.add(OperationAgentUpdateActivate, OperationVersion1, providers.Updates != nil, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
+		var request UpdateActivateRequest
+		if err := decodePayload(payload, &request); err != nil {
+			return nil, invalidPayloadError(err)
+		}
+		if providers.Updates == nil {
+			return nil, unavailableError("agent update provider is not configured")
+		}
+		result, err := providers.Updates.Activate(ctx, request)
+		if err != nil {
+			return nil, providerError(err)
+		}
+		return marshalOperationResult(result)
+	})
+	registry.add(OperationAgentUpdateRollback, OperationVersion1, providers.Updates != nil, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
+		var request UpdateRollbackRequest
+		if err := decodePayload(payload, &request); err != nil {
+			return nil, invalidPayloadError(err)
+		}
+		if providers.Updates == nil {
+			return nil, unavailableError("agent update provider is not configured")
+		}
+		result, err := providers.Updates.Rollback(ctx, request)
+		if err != nil {
+			return nil, providerError(err)
+		}
+		return marshalOperationResult(result)
 	})
 	return registry
 }

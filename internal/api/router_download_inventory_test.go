@@ -70,10 +70,14 @@ func setIntersection(a, b map[string]struct{}) map[string]struct{} {
 
 var downloadRouteAllowlist = []string{
 	"/download/pulse-agent",
+	"/download/pulse-agent-helper",
+	"/download/pulse-agent-runner",
 }
 
 var publicDownloadAllowlist = []string{
 	"/download/pulse-agent",
+	"/download/pulse-agent-helper",
+	"/download/pulse-agent-runner",
 }
 
 var protectedDownloadAllowlist = []string{}

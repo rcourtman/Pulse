@@ -34,6 +34,11 @@ preserves collector identity and installation files only; it must not rewrite
 storage/recovery evidence or reinterpret a restored legacy collector profile as
 recovery success. Typed `host.storage_cleanup` remains governed remediation,
 not storage-recovery authority inferred from the credential itself.
+The helper-backed collector updater likewise retains only one fixed
+last-known-good executable and an identity-bound activation receipt. That
+binary rollback is agent lifecycle state, not a Pulse storage snapshot,
+recovery point, backup retention record, or authorization to read or mutate
+customer storage/recovery data.
 
 First-run authentication always writes the canonical `.env` persistence
 artifact before runtime state changes. Root systemd installation may also

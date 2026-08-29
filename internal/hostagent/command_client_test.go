@@ -259,3 +259,16 @@ func TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp(t *testing.T) {
 	default:
 	}
 }
+
+func TestCommandClientActionRunnerMessageCatalogRejectsGenericAuthority(t *testing.T) {
+	for _, message := range []messageType{msgTypeExecuteCmd, msgTypeReadFile, msgTypeDeployPreflight, msgTypeDeployInstall, msgTypeDeployCancel} {
+		if allowedActionRunnerMessage(message) {
+			t.Fatalf("action runner unexpectedly admitted generic message %q", message)
+		}
+	}
+	for _, message := range []messageType{msgTypeHostUpdate, msgTypeHostStorageCleanup, msgTypeProxmoxGuestLifecycle, msgTypeDockerContainerLifecycle} {
+		if !allowedActionRunnerMessage(message) {
+			t.Fatalf("action runner rejected typed message %q", message)
+		}
+	}
+}

@@ -26,6 +26,14 @@ PULSE_RELEASE_AGENT_HELPER_TARGETS=(
     linux-386
 )
 
+PULSE_RELEASE_AGENT_RUNNER_TARGETS=(
+    linux-amd64
+    linux-arm64
+    linux-armv7
+    linux-armv6
+    linux-386
+)
+
 PULSE_RELEASE_SERVER_TARGETS=(
     linux-amd64
     linux-arm64
@@ -68,6 +76,7 @@ pulse_release_binary_filename() {
     case "${component}" in
         agent) filename="pulse-agent-${target}" ;;
         agent-helper) filename="pulse-agent-helper-${target}" ;;
+        agent-runner) filename="pulse-agent-runner-${target}" ;;
         mcp) filename="pulse-mcp-${target}" ;;
         server) filename="pulse-${target}" ;;
         control-plane) filename="pulse-control-plane-${target}" ;;

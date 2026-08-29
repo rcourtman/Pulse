@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +67,7 @@ type Server struct {
 	pendingReqs                        map[string]chan CommandResultPayload            // scoped request key -> response channel
 	pendingHostStorageCleanups         map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
 	pendingHostUpdates                 map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
+	pendingProxmoxGuestLifecycles      map[string]chan ProxmoxGuestLifecycleResultPayload
 	pendingDockerContainerLifecycles   map[string]chan DockerContainerLifecycleResultPayload
 	pendingDockerContainerUpdates      map[string]chan DockerContainerUpdateResultPayload
 	pendingDockerContainerObservations map[string]chan DockerContainerObservationResultPayload
@@ -95,10 +97,12 @@ type organizationContextKey struct{}
 // session. The raw bearer token is deliberately not retained after
 // registration.
 type AgentAdmission struct {
-	OrganizationID string
-	TokenID        string
-	AgentID        string
-	Hostname       string
+	OrganizationID   string
+	TokenID          string
+	AgentID          string
+	Hostname         string
+	RuntimeRole      string
+	ActionCapability string
 }
 
 // AgentRegistrationValidator authenticates and binds a registration to one
@@ -195,6 +199,7 @@ func NewServerWithAdmissionValidator(admit AgentRegistrationValidator, validateS
 		pendingReqs:                        make(map[string]chan CommandResultPayload),
 		pendingHostStorageCleanups:         make(map[string]chan HostStorageCleanupResultPayload),
 		pendingHostUpdates:                 make(map[string]chan HostUpdateResultPayload),
+		pendingProxmoxGuestLifecycles:      make(map[string]chan ProxmoxGuestLifecycleResultPayload),
 		pendingDockerContainerLifecycles:   make(map[string]chan DockerContainerLifecycleResultPayload),
 		pendingDockerContainerUpdates:      make(map[string]chan DockerContainerUpdateResultPayload),
 		pendingDockerContainerObservations: make(map[string]chan DockerContainerObservationResultPayload),
@@ -371,6 +376,16 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 	return nil, false
 }
 
+func requireLegacyFullTrustConnection(ac *agentConn, operation string) error {
+	if ac == nil {
+		return fmt.Errorf("agent connection is unavailable")
+	}
+	if strings.TrimSpace(ac.admission.RuntimeRole) == RuntimeRoleActionRunner {
+		return fmt.Errorf("%s is not available on typed action-runner sessions", operation)
+	}
+	return nil
+}
+
 func (s *Server) connectionForContext(ctx context.Context, agentID string) (*agentConn, bool) {
 	return s.connectionForOrganization(organizationIDFromContext(ctx), agentID)
 }
@@ -440,6 +455,16 @@ func (s *Server) matchesPendingDockerUpdateOperationForSession(sessionKey, agent
 	s.mu.RUnlock()
 	actual := operationreceipt.Identity{AttemptID: result.RequestID, ActionID: result.ActionID, OperationKind: result.Operation, OperationVersion: result.OperationVersion, RequestDigest: result.RequestDigest, AgentID: strings.TrimSpace(agentID)}
 	return ok && expected.identity == actual && expected.subjectID == strings.ToLower(strings.TrimSpace(result.ContainerID))
+}
+
+func (s *Server) matchesPendingProxmoxGuestOperationForSession(sessionKey, agentID string, result ProxmoxGuestLifecycleResultPayload) bool {
+	key := pendingRequestKey(sessionKey, result.RequestID)
+	s.mu.RLock()
+	expected, ok := s.pendingHostOperations[key]
+	s.mu.RUnlock()
+	actual := operationreceipt.Identity{AttemptID: result.RequestID, ActionID: result.ActionID, OperationKind: result.Operation, OperationVersion: result.OperationVersion, RequestDigest: result.RequestDigest, AgentID: strings.TrimSpace(agentID)}
+	subject := result.GuestKind + ":" + strconv.Itoa(result.VMID)
+	return ok && expected.identity == actual && expected.subjectID == subject
 }
 
 func (s *Server) releasePendingHostOperation(key string) {
@@ -935,6 +960,8 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	admission.TokenID = strings.TrimSpace(admission.TokenID)
 	admission.AgentID = strings.TrimSpace(admission.AgentID)
 	admission.Hostname = strings.TrimSpace(admission.Hostname)
+	admission.RuntimeRole = strings.TrimSpace(admission.RuntimeRole)
+	admission.ActionCapability = strings.TrimSpace(admission.ActionCapability)
 	if admission.AgentID == "" {
 		admission.AgentID = reg.AgentID
 	}
@@ -943,6 +970,19 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	if admission.AgentID != reg.AgentID ||
 		!unifiedresources.HostnamesEquivalent(admission.Hostname, reg.Hostname) {
+		admitted = false
+	}
+	registrationRole := strings.TrimSpace(reg.RuntimeRole)
+	registrationCapability := strings.TrimSpace(reg.ActionCapability)
+	if admission.RuntimeRole == RuntimeRoleActionRunner {
+		if registrationRole != RuntimeRoleActionRunner ||
+			admission.ActionCapability != ActionCapabilityTypedV1 ||
+			registrationCapability != admission.ActionCapability {
+			admitted = false
+		}
+	} else if registrationRole == RuntimeRoleActionRunner || registrationCapability != "" {
+		// A legacy collector token cannot opt itself into the runner protocol by
+		// asserting registration fields that were not bound into its credential.
 		admitted = false
 	}
 	if !admitted {
@@ -976,6 +1016,8 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Version:                  reg.Version,
 			Platform:                 reg.Platform,
 			Tags:                     reg.Tags,
+			RuntimeRole:              admission.RuntimeRole,
+			ActionCapability:         admission.ActionCapability,
 			ConnectedAt:              time.Now(),
 			OperationReceiptVersion:  reg.OperationReceiptVersion,
 			ActionPreflightVersion:   reg.ActionPreflightVersion,
@@ -1305,6 +1347,27 @@ func (s *Server) readLoop(ac *agentConn) {
 				}
 			}
 
+		case MsgTypeProxmoxGuestLifecycleResult:
+			result, decodeErr := DecodeProxmoxGuestLifecycleResultPayload(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid Proxmox guest lifecycle result")
+				continue
+			}
+			if !s.matchesPendingProxmoxGuestOperationForSession(connectionSessionKey(ac), ac.agent.AgentID, result) {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated Proxmox guest lifecycle result")
+				continue
+			}
+			s.mu.RLock()
+			ch, ok := s.pendingProxmoxGuestLifecycles[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
+			s.mu.RUnlock()
+			if ok {
+				select {
+				case ch <- result:
+				default:
+					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Proxmox guest lifecycle result channel full, dropping")
+				}
+			}
+
 		case MsgTypeDockerContainerLifecycleResult:
 			result, decodeErr := DecodeDockerContainerLifecycleResultPayload(msg.Payload)
 			if decodeErr != nil {
@@ -1586,6 +1649,9 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			Str("request_id", cmd.RequestID).
 			Msg("Execute command requested for disconnected agent")
 		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if err := requireLegacyFullTrustConnection(ac, "execute_command"); err != nil {
+		return nil, err
 	}
 	if err := s.authorizeCommandPayload(cmd); err != nil {
 		return nil, err
@@ -2027,6 +2093,41 @@ func (s *Server) ExecuteDockerContainerLifecycle(ctx context.Context, agentID st
 		})
 }
 
+// ExecuteProxmoxGuestLifecycle dispatches one closed Proxmox guest action to
+// an action-runner session. The wire contract contains only guest kind, fixed
+// lifecycle verb, numeric VMID, and request-bound before state.
+func (s *Server) ExecuteProxmoxGuestLifecycle(ctx context.Context, agentID string, req ProxmoxGuestLifecyclePayload) (*ProxmoxGuestLifecycleResultPayload, error) {
+	if s == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	if strings.TrimSpace(req.RequestID) == "" {
+		req.RequestID = uuid.NewString()
+	}
+	if err := BindProxmoxGuestLifecyclePayload(&req); err != nil {
+		return nil, err
+	}
+	if err := ValidateProxmoxGuestLifecyclePayload(&req); err != nil {
+		return nil, err
+	}
+	ac, ok := s.connectionForContext(ctx, agentID)
+	if !ok {
+		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if ac.admission.RuntimeRole != RuntimeRoleActionRunner || ac.admission.ActionCapability != ActionCapabilityTypedV1 {
+		return nil, fmt.Errorf("Proxmox guest lifecycle requires a typed action-runner session")
+	}
+	identity := ProxmoxGuestLifecycleOperationIdentity(agentID, req)
+	return dispatchTypedDockerContainerOperation(ctx, s, agentID, req.RequestID, req.Timeout, identity, req.GuestKind+":"+strconv.Itoa(req.VMID),
+		MsgTypeProxmoxGuestLifecycle, req, s.pendingProxmoxGuestLifecycles, "Proxmox guest lifecycle",
+		func(result ProxmoxGuestLifecycleResultPayload) error {
+			return ValidateProxmoxGuestLifecycleResultForRequest(req, result)
+		})
+}
+
 // dispatchTypedDockerContainerOperation owns the shared skeleton for closed
 // typed container dispatches: durable-receipt capability check, pending
 // operation claim, single-flight request registration, send, and the bounded
@@ -2229,6 +2330,9 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 			Str("request_id", req.RequestID).
 			Msg("Read file requested for disconnected agent")
 		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if err := requireLegacyFullTrustConnection(ac, "read_file"); err != nil {
+		return nil, err
 	}
 
 	readLog := log.With().
@@ -2509,6 +2613,9 @@ func (s *Server) sendDeployCommand(ctx context.Context, agentID string, msgType 
 	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		return fmt.Errorf("agent %s not connected", agentID)
+	}
+	if err := requireLegacyFullTrustConnection(ac, "deploy command"); err != nil {
+		return err
 	}
 
 	requestID = strings.TrimSpace(requestID)

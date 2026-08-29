@@ -122,6 +122,44 @@ account, while mutable state is confined to the collector-owned state
 directory. Ordinary updates preserve an installed profile and may not migrate a
 legacy root/full-trust service implicitly; safe-profile migration, health
 verification, and rollback are explicit transactions.
+The typed-helper profile keeps automatic updates behind a fixed filesystem
+transaction: `/var/lib/pulse-agent/update-quarantine` is collector-owned and
+read-only to the helper sandbox, `/var/lib/pulse-agent-helper` is root-only
+activation state/staging, and the helper has write access to `/usr/local/bin`
+solely to atomically replace the protocol-fixed `pulse-agent` target and its
+last-known-good copy. The collector can select no privileged source, target,
+path, command, or argument, and direct collector-owned replacement is not a
+fallback.
+
+The same supported Linux systemd profile can install `pulse-agent-runner` only
+through the separate `--enable-action-runner` choice, a private token file,
+and the already selected typed helper profile. The runner binary, unit,
+configuration, credential, health record, and receipt database are root-owned
+and independent from collector state. Activation is transactional and restores
+the previous runner-only files if health does not become current; disable and
+uninstall remove only remediation and leave monitoring running. The action
+credential is never placed in argv or reused as the collector token.
+
+Safe-profile migration is never an ordinary update side effect.
+`--safe-profile-inspect` is read-only and reports the current authority,
+platform support, provider differences, and unchanged action-runner state;
+`--safe-profile-apply` snapshots the collector/helper files and identity before
+installing the typed-helper monitoring-only profile; and
+`--safe-profile-rollback` restores that committed snapshot without broadening
+privilege or changing the independently enrolled runner. These operations fail
+closed outside Linux systemd. Appliance, non-systemd, Windows, and macOS
+profiles retain an explicitly named legacy/full-trust path until their service,
+filesystem, update, helper, and runner boundaries have separate proof.
+
+Release builds and archives carry both helper and runner binaries for the five
+Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,
+Ed25519, and SSH signature sidecars. Exact archive/container-context validation
+must prove those assets rather than inferring them from collector packaging.
+This packaging proof does not establish live platform qualification: helper
+update staging/activation/restart/rollback on a real systemd host, real
+Docker/Podman and Proxmox action execution, systemd migration rehearsal, and
+appliance support remain residual qualification work and must not be described
+as complete.
 
 Published exact-version install and rollback guidance must preserve the server
 and Unified Agent installer boundary. Supported systemd and Proxmox LXC

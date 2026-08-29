@@ -19,9 +19,17 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 )
 
 const defaultSocketPath = "/run/pulse-agent/helper.sock"
+
+const (
+	updateQuarantineDir = "/var/lib/pulse-agent/update-quarantine"
+	updateStagingDir    = "/var/lib/pulse-agent-helper/update-staging"
+	agentBinaryPath     = "/usr/local/bin/pulse-agent"
+	updateStatePath     = "/var/lib/pulse-agent-helper/update-activation.json"
+)
 
 type commandConfig struct {
 	socketPath  string
@@ -60,7 +68,34 @@ func run(args []string) error {
 	}
 	defer cleanup()
 
-	registry := agenthelper.NewRegistry(localSMARTProvider{}, localProxmoxProvider{})
+	containers, err := agenthelper.NewLocalContainerProvider([]agenthelper.ContainerEndpoint{
+		{Runtime: "docker", SocketPath: "/var/run/docker.sock", APIPath: "/v1.41/containers/json?all=1"},
+		{Runtime: "podman", SocketPath: "/run/podman/podman.sock", APIPath: "/v4.0.0/libpod/containers/json?all=true"},
+	})
+	if err != nil {
+		return fmt.Errorf("configure container inventory: %w", err)
+	}
+	updates, err := agenthelper.NewUpdateActivator(agenthelper.UpdateActivatorConfig{
+		QuarantineDir: updateQuarantineDir,
+		StagingDir:    updateStagingDir,
+		TargetPath:    agentBinaryPath,
+		StatePath:     updateStatePath,
+		VerifySignature: func(data []byte, signature string) error {
+			if !updatesignature.HasTrustedPublicKeys() {
+				return errors.New("helper build contains no trusted update keys")
+			}
+			return updatesignature.VerifyBytes(data, signature)
+		},
+		ValidateOwner:           agenthelper.StrictRootOwnedFile,
+		ValidateQuarantineOwner: agenthelper.FileOwnedByUID(uid),
+	})
+	if err != nil {
+		return fmt.Errorf("configure update activation: %w", err)
+	}
+	registry := agenthelper.NewRegistryWithProviders(localSMARTProvider{}, localProxmoxProvider{}, agenthelper.Providers{
+		Containers: containers,
+		Updates:    updates,
+	})
 	server, err := agenthelper.NewServer(agenthelper.ServerConfig{
 		AllowedUID:          uid,
 		PeerResolver:        agenthelper.PlatformPeerResolver{},

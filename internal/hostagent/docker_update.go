@@ -44,6 +44,8 @@ func (c *CommandClient) handleDockerContainerUpdate(ctx context.Context, conn *w
 		timeout = 15 * time.Minute
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, timeout)
+	c.registerActiveCommand(payload.RequestID, cancel)
+	defer c.unregisterActiveCommand(payload.RequestID)
 	defer cancel()
 
 	result := c.runDockerContainerUpdate(operationCtx, payload)

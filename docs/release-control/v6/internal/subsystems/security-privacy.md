@@ -44,6 +44,27 @@ operations rather than command, path, argument, environment, or shell input.
 Protocol decoding is bounded and strict, request deadlines are mandatory, and
 audit records contain metadata only. SMART and Proxmox LXC filesystem payloads
 remain local collector data and must never be copied into helper audit output.
+Container inventory is a bounded helper-owned projection of fixed
+Docker/Podman daemon endpoints, never a daemon proxy. Update staging accepts
+only an artifact identity and digest from the fixed collector-owned quarantine;
+the request cannot select a source, destination, target, URL, command, or
+argument. The helper revalidates the quarantine owner, signature, digest, ELF
+shape, regular-file identity, symlink resistance, and byte ceiling before
+copying into fixed root-owned staging. Activation and rollback then revalidate
+the root boundary, perform atomic replacement, and durably bind the transition
+identity before changing the root-owned collector binary.
+
+Remediation credentials belong only to the separately installed
+`pulse-agent-runner`. They bind organization, canonical host identity, token
+record, runtime role, and `typed_actions.v1`; monitoring credentials cannot be
+upgraded in place or accepted on the action session. The runner's closed
+protocol permits only the enumerated typed host, Proxmox guest, and container
+operations with strict payloads, target binding, deadlines, request digests,
+replay protection, cancellation, and durable terminal receipts. Generic
+shell/exec, unrestricted `read_file`, deploy, and trusted-origin bypasses are
+forbidden. The legacy combined command channel remains a disclosed full-trust
+migration boundary only until runner enrollment and live session parity are
+qualified; it is not safe-profile authority.
 
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,

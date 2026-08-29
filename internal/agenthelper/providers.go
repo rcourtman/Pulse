@@ -20,6 +20,22 @@ type ProxmoxProvider interface {
 	LXCFilesystems(context.Context) (json.RawMessage, error)
 }
 
+// ContainerProvider owns a complete, bounded inventory of the helper's fixed
+// local Docker and Podman endpoints. The protocol supplies no socket, URL,
+// daemon method, or query fields.
+type ContainerProvider interface {
+	Inventory(context.Context) (json.RawMessage, error)
+}
+
+// UpdateProvider owns the fixed-target, root-owned binary activation
+// transaction. Request values identify a pre-staged artifact; they are never
+// interpreted as filesystem paths.
+type UpdateProvider interface {
+	Stage(context.Context, UpdateStageRequest) (UpdateStageResult, error)
+	Activate(context.Context, UpdateActivateRequest) (UpdateResult, error)
+	Rollback(context.Context, UpdateRollbackRequest) (UpdateResult, error)
+}
+
 type ProviderError struct {
 	Code      string
 	Message   string
@@ -51,7 +67,7 @@ func providerError(err error) *ResponseError {
 
 func stableProviderErrorCode(code string) string {
 	switch code {
-	case ErrorProviderUnavailable, ErrorDeadlineExceeded:
+	case ErrorProviderUnavailable, ErrorDeadlineExceeded, ErrorArtifactInvalid, ErrorStateConflict:
 		return code
 	default:
 		return ErrorInternal

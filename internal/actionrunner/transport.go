@@ -1,0 +1,33 @@
+package actionrunner
+
+import (
+	"context"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
+)
+
+// TransportConfig carries only the separate runner's connection credential,
+// state, and TLS inputs. There is deliberately no monitoring/report config.
+type TransportConfig = hostagent.ActionRunnerClientConfig
+
+// Client is the action-runner-owned facade over the existing typed action
+// codecs and executors. The hostagent implementation remains an internal
+// compatibility detail while the collector continues its legacy migration.
+type Client struct {
+	inner *hostagent.CommandClient
+}
+
+func NewClient(config TransportConfig, hostID, hostname, version string) *Client {
+	return &Client{inner: hostagent.NewActionRunnerClient(config, hostID, hostname, version)}
+}
+
+func (client *Client) Run(ctx context.Context) error {
+	return client.inner.Run(ctx)
+}
+
+func (client *Client) Close() error {
+	if client == nil || client.inner == nil {
+		return nil
+	}
+	return client.inner.Close()
+}

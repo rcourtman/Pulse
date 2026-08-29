@@ -143,6 +143,10 @@ pulse_release_stage_server_archive() {
         echo "Error: PULSE_RELEASE_AGENT_HELPER_TARGETS is empty." >&2
         return 1
     fi
+    if [[ ${#PULSE_RELEASE_AGENT_RUNNER_TARGETS[@]} -eq 0 ]]; then
+        echo "Error: PULSE_RELEASE_AGENT_RUNNER_TARGETS is empty." >&2
+        return 1
+    fi
 
     rm -rf "${staging_dir}"
     mkdir -p "${staging_dir}/bin" "${staging_dir}/scripts"
@@ -160,6 +164,11 @@ pulse_release_stage_server_archive() {
     for target in "${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}"; do
         src="${agent_binary_dir}/pulse-agent-helper-${target}"
         dest="${staging_dir}/bin/pulse-agent-helper-${target}"
+        install -m 0755 "${src}" "${dest}"
+    done
+    for target in "${PULSE_RELEASE_AGENT_RUNNER_TARGETS[@]}"; do
+        src="${agent_binary_dir}/pulse-agent-runner-${target}"
+        dest="${staging_dir}/bin/pulse-agent-runner-${target}"
         install -m 0755 "${src}" "${dest}"
     done
     (

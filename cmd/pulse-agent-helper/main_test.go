@@ -128,6 +128,21 @@ func TestCommandRegistryWiresTypedLocalProviders(t *testing.T) {
 	}
 }
 
+func TestFixedPrivilegedEndpointsAreNotCallerConfigurable(t *testing.T) {
+	for _, args := range [][]string{
+		{"--docker-socket", "/tmp/attacker.sock"},
+		{"--staging-dir", "/tmp/staged"},
+		{"--target", "/tmp/pulse-agent"},
+	} {
+		if _, err := parseFlags(args); err == nil {
+			t.Fatalf("caller-selected privileged endpoint accepted: %v", args)
+		}
+	}
+	if updateStagingDir != "/var/lib/pulse-agent-helper/update-staging" || agentBinaryPath != "/usr/local/bin/pulse-agent" {
+		t.Fatal("update activation paths are not the fixed installer contract")
+	}
+}
+
 func TestLocalProxmoxProviderAlwaysReturnsValidJSON(t *testing.T) {
 	result, err := (localProxmoxProvider{}).LXCFilesystems(t.Context())
 	if err != nil {

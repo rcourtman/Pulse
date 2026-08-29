@@ -585,6 +585,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "scripts/installtests/agent_state_dir_lifecycle_test.go",
                         "scripts/installtests/install_sh_test.go",
+                        "scripts/installtests/safe_profile_migration_test.go",
                     ],
                 }
             ],
@@ -610,6 +611,39 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "scripts/installtests/agent_state_dir_lifecycle_test.go",
                         "scripts/installtests/install_sh_test.go",
+                        "scripts/installtests/safe_profile_migration_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_action_runner_runtime_uses_separate_typed_runner_policy(self):
+        required = infer_impacted_subsystems(
+            [
+                "cmd/pulse-agent-runner/main.go",
+                "internal/actionrunner/runner.go",
+                "internal/dockeragent/action_runtime.go",
+            ]
+        )
+        self.assertEqual(set(required), {"agent-lifecycle"})
+        lifecycle = required["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle["verification_requirements"],
+            [
+                {
+                    "id": "action-runner-runtime",
+                    "label": "separate typed action runner and durable receipt proof",
+                    "touched_runtime_files": [
+                        "cmd/pulse-agent-runner/main.go",
+                        "internal/actionrunner/runner.go",
+                        "internal/dockeragent/action_runtime.go",
+                    ],
+                    "allow_same_subsystem_tests": True,
+                    "test_prefixes": ["internal/actionrunner/"],
+                    "exact_files": [
+                        "cmd/pulse-agent-runner/main_test.go",
+                        "internal/agentexec/server_websocket_test.go",
+                        "internal/hostagent/action_runner_client_test.go",
                     ],
                 }
             ],
@@ -1278,6 +1312,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": ["frontend-modern/src/api/__tests__/"],
                     "exact_files": [
                         "frontend-modern/src/types/api.ts",
+                        "internal/api/action_runner_credentials_test.go",
                         "internal/api/ai_handlers_more_test.go",
                         "internal/api/ai_handlers_patrol_actions_additional_test.go",
                         "internal/api/alerting/external_probe_notifications_test.go",

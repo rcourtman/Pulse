@@ -4,6 +4,7 @@ package agentbinding
 import (
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -22,6 +23,28 @@ type Decision struct {
 	RebindHostname bool
 	BackfillID     bool
 	BackfillHost   bool
+}
+
+// EvaluateActionRunner admits only a pre-bound, typed action credential whose
+// tenant-independent host identity exactly matches the registering runner.
+// Action credentials are never first-use rebound or legacy-migrated.
+func EvaluateActionRunner(record *config.APITokenRecord, requestedID, requestedHost string) Decision {
+	if record == nil || !record.HasScope(config.ScopeAgentExec) {
+		return Decision{}
+	}
+	if strings.TrimSpace(record.Metadata[agenttokens.RuntimeRoleMetadataKey]) != agenttokens.CredentialKindActionRunner ||
+		strings.TrimSpace(record.Metadata[agenttokens.ActionCapabilityMetadataKey]) != agenttokens.ActionCapabilityTypedV1 ||
+		strings.TrimSpace(record.Metadata[agenttokens.ActionBindingVersionMetadataKey]) != agenttokens.ActionBindingVersion {
+		return Decision{}
+	}
+	boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
+	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
+	requestedID = strings.TrimSpace(requestedID)
+	requestedHost = strings.TrimSpace(requestedHost)
+	if boundID == "" || boundHost == "" || requestedID == "" || requestedHost == "" {
+		return Decision{}
+	}
+	return Decision{Admit: boundID == requestedID && hostnamesMatch(boundHost, requestedHost)}
 }
 
 func Evaluate(record *config.APITokenRecord, requestedID, requestedHost string) Decision {

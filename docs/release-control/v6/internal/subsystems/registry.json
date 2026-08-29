@@ -1294,6 +1294,7 @@
       "lane": "L16",
       "contract": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
       "owned_prefixes": [
+        "internal/actionrunner/",
         "internal/agentexec/",
         "internal/agenthelper/",
         "internal/agenttarget/",
@@ -1304,6 +1305,7 @@
       "owned_files": [
         ".github/workflows/unified-agent-native.yml",
         "cmd/pulse-agent-helper/main.go",
+        "cmd/pulse-agent-runner/main.go",
         "cmd/pulse-agent/main.go",
         "cmd/pulse-agent/service_windows.go",
         "frontend-modern/src/api/agentProfiles.ts",
@@ -1367,6 +1369,7 @@
         "internal/api/configapi/setup_script_render.go",
         "internal/api/unified_agent.go",
         "internal/config/host_continuity.go",
+        "internal/dockeragent/action_runtime.go",
         "internal/dockeragent/agent.go",
         "internal/dockeragent/container_update.go",
         "internal/dockeragent/container_update_typed.go",
@@ -1392,7 +1395,27 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
-            "id": "agent-privilege-helper-runtime",
+            "id": "action-runner-runtime",
+            "label": "separate typed action runner and durable receipt proof",
+            "match_prefixes": [
+              "internal/actionrunner/"
+            ],
+            "match_files": [
+              "cmd/pulse-agent-runner/main.go",
+              "internal/dockeragent/action_runtime.go"
+            ],
+            "allow_same_subsystem_tests": true,
+            "test_prefixes": [
+              "internal/actionrunner/"
+            ],
+            "exact_files": [
+              "cmd/pulse-agent-runner/main_test.go",
+              "internal/agentexec/server_websocket_test.go",
+              "internal/hostagent/action_runner_client_test.go"
+            ]
+          },
+        {
+          "id": "agent-privilege-helper-runtime",
             "label": "typed no-network agent privilege helper proof",
             "match_prefixes": [
               "internal/agenthelper/"
@@ -1404,9 +1427,11 @@
             "test_prefixes": [
               "internal/agenthelper/"
             ],
-            "exact_files": [
-              "cmd/pulse-agent-helper/main_test.go"
-            ]
+          "exact_files": [
+            "cmd/pulse-agent-helper/main_test.go",
+            "internal/agenthelper/container_inventory_test.go",
+            "internal/agenthelper/update_activation_test.go"
+          ]
           },
           {
             "id": "patrol-autonomy-colima-real-lab",
@@ -1626,10 +1651,11 @@
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
-            "exact_files": [
-              "scripts/installtests/agent_state_dir_lifecycle_test.go",
-              "scripts/installtests/install_sh_test.go"
-            ]
+          "exact_files": [
+            "scripts/installtests/agent_state_dir_lifecycle_test.go",
+            "scripts/installtests/install_sh_test.go",
+            "scripts/installtests/safe_profile_migration_test.go"
+          ]
           },
           {
             "id": "windows-agent-installer-runtime",
@@ -3073,9 +3099,10 @@
             "test_prefixes": [
               "frontend-modern/src/api/__tests__/"
             ],
-            "exact_files": [
-              "frontend-modern/src/types/api.ts",
-              "internal/api/ai_handlers_more_test.go",
+          "exact_files": [
+            "frontend-modern/src/types/api.ts",
+            "internal/api/action_runner_credentials_test.go",
+            "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/alerting/external_probe_notifications_test.go",
               "internal/api/audit_handlers_test.go",
@@ -4610,8 +4637,8 @@
               "scripts/release_control/release_candidate_manifest_test.py"
             ]
           },
-          {
-            "id": "release-build-metadata-runtime",
+        {
+          "id": "release-build-metadata-runtime",
             "label": "release build metadata proof",
             "match_prefixes": [],
             "match_files": [
@@ -4631,11 +4658,12 @@
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
-            "exact_files": [
-              "pulse-enterprise:scripts/validate-pro-release-line_test.sh",
-              "scripts/installtests/backfill_release_assets_test.go",
-              "scripts/installtests/build_release_assets_test.go",
-              "scripts/installtests/release_ldflags_test.go"
+          "exact_files": [
+            "pulse-enterprise:scripts/validate-pro-release-line_test.sh",
+            "scripts/installtests/backfill_release_assets_test.go",
+            "scripts/installtests/build_release_assets_test.go",
+            "scripts/installtests/release_ldflags_test.go",
+            "scripts/installtests/safe_profile_migration_test.go"
             ]
           },
           {
@@ -4849,8 +4877,8 @@
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
           },
-          {
-            "id": "shell-installer-runtime",
+        {
+          "id": "shell-installer-runtime",
             "label": "shell installer runtime proof",
             "match_prefixes": [],
             "match_files": [
@@ -4858,10 +4886,11 @@
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
-            "exact_files": [
-              "scripts/installtests/agent_state_dir_lifecycle_test.go",
-              "scripts/installtests/install_sh_test.go"
-            ]
+          "exact_files": [
+            "scripts/installtests/agent_state_dir_lifecycle_test.go",
+            "scripts/installtests/install_sh_test.go",
+            "scripts/installtests/safe_profile_migration_test.go"
+          ]
           }
         ],
         "match_files": null

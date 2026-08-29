@@ -29,6 +29,19 @@ with an exact local build command when the helper is absent; published builds
 may proxy only the exact versioned `pulse-agent-helper-linux-*` release asset
 and its two signature sidecars.
 
+The action runner has a parallel Linux-only, rate-limited signed-binary
+contract at `GET|HEAD /download/pulse-agent-runner?arch=linux-*`; it never
+falls back to a collector or helper asset. `POST
+/api/agents/action-runner/credential` is an admin and `actions:execute`
+operation that accepts one canonical monitored host identity and returns a
+new, separately persisted `agent:exec` credential bound to organization,
+agent ID, normalized hostname, runtime role `action-runner`, and capability
+`typed_actions.v1`. Monitoring credentials cannot call the issuance route or
+authenticate an action-runner session, and action-runner credentials are not
+collector report/config credentials. Unknown request fields, ambiguous or
+conflicted host identities, and persistence failures fail before any usable
+credential is returned.
+
 The API runtime is decomposed along production domain boundaries so Go can
 compile and execute domain qualification packages concurrently. Shared tenant
 identity and scope enforcement live in `internal/api/apicontext/` and
@@ -311,6 +324,7 @@ the current command-enabled boolean.
 81. `internal/api/agent_exec_token_binding.go`
     81a. `internal/api/agentbinding/policy.go`
     81b. `internal/api/agenttokens/install.go`
+    81c. `internal/api/action_runner_credentials.go`
     72a. `cmd/pulse-mcp/main.go`
     72b. `cmd/pulse-mcp/README.md`
     72c. `cmd/agent-probe/main.go`

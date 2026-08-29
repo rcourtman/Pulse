@@ -650,6 +650,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/install.ps1", r.downloadLimiter.Middleware(r.handleDownloadUnifiedInstallScriptPS))
 	r.mux.HandleFunc("/download/pulse-agent", r.downloadLimiter.Middleware(r.handleDownloadUnifiedAgent))
 	r.mux.HandleFunc("/download/pulse-agent-helper", r.downloadLimiter.Middleware(r.handleDownloadAgentHelper))
+	r.mux.HandleFunc("/download/pulse-agent-runner", r.downloadLimiter.Middleware(r.handleDownloadAgentRunner))
 
 	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
 	r.mux.HandleFunc("/api/server/info", r.handleServerInfo)

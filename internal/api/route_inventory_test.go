@@ -290,6 +290,8 @@ var publicRouteAllowlist = []string{
 	"/install.sh",
 	"/install.ps1",
 	"/download/pulse-agent",
+	"/download/pulse-agent-helper",
+	"/download/pulse-agent-runner",
 }
 
 var bareRouteAllowlist = []string{
@@ -346,6 +348,8 @@ var bareRouteAllowlist = []string{
 	"/api/system/verify-temperature-ssh",
 	"/api/version",
 	"/download/pulse-agent",
+	"/download/pulse-agent-helper",
+	"/download/pulse-agent-runner",
 	"/install.ps1",
 	"/install.sh",
 	"/api/public/signup",
@@ -375,6 +379,7 @@ var allRouteAllowlist = []string{
 	"/api/logs/level",
 	"/api/agents/docker/report",
 	"/api/agents/kubernetes/report",
+	"/api/agents/action-runner/credential",
 	"/api/agents/agent/report",
 	"/api/agents/host/report",
 	"/api/agents/agent/lookup",
@@ -702,6 +707,8 @@ var allRouteAllowlist = []string{
 	"/install.sh",
 	"/install.ps1",
 	"/download/pulse-agent",
+	"/download/pulse-agent-helper",
+	"/download/pulse-agent-runner",
 	"/api/agent/version",
 	"/api/server/info",
 	"/ws",

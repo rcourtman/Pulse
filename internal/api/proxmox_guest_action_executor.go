@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -52,6 +53,10 @@ type proxmoxGuestPostconditionObserver interface {
 	ObserveProxmoxGuest(context.Context, string, string, string, int, proxmoxGuestKind) (proxmoxGuestPostconditionObservation, error)
 }
 
+type proxmoxGuestLifecycleAgentCommander interface {
+	ExecuteProxmoxGuestLifecycle(context.Context, string, agentexec.ProxmoxGuestLifecyclePayload) (*agentexec.ProxmoxGuestLifecycleResultPayload, error)
+}
+
 func newProxmoxGuestActionExecutor(resources *ResourceHandlers, agents actionAgentCommander, observer proxmoxGuestPostconditionObserver) ActionExecutor {
 	if resources == nil || agents == nil {
 		return nil
@@ -59,8 +64,32 @@ func newProxmoxGuestActionExecutor(resources *ResourceHandlers, agents actionAge
 	return proxmoxGuestActionExecutor{resources: resources, agents: agents, observer: observer}
 }
 
+func (e proxmoxGuestActionExecutor) BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error) {
+	record, err := unified.NormalizeActionAuditRecord(record)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	resource, kind, err := e.currentProxmoxGuestResource(ctx, record.Request.ResourceID, record.Request.CapabilityName)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	agentID, err := e.connectedProxmoxNodeCommandAgentID(ctx, resource)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	request, err := proxmoxGuestLifecycleRequest(attempt.ID, record.ID, string(kind), record.Request.CapabilityName, resource)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	return unified.BindActionDispatchAttempt(attempt, unified.ActionDispatchBinding{OperationKind: request.Operation, OperationVersion: request.OperationVersion, RequestDigest: request.RequestDigest, AgentID: agentID})
+}
+
 func (e proxmoxGuestActionExecutor) ActionHandlerNames() []string {
 	return []string{proxmoxVMLifecycleHandler, proxmoxCTLifecycleHandler}
+}
+
+func (e proxmoxGuestActionExecutor) ActionDispatchOperationKinds() []string {
+	return []string{"start", "stop", "shutdown", "reboot"}
 }
 
 func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
@@ -93,8 +122,46 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 		}
 	}
 
-	command := proxmoxGuestLifecycleCommand(kind, operation, vmid)
 	actionStartedAt := time.Now().UTC()
+	if typedAgents, ok := e.agents.(proxmoxGuestLifecycleAgentCommander); ok {
+		request, err := proxmoxGuestLifecycleRequest(attempt.ID, record.ID, string(kind), operation, resource)
+		if err != nil {
+			return nil, err
+		}
+		if attempt.OperationKind != "" && agentexec.ProxmoxGuestLifecycleOperationIdentity(agentID, request) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
+			return nil, fmt.Errorf("Proxmox guest lifecycle dispatch binding drift")
+		}
+		result, err := typedAgents.ExecuteProxmoxGuestLifecycle(agentCommandContext(ctx), agentID, request)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil {
+			return nil, fmt.Errorf("typed Proxmox guest lifecycle returned no result")
+		}
+		if err := agentexec.ValidateProxmoxGuestLifecycleResultForRequest(request, *result); err != nil {
+			return nil, fmt.Errorf("invalid typed Proxmox guest lifecycle result: %w", err)
+		}
+		succeeded := result.ExecutionPhase == agentexec.ProxmoxGuestPhaseComplete && result.MutationCompleted && result.Error == ""
+		exitCode := 0
+		if !succeeded {
+			exitCode = 1
+		}
+		output := ""
+		if result.ReadbackRan {
+			output = "status: " + result.After.Status
+		}
+		agentVerification := &unified.ActionVerificationResult{
+			Ran: result.ReadbackRan, Command: proxmoxGuestStatusCommand(kind, vmid), Output: output,
+			Success: succeeded, RanAt: result.After.ObservedAt,
+		}
+		independentAfter, independentEvaluation := e.observeProxmoxGuestPostcondition(ctx, record.Request.ResourceID, resource, kind, operation, independentBefore, actionStartedAt)
+		return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, exitCode, output, result.Error, agentVerification, independentBefore, independentAfter, independentEvaluation, actionStartedAt)
+	}
+
+	// Legacy full-trust sessions retain the historical command boundary during
+	// migration. Typed action-runner sessions can never enter this fallback:
+	// the server rejects execute_command for that runtime role.
+	command := proxmoxGuestLifecycleCommand(kind, operation, vmid)
 	result, err := e.agents.ExecuteCommand(agentCommandContext(ctx), agentID, agentexec.ExecuteCommandPayload{
 		RequestID:  attempt.ID,
 		Command:    command,
@@ -115,6 +182,32 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 	agentVerification := e.verifyProxmoxGuestState(ctx, agentID, record.ID, kind, vmid, operation, actionStartedAt)
 	independentAfter, independentEvaluation := e.observeProxmoxGuestPostcondition(ctx, record.Request.ResourceID, resource, kind, operation, independentBefore, actionStartedAt)
 	return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, result.ExitCode, output, result.Error, agentVerification, independentBefore, independentAfter, independentEvaluation, actionStartedAt)
+}
+
+func proxmoxGuestLifecycleRequest(attemptID, actionID, kind, operation string, resource unified.Resource) (agentexec.ProxmoxGuestLifecyclePayload, error) {
+	expectedStatus := ""
+	if resource.Proxmox != nil {
+		expectedStatus = strings.ToLower(strings.TrimSpace(resource.Proxmox.RuntimeStatus))
+	}
+	if expectedStatus == "" {
+		switch resource.Status {
+		case unified.StatusOnline:
+			expectedStatus = "running"
+		case unified.StatusOffline:
+			expectedStatus = "stopped"
+		}
+	}
+	if expectedStatus != "running" && expectedStatus != "stopped" {
+		return agentexec.ProxmoxGuestLifecyclePayload{}, fmt.Errorf("Proxmox guest lifecycle requires a current running or stopped state")
+	}
+	request := agentexec.ProxmoxGuestLifecyclePayload{
+		RequestID: attemptID, ActionID: actionID, Operation: operation, GuestKind: kind,
+		VMID: resource.Proxmox.VMID, ExpectedStatus: expectedStatus, Timeout: proxmoxGuestLifecycleTimeout(operation),
+	}
+	if err := agentexec.BindProxmoxGuestLifecyclePayload(&request); err != nil {
+		return agentexec.ProxmoxGuestLifecyclePayload{}, err
+	}
+	return request, nil
 }
 
 func (e proxmoxGuestActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {

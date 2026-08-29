@@ -144,6 +144,10 @@ for target in "${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}"; do
     task_components+=(agent-helper)
     task_targets+=("${target}")
 done
+for target in "${PULSE_RELEASE_AGENT_RUNNER_TARGETS[@]}"; do
+    task_components+=(agent-runner)
+    task_targets+=("${target}")
+done
 if [[ "${PROFILE}" == "full" ]]; then
     for target in "${PULSE_RELEASE_SERVER_TARGETS[@]}"; do
         task_components+=(server)
@@ -169,6 +173,10 @@ build_one() {
             ;;
         agent-helper)
             package=./cmd/pulse-agent-helper
+			ldflags="${agent_ldflags}"
+            ;;
+        agent-runner)
+            package=./cmd/pulse-agent-runner
             ldflags=""
             ;;
         mcp)

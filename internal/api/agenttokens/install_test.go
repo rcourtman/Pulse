@@ -30,6 +30,59 @@ func TestIssueAndPersistInstallToken(t *testing.T) {
 	if !record.HasScope(config.ScopeAgentExec) {
 		t.Fatalf("commands-enabled host scopes = %v", record.Scopes)
 	}
+	if got := record.Metadata[RuntimeRoleMetadataKey]; got != CredentialKindLegacyFullTrust {
+		t.Fatalf("combined install runtime role = %q, want %q", got, CredentialKindLegacyFullTrust)
+	}
+}
+
+func TestIssueActionRunnerAndPersistIsHostBoundAndExecOnly(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	raw, record, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-123", Hostname: " Node.EXAMPLE. ", OwnerUserID: "operator",
+	})
+	if err != nil {
+		t.Fatalf("IssueActionRunnerAndPersist: %v", err)
+	}
+	if raw == "" || record == nil {
+		t.Fatalf("issued action credential = (%q, %#v)", raw, record)
+	}
+	if len(record.Scopes) != 1 || record.Scopes[0] != config.ScopeAgentExec {
+		t.Fatalf("action credential scopes = %v, want only %q", record.Scopes, config.ScopeAgentExec)
+	}
+	if record.HasScope(config.ScopeAgentReport) || record.HasScope(config.ScopeAgentConfigRead) || record.HasScope(config.ScopeAgentManage) {
+		t.Fatalf("action credential inherited collector authority: %v", record.Scopes)
+	}
+	if record.OrgID != "org-a" || record.Metadata["bound_agent_id"] != "machine-123" || record.Metadata["bound_hostname"] != "node.example" {
+		t.Fatalf("action credential binding = org=%q metadata=%#v", record.OrgID, record.Metadata)
+	}
+	if record.Metadata[RuntimeRoleMetadataKey] != CredentialKindActionRunner ||
+		record.Metadata[ActionCapabilityMetadataKey] != ActionCapabilityTypedV1 ||
+		record.Metadata[ActionBindingVersionMetadataKey] != ActionBindingVersion {
+		t.Fatalf("action credential authority metadata = %#v", record.Metadata)
+	}
+}
+
+func TestIssueActionRunnerAndPersistRejectsIncompleteBinding(t *testing.T) {
+	for _, tc := range []ActionRunnerIssueOptions{
+		{AgentID: "machine", Hostname: "node"},
+		{OrgID: "org", Hostname: "node"},
+		{OrgID: "org", AgentID: "machine"},
+	} {
+		if raw, record, err := IssueActionRunnerAndPersist(&config.Config{}, nil, tc); !errors.Is(err, ErrRecord) || raw != "" || record != nil {
+			t.Fatalf("incomplete binding %#v = (%q, %#v, %v), want ErrRecord", tc, raw, record, err)
+		}
+	}
+}
+
+func TestIssueAndPersistRejectsMonitoringRoleWithExecAuthority(t *testing.T) {
+	_, _, err := IssueAndPersist(&config.Config{}, nil, IssueOptions{
+		TokenName: "invalid",
+		Scopes:    []string{config.ScopeAgentReport, config.ScopeAgentExec},
+		Metadata:  map[string]string{RuntimeRoleMetadataKey: CredentialKindMonitoringCollector},
+	})
+	if !errors.Is(err, ErrRecord) {
+		t.Fatalf("monitoring role with exec authority error = %v, want ErrRecord", err)
+	}
 }
 
 func TestProxmoxScopesRequireExplicitCommandAuthority(t *testing.T) {

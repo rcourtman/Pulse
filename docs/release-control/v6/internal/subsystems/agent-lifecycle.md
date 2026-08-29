@@ -34,6 +34,25 @@ management, and fleet control surfaces. Pulse v6 has one host-installed
 infrastructure agent binary, `pulse-agent`; host, Docker / Podman,
 Kubernetes, Proxmox-local, and other node-local telemetry are modules inside
 that binary, not separate customer-facing agent products.
+On supported Linux systemd hosts, the opt-in safe runtime is a root-owned,
+unprivileged monitoring collector plus the no-network typed helper, with
+remediation installed only as the separate root-owned `pulse-agent-runner`.
+The runner has its own host-bound credential and state, registers with the
+explicit `action-runner` role, and admits only protocol-v1 typed host-update,
+host-storage-cleanup, Proxmox guest lifecycle, and container lifecycle/update
+operations. Generic shell, exec, unrestricted `read_file`, and deploy requests
+are forbidden. Removing or disabling the runner leaves collector monitoring
+and the helper unchanged.
+
+The runner's server transport currently reuses the combined agent command
+WebSocket envelope as a migration boundary. That compatibility path may carry
+only the closed typed action set after runtime-role, organization, canonical
+host, token, capability, target, digest, deadline, replay, cancellation, and
+receipt validation. It must be removed once supported command-capable installs
+have an action-runner migration path, live action-runner session parity is
+qualified, and no supported client depends on collector command delivery.
+Until those criteria are met, the combined collector command path is explicitly
+legacy/full-trust compatibility, not part of the safe profile.
 Fresh installs carry an explicit local command-authority profile. The closed
 values are `monitoring-only`, `command-capable`, and `legacy`. A
 `monitoring-only` service may accept remote configuration that keeps commands
@@ -252,7 +271,12 @@ installer download and the agent's subsequent Pulse TLS connection.
    5f. `pkg/agents/docker/report_limits.go`
    5g. `internal/hostagent/xcpng.go`
    5h. `internal/hostagent/proxmox_lxc_filesystems.go`
+   5i. `internal/agenthelper/`
+   5j. `internal/actionrunner/`
+   5k. `internal/dockeragent/action_runtime.go`
 6. `cmd/pulse-agent/main.go`
+   6a. `cmd/pulse-agent-helper/main.go`
+   6b. `cmd/pulse-agent-runner/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
    8a. `.github/workflows/unified-agent-native.yml`
@@ -6669,9 +6693,15 @@ errors correlated by request ID.
 Admission is local and fail closed: Linux peer credentials must resolve to the
 configured collector UID before dispatch. The registry exposes only named,
 versioned operations whose providers own all executable paths and arguments.
-The first collection operations are `smart.snapshot.v1` and
-`proxmox.lxc_filesystems.v1`; callers cannot supply a binary path, arbitrary
-filesystem path, environment, or command arguments. A health/capabilities
+The first collection operations are `smart.snapshot.v1`,
+`proxmox.lxc_filesystems.v1`, and the bounded fixed-endpoint
+`container.inventory.v1`; callers cannot supply a binary path, arbitrary
+filesystem path, daemon endpoint, environment, or command arguments. The
+`agent_update.activate.v1` and `agent_update.rollback.v1` families accept only
+fixed-root, regular, owned, digest-bound update artifacts and produce durable
+activation identity around an atomic swap. Their collector staging,
+restart/health, and live rollback integration remains qualification work, so
+the safe collector must not claim automatic update parity yet. A health/capabilities
 operation reports protocol and operation availability without widening the
 allow-list. Provider execution inherits a bounded request context. Audit hooks
 receive operation, request ID, peer identity, duration, outcome, and response

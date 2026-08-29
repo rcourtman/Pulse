@@ -5640,6 +5640,8 @@ func TestInstallSHTypedPrivilegedHelperUnits(t *testing.T) {
 		set -euo pipefail
 		PRIVILEGED_HELPER_NAME="pulse-agent-helper"
 		PRIVILEGED_HELPER_SOCKET_PATH="/run/pulse-agent/helper.sock"
+		PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR="/var/lib/pulse-agent/update-quarantine"
+		PRIVILEGED_HELPER_STATE_DIR="/var/lib/pulse-agent-helper"
 		LEAST_PRIVILEGE_USER="pulse-agent"
 ` + extractInstallShellFunction(t, "render_privileged_helper_socket_unit") + `
 ` + extractInstallShellFunction(t, "render_privileged_helper_service_unit") + `
@@ -5682,6 +5684,8 @@ func TestInstallSHTypedPrivilegedHelperUnits(t *testing.T) {
 		"RestrictAddressFamilies=AF_UNIX",
 		"ProtectSystem=strict",
 		"ProtectHome=true",
+		"ReadOnlyPaths=/var/lib/pulse-agent/update-quarantine",
+		"ReadWritePaths=/var/lib/pulse-agent-helper /usr/local/bin",
 	} {
 		if !strings.Contains(service, required) {
 			t.Fatalf("typed helper service unit missing %q:\n%s", required, service)
@@ -5708,7 +5712,6 @@ func TestInstallSHTypedPrivilegedHelperProfileIsOptInAndFailClosed(t *testing.T)
 		`--enable-privileged-helper is supported only on standard Linux systemd hosts; no broader-privilege fallback was applied`,
 		`Preserving existing typed privileged-helper profile`,
 		`PULSE_AGENT_HELPER_SOCKET`,
-		`EXEC_ARG_ITEMS+=(--disable-auto-update)`,
 		`chown root:root "${INSTALL_DIR}/${BINARY_NAME}"`,
 		`chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"`,
 		`chown -R "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "$STATE_DIR"`,
@@ -5728,6 +5731,115 @@ func TestInstallSHTypedPrivilegedHelperProfileIsOptInAndFailClosed(t *testing.T)
 		if !strings.Contains(script, required) {
 			t.Fatalf("install.sh missing typed-helper invariant: %s", required)
 		}
+	}
+	if strings.Contains(script, `EXEC_ARG_ITEMS+=(--disable-auto-update)`) {
+		t.Fatal("typed helper profile must keep updater enabled for signed helper-backed activation")
+	}
+}
+
+func TestInstallSHTypedPrivilegeHelperUpdateFilesystemBoundary(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+	for _, required := range []string{
+		`PRIVILEGED_HELPER_STATE_DIR="/var/lib/pulse-agent-helper"`,
+		`PRIVILEGED_HELPER_UPDATE_STAGING_DIR="${PRIVILEGED_HELPER_STATE_DIR}/update-staging"`,
+		`PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR="/var/lib/pulse-agent/update-quarantine"`,
+		`ReadOnlyPaths=${PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR}`,
+		`ReadWritePaths=${PRIVILEGED_HELPER_STATE_DIR} /usr/local/bin`,
+		`install -d -o "$LEAST_PRIVILEGE_USER" -g "$LEAST_PRIVILEGE_USER" -m 0700`,
+		`install -d -o root -g root -m 0700`,
+		`Typed privileged-helper updates require the fixed /usr/local/bin/pulse-agent target`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("install.sh missing typed helper update boundary %q", required)
+		}
+	}
+}
+
+func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+	for _, required := range []string{
+		`ACTION_RUNNER_ENABLED="false"`,
+		`ACTION_RUNNER_NAME="pulse-agent-runner"`,
+		`ACTION_RUNNER_TOKEN_FILE="${ACTION_RUNNER_CONFIG_DIR}/token"`,
+		`--enable-action-runner) ACTION_RUNNER_ENABLED="true"; ACTION_RUNNER_EXPLICIT="true"; shift ;;`,
+		`--disable-action-runner) ACTION_RUNNER_ENABLED="false"; ACTION_RUNNER_EXPLICIT="true"; shift ;;`,
+		`--uninstall-action-runner) UNINSTALL_ACTION_RUNNER="true"; shift ;;`,
+		`--enable-action-runner requires the safe --least-privilege --enable-privileged-helper collector profile`,
+		`--enable-action-runner cannot be combined with legacy collector --enable-commands`,
+		`--action-token-file requires --enable-action-runner (or an existing preserved runner profile)`,
+		`The action runner must use a separate credential from the collector token`,
+		`Preserving existing separately enabled action-runner profile`,
+		`write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"`,
+		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"`,
+		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"`,
+		`/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}`,
+		`verify_download_signature "$TMP_ACTION_RUNNER_BIN" "$runner_signature"`,
+		`install -o root -g root -m 0755 "$TMP_ACTION_RUNNER_BIN"`,
+		`chmod 0600 "$ACTION_RUNNER_TOKEN_FILE"`,
+		`ACTION_TOKEN=""`,
+		`health_mtime=$(stat -c '%Y' "$ACTION_RUNNER_HEALTH_FILE"`,
+		`"registered"[[:space:]]*:[[:space:]]*true`,
+		`"host_id"[[:space:]]*:[[:space:]]*`,
+		`[[ "$health_agent_id" == "$expected_agent_id" ]]`,
+		`rolling back runner-only files while leaving monitoring active`,
+		`Pulse action runner removed. Collector monitoring was left installed and running.`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("install.sh missing action-runner invariant: %s", required)
+		}
+	}
+	teardown := extractInstallShellFunction(t, "teardown_action_runner_service")
+	if strings.Contains(teardown, "teardown_systemd_agent_service") || strings.Contains(teardown, `rm -f "${INSTALL_DIR}/${BINARY_NAME}"`) {
+		t.Fatalf("runner teardown must not remove the monitoring collector:\n%s", teardown)
+	}
+}
+
+func TestInstallSHRendersHardenedActionRunnerUnit(t *testing.T) {
+	root := t.TempDir()
+	unitPath := filepath.Join(root, "pulse-agent-runner.service")
+	script := `
+		set -euo pipefail
+		ACTION_RUNNER_ENV_FILE="/etc/pulse-agent-runner/runner.env"
+		ACTION_RUNNER_STATE_DIR="/var/lib/pulse-agent-runner"
+` + extractInstallShellFunction(t, "render_action_runner_service_unit") + `
+		render_action_runner_service_unit "` + unitPath + `" "/usr/local/lib/pulse-agent/pulse-agent-runner"
+	`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("render action runner unit: %v\n%s", err, out)
+	}
+	content, err := os.ReadFile(unitPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := string(content)
+	for _, required := range []string{
+		"ExecStart=/usr/local/lib/pulse-agent/pulse-agent-runner",
+		"EnvironmentFile=/etc/pulse-agent-runner/runner.env",
+		"User=root",
+		"Group=root",
+		"NoNewPrivileges=true",
+		"ProtectHome=true",
+		"ProtectSystem=strict",
+		"ProtectKernelTunables=true",
+		"ProtectKernelModules=true",
+		"ProtectControlGroups=true",
+		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+		"ReadWritePaths=/var/lib/pulse-agent-runner",
+	} {
+		if !strings.Contains(unit, required) {
+			t.Fatalf("action runner unit missing %q:\n%s", required, unit)
+		}
+	}
+	if strings.Contains(unit, "PrivateNetwork=true") {
+		t.Fatalf("networked action runner cannot use the helper's private-network sandbox:\n%s", unit)
 	}
 }
 

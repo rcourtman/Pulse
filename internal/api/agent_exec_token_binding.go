@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
@@ -130,6 +131,40 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 	if len(orgs) == 1 && strings.TrimSpace(orgs[0]) != "" {
 		organizationID = strings.TrimSpace(orgs[0])
 	}
+	runtimeRole := strings.TrimSpace(record.Metadata[agenttokens.RuntimeRoleMetadataKey])
+	if runtimeRole == agenttokens.CredentialKindMonitoringCollector {
+		config.Mu.Unlock()
+		log.Warn().Str("token_id", tokenID).Msg("Monitoring collector credential rejected by action listener")
+		return agentexec.AgentAdmission{}, false
+	}
+	if runtimeRole == agenttokens.CredentialKindActionRunner {
+		if len(orgs) != 1 {
+			config.Mu.Unlock()
+			log.Warn().Str("token_id", tokenID).Msg("Action runner credential requires one explicit organization binding")
+			return agentexec.AgentAdmission{}, false
+		}
+		decision := agentbinding.EvaluateActionRunner(record, requestedID, requestedHost)
+		if !decision.Admit {
+			config.Mu.Unlock()
+			log.Warn().Str("token_id", tokenID).Msg("Action runner credential binding or capability mismatch")
+			return agentexec.AgentAdmission{}, false
+		}
+		capability := strings.TrimSpace(record.Metadata[agenttokens.ActionCapabilityMetadataKey])
+		config.Mu.Unlock()
+		return agentexec.AgentAdmission{
+			OrganizationID:   organizationID,
+			TokenID:          tokenID,
+			AgentID:          requestedID,
+			Hostname:         requestedHost,
+			RuntimeRole:      agentexec.RuntimeRoleActionRunner,
+			ActionCapability: capability,
+		}, true
+	}
+	if runtimeRole != "" && runtimeRole != agenttokens.CredentialKindLegacyFullTrust {
+		config.Mu.Unlock()
+		log.Warn().Str("token_id", tokenID).Str("runtime_role", runtimeRole).Msg("Agent exec token has unsupported runtime role")
+		return agentexec.AgentAdmission{}, false
+	}
 
 	boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
 	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
@@ -148,6 +183,7 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			"bound_hostname",
 			"bound_at",
 			agentExecBindingVersionKey,
+			agenttokens.RuntimeRoleMetadataKey,
 		)
 		record.Metadata["bound_agent_id"] = requestedID
 		// A bound_hostname already written by the Proxmox auto-register
@@ -159,6 +195,7 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 		}
 		record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
 		record.Metadata[agentExecBindingVersionKey] = agentExecBindingVersion
+		record.Metadata[agenttokens.RuntimeRoleMetadataKey] = agenttokens.CredentialKindLegacyFullTrust
 		if r.persistence != nil {
 			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 				restoreAgentExecMetadata(record.Metadata, previousMetadata)
@@ -184,6 +221,7 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			TokenID:        tokenID,
 			AgentID:        requestedID,
 			Hostname:       requestedHost,
+			RuntimeRole:    agentexec.RuntimeRoleLegacyFullTrust,
 		}, true
 
 	case decision.legacyMigrate:
@@ -193,10 +231,12 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			"bound_agent_id",
 			"bound_at",
 			agentExecBindingVersionKey,
+			agenttokens.RuntimeRoleMetadataKey,
 		)
 		record.Metadata["bound_agent_id"] = requestedID
 		record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
 		record.Metadata[agentExecBindingVersionKey] = agentExecBindingVersion
+		record.Metadata[agenttokens.RuntimeRoleMetadataKey] = agenttokens.CredentialKindLegacyFullTrust
 		if r.persistence != nil {
 			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 				restoreAgentExecMetadata(record.Metadata, previousMetadata)
@@ -220,6 +260,7 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			TokenID:        tokenID,
 			AgentID:        requestedID,
 			Hostname:       requestedHost,
+			RuntimeRole:    agentexec.RuntimeRoleLegacyFullTrust,
 		}, true
 
 	case decision.admit:
@@ -230,8 +271,12 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			"bound_hostname",
 			"bound_at",
 			agentExecBindingVersionKey,
+			agenttokens.RuntimeRoleMetadataKey,
 		)
-		metadataChanged := false
+		metadataChanged := runtimeRole == ""
+		if runtimeRole == "" {
+			record.Metadata[agenttokens.RuntimeRoleMetadataKey] = agenttokens.CredentialKindLegacyFullTrust
+		}
 		if decision.backfillID {
 			record.Metadata["bound_agent_id"] = requestedID
 			boundID = requestedID
@@ -271,6 +316,7 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			TokenID:        tokenID,
 			AgentID:        requestedID,
 			Hostname:       requestedHost,
+			RuntimeRole:    agentexec.RuntimeRoleLegacyFullTrust,
 		}, true
 	}
 
@@ -317,7 +363,19 @@ func (r *Router) validateAgentExecSession(admission agentexec.AgentAdmission) bo
 		if len(orgs) == 1 && strings.TrimSpace(orgs[0]) != "" {
 			organizationID = strings.TrimSpace(orgs[0])
 		}
-		return organizationID == strings.TrimSpace(admission.OrganizationID) &&
+		runtimeRole := strings.TrimSpace(record.Metadata[agenttokens.RuntimeRoleMetadataKey])
+		if runtimeRole == agenttokens.CredentialKindActionRunner {
+			return len(orgs) == 1 &&
+				strings.TrimSpace(admission.RuntimeRole) == agentexec.RuntimeRoleActionRunner &&
+				strings.TrimSpace(admission.ActionCapability) == agentexec.ActionCapabilityTypedV1 &&
+				organizationID == strings.TrimSpace(admission.OrganizationID) &&
+				agentbinding.EvaluateActionRunner(record, requestedID, requestedHost).Admit
+		}
+		if runtimeRole != agenttokens.CredentialKindLegacyFullTrust {
+			return false
+		}
+		return strings.TrimSpace(admission.RuntimeRole) == agentexec.RuntimeRoleLegacyFullTrust &&
+			organizationID == strings.TrimSpace(admission.OrganizationID) &&
 			strings.TrimSpace(record.Metadata["bound_agent_id"]) == requestedID &&
 			agentExecHostnamesMatch(strings.TrimSpace(record.Metadata["bound_hostname"]), requestedHost)
 	}

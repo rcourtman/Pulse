@@ -155,9 +155,12 @@ root-owned `/etc/pulse-agent` directory with `root:pulse-agent` group-read
 access; mutable identity, buffering, and enrolled monitoring-token state remain
 under the collector-owned state directory. The collector is not added to the
 rootful Docker group and cannot enable command execution. Automatic binary
-replacement is disabled until signed update activation moves behind a separate
-typed transaction, so operators must use an explicit signed installer update
-for this opt-in profile.
+replacement uses a separate typed transaction: the collector downloads and
+self-tests a signed artifact inside its fixed quarantine, while the helper
+revalidates ownership, digest, ELF shape, and signature before promoting it to
+root-only staging and atomically activating it. A failed process restart asks
+the helper to restore the identity-bound last-known-good binary; there is no
+collector-writable direct-replacement fallback.
 
 Exceptional telemetry crosses `/run/pulse-agent/helper.sock` to a separate
 root process. The socket admits only the `pulse-agent` UID, and the helper has
@@ -175,9 +178,45 @@ The typed-helper profile cannot be combined with `--grant-smart` or
 `--grant-pct`. Rootful Docker-socket monitoring is also unavailable because
 membership in the Docker group is root-equivalent; API monitoring or a
 separately scoped rootless runtime socket is required instead. The profile is
-currently explicit rather than the installer default while migration,
-rollback, update activation, appliance qualification, and the separate action
-runner are completed.
+currently explicit rather than the installer default. Its inspect, apply, and
+rollback transaction is implemented for Linux systemd, but representative
+live-host migration and helper update staging/activation/rollback exercises,
+container-runtime parity, and appliance qualification are still required
+before the profile can become the general default.
+
+Monitoring never implies remediation. On the supported Linux systemd profile,
+an operator may separately enroll the typed action runner:
+
+```bash
+install.sh --least-privilege --enable-privileged-helper \
+  --enable-action-runner --action-token-file /root/pulse-runner.token ...
+```
+
+Create that token through the authenticated action-runner credential endpoint
+for the exact monitored host; do not reuse the collector token. The installer
+keeps the runner binary, service, credential, health record, and receipts
+root-owned. Disabling or uninstalling the runner leaves monitoring active.
+The safe runner accepts only versioned host update/storage-cleanup, Proxmox
+guest lifecycle, and container lifecycle/update requests. Generic shell,
+`exec`, unrestricted `read_file`, and deploy operations are rejected.
+
+The existing combined collector command path remains available only as the
+explicit legacy/full-trust migration profile. It is not part of the typed
+helper/runner security claim and will remain until supported command-enabled
+installs have a runner enrollment path and live action-session parity has been
+qualified.
+
+Safe-profile conversion is always deliberate:
+
+```bash
+install.sh --safe-profile-inspect ...
+install.sh --safe-profile-apply ...
+install.sh --safe-profile-rollback ...
+```
+
+Inspection makes no changes. Apply snapshots collector/helper files and
+identity before switching profiles, and rollback restores that snapshot. The
+separately installed action runner is not changed by either operation.
 
 The older `--least-privilege` profile without `--enable-privileged-helper`
 remains available for compatibility. Its trade-offs are documented below.

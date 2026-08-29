@@ -25,6 +25,30 @@ func (f fakeProxmoxProvider) LXCFilesystems(ctx context.Context) (json.RawMessag
 	return f(ctx)
 }
 
+type fakeContainerProvider func(context.Context) (json.RawMessage, error)
+
+func (f fakeContainerProvider) Inventory(ctx context.Context) (json.RawMessage, error) {
+	return f(ctx)
+}
+
+type fakeUpdateProvider struct {
+	stage    func(context.Context, UpdateStageRequest) (UpdateStageResult, error)
+	activate func(context.Context, UpdateActivateRequest) (UpdateResult, error)
+	rollback func(context.Context, UpdateRollbackRequest) (UpdateResult, error)
+}
+
+func (f fakeUpdateProvider) Stage(ctx context.Context, request UpdateStageRequest) (UpdateStageResult, error) {
+	return f.stage(ctx, request)
+}
+
+func (f fakeUpdateProvider) Activate(ctx context.Context, request UpdateActivateRequest) (UpdateResult, error) {
+	return f.activate(ctx, request)
+}
+
+func (f fakeUpdateProvider) Rollback(ctx context.Context, request UpdateRollbackRequest) (UpdateResult, error) {
+	return f.rollback(ctx, request)
+}
+
 func authorizedResolver(uid uint32) PeerResolver {
 	return PeerResolverFunc(func(net.Conn) (Peer, error) {
 		return Peer{UID: uid, GID: 2000, PID: 3000}, nil
@@ -156,6 +180,62 @@ func TestServerDispatchesTypedProvidersWithoutCallerArguments(t *testing.T) {
 	request = validRequest(OperationProxmoxLXCFilesystems)
 	request.Payload = json.RawMessage(`{"args":["exec","100"]}`)
 	requireErrorCode(t, exchange(t, server, request), ErrorInvalidRequest)
+}
+
+func TestServerDispatchesClosedContainerAndUpdateOperations(t *testing.T) {
+	containerCalled := false
+	stageCalled := false
+	activateCalled := false
+	rollbackCalled := false
+	updates := fakeUpdateProvider{
+		stage: func(_ context.Context, request UpdateStageRequest) (UpdateStageResult, error) {
+			stageCalled = request.ArtifactID == "release-1"
+			return UpdateStageResult{Action: "staged", ArtifactID: request.ArtifactID, SHA256: request.SHA256}, nil
+		},
+		activate: func(_ context.Context, request UpdateActivateRequest) (UpdateResult, error) {
+			activateCalled = request.ArtifactID == "release-1"
+			return UpdateResult{Action: "activated", ActivationID: "release-1:0123456789abcdef"}, nil
+		},
+		rollback: func(_ context.Context, request UpdateRollbackRequest) (UpdateResult, error) {
+			rollbackCalled = request.ActivationID == "release-1:0123456789abcdef"
+			return UpdateResult{Action: "rolled_back", ActivationID: request.ActivationID}, nil
+		},
+	}
+	registry := NewRegistryWithProviders(nil, nil, Providers{
+		Containers: fakeContainerProvider(func(context.Context) (json.RawMessage, error) {
+			containerCalled = true
+			return json.RawMessage(`{"runtimes":[]}`), nil
+		}),
+		Updates: updates,
+	})
+	server := newTestServer(t, registry, authorizedResolver(1000), nil)
+	if response := exchange(t, server, validRequest(OperationContainerInventory)); !response.Success || !containerCalled {
+		t.Fatalf("container response=%#v called=%t", response, containerCalled)
+	}
+	stage := validRequest(OperationAgentUpdateStage)
+	stage.Payload = json.RawMessage(`{"artifactId":"release-1","sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`)
+	if response := exchange(t, server, stage); !response.Success || !stageCalled {
+		t.Fatalf("stage response=%#v called=%t", response, stageCalled)
+	}
+	activate := validRequest(OperationAgentUpdateActivate)
+	activate.Payload = json.RawMessage(`{"artifactId":"release-1","sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`)
+	if response := exchange(t, server, activate); !response.Success || !activateCalled {
+		t.Fatalf("activate response=%#v called=%t", response, activateCalled)
+	}
+	rollback := validRequest(OperationAgentUpdateRollback)
+	rollback.Payload = json.RawMessage(`{"activationId":"release-1:0123456789abcdef","currentSha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","rollbackSha256":"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}`)
+	if response := exchange(t, server, rollback); !response.Success || !rollbackCalled {
+		t.Fatalf("rollback response=%#v called=%t", response, rollbackCalled)
+	}
+
+	for _, operation := range []string{OperationContainerInventory, OperationAgentUpdateStage, OperationAgentUpdateActivate, OperationAgentUpdateRollback} {
+		request := validRequest(operation)
+		request.Payload = json.RawMessage(`{"path":"/tmp/attacker","args":["sh"]}`)
+		requireErrorCode(t, exchange(t, server, request), ErrorInvalidRequest)
+		request = validRequest(operation)
+		request.OperationVersion = 2
+		requireErrorCode(t, exchange(t, server, request), ErrorUnsupportedOperation)
+	}
 }
 
 func TestServerRejectsEnvelopeAndRegistryViolations(t *testing.T) {

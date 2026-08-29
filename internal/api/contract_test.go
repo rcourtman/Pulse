@@ -10255,6 +10255,40 @@ func TestContract_AgentHelperDownloadIsLinuxOnlyAndSeparatelySigned(t *testing.T
 	}
 }
 
+func TestContract_AgentRunnerDownloadIsLinuxOnlyAndSeparatelySigned(t *testing.T) {
+	tempDir := t.TempDir()
+	binDir := filepath.Join(tempDir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binaryPath := filepath.Join(binDir, "pulse-agent-runner-linux-amd64")
+	if err := os.WriteFile(binaryPath, []byte("typed-runner"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binaryPath+".sig", []byte("detached-signature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binaryPath+".sshsig", []byte("ssh-signature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	router := &Router{projectRoot: tempDir, serverVersion: "6.5.0"}
+	request := httptest.NewRequest(http.MethodGet, "/download/pulse-agent-runner?arch=linux-amd64", nil)
+	response := httptest.NewRecorder()
+	router.handleDownloadAgentRunner(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("runner download status = %d: %s", response.Code, response.Body.String())
+	}
+	if response.Header().Get(checksumHeaderName) == "" || response.Header().Get(sshSignatureHeaderName) == "" {
+		t.Fatalf("runner download omitted signed-asset headers: %#v", response.Header())
+	}
+	request = httptest.NewRequest(http.MethodGet, "/download/pulse-agent-runner?arch=windows-amd64", nil)
+	response = httptest.NewRecorder()
+	router.handleDownloadAgentRunner(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("non-Linux runner status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+}
+
 func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 	payload := EmptySystemSettingsResponse()
 	payload.SystemSettings = config.SystemSettings{

@@ -184,6 +184,25 @@ func agentHelperLocalBuildCommand(normalized string) string {
 	return fmt.Sprintf("%s go build -o bin/pulse-agent-helper-%s ./cmd/pulse-agent-helper", strings.Join(env, " "), normalized)
 }
 
+func agentRunnerLocalBuildCommand(normalized string) string {
+	goos, goarch, ok := strings.Cut(strings.TrimSpace(normalized), "-")
+	if !ok || goos != "linux" || goarch == "" {
+		goos = "linux"
+		goarch = "amd64"
+		normalized = "linux-amd64"
+	}
+	env := []string{"CGO_ENABLED=0", "GOOS=" + goos}
+	switch goarch {
+	case "armv7":
+		env = append(env, "GOARCH=arm", "GOARM=7")
+	case "armv6":
+		env = append(env, "GOARCH=arm", "GOARM=6")
+	default:
+		env = append(env, "GOARCH="+goarch)
+	}
+	return fmt.Sprintf("%s go build -o bin/pulse-agent-runner-%s ./cmd/pulse-agent-runner", strings.Join(env, " "), normalized)
+}
+
 // handleDownloadUnifiedAgent serves the pulse-agent binary
 func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -419,6 +438,106 @@ func (r *Router) proxyAgentHelperFromGitHub(w http.ResponseWriter, req *http.Req
 		encodeSSHSignatureForHeader(sshSignature),
 		"github-proxy",
 	)
+}
+
+// handleDownloadAgentRunner serves the separately signed Linux action runner.
+// It is a distinct asset from both the monitoring collector and the local
+// privilege helper so installer profiles cannot substitute one authority for
+// another.
+func (r *Router) handleDownloadAgentRunner(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	normalized := normalizeAgentHelperArch(strings.TrimSpace(req.URL.Query().Get("arch")))
+	if normalized == "" {
+		http.Error(w, "A supported Linux architecture is required", http.StatusBadRequest)
+		return
+	}
+	binaryName := "pulse-agent-runner-" + normalized
+	searchPaths := []string{
+		filepath.Join(pulseBinDir(), binaryName),
+		filepath.Join("/opt/pulse", binaryName),
+		filepath.Join("/app", binaryName),
+		filepath.Join(r.projectRoot, "bin", binaryName),
+	}
+	for _, candidate := range searchPaths {
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		checksum, err := r.cachedSHA256(candidate, info)
+		if err != nil {
+			continue
+		}
+		signature, sigErr := readReleaseAssetSignature(candidate)
+		sshSignature, sshSigErr := readReleaseAssetSSHSignature(candidate)
+		if (sigErr != nil || sshSigErr != nil) && isPublishedReleaseAssetVersion(r.serverVersion) {
+			continue
+		}
+		file, err := os.Open(candidate)
+		if err != nil {
+			continue
+		}
+		defer file.Close()
+		w.Header().Set(checksumHeaderName, checksum)
+		if signature != "" {
+			w.Header().Set(signatureHeaderName, signature)
+		}
+		if sshSignature != "" {
+			w.Header().Set(sshSignatureHeaderName, sshSignature)
+		}
+		http.ServeContent(w, req, binaryName, info.ModTime(), file)
+		return
+	}
+	if !isPublishedReleaseAssetVersion(r.serverVersion) {
+		http.Error(w, "Agent runner binary not found for "+normalized+" in dev mode.\nBuild with:\n  "+agentRunnerLocalBuildCommand(normalized), http.StatusNotFound)
+		return
+	}
+	r.proxyAgentRunnerFromGitHub(w, req, normalized)
+}
+
+func (r *Router) proxyAgentRunnerFromGitHub(w http.ResponseWriter, req *http.Request, normalized string) {
+	assetName := "pulse-agent-runner-" + normalized
+	assetURL, err := r.releaseAssetURL(assetName)
+	if err != nil {
+		http.Error(w, "Agent runner binary unavailable for current server build", http.StatusServiceUnavailable)
+		return
+	}
+	client := r.installScriptClient
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Minute}
+	}
+	response, err := client.Get(assetURL)
+	if err != nil {
+		http.Error(w, "Failed to fetch agent runner binary", http.StatusServiceUnavailable)
+		return
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		http.Error(w, "Agent runner binary not found on GitHub", http.StatusNotFound)
+		return
+	}
+	content, checksum, err := readBinaryWithChecksum(response.Body)
+	if err != nil {
+		http.Error(w, "Failed to read agent runner binary", http.StatusInternalServerError)
+		return
+	}
+	signature, err := fetchReleaseAssetContent(req.Context(), client, assetURL+".sig", 16*1024)
+	if err != nil {
+		http.Error(w, "Failed to fetch agent runner binary signature", http.StatusServiceUnavailable)
+		return
+	}
+	sshSignature, err := fetchReleaseAssetContent(req.Context(), client, assetURL+".sshsig", 64*1024)
+	if err != nil {
+		http.Error(w, "Failed to fetch agent runner binary SSH signature", http.StatusServiceUnavailable)
+		return
+	}
+	serveProxiedAgentBinaryWithSignatures(w, content, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy")
 }
 
 // validateUnifiedAgentBinary rejects a local agent binary that this server must

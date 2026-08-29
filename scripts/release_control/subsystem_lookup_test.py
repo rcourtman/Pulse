@@ -1441,6 +1441,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "scripts/installtests/agent_state_dir_lifecycle_test.go",
                 "scripts/installtests/install_sh_test.go",
+                "scripts/installtests/safe_profile_migration_test.go",
             ],
         )
 
@@ -1459,6 +1460,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "scripts/installtests/agent_state_dir_lifecycle_test.go",
                 "scripts/installtests/install_sh_test.go",
+                "scripts/installtests/safe_profile_migration_test.go",
             ],
         )
 
@@ -3510,6 +3512,37 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
             ],
         )
+
+    def test_lookup_paths_assigns_separate_action_runner_to_agent_lifecycle(self) -> None:
+        result = lookup_paths(
+            [
+                "cmd/pulse-agent-runner/main.go",
+                "internal/actionrunner/runner.go",
+                "internal/dockeragent/action_runtime.go",
+            ]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"agent-lifecycle"},
+        )
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(len(file_entry["matches"]), 1)
+            match = file_entry["matches"][0]
+            self.assertEqual(match["subsystem"], "agent-lifecycle")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "action-runner-runtime",
+            )
+            self.assertEqual(
+                match["verification_requirement"]["exact_files"],
+                [
+                    "cmd/pulse-agent-runner/main_test.go",
+                    "internal/agentexec/server_websocket_test.go",
+                    "internal/hostagent/action_runner_client_test.go",
+                ],
+            )
 
     def test_lookup_paths_reports_windows_installer_as_shared_boundary(self) -> None:
         result = lookup_paths(["scripts/install.ps1"])

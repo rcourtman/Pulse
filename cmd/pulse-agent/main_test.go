@@ -1740,18 +1740,30 @@ func TestRun_PassesStateDirToUpdaterAndHostAgent(t *testing.T) {
 
 func TestRunConfiguresTypedPrivilegeHelperFromInstallerEnvironment(t *testing.T) {
 	originalHelper := newPrivilegeHelperTelemetry
+	originalUpdate := newPrivilegeHelperUpdate
+	originalUpdater := newUpdater
 	originalHost := newHostAgent
 	defer func() {
 		newPrivilegeHelperTelemetry = originalHelper
+		newPrivilegeHelperUpdate = originalUpdate
+		newUpdater = originalUpdater
 		newHostAgent = originalHost
 	}()
 
 	const socketPath = "/run/pulse-agent/helper.sock"
 	t.Setenv("PULSE_AGENT_HELPER_SOCKET", socketPath)
 	configuredPath := ""
+	configuredUpdatePath := ""
 	newPrivilegeHelperTelemetry = func(path string) (hostagent.PrivilegedTelemetry, error) {
 		configuredPath = path
 		return nil, nil
+	}
+	newPrivilegeHelperUpdate = func(path string) (agentupdate.PrivilegedUpdate, error) {
+		configuredUpdatePath = path
+		return nil, nil
+	}
+	newUpdater = func(agentupdate.Config) *agentupdate.Updater {
+		return agentupdate.New(agentupdate.Config{Disabled: true})
 	}
 	newHostAgent = func(hostagent.Config) (Runnable, error) {
 		return &mockRunnable{}, nil
@@ -1770,6 +1782,9 @@ func TestRunConfiguresTypedPrivilegeHelperFromInstallerEnvironment(t *testing.T)
 	}
 	if configuredPath != socketPath {
 		t.Fatalf("helper socket path = %q, want %q", configuredPath, socketPath)
+	}
+	if configuredUpdatePath != socketPath {
+		t.Fatalf("helper update socket path = %q, want %q", configuredUpdatePath, socketPath)
 	}
 }
 

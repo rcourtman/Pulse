@@ -196,6 +196,9 @@ done
 for target in "${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}"; do
     printf 'helper:%s:%s\n' "${target}" "$(pulse_release_binary_filename agent-helper "${target}")"
 done
+for target in "${PULSE_RELEASE_AGENT_RUNNER_TARGETS[@]}"; do
+    printf 'runner:%s:%s\n' "${target}" "$(pulse_release_binary_filename agent-runner "${target}")"
+done
 `, "pulse-agent-helper-target-test", targetScriptPath)
 	targetOutput, err := targetCmd.CombinedOutput()
 	if err != nil {
@@ -204,6 +207,7 @@ done
 
 	var linuxAgentTargets []string
 	var helperTargets []string
+	var runnerTargets []string
 	for _, line := range strings.Split(strings.TrimSpace(string(targetOutput)), "\n") {
 		switch {
 		case strings.HasPrefix(line, "agent:"):
@@ -218,10 +222,23 @@ done
 			if parts[2] != wantFilename {
 				t.Fatalf("helper target %s filename = %s, want %s", parts[1], parts[2], wantFilename)
 			}
+		case strings.HasPrefix(line, "runner:"):
+			parts := strings.Split(line, ":")
+			if len(parts) != 3 {
+				t.Fatalf("unexpected runner target output %q", line)
+			}
+			runnerTargets = append(runnerTargets, parts[1])
+			wantFilename := "pulse-agent-runner-" + parts[1]
+			if parts[2] != wantFilename {
+				t.Fatalf("runner target %s filename = %s, want %s", parts[1], parts[2], wantFilename)
+			}
 		}
 	}
 	if got, want := strings.Join(helperTargets, ","), strings.Join(linuxAgentTargets, ","); got != want {
 		t.Fatalf("helper target matrix = %s, want Linux Unified Agent matrix %s", got, want)
+	}
+	if got, want := strings.Join(runnerTargets, ","), strings.Join(linuxAgentTargets, ","); got != want {
+		t.Fatalf("runner target matrix = %s, want Linux Unified Agent matrix %s", got, want)
 	}
 
 	buildBytes, err := os.ReadFile(repoFile("scripts", "build-release.sh"))
@@ -249,12 +266,25 @@ done
 		`agent_helper_build_order=("${PULSE_RELEASE_AGENT_HELPER_TARGETS[@]}")`,
 		`output_path="${BUILD_DIR}/$(pulse_release_binary_filename agent-helper "${target}")"`,
 		`./cmd/pulse-agent-helper`,
+		`-ldflags="${agent_ldflags}"`,
 		`cp "$BUILD_DIR/pulse-agent-helper-${target}" "$universal_dir/bin/pulse-agent-helper-${target}"`,
 		`tar -czf "$RELEASE_DIR/pulse-agent-helper-v${VERSION}-${target}.tar.gz" -C "$BUILD_DIR" "pulse-agent-helper-${target}"`,
 		`cp "$BUILD_DIR/pulse-agent-helper-${target}" "$RELEASE_DIR/"`,
 	} {
 		if !strings.Contains(buildScript, needle) {
 			t.Fatalf("build-release.sh missing agent helper release wiring: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`agent_runner_build_order=("${PULSE_RELEASE_AGENT_RUNNER_TARGETS[@]}")`,
+		`output_path="${BUILD_DIR}/$(pulse_release_binary_filename agent-runner "${target}")"`,
+		`./cmd/pulse-agent-runner`,
+		`cp "$BUILD_DIR/pulse-agent-runner-${target}" "$universal_dir/bin/pulse-agent-runner-${target}"`,
+		`tar -czf "$RELEASE_DIR/pulse-agent-runner-v${VERSION}-${target}.tar.gz" -C "$BUILD_DIR" "pulse-agent-runner-${target}"`,
+		`cp "$BUILD_DIR/pulse-agent-runner-${target}" "$RELEASE_DIR/"`,
+	} {
+		if !strings.Contains(buildScript, needle) {
+			t.Fatalf("build-release.sh missing agent runner release wiring: %s", needle)
 		}
 	}
 	for _, needle := range []string{
@@ -267,6 +297,15 @@ done
 		}
 	}
 	for _, needle := range []string{
+		`for target in "${PULSE_RELEASE_AGENT_RUNNER_TARGETS[@]}"; do`,
+		`task_components+=(agent-runner)`,
+		`package=./cmd/pulse-agent-runner`,
+	} {
+		if !strings.Contains(compileScript, needle) {
+			t.Fatalf("build-release-binaries.sh missing action runner compilation wiring: %s", needle)
+		}
+	}
+	for _, needle := range []string{
 		`if [[ ${#PULSE_RELEASE_AGENT_HELPER_TARGETS[@]} -eq 0 ]]; then`,
 		`src="${agent_binary_dir}/pulse-agent-helper-${target}"`,
 		`dest="${staging_dir}/bin/pulse-agent-helper-${target}"`,
@@ -274,6 +313,15 @@ done
 	} {
 		if !strings.Contains(commonScript, needle) {
 			t.Fatalf("release_asset_common.sh missing agent helper packaging wiring: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`if [[ ${#PULSE_RELEASE_AGENT_RUNNER_TARGETS[@]} -eq 0 ]]; then`,
+		`src="${agent_binary_dir}/pulse-agent-runner-${target}"`,
+		`dest="${staging_dir}/bin/pulse-agent-runner-${target}"`,
+	} {
+		if !strings.Contains(commonScript, needle) {
+			t.Fatalf("release_asset_common.sh missing action runner packaging wiring: %s", needle)
 		}
 	}
 	helperStage := strings.Index(commonScript, `src="${agent_binary_dir}/pulse-agent-helper-${target}"`)
@@ -299,6 +347,12 @@ done
 		asset := "release/pulse-agent-helper-" + target
 		if !strings.Contains(workflow, asset) {
 			t.Fatalf("create-release.yml missing bare helper upload: %s", asset)
+		}
+	}
+	for _, target := range runnerTargets {
+		asset := "release/pulse-agent-runner-" + target
+		if !strings.Contains(workflow, asset) {
+			t.Fatalf("create-release.yml missing bare action runner upload: %s", asset)
 		}
 	}
 	for _, signatureGlob := range []string{
@@ -405,6 +459,12 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 			files[name] = "shared-helper-" + helperTarget
 			files[name+".sig"] = "shared-helper-signature-" + helperTarget
 			files[name+".sshsig"] = "shared-helper-ssh-signature-" + helperTarget
+		}
+		for _, runnerTarget := range []string{"linux-amd64", "linux-arm64", "linux-armv7", "linux-armv6", "linux-386"} {
+			name := "bin/pulse-agent-runner-" + runnerTarget
+			files[name] = "shared-runner-" + runnerTarget
+			files[name+".sig"] = "shared-runner-signature-" + runnerTarget
+			files[name+".sshsig"] = "shared-runner-ssh-signature-" + runnerTarget
 		}
 		if driftUniversalPayload {
 			files["scripts/install.sh"] = "drifted-agent-installer"
@@ -735,6 +795,11 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`release/pulse-agent-helper-linux-armv7`,
 		`release/pulse-agent-helper-linux-armv6`,
 		`release/pulse-agent-helper-linux-386`,
+		`release/pulse-agent-runner-linux-amd64`,
+		`release/pulse-agent-runner-linux-arm64`,
+		`release/pulse-agent-runner-linux-armv7`,
+		`release/pulse-agent-runner-linux-armv6`,
+		`release/pulse-agent-runner-linux-386`,
 		`release/pulse-agent-freebsd-amd64`,
 		`release/pulse-agent-freebsd-arm64`,
 		`release/pulse-agent-windows-amd64.exe`,

@@ -154,6 +154,11 @@ type Config struct {
 
 	// Disabled skips all update checks when true
 	Disabled bool
+
+	// PrivilegedUpdate selects the typed helper-backed Linux activation path.
+	// When configured, update installation never falls back to local executable
+	// replacement.
+	PrivilegedUpdate PrivilegedUpdate
 }
 
 // Updater handles automatic updates for Pulse agents.
@@ -936,6 +941,9 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	// Verify checksum if provided
 	checksumHeader := strings.TrimSpace(resp.Header.Get(checksumSHA256Header))
 	signatureHeaderValue := strings.TrimSpace(resp.Header.Get(signatureHeader))
+	if u.cfg.PrivilegedUpdate != nil {
+		return u.performPrivilegedUpdate(ctx, execPath, resp.Body, resp.ContentLength, checksumHeader, signatureHeaderValue)
+	}
 
 	// Resolve symlinks to get the real path for atomic rename
 	realExecPath, err := evalSymlinksFn(execPath)
@@ -1065,6 +1073,96 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 
 	// Restart the process using platform-specific implementation
 	return restartProcessFn(execPath)
+}
+
+func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, body io.Reader, contentLength int64, checksumHeader, signature string) error {
+	if runtimeGOOS != goOSLinux {
+		return errors.New("typed privilege-helper updates are supported only on Linux")
+	}
+	if checksumHeader == "" {
+		return fmt.Errorf("server did not provide checksum header (%s); refusing helper-backed update", checksumSHA256Header)
+	}
+	if signature == "" {
+		return fmt.Errorf("server did not provide signature header (%s); refusing helper-backed update", signatureHeader)
+	}
+	if contentLength > maxBinarySizeBytes {
+		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySizeBytes)
+	}
+
+	artifactID, file, cleanup, err := u.cfg.PrivilegedUpdate.CreateQuarantinedArtifact()
+	if err != nil {
+		return fmt.Errorf("prepare fixed update quarantine: %w", err)
+	}
+	defer cleanup()
+	artifactPath := file.Name()
+	hasher := sha256.New()
+	written, copyErr := io.Copy(file, io.TeeReader(io.LimitReader(body, maxBinarySizeBytes+1), hasher))
+	if copyErr != nil {
+		_ = file.Close()
+		return fmt.Errorf("write quarantined agent binary: %w", copyErr)
+	}
+	if written > maxBinarySizeBytes {
+		_ = file.Close()
+		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySizeBytes)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("sync quarantined agent binary: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close quarantined agent binary: %w", err)
+	}
+	digest := hex.EncodeToString(hasher.Sum(nil))
+	if !strings.EqualFold(strings.TrimSpace(checksumHeader), digest) {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", strings.ToLower(strings.TrimSpace(checksumHeader)), digest)
+	}
+	if err := verifyBinaryMagic(artifactPath); err != nil {
+		return fmt.Errorf("downloaded file is not a valid executable: %w", err)
+	}
+	if updatesignature.HasTrustedPublicKeys() {
+		if err := updatesignature.VerifyFile(artifactPath, signature); err != nil {
+			return fmt.Errorf("signature verification failed: %w", err)
+		}
+	}
+	if err := chmodFn(artifactPath, 0o700); err != nil {
+		return fmt.Errorf("make quarantined binary executable for self-test: %w", err)
+	}
+	if err := u.selfTestFn(ctx, artifactPath); err != nil {
+		return err
+	}
+	if err := chmodFn(artifactPath, 0o600); err != nil {
+		return fmt.Errorf("restore quarantined binary mode: %w", err)
+	}
+	if err := u.cfg.PrivilegedUpdate.WriteQuarantinedSignature(artifactID, signature); err != nil {
+		return err
+	}
+	staged, err := u.cfg.PrivilegedUpdate.Stage(ctx, artifactID, digest)
+	if err != nil {
+		return fmt.Errorf("stage signed update through typed helper: %w", err)
+	}
+	if staged.Action != "staged" || staged.ArtifactID != artifactID || !strings.EqualFold(staged.SHA256, digest) {
+		return errors.New("typed helper returned an invalid staging result")
+	}
+	activation, err := u.cfg.PrivilegedUpdate.Activate(ctx, artifactID, digest)
+	if err != nil {
+		return fmt.Errorf("activate signed update through typed helper: %w", err)
+	}
+	if activation.Action != "activated" || !strings.EqualFold(activation.ActiveSHA256, digest) || activation.ActivationID == "" || activation.RollbackSHA256 == "" {
+		return errors.New("typed helper returned an invalid activation result")
+	}
+	if err := restartProcessFn(execPath); err != nil {
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		rolledBack, rollbackErr := u.cfg.PrivilegedUpdate.Rollback(rollbackCtx, activation)
+		if rollbackErr != nil {
+			return errors.Join(fmt.Errorf("failed to restart after helper activation: %w", err), fmt.Errorf("typed helper rollback failed: %w", rollbackErr))
+		}
+		if rolledBack.Action != "rolled_back" || !strings.EqualFold(rolledBack.ActiveSHA256, activation.RollbackSHA256) {
+			return errors.Join(fmt.Errorf("failed to restart after helper activation: %w", err), errors.New("typed helper returned an invalid rollback result"))
+		}
+		return fmt.Errorf("failed to restart after helper activation; update rolled back: %w", err)
+	}
+	return nil
 }
 
 func (u *Updater) syncPersistentBinaryCopy(execPath, persistPath, platform string) {

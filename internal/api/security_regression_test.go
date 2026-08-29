@@ -636,6 +636,66 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	conn.Close()
 }
 
+func TestActionRunnerCredentialAdmissionBindsTenantHostRoleAndCapability(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	rawToken, record, err := agenttokens.IssueActionRunnerAndPersist(cfg, nil, agenttokens.ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-a", Hostname: "node.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &Router{config: cfg}
+
+	admission, ok := router.admitAgentExecToken(rawToken, "machine-a", "NODE")
+	if !ok {
+		t.Fatal("typed action runner credential was rejected")
+	}
+	if admission.OrganizationID != "org-a" || admission.TokenID != record.ID ||
+		admission.AgentID != "machine-a" || admission.RuntimeRole != agentexec.RuntimeRoleActionRunner ||
+		admission.ActionCapability != agentexec.ActionCapabilityTypedV1 {
+		t.Fatalf("action admission = %#v", admission)
+	}
+	if !router.validateAgentExecSession(admission) {
+		t.Fatal("fresh action runner admission failed live session validation")
+	}
+
+	config.Mu.Lock()
+	cfg.APITokens[0].Metadata[agenttokens.ActionCapabilityMetadataKey] = "shell.v1"
+	config.Mu.Unlock()
+	if router.validateAgentExecSession(admission) {
+		t.Fatal("session stayed valid after action capability changed")
+	}
+}
+
+func TestActionRunnerCredentialAdmissionRejectsWrongIdentityAndUnboundOrganization(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		agentID  string
+		hostname string
+		clearOrg bool
+	}{
+		{name: "wrong agent", agentID: "other", hostname: "node.example"},
+		{name: "wrong host", agentID: "machine-a", hostname: "other.example"},
+		{name: "missing organization binding", agentID: "machine-a", hostname: "node.example", clearOrg: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{DataPath: t.TempDir()}
+			rawToken, _, err := agenttokens.IssueActionRunnerAndPersist(cfg, nil, agenttokens.ActionRunnerIssueOptions{
+				OrgID: "org-a", AgentID: "machine-a", Hostname: "node.example",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.clearOrg {
+				cfg.APITokens[0].OrgID = ""
+			}
+			if _, ok := (&Router{config: cfg}).admitAgentExecToken(rawToken, tc.agentID, tc.hostname); ok {
+				t.Fatal("mismatched action credential was admitted")
+			}
+		})
+	}
+}
+
 func TestAgentExecTokenRejectsAmbiguousMultiOrganizationAuthority(t *testing.T) {
 	rawToken := "multi-org-agent-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{
