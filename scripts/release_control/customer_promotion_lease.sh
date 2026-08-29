@@ -44,7 +44,25 @@ acquire() {
     local observed_sha
     observed_sha="$(git ls-remote origin "${LOCK_REF}" | awk '{print $1}')"
     if [[ ! "${observed_sha}" =~ ^[0-9a-f]{40}$ ]]; then
-      echo "Customer-promotion lease changed while acquiring; retrying."
+      # GitHub's Actions token can fast-forward this lease ref but may reject
+      # creating it with git push. Seed the absent ref at the checked-out
+      # release-control commit so every contender still has to win the normal
+      # fast-forward push of its owner commit. A concurrent creator returning
+      # 422 is harmless; the next loop observes whichever contender won.
+      local bootstrap_sha
+      bootstrap_sha="$(git rev-parse HEAD)"
+      if jq -n \
+           --arg ref "${LOCK_REF}" \
+           --arg sha "${bootstrap_sha}" \
+           '{ref: $ref, sha: $sha}' | \
+         gh api \
+           --method POST \
+           "repos/${GITHUB_REPOSITORY}/git/refs" \
+           --input - >/dev/null 2>&1; then
+        echo "Bootstrapped absent customer-promotion lease ref at ${bootstrap_sha}."
+      else
+        echo "Customer-promotion lease changed while acquiring; retrying."
+      fi
       sleep 15
       continue
     fi

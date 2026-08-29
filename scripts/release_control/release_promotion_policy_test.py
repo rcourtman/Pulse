@@ -629,6 +629,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("customer_promotion_lease.sh acquire", lease)
         self.assertIn("refs/heads/release-customer-promotion-lock", lease_script)
         self.assertIn("git push origin \"${lock_commit}:${LOCK_REF}\"", lease_script)
+        self.assertIn('"repos/${GITHUB_REPOSITORY}/git/refs"', lease_script)
+        self.assertIn("Bootstrapped absent customer-promotion lease ref", lease_script)
         self.assertIn("--force-with-lease=\"${LOCK_REF}:${observed_sha}\"", lease_script)
         self.assertIn("owner_status", lease_script)
         self.assertIn("sort -Vr", lease)

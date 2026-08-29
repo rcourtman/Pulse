@@ -2476,6 +2476,15 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	convergenceWorkflow := string(convergenceBytes)
 	recoveryWorkflow := string(recoveryBytes)
 	leaseScript := string(leaseScriptBytes)
+	for _, needle := range []string{
+		`"repos/${GITHUB_REPOSITORY}/git/refs"`,
+		`Bootstrapped absent customer-promotion lease ref`,
+		`git push origin "${lock_commit}:${LOCK_REF}"`,
+	} {
+		if !strings.Contains(leaseScript, needle) {
+			t.Fatalf("customer-promotion lease missing absent-ref bootstrap contract: %s", needle)
+		}
+	}
 	createJob := workflowJobBlock(t, createWorkflow, "create_release")
 	prepareJob := workflowJobBlock(t, createWorkflow, "prepare")
 	frontendBundleJob := workflowJobBlock(t, createWorkflow, "frontend_bundle")
