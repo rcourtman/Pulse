@@ -249,7 +249,9 @@ describe('useWorkloads', () => {
           vmid: 101,
           nodeName: 'pve1',
           instance: 'cluster-a',
+          lastBackup: '2026-02-06T06:00:00Z',
         },
+        uptime: 86_400,
         cpu: { current: 25 },
         memory: { current: 50, used: 2 * 1024, total: 4 * 1024 },
         disk: { current: 20, used: 20 * 1024, total: 100 * 1024 },
@@ -276,6 +278,8 @@ describe('useWorkloads', () => {
         vmid: 101,
         node: 'pve1',
         metricsTarget: { resourceType: 'vm', resourceId: 'mock-cluster-a-pve1-101' },
+        uptime: 86_400,
+        lastBackup: Date.parse('2026-02-06T06:00:00Z'),
         alertResourceIds: expect.arrayContaining([
           'cluster-a-pve1-101',
           'mock-cluster-a-pve1-101',

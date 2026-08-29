@@ -1,21 +1,23 @@
 {
   "version": 1,
-  "base_sha": "0dc2c8c16d9612f981a29055cc703f6100cdf8cb",
-  "verified_at": "2026-08-28T19:44:59Z",
+  "base_sha": "ea3f6388f3eb00381b02f33a78bca403dafa6dd7",
+  "verified_at": "2026-08-29T08:24:25Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "58e4c06e98108a69f1e62f631bb248eec626b3c6fc204e60507e377cd1633d8c",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "1e6daf19456ff79e7181e8117bbb2064feb53b852438294a58dd2fa5197b3817"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "9a30ba0035976f356abad5b9803bbddfdbafe28a77ef9d461c7ed3f8e70c7595",
+    "frontend-modern/src/hooks/useWorkloads.ts": "405e74ddd3cb490b54661fe6cd2d603adf47a56b1737f99c384f6a27cce2446c",
+    "frontend-modern/src/types/resource.ts": "0effa6ccaa032a106e9194d3f2c4665061aeb72abe31b062c0c8a5f002a7f5c1"
   },
   "routes": ["/proxmox/overview", "/proxmox/backups/date"],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1600,
+      "height": 1000
     },
     {
       "width": 390,
@@ -23,15 +25,15 @@
     }
   ],
   "states": [
-    "mock-backed Proxmox Overview with the bounded node preview flowing directly into Guests and no PBS server table",
-    "Proxmox Backups By date view retaining the PBS server and datastore table with artifact counts",
-    "expanded PBS server row retaining canonical resource details on the Backups tab",
+    "mock-backed Proxmox Overview first paint with completed, running, and genuinely absent backup states plus populated guest uptime",
+    "full-page Overview refresh retaining backup and uptime evidence without an interim unknown state",
+    "Overview revisited after navigating through the Proxmox backup workflow",
     "desktop and narrow layouts contained within the viewport without horizontal document overflow"
   ],
   "interactions": [
-    "opened Proxmox Overview at 1280x800 and confirmed Nodes precede Guests with a 16 pixel section gap and no backup-server table",
-    "opened Proxmox Backups at 1280x800 and confirmed three PBS server/datastore rows remain visible",
-    "repeated Overview at 390x844 and confirmed Nodes and Guests remain visible without a duplicated PBS table or horizontal overflow",
-    "opened Proxmox Backups at 390x844, expanded the first PBS row, and confirmed canonical resource details remain usable without horizontal overflow"
+    "opened Proxmox Overview at 1600x1000 and confirmed 140 rendered backup indicators included completed, running, and no-backup states with no unknown uptime",
+    "refreshed Overview at 1600x1000 and confirmed the same 140 backup indicators and populated uptime remained on first paint",
+    "navigated to Proxmox Backups By date and back to Overview at 1600x1000, then confirmed backup and uptime evidence remained complete",
+    "repeated direct load, full-page refresh, and Backups-to-Overview route switching at 390x844; each state rendered 36 backup indicators, populated uptime, and no horizontal overflow"
   ]
 }

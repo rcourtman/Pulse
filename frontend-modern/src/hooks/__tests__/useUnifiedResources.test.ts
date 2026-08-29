@@ -1169,6 +1169,7 @@ describe('useUnifiedResources', () => {
             type: 'vm',
             proxmox: {
               sourceId: 'site-a:pve1',
+              runtimeStatus: 'running',
               nodeName: 'pve1',
               clusterName: 'cluster-b',
               instance: 'site-a',
@@ -1177,6 +1178,11 @@ describe('useUnifiedResources', () => {
               connectionHealth: 'error',
               pveVersion: '8.4.1',
               kernelVersion: '6.8.12-10-pve',
+              uptime: 86_400,
+              lastBackup: '2026-02-06T06:00:00Z',
+              backupInProgress: true,
+              osName: 'Debian GNU/Linux',
+              osVersion: '13',
             },
           },
         ],
@@ -1204,7 +1210,14 @@ describe('useUnifiedResources', () => {
       connectionHealth: 'error',
       pveVersion: '8.4.1',
       kernelVersion: '6.8.12-10-pve',
+      runtimeStatus: 'running',
+      uptime: 86_400,
+      lastBackup: '2026-02-06T06:00:00Z',
+      backupInProgress: true,
+      osName: 'Debian GNU/Linux',
+      osVersion: '13',
     });
+    expect(result!.resources()[0]?.uptime).toBe(86_400);
 
     dispose();
   });

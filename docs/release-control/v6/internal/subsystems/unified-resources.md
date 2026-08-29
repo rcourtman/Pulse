@@ -2035,6 +2035,17 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
 
 ## Current State
 
+### Canonical REST facets preserve realtime workload evidence
+
+The frontend REST projection retains the complete source-authored Proxmox
+facet, including runtime status, uptime, last backup, backup-in-progress, and
+guest metadata, while applying only the canonical identity and metric
+normalizations. It also preserves the provider-neutral `virtualMachine` facet.
+Platform owners may therefore adapt the first REST snapshot into workload rows
+without waiting for a later WebSocket merge; REST and WebSocket delivery must
+not disagree about already-authoritative fields. The boundary is pinned by
+`useUnifiedResources.test.ts` and `useWorkloads.test.ts`.
+
 ### Agent libvirt domains use a provider-neutral VM facet
 
 The registry projects a host's validated libvirt domains as `vm` resources

@@ -27,6 +27,7 @@ import type {
   ResourceStorageRisk,
   ResourceTrueNASMeta,
   ResourceType,
+  ResourceVirtualMachineMeta,
   ResourceVMwareMeta,
 } from '@/types/resource';
 import { normalizeDiskArray } from '@/utils/format';
@@ -226,8 +227,14 @@ type APIResource = {
   tags?: string[];
   proxmox?: {
     sourceId?: string;
+    runtimeStatus?: string;
+    nodeIdentity?: string;
     nodeName?: string;
+    nodeAliases?: string[];
+    nodeDisplayName?: string;
+    pool?: string;
     clusterName?: string;
+    isClusterMember?: boolean;
     instance?: string;
     host?: string;
     guestUrl?: string;
@@ -237,18 +244,38 @@ type APIResource = {
     vmid?: number;
     cpus?: number;
     uptime?: number;
+    lastBackup?: string;
+    backupInProgress?: boolean;
     temperature?: number;
     temperatureDetails?: {
       available?: boolean;
       legacySensorsFormat?: boolean;
     };
     template?: boolean;
+    containerType?: string;
+    isOci?: boolean;
     disks?: APIAgentDiskInfo[];
+    diskStatusReason?: string;
+    guestAgentStatus?: string;
+    guestAgentExpected?: boolean;
     networkInterfaces?: APIAgentNetworkInterface[];
+    osName?: string;
+    osVersion?: string;
+    agentVersion?: string;
+    osTemplate?: string;
+    hasDocker?: boolean;
+    dockerCheckedAt?: string;
+    loadAverage?: number[];
+    pendingUpdates?: number;
+    temperatureMonitoringEnabled?: boolean;
+    pendingUpdatesCheckedAt?: string;
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;
+    memoryCache?: number;
+    lock?: string;
   };
+  virtualMachine?: ResourceVirtualMachineMeta;
   agent?: {
     agentId?: string;
     agentVersion?: string;
@@ -833,6 +860,11 @@ const toResource = (v2: APIResource): Resource => {
     ceph: v2.ceph as ResourceCephMeta | undefined,
     proxmox: v2.proxmox
       ? {
+          // Keep the canonical provider facet intact. The Proxmox overview
+          // adapts this Resource back into a workload row, so dropping fields
+          // here makes the first REST paint disagree with the later websocket
+          // merge (notably uptime and completed-backup state).
+          ...v2.proxmox,
           sourceId: v2.proxmox.sourceId,
           vmid: v2.proxmox.vmid,
           node: v2.proxmox.nodeName,
@@ -854,6 +886,7 @@ const toResource = (v2: APIResource): Resource => {
           temperatureDetails: v2.proxmox.temperatureDetails,
         }
       : undefined,
+    virtualMachine: v2.virtualMachine,
     cpu: metricToResourceMetric(v2.metrics?.cpu),
     memory: metricToResourceMetric(v2.metrics?.memory),
     disk: metricToResourceMetric(v2.metrics?.disk),

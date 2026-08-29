@@ -1350,6 +1350,16 @@ still remove an authoritatively deleted guest. These rules preserve sort,
 selection, drawer, and virtualized viewport state without adding another
 resource scan, websocket subscription, or browser-local source of truth.
 
+### Proxmox owner snapshots remain complete on first paint
+
+The scoped Proxmox owner reuses the canonical resource snapshot and performs
+only constant-time field projection per workload row. That snapshot carries
+top-level uptime and the intact source-authored Proxmox facet, so the first
+successful REST paint can render runtime and backup evidence without showing
+an interim unknown or never-backed-up state while waiting for a WebSocket
+tick. This correction adds no request, subscription, retry, or resource scan;
+`useUnifiedResources.test.ts` and `useWorkloads.test.ts` pin the boundary.
+
 ### Command-session liveness lookup stays bounded and in-memory
 
 The connections ledger's command-channel liveness check

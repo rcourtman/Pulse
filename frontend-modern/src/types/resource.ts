@@ -715,14 +715,20 @@ export interface ResourceProxmoxMeta {
   pool?: string;
   instance?: string;
   clusterName?: string;
+  isClusterMember?: boolean;
   /** PVE API connection URL (json `host` on the backend ProxmoxData). */
   host?: string;
   /** Operator-set web interface URL override. */
   guestUrl?: string;
   /** Reachability of the Proxmox API source for this canonical node. */
   connectionHealth?: string;
+  containerType?: string;
   cpus?: number;
   template?: boolean;
+  temperature?: number;
+  uptime?: number;
+  lastBackup?: string;
+  backupInProgress?: boolean;
   disks?: Disk[];
   diskStatusReason?: string;
   guestAgentStatus?: string;
@@ -738,6 +744,15 @@ export interface ResourceProxmoxMeta {
   pendingUpdates?: number;
   isOci?: boolean;
   osTemplate?: string;
+  osName?: string;
+  osVersion?: string;
+  agentVersion?: string;
+  hasDocker?: boolean;
+  dockerCheckedAt?: string;
+  loadAverage?: number[];
+  temperatureMonitoringEnabled?: boolean;
+  pendingUpdatesCheckedAt?: string;
+  lock?: string;
   pveVersion?: string;
   kernelVersion?: string;
   // Narrow projection of the node's temperature payload. `legacySensorsFormat`

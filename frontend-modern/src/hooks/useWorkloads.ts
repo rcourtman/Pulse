@@ -686,6 +686,7 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
     type: resource.type,
     name: resource.name,
     status: resource.status,
+    uptime: resource.uptime,
     lastSeen: resource.lastSeen ? new Date(resource.lastSeen).toISOString() : undefined,
     sources: resource.sources,
     platformScopes: resource.platformScopes,

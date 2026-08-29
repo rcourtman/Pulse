@@ -2389,6 +2389,16 @@ legacy `/proxmox/backups?view=...` query form remains compatibility input only;
 new links and tab state must use the path segment, preserve shared scope
 filters, and clear incompatible per-view facets when crossing sections.
 
+### Overview backup evidence is authoritative on first paint
+
+The canonical REST-to-resource-to-workload boundary preserves Proxmox
+`lastBackup` and `backupInProgress` evidence before the overview renders. A
+missing value may be presented as never backed up only after that authoritative
+facet is loaded; the UI must not require a later WebSocket merge to replace a
+transport-induced absence. Preserving this read-only evidence adds no backup,
+restore, retention, or recovery authority. The behavior is pinned by
+`useUnifiedResources.test.ts` and `useWorkloads.test.ts`.
+
 ### Retained Patrol objectives do not create recovery authority
 
 The shared `internal/api` retained-objective endpoints may scope an outcome to
