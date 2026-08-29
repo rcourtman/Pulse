@@ -244,8 +244,18 @@ fi
 
 rollback_on_error() {
   local rc=$?
+  local failed_pid
   trap - ERR
   if [ "$MUTATED" = true ]; then
+    failed_pid="$(systemctl show "$SERVICE_NAME" --property=MainPID --value || true)"
+    if [[ "$failed_pid" =~ ^[1-9][0-9]*$ ]] && sudo kill -0 "$failed_pid" 2>/dev/null; then
+      # The HTTP listener never opened, so pprof is unavailable. SIGQUIT gives
+      # one bounded Go goroutine dump in the service journal before the already
+      # failed process is stopped; it does not widen recovery to any other unit.
+      log "capturing failed Pulse startup goroutines before compensation"
+      sudo kill -QUIT "$failed_pid" || true
+      sleep 2
+    fi
     log "recovery validation failed; compensating by stopping only pulse.service"
     sudo systemctl stop "$SERVICE_NAME" || true
     restore_runtime_config || true

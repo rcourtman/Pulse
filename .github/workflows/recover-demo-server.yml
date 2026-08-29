@@ -146,6 +146,13 @@ jobs:
                 -e 's/(Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/g' \
                 -e 's/((token|secret|password|authorization|api[_-]?key)[^=: ]*[=: ][[:space:]]*)[^ ,"]+/\1[REDACTED]/Ig' \
             || true
+          printf '%s\n' '--- bounded recent service tail ---'
+          sudo journalctl -u pulse --since '-10 minutes' --no-pager -o cat \
+            | tail -400 \
+            | sed -E \
+                -e 's/(Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/g' \
+                -e 's/((token|secret|password|authorization|api[_-]?key)[^=: ]*[=: ][[:space:]]*)[^ ,"]+/\1[REDACTED]/Ig' \
+            || true
           EOF
           cat demo-runtime-diagnostics.txt
 

@@ -2043,7 +2043,10 @@ isolated local-development opt-in, and carrying it into the public demo can
 block startup while its existing metrics database is synchronously backfilled.
 Failed stable-demo recovery must also retain bounded, redacted service evidence:
 structured systemd state, bounded process metadata, and only startup- or
-health-relevant recent journal lines. Diagnostics run after compensation-safe
+health-relevant recent journal lines. When the listener never opens, the
+recovery sends `SIGQUIT` only to the already-failed Pulse PID before stopping
+it, retaining a bounded Go goroutine dump instead of guessing which persisted
+store is blocking synchronous startup. Diagnostics run after compensation-safe
 recovery failure, carry a hard SSH timeout, and remain part of the existing
 14-day recovery artifact rather than widening the recovery mutation boundary.
 
