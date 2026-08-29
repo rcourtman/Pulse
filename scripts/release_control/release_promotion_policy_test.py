@@ -2128,6 +2128,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("clear_demo_operational_history", recovery)
         self.assertIn("restore_demo_operational_history", recovery)
         self.assertIn("alerts/events.db", recovery)
+        self.assertIn("alerts/alert-history.json.imported", recovery)
+        self.assertIn("alerts/alert-history.backup.json.imported", recovery)
         self.assertIn("ai_incidents.json", recovery)
         self.assertIn("demo-operational-history.tar", recovery)
         self.assertNotIn('rm -f "/etc/pulse/', recovery)

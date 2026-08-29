@@ -2054,7 +2054,9 @@ left more than 5,000 `IncidentStore.saveAsync` goroutines contending on one
 persistence mutex while durable mock alert lifecycle events were replayed.
 Stable-demo recovery therefore archives and clears only the fixed generated
 demo operational-memory files (`ai_incidents.json` and `alerts/events.db` plus
-SQLite sidecars) before restart. A failed bounded restart restores that archive;
+SQLite sidecars), together with the fixed retired `alert-history` JSON recovery
+sources that otherwise repopulate the cleared event log, before restart. A
+failed bounded restart restores that archive;
 success discards it. Customer configuration, active-alert recovery state,
 metrics history, the binary, unit, and Relay remain outside this reset.
 

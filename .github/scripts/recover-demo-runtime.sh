@@ -32,6 +32,10 @@ HISTORY_BACKUP_ARCHIVE=""
 DEMO_HISTORY_PATHS=(
   ai_incidents.json
   ai_incidents.json.tmp
+  alerts/alert-history.json
+  alerts/alert-history.backup.json
+  alerts/alert-history.json.imported
+  alerts/alert-history.backup.json.imported
   alerts/events.db
   alerts/events.db-shm
   alerts/events.db-wal
@@ -348,7 +352,8 @@ sudo chmod 600 /etc/pulse/.env
 # operational memory. A failed 50-node bootstrap can leave thousands of
 # lifecycle events whose v6.4 replay queues one serialized incident save per
 # event before HTTP opens. Back up and clear only those fixed demo-history
-# files; compensation restores them if the bounded profile still fails.
+# files, including the retired JSON sources that repopulate a cleared event
+# log; compensation restores them if the bounded profile still fails.
 clear_demo_operational_history
 sudo systemctl restart "$SERVICE_NAME"
 
