@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,15 +15,54 @@ import (
 // no declared Content-Length (e.g. streamed JSON) are still compressed.
 const gzipMinContentLength = 1024
 
-var gzipWriterPool = sync.Pool{
-	New: func() any {
+// gzipWriterPoolCapacity bounds idle compression state retained after bursts.
+// A BestSpeed writer owns roughly a MiB of working memory. sync.Pool has no
+// cardinality limit, so a burst of concurrent API responses can leave hundreds
+// of MiB resident until enough GC/scavenger cycles happen to release it. Eight
+// writers cover ordinary parallel browser requests without making a past
+// concurrency spike the server's steady-state memory floor.
+const gzipWriterPoolCapacity = 8
+
+type boundedGzipWriterPool struct {
+	idle chan *gzip.Writer
+}
+
+func newBoundedGzipWriterPool(capacity int) *boundedGzipWriterPool {
+	if capacity < 0 {
+		capacity = 0
+	}
+	return &boundedGzipWriterPool{idle: make(chan *gzip.Writer, capacity)}
+}
+
+func (p *boundedGzipWriterPool) get() *gzip.Writer {
+	select {
+	case gw := <-p.idle:
+		return gw
+	default:
 		// BestSpeed keeps CPU cost low on multi-megabyte state payloads while
 		// still collapsing repetitive monitoring JSON by roughly an order of
-		// magnitude.
-		gw, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+		// magnitude. The level is a constant accepted by compress/gzip.
+		gw, err := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+		if err != nil {
+			panic("server: unsupported gzip compression level")
+		}
 		return gw
-	},
+	}
 }
+
+func (p *boundedGzipWriterPool) put(gw *gzip.Writer) {
+	if gw == nil {
+		return
+	}
+	gw.Reset(io.Discard)
+	select {
+	case p.idle <- gw:
+	default:
+		// Do not retain compression state beyond the explicit idle budget.
+	}
+}
+
+var gzipWriterPool = newBoundedGzipWriterPool(gzipWriterPoolCapacity)
 
 // gzipCompressibleContentTypes lists the response types worth compressing.
 // Everything else (images, fonts, event streams, already-compressed archives)
@@ -259,7 +297,7 @@ func (w *gzipResponseWriter) ensureGzipWriter() {
 	if w.gz != nil {
 		return
 	}
-	gz := gzipWriterPool.Get().(*gzip.Writer)
+	gz := gzipWriterPool.get()
 	gz.Reset(w.ResponseWriter)
 	w.gz = gz
 }
@@ -274,7 +312,6 @@ func (w *gzipResponseWriter) close() {
 		return
 	}
 	_ = w.gz.Close()
-	w.gz.Reset(io.Discard)
-	gzipWriterPool.Put(w.gz)
+	gzipWriterPool.put(w.gz)
 	w.gz = nil
 }

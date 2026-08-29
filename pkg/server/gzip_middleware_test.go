@@ -58,6 +58,44 @@ func TestWithGzipCompressesJSONForAcceptingClients(t *testing.T) {
 	}
 }
 
+func TestBoundedGzipWriterPoolLimitsIdleCompressionState(t *testing.T) {
+	const capacity = 2
+	pool := newBoundedGzipWriterPool(capacity)
+	writers := make([]*gzip.Writer, 0, capacity+3)
+	for range capacity + 3 {
+		writer := pool.get()
+		// Force allocation of the writer's BestSpeed working state. The pool's
+		// contract is about bounding these initialized writers, not just shells.
+		if _, err := writer.Write([]byte(strings.Repeat("state-payload", 1024))); err != nil {
+			t.Fatalf("prime gzip writer: %v", err)
+		}
+		writers = append(writers, writer)
+	}
+
+	for _, writer := range writers {
+		if err := writer.Close(); err != nil {
+			t.Fatalf("close gzip writer: %v", err)
+		}
+		pool.put(writer)
+	}
+
+	if got := len(pool.idle); got != capacity {
+		t.Fatalf("idle gzip writers = %d, want bounded capacity %d", got, capacity)
+	}
+}
+
+func TestBoundedGzipWriterPoolSupportsNoIdleRetention(t *testing.T) {
+	pool := newBoundedGzipWriterPool(0)
+	writer := pool.get()
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close gzip writer: %v", err)
+	}
+	pool.put(writer)
+	if got := len(pool.idle); got != 0 {
+		t.Fatalf("idle gzip writers = %d, want 0", got)
+	}
+}
+
 func TestWithGzipPassesThroughWithoutAcceptEncoding(t *testing.T) {
 	payload := strings.Repeat("plain body ", 500)
 	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
