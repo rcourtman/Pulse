@@ -116,6 +116,84 @@ describe('Dialog', () => {
     expect(last).toHaveFocus();
   });
 
+  it('gives Escape, focus trapping, and backdrop dismissal to only the topmost dialog', async () => {
+    const [innerOpen, setInnerOpen] = createSignal(false);
+    const onOuterClose = vi.fn();
+    const onInnerClose = vi.fn(() => setInnerOpen(false));
+    render(() => (
+      <>
+        <Dialog isOpen={true} onClose={onOuterClose} ariaLabel="Outer dialog">
+          <button type="button" onClick={() => setInnerOpen(true)}>
+            Open inner dialog
+          </button>
+        </Dialog>
+        <Dialog isOpen={innerOpen()} onClose={onInnerClose} ariaLabel="Inner dialog">
+          <button type="button">Inner first</button>
+          <button type="button">Inner last</button>
+        </Dialog>
+      </>
+    ));
+
+    await Promise.resolve();
+    const outerAction = screen.getByRole('button', { name: 'Open inner dialog' });
+    outerAction.focus();
+    fireEvent.click(outerAction);
+    await Promise.resolve();
+    expect(screen.getByRole('button', { name: 'Inner first' })).toHaveFocus();
+
+    const innerLast = screen.getByRole('button', { name: 'Inner last' });
+    innerLast.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: 'Inner first' })).toHaveFocus();
+    expect(outerAction).not.toHaveFocus();
+
+    const [outerBackdrop, innerBackdrop] = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-dialog-backdrop]'),
+    );
+    fireEvent.click(outerBackdrop);
+    expect(onOuterClose).not.toHaveBeenCalled();
+    expect(onInnerClose).not.toHaveBeenCalled();
+
+    fireEvent.click(innerBackdrop);
+    expect(onInnerClose).toHaveBeenCalledTimes(1);
+    expect(onOuterClose).not.toHaveBeenCalled();
+    expect(outerAction).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onInnerClose).toHaveBeenCalledTimes(1);
+    expect(onOuterClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an underlying dialog cleanup steal focus from the topmost dialog', async () => {
+    const [outerOpen, setOuterOpen] = createSignal(true);
+    const [innerOpen, setInnerOpen] = createSignal(false);
+    render(() => (
+      <>
+        <Dialog isOpen={outerOpen()} onClose={() => setOuterOpen(false)} ariaLabel="Outer dialog">
+          <button type="button" onClick={() => setInnerOpen(true)}>
+            Open inner dialog
+          </button>
+        </Dialog>
+        <Dialog isOpen={innerOpen()} onClose={() => setInnerOpen(false)} ariaLabel="Inner dialog">
+          <button type="button">Inner action</button>
+        </Dialog>
+      </>
+    ));
+
+    await Promise.resolve();
+    const outerAction = screen.getByRole('button', { name: 'Open inner dialog' });
+    outerAction.focus();
+    fireEvent.click(outerAction);
+    await Promise.resolve();
+
+    const innerAction = screen.getByRole('button', { name: 'Inner action' });
+    expect(innerAction).toHaveFocus();
+    setOuterOpen(false);
+
+    expect(innerAction).toHaveFocus();
+    expect(document.body.style.overflow).toBe('hidden');
+  });
+
   it('honors an explicitly requested initial focus target', async () => {
     render(() => (
       <Dialog isOpen={true} onClose={() => undefined}>

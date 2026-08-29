@@ -12,28 +12,36 @@ interface DialogStateOptions {
 let openDialogCount = 0;
 let previousBodyOverflow = '';
 const [dialogStackDepth, setDialogStackDepth] = createSignal(0);
+const dialogStack: symbol[] = [];
 
 export function dialogStackHasBlockingDialog() {
   return dialogStackDepth() > 0;
 }
 
-function lockBodyScroll() {
+function lockBodyScroll(dialogId: symbol) {
   if (typeof document === 'undefined') return;
   if (openDialogCount === 0) {
     previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
   }
-  openDialogCount += 1;
+  dialogStack.push(dialogId);
+  openDialogCount = dialogStack.length;
   setDialogStackDepth(openDialogCount);
 }
 
-function unlockBodyScroll() {
+function unlockBodyScroll(dialogId: symbol) {
   if (typeof document === 'undefined') return;
-  openDialogCount = Math.max(0, openDialogCount - 1);
+  const stackIndex = dialogStack.lastIndexOf(dialogId);
+  if (stackIndex !== -1) dialogStack.splice(stackIndex, 1);
+  openDialogCount = dialogStack.length;
   setDialogStackDepth(openDialogCount);
   if (openDialogCount === 0) {
     document.body.style.overflow = previousBodyOverflow;
   }
+}
+
+function isTopmostDialog(dialogId: symbol) {
+  return dialogStack[dialogStack.length - 1] === dialogId;
 }
 
 export function useDialogState(options: DialogStateOptions): {
@@ -42,16 +50,17 @@ export function useDialogState(options: DialogStateOptions): {
   setPanelRef: (el: HTMLDivElement) => void;
 } {
   let panelRef: HTMLDivElement | undefined;
+  const dialogId = Symbol('dialog');
 
   createEffect(() => {
     if (!options.isOpen || typeof document === 'undefined') return;
 
     const previousFocus =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    lockBodyScroll();
+    lockBodyScroll(dialogId);
 
     queueMicrotask(() => {
-      if (!panelRef) return;
+      if (!panelRef || !document.contains(panelRef) || !isTopmostDialog(dialogId)) return;
       const focusable = getDialogFocusableElements(panelRef);
       const requestedInitialFocus = focusable.find((element) => element.hasAttribute('autofocus'));
       if (requestedInitialFocus) {
@@ -66,7 +75,7 @@ export function useDialogState(options: DialogStateOptions): {
     });
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!panelRef) return;
+      if (!panelRef || !isTopmostDialog(dialogId)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -103,9 +112,10 @@ export function useDialogState(options: DialogStateOptions): {
 
     document.addEventListener('keydown', onKeyDown);
     onCleanup(() => {
+      const shouldRestoreFocus = isTopmostDialog(dialogId);
       document.removeEventListener('keydown', onKeyDown);
-      unlockBodyScroll();
-      if (previousFocus && document.contains(previousFocus)) {
+      unlockBodyScroll(dialogId);
+      if (shouldRestoreFocus && previousFocus && document.contains(previousFocus)) {
         previousFocus.focus({ preventScroll: true });
       }
     });
@@ -113,7 +123,7 @@ export function useDialogState(options: DialogStateOptions): {
 
   return {
     handleBackdropClick: () => {
-      if (options.closeOnBackdrop ?? true) {
+      if (isTopmostDialog(dialogId) && (options.closeOnBackdrop ?? true)) {
         options.onClose();
       }
     },
