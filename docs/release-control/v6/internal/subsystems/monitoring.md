@@ -38,6 +38,10 @@ monitor restart.
 Monitor construction also applies the persisted grouping enabled flag, window,
 and node/guest keys as one notification-manager policy, so restart behavior is
 identical to a live alert-configuration save.
+Monitor construction installs external alert callbacks before publishing the
+monitor to API handlers. `Monitor.Start` adds runtime WebSocket context and
+lifecycle replay, but an immediately reconnecting agent must not create a
+canonical warning while notification delivery is still unwired.
 Monitor construction enables the alerts-owned persistent event log once for
 each tenant alert manager. This is bootstrap wiring only: monitoring does not
 own event types, retention, query semantics, or lifecycle/notification truth,
@@ -3432,6 +3436,20 @@ levels continue to route by channel, including Apprise; this compatibility path
 must not silently skip a supported destination. Monitoring broadcasts the
 escalated alert after dispatch but does not reinterpret destination identity,
 retry semantics, acknowledgement, or the critical-repeat cadence.
+
+### External alert callbacks are ready before monitor publication
+
+`monitoring.New` installs firing, resolution, AI, and escalation callback slots
+before returning a monitor that API handlers can publish. The asynchronous
+`Monitor.Start` loop adds lifecycle projection handling and rewires escalation
+with its WebSocket hub, but it is not the first notification-delivery boundary.
+This closes the startup interval in which an immediately reconnecting agent
+could create and persist an active warning while the outbound callback was
+still nil. The constructor-time callbacks use the already loaded alert and
+destination configuration; runtime rewiring replaces single callback slots and
+does not duplicate delivery. `TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart`
+in `internal/monitoring/monitor_host_agents_test.go` proves a first custom-sensor
+warning reaches the external path before `Start` runs.
 
 ### Proxmox node unavailability is not credential evidence
 

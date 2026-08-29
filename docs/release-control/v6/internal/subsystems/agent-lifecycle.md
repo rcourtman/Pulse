@@ -85,6 +85,10 @@ initial notification target into the notification manager. This adjacent
 alerts/notifications wiring grants no agent enrollment, reporting, removal,
 profile, update, probe-assignment, or command authority and must not mutate
 host-agent state.
+The same adjacent boundary installs external alert callbacks before the
+monitor is exposed to report handlers. This guarantees that the first accepted
+agent observation can reach canonical notification delivery without granting
+the callback path enrollment, identity, profile, update, or command authority.
 The shared `internal/api/ai_handlers.go` route may also reopen a dismissed
 Patrol finding and mirror that state into the unified findings store. This is
 AI finding-state management only; it grants no agent enrollment, report,
@@ -6794,3 +6798,17 @@ agent report or mutate the live agent inventory to make a mock timeline
 complete. `internal/api/alerting/alerts_test.go` and
 `internal/mock/alert_incidents_test.go` pin the transport and fixture sides of
 this separation.
+
+### First agent reports cannot outrun alert delivery wiring
+
+The monitoring constructor installs external alert callbacks before it returns
+the monitor to API routing. An agent report accepted immediately after process
+startup can therefore create a canonical alert and reach notification and push
+delivery even if the long-running `Monitor.Start` goroutine has not yet begun.
+`Start` may replace those single callback slots with runtime-specific WebSocket
+context and add lifecycle projection replay, but it cannot be the first owner
+of outbound alert wiring. This ordering changes no enrollment or token
+authority; it only prevents the first accepted agent observation from losing
+its alert consequence. `TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart`
+in `internal/monitoring/monitor_host_agents_test.go` pins the pre-`Start`
+warning path.

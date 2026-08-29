@@ -1857,6 +1857,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 		Version:   "2.0.0-go",
 	}
 
+	// Agent endpoints can receive reports as soon as New returns, before the
+	// monitoring loop goroutine reaches Start. Wire external alert delivery now
+	// so a first startup observation cannot create an active alert without also
+	// reaching notifications. Start rewires the escalation callback with its
+	// WebSocket hub and installs lifecycle projection handling.
+	m.wireExternalAlertCallbacks(nil)
+
 	return m, nil
 }
 
@@ -1991,25 +1998,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	// Set up alert callbacks
 	m.alertManager.SubscribeLifecycleCallback(m.handleAlertLifecycleEvent)
-	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
-		m.handleAlertFired(alert)
-	})
-	// Set up AI analysis callback - this bypasses activation state and other notification suppression
-	// so AI can analyze alerts even during pending_review setup phase
-	m.alertManager.SetAlertForAICallback(func(alert *alerts.Alert) {
-		log.Debug().Str("alertID", alert.ID).Msg("AI alert callback invoked (bypassing notification suppression)")
-		if m.alertTriggeredAICallback != nil {
-			m.alertTriggeredAICallback(alert)
-		}
-	})
-	m.alertManager.SetResolvedCallback(func(alertID string) {
-		m.handleAlertResolved(alertID)
-		// Don't broadcast full state here - it causes a cascade with many guests.
-		// The frontend will get the updated alerts through the regular broadcast ticker.
-	})
-	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
-		m.handleAlertEscalated(wsHub, alert, level)
-	})
+	m.wireExternalAlertCallbacks(wsHub)
 	m.replayAlertLifecycleProjections()
 	m.reconcileActiveAlertTimelines()
 	m.markDeadManMonitoringProgress(time.Now().UTC())
@@ -2140,6 +2129,37 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			return
 		}
 	}
+}
+
+// wireExternalAlertCallbacks installs callbacks whose effects leave the alert
+// manager. It is safe to call again: these are single callback slots, so Start
+// replaces the constructor-time escalation closure with one carrying its hub.
+func (m *Monitor) wireExternalAlertCallbacks(wsHub *websocket.Hub) {
+	if m == nil || m.alertManager == nil {
+		return
+	}
+	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
+		m.handleAlertFired(alert)
+	})
+	// AI analysis bypasses activation and notification suppression so findings
+	// can be prepared while alert delivery is still pending review.
+	m.alertManager.SetAlertForAICallback(func(alert *alerts.Alert) {
+		log.Debug().Str("alertID", alert.ID).Msg("AI alert callback invoked (bypassing notification suppression)")
+		m.mu.RLock()
+		callback := m.alertTriggeredAICallback
+		m.mu.RUnlock()
+		if callback != nil {
+			callback(alert)
+		}
+	})
+	m.alertManager.SetResolvedCallback(func(alertID string) {
+		m.handleAlertResolved(alertID)
+		// Don't broadcast full state here - it causes a cascade with many guests.
+		// The frontend gets updated alerts through the regular broadcast ticker.
+	})
+	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
+		m.handleAlertEscalated(wsHub, alert, level)
+	})
 }
 
 // poll fetches data from all configured instances

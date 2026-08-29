@@ -24,6 +24,48 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
+func TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart(t *testing.T) {
+	monitor, err := New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+
+	delivered := make(chan *alerts.Alert, 1)
+	monitor.SetAlertPushCallback(func(alert *alerts.Alert) {
+		delivered <- alert
+	})
+
+	manager := monitor.GetAlertManager()
+	alertConfig := manager.GetConfig()
+	alertConfig.Enabled = true
+	alertConfig.ActivationState = alerts.ActivationActive
+	alertConfig.Schedule.QuietHours.Enabled = false
+	manager.UpdateConfig(alertConfig)
+
+	value := 1.0
+	manager.CheckHost(models.Host{
+		ID:       "startup-warning-host",
+		Hostname: "startup-warning-host",
+		Sensors: models.HostSensorSummary{Custom: []models.HostCustomSensorMetric{{
+			ID:         "apt-upgradable",
+			Name:       "Apt Upgradable",
+			Value:      &value,
+			Status:     "warning",
+			ObservedAt: time.Now().UTC(),
+		}}},
+	})
+
+	select {
+	case alert := <-delivered:
+		if alert.Type != "custom-sensor" || alert.Level != alerts.AlertLevelWarning {
+			t.Fatalf("startup alert = %#v, want warning custom-sensor", alert)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("custom sensor warning did not reach external delivery before Monitor.Start")
+	}
+}
+
 func TestHostZFSPoolsFromAgentDisksPreservesDatasetFacts(t *testing.T) {
 	got := hostZFSPoolsFromAgentDisks([]agentshost.Disk{
 		{Device: "/", Type: "ext4"},
