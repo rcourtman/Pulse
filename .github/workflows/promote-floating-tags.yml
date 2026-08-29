@@ -20,6 +20,18 @@ on:
         description: "Is this a prerelease?"
         required: true
         type: boolean
+      source_sha:
+        description: "Exact source commit asserted by the image provenance."
+        required: true
+        type: string
+      server_digest:
+        description: "Activation-committed Pulse server image digest."
+        required: true
+        type: string
+      control_plane_digest:
+        description: "Activation-committed Pulse control-plane image digest."
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -94,34 +106,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for exact-version images to be available
+      - name: Reverify activation-committed image identities
         env:
           TAG: ${{ steps.extract.outputs.tag }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SERVER_DIGEST: ${{ inputs.server_digest }}
+          CONTROL_PLANE_DIGEST: ${{ inputs.control_plane_digest }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for image in pulse pulse-control-plane; do
-            echo "Waiting for rcourtman/${image}:${TAG} to be available..."
-            available=false
-            for attempt in $(seq 1 30); do
-              if docker manifest inspect "rcourtman/${image}:${TAG}" > /dev/null 2>&1; then
-                echo "Image rcourtman/${image}:${TAG} is available."
-                available=true
-                break
-              fi
-              echo "Attempt ${attempt}/30 - ${image} image not yet available, waiting 10s..."
-              sleep 10
-            done
-            if [ "$available" != "true" ]; then
-              echo "::error::Timeout waiting for rcourtman/${image}:${TAG}"
-              exit 1
-            fi
-          done
+          expected_proof="$(printf 'server_digest=%s\ncontrol_plane_digest=%s' \
+            "${SERVER_DIGEST}" "${CONTROL_PLANE_DIGEST}")"
+          actual_proof="$(./scripts/verify-release-container-images.sh \
+            "${TAG}" "${SOURCE_SHA}" "${GITHUB_REPOSITORY}")"
+          if [ "${actual_proof}" != "${expected_proof}" ]; then
+            echo "::error::Exact-version container identities no longer match the immutable activation marker."
+            printf 'Expected:\n%s\nObserved:\n%s\n' "${expected_proof}" "${actual_proof}" >&2
+            exit 1
+          fi
+          echo "[OK] Exact-version tags still resolve to the activation-committed, attested digests."
 
       - name: Promote Pulse server image tags
         env:
           TAG: ${{ steps.extract.outputs.tag }}
           PRERELEASE: ${{ steps.extract.outputs.prerelease }}
           OWNER: ${{ github.repository_owner }}
+          SERVER_DIGEST: ${{ inputs.server_digest }}
+          CONTROL_PLANE_DIGEST: ${{ inputs.control_plane_digest }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
@@ -132,38 +143,62 @@ jobs:
 
           HIGHEST_STABLE=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
           for image in pulse pulse-control-plane; do
+            if [ "${image}" = "pulse" ]; then
+              expected_digest="${SERVER_DIGEST}"
+            else
+              expected_digest="${CONTROL_PLANE_DIGEST}"
+            fi
+            docker_source="docker.io/rcourtman/${image}@${expected_digest}"
+            ghcr_source="ghcr.io/${OWNER}/${image}@${expected_digest}"
+            docker_targets=()
+            ghcr_targets=()
             if [ "$PRERELEASE" = "true" ]; then
-              echo "Promoting :rc for ${image} from ${TAG}."
+              echo "Promoting :rc for ${image} from ${expected_digest}."
+              docker_targets+=("rcourtman/${image}:rc")
+              ghcr_targets+=("ghcr.io/${OWNER}/${image}:rc")
               docker buildx imagetools create \
-                -t "rcourtman/${image}:rc" \
-                "rcourtman/${image}:${TAG}"
+                -t "${docker_targets[0]}" \
+                "${docker_source}"
               docker buildx imagetools create \
-                -t "ghcr.io/${OWNER}/${image}:rc" \
-                "ghcr.io/${OWNER}/${image}:${TAG}"
-              continue
+                -t "${ghcr_targets[0]}" \
+                "${ghcr_source}"
+            else
+              docker_targets=(
+                "rcourtman/${image}:${MAJOR_MINOR}"
+                "rcourtman/${image}:${MAJOR}"
+              )
+              ghcr_targets=(
+                "ghcr.io/${OWNER}/${image}:${MAJOR_MINOR}"
+                "ghcr.io/${OWNER}/${image}:${MAJOR}"
+              )
+              if [ "$TAG" = "$HIGHEST_STABLE" ]; then
+                docker_targets+=("rcourtman/${image}:latest")
+                ghcr_targets+=("ghcr.io/${OWNER}/${image}:latest")
+                echo "Promoting stable aliases for ${image} from ${expected_digest}, including :latest."
+              else
+                echo "Promoting stable aliases for ${image} from ${expected_digest} without :latest (highest stable is ${HIGHEST_STABLE})."
+              fi
+              docker_hub_tags=()
+              ghcr_tags=()
+              for target in "${docker_targets[@]}"; do docker_hub_tags+=(-t "$target"); done
+              for target in "${ghcr_targets[@]}"; do ghcr_tags+=(-t "$target"); done
+              docker buildx imagetools create \
+                "${docker_hub_tags[@]}" \
+                "${docker_source}"
+              docker buildx imagetools create \
+                "${ghcr_tags[@]}" \
+                "${ghcr_source}"
             fi
 
-            docker_hub_tags=(
-              -t "rcourtman/${image}:${MAJOR_MINOR}"
-              -t "rcourtman/${image}:${MAJOR}"
-            )
-            ghcr_tags=(
-              -t "ghcr.io/${OWNER}/${image}:${MAJOR_MINOR}"
-              -t "ghcr.io/${OWNER}/${image}:${MAJOR}"
-            )
-            if [ "$TAG" = "$HIGHEST_STABLE" ]; then
-              docker_hub_tags+=( -t "rcourtman/${image}:latest" )
-              ghcr_tags+=( -t "ghcr.io/${OWNER}/${image}:latest" )
-              echo "Promoting stable aliases for ${image} from ${TAG}, including :latest."
-            else
-              echo "Promoting stable aliases for ${image} from ${TAG} without :latest (highest stable is ${HIGHEST_STABLE})."
-            fi
-            docker buildx imagetools create \
-              "${docker_hub_tags[@]}" \
-              "rcourtman/${image}:${TAG}"
-            docker buildx imagetools create \
-              "${ghcr_tags[@]}" \
-              "ghcr.io/${OWNER}/${image}:${TAG}"
+            for target in "${docker_targets[@]}" "${ghcr_targets[@]}"; do
+              observed_digest="$(docker buildx imagetools inspect "${target}" \
+                --format '{{json .Manifest}}' | jq -er '.digest')"
+              if [ "${observed_digest}" != "${expected_digest}" ]; then
+                echo "::error::Promoted alias ${target} resolved to ${observed_digest}, expected ${expected_digest}."
+                exit 1
+              fi
+              echo "[OK] ${target} -> ${expected_digest}"
+            done
           done
 
       - name: Promotion summary
