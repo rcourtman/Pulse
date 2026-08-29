@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -233,6 +234,35 @@ func bindMissingAPITokenIDs(tokens []APITokenRecord) int {
 		}
 	}
 	return migrated
+}
+
+type apiTokenMigrationSummary struct {
+	missingIDs        int
+	legacyScopes      int
+	legacyOrgBindings int
+}
+
+func (s apiTokenMigrationSummary) changed() bool {
+	return s.missingIDs > 0 || s.legacyScopes > 0 || s.legacyOrgBindings > 0
+}
+
+// canonicalizeAPITokens applies every migration required before token records
+// are safe to admit to live configuration. Callers must persist the resulting
+// inventory successfully before using it: IDs are revocation handles, scopes
+// are authorization state, and organization bindings constrain tenancy.
+func canonicalizeAPITokens(tokens []APITokenRecord) apiTokenMigrationSummary {
+	summary := apiTokenMigrationSummary{
+		missingIDs:        bindMissingAPITokenIDs(tokens),
+		legacyOrgBindings: bindLegacyAPITokensToDefault(tokens),
+	}
+	for i := range tokens {
+		normalizedScopes := normalizeScopes(tokens[i].Scopes)
+		if !slices.Equal(tokens[i].Scopes, normalizedScopes) {
+			summary.legacyScopes++
+		}
+		tokens[i].Scopes = normalizedScopes
+	}
+	return summary
 }
 
 // tokenPrefix returns the first six characters suitable for hints.

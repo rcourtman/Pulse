@@ -559,33 +559,8 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		return
 	}
 
-	persistMutations := false
-	if migrated := bindMissingAPITokenIDs(tokens); migrated > 0 {
-		persistMutations = true
-		log.Warn().
-			Int("count", migrated).
-			Str("api_tokens_path", cw.apiTokensPath).
-			Msg("Migrated API tokens missing IDs during reload")
-	}
-
-	if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
-		persistMutations = true
-		log.Warn().
-			Int("count", migrated).
-			Str("api_tokens_path", cw.apiTokensPath).
-			Msg("Migrated legacy API tokens to default organization binding during reload")
-	}
-
-	if persistMutations {
-		if err := cw.persistence.SaveAPITokens(tokens); err != nil {
-			log.Error().
-				Err(err).
-				Str("api_tokens_path", cw.apiTokensPath).
-				Msg("Failed to persist API token migrations during reload")
-		}
-	}
-
-	// Only update if we successfully loaded tokens.
+	// LoadAPITokens persists every authorization-relevant migration before it
+	// returns. Only a durable canonical inventory may replace live credentials.
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
 

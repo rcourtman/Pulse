@@ -79,10 +79,12 @@ func TestLoad_Errors(t *testing.T) {
 	tokensPath := filepath.Join(tempDir, "api_tokens.json")
 	require.NoError(t, os.WriteFile(tokensPath, []byte("{invalid}"), 0644))
 
-	// Load should still proceed with defaults and log warnings
+	// Non-credential files retain their recovery behavior, but a corrupted API
+	// token inventory must stop startup rather than silently disable token auth.
 	cfg, err := Load()
-	assert.NoError(t, err)
-	assert.NotNil(t, cfg)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Contains(t, err.Error(), "load API tokens")
 }
 
 func TestLoad_MockEnvErrors(t *testing.T) {

@@ -699,15 +699,17 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 		return nil, fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
-	for i := range tokens {
-		tokens[i].ensureID()
-		tokens[i].ensureScopes()
-	}
-
-	if migratedPlaintext && c.crypto != nil {
+	migrations := canonicalizeAPITokens(tokens)
+	if migratedPlaintext || migrations.changed() {
 		if err := c.persistAPITokensLocked(tokens); err != nil {
-			return nil, fmt.Errorf("rewrite plaintext api tokens file %s: %w", c.apiTokensFile, err)
+			return nil, fmt.Errorf("persist canonical api tokens file %s: %w", c.apiTokensFile, err)
 		}
+		log.Warn().
+			Bool("encrypted_plaintext", migratedPlaintext && c.crypto != nil).
+			Int("missing_ids", migrations.missingIDs).
+			Int("legacy_scopes", migrations.legacyScopes).
+			Int("legacy_org_bindings", migrations.legacyOrgBindings).
+			Msg("Migrated API token metadata before loading")
 	}
 
 	return tokens, nil

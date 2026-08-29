@@ -547,6 +547,7 @@ func TestExportConfigIncludesAPITokens(t *testing.T) {
 			Suffix:    "-0001",
 			CreatedAt: createdAt,
 			Scopes:    []string{config.ScopeWildcard},
+			OrgID:     "default",
 		},
 		{
 			ID:        "token-2",
@@ -556,6 +557,7 @@ func TestExportConfigIncludesAPITokens(t *testing.T) {
 			Suffix:    "-0002",
 			CreatedAt: createdAt.Add(time.Hour),
 			Scopes:    []string{config.ScopeMonitoringRead},
+			OrgID:     "default",
 		},
 	}
 
@@ -1053,6 +1055,7 @@ func TestImportAcceptsVersion40Bundle(t *testing.T) {
 			Suffix:    "-k",
 			CreatedAt: time.Date(2022, 4, 4, 12, 0, 0, 0, time.UTC),
 			Scopes:    []string{config.ScopeWildcard},
+			OrgID:     "default",
 		},
 	}
 	if err := target.SaveAPITokens(baselineTokens); err != nil {

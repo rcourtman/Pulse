@@ -989,28 +989,16 @@ func load(initLogging bool) (*Config, error) {
 
 	}
 
-	// Load API tokens
-	if tokens, err := persistence.LoadAPITokens(); err == nil {
-		if migrated := bindMissingAPITokenIDs(tokens); migrated > 0 {
-			if err := persistence.SaveAPITokens(tokens); err != nil {
-				log.Error().Err(err).Int("count", migrated).Msg("Failed to persist API token ID migration")
-			} else {
-				log.Warn().Int("count", migrated).Msg("Migrated API tokens missing IDs")
-			}
-		}
-		if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
-			if err := persistence.SaveAPITokens(tokens); err != nil {
-				log.Error().Err(err).Int("count", migrated).Msg("Failed to persist legacy API token org binding migration")
-			} else {
-				log.Warn().Int("count", migrated).Msg("Migrated legacy API tokens to default organization binding")
-			}
-		}
-		cfg.APITokens = tokens
-		cfg.SortAPITokens()
-		log.Info().Int("count", len(tokens)).Msg("Loaded API tokens from persistence")
-	} else {
-		log.Warn().Err(err).Msg("Failed to load API tokens from persistence")
+	// API tokens are an authentication boundary. Starting with an unreadable or
+	// unpersistable token inventory would silently turn token-only mode into an
+	// unconfigured runtime. Fail startup/reload instead of weakening auth.
+	tokens, err := persistence.LoadAPITokens()
+	if err != nil {
+		return nil, fmt.Errorf("load API tokens: %w", err)
 	}
+	cfg.APITokens = tokens
+	cfg.SortAPITokens()
+	log.Info().Int("count", len(tokens)).Msg("Loaded API tokens from persistence")
 
 	// Ensure polling intervals have sane defaults if not set
 	if cfg.PVEPollingInterval <= 0 {
