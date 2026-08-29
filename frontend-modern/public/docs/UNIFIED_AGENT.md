@@ -332,6 +332,39 @@ health/metrics endpoint over the network. Use `--health-addr ""` or
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
 
+### Agent log level
+
+The default `info` level records normal lifecycle and connection messages.
+Use `warn` to retain warnings and errors while suppressing routine messages;
+log level does not change collection, reporting, alerts, or notifications.
+
+For an agent installed as a Linux systemd service, use a persistent drop-in
+instead of editing the generated unit (which an agent update may replace):
+
+```bash
+sudo systemctl edit pulse-agent
+```
+
+Add the following content, then save and exit:
+
+```ini
+[Service]
+Environment="LOG_LEVEL=warn"
+```
+
+Apply and verify the change:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart pulse-agent
+sudo journalctl -u pulse-agent --since "5 minutes ago"
+```
+
+Set the value to `debug` temporarily when collecting diagnostics, then restore
+`info` or `warn`. For a container agent, set `LOG_LEVEL=warn` in the container
+environment and recreate the container. Pro installations can also manage
+`log_level` with an [agent configuration profile](CENTRALIZED_MANAGEMENT.md).
+
 ## Observer destinations
 
 Observer destinations receive the same already-collected host, Docker/Podman,
@@ -767,7 +800,9 @@ If your Docker Swarm cluster isn't being detected:
 
 5. **Enable debug logging**: For more detail:
    ```bash
-   LOG_LEVEL=debug journalctl -u pulse-agent -f
+   # Set the service to debug as described under "Agent log level", restart it,
+   # then follow the service journal.
+   journalctl -u pulse-agent -f
    ```
 
 ### PVE Backups Not Showing (Recovery)

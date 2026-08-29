@@ -228,6 +228,18 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         self.assertIn("Version and outdated", upgrade_doc)
         self.assertIn("only after the agent has successfully reported", upgrade_doc)
 
+    def test_agent_log_level_guidance_changes_the_service_environment(self) -> None:
+        for rel in (
+            "docs/UNIFIED_AGENT.md",
+            "frontend-modern/public/docs/UNIFIED_AGENT.md",
+        ):
+            content = read(rel)
+            prose = normalize_prose(content)
+            self.assertIn("sudo systemctl edit pulse-agent", content)
+            self.assertIn('Environment="LOG_LEVEL=warn"', content)
+            self.assertIn("log level does not change collection, reporting, alerts, or notifications", prose)
+            self.assertNotIn("LOG_LEVEL=debug journalctl", content)
+
     def test_api_token_docs_explain_primary_token_and_revocation_safety(self) -> None:
         config_doc = read("docs/CONFIGURATION.md")
         public_config_doc = read("frontend-modern/public/docs/CONFIGURATION.md")
