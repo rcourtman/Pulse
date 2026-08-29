@@ -2042,6 +2042,7 @@ func TestDemoPublicBrowserSmokeWaitsForVisibleLoginUI(t *testing.T) {
 		`getByLabel('Username').waitFor({ state: 'visible', timeout: 120000 })`,
 		`getByLabel('Password').waitFor({ state: 'visible', timeout: 120000 })`,
 		`getByRole('button', { name: 'Sign in to Pulse' }).waitFor({ state: 'visible', timeout: 120000 })`,
+		`getByRole('status', { name: 'Backend and live data stream are connected.' })`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {

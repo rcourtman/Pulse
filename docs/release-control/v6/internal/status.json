@@ -9766,21 +9766,7 @@
     }
   ],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "ga-release-6-4-0-lane-l1",
-      "agent_id": "ga-release-6-4-0",
-      "summary": "Prepare and publish v6.4.0 GA from the latest main cutoff under the owner-authorized expedited promotion, with exact-SHA qualification and release convergence.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-28T22:31:03Z",
-      "heartbeat_at": "2026-08-28T22:31:03Z",
-      "expires_at": "2026-08-29T06:31:03Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L1"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
