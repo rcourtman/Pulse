@@ -39,7 +39,7 @@ func TestCgroupV2PathFrom(t *testing.T) {
 		want    string
 	}{
 		{"systemd service", "0::/system.slice/pulse.service\n", "system.slice/pulse.service"},
-		{"container root", "0::/\n", ""},
+		{"container root", "0::/\n", "."},
 		{"hybrid picks unified line", "12:memory:/legacy\n0::/system.slice/pulse.service\n", "system.slice/pulse.service"},
 		{"v1 only", "12:memory:/legacy\n", ""},
 		{"empty", "", ""},
@@ -50,6 +50,18 @@ func TestCgroupV2PathFrom(t *testing.T) {
 				t.Fatalf("cgroupV2PathFrom(%q) = %q, want %q", tc.content, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestReadCgroupV2MemoryLimitAtNamespacedRoot(t *testing.T) {
+	root := t.TempDir()
+	proc := filepath.Join(root, "proc-self-cgroup")
+	writeCgroupFixture(t, proc, "0::/\n")
+	writeCgroupFixture(t, filepath.Join(root, "memory.max"), "536870912\n")
+
+	got, ok := readCgroupV2MemoryLimit(root, proc)
+	if !ok || got != 536870912 {
+		t.Fatalf("got (%d, %v), want (536870912, true)", got, ok)
 	}
 }
 

@@ -9,6 +9,57 @@ describe('DiagnosticsResultsPanel', () => {
     cleanup();
   });
 
+  it('distinguishes live heap, retained runtime memory, and process RSS', () => {
+    const diagnosticsData = {
+      version: '6.4.1',
+      runtime: 'go',
+      uptime: 3600,
+      nodes: [],
+      pbs: [],
+      system: {
+        os: 'linux',
+        arch: 'amd64',
+        goVersion: 'go1.26.7',
+        numCPU: 4,
+        numGoroutine: 40,
+        memoryMB: 24,
+        heapAllocMB: 24,
+        heapIdleMB: 40,
+        heapReleasedMB: 16,
+        runtimeRetainedMB: 64,
+        processRssMB: 96,
+        gcMemoryLimitMB: 230,
+      },
+      errors: [],
+    } as DiagnosticsData;
+
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <DiagnosticsResultsPanel
+              diagnosticsData={diagnosticsData}
+              loading={false}
+              onRunDiagnostics={() => {}}
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    expect(screen.getByText('Live Heap')).toBeInTheDocument();
+    expect(screen.getByText('24 MB')).toBeInTheDocument();
+    expect(screen.getByText('Process RSS')).toBeInTheDocument();
+    expect(screen.getByText('96 MB')).toBeInTheDocument();
+    expect(screen.getByText('Go Retained')).toBeInTheDocument();
+    expect(screen.getByText('64 MB')).toBeInTheDocument();
+    expect(screen.getByText('Heap Idle / Released')).toBeInTheDocument();
+    expect(screen.getByText('40 / 16 MB')).toBeInTheDocument();
+    expect(screen.getByText('GC Soft Limit')).toBeInTheDocument();
+    expect(screen.getByText('230 MB')).toBeInTheDocument();
+  });
+
   it('labels Pulse Assistant diagnostics as native runtime status', () => {
     const diagnosticsData = {
       version: '6.0.0',

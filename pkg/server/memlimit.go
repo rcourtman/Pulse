@@ -105,12 +105,19 @@ func readCgroupV2MemoryLimit(root, procSelfCgroup string) (int64, bool) {
 
 // cgroupV2PathFrom extracts the unified-hierarchy path from /proc/self/cgroup
 // content ("0::/system.slice/pulse.service" -> "system.slice/pulse.service").
+// A process in a cgroup namespace commonly sees its own cgroup as "0::/";
+// filepath's "." preserves that valid root path without conflating it with a
+// missing unified-hierarchy entry.
 func cgroupV2PathFrom(content string) string {
 	for _, line := range strings.Split(content, "\n") {
 		if !strings.HasPrefix(line, "0::") {
 			continue
 		}
-		return strings.TrimPrefix(strings.TrimSpace(strings.TrimPrefix(line, "0::")), "/")
+		path := strings.TrimSpace(strings.TrimPrefix(line, "0::"))
+		if path == "/" {
+			return "."
+		}
+		return strings.TrimPrefix(path, "/")
 	}
 	return ""
 }

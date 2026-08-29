@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gorilla/websocket"
@@ -93,6 +94,45 @@ func TestBoundedGzipWriterPoolSupportsNoIdleRetention(t *testing.T) {
 	pool.put(writer)
 	if got := len(pool.idle); got != 0 {
 		t.Fatalf("idle gzip writers = %d, want 0", got)
+	}
+}
+
+func TestWithGzipBoundsIdleWritersAfterConcurrentBurst(t *testing.T) {
+	const (
+		capacity    = 2
+		concurrency = 8
+	)
+	previousPool := gzipWriterPool
+	gzipWriterPool = newBoundedGzipWriterPool(capacity)
+	t.Cleanup(func() { gzipWriterPool = previousPool })
+
+	started := make(chan struct{}, concurrency)
+	release := make(chan struct{})
+	handler := withGzip(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(strings.Repeat("burst-payload", 1024)))
+		started <- struct{}{}
+		<-release
+	}))
+
+	var wg sync.WaitGroup
+	for range concurrency {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+			req.Header.Set("Accept-Encoding", "gzip")
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+		}()
+	}
+	for range concurrency {
+		<-started
+	}
+	close(release)
+	wg.Wait()
+
+	if got := len(gzipWriterPool.idle); got != capacity {
+		t.Fatalf("idle gzip writers after burst = %d, want bounded capacity %d", got, capacity)
 	}
 }
 

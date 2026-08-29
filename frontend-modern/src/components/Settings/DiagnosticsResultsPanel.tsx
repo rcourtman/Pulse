@@ -109,9 +109,33 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
             <MetricRow label="CPU Cores" value={props.diagnosticsData?.system?.numCPU} />
             <MetricRow label="Goroutines" value={props.diagnosticsData?.system?.numGoroutine} />
             <MetricRow
-              label="Memory"
-              value={`${props.diagnosticsData?.system?.memoryMB || 0} MB`}
+              label="Live Heap"
+              value={`${props.diagnosticsData?.system?.heapAllocMB ?? props.diagnosticsData?.system?.memoryMB ?? 0} MB`}
             />
+            <Show when={props.diagnosticsData?.system?.processRssMB !== undefined}>
+              <MetricRow
+                label="Process RSS"
+                value={`${props.diagnosticsData?.system?.processRssMB ?? 0} MB`}
+              />
+            </Show>
+            <Show when={props.diagnosticsData?.system?.runtimeRetainedMB !== undefined}>
+              <MetricRow
+                label="Go Retained"
+                value={`${props.diagnosticsData?.system?.runtimeRetainedMB ?? 0} MB`}
+              />
+            </Show>
+            <Show when={props.diagnosticsData?.system?.heapIdleMB !== undefined}>
+              <MetricRow
+                label="Heap Idle / Released"
+                value={`${props.diagnosticsData?.system?.heapIdleMB ?? 0} / ${props.diagnosticsData?.system?.heapReleasedMB ?? 0} MB`}
+              />
+            </Show>
+            <Show when={(props.diagnosticsData?.system?.gcMemoryLimitMB ?? 0) > 0}>
+              <MetricRow
+                label="GC Soft Limit"
+                value={`${props.diagnosticsData?.system?.gcMemoryLimitMB ?? 0} MB`}
+              />
+            </Show>
           </DiagnosticCard>
 
           <DiagnosticCard

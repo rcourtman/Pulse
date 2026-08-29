@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/user"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +26,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
+	"github.com/shirou/gopsutil/v4/process"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/singleflight"
 )
@@ -593,12 +596,65 @@ type PBSDetails struct {
 
 // SystemDiagnostic contains system-level diagnostic info
 type SystemDiagnostic struct {
-	OS           string `json:"os"`
-	Arch         string `json:"arch"`
-	GoVersion    string `json:"goVersion"`
-	NumCPU       int    `json:"numCPU"`
-	NumGoroutine int    `json:"numGoroutine"`
-	MemoryMB     uint64 `json:"memoryMB"`
+	OS                string `json:"os"`
+	Arch              string `json:"arch"`
+	GoVersion         string `json:"goVersion"`
+	NumCPU            int    `json:"numCPU"`
+	NumGoroutine      int    `json:"numGoroutine"`
+	MemoryMB          uint64 `json:"memoryMB"`
+	ProcessRSSMB      uint64 `json:"processRssMB,omitempty"`
+	HeapAllocMB       uint64 `json:"heapAllocMB,omitempty"`
+	HeapInUseMB       uint64 `json:"heapInUseMB,omitempty"`
+	HeapIdleMB        uint64 `json:"heapIdleMB,omitempty"`
+	HeapReleasedMB    uint64 `json:"heapReleasedMB,omitempty"`
+	RuntimeRetainedMB uint64 `json:"runtimeRetainedMB,omitempty"`
+	GCMemoryLimitMB   uint64 `json:"gcMemoryLimitMB,omitempty"`
+}
+
+const bytesPerMiB = uint64(1024 * 1024)
+
+func bytesToMiB(value uint64) uint64 {
+	return value / bytesPerMiB
+}
+
+func currentProcessRSS() uint64 {
+	p, err := process.NewProcess(int32(os.Getpid()))
+	if err != nil {
+		return 0
+	}
+	info, err := p.MemoryInfo()
+	if err != nil || info == nil {
+		return 0
+	}
+	return info.RSS
+}
+
+func buildSystemDiagnostic(memStats runtime.MemStats, processRSS uint64, gcMemoryLimit int64) SystemDiagnostic {
+	runtimeRetained := memStats.Sys
+	if memStats.HeapReleased < runtimeRetained {
+		runtimeRetained -= memStats.HeapReleased
+	} else {
+		runtimeRetained = 0
+	}
+
+	diagnostic := SystemDiagnostic{
+		OS:                runtime.GOOS,
+		Arch:              runtime.GOARCH,
+		GoVersion:         runtime.Version(),
+		NumCPU:            runtime.NumCPU(),
+		NumGoroutine:      runtime.NumGoroutine(),
+		MemoryMB:          bytesToMiB(memStats.Alloc), // Backward-compatible live-heap field.
+		ProcessRSSMB:      bytesToMiB(processRSS),
+		HeapAllocMB:       bytesToMiB(memStats.Alloc),
+		HeapInUseMB:       bytesToMiB(memStats.HeapInuse),
+		HeapIdleMB:        bytesToMiB(memStats.HeapIdle),
+		HeapReleasedMB:    bytesToMiB(memStats.HeapReleased),
+		RuntimeRetainedMB: bytesToMiB(runtimeRetained),
+	}
+	if gcMemoryLimit > 0 && gcMemoryLimit < math.MaxInt64 {
+		diagnostic.GCMemoryLimitMB = bytesToMiB(uint64(gcMemoryLimit))
+	}
+	return diagnostic
 }
 
 // APITokenDiagnostic reports on the state of the multi-token authentication system.
@@ -1005,14 +1061,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	// System info
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
-	diag.System = SystemDiagnostic{
-		OS:           runtime.GOOS,
-		Arch:         runtime.GOARCH,
-		GoVersion:    runtime.Version(),
-		NumCPU:       runtime.NumCPU(),
-		NumGoroutine: runtime.NumGoroutine(),
-		MemoryMB:     memStats.Alloc / 1024 / 1024,
-	}
+	diag.System = buildSystemDiagnostic(memStats, currentProcessRSS(), debug.SetMemoryLimit(-1))
 
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 	diag.MetricsStore = buildMetricsStoreDiagnostic(r.monitor)

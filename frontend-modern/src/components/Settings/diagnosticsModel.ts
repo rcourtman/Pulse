@@ -37,6 +37,13 @@ export interface SystemDiagnostic {
   numCPU: number;
   numGoroutine: number;
   memoryMB: number;
+  processRssMB?: number;
+  heapAllocMB?: number;
+  heapInUseMB?: number;
+  heapIdleMB?: number;
+  heapReleasedMB?: number;
+  runtimeRetainedMB?: number;
+  gcMemoryLimitMB?: number;
 }
 
 export interface DiscoveryDiagnostic {
