@@ -3,6 +3,7 @@ package agenthelper
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"strings"
 	"testing"
 )
@@ -69,5 +70,16 @@ func TestMarshalFrameEnforcesLimit(t *testing.T) {
 	value := strings.Repeat("x", 128)
 	if _, err := marshalFrame(value, 32); err == nil {
 		t.Fatal("oversized marshaled frame accepted")
+	}
+}
+
+func TestCheckedFrameSizeRejectsInvalidAllocationSizes(t *testing.T) {
+	for _, payloadBytes := range []int{-1, math.MaxInt - frameHeaderBytes + 1} {
+		if _, err := checkedFrameSize(payloadBytes); err == nil {
+			t.Fatalf("invalid payload size accepted: %d", payloadBytes)
+		}
+	}
+	if got, err := checkedFrameSize(128); err != nil || got != frameHeaderBytes+128 {
+		t.Fatalf("checkedFrameSize(128) = %d, %v", got, err)
 	}
 }

@@ -29,12 +29,21 @@ function extractSectionValue(body, heading) {
   return value || null;
 }
 
+function stripHTMLComments(value) {
+  let stripped = String(value || "");
+  let previous;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+  } while (stripped !== previous);
+  return stripped;
+}
+
 function classifyAdditionalActionableTopics(body) {
   const value = extractSectionValue(body, "Additional actionable topics");
   if (value === null) return null;
 
-  const normalized = value
-    .replace(/<!--([\s\S]*?)-->/g, "")
+  const normalized = stripHTMLComments(value)
     .trim()
     .toLowerCase()
     .replace(/[.!]+$/g, "");

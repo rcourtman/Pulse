@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 const (
@@ -70,8 +71,17 @@ type frameError struct {
 
 func (e *frameError) Error() string { return e.message }
 
+const frameHeaderBytes = 4
+
+func checkedFrameSize(payloadBytes int) (int, error) {
+	if payloadBytes < 0 || payloadBytes > math.MaxInt-frameHeaderBytes {
+		return 0, &frameError{message: "frame payload size overflows allocation"}
+	}
+	return frameHeaderBytes + payloadBytes, nil
+}
+
 func readFrame(r io.Reader, limit uint32) ([]byte, error) {
-	var header [4]byte
+	var header [frameHeaderBytes]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {
 		return nil, &frameError{message: fmt.Sprintf("read frame length: %v", err)}
 	}
@@ -100,9 +110,13 @@ func marshalFrame(value any, limit uint32) ([]byte, error) {
 		return nil, &frameError{message: fmt.Sprintf("frame payload exceeds %d bytes", limit)}
 	}
 
-	framed := make([]byte, 4+len(payload))
-	binary.BigEndian.PutUint32(framed[:4], uint32(len(payload)))
-	copy(framed[4:], payload)
+	frameSize, err := checkedFrameSize(len(payload))
+	if err != nil {
+		return nil, err
+	}
+	framed := make([]byte, frameSize)
+	binary.BigEndian.PutUint32(framed[:frameHeaderBytes], uint32(len(payload)))
+	copy(framed[frameHeaderBytes:], payload)
 	return framed, nil
 }
 

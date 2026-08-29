@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -146,7 +147,7 @@ func resolveIdentity(uidValue, gidValue int64) (uint32, int, error) {
 		}
 		gidValue = int64(parsed)
 	}
-	if uidValue < 0 || gidValue < 0 || gidValue > int64(^uint(0)>>1) {
+	if uidValue < 0 || uidValue > math.MaxUint32 || gidValue < 0 || gidValue > math.MaxInt {
 		return 0, 0, errors.New("resolved UID or GID is invalid")
 	}
 	return uint32(uidValue), int(gidValue), nil

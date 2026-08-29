@@ -2745,6 +2745,17 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Privileged helper framing and identities are architecture-safe
+
+The no-network helper rejects a framed allocation size that cannot include its
+four-byte protocol header before calling `make`, even if a future payload limit
+is raised beyond today's bounded request and response ceilings. Resolved helper
+UIDs must fit the protocol's unsigned 32-bit identity, and resolved socket GIDs
+must fit the target architecture's `int` before reaching `os.Chown`; this keeps
+the Linux 386 release target fail-closed instead of relying on a narrowing
+conversion. `TestCheckedFrameSizeRejectsInvalidAllocationSizes` and
+`TestResolveIdentityRejectsOutOfRangeNumericValues` pin those boundaries.
+
 ### Linked-agent interface precedence remains singular
 
 A Proxmox node may now carry PVE API interface inventory alongside an optional

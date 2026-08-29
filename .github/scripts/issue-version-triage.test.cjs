@@ -189,6 +189,12 @@ test("additional topic classification is explicit and fail-quiet for legacy form
   );
   assert.equal(
     classifyAdditionalActionableTopics(
+      "## Additional actionable topics\n<!<!-- -->-->\n"
+    ),
+    false
+  );
+  assert.equal(
+    classifyAdditionalActionableTopics(
       "## Additional actionable topics\n- Add a storage filter\n- Reduce log noise\n"
     ),
     true

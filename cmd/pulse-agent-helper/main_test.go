@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +67,17 @@ func TestResolveIdentityUsesExplicitNumericValues(t *testing.T) {
 	}
 	if uid != 1001 || gid != 1002 {
 		t.Fatalf("uid=%d gid=%d", uid, gid)
+	}
+}
+
+func TestResolveIdentityRejectsOutOfRangeNumericValues(t *testing.T) {
+	if _, _, err := resolveIdentity(int64(^uint32(0))+1, 1002); err == nil {
+		t.Fatal("UID above uint32 accepted")
+	}
+	if strconv.IntSize == 32 {
+		if _, _, err := resolveIdentity(1001, int64(math.MaxInt32)+1); err == nil {
+			t.Fatal("GID above 32-bit int accepted")
+		}
 	}
 }
 
