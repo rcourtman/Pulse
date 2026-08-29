@@ -175,17 +175,21 @@ func TestAccumulateAlertOutcomeCountsUsesOnlyContentFreeLifecycleTotals(t *testi
 	counts := InstallSnapshotCounts{}
 	accumulateAlertOutcomeCounts(&counts, []alerts.Alert{
 		{
+			Level:   alerts.AlertLevelCritical,
 			AckTime: &recentAck,
 			OperationalRecord: &operationaltrust.OperationalRecord{
 				State: operationaltrust.OperationalResolved,
 			},
 		},
-		{AckTime: &oldAck},
+		{Level: alerts.AlertLevelWarning, AckTime: &oldAck},
 	}, now.Add(-30*24*time.Hour))
 
 	assert.Equal(t, 2, counts.AlertsFired30d)
 	assert.Equal(t, 1, counts.AlertsAcknowledged30d)
 	assert.Equal(t, 1, counts.AlertsResolved30d)
+	assert.Equal(t, 1, counts.AlertQuality.FiredCritical30d)
+	assert.Equal(t, 1, counts.AlertQuality.FiredWarning30d)
+	assert.Equal(t, 1, counts.AlertQuality.ResolvedCritical30d)
 }
 
 func TestAccumulateAlertOutcomeCountsDeduplicatesOccurrenceSnapshots(t *testing.T) {

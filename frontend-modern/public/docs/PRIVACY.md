@@ -93,6 +93,21 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Alerts fired 30d | `18` | Count unique locally retained alert occurrences in the current 30-day window without sending alert text, resource IDs, or timestamps |
 | Alerts acknowledged 30d | `7` | Count acknowledgements in the current 30-day window without sending actors, reasons, alert IDs, or timestamps |
 | Alerts resolved 30d | `12` | Count resolved alert records in the current 30-day window without sending resolution details, alert IDs, or resource IDs |
+| Active alerts by severity | `1` info, `2` warning, `1` critical | Three aggregate counts that reconcile to active alerts |
+| Active alert age buckets | `1` under 1h, `2` 1h-24h, `1` 1d-7d, `0` 7d+ | Four closed age buckets with no alert timestamps |
+| Alerts fired by severity 30d | `2` info, `10` warning, `6` critical | Three aggregate occurrence counts that reconcile to alerts fired 30d |
+| Alerts resolved by severity 30d | `1` info, `7` warning, `4` critical | Three aggregate occurrence counts that reconcile to alerts resolved 30d |
+| Alert resolution duration buckets 30d | `3` under 15m, `2` 15m-1h, `5` 1h-24h, `2` 1d-7d, `0` 7d+ | Five closed time-to-resolution buckets with no occurrence timestamps |
+| Repeat alert occurrences 30d | `4` | Count occurrences after the first local occurrence of the same canonical alert identity, without sending that identity |
+| Snoozed alert occurrences 30d | `3` | Count occurrences with a durable suppression lifecycle transition |
+| Alerts resolved while snoozed 30d | `2` | Count snoozed occurrences whose recovery transition arrived before an unsnooze transition |
+| Alert manager tenants | `2` | Denominator for tenant-level alert configuration and persistence fields |
+| Alert delivery active tenants | `2` | Count tenant alert managers with delivery enabled and activation state active |
+| Alert flapping detection enabled tenants | `2` | Count tenant alert managers with flapping detection configured, not detected flapping episodes |
+| Alert intent policy configured tenants | `1` | Count tenant alert managers with an explicitly revised default, resource-type, or resource intent policy |
+| Alert event history authoritative tenants | `2` | Count tenant alert managers whose durable event history is authoritative |
+| Alert active state authoritative tenants | `2` | Count tenant alert managers whose durable active-state projection is authoritative |
+| Alert active state persistence degraded tenants | `0` | Count tenant alert managers carrying the fixed local degraded-state marker |
 | Notification attempts 7d | `14` | Count delivery attempts, including retry attempts, in the locally retained seven-day queue window without sending recipients, endpoints, titles, or message content |
 | Notification deliveries 7d | `11` | Count successfully delivered queue records in the local seven-day window without sending channel, recipient, endpoint, or content |
 | Notification failures 7d (terminal in schema v3) | `3` | Count terminal failed or dead-lettered delivery outcomes in the local seven-day window without sending retry-attempt failures, error text, endpoint, recipient, or message content |
@@ -235,6 +250,16 @@ or usage counters to the new release. Listener, startup, runtime, API, UI, and
 asset failures collapse into fixed categories. Addresses, URLs, IP addresses,
 asset names, response bodies, and raw errors are neither sent nor stored.
 
+Telemetry schema v14 adds the alert-quality aggregates listed above. The
+sender folds identities and lifecycle transitions locally, then sends counts
+only. Automatic versus operator resolution is deliberately absent because the
+canonical alert lifecycle records recovery evidence but has no operator-resolve
+action or resolution-actor provenance. Maintenance suppression effectiveness
+is also absent because intent policies can suppress a candidate before an alert
+occurrence exists, leaving no trustworthy fired-alert denominator. Detected
+flapping episodes are not reported because their diagnostic event path may be
+dropped under pressure. Configuration adoption is reported instead.
+
 #### Server-side handling and retention
 
 - Telemetry pings are stored on the Pulse license server only for aggregate install/use analysis.
@@ -243,6 +268,7 @@ asset names, response bodies, and raw errors are neither sent nor stored.
 - Aggregate reports preserve the closed deployment-method buckets, but treat them as best-effort current-runtime evidence. In particular, `container_other` and `binary_other` are unknown fallbacks for many upgraded installs, not precise original installation provenance.
 - Aggregate reports describe the known-age bucket as time since Pulse first created the schema-v2 lifecycle record. It is only a lower bound for an upgraded install and must not be presented as original installation age.
 - Aggregate release-health reports use the direct schema-v13 current and immediately previous observations. They do not infer new-release health from rolling update, feature, alert, or action counters.
+- Aggregate alert-quality release comparisons require schema v14 on both cohorts, compare rolling counters only between consecutive same-version heartbeats, and stratify cohort exposure by known-age and heartbeat-count buckets. A first heartbeat is baseline-only, and cohorts with materially different exposure are not presented as like-for-like outcomes.
 - External-agent/MCP activity is stored only as a coarse adapter-origin flag plus capability-class counters: context, event stream, provisioning, operator state, findings, and action requests.
 - The receiver stores only fields in its versioned telemetry allowlist. A cross-repository parity check prevents client fields from being silently dropped and prevents the storage contract from growing beyond the disclosed payload.
 - Telemetry rows older than **90 days** are purged automatically.

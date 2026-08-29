@@ -9,7 +9,7 @@ published-release reporting.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import gzip
@@ -1024,6 +1024,37 @@ DEEP_SIGNAL_FIELDS = (
         for field, label in PULSE_INTELLIGENCE_COUNT_FIELDS
     ),
 )
+ALERT_QUALITY_SCHEMA_VERSION = 14
+ALERT_QUALITY_COUNT_FIELDS = (
+    ("active_alerts_info", "Active alerts: info"),
+    ("active_alerts_warning", "Active alerts: warning"),
+    ("active_alerts_critical", "Active alerts: critical"),
+    ("active_alerts_age_under_1h", "Active alerts under 1h"),
+    ("active_alerts_age_1h_24h", "Active alerts 1h-24h"),
+    ("active_alerts_age_1d_7d", "Active alerts 1d-7d"),
+    ("active_alerts_age_7d_plus", "Active alerts 7d+"),
+    ("alerts_fired_info_30d", "Alerts fired: info (30d)"),
+    ("alerts_fired_warning_30d", "Alerts fired: warning (30d)"),
+    ("alerts_fired_critical_30d", "Alerts fired: critical (30d)"),
+    ("alerts_resolved_info_30d", "Alerts resolved: info (30d)"),
+    ("alerts_resolved_warning_30d", "Alerts resolved: warning (30d)"),
+    ("alerts_resolved_critical_30d", "Alerts resolved: critical (30d)"),
+    ("alerts_resolution_under_15m_30d", "Resolution under 15m (30d)"),
+    ("alerts_resolution_15m_1h_30d", "Resolution 15m-1h (30d)"),
+    ("alerts_resolution_1h_24h_30d", "Resolution 1h-24h (30d)"),
+    ("alerts_resolution_1d_7d_30d", "Resolution 1d-7d (30d)"),
+    ("alerts_resolution_7d_plus_30d", "Resolution 7d+ (30d)"),
+    ("alerts_repeat_occurrences_30d", "Repeat alert occurrences (30d)"),
+    ("alerts_snoozed_occurrences_30d", "Snoozed alert occurrences (30d)"),
+    ("alerts_resolved_while_snoozed_30d", "Alerts resolved while snoozed (30d)"),
+    ("alert_manager_tenants", "Alert manager tenants"),
+    ("alert_delivery_active_tenants", "Alert delivery active tenants"),
+    ("alert_flapping_enabled_tenants", "Flapping detection enabled tenants"),
+    ("alert_intent_policy_configured_tenants", "Alert intent policy tenants"),
+    ("alert_event_history_authoritative_tenants", "Authoritative event-history tenants"),
+    ("alert_active_state_authoritative_tenants", "Authoritative active-state tenants"),
+    ("alert_active_state_persistence_degraded_tenants", "Degraded active-state tenants"),
+)
 REPORT_ROW_COLUMNS = tuple(
     dict.fromkeys(
         (
@@ -1038,6 +1069,7 @@ REPORT_ROW_COLUMNS = tuple(
             "version_is_published_release",
             "platform",
             "notification_failures_7d",
+            *(key for key, _ in ALERT_QUALITY_COUNT_FIELDS),
             *(key for key, _ in ADOPTION_COUNT_FIELDS),
             *(key for key, _ in FEATURE_BOOL_FIELDS),
             *(key for key, _ in USER_BASE_CATEGORY_FIELDS),
@@ -1064,6 +1096,7 @@ TARGET_RELEASE_ACTIVITY_COUNT_FIELDS = tuple(
             "alerts_fired_30d",
             "alerts_acknowledged_30d",
             "alerts_resolved_30d",
+            *(field for field, _ in ALERT_QUALITY_COUNT_FIELDS),
             "notification_attempts_7d",
             "notification_deliveries_7d",
             "notification_failures_7d",
@@ -1088,6 +1121,7 @@ TARGET_RELEASE_ACTIVITY_LABELS = {
     **{key: label for key, label in ADOPTION_COUNT_FIELDS},
     **{key: label for key, label in PULSE_INTELLIGENCE_COUNT_FIELDS},
     "notification_failures_7d": "Notification failures (7d; schema-dependent semantics)",
+    **{key: label for key, label in ALERT_QUALITY_COUNT_FIELDS},
 }
 GIT_DESCRIBE_RE = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(?P<count>\d+)-g(?P<sha>[0-9a-fA-F]+)(?P<dirty>-dirty)?$"
@@ -1129,6 +1163,8 @@ class TargetReleaseInstallAnalysis:
     first_counts: tuple[int, ...]
     increase_totals: tuple[int, ...]
     decrease_totals: tuple[int, ...]
+    latest_schema_version: int
+    latest_known_install_age_bucket: str
 
 
 @dataclass
@@ -1147,6 +1183,8 @@ class _TargetReleaseInstallAccumulator:
     adjacent_received_at: datetime | None = None
     adjacent_is_target: bool = False
     adjacent_counts: tuple[int, ...] = ()
+    latest_schema_version: int = 0
+    latest_known_install_age_bucket: str = "unknown"
 
     def observe(self, row: dict[str, Any], received_at: datetime, is_target: bool) -> None:
         counts = tuple(
@@ -1160,6 +1198,13 @@ class _TargetReleaseInstallAccumulator:
                 self.first_counts = counts
             if self.latest_received_at is None or received_at > self.latest_received_at:
                 self.latest_received_at = received_at
+                self.latest_schema_version = parse_optional_nonnegative_int(
+                    row.get("schema_version")
+                )
+                self.latest_known_install_age_bucket = (
+                    str(row.get("known_install_age_bucket") or "unknown").strip()
+                    or "unknown"
+                )
 
         if (
             is_target
@@ -1194,6 +1239,8 @@ class _TargetReleaseInstallAccumulator:
             first_counts=self.first_counts,
             increase_totals=tuple(self.increase_totals),
             decrease_totals=tuple(self.decrease_totals),
+            latest_schema_version=self.latest_schema_version,
+            latest_known_install_age_bucket=self.latest_known_install_age_bucket,
         )
 
 
@@ -1657,6 +1704,7 @@ def fetch_rows_remote(
     db_path: str,
     since_days: int,
     target_version: str | None = None,
+    baseline_version: str | None = None,
 ) -> dict[str, Any]:
     # Let SQLite aggregate the history into sufficient per-install evidence.
     # Only the latest row and compact per-install facts cross the network, not
@@ -1673,6 +1721,8 @@ column_names = sys.argv[3].split(",")
 intelligence_columns = sys.argv[4].split(",")
 target_version = sys.argv[5]
 target_activity_columns = sys.argv[6].split(",") if sys.argv[6] else []
+baseline_version = sys.argv[7] if len(sys.argv) > 7 else ""
+analysis_versions = [value for value in (target_version, baseline_version) if value]
 if not column_names or any(
     not name or not name[0].isalpha() or not name.replace("_", "").isalnum()
     for name in column_names
@@ -1734,7 +1784,7 @@ analysis_sql = (
     "GROUP BY install_id"
 )
 target_analysis_sql = None
-if target_version:
+if analysis_versions:
     target_match = "(ordered_version = ? OR ordered_version = ?)"
     previous_target_match = "(previous_version = ? OR previous_version = ?)"
     pair_match = previous_target_match + " AND received_at <> previous_received_at"
@@ -1744,6 +1794,8 @@ if target_version:
         "SUM(CASE WHEN " + pair_match + " THEN 1 ELSE 0 END)",
         "MIN(received_at)",
         "MAX(received_at)",
+        "MAX(CASE WHEN last_rank = 1 THEN COALESCE(schema_version, 0) END)",
+        "MAX(CASE WHEN last_rank = 1 THEN COALESCE(known_install_age_bucket, 'unknown') END)",
     ]
     for name in target_activity_columns:
         target_selects.append(
@@ -1762,6 +1814,8 @@ if target_version:
         "received_at",
         "rowid AS source_rowid",
         "TRIM(version) AS ordered_version",
+        ("schema_version" if "schema_version" in available_columns else "0 AS schema_version"),
+        ("known_install_age_bucket" if "known_install_age_bucket" in available_columns else "'unknown' AS known_install_age_bucket"),
         *(
             name if name in available_columns else "0 AS " + name
             for name in target_activity_columns
@@ -1779,6 +1833,8 @@ if target_version:
         "received_at",
         "source_rowid",
         "ordered_version",
+        "schema_version",
+        "known_install_age_bucket",
         *target_activity_columns,
         "previous_received_at",
         "previous_version",
@@ -1797,6 +1853,9 @@ if target_version:
         "ROW_NUMBER() OVER ("
         "PARTITION BY install_id ORDER BY received_at ASC, source_rowid ASC"
         ") AS first_rank "
+        ", ROW_NUMBER() OVER ("
+        "PARTITION BY install_id ORDER BY received_at DESC, source_rowid DESC"
+        ") AS last_rank "
         "FROM ordered WHERE " + target_match +
         ") SELECT " + ", ".join(target_selects) + " "
         "FROM target_rows GROUP BY install_id"
@@ -1832,31 +1891,32 @@ try:
             signal_fields, free_signal_fields,
         ]})
     if target_analysis_sql is not None:
-        for row in conn.execute(
-            target_analysis_sql,
-            (
-                cutoff,
-                target_version,
-                "v" + target_version,
-                *(
-                    value
-                    for _ in range(1 + (len(target_activity_columns) * 2))
-                    for value in (target_version, "v" + target_version)
+        for analysis_version in analysis_versions:
+            for row in conn.execute(
+                target_analysis_sql,
+                (
+                    cutoff,
+                    analysis_version,
+                    "v" + analysis_version,
+                    *(
+                        value
+                        for _ in range(1 + (len(target_activity_columns) * 2))
+                        for value in (analysis_version, "v" + analysis_version)
+                    ),
                 ),
-            ),
-        ):
-            first_counts = []
-            increase_totals = []
-            decrease_totals = []
-            for signal_index in range(len(target_activity_columns)):
-                value_index = 5 + (signal_index * 3)
-                first_counts.append(row[value_index])
-                increase_totals.append(row[value_index + 1])
-                decrease_totals.append(row[value_index + 2])
-            emit({"t": [
-                row[0], row[1], row[2], row[3], row[4], first_counts,
-                increase_totals, decrease_totals,
-            ]})
+            ):
+                first_counts = []
+                increase_totals = []
+                decrease_totals = []
+                for signal_index in range(len(target_activity_columns)):
+                    value_index = 7 + (signal_index * 3)
+                    first_counts.append(row[value_index])
+                    increase_totals.append(row[value_index + 1])
+                    decrease_totals.append(row[value_index + 2])
+                emit({"t": [
+                    analysis_version, row[0], row[1], row[2], row[3], row[4],
+                    row[5], row[6], first_counts, increase_totals, decrease_totals,
+                ]})
     for row in conn.execute(rows_sql, (cutoff,)):
         emit({"r": list(row)})
 finally:
@@ -1875,6 +1935,7 @@ finally:
             ",".join(REPORT_HISTORY_SIGNAL_COLUMNS),
             normalize_release_tag(target_version or ""),
             ",".join(TARGET_RELEASE_ACTIVITY_COUNT_FIELDS),
+            normalize_release_tag(baseline_version or ""),
         ],
         input=remote_script.encode("utf-8"),
         capture_output=True,
@@ -1918,18 +1979,27 @@ finally:
             )
         elif "t" in record:
             values = record["t"]
-            if len(values) != 8:
+            if len(values) not in {8, 11}:
                 raise RuntimeError(f"invalid target release analysis from remote telemetry fetch on {ssh_host}")
+            if len(values) == 8:
+                values = [
+                    normalize_release_tag(target_version or ""),
+                    values[0], values[1], values[2], values[3], values[4],
+                    0, "unknown", values[5], values[6], values[7],
+                ]
             target_release_facts.append(
                 {
-                    "install_id": values[0],
-                    "heartbeat_count": values[1],
-                    "same_version_pair_count": values[2],
-                    "first_received_at": values[3],
-                    "latest_received_at": values[4],
-                    "first_counts": values[5],
-                    "increase_totals": values[6],
-                    "decrease_totals": values[7],
+                    "version": values[0],
+                    "install_id": values[1],
+                    "heartbeat_count": values[2],
+                    "same_version_pair_count": values[3],
+                    "first_received_at": values[4],
+                    "latest_received_at": values[5],
+                    "latest_schema_version": values[6],
+                    "latest_known_install_age_bucket": values[7],
+                    "first_counts": values[8],
+                    "increase_totals": values[9],
+                    "decrease_totals": values[10],
                 }
             )
         else:
@@ -2740,10 +2810,15 @@ def analyze_target_release_rows(
 
 def analyze_target_release_facts(
     facts: Iterable[dict[str, Any]],
+    target_version: str | None = None,
 ) -> dict[str, TargetReleaseInstallAnalysis]:
     analyses: dict[str, TargetReleaseInstallAnalysis] = {}
     expected_count_length = len(TARGET_RELEASE_ACTIVITY_COUNT_FIELDS)
+    normalized_target = normalize_release_tag(target_version or "")
     for fact in facts:
+        fact_version = normalize_release_tag(str(fact.get("version") or ""))
+        if normalized_target and fact_version and fact_version != normalized_target:
+            continue
         first_counts = tuple(
             parse_optional_nonnegative_int(value)
             for value in fact.get("first_counts") or ()
@@ -2772,6 +2847,13 @@ def analyze_target_release_facts(
             first_counts=first_counts,
             increase_totals=increase_totals,
             decrease_totals=decrease_totals,
+            latest_schema_version=parse_optional_nonnegative_int(
+                fact.get("latest_schema_version")
+            ),
+            latest_known_install_age_bucket=(
+                str(fact.get("latest_known_install_age_bucket") or "unknown").strip()
+                or "unknown"
+            ),
         )
     return analyses
 
@@ -2789,6 +2871,176 @@ def summarize_target_release_followup(
         for install_id, analysis in analyses_by_install.items()
         if install_id in latest_by_install
     }
+    return _summarize_target_release_followup_analysis(
+        latest_by_install,
+        published_versions,
+        normalized_target,
+        target_identity,
+        analyses,
+    )
+
+
+def _heartbeat_exposure_bucket(heartbeat_count: int) -> str:
+    if heartbeat_count <= 1:
+        return "1"
+    if heartbeat_count == 2:
+        return "2"
+    if heartbeat_count <= 6:
+        return "3_6"
+    return "7_plus"
+
+
+def _alert_quality_release_cohort(
+    version: str,
+    analyses: dict[str, TargetReleaseInstallAnalysis],
+) -> dict[str, Any]:
+    age_buckets: Counter[str] = Counter()
+    heartbeat_buckets: Counter[str] = Counter()
+    schema_versions: Counter[str] = Counter()
+    schema_capable = 0
+    comparable = 0
+    for analysis in analyses.values():
+        age_buckets[analysis.latest_known_install_age_bucket] += 1
+        heartbeat_buckets[_heartbeat_exposure_bucket(analysis.heartbeat_count)] += 1
+        schema_versions[str(analysis.latest_schema_version)] += 1
+        if analysis.latest_schema_version >= ALERT_QUALITY_SCHEMA_VERSION:
+            schema_capable += 1
+            if analysis.same_version_pair_count > 0:
+                comparable += 1
+    return {
+        "version": normalize_release_tag(version),
+        "installs": len(analyses),
+        "heartbeat_rows": sum(item.heartbeat_count for item in analyses.values()),
+        "first_heartbeat_baseline_only_installs": sum(
+            1 for item in analyses.values() if item.same_version_pair_count == 0
+        ),
+        "schema_capable_installs": schema_capable,
+        "same_version_comparable_installs": comparable,
+        "known_age_buckets": counter_entries(age_buckets, "bucket"),
+        "heartbeat_count_buckets": counter_entries(heartbeat_buckets, "bucket"),
+        "schema_versions": counter_entries(schema_versions, "schema_version"),
+    }
+
+
+def summarize_alert_quality_release_comparison(
+    target_version: str,
+    baseline_version: str,
+    target_analyses: dict[str, TargetReleaseInstallAnalysis],
+    baseline_analyses: dict[str, TargetReleaseInstallAnalysis],
+) -> dict[str, Any]:
+    target_cohort = _alert_quality_release_cohort(target_version, target_analyses)
+    baseline_cohort = _alert_quality_release_cohort(baseline_version, baseline_analyses)
+    result: dict[str, Any] = {
+        "target": target_cohort,
+        "baseline": baseline_cohort,
+        "matched_exposure_strata": [],
+        "interpretation": {
+            "first_heartbeat": (
+                "The first heartbeat for a version is baseline-only. Alert-quality changes require "
+                "a later consecutive heartbeat from the same version and install."
+            ),
+            "exposure": (
+                "Comparisons are separated by the latest known-install-age bucket and version heartbeat-count "
+                "bucket. Unmatched strata are not pooled into a release outcome."
+            ),
+            "rolling_window": (
+                "Positive and negative rolling-window changes remain separate. Ratios below use positive "
+                "same-version changes only and are descriptive, not causal release attribution."
+            ),
+        },
+    }
+    if target_cohort["schema_capable_installs"] == 0 or baseline_cohort["schema_capable_installs"] == 0:
+        result["status"] = "schema_not_comparable"
+        result["reason"] = (
+            f"Both releases need telemetry schema {ALERT_QUALITY_SCHEMA_VERSION} or newer. "
+            f"{normalize_release_tag(target_version)} and {normalize_release_tag(baseline_version)} "
+            "cannot be compared with alert-quality outcomes from legacy volume counters."
+        )
+        return result
+
+    quality_index = {
+        field: TARGET_RELEASE_ACTIVITY_COUNT_FIELDS.index(field)
+        for field in (
+            "alerts_fired_30d",
+            "alerts_resolved_30d",
+            "alerts_repeat_occurrences_30d",
+            "alerts_snoozed_occurrences_30d",
+            "alerts_resolved_while_snoozed_30d",
+            "alerts_resolution_under_15m_30d",
+            "alerts_resolution_15m_1h_30d",
+            "alerts_resolution_1h_24h_30d",
+            "alerts_resolution_1d_7d_30d",
+            "alerts_resolution_7d_plus_30d",
+        )
+    }
+
+    def stratify(
+        analyses: dict[str, TargetReleaseInstallAnalysis],
+    ) -> dict[tuple[str, str], list[TargetReleaseInstallAnalysis]]:
+        strata: dict[tuple[str, str], list[TargetReleaseInstallAnalysis]] = defaultdict(list)
+        for analysis in analyses.values():
+            if (
+                analysis.latest_schema_version < ALERT_QUALITY_SCHEMA_VERSION
+                or analysis.same_version_pair_count == 0
+            ):
+                continue
+            strata[(
+                analysis.latest_known_install_age_bucket,
+                _heartbeat_exposure_bucket(analysis.heartbeat_count),
+            )].append(analysis)
+        return strata
+
+    def summarize_stratum(items: list[TargetReleaseInstallAnalysis]) -> dict[str, Any]:
+        totals = {
+            field: sum(item.increase_totals[index] for item in items)
+            for field, index in quality_index.items()
+        }
+        fired = totals["alerts_fired_30d"]
+        resolved = totals["alerts_resolved_30d"]
+        snoozed = totals["alerts_snoozed_occurrences_30d"]
+        return {
+            "installs": len(items),
+            "same_version_pairs": sum(item.same_version_pair_count for item in items),
+            "positive_changes": totals,
+            "resolution_per_fired": (resolved / fired) if fired else None,
+            "repeat_per_fired": (
+                totals["alerts_repeat_occurrences_30d"] / fired if fired else None
+            ),
+            "resolved_while_snoozed_per_snoozed": (
+                totals["alerts_resolved_while_snoozed_30d"] / snoozed
+                if snoozed
+                else None
+            ),
+        }
+
+    target_strata = stratify(target_analyses)
+    baseline_strata = stratify(baseline_analyses)
+    for age_bucket, heartbeat_bucket in sorted(set(target_strata) & set(baseline_strata)):
+        key = (age_bucket, heartbeat_bucket)
+        result["matched_exposure_strata"].append({
+            "known_install_age_bucket": age_bucket,
+            "heartbeat_count_bucket": heartbeat_bucket,
+            "target": summarize_stratum(target_strata[key]),
+            "baseline": summarize_stratum(baseline_strata[key]),
+        })
+    if not result["matched_exposure_strata"]:
+        result["status"] = "no_matched_exposure"
+        result["reason"] = (
+            "Schema-capable rows exist, but no known-age and heartbeat-count stratum has "
+            "same-version follow-up in both releases."
+        )
+    else:
+        result["status"] = "descriptive_matched_strata"
+    return result
+
+
+def _summarize_target_release_followup_analysis(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str],
+    normalized_target: str,
+    target_identity: ClassifiedVersion,
+    analyses: dict[str, TargetReleaseInstallAnalysis],
+) -> dict[str, Any]:
     signals = {
         field: {
             "field": field,
@@ -3052,6 +3304,7 @@ def summarize_rows(
     rows: Iterable[dict[str, Any]],
     published_versions: set[str],
     target_version: str | None = None,
+    baseline_version: str | None = None,
     include_mock_fleet: bool = False,
     *,
     now: datetime | None = None,
@@ -3087,15 +3340,31 @@ def summarize_rows(
         for install_id, analysis in pulse_intelligence_analysis.items()
         if install_id in latest_by_install
     }
+    release_fact_list = (
+        list(target_release_analysis_facts)
+        if target_release_analysis_facts is not None
+        else None
+    )
     target_release_analysis: dict[str, TargetReleaseInstallAnalysis] = {}
     if target_version:
         target_release_analysis = (
-            analyze_target_release_facts(target_release_analysis_facts)
-            if target_release_analysis_facts is not None
+            analyze_target_release_facts(release_fact_list, target_version)
+            if release_fact_list is not None
             else analyze_target_release_rows(
                 row_list,
                 published_versions,
                 target_version,
+            )
+        )
+    baseline_release_analysis: dict[str, TargetReleaseInstallAnalysis] = {}
+    if baseline_version:
+        baseline_release_analysis = (
+            analyze_target_release_facts(release_fact_list, baseline_version)
+            if release_fact_list is not None
+            else analyze_target_release_rows(
+                row_list,
+                published_versions,
+                baseline_version,
             )
         )
     latest_install_windows = summarize_latest_install_windows(
@@ -3166,6 +3435,14 @@ def summarize_rows(
         if target_version
         else None,
         "target_release_followup": target_release_followup,
+        "alert_quality_release_comparison": summarize_alert_quality_release_comparison(
+            target_version,
+            baseline_version,
+            target_release_analysis,
+            baseline_release_analysis,
+        )
+        if target_version and baseline_version
+        else None,
         "active_latest": {
             "active_24h": latest_install_windows["24h"]["active_installs"],
             "active_72h": summary_72h["active_installs"],
@@ -3559,6 +3836,36 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             else:
                 lines.append("  - none")
 
+    quality_comparison = summary.get("alert_quality_release_comparison")
+    if quality_comparison:
+        target = quality_comparison["target"]
+        baseline = quality_comparison["baseline"]
+        lines.extend([
+            "",
+            f"Alert-quality release comparison ({target['version']} vs {baseline['version']}):",
+            f"- status: {quality_comparison['status']}",
+            f"- target exposure: {target['installs']} install(s), {target['heartbeat_rows']} heartbeat(s), "
+            f"{target['same_version_comparable_installs']} schema-capable same-version follow-up install(s)",
+            f"- baseline exposure: {baseline['installs']} install(s), {baseline['heartbeat_rows']} heartbeat(s), "
+            f"{baseline['same_version_comparable_installs']} schema-capable same-version follow-up install(s)",
+            "- first heartbeat for each version and install is baseline-only",
+            "- comparisons use only matched known-age and heartbeat-count exposure strata",
+        ])
+        if quality_comparison.get("reason"):
+            lines.append(f"- reason: {quality_comparison['reason']}")
+        strata = quality_comparison.get("matched_exposure_strata", [])
+        lines.append("- matched exposure strata:")
+        if strata:
+            for stratum in strata:
+                lines.append(
+                    "  - age " + stratum["known_install_age_bucket"] +
+                    ", heartbeats " + stratum["heartbeat_count_bucket"] +
+                    f": target {stratum['target']['installs']} install(s), "
+                    f"baseline {stratum['baseline']['installs']} install(s)"
+                )
+        else:
+            lines.append("  - none")
+
     target_coverage = summary.get("target_release_coverage_7d")
     if target_coverage:
         lines.extend(
@@ -3634,6 +3941,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--baseline-version",
+        help=(
+            "optional earlier release for schema-gated alert-quality comparison; "
+            "cohorts are separated by known-age and heartbeat-count exposure"
+        ),
+    )
+    parser.add_argument(
         "--include-mock-fleet",
         action="store_true",
         help=(
@@ -3664,6 +3978,7 @@ def main(argv: list[str] | None = None) -> int:
             args.db_path,
             args.since_days,
             target_version=target_version,
+            baseline_version=args.baseline_version,
         )
         if args.ssh_host
         else fetch_rows_local(args.db_path, args.since_days)
@@ -3673,6 +3988,7 @@ def main(argv: list[str] | None = None) -> int:
         source["rows"],
         published_versions,
         target_version=target_version,
+        baseline_version=args.baseline_version,
         include_mock_fleet=args.include_mock_fleet,
         source_window_days=args.since_days,
         pulse_intelligence_analysis_facts=source.get(

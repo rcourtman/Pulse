@@ -4209,6 +4209,16 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Telemetry preview is the canonical schema-v14 alert-quality payload
+
+The system settings telemetry preview continues to return the exact `Ping`
+built by the outbound sender. Schema v14 adds aggregate alert lifecycle,
+active-age, resolution-duration, repeat, snooze, configuration-adoption, and
+persistence-health fields. `TelemetryPingPreview` declares the same fields, and
+cross-repository schema parity covers the public Go payload, the frontend type,
+and the private receiver allowlist. Older payload rows remain valid with zero
+defaults for additive v14 columns.
+
 Production package boundaries are active under `internal/api/alerting/` and
 `internal/api/configapi/`, backed by shared tenant-context, scope-enforcement,
 install-token, and agent-binding packages. Alert/notification and

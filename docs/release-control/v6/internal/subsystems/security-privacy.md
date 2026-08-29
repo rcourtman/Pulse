@@ -740,6 +740,22 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Alert-quality telemetry remains aggregate and comparison-safe
+
+Telemetry schema v14 exports only counts and closed buckets. It exports no
+resource or destination identity, hostname, alert or rule content, lifecycle
+timestamp, actor, reason, error text, or clickstream. Public and frontend-served
+privacy disclosures enumerate the fields and explain the deliberately excluded
+resolution, maintenance-suppression, and detected-flapping classifications.
+
+The adoption report treats a version's first heartbeat as baseline-only and
+uses only consecutive same-version changes for rolling counters. Optional
+release comparisons require schema v14 in both cohorts, then match observations
+by the latest known-install-age bucket and version heartbeat-count bucket.
+Unmatched exposure is reported rather than pooled, and the specific 6.4.0
+versus 6.3.2 comparison is rejected as schema-incompatible instead of presenting
+legacy alert volume as alert quality.
+
 ### Docker update preflight remains read-only across the unified-agent bridge
 
 The `pulse-agent` late-bound Docker updater delegates the typed, read-only

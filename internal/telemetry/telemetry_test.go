@@ -335,40 +335,54 @@ func TestApplySnapshot(t *testing.T) {
 
 	snap := func() Snapshot {
 		return Snapshot{
-			PVENodes:                        3,
-			VMs:                             10,
-			Containers:                      5,
-			AgentHosts:                      2,
-			DockerContainers:                12,
-			KubernetesPods:                  18,
-			StoragePools:                    4,
-			PhysicalDisks:                   9,
-			TrueNASSystems:                  1,
-			TrueNASApps:                     3,
-			VMwareHosts:                     2,
-			AvailabilityTargets:             6,
-			AIEnabled:                       true,
-			PatrolEnabled:                   true,
-			DiscoveryEnabled:                true,
-			NotificationsEnabled:            true,
-			AIActionsEnabled:                true,
-			AlertAIEnabled:                  true,
-			ActiveAlerts:                    2,
-			PaidLicense:                     true,
-			HasAPITokens:                    true,
-			RBACCustomRoles:                 3,
-			RBACUserAssignments:             7,
-			AuditReads30d:                   41,
-			ReportSchedules:                 5,
-			ReportSchedulesEnabled:          4,
-			ReportSchedulesRun30d:           2,
-			AgentProfiles:                   9,
-			UpdateAttempts30d:               4,
-			UpdateSuccesses30d:              2,
-			UpdateFailures30d:               1,
-			UpdateLastFailureCategory:       "download",
-			PulseIntelligenceLoopConfigured: true,
-			PulseIntelligenceLoopActive30d:  true,
+			PVENodes:                              3,
+			VMs:                                   10,
+			Containers:                            5,
+			AgentHosts:                            2,
+			DockerContainers:                      12,
+			KubernetesPods:                        18,
+			StoragePools:                          4,
+			PhysicalDisks:                         9,
+			TrueNASSystems:                        1,
+			TrueNASApps:                           3,
+			VMwareHosts:                           2,
+			AvailabilityTargets:                   6,
+			AIEnabled:                             true,
+			PatrolEnabled:                         true,
+			DiscoveryEnabled:                      true,
+			NotificationsEnabled:                  true,
+			AIActionsEnabled:                      true,
+			AlertAIEnabled:                        true,
+			ActiveAlerts:                          2,
+			PaidLicense:                           true,
+			HasAPITokens:                          true,
+			RBACCustomRoles:                       3,
+			RBACUserAssignments:                   7,
+			AuditReads30d:                         41,
+			ReportSchedules:                       5,
+			ReportSchedulesEnabled:                4,
+			ReportSchedulesRun30d:                 2,
+			AgentProfiles:                         9,
+			UpdateAttempts30d:                     4,
+			UpdateSuccesses30d:                    2,
+			UpdateFailures30d:                     1,
+			UpdateLastFailureCategory:             "download",
+			ActiveAlertsCritical:                  2,
+			ActiveAlertsAge1h24h:                  2,
+			AlertsFiredCritical30d:                5,
+			AlertsResolvedCritical30d:             3,
+			AlertsResolution1h24h30d:              3,
+			AlertsRepeatOccurrences30d:            2,
+			AlertsSnoozedOccurrences30d:           2,
+			AlertsResolvedWhileSnoozed30d:         1,
+			AlertManagerTenants:                   2,
+			AlertDeliveryActiveTenants:            1,
+			AlertFlappingEnabledTenants:           2,
+			AlertIntentPolicyConfiguredTenants:    1,
+			AlertEventHistoryAuthoritativeTenants: 2,
+			AlertActiveStateAuthoritativeTenants:  2,
+			PulseIntelligenceLoopConfigured:       true,
+			PulseIntelligenceLoopActive30d:        true,
 			PulseIntelligenceCompleteOperationsLoop30d:                     true,
 			PulseIntelligenceApprovedExecutionLoop30d:                      true,
 			PulseIntelligenceResolvedOperationsLoop30d:                     true,
@@ -486,6 +500,15 @@ func TestApplySnapshot(t *testing.T) {
 	if ping.UpdateAttempts30d != 4 || ping.UpdateSuccesses30d != 2 || ping.UpdateFailures30d != 1 ||
 		ping.UpdateLastFailureCategory != "download" {
 		t.Fatalf("update telemetry counters not applied: %#v", ping)
+	}
+	if ping.ActiveAlertsCritical != 2 || ping.ActiveAlertsAge1h24h != 2 ||
+		ping.AlertsFiredCritical30d != 5 || ping.AlertsResolvedCritical30d != 3 ||
+		ping.AlertsResolution1h24h30d != 3 || ping.AlertsRepeatOccurrences30d != 2 ||
+		ping.AlertsSnoozedOccurrences30d != 2 || ping.AlertsResolvedWhileSnoozed30d != 1 ||
+		ping.AlertManagerTenants != 2 || ping.AlertDeliveryActiveTenants != 1 ||
+		ping.AlertFlappingEnabledTenants != 2 || ping.AlertIntentPolicyConfiguredTenants != 1 ||
+		ping.AlertEventHistoryAuthoritativeTenants != 2 || ping.AlertActiveStateAuthoritativeTenants != 2 {
+		t.Fatalf("alert quality snapshot not applied: %#v", ping)
 	}
 	if !ping.PulseIntelligenceLoopConfigured || !ping.PulseIntelligenceLoopActive30d ||
 		!ping.PulseIntelligenceCompleteOperationsLoop30d ||
@@ -868,6 +891,8 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 				NotificationFailures7d:               3,
 				NotificationFailuresAuthentication7d: 2,
 				NotificationFailuresConnectivity7d:   1,
+				AlertsRepeatOccurrences30d:           4,
+				AlertManagerTenants:                  2,
 			}
 		},
 	})
@@ -907,6 +932,9 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 		preview.NotificationFailuresConnectivity7d != 1 {
 		t.Fatalf("preview notification failure classes = %#v", preview)
 	}
+	if preview.AlertsRepeatOccurrences30d != 4 || preview.AlertManagerTenants != 2 {
+		t.Fatalf("preview alert-quality fields = %#v", preview)
+	}
 	if preview.InstallID == "" {
 		t.Fatal("expected preview install ID")
 	}
@@ -929,6 +957,27 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 	record := decodeInstallIDRecordFile(t, filepath.Join(dir, installIDFile))
 	if record.InstallID != preview.InstallID {
 		t.Fatalf("persisted install ID = %q, want %q", record.InstallID, preview.InstallID)
+	}
+}
+
+func TestAlertQualityPayloadContainsOnlyAggregateFields(t *testing.T) {
+	payload, err := json.Marshal(Ping{
+		AlertsRepeatOccurrences30d:                 7,
+		AlertsResolvedWhileSnoozed30d:              5,
+		AlertIntentPolicyConfiguredTenants:         3,
+		AlertActiveStatePersistenceDegradedTenants: 1,
+	})
+	if err != nil {
+		t.Fatalf("marshal ping: %v", err)
+	}
+	text := strings.ToLower(string(payload))
+	for _, forbidden := range []string{
+		"resource_id", "hostname", "alert_text", "alert_message", "rule_content",
+		"destination", "resolved_at", "start_time", "error_text", "click",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("alert-quality payload contains forbidden key fragment %q: %s", forbidden, text)
+		}
 	}
 }
 

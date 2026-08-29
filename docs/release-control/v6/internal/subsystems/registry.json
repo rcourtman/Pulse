@@ -2585,6 +2585,7 @@
               "internal/alerts/reducer_parity_refire_test.go",
               "internal/alerts/resolved_lock_discipline_test.go",
               "internal/alerts/synology_test.go",
+              "internal/alerts/telemetry_quality_test.go",
               "internal/alerts/threshold_resolution_shared_test.go",
               "internal/alerts/unified_incident_confirmation_test.go",
               "internal/alerts/update_alerts_test.go",
@@ -6101,6 +6102,7 @@
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
+              "internal/monitoring/reload_test.go",
               "internal/monitoring/truenas_poller_test.go",
               "internal/unifiedresources/code_standards_test.go"
             ]

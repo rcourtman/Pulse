@@ -39,6 +39,10 @@
 //   - Whether a paid license is active
 //   - Whether any API tokens are configured
 //   - Aggregate alert fired/acknowledged/resolved counts over 30 days
+//   - Aggregate alert lifecycle counts by severity, active-alert age and
+//     resolution-duration buckets, repeat and snooze outcomes over 30 days
+//   - Tenant counts for alert delivery, flapping and intent-policy adoption,
+//     plus event-history and active-state persistence health
 //   - Aggregate notification attempt/delivery/failure counts over seven days
 //   - Coarse update funnel counters and last failure category over the current install-ID rotation window
 //   - Patrol, Assistant, and external-agent usage counters over the current install-ID rotation window:
@@ -180,7 +184,10 @@ const (
 	// previous release observation. This separates a process that can emit
 	// telemetry from one that is actually serving its API and frontend assets,
 	// while retaining only fixed categories and release identity.
-	TelemetrySchemaVersion = 13
+	// Schema v14 adds identity-free alert quality outcomes and their tenant
+	// denominators. It uses closed severity, age, and resolution-time buckets,
+	// and reports only aggregate lifecycle, adoption, and persistence health.
+	TelemetrySchemaVersion = 14
 )
 
 type installIDRecord struct {
@@ -331,11 +338,42 @@ type Ping struct {
 
 	// Core product outcomes. Alert history is retained locally for 30 days;
 	// notification delivery rows are locally retention-bounded to seven days.
-	AlertsFired30d           int `json:"alerts_fired_30d"`
-	AlertsAcknowledged30d    int `json:"alerts_acknowledged_30d"`
-	AlertsResolved30d        int `json:"alerts_resolved_30d"`
-	NotificationAttempts7d   int `json:"notification_attempts_7d"`
-	NotificationDeliveries7d int `json:"notification_deliveries_7d"`
+	AlertsFired30d        int `json:"alerts_fired_30d"`
+	AlertsAcknowledged30d int `json:"alerts_acknowledged_30d"`
+	AlertsResolved30d     int `json:"alerts_resolved_30d"`
+	// Alert quality aggregates. Severity totals reconcile to the existing
+	// lifecycle totals, while age and resolution-duration buckets have fixed
+	// inclusive lower and exclusive upper boundaries.
+	ActiveAlertsInfo                           int `json:"active_alerts_info"`
+	ActiveAlertsWarning                        int `json:"active_alerts_warning"`
+	ActiveAlertsCritical                       int `json:"active_alerts_critical"`
+	ActiveAlertsAgeUnder1h                     int `json:"active_alerts_age_under_1h"`
+	ActiveAlertsAge1h24h                       int `json:"active_alerts_age_1h_24h"`
+	ActiveAlertsAge1d7d                        int `json:"active_alerts_age_1d_7d"`
+	ActiveAlertsAge7dPlus                      int `json:"active_alerts_age_7d_plus"`
+	AlertsFiredInfo30d                         int `json:"alerts_fired_info_30d"`
+	AlertsFiredWarning30d                      int `json:"alerts_fired_warning_30d"`
+	AlertsFiredCritical30d                     int `json:"alerts_fired_critical_30d"`
+	AlertsResolvedInfo30d                      int `json:"alerts_resolved_info_30d"`
+	AlertsResolvedWarning30d                   int `json:"alerts_resolved_warning_30d"`
+	AlertsResolvedCritical30d                  int `json:"alerts_resolved_critical_30d"`
+	AlertsResolutionUnder15m30d                int `json:"alerts_resolution_under_15m_30d"`
+	AlertsResolution15m1h30d                   int `json:"alerts_resolution_15m_1h_30d"`
+	AlertsResolution1h24h30d                   int `json:"alerts_resolution_1h_24h_30d"`
+	AlertsResolution1d7d30d                    int `json:"alerts_resolution_1d_7d_30d"`
+	AlertsResolution7dPlus30d                  int `json:"alerts_resolution_7d_plus_30d"`
+	AlertsRepeatOccurrences30d                 int `json:"alerts_repeat_occurrences_30d"`
+	AlertsSnoozedOccurrences30d                int `json:"alerts_snoozed_occurrences_30d"`
+	AlertsResolvedWhileSnoozed30d              int `json:"alerts_resolved_while_snoozed_30d"`
+	AlertManagerTenants                        int `json:"alert_manager_tenants"`
+	AlertDeliveryActiveTenants                 int `json:"alert_delivery_active_tenants"`
+	AlertFlappingEnabledTenants                int `json:"alert_flapping_enabled_tenants"`
+	AlertIntentPolicyConfiguredTenants         int `json:"alert_intent_policy_configured_tenants"`
+	AlertEventHistoryAuthoritativeTenants      int `json:"alert_event_history_authoritative_tenants"`
+	AlertActiveStateAuthoritativeTenants       int `json:"alert_active_state_authoritative_tenants"`
+	AlertActiveStatePersistenceDegradedTenants int `json:"alert_active_state_persistence_degraded_tenants"`
+	NotificationAttempts7d                     int `json:"notification_attempts_7d"`
+	NotificationDeliveries7d                   int `json:"notification_deliveries_7d"`
 	// NotificationFailures7d counts only terminal failed/dead-letter outcomes.
 	// Retry-attempt failures remain represented in NotificationAttempts7d.
 	NotificationFailures7d               int `json:"notification_failures_7d"`
@@ -491,6 +529,34 @@ type Snapshot struct {
 	AlertsFired30d                                                 int
 	AlertsAcknowledged30d                                          int
 	AlertsResolved30d                                              int
+	ActiveAlertsInfo                                               int
+	ActiveAlertsWarning                                            int
+	ActiveAlertsCritical                                           int
+	ActiveAlertsAgeUnder1h                                         int
+	ActiveAlertsAge1h24h                                           int
+	ActiveAlertsAge1d7d                                            int
+	ActiveAlertsAge7dPlus                                          int
+	AlertsFiredInfo30d                                             int
+	AlertsFiredWarning30d                                          int
+	AlertsFiredCritical30d                                         int
+	AlertsResolvedInfo30d                                          int
+	AlertsResolvedWarning30d                                       int
+	AlertsResolvedCritical30d                                      int
+	AlertsResolutionUnder15m30d                                    int
+	AlertsResolution15m1h30d                                       int
+	AlertsResolution1h24h30d                                       int
+	AlertsResolution1d7d30d                                        int
+	AlertsResolution7dPlus30d                                      int
+	AlertsRepeatOccurrences30d                                     int
+	AlertsSnoozedOccurrences30d                                    int
+	AlertsResolvedWhileSnoozed30d                                  int
+	AlertManagerTenants                                            int
+	AlertDeliveryActiveTenants                                     int
+	AlertFlappingEnabledTenants                                    int
+	AlertIntentPolicyConfiguredTenants                             int
+	AlertEventHistoryAuthoritativeTenants                          int
+	AlertActiveStateAuthoritativeTenants                           int
+	AlertActiveStatePersistenceDegradedTenants                     int
 	NotificationAttempts7d                                         int
 	NotificationDeliveries7d                                       int
 	NotificationFailures7d                                         int
@@ -1129,6 +1195,34 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.AlertsFired30d = s.AlertsFired30d
 	ping.AlertsAcknowledged30d = s.AlertsAcknowledged30d
 	ping.AlertsResolved30d = s.AlertsResolved30d
+	ping.ActiveAlertsInfo = s.ActiveAlertsInfo
+	ping.ActiveAlertsWarning = s.ActiveAlertsWarning
+	ping.ActiveAlertsCritical = s.ActiveAlertsCritical
+	ping.ActiveAlertsAgeUnder1h = s.ActiveAlertsAgeUnder1h
+	ping.ActiveAlertsAge1h24h = s.ActiveAlertsAge1h24h
+	ping.ActiveAlertsAge1d7d = s.ActiveAlertsAge1d7d
+	ping.ActiveAlertsAge7dPlus = s.ActiveAlertsAge7dPlus
+	ping.AlertsFiredInfo30d = s.AlertsFiredInfo30d
+	ping.AlertsFiredWarning30d = s.AlertsFiredWarning30d
+	ping.AlertsFiredCritical30d = s.AlertsFiredCritical30d
+	ping.AlertsResolvedInfo30d = s.AlertsResolvedInfo30d
+	ping.AlertsResolvedWarning30d = s.AlertsResolvedWarning30d
+	ping.AlertsResolvedCritical30d = s.AlertsResolvedCritical30d
+	ping.AlertsResolutionUnder15m30d = s.AlertsResolutionUnder15m30d
+	ping.AlertsResolution15m1h30d = s.AlertsResolution15m1h30d
+	ping.AlertsResolution1h24h30d = s.AlertsResolution1h24h30d
+	ping.AlertsResolution1d7d30d = s.AlertsResolution1d7d30d
+	ping.AlertsResolution7dPlus30d = s.AlertsResolution7dPlus30d
+	ping.AlertsRepeatOccurrences30d = s.AlertsRepeatOccurrences30d
+	ping.AlertsSnoozedOccurrences30d = s.AlertsSnoozedOccurrences30d
+	ping.AlertsResolvedWhileSnoozed30d = s.AlertsResolvedWhileSnoozed30d
+	ping.AlertManagerTenants = s.AlertManagerTenants
+	ping.AlertDeliveryActiveTenants = s.AlertDeliveryActiveTenants
+	ping.AlertFlappingEnabledTenants = s.AlertFlappingEnabledTenants
+	ping.AlertIntentPolicyConfiguredTenants = s.AlertIntentPolicyConfiguredTenants
+	ping.AlertEventHistoryAuthoritativeTenants = s.AlertEventHistoryAuthoritativeTenants
+	ping.AlertActiveStateAuthoritativeTenants = s.AlertActiveStateAuthoritativeTenants
+	ping.AlertActiveStatePersistenceDegradedTenants = s.AlertActiveStatePersistenceDegradedTenants
 	ping.NotificationAttempts7d = s.NotificationAttempts7d
 	ping.NotificationDeliveries7d = s.NotificationDeliveries7d // gitleaks:allow -- schema field name, not a credential
 	ping.NotificationFailures7d = s.NotificationFailures7d

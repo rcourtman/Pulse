@@ -1178,6 +1178,16 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 ## Current State
 
+### Install snapshots aggregate alert quality across isolated tenant managers
+
+`ReloadableMonitor.AggregateInstallSnapshotCounts` loads each provisioned
+organization through its own monitor, reads one privacy-bounded alert-quality
+snapshot from that tenant's alert manager, and adds only aggregate integers to
+the install snapshot. Organization IDs and alert identities are never copied
+into telemetry state. Existing fired, acknowledged, and resolved totals now
+come from the same canonical fold as the v14 quality fields, keeping legacy
+consumers compatible while preventing two calculations from drifting.
+
 ### Proxmox and agent disk observations share full hardware identity
 
 PVE may publish a RAID array volume's full NAA value as a bare serial while

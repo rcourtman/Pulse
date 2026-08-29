@@ -55,11 +55,14 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         decrease_totals = list(first_counts)
         target_release_facts = [
             {
+                "version": "6.3.0-rc.3",
                 "install_id": "a",
                 "heartbeat_count": 2,
                 "same_version_pair_count": 1,
                 "first_received_at": "2026-07-16 23:00:00",
                 "latest_received_at": "2026-07-17 00:00:00",
+                "latest_schema_version": 14,
+                "latest_known_install_age_bucket": "31_90d",
                 "first_counts": first_counts,
                 "increase_totals": increase_totals,
                 "decrease_totals": decrease_totals,
@@ -93,11 +96,14 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                     json.dumps(
                         {
                             "t": [
+                                fact["version"],
                                 fact["install_id"],
                                 fact["heartbeat_count"],
                                 fact["same_version_pair_count"],
                                 fact["first_received_at"],
                                 fact["latest_received_at"],
+                                fact["latest_schema_version"],
+                                fact["latest_known_install_age_bucket"],
                                 fact["first_counts"],
                                 fact["increase_totals"],
                                 fact["decrease_totals"],
@@ -149,18 +155,19 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertNotIn("SELECT *", remote_script)
         self.assertIn("received_at >= datetime('now', ?)", remote_script)
         self.assertEqual(
-            run_mock.call_args.args[0][-4],
+            run_mock.call_args.args[0][-5],
             ",".join(report.REPORT_ROW_COLUMNS),
         )
         self.assertEqual(
-            run_mock.call_args.args[0][-3],
+            run_mock.call_args.args[0][-4],
             ",".join(report.REPORT_HISTORY_SIGNAL_COLUMNS),
         )
-        self.assertEqual(run_mock.call_args.args[0][-2], "6.3.0-rc.3")
+        self.assertEqual(run_mock.call_args.args[0][-3], "6.3.0-rc.3")
         self.assertEqual(
-            run_mock.call_args.args[0][-1],
+            run_mock.call_args.args[0][-2],
             ",".join(report.TARGET_RELEASE_ACTIVITY_COUNT_FIELDS),
         )
+        self.assertEqual(run_mock.call_args.args[0][-1], "")
         self.assertIn("ROW_NUMBER() OVER (", remote_script)
         self.assertIn("GROUP BY install_id", remote_script)
         self.assertIn("MIN(CASE WHEN paid_license = 0", remote_script)
@@ -300,11 +307,12 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         ]
         target_record = next(record["t"] for record in records if "t" in record)
         alerts_index = report.TARGET_RELEASE_ACTIVITY_COUNT_FIELDS.index("alerts_fired_30d")
-        self.assertEqual(target_record[1], 2)
-        self.assertEqual(target_record[2], 1)
-        self.assertEqual(target_record[5][alerts_index], 4)
-        self.assertEqual(target_record[6][alerts_index], 2)
-        self.assertEqual(target_record[7][alerts_index], 0)
+        self.assertEqual(target_record[0], "6.3.0-rc.3")
+        self.assertEqual(target_record[2], 2)
+        self.assertEqual(target_record[3], 1)
+        self.assertEqual(target_record[8][alerts_index], 4)
+        self.assertEqual(target_record[9][alerts_index], 2)
+        self.assertEqual(target_record[10][alerts_index], 0)
 
     def test_compact_intelligence_facts_match_full_history_analysis(self) -> None:
         numeric_columns = {
@@ -684,6 +692,94 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("rollback transitions:", rendered)
         self.assertIn("6.2.1: 1 install(s)", rendered)
 
+    def test_alert_quality_comparison_rejects_640_vs_632_legacy_schemas(self) -> None:
+        now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+        rows = [
+            {
+                "install_id": "target-install",
+                "version": "6.4.0",
+                "schema_version": 13,
+                "known_install_age_bucket": "31_90d",
+                "received_at": now.replace(hour=8).strftime("%Y-%m-%d %H:%M:%S"),
+                "alerts_fired_30d": 100,
+            },
+            {
+                "install_id": "target-install",
+                "version": "6.4.0",
+                "schema_version": 13,
+                "known_install_age_bucket": "31_90d",
+                "received_at": now.replace(hour=10).strftime("%Y-%m-%d %H:%M:%S"),
+                "alerts_fired_30d": 102,
+            },
+            {
+                "install_id": "baseline-install",
+                "version": "6.3.2",
+                "schema_version": 12,
+                "known_install_age_bucket": "91_365d",
+                "received_at": now.replace(hour=7).strftime("%Y-%m-%d %H:%M:%S"),
+                "alerts_fired_30d": 40,
+            },
+            {
+                "install_id": "baseline-install",
+                "version": "6.3.2",
+                "schema_version": 12,
+                "known_install_age_bucket": "91_365d",
+                "received_at": now.replace(hour=11).strftime("%Y-%m-%d %H:%M:%S"),
+                "alerts_fired_30d": 80,
+            },
+        ]
+        full_summary = report.summarize_rows(
+            {"latest_ping": rows[-1]["received_at"], "total_rows": 4, "total_distinct_installs": 2},
+            rows,
+            {"6.4.0", "6.3.2"},
+            target_version="6.4.0",
+            baseline_version="6.3.2",
+            now=now,
+        )
+        summary = full_summary["alert_quality_release_comparison"]
+        self.assertEqual(summary["status"], "schema_not_comparable")
+        self.assertEqual(summary["matched_exposure_strata"], [])
+        self.assertIn("schema 14", summary["reason"])
+        rendered = report.format_text(full_summary, "rcourtman/Pulse", 7)
+        self.assertIn("Alert-quality release comparison (6.4.0 vs 6.3.2):", rendered)
+        self.assertIn("status: schema_not_comparable", rendered)
+
+    def test_alert_quality_comparison_uses_only_matched_followup_exposure(self) -> None:
+        now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+
+        def rows_for(version: str, install: str, fired: tuple[int, int], resolved: tuple[int, int]):
+            return [
+                {
+                    "install_id": install,
+                    "version": version,
+                    "schema_version": 14,
+                    "known_install_age_bucket": "31_90d",
+                    "received_at": now.replace(hour=hour).strftime("%Y-%m-%d %H:%M:%S"),
+                    "alerts_fired_30d": fired[index],
+                    "alerts_resolved_30d": resolved[index],
+                    "alerts_repeat_occurrences_30d": index,
+                }
+                for index, hour in enumerate((8, 10))
+            ]
+
+        rows = rows_for("6.4.1", "target", (100, 104), (70, 73)) + rows_for(
+            "6.4.0", "baseline", (30, 35), (20, 22)
+        )
+        summary = report.summarize_rows(
+            {"latest_ping": rows[-1]["received_at"], "total_rows": 4, "total_distinct_installs": 2},
+            rows,
+            {"6.4.1", "6.4.0"},
+            target_version="6.4.1",
+            baseline_version="6.4.0",
+            now=now,
+        )["alert_quality_release_comparison"]
+        self.assertEqual(summary["status"], "descriptive_matched_strata")
+        self.assertEqual(len(summary["matched_exposure_strata"]), 1)
+        stratum = summary["matched_exposure_strata"][0]
+        self.assertEqual(stratum["heartbeat_count_bucket"], "2")
+        self.assertEqual(stratum["target"]["positive_changes"]["alerts_fired_30d"], 4)
+        self.assertEqual(stratum["baseline"]["positive_changes"]["alerts_fired_30d"], 5)
+        self.assertEqual(stratum["target"]["resolution_per_fired"], 0.75)
     def test_compact_target_release_facts_match_local_one_pass_analysis(self) -> None:
         rows = [
             {

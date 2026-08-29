@@ -556,6 +556,25 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Alert-quality telemetry folds only canonical durable lifecycle truth
+
+`internal/alerts/telemetry_quality.go` folds active alerts and the canonical
+30-day history projection into identity-free aggregate counts. Severity totals,
+active-age buckets, resolution-duration buckets, repeated occurrences, and
+snooze outcomes are computed locally. Canonical state and occurrence time may
+be used transiently for folding, but neither leaves the process. The snapshot
+also exposes tenant-level configuration and event/active-state authority counts
+so downstream rates have denominators and persistence failures remain visible.
+
+The contract deliberately does not classify automatic versus operator
+resolution because alert resolution currently records recovery evidence, not a
+resolution actor or operator-resolve action. It does not claim maintenance
+suppression effectiveness because an intent policy can suppress a candidate
+before an alert occurrence exists. It also excludes detected flapping episode
+counts because that diagnostic event path may drop under pressure. Flapping
+configuration adoption remains measurable. `telemetry_quality_test.go` pins
+occurrence folding, snooze sequencing, and exact bucket boundaries.
+
 The alert webhook editor exposes the delivery contract's language-neutral
 `MessageKey`, event, resource type and node display name alongside the existing
 type, severity and metric fields. Presentation must advertise the backend-owned

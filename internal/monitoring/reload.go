@@ -9,7 +9,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -55,6 +54,7 @@ type InstallSnapshotCounts struct {
 	NotificationFailuresConfiguration7d  int
 	NotificationFailuresRejected7d       int
 	NotificationFailuresUnknown7d        int
+	AlertQuality                         alerts.AlertQualitySnapshot
 }
 
 // ReloadableMonitor wraps a Monitor with reload capability
@@ -283,9 +283,12 @@ func accumulateInstallOutcomeCounts(counts *InstallSnapshotCounts, monitor *Moni
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	alertCutoff := now.Add(-30 * 24 * time.Hour)
 	if alertManager := monitor.GetAlertManager(); alertManager != nil {
-		accumulateAlertOutcomeCounts(counts, alertManager.GetAlertHistorySince(alertCutoff, 0), alertCutoff)
+		quality := alertManager.AlertQualityTelemetrySnapshot(now)
+		counts.AlertQuality.Add(quality)
+		counts.AlertsFired30d += quality.Fired30d
+		counts.AlertsAcknowledged30d += quality.Acknowledged30d
+		counts.AlertsResolved30d += quality.Resolved30d
 	}
 	if notificationManager := monitor.GetNotificationManager(); notificationManager != nil {
 		stats, err := notificationManager.GetTelemetryStats(now.Add(-7 * 24 * time.Hour))
@@ -306,46 +309,18 @@ func accumulateInstallOutcomeCounts(counts *InstallSnapshotCounts, monitor *Moni
 	}
 }
 
+// accumulateAlertOutcomeCounts remains the focused history-folding seam used
+// by monitoring tests. Production collection uses the manager snapshot so the
+// same calculation also includes current age, adoption, and persistence health.
 func accumulateAlertOutcomeCounts(counts *InstallSnapshotCounts, history []alerts.Alert, cutoff time.Time) {
 	if counts == nil {
 		return
 	}
-	type outcome struct {
-		acknowledged bool
-		resolved     bool
-	}
-	outcomes := make(map[string]outcome, len(history))
-	for index, alert := range history {
-		identity := strings.TrimSpace(alert.CanonicalState)
-		if identity == "" {
-			identity = strings.TrimSpace(alert.ID)
-		}
-		occurrence := alert.StartTime
-		if occurrence.IsZero() && alert.OperationalRecord != nil {
-			occurrence = alert.OperationalRecord.FirstObservedAt
-		}
-		key := fmt.Sprintf("%s:%d", identity, occurrence.UnixNano())
-		if identity == "" {
-			key = fmt.Sprintf("anonymous:%d", index)
-		}
-		current := outcomes[key]
-		if alert.AckTime != nil && !alert.AckTime.Before(cutoff) {
-			current.acknowledged = true
-		}
-		if alert.OperationalRecord != nil && alert.OperationalRecord.State == operationaltrust.OperationalResolved {
-			current.resolved = true
-		}
-		outcomes[key] = current
-	}
-	for _, current := range outcomes {
-		counts.AlertsFired30d++
-		if current.acknowledged {
-			counts.AlertsAcknowledged30d++
-		}
-		if current.resolved {
-			counts.AlertsResolved30d++
-		}
-	}
+	quality := alerts.CalculateAlertQualitySnapshot(history, nil, cutoff, cutoff.Add(30*24*time.Hour))
+	counts.AlertQuality.Add(quality)
+	counts.AlertsFired30d += quality.Fired30d
+	counts.AlertsAcknowledged30d += quality.Acknowledged30d
+	counts.AlertsResolved30d += quality.Resolved30d
 }
 
 func accumulateInstallSnapshotCounts(counts *InstallSnapshotCounts, monitor *Monitor) {
