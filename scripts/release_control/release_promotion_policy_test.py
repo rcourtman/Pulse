@@ -1667,7 +1667,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("secrets.", docker_build)
         self.assertNotIn("provenance: false", content)
         self.assertIn("Derived rollback command:", helper)
-        self.assertIn("./scripts/install.sh --version", helper)
+        self.assertIn("sudo /bin/update --version", helper)
         self.assertIn("v6 GA date to publish with GA", helper)
         self.assertIn("--arg ga_date \"$GA_DATE\"", helper)
         self.assertIn("ga_date", resolver)

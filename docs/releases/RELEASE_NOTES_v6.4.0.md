@@ -21,4 +21,4 @@
 - Existing configurations remain valid. Alert identity and history migrations run automatically, with no manual data migration required.
 - Pulse Mobile iOS build 12 and Android versionCode 9 remain compatible. The new `alert_fired` push uses the existing `view_alert` action, so no companion mobile release is required.
 - Windows Unified Agent binaries are not Authenticode-signed while SignPath remains unavailable and may show an Unknown Publisher warning. Verify downloads with the published checksums and detached signatures.
-- The rollback target is stable `v6.3.2`. Use `./scripts/install.sh --version v6.3.2` if you need to return to the previous stable release.
+- The rollback target is stable `v6.3.2`. On systemd and Proxmox LXC installs, use `sudo /bin/update --version v6.3.2` if you need to return to the previous stable release. For Docker Compose, pin the image to `rcourtman/pulse:6.3.2` and recreate the container.

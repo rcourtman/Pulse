@@ -486,6 +486,14 @@ def build_installation_section(version: str) -> str:
         [
             "## Install",
             "",
+            "For systemd and Proxmox LXC installs, use **Settings → System → Updates** or:",
+            "",
+            "```bash",
+            f"sudo /bin/update --version v{version}",
+            "```",
+            "",
+            "For Docker:",
+            "",
             "```bash",
             f"docker pull rcourtman/pulse:{version}",
             "```",
@@ -509,6 +517,8 @@ def build_rollback_section(args: argparse.Namespace) -> str:
             "```bash",
             args.rollback_command,
             "```",
+            "",
+            "For Docker Compose, set the Pulse image to the rollback target and recreate the container.",
         ]
     )
 

@@ -38,7 +38,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             tag_exists_fn=lambda tag: tag == "v5.1.14",
         )
         self.assertEqual(metadata["rollback_tag"], "v5.1.14")
-        self.assertEqual(metadata["rollback_command"], "./scripts/install.sh --version v5.1.14")
+        self.assertEqual(metadata["rollback_command"], "sudo /bin/update --version v5.1.14")
         self.assertEqual(metadata["promoted_from_tag"], "")
         self.assertEqual(metadata["soak_hours"], "")
 
@@ -97,7 +97,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
 
         self.assertEqual(metadata["promoted_from_tag"], "")
         self.assertEqual(metadata["rollback_tag"], "v6.0.0")
-        self.assertEqual(metadata["rollback_command"], "./scripts/install.sh --version v6.0.0")
+        self.assertEqual(metadata["rollback_command"], "sudo /bin/update --version v6.0.0")
         self.assertEqual(metadata["hotfix_exception"], "true")
         self.assertEqual(
             metadata["hotfix_reason"],

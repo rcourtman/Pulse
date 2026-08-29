@@ -60,7 +60,7 @@ This changelog describes the complete stable release train since `v6.3.2`.
 - Promoted prerelease: `v6.4.0-rc.12`
 - Runtime content cutoff: `18b22d1ebbfe542484652e419320fc7643a792f0`
 - Rollback target: `v6.3.2`
-- Rollback command: `./scripts/install.sh --version v6.3.2`
+- Rollback command: `sudo /bin/update --version v6.3.2`
 - Promotion path: owner-approved expedited exact-SHA stable cutoff from `main`
 - Promotion decision: the release owner accepted a shortened soak to deliver bounded fixes for active monitoring correctness and collection-load harm. This is version-bound risk acceptance, not soak evidence or a standing exception.
 - Windows signing decision: the standing SignPath-unavailable policy applies. Windows agents are not Authenticode-signed, may show an Unknown Publisher warning, and retain exact-SHA checksums, detached signatures, immutable-manifest verification, and published-digest verification.

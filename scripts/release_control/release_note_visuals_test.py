@@ -177,7 +177,7 @@ class ReleaseNoteVisualPlanTest(unittest.TestCase):
                 (),
                 {
                     "rollback_target": "v6.3.2",
-                    "rollback_command": "./scripts/install.sh --version v6.3.2",
+                    "rollback_command": "sudo /bin/update --version v6.3.2",
                 },
             )()
         )

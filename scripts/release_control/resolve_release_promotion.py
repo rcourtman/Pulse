@@ -360,7 +360,10 @@ def resolve_metadata(
         )
     if not tag_exists_fn(rollback_tag):
         raise ValueError(f"rollback_version {rollback_tag} does not exist as a repository tag.")
-    rollback_command = f"./scripts/install.sh --version {rollback_tag}"
+    # Supported systemd and Proxmox LXC installs expose the signed server
+    # installer through /bin/update. The archive's scripts/install.sh is the
+    # Unified Agent installer and deliberately does not accept --version.
+    rollback_command = f"sudo /bin/update --version {rollback_tag}"
 
     promoted_from_tag = ""
     soak_hours = ""

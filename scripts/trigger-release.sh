@@ -242,9 +242,9 @@ if [ -z "$ROLLBACK_VERSION" ]; then
 fi
 
 if [[ "$ROLLBACK_VERSION" == v* ]]; then
-    ROLLBACK_COMMAND="./scripts/install.sh --version ${ROLLBACK_VERSION}"
+    ROLLBACK_COMMAND="sudo /bin/update --version ${ROLLBACK_VERSION}"
 else
-    ROLLBACK_COMMAND="./scripts/install.sh --version v${ROLLBACK_VERSION}"
+    ROLLBACK_COMMAND="sudo /bin/update --version v${ROLLBACK_VERSION}"
 fi
 
 echo ""

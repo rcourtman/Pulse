@@ -24,7 +24,7 @@ SUMMARY = """# Prerelease-to-GA Rehearsal Summary
 - Promotion channel: stable
 - Promoted prerelease tag: v6.0.0-rc.1
 - Rollback target: v5.1.23
-- Rollback command: `./scripts/install.sh --version v5.1.23`
+- Rollback command: `sudo /bin/update --version v5.1.23`
 - Prerelease soak hours at rehearsal time: 96
 - Planned GA date: 2026-03-15
 - Planned v5 end-of-support date: 2026-06-11
@@ -43,7 +43,7 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
         self.assertEqual(parsed["tag"], "v6.0.0")
         self.assertEqual(parsed["channel_under_rehearsal"], "stable")
         self.assertEqual(parsed["promoted_from_rc"], "v6.0.0-rc.1")
-        self.assertEqual(parsed["rollback_command"], "`./scripts/install.sh --version v5.1.23`")
+        self.assertEqual(parsed["rollback_command"], "`sudo /bin/update --version v5.1.23`")
         self.assertEqual(parsed["planned_ga_date"], "2026-03-15")
         self.assertEqual(parsed["planned_v5_eos_date"], "2026-06-11")
         self.assertEqual(parsed["windows_authenticode_required"], "false")
@@ -53,7 +53,7 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
         rendered = mod.render_record(
             record_date="2026-03-12",
             result="pass",
-            rollback_command="./scripts/install.sh --version v5.1.23",
+            rollback_command="sudo /bin/update --version v5.1.23",
             run_metadata={"headSha": "abc123", "url": "https://github.com/rcourtman/Pulse/actions/runs/12345"},
             summary_metadata=mod.parse_summary_markdown(SUMMARY),
             summary_source="/tmp/rc-to-ga-rehearsal-summary.md",
@@ -67,7 +67,7 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
         self.assertIn("Candidate stable tag: v6.0.0", rendered)
         self.assertIn("Promotion channel: stable", rendered)
         self.assertIn("Promoted prerelease tag: v6.0.0-rc.1", rendered)
-        self.assertIn("Exact rollback or reinstall command: `./scripts/install.sh --version v5.1.23`", rendered)
+        self.assertIn("Exact rollback or reinstall command: `sudo /bin/update --version v5.1.23`", rendered)
         self.assertIn("Exact GA date to publish: 2026-03-15", rendered)
         self.assertIn("Exact v5 end-of-support date to publish: 2026-06-13", rendered)
         self.assertIn("Windows Authenticode required: false", rendered)
@@ -98,7 +98,7 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
             self.assertIn("v6.0.0-rc.1", content)
             self.assertIn("Promotion channel: stable", content)
             self.assertIn("2026-03-15", content)
-            self.assertIn("Exact rollback or reinstall command: `./scripts/install.sh --version v5.1.23`", content)
+            self.assertIn("Exact rollback or reinstall command: `sudo /bin/update --version v5.1.23`", content)
 
     def test_main_defaults_output_to_canonical_record_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -231,7 +231,7 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
 
     def test_main_requires_rollback_command_when_summary_omits_it(self) -> None:
         summary_without_command = SUMMARY.replace(
-            "- Rollback command: `./scripts/install.sh --version v5.1.23`\n", ""
+            "- Rollback command: `sudo /bin/update --version v5.1.23`\n", ""
         )
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -306,7 +306,7 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
                         "--v5-eos-date",
                         "2026-06-11",
                         "--rollback-command",
-                        "./scripts/install.sh --version v5.1.23",
+                        "sudo /bin/update --version v5.1.23",
                     ]
                 )
 

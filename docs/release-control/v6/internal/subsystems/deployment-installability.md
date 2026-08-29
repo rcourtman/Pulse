@@ -100,6 +100,16 @@ upgrade must recover those values from both split and `--key=value` service
 arguments and reproduce them in the generated systemd command without
 discarding existing explicit disk exclusions.
 
+Published exact-version install and rollback guidance must preserve the server
+and Unified Agent installer boundary. Supported systemd and Proxmox LXC
+deployments use the signed `/bin/update --version vX.Y.Z` server helper;
+`/opt/pulse/scripts/install.sh` and release archives' `scripts/install.sh` are
+Unified Agent installers and must never be presented as server rollback
+commands. Docker guidance instead pins the target image and recreates the
+container. The promotion resolver, manual release trigger, rendered release
+body, current release packet, and shipped upgrade guide must agree on those
+deployment-specific paths.
+
 The accelerated exact-SHA release worker must preserve release-gate fidelity
 under its own resource envelope. Bounded frontend static checks and integration
 image preparation may overlap, but the full frontend test suite and the
@@ -1740,6 +1750,11 @@ artifact-selection behaviour.
    `frontend-modern/public/docs/UPGRADE_v6.md` byte-synchronized. The shipped
    copy is part of every release packet, and `docsLinks.test.ts` must fail when
    release preparation changes only one side.
+16. Keep generated install and rollback instructions deployment-specific.
+   `scripts/installtests/build_release_assets_test.go` must reject a release
+   trigger, promotion resolver, rendered release body, current upgrade guide,
+   or current release packet that routes systemd/LXC rollback through the
+   Unified Agent installer, and must retain explicit Docker image guidance.
 
 ## Current State
 

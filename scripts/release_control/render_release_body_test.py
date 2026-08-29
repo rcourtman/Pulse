@@ -499,7 +499,7 @@ Old metadata section.
                     "candidate_tag": "v6.0.0-rc.2",
                     "promoted_prerelease_tag": "",
                     "rollback_target": "v5.1.28",
-                    "rollback_command": "./scripts/install.sh --version v5.1.28",
+                    "rollback_command": "sudo /bin/update --version v5.1.28",
                     "planned_ga_date": "",
                     "planned_v5_eos_date": "",
                     "hotfix_exception": "false",
@@ -523,10 +523,15 @@ Old metadata section.
             self.assertEqual(body.count("## Install"), 1)
             self.assertEqual(body.count("## Roll back"), 1)
             self.assertNotIn("## Promotion Metadata", body)
+            self.assertIn("sudo /bin/update --version v6.0.0-rc.2", body)
             self.assertIn("docker pull rcourtman/pulse:6.0.0-rc.2", body)
             self.assertIn("https://pulserelay.pro/download.html", body)
             self.assertIn("The rollback target is `v5.1.28`", body)
-            self.assertIn("./scripts/install.sh --version v5.1.28", body)
+            self.assertIn("sudo /bin/update --version v5.1.28", body)
+            self.assertIn(
+                "For Docker Compose, set the Pulse image to the rollback target",
+                body,
+            )
             render_release_body.validate_release_body_shape(body, "6.0.0-rc.2")
 
     def test_release_body_accepts_visual_evidence_before_installation(self) -> None:
@@ -553,7 +558,7 @@ Controls remain readable without horizontal scrolling.
             (),
             {
                 "rollback_target": "v6.3.2",
-                "rollback_command": "./scripts/install.sh --version v6.3.2",
+                "rollback_command": "sudo /bin/update --version v6.3.2",
             },
         )()
         body = "\n\n".join(

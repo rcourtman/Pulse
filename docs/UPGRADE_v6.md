@@ -260,7 +260,7 @@ Yes. Keep a rollback path available while you evaluate v6. The final release
 on the v5 line is 5.1.36, so the stable rollback command is:
 
 ```bash
-./scripts/install.sh --version v5.1.36
+sudo /bin/update --version v5.1.36
 ```
 
 ### Why did my v5 install upgrade itself to v6?
@@ -273,7 +273,7 @@ your data and configuration carry over; run through the Post-Upgrade
 Checklist above to confirm everything still works. To return to v5, run:
 
 ```bash
-./scripts/install.sh --version v5.1.36
+sudo /bin/update --version v5.1.36
 ```
 
 ## Migration Notes (v6)

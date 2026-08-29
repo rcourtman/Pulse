@@ -3270,6 +3270,38 @@ func TestReleaseTriggersReevaluateVisualsInsteadOfTrustingSidecars(t *testing.T)
 	}
 }
 
+func TestReleaseRollbackGuidanceUsesServerUpdateHelper(t *testing.T) {
+	for _, path := range []string{
+		repoFile("scripts", "trigger-release.sh"),
+		repoFile("scripts", "release_control", "resolve_release_promotion.py"),
+		repoFile("scripts", "release_control", "render_release_body.py"),
+		repoFile("docs", "UPGRADE_v6.md"),
+		repoFile("frontend-modern", "public", "docs", "UPGRADE_v6.md"),
+		repoFile("docs", "releases", "RELEASE_NOTES_v6.4.0.md"),
+		repoFile("docs", "releases", "V6_CHANGELOG_v6.4.0.md"),
+	} {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(content)
+		if !strings.Contains(text, "/bin/update --version") {
+			t.Fatalf("%s must route systemd/LXC exact-version changes through the server update helper", path)
+		}
+		if strings.Contains(text, "./scripts/install.sh --version") {
+			t.Fatalf("%s routes server rollback through the Unified Agent installer", path)
+		}
+	}
+
+	renderer, err := os.ReadFile(repoFile("scripts", "release_control", "render_release_body.py"))
+	if err != nil {
+		t.Fatalf("read release body renderer: %v", err)
+	}
+	if !strings.Contains(string(renderer), "For Docker Compose, set the Pulse image to the rollback target") {
+		t.Fatal("release body renderer must retain deployment-specific Docker rollback guidance")
+	}
+}
+
 func TestCommittedReleaseVisualSidecarsCarrySelectionEvidence(t *testing.T) {
 	paths, err := filepath.Glob(repoFile("docs", "releases", "*.visuals.json"))
 	if err != nil {
