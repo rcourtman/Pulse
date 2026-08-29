@@ -4406,6 +4406,7 @@
         "scripts/trigger-stable-patch.sh",
         "scripts/uninstall-sensor-proxy.sh",
         "scripts/validate-release.sh",
+        "scripts/verify-github-release-integrity.sh",
         "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
@@ -4553,6 +4554,7 @@
               "scripts/trigger-release-dry-run.sh",
               "scripts/trigger-release.sh",
               "scripts/trigger-stable-patch.sh",
+              "scripts/verify-github-release-integrity.sh",
               "VERSION"
             ],
             "allow_same_subsystem_tests": false,
@@ -4570,7 +4572,8 @@
               "scripts/release_control/release_promotion_policy_test.py",
               "scripts/release_control/render_release_body_test.py",
               "scripts/release_control/resolve_release_promotion_test.py",
-              "scripts/release_control/validate_artifact_release_line_test.py"
+              "scripts/release_control/validate_artifact_release_line_test.py",
+              "scripts/release_control/verify_github_release_integrity_test.py"
             ]
           },
           {

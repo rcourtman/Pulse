@@ -396,22 +396,33 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(".r2_prefix == $r2_prefix", activation)
         self.assertIn(".r2_prefix == $r2_prefix", convergence)
         self.assertIn("committed=true", activation)
-        self.assertIn("Irreversibly committed and publicly verified ${TAG}", activation)
+        self.assertIn("Immutably committed, attested, and publicly verified ${TAG}", activation)
+        self.assertIn("Draft activation marker digest does not match", activation)
+        self.assertIn(".immutable // false", activation)
+        self.assertIn("verify-github-release-integrity.sh", activation)
+        self.assertIn("verify-github-release-integrity.sh", convergence)
+        self.assertIn("verify-github-release-integrity.sh", commit_verdict)
         marker_upload = activation.index('gh release upload "${TAG}"')
-        commit_flip = activation.index("committed=true", marker_upload)
+        publish_patch = activation.index(
+            '-X PATCH --input "$publish_payload"', marker_upload
+        )
+        commit_flip = activation.index("committed=true", publish_patch)
         activation_readback = activation.index("curl -fsSL --retry 12", commit_flip)
         self.assertIn(
             '--repo "${GITHUB_REPOSITORY}"',
-            activation[marker_upload:commit_flip],
+            activation[marker_upload:publish_patch],
         )
-        self.assertLess(marker_upload, commit_flip)
+        self.assertLess(marker_upload, publish_patch)
+        self.assertLess(publish_patch, commit_flip)
         self.assertLess(commit_flip, activation_readback)
 
-        # Failure injection: after the marker upload succeeds, activation-side
-        # public read-back may fail, but the ERR trap must see committed=true
-        # and may no longer quarantine while convergence owns the marker.
-        state = {"activated": True, "marker_uploaded": False, "committed": False}
-        state["marker_uploaded"] = True
+        # Failure injection: the draft marker is still compensatable, but once
+        # immutable publication succeeds, a later public read-back failure may
+        # not attempt to mutate the locked release.
+        state = {"activated": False, "marker_staged": True, "committed": False}
+        should_remove_marker = state["marker_staged"] and not state["committed"]
+        self.assertTrue(should_remove_marker)
+        state["activated"] = True
         state["committed"] = True
         activation_readback_succeeded = False
         should_quarantine = state["activated"] and not state["committed"]
@@ -463,6 +474,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('--repo "${GITHUB_REPOSITORY}"', job)
         self.assertNotIn("build-release-candidate.yml", recovery)
         self.assertNotIn("scripts/build-release.sh", recovery)
+        self.assertIn("Recovered draft activation marker digest does not match", job)
+        self.assertIn(".immutable // false", job)
+        self.assertIn("verify-github-release-integrity.sh", job)
 
         convergence = read(".github/workflows/release-convergence.yml")
         helm_pages_caller = workflow_job_block(convergence, "publish_helm_pages")
@@ -470,9 +484,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("contents: write", helm_pages_caller)
 
         marker_upload = job.index('gh release upload "${TAG}"')
-        committed = job.index("committed=true", marker_upload)
+        publish_patch = job.index(
+            '-X PATCH --input "${publish_payload}"', marker_upload
+        )
+        committed = job.index("committed=true", publish_patch)
         readback = job.index("curl -fsSL --retry 12", committed)
-        self.assertLess(marker_upload, committed)
+        self.assertLess(marker_upload, publish_patch)
+        self.assertLess(publish_patch, committed)
         self.assertLess(committed, readback)
 
         helm_pages = read(".github/workflows/helm-pages.yml")
@@ -743,7 +761,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("--json event,status,conclusion,workflowName,displayTitle,url", activation)
         self.assertIn('expected_title="Release convergence ${TAG} source ${GITHUB_RUN_ID}"', activation)
         self.assertIn('[ "${owner_status}" = "completed" ]', activation)
-        self.assertIn("immediately before the marker", activation)
+        self.assertIn("before staging the exact marker", activation)
         self.assertIn("validate_existing_activation_commit", activation)
         self.assertIn(
             "Recover release activation ${TAG} source ${GITHUB_RUN_ID}", activation
@@ -764,10 +782,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             activation.index("require_viable_convergence_owner\n          gh api"),
             activation.index("-X PATCH --input \"$publish_payload\""),
         )
-        self.assertLess(
-            activation.rindex("require_viable_convergence_owner"),
-            activation.index('gh release upload "${TAG}"'),
+        marker_upload = activation.index('gh release upload "${TAG}"')
+        final_owner_check = activation.rindex("require_viable_convergence_owner")
+        publish_patch = activation.index(
+            '-X PATCH --input "$publish_payload"', final_owner_check
         )
+        self.assertLess(marker_upload, final_owner_check)
+        self.assertLess(final_owner_check, publish_patch)
 
     def test_fresh_fixed_code_convergence_can_adopt_completed_original_owner(self) -> None:
         convergence = read(".github/workflows/release-convergence.yml")

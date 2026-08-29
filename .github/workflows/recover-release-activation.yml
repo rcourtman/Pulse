@@ -247,6 +247,7 @@ jobs:
           verified_marker=$(mktemp)
           activated=false
           committed=false
+          marker_staged=false
 
           require_viable_convergence_owner() {
             local attempt owner_state owner_event owner_status owner_conclusion
@@ -284,14 +285,27 @@ jobs:
             return 1
           }
 
-          quarantine_on_error() {
+          compensate_uncommitted_activation() {
             if [ "${activated}" = "true" ] && [ "${committed}" != "true" ]; then
-              echo "::warning::Recovered activation failed before its marker; returning ${TAG} to draft quarantine."
+              echo "::warning::Recovered publication did not become immutable; returning ${TAG} to draft quarantine."
               gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
                 -X PATCH --input "${quarantine_payload}" >/dev/null || true
             fi
+            if [ "${marker_staged}" = "true" ] && [ "${committed}" != "true" ]; then
+              marker_asset_id="$(
+                gh api --paginate \
+                  "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" \
+                  --jq '.[] | select(.name == "release-activation.json") | .id' \
+                  2>/dev/null || true
+              )"
+              if [[ "${marker_asset_id}" =~ ^[0-9]+$ ]]; then
+                gh api -X DELETE \
+                  "repos/${GITHUB_REPOSITORY}/releases/assets/${marker_asset_id}" \
+                  >/dev/null || true
+              fi
+            fi
           }
-          trap quarantine_on_error ERR
+          trap compensate_uncommitted_activation ERR
 
           gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" > "${release_json}"
           jq -e \
@@ -319,26 +333,6 @@ jobs:
           jq -n '{draft: true, make_latest: "false"}' > "${quarantine_payload}"
 
           require_viable_convergence_owner
-          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
-            -X PATCH --input "${publish_payload}" > "${release_json}"
-          activated=true
-          if [ "$(jq -r '.draft' "${release_json}")" != "false" ] || \
-             [ -z "$(jq -r '.published_at // ""' "${release_json}")" ]; then
-            echo "::error::GitHub did not publish release ${RELEASE_ID}."
-            exit 1
-          fi
-
-          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
-          for asset_name in \
-            checksums.txt \
-            install.sh \
-            "pulse-provider-msp-${TAG}.tar.gz" \
-            "pulse-${TAG}-linux-amd64.tar.gz"; do
-            curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
-              -o /dev/null "${base}/${asset_name}"
-          done
-
-          require_viable_convergence_owner
           jq -n \
             --arg tag "${TAG}" \
             --arg target_commitish "${EXPECTED_COMMIT}" \
@@ -360,7 +354,46 @@ jobs:
           gh release upload "${TAG}" \
             "${activation_marker}" --clobber \
             --repo "${GITHUB_REPOSITORY}"
+          marker_staged=true
+
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" > "${release_json}"
+          expected_marker_digest="sha256:$(sha256sum "${activation_marker}" | awk '{print $1}')"
+          actual_marker_digest="$(
+            jq -er \
+              '[.assets[] | select(.name == "release-activation.json" and .state == "uploaded")] |
+               if length == 1 then .[0].digest else error("expected exactly one activation marker") end |
+               select(test("^sha256:[0-9a-f]{64}$"))' \
+              "${release_json}"
+          )"
+          if [ "${actual_marker_digest}" != "${expected_marker_digest}" ]; then
+            echo "::error::Recovered draft activation marker digest does not match the staged bytes."
+            exit 1
+          fi
+
+          require_viable_convergence_owner
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -X PATCH --input "${publish_payload}" > "${release_json}"
+          activated=true
+          if [ "$(jq -r '.draft' "${release_json}")" != "false" ] || \
+             [ -z "$(jq -r '.published_at // ""' "${release_json}")" ] || \
+             [ "$(jq -r '.immutable // false' "${release_json}")" != "true" ]; then
+            echo "::error::GitHub did not publish ${TAG} as an immutable release. Enable repository release immutability before activation."
+            exit 1
+          fi
           committed=true
+
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          for asset_name in \
+            checksums.txt \
+            install.sh \
+            "pulse-provider-msp-${TAG}.tar.gz" \
+            "pulse-${TAG}-linux-amd64.tar.gz"; do
+            curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
+              -o /dev/null "${base}/${asset_name}"
+          done
+
+          ./scripts/verify-github-release-integrity.sh \
+            "${TAG}" "${GITHUB_REPOSITORY}" "${RELEASE_ID}" "${EXPECTED_COMMIT}"
           curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
             -o "${verified_marker}" "${base}/release-activation.json"
           jq -e \
@@ -378,4 +411,4 @@ jobs:
              .activation_recovery_run_id == $activation_recovery_run_id' \
             "${verified_marker}" >/dev/null
           trap - ERR
-          echo "[OK] Recovered and irreversibly committed ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."
+          echo "[OK] Recovered, immutably committed, and attested ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."

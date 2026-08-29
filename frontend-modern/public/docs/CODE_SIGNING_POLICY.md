@@ -73,6 +73,14 @@ Normal stable publication and stable dry runs select `signpath` directly.
   policy is invalid.
 - Release checksums and detached signatures are published alongside artifacts
   and verified independently after publication.
+- Every new release is assembled and validated as a draft. Its activation
+  marker is uploaded and digest-checked before publication; GitHub must then
+  report the published release as immutable, protecting its tag and complete
+  asset set from replacement.
+- Customer-facing image aliases, Helm indexes, paid-runtime pointers, and demo
+  environments are not promoted until `gh release verify <tag> --repo
+  rcourtman/Pulse` validates GitHub's signed release attestation. Operators can
+  use the same command to verify the packet independently.
 
 ## Project roles
 

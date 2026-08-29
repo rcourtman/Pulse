@@ -54,6 +54,9 @@ jobs:
       activation_owner_run_id: ${{ steps.marker.outputs.activation_owner_run_id }}
       activation_marker_sha256: ${{ steps.marker.outputs.activation_marker_sha256 }}
     steps:
+      - name: Checkout release integrity control
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
       - name: Wait for verified public activation marker
         id: marker
         env:
@@ -76,20 +79,22 @@ jobs:
           for attempt in $(seq 1 "${max_attempts}"); do
             release_state="$(
               gh api "repos/${{ github.repository }}/releases/tags/${TAG}" \
-                --jq '[.id, .tag_name, .target_commitish, (.draft | tostring), (.published_at // "")] | @tsv' \
+                --jq '[.id, .tag_name, .target_commitish, (.draft | tostring), (.immutable // false | tostring), (.published_at // "")] | @tsv' \
                 2>/dev/null || true
             )"
             release_id="$(awk -F '\t' '{print $1}' <<<"${release_state}")"
             actual_tag="$(awk -F '\t' '{print $2}' <<<"${release_state}")"
             actual_commit="$(awk -F '\t' '{print $3}' <<<"${release_state}")"
             is_draft="$(awk -F '\t' '{print $4}' <<<"${release_state}")"
-            published_at="$(awk -F '\t' '{print $5}' <<<"${release_state}")"
+            is_immutable="$(awk -F '\t' '{print $5}' <<<"${release_state}")"
+            published_at="$(awk -F '\t' '{print $6}' <<<"${release_state}")"
             marker="$(mktemp)"
             marker_downloaded=false
             if [ "${release_id}" = "${EXPECTED_RELEASE_ID}" ] && \
                [ "${actual_tag}" = "${TAG}" ] && \
                [ "${actual_commit}" = "${EXPECTED_COMMIT}" ] && \
                [ "${is_draft}" = "false" ] && \
+               [ "${is_immutable}" = "true" ] && \
                [ -n "${published_at}" ] && \
                curl -fsSL --retry 2 --retry-delay 2 --retry-all-errors \
                  -o "${marker}" "${marker_url}"; then
@@ -123,11 +128,18 @@ jobs:
                 fi
                 echo "[OK] Adopting committed ${TAG} from completed convergence owner ${activation_owner_run_id}."
               fi
+              if ! ./scripts/verify-github-release-integrity.sh \
+                  "${TAG}" "${GITHUB_REPOSITORY}" \
+                  "${EXPECTED_RELEASE_ID}" "${EXPECTED_COMMIT}"; then
+                rm -f "${marker}"
+                echo "::error::Immutable release attestation verification failed for ${TAG}; customer convergence is blocked."
+                exit 1
+              fi
               activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
               echo "activation_owner_run_id=${activation_owner_run_id}" >> "$GITHUB_OUTPUT"
               echo "activation_marker_sha256=${activation_marker_sha256}" >> "$GITHUB_OUTPUT"
               rm -f "${marker}"
-              echo "[OK] ${TAG} crossed the verified activation commit point."
+              echo "[OK] ${TAG} crossed the immutable, attested activation commit point."
               exit 0
             fi
             rm -f "${marker}"

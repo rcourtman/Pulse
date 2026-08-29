@@ -120,6 +120,9 @@ may delete invalid assets and rewrite validation annotations only while a
 release is still a draft. A post-publication edit is observation, not authority
 to mutate or destroy an immutable release; failed revalidation records a
 failing status and requires an explicit corrective release path.
+The activation marker is part of that complete draft packet: its stored digest
+must be checked before publication, and customer convergence is forbidden until
+GitHub reports the release immutable and its signed release attestation verifies.
 
 The accelerated exact-SHA release worker must preserve release-gate fidelity
 under its own resource envelope. Bounded frontend static checks and integration
@@ -267,6 +270,7 @@ release-latency optimization.
 95. `.github/scripts/check-demo-reachability.sh`
 96. `.github/scripts/setup-demo-ssh.sh`
 97. `scripts/trigger-stable-patch.sh`
+98. `scripts/verify-github-release-integrity.sh`
 
 ## Shared Boundaries
 
@@ -602,7 +606,7 @@ artifact-selection behaviour.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/verify-github-release-integrity.sh`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
    The governed release-build surface also includes
    `scripts/prepare-release-container-context.sh` for exact-candidate container
    assembly.
@@ -4391,3 +4395,22 @@ grants by reading the existing unit. A unit with an active grant sets
 host); a grantless profile keeps `NoNewPrivileges=true`. Uninstall removes
 the sudoers file and helper directory. `scripts/installtests/install_sh_test.go`
 (`TestInstallSHLeastPrivilegeProfile`) pins these invariants.
+
+### Publication locks the complete release packet
+
+GitHub release immutability is a mandatory activation control. The release
+workflow must create and validate a draft, stage `release-activation.json`, and
+compare GitHub's stored SHA-256 digest for that marker with the local bytes
+before publication. Publication, not a later asset upload, is the irreversible
+boundary. GitHub must return `immutable: true`; otherwise the workflow must
+fail and compensate the still-mutable publication back to a marker-free draft.
+
+`scripts/verify-github-release-integrity.sh` is the shared post-publication
+check. It binds the release database ID, tag, exact source SHA, immutable state,
+and single digest-bearing activation marker, then requires `gh release verify`
+to validate GitHub's signed release attestation. The source release verdict,
+activation-only recovery, and `release-convergence.yml` must all use that
+check. Convergence must not acquire the customer-promotion lease or mutate a
+floating image tag, Helm index, paid-runtime pointer, or live environment until
+the check passes. Repository release immutability must therefore be enabled
+before merging or running this activation path.

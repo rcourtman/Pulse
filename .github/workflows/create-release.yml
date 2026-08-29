@@ -1533,11 +1533,10 @@ jobs:
           echo "run_url=${run_url}" >> "$GITHUB_OUTPUT"
           echo "[OK] Customer convergence is durably queued as ${run_url}."
 
-  # release-activation.json is the irreversible publication commit. Before the
-  # marker is public, any verification failure returns the release to draft.
-  # After the marker is public, customer convergence owns retriable rollout and
-  # the release is never described as rolled back merely because a mutable
-  # external surface is temporarily unavailable.
+  # release-activation.json is staged and digest-checked while the release is a
+  # draft. Publishing that complete packet is the irreversible commit: GitHub
+  # must lock its tag/assets and issue a verifiable release attestation before
+  # customer convergence may use the marker.
   activate_release:
     needs:
       - prepare
@@ -1553,6 +1552,9 @@ jobs:
       actions: read
       contents: write
     steps:
+      - name: Checkout release integrity control
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
       - name: Publish the fully staged release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1572,6 +1574,7 @@ jobs:
           verified_marker=$(mktemp)
           activated=false
           committed=false
+          marker_staged=false
 
           validate_existing_activation_commit() {
             local marker_convergence_run_id recovery_run_id recovery_run expected_title
@@ -1666,14 +1669,27 @@ jobs:
             return 1
           }
 
-          quarantine_on_error() {
+          compensate_uncommitted_activation() {
             if [ "$activated" = "true" ] && [ "$committed" != "true" ]; then
-              echo "::warning::Public asset verification failed; returning ${TAG} to draft quarantine."
+              echo "::warning::Release publication did not become immutable; returning ${TAG} to draft quarantine."
               gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
                 -X PATCH --input "$quarantine_payload" >/dev/null || true
             fi
+            if [ "$marker_staged" = "true" ] && [ "$committed" != "true" ]; then
+              marker_asset_id="$(
+                gh api --paginate \
+                  "repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?per_page=100" \
+                  --jq '.[] | select(.name == "release-activation.json") | .id' \
+                  2>/dev/null || true
+              )"
+              if [[ "$marker_asset_id" =~ ^[0-9]+$ ]]; then
+                gh api -X DELETE \
+                  "repos/${{ github.repository }}/releases/assets/${marker_asset_id}" \
+                  >/dev/null || true
+              fi
+            fi
           }
-          trap quarantine_on_error ERR
+          trap compensate_uncommitted_activation ERR
 
           gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" > "$release_json"
           actual_tag=$(jq -r '.tag_name // ""' "$release_json")
@@ -1681,12 +1697,16 @@ jobs:
           actual_draft=$(jq -r '.draft' "$release_json")
           published_at=$(jq -r '.published_at // ""' "$release_json")
           actual_prerelease=$(jq -r '.prerelease' "$release_json")
+          actual_immutable=$(jq -r '.immutable // false' "$release_json")
           activation_committed=$(jq -r 'any(.assets[]?; .name == "release-activation.json")' "$release_json")
           if [ "$actual_tag" = "$TAG" ] && [ "$actual_commit" = "$EXPECTED_COMMIT" ] && \
              [ "$actual_draft" = "false" ] && [ -n "$published_at" ] && \
              [ "$activation_committed" = "true" ] && \
+             [ "$actual_immutable" = "true" ] && \
              [ "$actual_prerelease" = "$IS_PRERELEASE" ]; then
             validate_existing_activation_commit
+            ./scripts/verify-github-release-integrity.sh \
+              "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT"
             rm -f "$release_json" "$publish_payload" "$quarantine_payload" \
               "$verified_marker"
             rm -rf "$activation_marker_dir"
@@ -1715,15 +1735,58 @@ jobs:
             '{draft: false, make_latest: $make_latest}' > "$publish_payload"
           jq -n '{draft: true, make_latest: "false"}' > "$quarantine_payload"
 
+          # Close the dispatch-to-commit race before staging the exact marker.
+          require_viable_convergence_owner
+          jq -n \
+            --arg tag "${TAG}" \
+            --arg target_commitish "${EXPECTED_COMMIT}" \
+            --arg release_id "${RELEASE_ID}" \
+            --arg source_release_run_id "${GITHUB_RUN_ID}" \
+            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+            --arg r2_prefix "${R2_PREFIX}" \
+            '{
+              schema_version: 1,
+              tag: $tag,
+              target_commitish: $target_commitish,
+              release_id: $release_id,
+              source_release_run_id: $source_release_run_id,
+              convergence_run_id: $convergence_run_id,
+              r2_prefix: $r2_prefix
+            }' > "${activation_marker}"
+          gh release upload "${TAG}" \
+            "${activation_marker}" --clobber \
+            --repo "${GITHUB_REPOSITORY}"
+          marker_staged=true
+
+          # GitHub exposes a SHA-256 digest for draft assets. Verify the exact
+          # marker bytes before publication makes the asset set unchangeable.
+          gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" > "$release_json"
+          expected_marker_digest="sha256:$(sha256sum "${activation_marker}" | awk '{print $1}')"
+          actual_marker_digest="$(
+            jq -er \
+              '[.assets[] | select(.name == "release-activation.json" and .state == "uploaded")] |
+               if length == 1 then .[0].digest else error("expected exactly one activation marker") end |
+               select(test("^sha256:[0-9a-f]{64}$"))' \
+              "$release_json"
+          )"
+          if [ "$actual_marker_digest" != "$expected_marker_digest" ]; then
+            echo "::error::Draft activation marker digest does not match the staged bytes."
+            exit 1
+          fi
+
+          # Publication is now the only irreversible boundary. GitHub must
+          # report the complete release as immutable before this job commits.
           require_viable_convergence_owner
           gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
             -X PATCH --input "$publish_payload" > "$release_json"
           activated=true
           if [ "$(jq -r '.draft' "$release_json")" != "false" ] || \
-             [ -z "$(jq -r '.published_at // ""' "$release_json")" ]; then
-            echo "::error::GitHub did not publish release ${RELEASE_ID}."
+             [ -z "$(jq -r '.published_at // ""' "$release_json")" ] || \
+             [ "$(jq -r '.immutable // false' "$release_json")" != "true" ]; then
+            echo "::error::GitHub did not publish ${TAG} as an immutable release. Enable repository release immutability before activation."
             exit 1
           fi
+          committed=true
 
           base="https://github.com/${{ github.repository }}/releases/download/${TAG}"
           for asset_name in \
@@ -1748,33 +1811,8 @@ jobs:
           fi
           rm -f "$visual_plan"
 
-          # Close the dispatch-to-commit race: the exact durable convergence
-          # owner must still be queued or running immediately before the marker
-          # makes activation irreversible.
-          require_viable_convergence_owner
-          jq -n \
-            --arg tag "${TAG}" \
-            --arg target_commitish "${EXPECTED_COMMIT}" \
-            --arg release_id "${RELEASE_ID}" \
-            --arg source_release_run_id "${GITHUB_RUN_ID}" \
-            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
-            --arg r2_prefix "${R2_PREFIX}" \
-            '{
-              schema_version: 1,
-              tag: $tag,
-              target_commitish: $target_commitish,
-              release_id: $release_id,
-              source_release_run_id: $source_release_run_id,
-              convergence_run_id: $convergence_run_id,
-              r2_prefix: $r2_prefix
-            }' > "${activation_marker}"
-          gh release upload "${TAG}" \
-            "${activation_marker}" --clobber \
-            --repo "${GITHUB_REPOSITORY}"
-          # The successful upload is the single irreversible logical boundary:
-          # convergence may observe the marker immediately, so no later
-          # activation-side read failure may return the release to draft.
-          committed=true
+          ./scripts/verify-github-release-integrity.sh \
+            "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT"
           curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
             -o "${verified_marker}" "${base}/release-activation.json"
           jq -e \
@@ -1790,7 +1828,7 @@ jobs:
           rm -f "$release_json" "$publish_payload" "$quarantine_payload" \
             "$verified_marker"
           rm -rf "$activation_marker_dir"
-          echo "[OK] Irreversibly committed and publicly verified ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."
+          echo "[OK] Immutably committed, attested, and publicly verified ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."
 
   release_commit_verdict:
     name: Release Activation Commit Verdict
@@ -1810,6 +1848,9 @@ jobs:
     if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout release integrity control
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
       - name: Enforce irreversible release commit outcome
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1857,6 +1898,9 @@ jobs:
             if [[ "$VERSION" == 6.* ]]; then
               require_result "private Pro staging" "$PRIVATE_PRO_STAGE_RESULT" success
             fi
+
+            ./scripts/verify-github-release-integrity.sh \
+              "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT"
 
             marker="$(mktemp)"
             curl -fsSL --retry 6 --retry-delay 5 --retry-all-errors \

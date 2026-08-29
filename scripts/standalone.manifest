@@ -24,3 +24,4 @@ scripts/patrol_e2e_matrix.sh | Manual e2e model-matrix exercise utility for patr
 scripts/remerge-parallel.sh | Operator script for branch remerge operations across multiple refs.
 scripts/trigger-release.sh | Manual workflow-dispatch helper for release orchestration.
 scripts/validate-published-release.sh | Post-publish GitHub release checksum verifier.
+scripts/verify-github-release-integrity.sh | Post-publish immutable-release and attestation verifier.
