@@ -1,27 +1,39 @@
 {
   "version": 1,
-  "base_sha": "d671f05408c909dc1e418ac149192c5db01d3d84",
-  "verified_at": "2026-08-29T17:05:39Z",
+  "base_sha": "5926b4dc38c84e086593476cec1d65c047ef1182",
+  "verified_at": "2026-08-29T20:31:20Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
+    "frontend-modern/src/components/shared/useMobileNavBarState.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
     "frontend-modern/src/types/api.ts",
-    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "396b3b8eb61f094bf2c57a46d45751fd349469c0d153074f1af9b01742dfab78",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "1eea31a6a8c4a6e181fa478c7b578590d26e1c9219b8ed9c3cfc8b76ae9bb370",
-    "frontend-modern/src/i18n/messages.de.ts": "c5e5f16d3e7c6d7a741e84fc2217e08aa6b257c4a6a7fa0e9009c993534eb8e7",
-    "frontend-modern/src/i18n/messages.es.ts": "048749c66b51d3c063e94b4742dfb21b20de70d13ad09216ef7d73b4fd98c13a",
-    "frontend-modern/src/i18n/messages.ts": "b1af1ee4f56039e6263685df8d776f7e14e32fe8fb7d84cd2f03992c01d09c18",
-    "frontend-modern/src/types/api.ts": "6f118c6c43b4ccc5cb11c440267797bee0c36a8e5ffa95aa94112419d28d56fa",
-    "frontend-modern/src/utils/alertOverviewPresentation.ts": "00aab1c0a3f2bdb78c4efb6effdb5fa4a95560f0f73f9e5e7f084e4db98e2057"
+    "frontend-modern/src/AppLayout.tsx": "db685903fef2a1509edd812acb3904f7ff3ffab0bbd1af2bff183c1b3ae8e373",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "15aa9c5dedebb2024f2548854996034672b35412708f28c276bd108892056e64",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "27358f3e77267cc111ce97b32d715b0069e2d1370ddd2b3ecc4f2d34a3e6dac5",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "ab9e69d379579d02e33a2abd1224d8c13e6543dd6aa0ad40cc1f65697a289d04",
+    "frontend-modern/src/components/shared/useMobileNavBarState.ts": "74b5b354d302d5e5ea136131f06b3a8c1772a83a9903351737b9931f8136cc16",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "bbc7047317b350074e2f234b2472f3a1b39b080e4ea4fddff706a866952f473f",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "cbf1b5a2fa2bdb51d582f699fef97203bac2d2ab559f29ea40821e2eb7c11ee3",
+    "frontend-modern/src/types/api.ts": "d3dfc213bc7b7c357954723a22a21744e6be5da9f34d97a1faf00f579efcb5fc",
+    "frontend-modern/src/types/resource.ts": "126473e475c63c995aa86c578e9bc8f115eaca98da6477545e4389fe96b43f68",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "3881918d823b440cf8739e14da780c7e98e871e71b9be490ca61a7fbc342c29e",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "6f077a5611c8563be3674d9b8baf2500c711494bae14fda697f56b1e00c2342b"
   },
-  "routes": ["/alerts/overview"],
+  "routes": [
+    "/proxmox/overview?status=running",
+    "/alerts",
+    "/actions"
+  ],
   "viewports": [
     {
       "width": 1440,
@@ -33,14 +45,13 @@
     }
   ],
   "states": [
-    "mock-backed Alerts Overview with forty or more active detector signals",
-    "same-resource alert group collapsed with the localized related-signal disclosure",
-    "same-resource alert group expanded with its underlying alert card and group acknowledgement action",
-    "desktop and narrow layouts with unacknowledged critical and warning cards"
+    "mock-backed Proxmox overview with multiple platform destinations and a remembered status query",
+    "mobile fixed navigation rail with the platform menu open",
+    "current NodeDrawerOverview mounted with synthetic checked-zero, stale-positive, and permission-unavailable update evidence fixtures"
   ],
   "interactions": [
-    "opened Alerts Overview at 1440x1000 and confirmed active cards, group disclosure, and acknowledgement controls are aligned and unclipped",
-    "expanded and collapsed a two-signal alert group and confirmed the nested alert remains visually subordinate while retaining its own controls",
-    "repeated the expanded and collapsed group at 390x844 and confirmed the document and body remain exactly 390 pixels wide with no horizontal overflow"
+    "inspected destination hrefs, opened the platform menu, closed it with Escape and verified focus returned to its trigger",
+    "used a modified Alerts click to open a native browser tab while retaining the original Proxmox route, then used a plain Actions click for in-app navigation",
+    "mounted the current NodeDrawerOverview component in the Vite browser, checked all three evidence states at desktop width, then narrowed to 390 pixels and verified no horizontal overflow"
   ]
 }

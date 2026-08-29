@@ -5742,3 +5742,13 @@ inventory, a recovery point, restore evidence, retention state, or durable
 storage metadata. Mock notes must not be written to the production incident
 store or survive a fixture-graph rebuild, and real-mode incident persistence
 remains unchanged. The mock API and fixture tests pin that isolation.
+
+### Package-update evidence is not recovery state
+
+The Proxmox fields projected through `useUnifiedResources` and
+`ResourceProxmoxMeta` describe the latest package-list observation only. A
+count, checked time, stale marker, or failure category is not backup inventory,
+a recovery point, retention evidence, restore authority, or permission to
+install packages. Canonical merging may replace an older count with a checked
+zero or clear inherited check metadata for unavailable evidence, but it must
+not mutate storage or initiate remediation.

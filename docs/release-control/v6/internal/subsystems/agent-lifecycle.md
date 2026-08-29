@@ -6828,3 +6828,17 @@ authority state. Agent lifecycle remains the sole owner of the relationship;
 alerts receives only a bounded presentation identity after that relationship
 has already been established. The reciprocal and fail-open cases are pinned in
 `internal/monitoring/monitor_host_agents_test.go`.
+
+### Proxmox package evidence does not create agent authority
+
+The PVE API poll may publish a node's bounded package-update evidence through
+the shared node model whether or not a Unified Agent is linked to that node.
+`pendingUpdates`, its last successful check time, and the fixed evidence status
+and reason describe only the Proxmox package source. They cannot enroll, link,
+command, update, revoke, remove, or re-enroll an agent, and a linked agent does
+not become an alternative authority for the package count.
+
+The node drawer may use `Node.LinkedAgentID` to label Pulse coverage, but that
+presentation does not combine agent lifecycle with package evidence. The
+polling states are pinned independently in
+`internal/monitoring/node_pending_updates_evidence_test.go`.

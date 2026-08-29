@@ -6819,3 +6819,23 @@ The labels retain singular/plural behavior, use the existing responsive button
 primitives, and introduce no parallel group component. Localization and
 presentation proofs live in `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 and `frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts`.
+
+### Mobile destinations are links and update evidence stays explicit
+
+Fixed mobile destinations and menu destinations that navigate are anchors with
+real `href` values. Plain primary activation remains in the SPA so route
+warming and per-platform route memory continue to apply; modified activation,
+middle-click, and context-menu actions remain native browser behavior.
+Platform and overflow controls that open menus remain buttons. Disabled
+platform anchors resolve to infrastructure setup, and menu focus, Escape
+return, active state, badges, and narrow-layout containment remain unchanged.
+`MobileNavBar.test.tsx`, `mobileNavBarModel.branchcov0712.test.ts`, and
+`AppLayout.test.tsx` pin those distinctions.
+
+The Proxmox node drawer presents checked zero, current positive, stale,
+unavailable, and not-checked package evidence as a labelled detail row with
+bounded copy and checked time. The compact table badge remains reserved for a
+current positive observation. Provider errors are never rendered. Component
+and browser evidence covers both 1440px and 390px layouts in
+`NodeDrawerOverview.updateEvidence.test.tsx`, `ProxmoxNodesTable.test.tsx`, and
+`frontend-modern/browser-verification.json`.

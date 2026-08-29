@@ -3476,3 +3476,19 @@ owns the correlation wire type and presentation semantics; monitoring owns the
 identity evidence that permits the host signal to join that system.
 `internal/monitoring/alert_correlation_test.go` pins reciprocal-link admission
 and every fail-open case.
+
+### Proxmox update polling preserves evidence quality
+
+The 30-minute node package poll treats one successful response, including an
+empty package list, as `checked` and records its completion time. A failed read
+must remain an error through the cluster-client fallback boundary. Monitoring
+maps it to a fixed privacy-safe reason and reports `unavailable` when no prior
+success exists or `stale` with the last successful count and timestamp when a
+cache entry exists. An offline node is `not_checked` with `node_offline`.
+
+Failures never refresh the successful timestamp or convert permission and
+reachability errors into zero. Cached successful observations remain checked
+until their normal refresh boundary, and a failed refresh is retried without
+discarding the cache. `node_pending_updates_evidence_test.go` and the cluster
+client pending-update tests pin zero, permission, reachability, stale-cache,
+and offline behavior.

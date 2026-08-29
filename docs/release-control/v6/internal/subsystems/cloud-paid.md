@@ -3440,3 +3440,12 @@ bootstrap group beside runtime branding, after authentication and organization
 context resolve. Hosted-mode, organization, license, entitlement, and
 presentation-policy behavior are unchanged. `reduceProUpsellNoise` remains a
 compatibility display flag; it does not grant or derive commercial capability.
+
+### Shell links do not bypass commercial capability checks
+
+The shared mobile shell now exposes destination `href` values, including for
+native modified and context-menu navigation. Those links resolve only routes;
+they do not enable a platform, grant an entitlement, select an organization,
+change hosted mode, or bypass a server capability check. An unconfigured
+platform still resolves to infrastructure settings, and paid destinations
+continue to render and authorize from the existing runtime entitlement state.

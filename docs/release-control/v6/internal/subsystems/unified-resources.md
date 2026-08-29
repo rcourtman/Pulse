@@ -4868,3 +4868,19 @@ that agent view once instead of duplicating the PVE inventory.
 `frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts`
 pin collection continuity, canonical projection, and both unified and
 Proxmox-page drawer presentation.
+
+### Proxmox update evidence merges as one authoritative observation
+
+The Proxmox node facet carries `pendingUpdates`, `pendingUpdatesCheckedAt`,
+`pendingUpdatesStatus`, and `pendingUpdatesReason` through adapters, registry
+cloning, typed views, and frontend state adapters. When explicit status is
+present, the incoming observation is authoritative as a unit: a checked zero
+clears an older positive count, and unavailable or not-checked evidence cannot
+inherit an older checked timestamp or status. Legacy status-less positive
+counts remain compatible.
+
+Consumers must not infer a successful zero from absent fields. The node drawer
+uses the explicit state for details, while the compact node-row badge requires
+current evidence. `proxmox_update_evidence_test.go`, `views_test.go`, and the
+frontend evidence presentation tests pin transport, merge, and consumer
+behavior.

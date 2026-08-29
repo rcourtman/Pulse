@@ -7774,3 +7774,17 @@ leaves page content visible and interactive below the backdrop while the
 Assistant is open, which is a modal-containment defect rather than a cosmetic
 one. The bar owns that value; see the frontend-primitives contract. Proofs live
 in `frontend-modern/src/components/AI/Chat/__tests__/AIChat.test.tsx`.
+
+### Mobile destination links do not expand AI authority
+
+`AppLayout` supplies the same remembered primary route to desktop and mobile
+anchors. Converting the Patrol destination from a button to an anchor changes
+browser navigation semantics only: native modified activation may open the
+existing Patrol route in another browsing context, while plain activation uses
+the existing shell callback. It does not start an investigation, approve an
+action, invoke a tool, or create mutation authority.
+
+Menu-opening controls remain buttons, and the mobile bar continues to own
+`--pulse-mobile-nav-height`; Assistant overlay containment and action approval
+boundaries are unchanged. Mobile navigation and AppLayout tests pin the route
+and focus behavior.

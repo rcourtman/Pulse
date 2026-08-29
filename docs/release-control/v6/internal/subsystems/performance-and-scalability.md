@@ -2908,3 +2908,12 @@ rebuilding the estate. `internal/mock/alert_incidents_test.go` proves bounded
 resource results and defensive-copy isolation, while
 `internal/api/alerting/alerts_test.go` proves that mock transport does not need
 the production incident store.
+
+### Update evidence reuses the bounded node observation
+
+Package evidence adds only one bounded status, one bounded reason, and the
+existing count and timestamp to each Proxmox node facet. It introduces no new
+poll loop, websocket channel, history series, or per-render scan: collection
+retains the existing 30-minute cache and frontend projection/presentation is
+constant work per rendered node. Failed refreshes reuse the single cached
+successful observation rather than accumulating attempts or provider errors.

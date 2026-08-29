@@ -10154,3 +10154,20 @@ sharing mutable pointers; the frontend API type mirrors the optional wire
 shape exactly. `internal/alerts/correlation_test.go` and
 `frontend-modern/src/features/alerts/__tests__/useAlertOverviewState.test.tsx`
 are the focused transport-consumer proofs.
+
+### Proxmox package-update evidence is additive and closed
+
+Proxmox node payloads retain the numeric `pendingUpdates` field and may add
+`pendingUpdatesCheckedAt`, `pendingUpdatesStatus`, and
+`pendingUpdatesReason`. Status is the closed set `checked`, `stale`,
+`unavailable`, or `not_checked`; reason, when present, is the closed set
+`permission_denied`, `source_unavailable`, `check_failed`, or `node_offline`.
+A checked zero is authoritative evidence rather than an absent capability.
+
+The reason is a server-owned diagnostic category and must never contain the
+provider error text, endpoint, credential, or response body. Older clients may
+ignore the additive fields, while newer clients retain legacy positive counts
+that predate explicit status. Model, resource, and presentation contracts are
+pinned by `internal/monitoring/node_pending_updates_evidence_test.go`,
+`internal/unifiedresources/proxmox_update_evidence_test.go`, and
+`frontend-modern/src/utils/__tests__/proxmoxUpdateEvidence.test.ts`.
