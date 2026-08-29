@@ -663,6 +663,96 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('keeps source filters in the canonical resource request', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=agent,vm,storage,network&source=vmware-vsphere',
+        cacheKey: 'vmware-overview-contract',
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/resources?type=agent%2Cvm%2Cstorage%2Cnetwork&source=vmware-vsphere&page=1&limit=100',
+      { cache: 'no-store' },
+    );
+    await waitForResourceCount(() => result!.resources().length);
+
+    dispose();
+  });
+
+  it('projects source-scoped queries from the canonical websocket snapshot', async () => {
+    const vmwareVM = createWsResource({
+      id: 'vmware-vm-1',
+      type: 'vm',
+      name: 'vmware-vm-1',
+      displayName: 'vmware-vm-1',
+      platformId: 'vmware-vm-1',
+      platformType: 'vmware-vsphere',
+      sourceType: 'api',
+      sources: ['vmware'],
+    });
+    const proxmoxVM = createWsResource({
+      id: 'proxmox-vm-1',
+      type: 'vm',
+      name: 'proxmox-vm-1',
+      displayName: 'proxmox-vm-1',
+      platformId: 'proxmox-vm-1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      sources: ['proxmox'],
+    });
+    batch(() => {
+      setWsState('resources', [vmwareVM, proxmoxVM]);
+      setWsState('lastUpdate', 1738843200100);
+      setWsResourceChange({
+        version: 1738843200100,
+        changedIds: new Set([vmwareVM.id, proxmoxVM.id]),
+      });
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=agent,vm&source=vmware-vsphere',
+        cacheKey: 'vmware-websocket-projection',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForValue(() => result!.resources().length, 1);
+    expect(result!.resources().map((resource) => resource.id)).toEqual(['vmware-vm-1']);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it('keeps unsupported source filters on the canonical REST fallback path', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'source=future-provider',
+        cacheKey: 'unsupported-source-filter',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    await waitForResourceCount(() => result!.resources().length);
+
+    dispose();
+  });
+
   it('loads physical disks beyond the first resource page without dropping wide-node inventory', async () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => ({
       ...v2Resource,

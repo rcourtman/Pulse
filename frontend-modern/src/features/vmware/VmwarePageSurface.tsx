@@ -40,6 +40,7 @@ import {
 } from '@/components/Workloads/workloadMetricHistoryModel';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import type { Resource } from '@/types/resource';
 import { VsphereHostsTable } from './VsphereHostsTable';
 import {
   VMWARE_TAB_SPECS,
@@ -57,7 +58,7 @@ import { VsphereNetworksTable } from './VsphereNetworksTable';
 // as canonical `vm`, datastores as canonical `storage`, and vCenter networks
 // as canonical `network`; provider-native topology stays in VMware metadata
 // under those shared resources.
-const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage,network';
+const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage,network&source=vmware-vsphere';
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
 
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
@@ -276,6 +277,10 @@ export function VmwarePageSurface() {
                   metricHistoryRange={metricHistoryRange}
                   setMetricHistoryRange={setMetricHistoryRange}
                   inventorySourcesQuery={inventorySources}
+                  resourceSnapshot={() =>
+                    loading() && model().resources.length === 0 ? undefined : model().resources
+                  }
+                  resourceSnapshotRefetch={() => refetch()}
                 />
               </div>
             </Show>
@@ -348,6 +353,8 @@ interface VmwareOverviewProps {
   metricHistoryRange: Accessor<WorkloadTableMetricHistoryRange>;
   setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
   inventorySourcesQuery: WorkloadsInventorySourcesQuery;
+  resourceSnapshot: Accessor<Resource[] | undefined>;
+  resourceSnapshotRefetch: () => Promise<unknown>;
 }
 
 function VmwareOverview(props: VmwareOverviewProps) {
@@ -356,6 +363,8 @@ function VmwareOverview(props: VmwareOverviewProps) {
     containers: [],
     nodes: [],
     useWorkloads: true,
+    resourceSnapshot: props.resourceSnapshot,
+    resourceSnapshotRefetch: props.resourceSnapshotRefetch,
     forcedPlatform: VMWARE_PLATFORM_FILTER,
     forcedViewMode: 'vm',
     suppressPlatformFilter: true,

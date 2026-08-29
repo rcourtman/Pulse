@@ -1130,7 +1130,36 @@ const enrichCanonicalAllResourcesCache = (
   setUnifiedResourcesCache(entry, enriched);
 };
 
-const parseUnifiedResourcesTypeFilter = (query: string): Set<ResourceType> | null => {
+type UnifiedResourcesLocalFilter = {
+  types: Set<ResourceType>;
+  sources: Set<string>;
+};
+
+const normalizeUnifiedResourceSource = (source: string): string => {
+  const normalized = source.trim().toLowerCase();
+  switch (normalized) {
+    case 'k8s':
+      return 'kubernetes';
+    case 'vmware-vsphere':
+      return 'vmware';
+    default:
+      return normalized;
+  }
+};
+
+const SUPPORTED_UNIFIED_RESOURCE_SOURCES = new Set([
+  'proxmox',
+  'agent',
+  'docker',
+  'pbs',
+  'pmg',
+  'kubernetes',
+  'truenas',
+  'vmware',
+  'availability',
+]);
+
+const parseUnifiedResourcesLocalFilter = (query: string): UnifiedResourcesLocalFilter | null => {
   const normalizedQuery = normalizeUnifiedResourcesQuery(query);
   if (normalizedQuery === '') {
     return null;
@@ -1138,9 +1167,10 @@ const parseUnifiedResourcesTypeFilter = (query: string): Set<ResourceType> | nul
 
   const params = new URLSearchParams(normalizedQuery);
   const types = new Set<ResourceType>();
+  const sources = new Set<string>();
 
   for (const [key, value] of params.entries()) {
-    if (key !== 'type') {
+    if (key !== 'type' && key !== 'source') {
       return null;
     }
 
@@ -1149,26 +1179,50 @@ const parseUnifiedResourcesTypeFilter = (query: string): Set<ResourceType> | nul
       .map((candidate) => asTrimmedString(candidate))
       .filter((candidate): candidate is string => candidate !== undefined)
       .forEach((candidate) => {
-        types.add(resolveType(candidate));
+        if (key === 'type') {
+          types.add(resolveType(candidate));
+          return;
+        }
+        const normalizedSource = normalizeUnifiedResourceSource(candidate);
+        if (SUPPORTED_UNIFIED_RESOURCE_SOURCES.has(normalizedSource)) {
+          sources.add(normalizedSource);
+        }
       });
   }
 
-  return types.size > 0 ? types : null;
+  return types.size > 0 || sources.size > 0 ? { types, sources } : null;
 };
 
 const filterCanonicalUnifiedResources = (
   resources: Resource[],
   query: string,
-  typeFilter: Set<ResourceType> | null,
+  localFilter: UnifiedResourcesLocalFilter | null,
 ): Resource[] | null => {
   const normalizedQuery = normalizeUnifiedResourcesQuery(query);
   if (normalizedQuery === '') {
     return resources;
   }
-  if (!typeFilter) {
+  if (!localFilter) {
     return null;
   }
-  return resources.filter((resource) => typeFilter.has(resolveType(resource.type)));
+  return resources.filter((resource) => {
+    if (localFilter.types.size > 0 && !localFilter.types.has(resolveType(resource.type))) {
+      return false;
+    }
+    if (localFilter.sources.size === 0) {
+      return true;
+    }
+    const platformSources = resource.platformData?.sources;
+    const resourceSources = [
+      ...(resource.sources ?? []),
+      ...(Array.isArray(platformSources)
+        ? platformSources.filter((source): source is string => typeof source === 'string')
+        : []),
+    ];
+    return resourceSources.some((source) =>
+      localFilter.sources.has(normalizeUnifiedResourceSource(source)),
+    );
+  });
 };
 
 /**
@@ -1213,8 +1267,8 @@ const seedUnifiedResourcesCacheFromAllResources = (
     return entry;
   }
 
-  const typeFilter = parseUnifiedResourcesTypeFilter(query);
-  if (!typeFilter) {
+  const localFilter = parseUnifiedResourcesLocalFilter(query);
+  if (!localFilter) {
     return entry;
   }
 
@@ -1225,9 +1279,8 @@ const seedUnifiedResourcesCacheFromAllResources = (
     return entry;
   }
 
-  entry.resources = allResourcesEntry.resources.filter((resource) =>
-    typeFilter.has(resolveType(resource.type)),
-  );
+  entry.resources =
+    filterCanonicalUnifiedResources(allResourcesEntry.resources, query, localFilter) ?? [];
   entry.policyPosture = allResourcesEntry.policyPosture;
   entry.aggregations = allResourcesEntry.aggregations;
   entry.hasSnapshot = true;
@@ -1370,8 +1423,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const initialHydration = options?.initialHydration ?? 'immediate';
   const enabled = options?.enabled ?? (() => true);
   const realtimeEnabled = options?.realtimeEnabled ?? enabled;
-  const typeFilter = parseUnifiedResourcesTypeFilter(query);
-  const supportsCanonicalWsHydration = query === '' || typeFilter !== null;
+  const localFilter = parseUnifiedResourcesLocalFilter(query);
+  const supportsCanonicalWsHydration = query === '' || localFilter !== null;
   const prefersWsInitialHydration =
     (initialHydration === 'prefer-ws' || initialHydration === 'prefer-ws-then-rest') &&
     supportsCanonicalWsHydration;
@@ -1763,7 +1816,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const projectedResources = filterCanonicalUnifiedResources(
       mergedWsResources,
       query,
-      typeFilter,
+      localFilter,
     );
     const now = Date.now();
     clearInitialHydrationTimeout();

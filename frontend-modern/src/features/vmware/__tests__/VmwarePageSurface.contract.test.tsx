@@ -8,6 +8,7 @@ const mockPathname = vi.hoisted(() => vi.fn(() => '/vmware/overview'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockGetGlobalTimeline = vi.hoisted(() => vi.fn());
 const mockListInventorySources = vi.hoisted(() => vi.fn());
+const mockUseWorkloadsState = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -21,13 +22,18 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
     ...resource,
   }) as Resource;
 
-const setResources = (resources: Resource[]) => {
+const setResources = (
+  resources: Resource[],
+  options: { loading?: boolean; refetch?: ReturnType<typeof vi.fn> } = {},
+) => {
+  const refetch = options.refetch ?? vi.fn().mockResolvedValue(resources);
   mockUseUnifiedResources.mockReturnValue({
     resources: () => resources,
-    loading: () => false,
+    loading: () => options.loading ?? false,
     error: () => null,
-    refetch: vi.fn(),
+    refetch,
   });
+  return refetch;
 };
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
@@ -73,13 +79,7 @@ vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
 }));
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
-  useWorkloadsState: () => ({
-    surfaceConnected: () => false,
-    surfaceInitialDataReceived: () => false,
-    allGuests: () => [],
-    search: () => '',
-    setSearch: vi.fn(),
-  }),
+  useWorkloadsState: (...args: unknown[]) => mockUseWorkloadsState(...args),
 }));
 
 vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
@@ -126,6 +126,13 @@ describe('VmwarePageSurface contract', () => {
     mockVersionInfo.mockReturnValue(null);
     mockGetGlobalTimeline.mockResolvedValue({ recentChanges: [] });
     mockListInventorySources.mockResolvedValue({ sources: [] });
+    mockUseWorkloadsState.mockReturnValue({
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      allGuests: () => [],
+      search: () => '',
+      setSearch: vi.fn(),
+    });
     setResources([]);
   });
 
@@ -169,6 +176,49 @@ describe('VmwarePageSurface contract', () => {
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-app-01',
     );
+  });
+
+  it('reuses the source-scoped page snapshot for the vSphere workload surface', async () => {
+    const refetch = vi.fn().mockResolvedValue([]);
+    const resources = [
+      makeResource({
+        id: 'esxi-host-1',
+        type: 'agent',
+        vmware: { entityType: 'host', managedObjectId: 'host-1' },
+      }),
+      makeResource({
+        id: 'vm-app-01',
+        type: 'vm',
+        vmware: { entityType: 'vm', managedObjectId: 'vm-1' },
+      }),
+      makeResource({
+        id: 'other-platform-vm',
+        type: 'vm',
+        platformType: 'proxmox-pve',
+        vmware: undefined,
+      }),
+    ];
+    setResources(resources, { refetch });
+
+    render(() => <VmwarePageSurface />);
+
+    expect(mockUseUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: 'type=agent,vm,storage,network&source=vmware-vsphere',
+        cacheKey: 'vmware-workspace',
+      }),
+    );
+    const stateOptions = mockUseWorkloadsState.mock.calls[0]?.[0] as {
+      resourceSnapshot: () => Resource[] | undefined;
+      resourceSnapshotRefetch: () => Promise<unknown>;
+    };
+    expect(stateOptions.resourceSnapshot()?.map((resource) => resource.id)).toEqual([
+      'esxi-host-1',
+      'vm-app-01',
+    ]);
+
+    await stateOptions.resourceSnapshotRefetch();
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('does not treat vSphere ESXi API host resources as Pulse agent update targets', () => {

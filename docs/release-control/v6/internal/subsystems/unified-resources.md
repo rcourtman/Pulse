@@ -2046,6 +2046,14 @@ without waiting for a later WebSocket merge; REST and WebSocket delivery must
 not disagree about already-authoritative fields. The boundary is pinned by
 `useUnifiedResources.test.ts` and `useWorkloads.test.ts`.
 
+Source-scoped platform owners remain canonical realtime consumers. The shared
+frontend hook locally projects supported `type` plus `source` filters from the
+canonical WebSocket snapshot, including the public `vmware-vsphere` alias for
+the raw `vmware` source, rather than degrading a source-scoped page to periodic
+REST refreshes. VMware Overview passes that same source-scoped snapshot into
+the embedded Workloads state, so hosts and VMs share one inventory generation
+and one explicit refresh path.
+
 ### Agent libvirt domains use a provider-neutral VM facet
 
 The registry projects a host's validated libvirt domains as `vm` resources

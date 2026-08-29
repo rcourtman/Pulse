@@ -1360,6 +1360,19 @@ an interim unknown or never-backed-up state while waiting for a WebSocket
 tick. This correction adds no request, subscription, retry, or resource scan;
 `useUnifiedResources.test.ts` and `useWorkloads.test.ts` pin the boundary.
 
+### vSphere owner snapshots avoid duplicate estate enumeration
+
+The VMware vSphere overview owns one `type=agent,vm,storage,network` resource
+query scoped to `source=vmware-vsphere` and passes the resulting canonical
+snapshot into its embedded Workloads state. Host and VM regions therefore
+paint from one paged generation and explicit refresh path; the Workloads owner
+must not launch the generic all-platform workload pagination or its generic
+infrastructure snapshot. The shared unified-resource hook projects the same
+type-and-source filter from canonical WebSocket state, so this request
+reduction adds no polling fallback or freshness regression. Contract tests pin
+the request shape, realtime projection, snapshot injection, and refresh
+handoff.
+
 ### Command-session liveness lookup stays bounded and in-memory
 
 The connections ledger's command-channel liveness check

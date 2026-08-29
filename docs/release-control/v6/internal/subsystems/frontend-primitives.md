@@ -71,14 +71,15 @@ shared filter rail must remove that route value along with the other active
 facets; the feature must not replace the shared rail with a page-local select.
 
 Large-estate platform pages must keep one canonical inventory snapshot for the
-initial read and explicit refresh path. The Proxmox overview owns its unified
-resource request and passes that snapshot into the shared workloads state; the
-workloads adapter may map the snapshot into the legacy guest boundary, but must
-not issue a second workload inventory request or create a second infrastructure
-poll. Refreshing the overview must invalidate that owner snapshot and update
-both the node and guest regions from the same result, so a large estate cannot
-render contradictory counts or pay duplicate transport and reconciliation
-costs.
+initial read and explicit refresh path. The Proxmox and VMware vSphere
+overviews own their source-scoped unified-resource requests and pass those
+snapshots into the shared workloads state; the workloads adapter may map the
+snapshot into the legacy guest boundary, but must not issue a second workload
+inventory request or create a second infrastructure poll. Refreshing an
+overview must invalidate that owner snapshot and update both the host/node and
+guest regions from the same result, so a large estate cannot render
+contradictory counts, flash a false empty workload state, or pay duplicate
+transport and reconciliation costs.
 The overview's bounded structural summary remains ahead of its long virtualized
 inventory at desktop and narrow widths. In particular, Proxmox must show up to
 six phone rows or twelve larger-layout rows before the guest list instead of

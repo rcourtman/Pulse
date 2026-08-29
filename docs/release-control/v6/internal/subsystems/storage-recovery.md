@@ -25,6 +25,15 @@ The shared `internal/api/` helper-binary download route is isolated from
 storage and recovery semantics. `/download/pulse-agent-helper` serves a signed
 Linux runtime artifact only; it cannot read, mutate, restore, export, or select
 storage state, recovery timelines, backup providers, or repository scope.
+The parallel `/download/pulse-agent-runner` artifact route and
+`/api/agents/action-runner/credential` issuance route are also adjacent
+API/agent-lifecycle boundaries. A signed runner binary or host-bound typed
+action credential is not a backup, snapshot, recovery point, restore grant,
+retention decision, or repository selector. Safe-profile inspect/apply/rollback
+preserves collector identity and installation files only; it must not rewrite
+storage/recovery evidence or reinterpret a restored legacy collector profile as
+recovery success. Typed `host.storage_cleanup` remains governed remediation,
+not storage-recovery authority inferred from the credential itself.
 
 First-run authentication always writes the canonical `.env` persistence
 artifact before runtime state changes. Root systemd installation may also
@@ -53,6 +62,14 @@ workload or infrastructure inventory request. Backup and recovery tables keep
 their domain-specific evidence requests, while an overview refresh must update
 all overview regions from the same owner snapshot rather than mixing reads
 from different inventory generations.
+The vSphere overview follows the same read-side ownership rule for its host,
+VM, datastore, and network regions. Its canonical snapshot is constrained to
+the `vmware-vsphere` source at the resource API boundary, and the embedded
+workloads adapter consumes that page-owned snapshot instead of issuing a
+second generic inventory request. Source aliases used to project a canonical
+websocket snapshot are transport filtering only: a VMware datastore remains
+descriptive inventory and does not gain backup, protection, recovery-point,
+or restore semantics from that projection.
 The physical-disks surface consumes every page in the server-declared unified
 resource result, scopes same-named Proxmox nodes by instance, and never hides a
 disk behind a client-side page ceiling. Search includes vendor, WWN, transport,

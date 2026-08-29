@@ -1,31 +1,23 @@
 {
   "version": 1,
-  "base_sha": "6453593b4b984eaa7d1d40727f43e12528212dd7",
-  "verified_at": "2026-08-29T21:11:53Z",
+  "base_sha": "6d4ee48000f9266d161af000f88d9d1f10042328",
+  "verified_at": "2026-08-29T22:35:09Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/agentDiagnostics.ts",
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
-    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/agentDiagnostics.ts": "0bf0f3d0854ebd03ab9d80ccef0e39655aeeb2bd16d18901b527ba3955a086bb",
-    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "0fe6f4cb3f10adbf13306eaa73b390e24b4d586ec71479cb7c8494ce158e6302",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "5aa559093039bc18785b4df88c2c955d67465b969b85979bc2a836a7d64d6dd0",
-    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "d352500b9f804111fe07602aa3716e9d1ff1a30ac5fe3b1d6a7d0587c36c6171",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts": "0f198074f88ef8d55a0fdc5142bacee4a39b572b12f94f7ed88a0fa10724c067"
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "659851ff4111f53d15f74d7959ab9e3f21683eecf0e5c55d91e477f47ad93540",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "0b5cca6992ae17575e5f689268e152cbdd47f61b3169043cec314b27c11d8c97"
   },
   "routes": [
-    "/settings/infrastructure?add=docker",
-    "/settings/infrastructure?add=pve",
-    "/settings/infrastructure/agent-doctor"
+    "/vmware/overview"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 720
     },
     {
       "width": 390,
@@ -33,15 +25,14 @@
     }
   ],
   "states": [
-    "mock-backed Docker installer before token generation, including the transitional Docker-in-LXC trust notice",
-    "Proxmox VE onboarding with the API-first strategy selected",
-    "Proxmox VE onboarding with Host Telemetry Agent selected and monitoring-only credential guidance visible",
-    "Agent Doctor route with the current fleet diagnostics loaded"
+    "vSphere overview with seven ESXi hosts and eighteen VMs loaded from one source-scoped canonical inventory snapshot",
+    "desktop host table, workload filters, grouped VM table, and live-connection status",
+    "narrow host and VM table projections with the responsive filter control and fixed mobile navigation"
   ],
   "interactions": [
-    "opened the Docker onboarding deep link and verified monitoring-first copy, token authorization guidance, and install handoff at desktop width",
-    "narrowed the Docker onboarding dialog to 390 pixels and verified the title, Docker-in-LXC notice, and token action remained visible",
-    "opened Proxmox VE onboarding, switched from Connect via API to Host Telemetry Agent, and verified the monitoring-only command-authority boundary copy",
-    "opened Agent Doctor and verified the routed diagnostics surface loaded without console-blocking UI failures"
+    "reloaded the vSphere overview with browser request tracing enabled and verified the only resource-list request was the page-owned type-and-source-scoped snapshot",
+    "verified the embedded VM filter and table populated from the owner snapshot without a generic workload or infrastructure resource request",
+    "set a 390 by 844 viewport and verified the host rows, VM search, Filters action, grouped VM rows, and mobile navigation remained visible and usable",
+    "reset the temporary viewport override to the browser default after responsive verification"
   ]
 }
