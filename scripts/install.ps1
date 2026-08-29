@@ -16,6 +16,7 @@ param (
     [bool]$EnableProxmox = $false,
     [string]$ProxmoxType = "",
     [bool]$EnableCommands = $false,
+    [string]$CommandAuthority = $env:PULSE_COMMAND_AUTHORITY,
     [bool]$Insecure = $false,
     [bool]$Uninstall = $false,
     [string]$CACertPath = $env:PULSE_CACERT,
@@ -941,6 +942,38 @@ if (-not [string]::IsNullOrWhiteSpace($ServerVersion) -and -not [string]::IsNull
 # --- Install Binary ---
 Write-Host "Installing binary..." -ForegroundColor Cyan
 
+# Resolve the local command-authority ceiling before replacing an existing
+# service. An unmarked service is explicitly legacy-compatible so an upgrade
+# cannot silently revoke a command state that was enabled remotely.
+$ExistingService = Get-CimInstance Win32_Service -Filter "Name='$AgentName'" -ErrorAction SilentlyContinue
+$ExistingServicePath = if ($null -ne $ExistingService) { [string]$ExistingService.PathName } else { "" }
+if (-not $PSBoundParameters.ContainsKey('EnableCommands') -and
+    [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_COMMANDS) -and
+    $ExistingServicePath -match '(?i)(?:^|\s)--enable-commands(?:\s|$)') {
+    $EnableCommands = $true
+}
+if ([string]::IsNullOrWhiteSpace($CommandAuthority)) {
+    $authorityMatch = [regex]::Match($ExistingServicePath, '(?i)(?:^|\s)--command-authority(?:=|\s+)["'']?([a-z-]+)')
+    if ($authorityMatch.Success) {
+        $CommandAuthority = $authorityMatch.Groups[1].Value
+    } elseif ($EnableCommands) {
+        $CommandAuthority = 'command-capable'
+    } elseif (-not [string]::IsNullOrWhiteSpace($ExistingServicePath)) {
+        $CommandAuthority = 'legacy'
+    } else {
+        $CommandAuthority = 'monitoring-only'
+    }
+}
+$CommandAuthority = $CommandAuthority.Trim().ToLowerInvariant()
+if ($CommandAuthority -notin @('monitoring-only', 'command-capable', 'legacy')) {
+    Show-Error "Invalid CommandAuthority '$CommandAuthority'. Expected monitoring-only, command-capable, or legacy."
+    Exit 1
+}
+if ($CommandAuthority -eq 'monitoring-only' -and $EnableCommands) {
+    Show-Error "EnableCommands conflicts with CommandAuthority monitoring-only."
+    Exit 1
+}
+
 # Stop existing service if running
 if (Get-Service $AgentName -ErrorAction SilentlyContinue) {
     Write-Host "Removing existing $AgentName service..." -ForegroundColor Yellow
@@ -992,6 +1025,7 @@ if ($EnableKubernetes) { $ServiceArgs += "--enable-kubernetes" }
 if ($EnableProxmox) { $ServiceArgs += "--enable-proxmox" }
 if (-not [string]::IsNullOrWhiteSpace($NormalizedProxmoxType)) { $ServiceArgs += @("--proxmox-type", "`"$NormalizedProxmoxType`"") }
 if ($EnableCommands) { $ServiceArgs += "--enable-commands" }
+$ServiceArgs += @("--command-authority", "`"$CommandAuthority`"")
 if ($Insecure) { $ServiceArgs += "--insecure" }
 if (-not [string]::IsNullOrWhiteSpace($CACertPath)) { $ServiceArgs += @("--cacert", "`"$CACertPath`"") }
 if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) { $ServiceArgs += @("--server-fingerprint", "`"$ServerFingerprint`"") }

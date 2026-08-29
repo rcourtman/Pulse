@@ -34,8 +34,8 @@ func normalizeProxmoxInstallType(raw string) (string, error) {
 	return installType, nil
 }
 
-func proxmoxAgentInstallScopes() []string {
-	return agenttokens.ProxmoxScopes()
+func proxmoxAgentInstallScopes(enableCommands bool) []string {
+	return agenttokens.ProxmoxScopes(enableCommands)
 }
 
 // hostAgentInstallScopes returns the scopes for a generic unified host agent

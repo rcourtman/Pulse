@@ -51,6 +51,9 @@ export interface AgentFleetDiagnosticModule {
 export interface AgentFleetDiagnosticPrivilege {
   runningAsRoot: boolean;
   serviceUser?: string;
+  commandAuthority?: 'monitoring-only' | 'command-capable' | 'legacy' | string;
+  credentialKnown?: boolean;
+  credentialExec?: boolean;
   smartctlHelper?: boolean;
   pctHelper?: boolean;
 }

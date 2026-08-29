@@ -133,10 +133,11 @@ func TestAgentInfoPrivilegeStatusRoundTrip(t *testing.T) {
 	agent := AgentInfo{
 		ID: "agent-privilege",
 		Privilege: &PrivilegeStatus{
-			RunningAsRoot:  false,
-			ServiceUser:    "pulse-agent",
-			SmartctlHelper: true,
-			PctHelper:      false,
+			RunningAsRoot:    false,
+			ServiceUser:      "pulse-agent",
+			CommandAuthority: "monitoring-only",
+			SmartctlHelper:   true,
+			PctHelper:        false,
 		},
 	}
 	encoded, err := json.Marshal(agent)
@@ -150,6 +151,7 @@ func TestAgentInfoPrivilegeStatusRoundTrip(t *testing.T) {
 	if decoded.Privilege == nil ||
 		decoded.Privilege.RunningAsRoot ||
 		decoded.Privilege.ServiceUser != "pulse-agent" ||
+		decoded.Privilege.CommandAuthority != "monitoring-only" ||
 		!decoded.Privilege.SmartctlHelper ||
 		decoded.Privilege.PctHelper {
 		t.Fatalf("privilege round trip = %+v", decoded.Privilege)

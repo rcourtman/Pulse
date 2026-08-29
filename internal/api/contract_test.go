@@ -37,6 +37,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
@@ -68,6 +69,29 @@ import (
 	"github.com/rs/zerolog/log"
 	tmock "github.com/stretchr/testify/mock"
 )
+
+func TestContractProxmoxInstallScopesRequireExplicitCommandChoice(t *testing.T) {
+	monitoringScopes := proxmoxAgentInstallScopes(false)
+	monitoringRecord := &config.APITokenRecord{Scopes: monitoringScopes}
+	if monitoringRecord.HasScope(config.ScopeAgentExec) {
+		t.Fatalf("monitoring Proxmox install scopes = %v, must not grant agent:exec", monitoringScopes)
+	}
+
+	commandScopes := proxmoxAgentInstallScopes(true)
+	commandScopeRecord := &config.APITokenRecord{Scopes: commandScopes}
+	if !commandScopeRecord.HasScope(config.ScopeAgentExec) {
+		t.Fatalf("command-capable Proxmox install scopes = %v, want agent:exec", commandScopes)
+	}
+	commandRecord := &config.APITokenRecord{
+		Scopes: commandScopes,
+		Metadata: map[string]string{
+			agenttokens.CommandPolicyIntentMetadataKey: agenttokens.CommandPolicyIntent(true),
+		},
+	}
+	if enabled, ok := agenttokens.ParseCommandPolicyIntent(commandRecord); !ok || !enabled {
+		t.Fatal("explicit command-capable install lost its command-policy intent")
+	}
+}
 
 func TestContractPatrolInternalBridgePreservesBoundedToolAuthority(t *testing.T) {
 	allowed := []string{

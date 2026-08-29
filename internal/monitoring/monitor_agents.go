@@ -3421,10 +3421,11 @@ func convertAgentPrivilegeStatus(value *agentshost.PrivilegeStatus) *models.Agen
 		return nil
 	}
 	return &models.AgentPrivilegeStatus{
-		RunningAsRoot:  value.RunningAsRoot,
-		ServiceUser:    strings.TrimSpace(value.ServiceUser),
-		SmartctlHelper: value.SmartctlHelper,
-		PctHelper:      value.PctHelper,
+		RunningAsRoot:    value.RunningAsRoot,
+		ServiceUser:      strings.TrimSpace(value.ServiceUser),
+		CommandAuthority: strings.TrimSpace(value.CommandAuthority),
+		SmartctlHelper:   value.SmartctlHelper,
+		PctHelper:        value.PctHelper,
 	}
 }
 

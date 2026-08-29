@@ -10,7 +10,7 @@ func TestCollectPrivilegeStatusReportsProcessFacts(t *testing.T) {
 	t.Setenv("PULSE_SMARTCTL_PATH", "")
 	t.Setenv("PULSE_PCT_PATH", "")
 
-	status := collectPrivilegeStatus()
+	status := collectPrivilegeStatus(CommandAuthorityMonitoringOnly)
 	if status == nil {
 		t.Fatal("collectPrivilegeStatus returned nil")
 	}
@@ -19,6 +19,9 @@ func TestCollectPrivilegeStatusReportsProcessFacts(t *testing.T) {
 	}
 	if status.ServiceUser == "" {
 		t.Fatal("ServiceUser is empty")
+	}
+	if status.CommandAuthority != string(CommandAuthorityMonitoringOnly) {
+		t.Fatalf("CommandAuthority = %q", status.CommandAuthority)
 	}
 	if status.SmartctlHelper || status.PctHelper {
 		t.Fatalf("helper flags set without overrides: %+v", status)
@@ -29,7 +32,7 @@ func TestCollectPrivilegeStatusReportsHelperOverrides(t *testing.T) {
 	t.Setenv("PULSE_SMARTCTL_PATH", "/usr/local/lib/pulse-agent/smartctl-helper")
 	t.Setenv("PULSE_PCT_PATH", "/usr/local/lib/pulse-agent/pct-helper")
 
-	status := collectPrivilegeStatus()
+	status := collectPrivilegeStatus(CommandAuthorityCommandCapable)
 	if !status.SmartctlHelper || !status.PctHelper {
 		t.Fatalf("helper overrides not reported: %+v", status)
 	}

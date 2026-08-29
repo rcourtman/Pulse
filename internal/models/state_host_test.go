@@ -57,6 +57,25 @@ func TestUpsertHost(t *testing.T) {
 	}
 }
 
+func TestUpsertHostPreservesReportedCommandAuthority(t *testing.T) {
+	state := NewState()
+	state.UpsertHost(Host{
+		ID: "host-authority",
+		AgentPrivilege: &AgentPrivilegeStatus{
+			RunningAsRoot:    true,
+			CommandAuthority: "monitoring-only",
+		},
+	})
+
+	hosts := state.GetHosts()
+	if len(hosts) != 1 || hosts[0].AgentPrivilege == nil {
+		t.Fatalf("reported privilege missing from state: %+v", hosts)
+	}
+	if got := hosts[0].AgentPrivilege.CommandAuthority; got != "monitoring-only" {
+		t.Fatalf("command authority = %q, want monitoring-only", got)
+	}
+}
+
 func TestGetHosts_Copy(t *testing.T) {
 	state := NewState()
 

@@ -326,9 +326,14 @@ func TestInstallPS1PreservesCommandExecutionParity(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`[bool]$EnableCommands = $false,`,
+		`[string]$CommandAuthority = $env:PULSE_COMMAND_AUTHORITY,`,
 		`if (-not $PSBoundParameters.ContainsKey('EnableCommands') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_COMMANDS)) {`,
 		`$EnableCommands = Parse-Bool $env:PULSE_ENABLE_COMMANDS $EnableCommands`,
 		`if ($EnableCommands) { $ServiceArgs += "--enable-commands" }`,
+		`$ServiceArgs += @("--command-authority", "` + "`" + `"$CommandAuthority` + "`" + `"")`,
+		`$CommandAuthority = 'monitoring-only'`,
+		`$CommandAuthority = 'legacy'`,
+		`$CommandAuthority = 'command-capable'`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {

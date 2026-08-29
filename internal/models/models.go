@@ -428,10 +428,11 @@ type AgentModuleStatus struct {
 // Informational only — a non-root agent is an intentional profile, not a
 // health defect.
 type AgentPrivilegeStatus struct {
-	RunningAsRoot  bool   `json:"runningAsRoot"`
-	ServiceUser    string `json:"serviceUser,omitempty"`
-	SmartctlHelper bool   `json:"smartctlHelper,omitempty"`
-	PctHelper      bool   `json:"pctHelper,omitempty"`
+	RunningAsRoot    bool   `json:"runningAsRoot"`
+	ServiceUser      string `json:"serviceUser,omitempty"`
+	CommandAuthority string `json:"commandAuthority,omitempty"`
+	SmartctlHelper   bool   `json:"smartctlHelper,omitempty"`
+	PctHelper        bool   `json:"pctHelper,omitempty"`
 }
 
 func (h Host) NormalizeCollections() Host {

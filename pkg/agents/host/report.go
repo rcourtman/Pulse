@@ -176,8 +176,9 @@ type AgentInfo struct {
 // anything, and the server must not treat a non-root agent as unhealthy on
 // this evidence alone.
 type PrivilegeStatus struct {
-	RunningAsRoot bool   `json:"runningAsRoot"`
-	ServiceUser   string `json:"serviceUser,omitempty"`
+	RunningAsRoot    bool   `json:"runningAsRoot"`
+	ServiceUser      string `json:"serviceUser,omitempty"`
+	CommandAuthority string `json:"commandAuthority,omitempty"`
 	// SmartctlHelper reports that a PULSE_SMARTCTL_PATH override is in effect,
 	// which a least-privilege install uses to route SMART reads through a
 	// scoped privilege helper.

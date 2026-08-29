@@ -28,8 +28,8 @@ root read access:
 
 - install it only on hosts you trust Pulse to monitor;
 - keep the agent token scoped to that Pulse server;
-- keep command execution disabled unless you explicitly need governed
-  remediation;
+- keep the local command-authority profile `monitoring-only` unless you
+  explicitly accept the transitional combined command runtime;
 - update from signed release assets rather than arbitrary branch snapshots.
 
 The agent is primarily an outbound reporter to your Pulse server. By default it
@@ -52,12 +52,16 @@ capacity monitoring, for example a log2ram `/var/log` mount. This reports
 filesystem capacity and usage metadata. It does not read or transmit file
 contents. Local `--disk-exclude` rules still take precedence.
 
-Command execution is disabled by default. It can be enabled with
-`--enable-commands`, `PULSE_ENABLE_COMMANDS=true`, or the centralized agent
-command setting after enrollment. Leave it disabled for read-only monitoring.
-When enabled, commands still flow through Pulse's command policy and approval
-surfaces instead of silently turning every agent into an unrestricted remote
-shell.
+Fresh installs use a local `monitoring-only` command-authority ceiling and a
+credential without `agent:exec`. Remote configuration cannot promote that
+service. Selecting the advanced legacy combined command profile at install time
+adds `--enable-commands`, records `command-capable`, and issues an execution-
+scoped credential. The root monitoring process can then also accept server
+command requests through the existing policy and approval surfaces. Existing
+unmarked services upgrade as `legacy` during the migration window so upgrades
+do not silently revoke an operator's prior command choice. Agent Doctor shows
+the process privilege, local authority ceiling, and credential execution scope
+separately and warns about mismatches.
 
 Custom numeric sensors are a separate, local configuration boundary. Enabling
 them with `--custom-sensors-file` does not enable remote commands and

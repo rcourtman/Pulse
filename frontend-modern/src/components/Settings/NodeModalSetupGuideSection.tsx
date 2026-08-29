@@ -20,7 +20,7 @@ const getNodeSetupStrategyPresentation = (
   if (setupMode === 'agent') {
     return {
       label: 'Host telemetry agent',
-      detail: `Optional full host telemetry: creates the ${productLabel} API token, installs Pulse Agent as the supported root service, and registers the source automatically.`,
+      detail: `Optional full host telemetry: creates a monitoring-only ${productLabel} credential, installs the current Pulse Agent root service, and registers the source automatically.`,
     };
   }
 
@@ -138,17 +138,19 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       Adds host-local telemetry such as temperatures, SMART, ZFS, Ceph, and mdadm
                     </li>
                     <li>
-                      Enables Pulse command execution for Patrol actions and opted-in Docker-in-LXC
-                      inventory
+                      Uses a monitoring-only Pulse credential. This setup does not grant remote
+                      command authority
                     </li>
                   </ul>
                   <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
                     <p class="text-xs text-blue-800 dark:text-blue-200">
-                      <strong>Docker inside Proxmox LXCs:</strong> use this host-agent path instead
-                      of installing Pulse Agent in every guest. The copied command enables Pulse
-                      command execution on the Proxmox node. The Pulse server still must be opted
-                      in: turn on <span class="font-medium">Discover Docker in LXC guests</span> in
-                      Settings → System → General (admin only), or set{' '}
+                      <strong>Docker inside Proxmox LXCs:</strong> this monitoring-only setup does
+                      not grant the command authority currently required for guest Docker discovery.
+                      Until the typed local helper replaces that path, use the advanced Pulse Agent
+                      installer only if you explicitly accept the combined command profile. The
+                      Pulse server must also be opted in: turn on{' '}
+                      <span class="font-medium">Discover Docker in LXC guests</span> in Settings →
+                      System → General (admin only), or set{' '}
                       <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
                         PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true
                       </code>{' '}
@@ -644,7 +646,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <li>
                       Host-local telemetry such as temperatures, SMART, services, and local disks
                     </li>
-                    <li>Agent-driven commands and service telemetry when explicitly used</li>
+                    <li>Monitoring-only Pulse credential with no remote command authority</li>
                     <li>Automatic reconnection on network issues</li>
                   </ul>
                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">

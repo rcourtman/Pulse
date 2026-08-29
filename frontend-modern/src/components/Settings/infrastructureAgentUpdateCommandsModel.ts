@@ -673,10 +673,18 @@ const diagnosticProfileVersionLabel = (
 const diagnosticPrivilegeLabel = (diagnostic?: AgentFleetAgentDiagnostic): string | undefined => {
   const privilege = diagnostic?.privilege;
   if (!privilege) return undefined;
-  if (privilege.runningAsRoot) return 'root';
   const user = privilege.serviceUser?.trim();
-  const base = user ? `least privilege (${user})` : 'least privilege';
+  const process = privilege.runningAsRoot
+    ? 'root'
+    : user
+      ? `least privilege (${user})`
+      : 'least privilege';
+  const authority = privilege.commandAuthority?.trim();
+  const base = authority ? `${process} · commands ${authority}` : process;
   const helpers: string[] = [];
+  if (privilege.credentialKnown) {
+    helpers.push(privilege.credentialExec ? 'credential grants exec' : 'monitoring credential');
+  }
   if (privilege.smartctlHelper) helpers.push('SMART helper active');
   if (privilege.pctHelper) helpers.push('pct helper active');
   return helpers.length > 0 ? `${base} · ${helpers.join(' · ')}` : base;

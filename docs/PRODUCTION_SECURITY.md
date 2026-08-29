@@ -36,9 +36,10 @@ temperature sensors, Docker or Podman sockets, host-local storage state, and
 some platform integrations require root or equivalent access. That is a real
 security boundary, not a cosmetic implementation detail.
 
-The default posture limits that boundary:
+The fresh-install posture limits that boundary:
 
-- command execution is disabled unless an operator explicitly enables it;
+- the service is marked `monitoring-only`, remote configuration cannot promote
+  it, and its credential omits `agent:exec`;
 - the health and Prometheus listener binds to `127.0.0.1:9191` by default;
 - generated systemd units apply service hardening including
   `NoNewPrivileges=true`, private temporary storage, and kernel/control-group
@@ -47,6 +48,13 @@ The default posture limits that boundary:
   connections are report-only;
 - Proxmox guest Docker inventory through `pct exec` is disabled by default and
   requires an explicit server setting.
+
+The advanced **legacy combined command profile** is a separate trust decision.
+It marks the root collector command-capable and gives its credential execution
+scope so the same process can accept governed server requests. Existing
+unmarked installations remain in a visible `legacy` compatibility state during
+the migration. Agent Doctor reports both local authority and credential scope
+so an over-scoped monitoring install is not mistaken for a safe default.
 
 On standard Linux systemd hosts the installer also offers a supported
 least-privilege profile: `--least-privilege` runs the service as a dedicated

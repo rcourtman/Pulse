@@ -34,13 +34,16 @@ type IssueOptions struct {
 	Scopes      []string
 }
 
-func ProxmoxScopes() []string {
-	return []string{
+func ProxmoxScopes(enableCommands bool) []string {
+	scopes := []string{
 		config.ScopeAgentReport,
 		config.ScopeAgentConfigRead,
 		config.ScopeAgentManage,
-		config.ScopeAgentExec,
 	}
+	if enableCommands {
+		scopes = append(scopes, config.ScopeAgentExec)
+	}
+	return scopes
 }
 
 func HostScopes(enableCommands bool) []string {
@@ -90,7 +93,10 @@ func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, 
 
 	scopes := opts.Scopes
 	if len(scopes) == 0 {
-		scopes = ProxmoxScopes()
+		// A caller that does not declare an authority profile receives a
+		// monitoring-only credential. Command authority must always be an
+		// explicit install-time choice.
+		scopes = ProxmoxScopes(false)
 	}
 	record, err := config.NewAPITokenRecord(rawToken, opts.TokenName, scopes)
 	if err != nil {

@@ -32,6 +32,21 @@ type wsRawMessage struct {
 	Payload json.RawMessage       `json:"payload,omitempty"`
 }
 
+func TestSecurityImplicitAgentCredentialOmitsExecutionScope(t *testing.T) {
+	_, record, err := agenttokens.IssueAndPersist(&config.Config{}, nil, agenttokens.IssueOptions{
+		TokenName: "implicit-monitoring-agent",
+	})
+	if err != nil {
+		t.Fatalf("IssueAndPersist: %v", err)
+	}
+	if !record.HasScope(config.ScopeAgentReport) || !record.HasScope(config.ScopeAgentConfigRead) {
+		t.Fatalf("implicit credential scopes = %v, want monitoring scopes", record.Scopes)
+	}
+	if record.HasScope(config.ScopeAgentExec) {
+		t.Fatalf("implicit credential scopes = %v, must not grant agent:exec", record.Scopes)
+	}
+}
+
 func TestSecurityGenericExecTokenCannotApplyInstallCommandPolicy(t *testing.T) {
 	token := config.APITokenRecord{
 		ID:     "generic-exec-token",

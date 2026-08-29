@@ -177,7 +177,7 @@ func TestHostedTenantAgentInstallCommandCarriesCommandPolicyIntent(t *testing.T)
 		installType string
 		wantIntent  string
 	}{
-		{installType: "pve", wantIntent: agenttokens.CommandPolicyIntentEnabled},
+		{installType: "pve", wantIntent: agenttokens.CommandPolicyIntentDisabled},
 		{installType: "pbs", wantIntent: agenttokens.CommandPolicyIntentDisabled},
 	} {
 		result, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
@@ -200,6 +200,8 @@ func TestHostedTenantAgentInstallCommandCarriesCommandPolicyIntent(t *testing.T)
 		}
 		require.NotNil(t, record, "minted token record not found for %s", tc.installType)
 		require.Equal(t, tc.wantIntent, record.Metadata[agenttokens.CommandPolicyIntentMetadataKey], "install type %s", tc.installType)
+		require.False(t, record.HasScope(config.ScopeAgentExec), "hosted monitoring token must not include exec for %s", tc.installType)
+		require.NotContains(t, result.Command, "--enable-commands", "hosted monitoring command must not enable exec for %s", tc.installType)
 	}
 }
 

@@ -82,7 +82,7 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
       'Run on the machine that runs Docker or Podman. For Docker inside Proxmox LXCs, use the Proxmox node path below instead of installing inside every guest.',
     recommendationTitle: 'Docker install path',
     recommendationDetail:
-      'For a standalone Docker or Podman host, install Pulse Agent on that host. The Docker profile is selected for this flow so copied commands force runtime monitoring when automatic detection is restricted. For Docker inside Proxmox LXCs, install on the Proxmox node, select the Proxmox VE node profile, and enable command execution so the server-opted-in LXC inventory path can run.',
+      'For a standalone Docker or Podman host, install Pulse Agent on that host. The Docker profile is selected for this flow so copied commands force runtime monitoring when automatic detection is restricted. Docker discovery inside Proxmox LXCs still uses the transitional command-capable profile until the scoped local helper is available.',
     preferredProfile: 'docker',
     platforms: ['linux'],
   },
@@ -118,7 +118,7 @@ const getCommandSectionDescription = (
     return 'Use the Linux installer from Unraid terminal or SSH. The agent stores its local uninstall helper under the Unraid plugin path.';
   }
   if (focus === 'docker') {
-    return 'Use the Linux installer on a standalone Docker or Podman host. For Docker inside Proxmox LXCs, switch Target profile to Proxmox VE node and enable command execution.';
+    return 'Use the Linux installer on a standalone Docker or Podman host. Docker discovery inside Proxmox LXCs currently requires the advanced, command-capable Proxmox install profile.';
   }
   if (focus === 'kubernetes') {
     return 'Use the Linux installer on a Kubernetes node. Commands in this flow include the Kubernetes profile.';
@@ -289,9 +289,10 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
               Install the agent on the Proxmox node, not inside every LXC. In advanced options,
               select <span class="font-medium">Proxmox VE node</span> and enable{' '}
-              <span class="font-medium">Pulse command execution</span>. Then turn on{' '}
-              <span class="font-medium">Discover Docker in LXC guests</span> in Settings → System →
-              General (admin only), or set{' '}
+              <span class="font-medium">the legacy combined command profile</span>. This is a
+              temporary full command-capable runtime, not a least-privilege monitoring install. Then
+              turn on <span class="font-medium">Discover Docker in LXC guests</span> in Settings →
+              System → General (admin only), or set{' '}
               <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the server
               environment to lock it on. Optionally restrict it with{' '}
               <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses bounded{' '}
@@ -604,7 +605,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
 
                   <label
                     class="flex cursor-pointer items-center gap-2 text-sm text-base-content"
-                    title="Allow Pulse-scoped command requests on this agent for Patrol actions and opted-in Proxmox LXC Docker inventory"
+                    title="Install the transitional combined runtime that can accept server command requests"
                   >
                     <input
                       type="checkbox"
@@ -615,15 +616,15 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       }
                       class="rounded text-blue-600 focus:ring-blue-500"
                     />
-                    Enable Pulse command execution (Patrol actions and Proxmox LXC Docker inventory)
+                    Enable legacy combined command profile
                   </label>
 
                   <Show when={state.enableCommands()}>
                     <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                      <span class="font-medium">Pulse commands enabled</span>: The agent will accept
-                      Pulse-scoped command requests. On Proxmox nodes, this is required for opted-in
-                      Docker-in-LXC inventory because Pulse runs bounded <code>pct exec</code>{' '}
-                      Docker summary checks.
+                      <span class="font-medium">Legacy combined trust enabled</span>: The root
+                      monitoring service will also accept server command requests. On Proxmox nodes,
+                      this remains necessary for opted-in Docker-in-LXC inventory until the scoped
+                      local helper replaces the current <code>pct exec</code> path.
                     </div>
                   </Show>
 

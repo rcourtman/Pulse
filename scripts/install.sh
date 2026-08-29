@@ -89,6 +89,11 @@ AGENT_ID=""
 HOSTNAME_OVERRIDE=""
 REPORT_IP=""
 ENABLE_COMMANDS="false"
+COMMAND_AUTHORITY="${PULSE_COMMAND_AUTHORITY:-}"
+COMMAND_AUTHORITY_SOURCE=""
+if [[ -n "$COMMAND_AUTHORITY" ]]; then
+    COMMAND_AUTHORITY_SOURCE="explicit"
+fi
 HEALTH_ADDR="${PULSE_HEALTH_ADDR:-}"
 HEALTH_ADDR_SET="false"
 if [[ -n "${PULSE_HEALTH_ADDR+x}" ]]; then
@@ -495,6 +500,7 @@ Options:
   --server-fingerprint <sha256> Pin the Pulse server leaf certificate for agent connections
   --observers-file <path> Absolute path to private JSON config for report-only observer Pulse destinations
   --enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
+  --command-authority <profile> Local command ceiling: monitoring-only, command-capable, or legacy
   --least-privilege       Run the agent as the 'pulse-agent' system user instead of root (Linux systemd only)
   --grant-smart           With --least-privilege: exact-command sudoers grant so SMART collection keeps working
   --grant-pct             With --least-privilege: sudoers grant restricted to 'pct list'/'pct df' so Proxmox LXC filesystem capacity keeps working
@@ -1050,12 +1056,9 @@ render_systemd_agent_unit() {
 		# dies with "write_id_mapping: Operation not permitted" and Docker in
 		# every unprivileged LXC stays invisible.
 		#
-		# This is granted for any PVE agent, not only one installed with
-		# --enable-commands, because command execution can be turned on later
-		# from the server (applyRemoteConfig) without rewriting this unit. That
-		# path used to leave the agent able to run commands but unable to
-		# attach to unprivileged guests, and the failure is only visible at
-		# debug level.
+		# The grant exists only for an explicitly command-capable PVE install.
+		# A monitoring-only unit must not carry dormant privilege in case a
+		# remote setting later requests command execution.
 		ambient_line=$'\n'"AmbientCapabilities=CAP_SETUID CAP_SETGID"
 	fi
 
@@ -1101,11 +1104,13 @@ systemd_agent_requires_lxc_attach() {
 	systemd_agent_may_attach_lxc
 }
 
-# Whether this host could ever need lxc-attach, independent of whether command
-# execution was enabled at install time. Command execution is also togglable
-# from the server after the fact, so the unit has to be provisioned for it up
-# front or the later toggle produces a half-working agent.
+# Whether this explicitly command-capable host needs lxc-attach. Remote
+# configuration cannot promote a monitoring-only process into a command
+# runtime, so the unit must not provision dormant attach capabilities.
 systemd_agent_may_attach_lxc() {
+	if [[ "$ENABLE_COMMANDS" != "true" ]]; then
+		return 1
+	fi
 	# The least-privilege profile never attaches into guests: pct exec and
 	# command execution stay root-profile features, so it does not get the
 	# CAP_SETUID/CAP_SETGID ambient grant either.
@@ -2018,6 +2023,7 @@ build_exec_arg_items() {
     if [[ -n "$SERVER_FINGERPRINT" ]]; then EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT"); fi
     if [[ -n "$OBSERVERS_FILE" ]]; then EXEC_ARG_ITEMS+=(--observers-file "$OBSERVERS_FILE"); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
+    EXEC_ARG_ITEMS+=(--command-authority "${COMMAND_AUTHORITY:-legacy}")
     if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi
     if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-pods); fi
@@ -2338,6 +2344,13 @@ apply_recovered_agent_arg_value() {
             if [[ -z "$OBSERVERS_FILE" ]]; then OBSERVERS_FILE="$value"; fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
+        command-authority)
+            if [[ -z "$COMMAND_AUTHORITY_SOURCE" ]]; then
+                COMMAND_AUTHORITY="$value"
+                COMMAND_AUTHORITY_SOURCE="recovered"
+            fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
         health-addr)
             if [[ "$HEALTH_ADDR_SET" != "true" ]]; then
                 HEALTH_ADDR="$value"
@@ -2385,6 +2398,33 @@ update_connection_state_incomplete() {
     [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || -z "$SERVER_FINGERPRINT" || "$INSECURE" != "true" ]]
 }
 
+resolve_command_authority_profile() {
+    if [[ -z "$COMMAND_AUTHORITY" ]]; then
+        if [[ "$ENABLE_COMMANDS" == "true" ]]; then
+            COMMAND_AUTHORITY="command-capable"
+        elif [[ "$UPDATE_ONLY" == "true" ]]; then
+            # Services installed before this marker existed may have been
+            # remotely promoted. Preserve that explicitly during update; fresh
+            # monitoring installs are locked below.
+            COMMAND_AUTHORITY="legacy"
+        else
+            COMMAND_AUTHORITY="monitoring-only"
+        fi
+    fi
+
+    case "$COMMAND_AUTHORITY" in
+        monitoring-only|command-capable|legacy)
+            ;;
+        *)
+            fail "Invalid --command-authority value: ${COMMAND_AUTHORITY} (expected monitoring-only, command-capable, or legacy)" "$EXIT_MISSING_ARGS"
+            ;;
+    esac
+
+    if [[ "$COMMAND_AUTHORITY" == "monitoring-only" && "$ENABLE_COMMANDS" == "true" ]]; then
+        fail "--enable-commands conflicts with --command-authority monitoring-only" "$EXIT_MISSING_ARGS"
+    fi
+}
+
 recover_connection_state_from_arg_stream() {
     local arg=""
     local pending_key=""
@@ -2401,10 +2441,10 @@ recover_connection_state_from_arg_stream() {
         fi
 
         case "$arg" in
-            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--report-ip|--cacert|--server-fingerprint|--observers-file|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|--disk-include|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)
+            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--report-ip|--cacert|--server-fingerprint|--observers-file|--command-authority|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|--disk-include|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-command-authority|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)
                 pending_key=$(normalize_recovered_agent_arg_key "$arg")
                 ;;
-            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--report-ip=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|--disk-include=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-report-ip=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*|-disk-include=*)
+            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--report-ip=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--command-authority=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|--disk-include=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-report-ip=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-command-authority=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*|-disk-include=*)
                 key="${arg%%=*}"
                 value="${arg#*=}"
                 apply_recovered_agent_arg_value "$key" "$value"
@@ -2990,6 +3030,7 @@ while [[ $# -gt 0 ]]; do
         --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
         --observers-file) OBSERVERS_FILE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
+        --command-authority) COMMAND_AUTHORITY="$2"; COMMAND_AUTHORITY_SOURCE="explicit"; shift 2 ;;
         --least-privilege) LEAST_PRIVILEGE="true"; shift ;;
         --grant-smart) GRANT_SMART="true"; shift ;;
         --grant-pct) GRANT_PCT="true"; shift ;;
@@ -3100,6 +3141,8 @@ if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" ]]; then
         fail "No existing Pulse Agent connection state found. Use the install command instead." "$EXIT_MISSING_ARGS"
     fi
 fi
+
+resolve_command_authority_profile
 
 if [[ -z "$STATE_DIR" || "$STATE_DIR" != /* || "$STATE_DIR" == "/" ||
       "$STATE_DIR" == *$'\r'* || "$STATE_DIR" == *$'\n'* ]]; then

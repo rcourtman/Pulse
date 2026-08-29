@@ -278,12 +278,10 @@ func TestInstallSHAllowsProxmoxCommandAgentLXCAttach(t *testing.T) {
 	}
 }
 
-// A PVE agent installed without --enable-commands must still be provisioned for
-// lxc-attach, because command execution can be enabled later from the server
-// without rewriting the unit. Without CAP_SETUID, lxc-attach cannot write
-// /proc/<pid>/uid_map for unprivileged guests, so Docker inside every
-// unprivileged LXC silently disappears from the Proxmox page.
-func TestInstallSHGrantsLXCAttachCapabilitiesForAnyPVEAgent(t *testing.T) {
+// Only a PVE agent explicitly installed with --enable-commands may receive the
+// lxc-attach capability grant. A monitoring-only unit must not carry dormant
+// CAP_SETUID/CAP_SETGID authority for a future remote toggle.
+func TestInstallSHGrantsLXCAttachCapabilitiesOnlyForCommandPVEAgent(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -292,6 +290,7 @@ func TestInstallSHGrantsLXCAttachCapabilitiesForAnyPVEAgent(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`systemd_agent_may_attach_lxc() {`,
+		`if [[ "$ENABLE_COMMANDS" != "true" ]]; then`,
 		`if [[ "$ENABLE_PROXMOX" != "true" ]]; then`,
 		`if systemd_agent_may_attach_lxc; then`,
 		`AmbientCapabilities=CAP_SETUID CAP_SETGID`,
@@ -303,9 +302,62 @@ func TestInstallSHGrantsLXCAttachCapabilitiesForAnyPVEAgent(t *testing.T) {
 		}
 	}
 
-	if strings.Contains(script, `systemd_agent_may_attach_lxc`) &&
-		!strings.Contains(script, "command execution can be turned on later") {
-		t.Fatal("install.sh must document why the capability grant is not gated on ENABLE_COMMANDS")
+	if strings.Contains(script, "command execution can be turned on later") {
+		t.Fatal("install.sh still provisions dormant attach capabilities for remote command promotion")
+	}
+}
+
+func TestRenderedSystemdUnitDoesNotPregrantCommandCapabilities(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		enableCommands bool
+		enableProxmox  bool
+		proxmoxType    string
+		leastPrivilege bool
+		wantCaps       bool
+	}{
+		{name: "monitoring PVE", enableProxmox: true, proxmoxType: "pve"},
+		{name: "explicit command PVE", enableCommands: true, enableProxmox: true, proxmoxType: "pve", wantCaps: true},
+		{name: "PBS command profile", enableCommands: true, enableProxmox: true, proxmoxType: "pbs"},
+		{name: "least privilege PVE", enableCommands: true, enableProxmox: true, proxmoxType: "pve", leastPrivilege: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			unitPath := filepath.Join(t.TempDir(), "pulse-agent.service")
+			script := `
+set -euo pipefail
+ENABLE_COMMANDS="` + strconv.FormatBool(tc.enableCommands) + `"
+ENABLE_PROXMOX="` + strconv.FormatBool(tc.enableProxmox) + `"
+PROXMOX_TYPE="` + tc.proxmoxType + `"
+LEAST_PRIVILEGE="` + strconv.FormatBool(tc.leastPrivilege) + `"
+GRANT_SMART="false"
+GRANT_PCT="false"
+SYSTEMD_ENV_LINES=""
+` + extractInstallShellFunction(t, "systemd_agent_requires_lxc_attach") + `
+` + extractInstallShellFunction(t, "systemd_agent_may_attach_lxc") + `
+` + extractInstallShellFunction(t, "render_systemd_agent_unit") + `
+render_systemd_agent_unit "` + unitPath + `" "/usr/local/bin/pulse-agent" "--url https://pulse" "network-online.target" "" "root" ""
+`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("render systemd unit: %v\n%s", err, out)
+			}
+			unit, err := os.ReadFile(unitPath)
+			if err != nil {
+				t.Fatalf("read rendered unit: %v", err)
+			}
+			text := string(unit)
+			hasCaps := strings.Contains(text, "AmbientCapabilities=CAP_SETUID CAP_SETGID")
+			if hasCaps != tc.wantCaps {
+				t.Fatalf("rendered capability grant = %v, want %v:\n%s", hasCaps, tc.wantCaps, text)
+			}
+			if tc.wantCaps {
+				if !strings.Contains(text, "NoNewPrivileges=false") || !strings.Contains(text, "RestrictSUIDSGID=false") {
+					t.Fatalf("command-capable PVE unit omitted required attach relaxations:\n%s", text)
+				}
+			} else if !strings.Contains(text, "NoNewPrivileges=true") || !strings.Contains(text, "RestrictSUIDSGID=true") {
+				t.Fatalf("monitoring unit did not retain hardening:\n%s", text)
+			}
+		})
 	}
 }
 
@@ -852,7 +904,7 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_arg_stream`,
 		`recover_token_from_default_agent_token_file() {`,
 		`normalize_recovered_agent_arg_key() {`,
-		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)`,
+		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-command-authority|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)`,
 		`--enable-host|-enable-host|--enable-host=true|-enable-host=true)`,
 		`recover_connection_state_from_env_stream`,
 		`recovered_connection_state_ready() {`,

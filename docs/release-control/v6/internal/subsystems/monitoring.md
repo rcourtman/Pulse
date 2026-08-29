@@ -30,6 +30,14 @@ product. Only PVE host profiles require a link to a PVE node; an explicit PBS
 profile, or an auto/missing-type host that matches a configured PBS instance by
 normalized hostname or reported address, must not receive the PVE-only
 `proxmox_profile_unlinked` warning.
+Agent Doctor also projects privilege and command authority without conflating
+them. The process user, local `monitoring-only`/`command-capable`/`legacy`
+ceiling, and server-derived credential execution scope are distinct evidence.
+A monitoring-only runtime with `agent:exec` is an over-scope warning; a
+command-capable runtime whose monitoring credential cannot re-enable commands
+is a scope-mismatch warning; an actively command-enabled runtime without
+`agent:exec` remains critical. These facts do not change collection truth or
+make a least-privilege service unhealthy by themselves.
 Monitor construction also applies the persisted alert schedule's normalized
 initial-delivery target to the tenant notification manager. This is runtime
 wiring only: monitoring does not choose destinations or own notification

@@ -84,7 +84,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       const data = await NodesAPI.getAgentInstallCommand({
         type,
         enableProxmox: true,
-        enableCommands: type === 'pve',
+        enableCommands: false,
         insecure: agentInstallInsecure(),
       });
       setAgentInstallCommand(data.command);

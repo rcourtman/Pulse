@@ -39,6 +39,7 @@ const (
 	AgentFleetReasonCredentialExpired     = "agent_credential_expired"
 	AgentFleetReasonCredentialUnlisted    = "agent_credential_registry_stale"
 	AgentFleetReasonExecScopeMissing      = "agent_exec_scope_missing"
+	AgentFleetReasonExecScopeExcess       = "agent_exec_scope_excess"
 	AgentFleetReasonDuplicateInstallation = "duplicate_host_agent_installation"
 
 	AgentFleetActionAllowReenroll        = "allow_reenroll"
@@ -120,10 +121,13 @@ type AgentFleetDiagnosticModule struct {
 // not a Reason: a least-privilege install is an intentional hardening choice,
 // so it must never degrade the agent's health status by itself.
 type AgentFleetDiagnosticPrivilege struct {
-	RunningAsRoot  bool   `json:"runningAsRoot"`
-	ServiceUser    string `json:"serviceUser,omitempty"`
-	SmartctlHelper bool   `json:"smartctlHelper,omitempty"`
-	PctHelper      bool   `json:"pctHelper,omitempty"`
+	RunningAsRoot    bool   `json:"runningAsRoot"`
+	ServiceUser      string `json:"serviceUser,omitempty"`
+	CommandAuthority string `json:"commandAuthority,omitempty"`
+	CredentialKnown  bool   `json:"credentialKnown,omitempty"`
+	CredentialExec   bool   `json:"credentialExec,omitempty"`
+	SmartctlHelper   bool   `json:"smartctlHelper,omitempty"`
+	PctHelper        bool   `json:"pctHelper,omitempty"`
 }
 
 type AgentFleetDiagnosticReason struct {
@@ -432,7 +436,7 @@ func diagnoseAgentFleetSubject(
 		Version:              subject.version,
 		AgentUpdate:          agentFleetUpdateForSubject(subject),
 		AgentModules:         agentFleetModulesForSubject(subject),
-		Privilege:            agentFleetPrivilegeForSubject(subject),
+		Privilege:            agentFleetPrivilegeForSubject(subject, tokenInventory),
 	}
 	if !subject.lastSeen.IsZero() {
 		result.LastSeen = subject.lastSeen.UnixMilli()
@@ -570,8 +574,9 @@ func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetToke
 		return nil
 	}
 	if record, ok := inventory.active[tokenID]; ok {
+		reasons := make([]AgentFleetDiagnosticReason, 0, 2)
 		if subject.host != nil && subject.host.CommandsEnabled && !record.HasScope(config.ScopeAgentExec) {
-			return []AgentFleetDiagnosticReason{{
+			reasons = append(reasons, AgentFleetDiagnosticReason{
 				Code:     AgentFleetReasonExecScopeMissing,
 				Severity: AgentFleetStatusCritical,
 				Message:  "The agent is configured to accept Pulse commands, but its credential does not grant command execution.",
@@ -579,9 +584,29 @@ func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetToke
 					"Agent command execution: enabled",
 					"Credential scope: agent:exec missing",
 				},
-			}}
+			})
 		}
-		return nil
+		if subject.host != nil && subject.host.AgentPrivilege != nil {
+			authority := strings.TrimSpace(subject.host.AgentPrivilege.CommandAuthority)
+			hasExec := record.HasScope(config.ScopeAgentExec)
+			switch {
+			case authority == "monitoring-only" && hasExec:
+				reasons = append(reasons, AgentFleetDiagnosticReason{
+					Code:     AgentFleetReasonExecScopeExcess,
+					Severity: AgentFleetStatusWarning,
+					Message:  "This monitoring-only runtime still uses a credential that grants command execution.",
+					Evidence: []string{"Local command authority: monitoring-only", "Credential scope: agent:exec present"},
+				})
+			case authority == "command-capable" && !hasExec && !subject.host.CommandsEnabled:
+				reasons = append(reasons, AgentFleetDiagnosticReason{
+					Code:     AgentFleetReasonExecScopeMissing,
+					Severity: AgentFleetStatusWarning,
+					Message:  "This runtime was installed as command-capable, but its credential cannot re-enable commands.",
+					Evidence: []string{"Local command authority: command-capable", "Credential scope: agent:exec missing"},
+				})
+			}
+		}
+		return reasons
 	}
 	if _, ok := inventory.expired[tokenID]; ok {
 		return []AgentFleetDiagnosticReason{{
@@ -930,17 +955,23 @@ func agentFleetUpdateForSubject(subject agentFleetSubject) *AgentFleetDiagnostic
 	}
 }
 
-func agentFleetPrivilegeForSubject(subject agentFleetSubject) *AgentFleetDiagnosticPrivilege {
+func agentFleetPrivilegeForSubject(subject agentFleetSubject, inventory agentFleetTokenInventory) *AgentFleetDiagnosticPrivilege {
 	if subject.host == nil || subject.host.AgentPrivilege == nil {
 		return nil
 	}
 	privilege := subject.host.AgentPrivilege
-	return &AgentFleetDiagnosticPrivilege{
-		RunningAsRoot:  privilege.RunningAsRoot,
-		ServiceUser:    strings.TrimSpace(privilege.ServiceUser),
-		SmartctlHelper: privilege.SmartctlHelper,
-		PctHelper:      privilege.PctHelper,
+	result := &AgentFleetDiagnosticPrivilege{
+		RunningAsRoot:    privilege.RunningAsRoot,
+		ServiceUser:      strings.TrimSpace(privilege.ServiceUser),
+		CommandAuthority: strings.TrimSpace(privilege.CommandAuthority),
+		SmartctlHelper:   privilege.SmartctlHelper,
+		PctHelper:        privilege.PctHelper,
 	}
+	if record, ok := inventory.active[strings.TrimSpace(subject.tokenID)]; ok {
+		result.CredentialKnown = true
+		result.CredentialExec = record.HasScope(config.ScopeAgentExec)
+	}
+	return result
 }
 
 func agentFleetModulesForSubject(subject agentFleetSubject) []AgentFleetDiagnosticModule {

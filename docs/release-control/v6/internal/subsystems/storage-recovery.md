@@ -133,6 +133,10 @@ Agent-install command generation under `internal/api/` may carry an explicit
 TLS-verification override, but it does not alter storage credentials, backup
 authority, restore behavior, or persisted recovery state. The generated
 command remains a bounded onboarding artifact with server-owned token quoting.
+Its monitoring-default credential and local command-authority marker likewise
+grant no backup mutation, restore, or recovery-state authority; `agent:exec`
+appears only when the operator explicitly requests the transitional
+command-capable profile.
 
 ## Canonical Files
 

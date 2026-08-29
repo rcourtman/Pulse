@@ -121,6 +121,10 @@ func hostAgentInstallScopes(enableCommands bool) []string {
 	return agenttokens.HostScopes(enableCommands)
 }
 
+func proxmoxAgentInstallScopes(enableCommands bool) []string {
+	return agenttokens.ProxmoxScopes(enableCommands)
+}
+
 func agentInstallCommandPolicyIntent(enableCommands bool) string {
 	return agenttokens.CommandPolicyIntent(enableCommands)
 }

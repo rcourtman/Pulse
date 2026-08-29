@@ -247,6 +247,68 @@ func TestAgentFleetDiagnosticsAcceptsCommandCredentialWithExecScope(t *testing.T
 	}
 }
 
+func TestAgentFleetDiagnosticsWarnsWhenMonitoringRuntimeHasExecCredential(t *testing.T) {
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.config.APITokens = []config.APITokenRecord{{
+		ID:     "over-scoped-token",
+		Scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec},
+	}}
+	monitor.state.UpsertHost(models.Host{
+		ID:           "agent-monitoring-authority",
+		Hostname:     "monitoring-node",
+		Platform:     "linux",
+		Status:       "online",
+		LastSeen:     now,
+		AgentVersion: "6.2.0",
+		TokenID:      "over-scoped-token",
+		AgentPrivilege: &models.AgentPrivilegeStatus{
+			RunningAsRoot:    true,
+			CommandAuthority: "monitoring-only",
+		},
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-monitoring-authority")
+	requireReasonCode(t, agent, AgentFleetReasonExecScopeExcess)
+	if agent.Status != AgentFleetStatusWarning {
+		t.Fatalf("status = %q, want %q", agent.Status, AgentFleetStatusWarning)
+	}
+	if agent.Privilege == nil || !agent.Privilege.CredentialKnown || !agent.Privilege.CredentialExec {
+		t.Fatalf("credential authority was not projected into privilege diagnostics: %+v", agent.Privilege)
+	}
+}
+
+func TestAgentFleetDiagnosticsWarnsWhenCommandCapableRuntimeCannotBeReenabled(t *testing.T) {
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.config.APITokens = []config.APITokenRecord{{
+		ID:     "monitoring-token",
+		Scopes: []string{config.ScopeAgentReport, config.ScopeAgentConfigRead},
+	}}
+	monitor.state.UpsertHost(models.Host{
+		ID:           "agent-command-authority",
+		Hostname:     "command-node",
+		Platform:     "linux",
+		Status:       "online",
+		LastSeen:     now,
+		AgentVersion: "6.2.0",
+		TokenID:      "monitoring-token",
+		AgentPrivilege: &models.AgentPrivilegeStatus{
+			RunningAsRoot:    true,
+			CommandAuthority: "command-capable",
+		},
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-command-authority")
+	reason := requireReasonCode(t, agent, AgentFleetReasonExecScopeMissing)
+	if reason.Severity != AgentFleetStatusWarning || agent.Status != AgentFleetStatusWarning {
+		t.Fatalf("reason/status = %q/%q, want warning/warning", reason.Severity, agent.Status)
+	}
+	if agent.Privilege == nil || !agent.Privilege.CredentialKnown || agent.Privilege.CredentialExec {
+		t.Fatalf("credential authority was not projected into privilege diagnostics: %+v", agent.Privilege)
+	}
+}
+
 func TestAgentFleetDiagnosticsDoesNotValidateSyntheticMockCredentials(t *testing.T) {
 	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
 	mustSetMockEnabled(t, true)
@@ -377,10 +439,11 @@ func TestAgentFleetDiagnosticsSurfacesPrivilegeProfileWithoutDegradingHealth(t *
 		IntervalSeconds: 30,
 		AgentVersion:    "6.2.0",
 		AgentPrivilege: &models.AgentPrivilegeStatus{
-			RunningAsRoot:  false,
-			ServiceUser:    "pulse-agent",
-			SmartctlHelper: true,
-			PctHelper:      false,
+			RunningAsRoot:    false,
+			ServiceUser:      "pulse-agent",
+			CommandAuthority: "monitoring-only",
+			SmartctlHelper:   true,
+			PctHelper:        false,
 		},
 	})
 
@@ -391,6 +454,7 @@ func TestAgentFleetDiagnosticsSurfacesPrivilegeProfileWithoutDegradingHealth(t *
 		t.Fatal("privilege profile missing from diagnostics")
 	}
 	if agent.Privilege.RunningAsRoot || agent.Privilege.ServiceUser != "pulse-agent" ||
+		agent.Privilege.CommandAuthority != "monitoring-only" ||
 		!agent.Privilege.SmartctlHelper || agent.Privilege.PctHelper {
 		t.Fatalf("privilege profile = %+v", agent.Privilege)
 	}

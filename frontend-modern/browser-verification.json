@@ -1,38 +1,26 @@
 {
   "version": 1,
-  "base_sha": "5926b4dc38c84e086593476cec1d65c047ef1182",
-  "verified_at": "2026-08-29T20:31:20Z",
+  "base_sha": "6453593b4b984eaa7d1d40727f43e12528212dd7",
+  "verified_at": "2026-08-29T21:11:53Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
-    "frontend-modern/src/components/shared/useMobileNavBarState.ts",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/hooks/useUnifiedResources.ts",
-    "frontend-modern/src/types/api.ts",
-    "frontend-modern/src/types/resource.ts",
-    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts",
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/api/agentDiagnostics.ts",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "db685903fef2a1509edd812acb3904f7ff3ffab0bbd1af2bff183c1b3ae8e373",
-    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "15aa9c5dedebb2024f2548854996034672b35412708f28c276bd108892056e64",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "27358f3e77267cc111ce97b32d715b0069e2d1370ddd2b3ecc4f2d34a3e6dac5",
-    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "ab9e69d379579d02e33a2abd1224d8c13e6543dd6aa0ad40cc1f65697a289d04",
-    "frontend-modern/src/components/shared/useMobileNavBarState.ts": "74b5b354d302d5e5ea136131f06b3a8c1772a83a9903351737b9931f8136cc16",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "bbc7047317b350074e2f234b2472f3a1b39b080e4ea4fddff706a866952f473f",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "cbf1b5a2fa2bdb51d582f699fef97203bac2d2ab559f29ea40821e2eb7c11ee3",
-    "frontend-modern/src/types/api.ts": "d3dfc213bc7b7c357954723a22a21744e6be5da9f34d97a1faf00f579efcb5fc",
-    "frontend-modern/src/types/resource.ts": "126473e475c63c995aa86c578e9bc8f115eaca98da6477545e4389fe96b43f68",
-    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "3881918d823b440cf8739e14da780c7e98e871e71b9be490ca61a7fbc342c29e",
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "6f077a5611c8563be3674d9b8baf2500c711494bae14fda697f56b1e00c2342b"
+    "frontend-modern/src/api/agentDiagnostics.ts": "0bf0f3d0854ebd03ab9d80ccef0e39655aeeb2bd16d18901b527ba3955a086bb",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "0fe6f4cb3f10adbf13306eaa73b390e24b4d586ec71479cb7c8494ce158e6302",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "5aa559093039bc18785b4df88c2c955d67465b969b85979bc2a836a7d64d6dd0",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "d352500b9f804111fe07602aa3716e9d1ff1a30ac5fe3b1d6a7d0587c36c6171",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "0f198074f88ef8d55a0fdc5142bacee4a39b572b12f94f7ed88a0fa10724c067"
   },
   "routes": [
-    "/proxmox/overview?status=running",
-    "/alerts",
-    "/actions"
+    "/settings/infrastructure?add=docker",
+    "/settings/infrastructure?add=pve",
+    "/settings/infrastructure/agent-doctor"
   ],
   "viewports": [
     {
@@ -45,13 +33,15 @@
     }
   ],
   "states": [
-    "mock-backed Proxmox overview with multiple platform destinations and a remembered status query",
-    "mobile fixed navigation rail with the platform menu open",
-    "current NodeDrawerOverview mounted with synthetic checked-zero, stale-positive, and permission-unavailable update evidence fixtures"
+    "mock-backed Docker installer before token generation, including the transitional Docker-in-LXC trust notice",
+    "Proxmox VE onboarding with the API-first strategy selected",
+    "Proxmox VE onboarding with Host Telemetry Agent selected and monitoring-only credential guidance visible",
+    "Agent Doctor route with the current fleet diagnostics loaded"
   ],
   "interactions": [
-    "inspected destination hrefs, opened the platform menu, closed it with Escape and verified focus returned to its trigger",
-    "used a modified Alerts click to open a native browser tab while retaining the original Proxmox route, then used a plain Actions click for in-app navigation",
-    "mounted the current NodeDrawerOverview component in the Vite browser, checked all three evidence states at desktop width, then narrowed to 390 pixels and verified no horizontal overflow"
+    "opened the Docker onboarding deep link and verified monitoring-first copy, token authorization guidance, and install handoff at desktop width",
+    "narrowed the Docker onboarding dialog to 390 pixels and verified the title, Docker-in-LXC notice, and token action remained visible",
+    "opened Proxmox VE onboarding, switched from Connect via API to Host Telemetry Agent, and verified the monitoring-only command-authority boundary copy",
+    "opened Agent Doctor and verified the routed diagnostics surface loaded without console-blocking UI failures"
   ]
 }

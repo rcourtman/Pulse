@@ -792,6 +792,64 @@ func TestResolveEnableCommands(t *testing.T) {
 	}
 }
 
+func TestLoadConfigCommandAuthorityProfiles(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		wantProfile hostagent.CommandAuthorityProfile
+		wantEnabled bool
+		wantError   bool
+	}{
+		{name: "unmarked stays legacy", args: []string{"-token", "test"}, wantProfile: hostagent.CommandAuthorityLegacy},
+		{name: "fresh monitoring marker", args: []string{"-token", "test", "-command-authority", "monitoring-only"}, wantProfile: hostagent.CommandAuthorityMonitoringOnly},
+		{name: "enable implies capable", args: []string{"-token", "test", "-enable-commands"}, wantProfile: hostagent.CommandAuthorityCommandCapable, wantEnabled: true},
+		{name: "explicit capable", args: []string{"-token", "test", "-command-authority", "command-capable"}, wantProfile: hostagent.CommandAuthorityCommandCapable},
+		{name: "conflicting authority", args: []string{"-token", "test", "-enable-commands", "-command-authority", "monitoring-only"}, wantError: true},
+		{name: "invalid authority", args: []string{"-token", "test", "-command-authority", "root"}, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := loadConfig(tc.args, func(string) string { return "" })
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("loadConfig() accepted invalid authority: %+v", cfg)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("loadConfig(): %v", err)
+			}
+			if cfg.CommandAuthorityProfile != tc.wantProfile || cfg.EnableCommands != tc.wantEnabled {
+				t.Fatalf("authority = (%q, enabled=%v), want (%q, enabled=%v)", cfg.CommandAuthorityProfile, cfg.EnableCommands, tc.wantProfile, tc.wantEnabled)
+			}
+		})
+	}
+}
+
+func TestApplyInitialRemoteCommandAuthority(t *testing.T) {
+	desired := true
+	for _, tc := range []struct {
+		name       string
+		profile    hostagent.CommandAuthorityProfile
+		wantEnable bool
+		wantAccept bool
+	}{
+		{name: "monitoring rejects startup promotion", profile: hostagent.CommandAuthorityMonitoringOnly, wantAccept: false},
+		{name: "command capable accepts startup enable", profile: hostagent.CommandAuthorityCommandCapable, wantEnable: true, wantAccept: true},
+		{name: "legacy accepts startup enable", profile: hostagent.CommandAuthorityLegacy, wantEnable: true, wantAccept: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{CommandAuthorityProfile: tc.profile}
+			accepted := applyInitialRemoteCommandAuthority(&cfg, &desired)
+			if cfg.EnableCommands != tc.wantEnable || accepted != tc.wantAccept {
+				t.Fatalf("startup authority = (enabled=%v, accepted=%v), want (enabled=%v, accepted=%v)", cfg.EnableCommands, accepted, tc.wantEnable, tc.wantAccept)
+			}
+		})
+	}
+	if !applyInitialRemoteCommandAuthority(nil, &desired) {
+		t.Fatal("nil config should be a no-op")
+	}
+}
+
 func TestResolveToken(t *testing.T) {
 	customStateDir := filepath.Join(string(filepath.Separator), "custom", "pulse-agent")
 	fakeReadFile := func(path string) ([]byte, error) {

@@ -100,6 +100,16 @@ upgrade must recover those values from both split and `--key=value` service
 arguments and reproduce them in the generated systemd command without
 discarding existing explicit disk exclusions.
 
+Unified Agent installers persist `--command-authority` as an explicit local
+service invariant. Fresh installs default to `monitoring-only`; an explicit
+command-enabled install uses `command-capable`; an upgrade of an older service
+with no marker writes `legacy` to preserve compatibility. A contradictory
+monitoring-only plus command-enabled request fails closed. Linux systemd units
+must grant ambient `CAP_SETUID`/`CAP_SETGID` only to the explicit command-capable
+PVE profile; fresh monitoring PVE, PBS/PMG, and least-privilege units retain no
+such ambient capabilities. Windows service replacement recovers the same
+authority marker from the existing service command line before reinstalling it.
+
 Published exact-version install and rollback guidance must preserve the server
 and Unified Agent installer boundary. Supported systemd and Proxmox LXC
 deployments use the signed `/bin/update --version vX.Y.Z` server helper;

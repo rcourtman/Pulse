@@ -72,14 +72,14 @@ func GenerateHostedTenantAgentInstallCommand(opts HostedTenantAgentInstallComman
 		TokenName:   tokenName,
 		OrgID:       orgID,
 		OwnerUserID: strings.TrimSpace(opts.OwnerUserID),
+		Scopes:      proxmoxAgentInstallScopes(false),
 		Metadata: map[string]string{
 			"install_type": installType,
 			"issued_via":   "hosted_agent_install_command",
-			// Hosted installs have no enableCommands toggle; commands follow the
-			// install type like the self-hosted flow (pve on, pbs off). Without
-			// this stamp, reconcileInstallTokenCommandPolicy skips the token and
-			// a reinstall never clears a stale disabled policy (#1728).
-			agenttokens.CommandPolicyIntentMetadataKey: agenttokens.CommandPolicyIntent(installType == proxmoxInstallTypePVE),
+			// Hosted installs have no command-authority enrollment step. Keep the
+			// credential monitoring-only and stamp the disabled intent so a
+			// reinstall clears any stale combined-runtime command policy (#1728).
+			agenttokens.CommandPolicyIntentMetadataKey: agenttokens.CommandPolicyIntent(false),
 		},
 	})
 	if err != nil {

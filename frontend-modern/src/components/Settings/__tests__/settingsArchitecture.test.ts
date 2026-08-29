@@ -1730,7 +1730,7 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalStateSource).not.toContain('quickSetupPreviewCommand');
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
     expect(nodeModalStatusFooterSource).toContain('props.saveDisabled');
-    expect(nodeModalStateSource).toContain("enableCommands: type === 'pve'");
+    expect(nodeModalStateSource).toContain('enableCommands: false');
     expect(nodeModalStateSource).toContain('data.setupMode !==');
     // The typed connection name rides the setup bootstrap request so the
     // one-time setup token can carry it into auto-registration naming.

@@ -28,6 +28,14 @@ An older watcher snapshot may never overwrite newer runtime and durable token
 state; `TestConfigWatcher_ReloadAPITokensDoesNotOverwriteConcurrentMutation`
 is the required concurrency proof.
 
+Pulse-minted Unified Agent credentials follow least authority at issuance.
+Implicit and ordinary monitoring installs receive `agent:report` and
+`agent:config:read`, never `agent:exec`. Execution scope is added only for an
+explicit command-capable installer choice. Local runtime authority remains an
+independent ceiling: a credential with `agent:exec` cannot promote a service
+installed as `monitoring-only`, and Agent Doctor must warn when such excess
+scope remains attached to that runtime.
+
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,
 token-management visibility, and privacy controls to operators. Customer-facing

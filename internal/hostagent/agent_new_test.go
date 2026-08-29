@@ -585,11 +585,12 @@ func TestAgentApplyRemoteConfigDoesNotLogUnchangedSettings(t *testing.T) {
 			ReportIP:       "192.0.2.20",
 			DisableCeph:    true,
 		},
-		interval:            30 * time.Second,
-		reportIP:            "192.0.2.20",
-		remoteConfigChanged: make(chan struct{}, 1),
-		logger:              logger,
-		commandClient:       commandClient,
+		interval:                30 * time.Second,
+		reportIP:                "192.0.2.20",
+		remoteConfigChanged:     make(chan struct{}, 1),
+		logger:                  logger,
+		commandClient:           commandClient,
+		commandAuthorityProfile: CommandAuthorityCommandCapable,
 	}
 	settings := map[string]interface{}{
 		"interval":     "30s",
@@ -607,6 +608,35 @@ func TestAgentApplyRemoteConfigDoesNotLogUnchangedSettings(t *testing.T) {
 	case <-agent.remoteConfigChanged:
 		t.Fatal("unchanged interval signaled a report-loop reset")
 	default:
+	}
+}
+
+func TestAgentApplyRemoteConfigCannotPromoteMonitoringOnlyRuntime(t *testing.T) {
+	var logs bytes.Buffer
+	desiredCommands := true
+	prior := &agentshost.ConfigFingerprint{Version: "host-agent-config/v1", Hash: "sha256:monitoring-only"}
+	agent := &Agent{
+		cfg: Config{
+			AppliedConfig: prior,
+		},
+		logger:                  zerolog.New(&logs).Level(zerolog.InfoLevel),
+		newCommandClient:        NewCommandClient,
+		commandAuthorityProfile: CommandAuthorityMonitoringOnly,
+	}
+
+	agent.ApplyRemoteConfig(nil, &desiredCommands)
+
+	if agent.cfg.EnableCommands {
+		t.Fatal("monitoring-only runtime accepted remote command promotion")
+	}
+	if agent.commandClient != nil {
+		t.Fatal("monitoring-only runtime created a command client")
+	}
+	if agent.cfg.AppliedConfig == nil || agent.cfg.AppliedConfig.Hash != prior.Hash {
+		t.Fatalf("rejected command promotion advanced applied fingerprint: %+v", agent.cfg.AppliedConfig)
+	}
+	if !strings.Contains(logs.String(), "was not provisioned with command authority") {
+		t.Fatalf("rejected command promotion omitted actionable warning: %s", logs.String())
 	}
 }
 

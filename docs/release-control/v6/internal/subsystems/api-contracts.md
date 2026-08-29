@@ -159,6 +159,14 @@ Proxmox installer generation. When true, the returned command uses insecure
 TLS for the installer download and passes `--insecure` to the agent; omission
 or false preserves certificate verification. The server, not the browser,
 continues to mint and quote the enrollment token.
+Install-command credentials are monitoring-only unless the request explicitly
+selects command execution. Monitoring credentials carry report and config-read
+scope without `agent:exec`; explicit command-capable credentials add
+`agent:exec`. Hosted PVE, PBS, and PMG commands do not infer execution authority
+from the target platform. Agent Doctor exposes the local command-authority
+profile and the server-derived credential execution scope as separate fields,
+and reports an over-scoped monitoring credential rather than hiding it behind
+the current command-enabled boolean.
 
 ## Canonical Files
 

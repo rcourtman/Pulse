@@ -161,6 +161,28 @@ describe('Agent Doctor model', () => {
     expect(report).toContain('Privilege least privilege (pulse-agent) · SMART helper active');
   });
 
+  it('shows local command authority separately from credential execution authority', () => {
+    const connection = connectionFixture();
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          privilege: {
+            runningAsRoot: true,
+            commandAuthority: 'monitoring-only',
+            credentialKnown: true,
+            credentialExec: true,
+          },
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target.privilegeLabel).toBe('root · commands monitoring-only · credential grants exec');
+  });
+
   it('turns a missing credential into a token-gated authentication repair', () => {
     const connection = connectionFixture({
       agentUpdateAvailable: false,

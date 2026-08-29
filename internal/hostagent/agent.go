@@ -62,7 +62,8 @@ type Config struct {
 	ProxmoxType   string // "pve", "pbs", or "" for auto-detect
 
 	// Security options
-	EnableCommands bool // If true, enables the command execution feature (AI auto-fix)
+	EnableCommands          bool                    // If true, enables the command execution feature (AI auto-fix)
+	CommandAuthorityProfile CommandAuthorityProfile // Immutable local ceiling; empty preserves legacy update continuity.
 
 	// Enrollment
 	Enroll bool // If true, exchange bootstrap token for runtime token on startup
@@ -172,15 +173,20 @@ type Agent struct {
 	commandClientMu        sync.Mutex
 	commandClientRunCancel context.CancelFunc
 	commandClientParentCtx context.Context
-	collector              SystemCollector
-	newCommandClient       func(Config, string, string, string, string) *CommandClient
-	runCommandClient       func(*CommandClient, context.Context) error
-	packageUpdates         *packageUpdateManager
-	storageCleanup         *storageCleanupManager
-	customSensors          *customSensorRuntime
-	availability           *availabilityProbeModule
-	reportStreamID         string
-	reportSequence         atomic.Uint64
+	// commandAuthorityProfile is the immutable local install-time ceiling for
+	// this process. Remote configuration may disable and later re-enable a
+	// command-capable or legacy install, but it cannot promote monitoring-only.
+	commandAuthorityProfile     CommandAuthorityProfile
+	commandAuthorityWarningSeen bool
+	collector                   SystemCollector
+	newCommandClient            func(Config, string, string, string, string) *CommandClient
+	runCommandClient            func(*CommandClient, context.Context) error
+	packageUpdates              *packageUpdateManager
+	storageCleanup              *storageCleanupManager
+	customSensors               *customSensorRuntime
+	availability                *availabilityProbeModule
+	reportStreamID              string
+	reportSequence              atomic.Uint64
 	// canonicalIDWarned holds the last server-acknowledged agent ID a
 	// mismatch warning was emitted for, so the warning fires once per
 	// resolved identity instead of on every report cycle. Only the
@@ -216,6 +222,15 @@ func (e *reportHTTPStatusError) Error() string {
 
 // New constructs a fully initialised runtime-side Unified Agent.
 func New(cfg Config) (*Agent, error) {
+	commandAuthorityProfile, err := NormalizeCommandAuthorityProfile(string(cfg.CommandAuthorityProfile))
+	if err != nil {
+		return nil, err
+	}
+	cfg.CommandAuthorityProfile = commandAuthorityProfile
+	if effectiveCommands, accepted := ResolveCommandAuthority(commandAuthorityProfile, cfg.EnableCommands); !accepted {
+		cfg.EnableCommands = effectiveCommands
+	}
+
 	if cfg.Interval <= 0 {
 		cfg.Interval = defaultInterval
 	}
@@ -247,7 +262,6 @@ func New(cfg Config) (*Agent, error) {
 	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
-	var err error
 	pulseURL, err = normalizePulseURL(pulseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
@@ -395,36 +409,37 @@ func New(cfg Config) (*Agent, error) {
 	cfg.storageCleanup = storageCleanup
 
 	agent := &Agent{
-		cfg:                 cfg,
-		logger:              logger,
-		httpClient:          client,
-		hostInfo:            info,
-		hostname:            hostname,
-		displayName:         displayName,
-		platform:            platform,
-		osName:              osName,
-		osVersion:           osVersion,
-		kernelVersion:       kernelVersion,
-		architecture:        arch,
-		machineID:           machineID,
-		agentID:             agentID,
-		agentVersion:        agentVersion,
-		updatedFrom:         updatedFrom,
-		reportIP:            cfg.ReportIP,
-		stateDir:            cfg.StateDir,
-		interval:            cfg.Interval,
-		trimmedPulseURL:     pulseURL,
-		remoteConfigChanged: make(chan struct{}, 1),
-		reportBuffer:        utils.New[agentshost.Report](bufferCapacity),
-		observerReporters:   observerReporters,
-		collector:           collector,
-		newCommandClient:    newCommandClientFn,
-		runCommandClient:    runCommandClientFn,
-		packageUpdates:      packageUpdates,
-		storageCleanup:      storageCleanup,
-		customSensors:       newCustomSensorRuntime(customSensorDefinitions, cfg.customSensorExecute),
-		availability:        newAvailabilityProbeModule(logger, cfg.AvailabilityTargets),
-		reportStreamID:      reportStreamID,
+		cfg:                     cfg,
+		logger:                  logger,
+		httpClient:              client,
+		hostInfo:                info,
+		hostname:                hostname,
+		displayName:             displayName,
+		platform:                platform,
+		osName:                  osName,
+		osVersion:               osVersion,
+		kernelVersion:           kernelVersion,
+		architecture:            arch,
+		machineID:               machineID,
+		agentID:                 agentID,
+		agentVersion:            agentVersion,
+		updatedFrom:             updatedFrom,
+		reportIP:                cfg.ReportIP,
+		stateDir:                cfg.StateDir,
+		interval:                cfg.Interval,
+		trimmedPulseURL:         pulseURL,
+		remoteConfigChanged:     make(chan struct{}, 1),
+		reportBuffer:            utils.New[agentshost.Report](bufferCapacity),
+		observerReporters:       observerReporters,
+		collector:               collector,
+		newCommandClient:        newCommandClientFn,
+		runCommandClient:        runCommandClientFn,
+		commandAuthorityProfile: commandAuthorityProfile,
+		packageUpdates:          packageUpdates,
+		storageCleanup:          storageCleanup,
+		customSensors:           newCustomSensorRuntime(customSensorDefinitions, cfg.customSensorExecute),
+		availability:            newAvailabilityProbeModule(logger, cfg.AvailabilityTargets),
+		reportStreamID:          reportStreamID,
 	}
 	if len(customSensorDefinitions) > 0 {
 		logger.Info().
@@ -1214,7 +1229,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			AppliedConfig:           runtimeConfig.appliedConfig,
 			Update:                  a.currentUpdateStatus(),
 			Modules:                 moduleStatus,
-			Privilege:               collectPrivilegeStatus(),
+			Privilege:               collectPrivilegeStatus(a.commandAuthorityProfile),
 		},
 		Host: agentshost.HostInfo{
 			ID:             a.machineID,
@@ -1436,8 +1451,9 @@ func (a *Agent) persistAgentID(agentID string) {
 // ApplyRemoteConfig applies server-side configuration overrides that can be
 // reconciled safely without restarting the agent process.
 func (a *Agent) ApplyRemoteConfig(settings map[string]interface{}, commandsEnabled *bool) {
+	commandAuthorityApplied := true
 	if commandsEnabled != nil {
-		a.applyRemoteConfig(*commandsEnabled)
+		_, commandAuthorityApplied = a.applyRemoteConfig(*commandsEnabled)
 	}
 	if interval, ok := remoteDurationSetting(settings, "interval"); ok && interval > 0 {
 		intervalChanged := false
@@ -1480,7 +1496,7 @@ func (a *Agent) ApplyRemoteConfig(settings map[string]interface{}, commandsEnabl
 		}
 	}
 	a.applyRemoteAvailabilityTargets(settings)
-	if remoteConfigAppliedWithoutRestart(settings) && remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
+	if commandAuthorityApplied && remoteConfigAppliedWithoutRestart(settings) && remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
 		metadata, err := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)
 		if err != nil {
 			a.logger.Warn().Err(err).Msg("Failed to derive refreshed managed configuration fingerprint")
@@ -1521,31 +1537,44 @@ func remoteConfigAppliedWithoutRestart(settings map[string]interface{}) bool {
 	return true
 }
 
-// applyRemoteConfig applies server-side command execution overrides.
-func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
+// applyRemoteConfig applies server-side command execution overrides without
+// exceeding the immutable authority provisioned when this process started.
+// It returns the effective state and whether the requested state was accepted.
+func (a *Agent) applyRemoteConfig(commandsEnabled bool) (bool, bool) {
 	var (
-		clientToStart *CommandClient
-		commandCfg    Config
-		shouldStop    bool
+		clientToStart                     *CommandClient
+		commandCfg                        Config
+		shouldStop                        bool
+		logRejected                       bool
+		effectiveState, authorityAccepted = ResolveCommandAuthority(a.commandAuthorityProfile, commandsEnabled)
 	)
 
 	a.configMu.Lock()
-	a.cfg.EnableCommands = commandsEnabled
+	if !authorityAccepted && !a.commandAuthorityWarningSeen {
+		a.commandAuthorityWarningSeen = true
+		logRejected = true
+	}
+	if !commandsEnabled {
+		a.commandAuthorityWarningSeen = false
+	}
+	a.cfg.EnableCommands = effectiveState
 	commandCfg = a.cfg
 	a.configMu.Unlock()
 
 	a.commandClientMu.Lock()
 	currentlyEnabled := a.commandClient != nil
 	switch {
-	case commandsEnabled && !currentlyEnabled:
+	case effectiveState && !currentlyEnabled:
 		clientToStart = a.newCommandClient(commandCfg, a.agentID, a.hostname, a.platform, a.agentVersion)
 		a.commandClient = clientToStart
-	case !commandsEnabled && currentlyEnabled:
+	case !effectiveState && currentlyEnabled:
 		shouldStop = true
 	}
 	a.commandClientMu.Unlock()
 
-	if clientToStart != nil {
+	if logRejected {
+		a.logger.Warn().Msg("Ignored remote command enablement because this monitoring-only runtime was not provisioned with command authority; reinstall with an explicit command profile")
+	} else if clientToStart != nil {
 		if a.startCommandClient(clientToStart) {
 			a.logger.Info().Msg("Server enabled command execution - starting command client")
 		} else {
@@ -1555,6 +1584,8 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
 		a.stopCommandClient(true)
 	}
+
+	return effectiveState, authorityAccepted
 }
 
 func remoteBoolSetting(settings map[string]interface{}, key string) (bool, bool) {

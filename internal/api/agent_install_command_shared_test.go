@@ -48,8 +48,36 @@ func TestAgentInstallCommandCarriesCommandPolicyIntent(t *testing.T) {
 	if got := cfg.APITokens[0].Metadata[agenttokens.CommandPolicyIntentMetadataKey]; got != agenttokens.CommandPolicyIntentEnabled {
 		t.Fatalf("command policy intent = %q, want enabled", got)
 	}
+	if !cfg.APITokens[0].HasScope(config.ScopeAgentExec) {
+		t.Fatalf("explicit command install token is missing %s: %v", config.ScopeAgentExec, cfg.APITokens[0].Scopes)
+	}
 	if !strings.Contains(response.Command, "--enable-commands") {
 		t.Fatalf("commands-enabled install omitted flag: %s", response.Command)
+	}
+}
+
+func TestAgentInstallCommandDefaultsToMonitoringOnlyAuthority(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
+	handler := newTestConfigHandlers(t, cfg)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/agent-install-command",
+		bytes.NewBufferString(`{"type":"pve"}`),
+	)
+	req.Host = "pulse.example:7655"
+	rec := httptest.NewRecorder()
+	handler.HandleAgentInstallCommand(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("install command status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("install command minted %d tokens, want 1", len(cfg.APITokens))
+	}
+	if cfg.APITokens[0].HasScope(config.ScopeAgentExec) {
+		t.Fatalf("monitoring-only install token includes %s: %v", config.ScopeAgentExec, cfg.APITokens[0].Scopes)
+	}
+	if got := cfg.APITokens[0].Metadata[agenttokens.CommandPolicyIntentMetadataKey]; got != agenttokens.CommandPolicyIntentDisabled {
+		t.Fatalf("command policy intent = %q, want disabled", got)
 	}
 }
 

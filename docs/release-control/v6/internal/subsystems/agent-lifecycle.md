@@ -34,6 +34,17 @@ management, and fleet control surfaces. Pulse v6 has one host-installed
 infrastructure agent binary, `pulse-agent`; host, Docker / Podman,
 Kubernetes, Proxmox-local, and other node-local telemetry are modules inside
 that binary, not separate customer-facing agent products.
+Fresh installs carry an explicit local command-authority profile. The closed
+values are `monitoring-only`, `command-capable`, and `legacy`. A
+`monitoring-only` service may accept remote configuration that keeps commands
+off, but remote configuration must never promote it to command-capable or
+advance the accepted configuration fingerprint for that rejected promotion.
+An explicit command-enabled install is `command-capable`; an already-installed
+service with no marker remains `legacy` during the compatibility window so an
+upgrade does not silently revoke an existing operator choice. Installers must
+persist the marker in the service command line and recover it during updates.
+The reported privilege projection carries this local ceiling independently of
+the current `commandsEnabled` state and the server-issued credential scope.
 The host telemetry module owns lossless physical-disk report assembly. Linux
 smartctl permission/open failures are not standby; only the explicit
 `-n standby,3` exit contract may mark a device sleeping. Identity-only rows

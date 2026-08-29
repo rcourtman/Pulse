@@ -32,6 +32,29 @@ func TestIssueAndPersistInstallToken(t *testing.T) {
 	}
 }
 
+func TestProxmoxScopesRequireExplicitCommandAuthority(t *testing.T) {
+	monitoringScopes := ProxmoxScopes(false)
+	if (&config.APITokenRecord{Scopes: monitoringScopes}).HasScope(config.ScopeAgentExec) {
+		t.Fatalf("monitoring-only Proxmox scopes include %s: %v", config.ScopeAgentExec, monitoringScopes)
+	}
+
+	commandScopes := ProxmoxScopes(true)
+	if !(&config.APITokenRecord{Scopes: commandScopes}).HasScope(config.ScopeAgentExec) {
+		t.Fatalf("explicit command profile is missing %s: %v", config.ScopeAgentExec, commandScopes)
+	}
+}
+
+func TestIssueAndPersistDefaultsToMonitoringOnlyScopes(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, record, err := IssueAndPersist(cfg, nil, IssueOptions{TokenName: "default-agent"})
+	if err != nil {
+		t.Fatalf("IssueAndPersist: %v", err)
+	}
+	if record.HasScope(config.ScopeAgentExec) {
+		t.Fatalf("implicit install scopes include %s: %v", config.ScopeAgentExec, record.Scopes)
+	}
+}
+
 func TestIssueAndPersistRollsBackCompleteInventoryWhenPersistenceFails(t *testing.T) {
 	now := time.Now().UTC()
 	tokens := []config.APITokenRecord{

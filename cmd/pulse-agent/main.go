@@ -278,18 +278,27 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				Str("component", "remote_config").
 				Str("action", "fetch_succeeded").
 				Msg("Successfully fetched remote configuration")
+			commandAuthorityApplied := true
 			if commandsEnabled != nil {
-				cfg.EnableCommands = *commandsEnabled
+				commandAuthorityApplied = applyInitialRemoteCommandAuthority(&cfg, commandsEnabled)
 				logger.Info().
 					Str("component", "remote_config").
 					Str("action", "apply_enable_commands").
+					Str("local_authority", string(cfg.CommandAuthorityProfile)).
+					Bool("accepted", commandAuthorityApplied).
 					Bool("enabled", cfg.EnableCommands).
 					Msg("Applied remote command execution setting")
+				if !commandAuthorityApplied {
+					logger.Warn().
+						Str("component", "remote_config").
+						Str("action", "reject_enable_commands").
+						Msg("Ignored remote command enablement because the local runtime is monitoring-only")
+				}
 			}
 			if len(settings) > 0 {
 				applyRemoteSettings(&cfg, settings, &logger)
 			}
-			if remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
+			if commandAuthorityApplied && remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
 				metadata, metadataErr := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)
 				if metadataErr != nil {
 					logger.Warn().Err(metadataErr).Msg("Failed to derive applied managed configuration fingerprint")
@@ -397,34 +406,35 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 8. Start Host Agent (if enabled)
 	if cfg.EnableHost {
 		hostCfg := hostagent.Config{
-			PulseURL:            cfg.PulseURL,
-			APIToken:            cfg.APIToken,
-			Interval:            cfg.Interval,
-			HostnameOverride:    cfg.HostnameOverride,
-			AgentID:             cfg.AgentID,
-			AgentType:           "unified",
-			AgentVersion:        Version,
-			Tags:                cfg.Tags,
-			InsecureSkipVerify:  cfg.InsecureSkipVerify,
-			CACertPath:          cfg.CACertPath,
-			ServerFingerprint:   cfg.ServerFingerprint,
-			CustomSensorsFile:   cfg.CustomSensorsFile,
-			DeploySSHUser:       cfg.DeploySSHUser,
-			LogLevel:            cfg.LogLevel,
-			Logger:              &logger,
-			EnableProxmox:       cfg.EnableProxmox,
-			ProxmoxType:         cfg.ProxmoxType,
-			EnableCommands:      cfg.EnableCommands,
-			Enroll:              cfg.Enroll,
-			DiskExclude:         cfg.DiskExclude,
-			DiskInclude:         cfg.DiskInclude,
-			StateDir:            cfg.StateDir,
-			ReportIP:            cfg.ReportIP,
-			DisableCeph:         cfg.DisableCeph,
-			AvailabilityTargets: cfg.AvailabilityTargets,
-			AppliedConfig:       cfg.AppliedConfig,
-			ModuleStatus:        runtimeStatus.moduleStatuses,
-			Observers:           hostObserverTargets(cfg.Observers),
+			PulseURL:                cfg.PulseURL,
+			APIToken:                cfg.APIToken,
+			Interval:                cfg.Interval,
+			HostnameOverride:        cfg.HostnameOverride,
+			AgentID:                 cfg.AgentID,
+			AgentType:               "unified",
+			AgentVersion:            Version,
+			Tags:                    cfg.Tags,
+			InsecureSkipVerify:      cfg.InsecureSkipVerify,
+			CACertPath:              cfg.CACertPath,
+			ServerFingerprint:       cfg.ServerFingerprint,
+			CustomSensorsFile:       cfg.CustomSensorsFile,
+			DeploySSHUser:           cfg.DeploySSHUser,
+			LogLevel:                cfg.LogLevel,
+			Logger:                  &logger,
+			EnableProxmox:           cfg.EnableProxmox,
+			ProxmoxType:             cfg.ProxmoxType,
+			EnableCommands:          cfg.EnableCommands,
+			CommandAuthorityProfile: cfg.CommandAuthorityProfile,
+			Enroll:                  cfg.Enroll,
+			DiskExclude:             cfg.DiskExclude,
+			DiskInclude:             cfg.DiskInclude,
+			StateDir:                cfg.StateDir,
+			ReportIP:                cfg.ReportIP,
+			DisableCeph:             cfg.DisableCeph,
+			AvailabilityTargets:     cfg.AvailabilityTargets,
+			AppliedConfig:           cfg.AppliedConfig,
+			ModuleStatus:            runtimeStatus.moduleStatuses,
+			Observers:               hostObserverTargets(cfg.Observers),
 
 			DockerContainerUpdater:           dockerUpdaterBridge,
 			DockerContainerLifecycleOperator: dockerUpdaterBridge,
@@ -677,6 +687,15 @@ func writeAgentIDFile(path, id string) error {
 	return nil
 }
 
+func applyInitialRemoteCommandAuthority(cfg *Config, desired *bool) bool {
+	if cfg == nil || desired == nil {
+		return true
+	}
+	effective, accepted := hostagent.ResolveCommandAuthority(cfg.CommandAuthorityProfile, *desired)
+	cfg.EnableCommands = effective
+	return accepted
+}
+
 func runRemoteConfigLoop(ctx context.Context, client *remoteconfig.Client, appliers []RemoteConfigApplier, logger *zerolog.Logger) {
 	if client == nil || len(appliers) == 0 {
 		return
@@ -850,7 +869,8 @@ type Config struct {
 	DockerRuntime              string // Force Docker / Podman runtime: docker, podman, or auto
 
 	// Security
-	EnableCommands bool // Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)
+	EnableCommands          bool                              // Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)
+	CommandAuthorityProfile hostagent.CommandAuthorityProfile // Immutable local authority ceiling; empty/unmarked is legacy-compatible.
 
 	// Enrollment
 	Enroll bool // Exchange bootstrap token for runtime token on startup
@@ -980,6 +1000,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envDisableRegistryCredentials := strings.TrimSpace(getenv("PULSE_DISABLE_REGISTRY_CREDENTIALS"))
 	envDockerRuntime := strings.TrimSpace(getenv("PULSE_DOCKER_RUNTIME"))
 	envEnableCommands := strings.TrimSpace(getenv("PULSE_ENABLE_COMMANDS"))
+	envCommandAuthority := strings.TrimSpace(getenv("PULSE_COMMAND_AUTHORITY"))
 	envDisableCommands := strings.TrimSpace(getenv("PULSE_DISABLE_COMMANDS")) // deprecated
 	envHealthAddr := strings.TrimSpace(getenv("PULSE_HEALTH_ADDR"))
 	envKubeconfig := strings.TrimSpace(getenv("PULSE_KUBECONFIG"))
@@ -1069,6 +1090,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	disableRegistryCredentialsFlag := fs.Bool("disable-registry-credentials", utils.ParseBool(envDisableRegistryCredentials), "Do not read host Docker credentials (config.json / credential helpers) for registry update checks")
 	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Docker / Podman runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)")
+	commandAuthorityFlag := fs.String("command-authority", envCommandAuthority, "Local command authority: monitoring-only, command-capable, or legacy")
 	disableCommandsFlag := fs.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
 	enrollFlag := fs.Bool("enroll", false, "Exchange bootstrap token for runtime token (used by deploy wizard)")
 	healthAddrFlag := fs.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
@@ -1167,6 +1189,18 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	enableCommands := resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands)
+	commandAuthorityRaw := strings.TrimSpace(*commandAuthorityFlag)
+	if commandAuthorityRaw == "" && enableCommands {
+		commandAuthorityRaw = string(hostagent.CommandAuthorityCommandCapable)
+	}
+	commandAuthorityProfile, err := hostagent.NormalizeCommandAuthorityProfile(commandAuthorityRaw)
+	if err != nil {
+		return Config{}, err
+	}
+	if commandAuthorityProfile == hostagent.CommandAuthorityMonitoringOnly && enableCommands {
+		return Config{}, fmt.Errorf("--enable-commands conflicts with --command-authority monitoring-only")
+	}
 
 	tags := gatherTags(envTags, tagFlags)
 	kubeIncludeNamespaces := gatherCSV(envKubeIncludeNamespaces, kubeIncludeNamespaceFlags)
@@ -1223,7 +1257,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		DisableDockerUpdateChecks:  *disableDockerUpdateChecksFlag,
 		DisableRegistryCredentials: *disableRegistryCredentialsFlag,
 		DockerRuntime:              dockerRuntime,
-		EnableCommands:             resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
+		EnableCommands:             enableCommands,
+		CommandAuthorityProfile:    commandAuthorityProfile,
 		Enroll:                     *enrollFlag,
 		HealthAddr:                 strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:             strings.TrimSpace(*kubeconfigFlag),

@@ -16,10 +16,11 @@ func TestAgent_ApplyRemoteConfig_Direct(t *testing.T) {
 	mc := &mockCollector{}
 	logger := zerolog.Nop()
 	a, _ := New(Config{
-		APIToken:  "token",
-		PulseURL:  "https://pulse",
-		Collector: mc,
-		Logger:    &logger,
+		APIToken:       "token",
+		PulseURL:       "https://pulse",
+		EnableCommands: true,
+		Collector:      mc,
+		Logger:         &logger,
 	})
 	if a != nil {
 		a.applyRemoteConfig(true)
@@ -127,10 +128,11 @@ func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.
 	mc := &mockCollector{}
 	logger := zerolog.Nop()
 	a, _ := New(Config{
-		APIToken:  "token",
-		PulseURL:  "https://pulse",
-		Collector: mc,
-		Logger:    &logger,
+		APIToken:       "token",
+		PulseURL:       "https://pulse",
+		EnableCommands: true,
+		Collector:      mc,
+		Logger:         &logger,
 		runCommandClientFn: func(_ *CommandClient, ctx context.Context) error {
 			started <- struct{}{}
 			<-ctx.Done()
