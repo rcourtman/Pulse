@@ -345,7 +345,7 @@ func mergeConnectionSystemMembers(
 	if strings.TrimSpace(existing.Endpoint) == "" {
 		existing.Endpoint = candidate.Endpoint
 	}
-	existing.State = moreSevereConnectionSystemMemberState(existing.State, candidate.State)
+	existing.State = mergedConnectionSystemMemberState(existing, candidate)
 	if existing.LastSeen == nil ||
 		(candidate.LastSeen != nil && candidate.LastSeen.After(*existing.LastSeen)) {
 		existing.LastSeen = candidate.LastSeen
@@ -358,6 +358,37 @@ func mergeConnectionSystemMembers(
 	}
 	existing.HostAliases = appendNormalizedHosts(existing.HostAliases, candidate.HostAliases...)
 	return existing
+}
+
+// mergedConnectionSystemMemberState resolves the state when the same machine
+// is projected as a member by more than one observation plane (the Proxmox
+// node inventory and the unified resource registry). The plane that has seen
+// the machine more recently decides liveness; severity decides only when
+// recency cannot (neither side carries evidence, or the timestamps tie).
+// Merged LastSeen already keeps the newest timestamp, so this also guarantees
+// the rendered badge and the rendered "Ns ago" come from the same plane — a
+// lapsed projection, such as an orphaned registry entry left behind by a
+// remove/re-enroll cycle, must not overrule a plane that heard from the
+// machine seconds ago. Pairing worst state with newest timestamp rendered
+// rows as "Stale · 5s ago".
+func mergedConnectionSystemMemberState(
+	existing ConnectionSystemMember,
+	candidate ConnectionSystemMember,
+) ConnectionState {
+	switch {
+	case existing.LastSeen == nil && candidate.LastSeen == nil:
+		return moreSevereConnectionSystemMemberState(existing.State, candidate.State)
+	case existing.LastSeen == nil:
+		return candidate.State
+	case candidate.LastSeen == nil:
+		return existing.State
+	case candidate.LastSeen.After(*existing.LastSeen):
+		return candidate.State
+	case existing.LastSeen.After(*candidate.LastSeen):
+		return existing.State
+	default:
+		return moreSevereConnectionSystemMemberState(existing.State, candidate.State)
+	}
 }
 
 func moreSevereConnectionSystemMemberState(

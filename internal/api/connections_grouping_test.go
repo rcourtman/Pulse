@@ -337,6 +337,59 @@ func TestMergeConnectionSystemMembersKeepsMostSevereState(t *testing.T) {
 	}
 }
 
+// A lapsed projection (orphaned unified-resource entry after a
+// remove/re-enroll cycle) must not pair its severity with the live plane's
+// fresh heartbeat: that rendered members as "Stale · 5s ago". The plane with
+// the newer LastSeen decides the state; severity still wins when neither side
+// carries evidence or the timestamps tie. Refs #1728.
+func TestMergeConnectionSystemMembersFresherEvidenceDecidesState(t *testing.T) {
+	now := time.Now().UTC()
+	fresh := now.Add(-5 * time.Second)
+	lapsed := now.Add(-3 * 24 * time.Hour)
+
+	liveNode := ConnectionSystemMember{
+		ID:       "node-minipc",
+		Name:     "minipc",
+		State:    ConnectionStateActive,
+		LastSeen: &fresh,
+		Primary:  true,
+	}
+	orphanResource := ConnectionSystemMember{
+		ID:       "resource-node-minipc",
+		Name:     "minipc",
+		State:    ConnectionStateStale,
+		LastSeen: &lapsed,
+	}
+
+	for name, merged := range map[string]ConnectionSystemMember{
+		"live-first":   mergeConnectionSystemMembers(liveNode, orphanResource),
+		"orphan-first": mergeConnectionSystemMembers(orphanResource, liveNode),
+	} {
+		if merged.State != ConnectionStateActive {
+			t.Fatalf("%s: merged state = %q, want %q", name, merged.State, ConnectionStateActive)
+		}
+		if merged.LastSeen == nil || !merged.LastSeen.Equal(fresh) {
+			t.Fatalf("%s: merged lastSeen = %v, want %v", name, merged.LastSeen, fresh)
+		}
+	}
+
+	// An evidence-bearing severe plane still wins over a plane that has no
+	// evidence at all, and over an equally recent healthy plane.
+	unreachable := ConnectionSystemMember{
+		Name:     "minipc",
+		State:    ConnectionStateUnreachable,
+		LastSeen: &lapsed,
+	}
+	noEvidence := ConnectionSystemMember{Name: "minipc", State: ConnectionStateActive}
+	if merged := mergeConnectionSystemMembers(noEvidence, unreachable); merged.State != ConnectionStateUnreachable {
+		t.Fatalf("no-evidence merge state = %q, want %q", merged.State, ConnectionStateUnreachable)
+	}
+	tied := ConnectionSystemMember{Name: "minipc", State: ConnectionStateActive, LastSeen: &lapsed}
+	if merged := mergeConnectionSystemMembers(tied, unreachable); merged.State != ConnectionStateUnreachable {
+		t.Fatalf("tied-recency merge state = %q, want %q", merged.State, ConnectionStateUnreachable)
+	}
+}
+
 func TestConnectionSystemMemberUsesDisplayNameWithoutChangingMemberKey(t *testing.T) {
 	resource := unified.Resource{
 		ID:     "resource-node",
