@@ -204,6 +204,7 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"macos data companion volume", "apfs", "/System/Volumes/Data", 245107195904, 213573853184, true},
 		{"macos preboot companion volume", "apfs", "/System/Volumes/Preboot", 245107195904, 213573853184, true},
 		{"macos simulator runtime volume", "apfs", "/Library/Developer/CoreSimulator/Volumes/iOS_23E254a", 18058575872, 17593331712, true},
+		{"macos app translocation volume", "apfs", "/private/var/folders/xy/random/T/AppTranslocation/2A9C/d/Pulse.app", 245107195904, 221809991680, true},
 
 		// Regular filesystems that should NOT be skipped
 		{"ext4 root", "ext4", "/", 100 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, false},

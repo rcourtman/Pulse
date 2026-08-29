@@ -132,6 +132,52 @@ func TestDelayFiresWithPendingStartAndDipResets(t *testing.T) {
 	}
 }
 
+func TestCriticalCanBypassWarningStabilityDelay(t *testing.T) {
+	state := NewState()
+	rule := MetricRule{Trigger: 80, Clear: 75, DelaySeconds: 300, CriticalBypassesDelay: true}
+
+	events := state.ApplyMetric(signalAt(95, 0), rule)
+	if len(events) != 1 || events[0].Type != EventFired || events[0].Severity != SeverityCritical {
+		t.Fatalf("events = %+v, want immediate critical fire", events)
+	}
+}
+
+func TestCriticalDoesNotBypassExplicitIntent(t *testing.T) {
+	state := NewState()
+	rule := MetricRule{
+		Trigger: 80, Clear: 75, CriticalBypassesDelay: true,
+		Intent: &DiscreteIntent{Explicit: true, GraceSeconds: 300},
+	}
+
+	events := state.ApplyMetric(signalAt(95, 0), rule)
+	if len(events) != 1 || events[0].Type != EventPending {
+		t.Fatalf("events = %+v, want explicit intent to keep critical pending", events)
+	}
+}
+
+func TestMetricRecoveryRequiresContinuousHealthyWindow(t *testing.T) {
+	state := NewState()
+	rule := MetricRule{Trigger: 80, Clear: 75, RecoveryDelaySeconds: 120}
+	state.ApplyMetric(signalAt(90, 0), rule)
+
+	if events := state.ApplyMetric(signalAt(70, time.Minute), rule); len(events) != 0 {
+		t.Fatalf("first healthy observation emitted %+v", events)
+	}
+	if events := state.ApplyMetric(signalAt(78, 90*time.Second), rule); len(events) != 0 {
+		t.Fatalf("hysteresis-band interruption emitted %+v", events)
+	}
+	if events := state.ApplyMetric(signalAt(70, 2*time.Minute), rule); len(events) != 0 {
+		t.Fatalf("restarted healthy run emitted %+v", events)
+	}
+	if events := state.ApplyMetric(signalAt(70, 3*time.Minute+59*time.Second), rule); len(events) != 0 {
+		t.Fatalf("recovery fired before continuous window elapsed: %+v", events)
+	}
+	events := state.ApplyMetric(signalAt(70, 4*time.Minute), rule)
+	if len(events) != 1 || events[0].Type != EventResolved {
+		t.Fatalf("events = %+v, want recovery after continuous healthy window", events)
+	}
+}
+
 func TestClearFallsBackToTriggerWhenUnset(t *testing.T) {
 	state := NewState()
 	rule := MetricRule{Trigger: 80, Clear: 0}

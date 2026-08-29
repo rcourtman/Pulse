@@ -938,6 +938,32 @@ func TestGuestFilesystemThresholdOverrideOwnsMountEvaluation(t *testing.T) {
 	}
 }
 
+func TestGuestFilesystemEvidenceSuppressesDuplicateAggregateAlert(t *testing.T) {
+	m := newTestManager(t)
+	guestID := BuildGuestKey("pve1", "node1", 109)
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{Disk: &HysteresisThreshold{Trigger: 80, Clear: 75}}
+	m.mu.Unlock()
+
+	m.CheckGuest(models.VM{
+		ID: guestID, VMID: 109, Name: "pulse-dev", Node: "node1", Instance: "pve1", Status: "running",
+		Disk:  models.Disk{Usage: 96.5},
+		Disks: []models.Disk{{Mountpoint: "/", Device: "/dev/vda1", Usage: 96.9, Total: 100, Used: 97, Free: 3}},
+	}, "pve1")
+
+	aggregateID := canonicalMetricStateID(guestID, "disk")
+	filesystemID := canonicalMetricStateID(guestID+"-disk-dev-vda1", "disk")
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := testLookupActiveAlert(t, m, aggregateID); exists {
+		t.Fatalf("aggregate alert %q duplicated filesystem evidence", aggregateID)
+	}
+	if _, exists := testLookupActiveAlert(t, m, filesystemID); !exists {
+		t.Fatalf("actionable filesystem alert %q was not created", filesystemID)
+	}
+}
+
 // Regression: checkMetric stores canonical-identity alerts under the
 // canonical state key, so hysteresis resolution must not remove only the
 // unregistered legacy "<resourceID>-<metric>" ID.

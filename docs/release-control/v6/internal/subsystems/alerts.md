@@ -2390,3 +2390,28 @@ against a managed local backend. The browser phase must exercise active-alert
 snooze, delivery diagnosis, restart persistence, unsnooze, incident evidence,
 history migration, virtualization, and clear tombstones without replacing the
 backend APIs with route mocks.
+
+### Noisy gauges use one trust-stable lifecycle
+
+Memory, temperature, and disk-temperature warnings use one continuous
+stability window on both lifecycle edges: an unchanged factory configuration
+requires five minutes above the trigger to open and five minutes at or below
+the recovery threshold to close. A return to the hysteresis band or a renewed
+breach resets the recovery run. Critical metric evidence may bypass only this
+factory or legacy activation delay; an explicit alert-intent policy remains
+authoritative. A metric-specific delay, including zero, remains the simple
+operator override and becomes the matching recovery window for these gauges.
+
+Recovery timing uses the reducer's monotonic runtime evidence when supplied,
+so wall-clock changes cannot prematurely close an incident. Missing or unknown
+observations do not constitute healthy evidence and therefore cannot advance a
+recovery run. Restarts conservatively restart an in-progress recovery window
+rather than manufacturing elapsed health.
+
+For guest disk capacity, valid per-filesystem evidence owns the alert identity
+and suppresses the less actionable guest-wide aggregate. This guarantees one
+incident for one full filesystem while retaining the aggregate only when no
+usable filesystem evidence exists. OS-managed transient mounts, including
+macOS Gatekeeper App Translocation volumes, are removed at the shared
+filesystem collection boundary before they can enter capacity inventory or
+alert evaluation.

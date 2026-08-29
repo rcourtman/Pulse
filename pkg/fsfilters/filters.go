@@ -129,6 +129,13 @@ var containerPathPrefixes = []string{
 	"/mnt/.ix-apps/docker/", // TrueNAS SCALE Docker overlay mounts
 }
 
+// transientMountPatterns identify OS-managed mounts whose lifetime follows an
+// application launch rather than operator-managed storage. They must not
+// participate in capacity inventory or alerting.
+var transientMountPatterns = []string{
+	"/AppTranslocation/", // macOS Gatekeeper translocated application image
+}
+
 // ShouldSkipFilesystem determines if a filesystem should be excluded from disk
 // usage aggregation. It checks for read-only filesystems, virtual/pseudo filesystems,
 // network mounts, and special system mountpoints. Returns skip=true if the filesystem
@@ -166,6 +173,13 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	// Check specific special mountpoints
 	if specialMountpoints[mountpoint] {
 		reasons = append(reasons, "special-mountpoint")
+	}
+
+	for _, pattern := range transientMountPatterns {
+		if strings.Contains(mountpoint, pattern) {
+			reasons = append(reasons, "transient-mountpoint")
+			break
+		}
 	}
 
 	// Windows System Reserved partition

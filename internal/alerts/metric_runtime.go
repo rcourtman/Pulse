@@ -11,6 +11,44 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type metricStabilityPolicy struct {
+	CriticalBypassesDelay bool
+	RecoveryDelaySeconds  int
+}
+
+const (
+	defaultLegacyMetricDelaySeconds   = 5
+	defaultNoisyGaugeStabilitySeconds = 5 * 60
+)
+
+func defaultMetricStabilityDelay(metricType string) int {
+	switch strings.ToLower(strings.TrimSpace(metricType)) {
+	case "memory", "temperature", "disktemperature", "disk_temperature":
+		return defaultNoisyGaugeStabilitySeconds
+	default:
+		return 0
+	}
+}
+
+// metricStabilityFor keeps noisy gauges trustworthy without adding a second
+// operator-facing policy surface. The configured alert delay is the one
+// stability window on both lifecycle edges; critical evidence bypasses only
+// the legacy/default activation delay, never an explicit intent policy.
+func metricStabilityFor(metricType string, delaySeconds int) metricStabilityPolicy {
+	if delaySeconds <= 0 {
+		return metricStabilityPolicy{}
+	}
+	switch strings.ToLower(strings.TrimSpace(metricType)) {
+	case "memory", "temperature", "disktemperature", "disk_temperature":
+		return metricStabilityPolicy{
+			CriticalBypassesDelay: true,
+			RecoveryDelaySeconds:  delaySeconds,
+		}
+	default:
+		return metricStabilityPolicy{}
+	}
+}
+
 func isMetricThresholdAlertType(metricType string) bool {
 	switch metricType {
 	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "usage":
@@ -66,21 +104,56 @@ func (m *Manager) getLegacyTimeThresholdWithSource(resourceType, metricType stri
 	if delay, ok := m.getMetricTimeThreshold(resourceType, metricType); ok {
 		return delay, "legacy.metricTimeThresholds." + strings.ToLower(strings.TrimSpace(resourceType)) + "." + strings.ToLower(strings.TrimSpace(metricType)), true
 	}
-
-	base, hasTypeSpecific := m.getBaseTimeThreshold(resourceType)
-
-	if !hasTypeSpecific {
-		if delay, ok := m.getGlobalMetricTimeThreshold(metricType); ok {
-			return delay, "legacy.metricTimeThresholds.all." + strings.ToLower(strings.TrimSpace(metricType)), true
-		}
+	if delay, ok := m.getGlobalExactMetricTimeThreshold(metricType); ok {
+		return delay, "legacy.metricTimeThresholds.all." + strings.ToLower(strings.TrimSpace(metricType)), true
 	}
+	base, hasTypeSpecific := m.getBaseTimeThreshold(resourceType)
 	if hasTypeSpecific {
+		// The legacy factory delay was five seconds for every metric. Upgrade
+		// only that unchanged default for noisy gauges; a deliberate type-level
+		// value remains authoritative, as does any metric-specific override above.
+		if base == defaultLegacyMetricDelaySeconds {
+			if delay := defaultMetricStabilityDelay(metricType); delay > 0 {
+				return delay, "factory.metricStability." + strings.ToLower(strings.TrimSpace(metricType)), true
+			}
+		}
 		return base, "legacy.timeThresholds." + strings.ToLower(strings.TrimSpace(resourceType)), true
 	}
+	if delay, ok := m.getGlobalMetricTimeThreshold(metricType); ok {
+		return delay, "legacy.metricTimeThresholds.all." + strings.ToLower(strings.TrimSpace(metricType)), true
+	}
 	if base != 0 {
+		if base == defaultLegacyMetricDelaySeconds {
+			if delay := defaultMetricStabilityDelay(metricType); delay > 0 {
+				return delay, "factory.metricStability." + strings.ToLower(strings.TrimSpace(metricType)), true
+			}
+		}
 		return base, "legacy.timeThresholds.all", true
 	}
 	return 0, "", false
+}
+
+// getGlobalExactMetricTimeThreshold returns only an explicit all.<metric>
+// override. Broad all.default/all.* fallbacks retain their legacy position
+// after resource-type delays and therefore cannot accidentally erase those
+// more specific policies.
+func (m *Manager) getGlobalExactMetricTimeThreshold(metricType string) (int, bool) {
+	if len(m.config.MetricTimeThresholds) == 0 {
+		return 0, false
+	}
+
+	perType, ok := m.config.MetricTimeThresholds["all"]
+	if !ok || len(perType) == 0 {
+		return 0, false
+	}
+
+	metricKey := strings.ToLower(strings.TrimSpace(metricType))
+	if metricKey == "" {
+		return 0, false
+	}
+
+	delay, ok := perType[metricKey]
+	return delay, ok
 }
 
 // getMetricTimeThreshold returns a metric-specific delay if configured at the resource-type level.
@@ -278,6 +351,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType))
 	var intent *reducer.DiscreteIntent
 	delaySeconds := 0
+	stability := metricStabilityPolicy{}
 	if effectiveIntent.Explicit {
 		decision := m.evaluateIntentNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, time.Now(), conditionActive, BackupIntentContext{})
 		if decision.StateChanged {
@@ -292,6 +366,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	} else if conditionActive {
 		delaySeconds = m.getTimeThreshold(resourceID, resourceType, metricType)
 	}
+	if !effectiveIntent.Explicit {
+		stability = metricStabilityFor(metricType, effectiveIntent.GraceSeconds)
+	}
 
 	events := m.core.ApplyMetric(reducer.MetricSignal{
 		ResourceID:       resourceID,
@@ -302,10 +379,12 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		RuntimeTickValid: true,
 		ObservedAt:       m.policyNow(),
 	}, reducer.MetricRule{
-		Trigger:      threshold.Trigger,
-		Clear:        threshold.Clear,
-		DelaySeconds: delaySeconds,
-		Intent:       intent,
+		Trigger:               threshold.Trigger,
+		Clear:                 threshold.Clear,
+		DelaySeconds:          delaySeconds,
+		CriticalBypassesDelay: stability.CriticalBypassesDelay,
+		RecoveryDelaySeconds:  stability.RecoveryDelaySeconds,
+		Intent:                intent,
 	})
 	primary := reducer.EventType("")
 	if len(events) > 0 {

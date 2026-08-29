@@ -261,40 +261,22 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	diskReadMetric, diskWriteMetric, networkInMetric, networkOutMetric := guestIORateMetrics(snapshot)
 	diskMetric := &UnifiedResourceMetric{Percent: diskUsage}
 	if len(disks) > 0 {
-		var aggregateTotal, aggregateUsed int64
-		hasDedicatedDiskOverride := false
 		seenAggregateDiskKeys := make(map[string]struct{})
 		for idx, disk := range disks {
 			if disk.Total <= 0 || disk.Usage < 0 {
 				continue
 			}
-			label, keySource, sanitizedKey := guestDiskIdentity(disk, idx)
+			_, _, sanitizedKey := guestDiskIdentity(disk, idx)
 			if _, exists := seenAggregateDiskKeys[sanitizedKey]; exists {
 				continue
 			}
 			seenAggregateDiskKeys[sanitizedKey] = struct{}{}
-
-			m.mu.RLock()
-			diskOverride, hasDiskOverride := lookupGuestDiskOverride(m.config.Overrides, guest, guestID, keySource)
-			m.mu.RUnlock()
-			if hasDiskOverride && (diskOverride.Disabled || diskOverride.Disk != nil) {
-				hasDedicatedDiskOverride = true
-				log.Debug().
-					Str("guest", name).
-					Str("diskLabel", label).
-					Msg("Excluding guest filesystem with a dedicated override from aggregate disk alert")
-				continue
-			}
-			aggregateTotal += disk.Total
-			aggregateUsed += disk.Used
 		}
-		if hasDedicatedDiskOverride {
-			if aggregateTotal > 0 {
-				diskMetric.Percent = float64(aggregateUsed) / float64(aggregateTotal) * 100
-			} else {
-				diskMetric = nil
-				m.clearAlert(canonicalMetricStateID(guestID, "disk"))
-			}
+		if len(seenAggregateDiskKeys) > 0 {
+			// Filesystem evidence is more actionable than the guest-wide rollup.
+			// Evaluating both creates two incidents for the same full filesystem.
+			diskMetric = nil
+			m.clearAlert(canonicalMetricStateID(guestID, "disk"))
 		}
 	}
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{

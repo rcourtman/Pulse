@@ -65,6 +65,15 @@ type MetricRule struct {
 	// an explicit Intent gate is supplied — the manager's explicit intent
 	// policies replace the legacy time-threshold delay.
 	DelaySeconds int
+	// CriticalBypassesDelay lets urgent evidence activate immediately while
+	// warning-level evidence still has to survive the stability window. It is
+	// intentionally ignored when an explicit Intent gate is present: explicit
+	// operator policy remains authoritative.
+	CriticalBypassesDelay bool
+	// RecoveryDelaySeconds is the continuous time at or below Clear required
+	// before a firing incident resolves. A value <= 0 preserves immediate
+	// hysteresis recovery.
+	RecoveryDelaySeconds int
 	// Intent is the resolved intent-policy context for this observation
 	// (metric.<name> signals); nil means no gate.
 	Intent *DiscreteIntent
@@ -108,9 +117,15 @@ type Incident struct {
 	// toward DiscreteRule.RecoveryConfirmations; reset by any matching
 	// observation. Unused by the metric family.
 	RecoveryCount int
-	Acknowledged  bool
-	AckUser       string
-	AckAt         time.Time
+	// RecoverySince and its monotonic companions track a continuous healthy
+	// run for metric rules with a recovery stability window.
+	RecoverySince           time.Time
+	RecoveryElapsed         time.Duration
+	RecoveryTicksSupplied   bool
+	LastRecoveryRuntimeTick time.Duration
+	Acknowledged            bool
+	AckUser                 string
+	AckAt                   time.Time
 	// Backup-run bookkeeping for the intent gate's backup-offline deferral
 	// sub-policy (confirmation family only).
 	BackupActive       bool
@@ -390,6 +405,7 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 		// recomputes level on every tick, so severity can demote as well as
 		// escalate while firing.
 		if incident != nil && incident.State == StateFiring {
+			resetMetricRecoveryRun(incident)
 			previous := incident.Severity
 			incident.Severity = severityFor(signal.Value, rule, signal.Metric)
 			incident.LastValue = signal.Value
@@ -444,7 +460,9 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 				return pendingResult()
 			}
 		} else if rule.DelaySeconds > 0 {
-			if signal.ObservedAt.Sub(incident.PendingSince) < time.Duration(rule.DelaySeconds)*time.Second {
+			critical := severityFor(signal.Value, rule, signal.Metric) == SeverityCritical
+			if !(critical && rule.CriticalBypassesDelay) &&
+				signal.ObservedAt.Sub(incident.PendingSince) < time.Duration(rule.DelaySeconds)*time.Second {
 				return pendingResult()
 			}
 		}
@@ -473,6 +491,31 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 		clear = rule.Trigger
 	}
 	if signal.Value <= clear {
+		if rule.RecoveryDelaySeconds > 0 {
+			if incident.RecoverySince.IsZero() {
+				incident.RecoverySince = signal.ObservedAt
+				incident.RecoveryTicksSupplied = signal.RuntimeTickValid
+				incident.LastRecoveryRuntimeTick = signal.RuntimeTick
+				incident.RecoveryElapsed = 0
+				incident.LastObservedAt = signal.ObservedAt
+				return nil
+			}
+			if signal.RuntimeTickValid {
+				if incident.RecoveryTicksSupplied && signal.RuntimeTick >= incident.LastRecoveryRuntimeTick {
+					incident.RecoveryElapsed += signal.RuntimeTick - incident.LastRecoveryRuntimeTick
+				}
+				incident.RecoveryTicksSupplied = true
+				incident.LastRecoveryRuntimeTick = signal.RuntimeTick
+			}
+			elapsed := signal.ObservedAt.Sub(incident.RecoverySince)
+			if incident.RecoveryTicksSupplied {
+				elapsed = incident.RecoveryElapsed
+			}
+			incident.LastObservedAt = signal.ObservedAt
+			if elapsed < time.Duration(rule.RecoveryDelaySeconds)*time.Second {
+				return nil
+			}
+		}
 		severity := incident.Severity
 		delete(s.incidents, key)
 		s.markAckInactive(key, signal.ObservedAt)
@@ -482,7 +525,18 @@ func (s *State) ApplyMetric(signal MetricSignal, rule MetricRule) []Event {
 	// Hysteresis hold: between clear and trigger the incident stays firing.
 	// The manager does not refresh value or last-seen in this band; the
 	// reducer mirrors that so parity diffs stay exact.
+	resetMetricRecoveryRun(incident)
 	return nil
+}
+
+func resetMetricRecoveryRun(incident *Incident) {
+	if incident == nil {
+		return
+	}
+	incident.RecoverySince = time.Time{}
+	incident.RecoveryElapsed = 0
+	incident.RecoveryTicksSupplied = false
+	incident.LastRecoveryRuntimeTick = 0
 }
 
 // SeedFiringIncident installs a firing incident directly, bypassing the

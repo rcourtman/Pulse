@@ -170,6 +170,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	var intent *reducer.DiscreteIntent
 	delaySeconds := 0
 	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType))
+	stability := metricStabilityPolicy{}
 	if effectiveIntent.Explicit {
 		decision := m.evaluateIntentNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, triggered, BackupIntentContext{})
 		if decision.StateChanged {
@@ -183,6 +184,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		}
 	} else if triggered {
 		delaySeconds = m.getTimeThreshold(spec.ResourceID, resourceType, metricType)
+	}
+	if !effectiveIntent.Explicit {
+		stability = metricStabilityFor(metricType, effectiveIntent.GraceSeconds)
 	}
 
 	evidence := alertspecs.AlertEvidence{
@@ -210,12 +214,14 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		RuntimeTickValid: true,
 		ObservedAt:       observedAt,
 	}, reducer.MetricRule{
-		Trigger:          spec.MetricThreshold.Trigger,
-		Clear:            clearThreshold,
-		Critical:         spec.MetricThreshold.Critical,
-		CriticalDisabled: spec.MetricThreshold.Critical == nil,
-		DelaySeconds:     delaySeconds,
-		Intent:           intent,
+		Trigger:               spec.MetricThreshold.Trigger,
+		Clear:                 clearThreshold,
+		Critical:              spec.MetricThreshold.Critical,
+		CriticalDisabled:      spec.MetricThreshold.Critical == nil,
+		DelaySeconds:          delaySeconds,
+		CriticalBypassesDelay: stability.CriticalBypassesDelay,
+		RecoveryDelaySeconds:  stability.RecoveryDelaySeconds,
+		Intent:                intent,
 	})
 	primary := reducer.EventType("")
 	if len(events) > 0 {
@@ -242,6 +248,10 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			"resourceType":   resourceType,
 			"clearThreshold": metricClearThreshold(spec.MetricThreshold, threshold),
 			"monitorOnly":    monitorOnly,
+		}
+		if stability.RecoveryDelaySeconds > 0 {
+			alertMetadata["stabilityWindowSeconds"] = stability.RecoveryDelaySeconds
+			alertMetadata["criticalBypassesStability"] = stability.CriticalBypassesDelay
 		}
 		if unit != "" {
 			alertMetadata["unit"] = unit

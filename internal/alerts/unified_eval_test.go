@@ -1559,3 +1559,27 @@ func TestUnifiedStorageForecastKeepsCanonicalMetricSpecAcrossPlatforms(t *testin
 		t.Fatalf("CanonicalSpecID = %q, want canonical usage spec", alert.CanonicalSpecID)
 	}
 }
+
+func TestUnifiedMetricNoisyWarningWaitsButCriticalFiresImmediately(t *testing.T) {
+	m := newTestManager(t)
+	input := &UnifiedResourceInput{
+		ID:     "vm-noisy-memory",
+		Type:   "vm",
+		Name:   "database",
+		Memory: &UnifiedResourceMetric{Percent: 90},
+	}
+	alertID := canonicalMetricStateID(input.ID, "memory")
+
+	m.CheckUnifiedResource(input)
+	assertAlertMissing(t, m, alertID)
+
+	input.Memory.Percent = 96
+	m.CheckUnifiedResource(input)
+	alert := testRequireActiveAlert(t, m, alertID)
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("critical memory alert level = %q, want %q", alert.Level, AlertLevelCritical)
+	}
+	if got := alert.Metadata["stabilityWindowSeconds"]; got != defaultNoisyGaugeStabilitySeconds {
+		t.Fatalf("stabilityWindowSeconds = %v, want %d", got, defaultNoisyGaugeStabilitySeconds)
+	}
+}
