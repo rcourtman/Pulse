@@ -193,8 +193,13 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read prepare-release-container-context.sh: %v", err)
 	}
+	qualifierBytes, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
+	if err != nil {
+		t.Fatalf("read qualify-release-containers.yml: %v", err)
+	}
 	dockerfile := string(dockerfileBytes)
 	prepareScript := string(prepareBytes)
+	qualifier := string(qualifierBytes)
 
 	for _, needle := range []string{
 		"FROM pulse-runtime-foundation AS prebuilt-runtime-base",
@@ -222,6 +227,17 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 	} {
 		if !strings.Contains(prepareScript, needle) {
 			t.Fatalf("prepare-release-container-context.sh missing candidate guard: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`actual_embedded_agent="$(docker run --rm --entrypoint /bin/sh`,
+		`test "${actual_embedded_agent}" = "${expected_agent}"`,
+		`test "$(readlink /usr/local/bin/pulse-agent)" = "/opt/pulse/bin/pulse-agent-linux-amd64"`,
+		`test -x /usr/local/bin/pulse-agent`,
+		`test ! -x "$sidecar"`,
+	} {
+		if !strings.Contains(qualifier, needle) {
+			t.Fatalf("exact-candidate container qualification missing embedded agent mode guard: %s", needle)
 		}
 	}
 }

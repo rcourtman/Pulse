@@ -84,12 +84,22 @@ jobs:
           expected_server="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse" | awk '{print $1}')"
           actual_server="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c 'sha256sum /app/pulse' | awk '{print $1}')"
           expected_agent="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse-agent-linux-amd64" | awk '{print $1}')"
+          actual_embedded_agent="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
           actual_agent="$(docker run --rm --entrypoint /bin/sh "pulse-agent-candidate:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
           expected_control_plane="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/compiled/binaries/pulse-control-plane-linux-amd64" | awk '{print $1}')"
           actual_control_plane="$(docker run --rm --entrypoint /bin/sh "pulse-control-plane-candidate:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-control-plane' | awk '{print $1}')"
           test "${actual_server}" = "${expected_server}"
+          test "${actual_embedded_agent}" = "${expected_agent}"
           test "${actual_agent}" = "${expected_agent}"
           test "${actual_control_plane}" = "${expected_control_plane}"
+          docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c '
+            set -euo pipefail
+            test "$(readlink /usr/local/bin/pulse-agent)" = "/opt/pulse/bin/pulse-agent-linux-amd64"
+            test -x /usr/local/bin/pulse-agent
+            for sidecar in /opt/pulse/bin/*.sig /opt/pulse/bin/*.sshsig; do
+              test ! -x "$sidecar"
+            done
+          '
 
       - name: Set up Helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
