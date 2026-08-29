@@ -2975,7 +2975,7 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	}
 }
 
-func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
+func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 	makefileBytes, err := os.ReadFile(repoFile("Makefile"))
 	if err != nil {
 		t.Fatalf("read Makefile: %v", err)
@@ -3014,6 +3014,11 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		"python3 scripts/shard_go_tests.py",
 		`--max-regex-bytes "$MAX_REGEX_BYTES"`,
 		`MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"`,
+		// Both the four-vCPU stable worker and eight-vCPU prerelease worker
+		// need the measured three-way partition. Two equal-count shards left
+		// the stable suffix over its 45-minute watchdog while still progressing.
+		`if [ "$VCPUS" -ge 4 ]; then`,
+		"cpu_shards=3",
 		// Admission thresholds are grounded in the 2026-08-21 direct probe on
 		// the PVE worker (~7.5 GiB measured gate footprint); auto mode must
 		// degrade the shard count when headroom is missing, never fail the
@@ -3036,7 +3041,7 @@ func TestReleaseBackendRaceGateUsesCompletePVEPartition(t *testing.T) {
 		`-test.timeout "$API_SHARD_TIMEOUT"`,
 	} {
 		if !strings.Contains(backendScript, needle) {
-			t.Fatalf("PVE backend partition missing coverage contract: %s", needle)
+			t.Fatalf("release backend partition missing coverage contract: %s", needle)
 		}
 	}
 }

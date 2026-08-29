@@ -1970,6 +1970,21 @@ oversubscribing the host. The deterministic CPU allocator and release guards
 pin this partition and reject a job ceiling that could pre-empt the API
 watchdog.
 
+The first stable `v6.4.0` qualification attempt, release run `33220050114` at
+exact source SHA `41428f46a3573802f3e89a51a40f92cf4434d0b6`, exposed the
+other release worker class. Stable releases use a four-vCPU GitHub-hosted
+runner, where auto mode selected two equal-count API shards of 1,829 and 1,828
+tests. Shard 1 passed in 1,797 seconds, but shard 2 was still making forward
+progress at `TestLimitedAPITokenCannotCreateBroaderToken` when its cumulative
+2,700-second watchdog fired. Every other release gate passed, activation
+failed closed, release `378812881` remained an unpublished draft, and
+convergence run `33220806414` changed no customer pointers. This is measured
+partition imbalance rather than a hung product test. Four-vCPU release workers
+must therefore use the same three-way cost boundary as the PVE worker, with a
+non-oversubscribed `1/1/1` API allocation plus one non-API package worker. The
+existing 10-GiB admission floor still degrades the shard count on constrained
+hosts instead of weakening the watchdog.
+
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
 passed preparation, frontend bundle, Windows installer smoke, release smoke,

@@ -25,6 +25,15 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertEqual(non_api, 2)
         self.assertEqual(sum(widths) + non_api, 8)
 
+        # Stable releases use a four-vCPU hosted runner. Keep the measured
+        # three-way API partition there as 1/1/1 plus one non-API worker;
+        # falling back to two equal-count shards exceeded the 45-minute
+        # watchdog in stable v6.4.0 run 33220050114.
+        widths, non_api = allocate_cpu_plan([3624, 15, 16], 4)
+        self.assertEqual(widths, [1, 1, 1])
+        self.assertEqual(non_api, 1)
+        self.assertEqual(sum(widths) + non_api, 4)
+
         widths, non_api = allocate_cpu_plan([10, 10], 4)
         self.assertEqual(widths, [1, 1])
         self.assertEqual(non_api, 2)
@@ -445,6 +454,8 @@ class ReleasePreflightTest(unittest.TestCase):
         )
         self.assertIn("shard_admission_required_kib", backend)
         self.assertIn("Degrading to $cpu_shards API shard(s)", backend)
+        self.assertIn('if [ "$VCPUS" -ge 4 ]; then', backend)
+        self.assertIn("cpu_shards=3", backend)
         self.assertIn(
             'API_SHARD_TIMEOUT="${PULSE_BACKEND_API_SHARD_TIMEOUT:-45m}"',
             backend,

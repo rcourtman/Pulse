@@ -119,9 +119,16 @@ AVAILABLE_KIB="$(read_available_kib)"
 if [ -z "$AVAILABLE_KIB" ]; then AVAILABLE_KIB=0; fi
 
 if [ "$API_SHARDS" = auto ]; then
-  if [ "$VCPUS" -ge 8 ]; then
+  # Stable releases run on GitHub's four-vCPU ubuntu-24.04 worker, while
+  # prereleases use the eight-vCPU PVE worker. Stable v6.4.0 run 33220050114
+  # proved that splitting the API package into two equal-count ranges is not
+  # cost-balanced: one range passed in 1,797s while the other was still making
+  # progress when its 2,700s watchdog fired. Use the measured three-way
+  # boundaries on both release worker classes; memory admission below still
+  # degrades safely on smaller hosts.
+  if [ "$VCPUS" -ge 4 ]; then
     cpu_shards=3
-  elif [ "$VCPUS" -ge 4 ]; then
+  elif [ "$VCPUS" -ge 2 ]; then
     cpu_shards=2
   else
     cpu_shards=1
