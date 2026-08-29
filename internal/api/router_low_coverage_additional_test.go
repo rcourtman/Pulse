@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -195,6 +197,50 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 		if !token.HasScope(scope) {
 			t.Fatalf("expected default migration token to include %q, got %#v", scope, token.Scopes)
 		}
+	}
+}
+
+func TestHandleDiagnosticsDockerPrepareToken_RollsBackWhenPersistenceFails(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
+
+	rawToken := "existing-container-runtime-token.12345678"
+	existing, err := config.NewAPITokenRecord(rawToken, "existing token", []string{config.ScopeSettingsWrite})
+	if err != nil {
+		t.Fatalf("new existing token: %v", err)
+	}
+	cfg := &config.Config{
+		PublicURL: "https://pulse.example.com",
+		APITokens: []config.APITokenRecord{*existing},
+	}
+	cfg.SortAPITokens()
+	previousPrimaryToken := cfg.APIToken
+
+	dataDir := filepath.Join(t.TempDir(), "state")
+	persistence := config.NewConfigPersistence(dataDir)
+	if err := os.RemoveAll(dataDir); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(dataDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+	router := &Router{monitor: monitor, config: cfg, persistence: persistence}
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", strings.NewReader(`{"agentId":"host-1"}`))
+	rec := httptest.NewRecorder()
+
+	router.handleDiagnosticsDockerPrepareToken(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != existing.ID {
+		t.Fatalf("live token inventory changed after failed persistence: %+v", cfg.APITokens)
+	}
+	if cfg.APIToken != previousPrimaryToken {
+		t.Fatalf("legacy primary token = %q, want rollback to %q", cfg.APIToken, previousPrimaryToken)
+	}
+	if strings.Contains(rec.Body.String(), `"token"`) {
+		t.Fatalf("failed token preparation exposed an unpersisted token: %q", rec.Body.String())
 	}
 }
 

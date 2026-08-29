@@ -502,17 +502,22 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 
 		// Update runtime config immediately with hashed token - no restart needed!
 		config.Mu.Lock()
+		previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 		r.config.AuthUser = setupRequest.Username
 		r.config.AuthPass = hashedPassword
 		r.config.APITokens = []config.APITokenRecord{*tokenRecord}
 		r.config.SortAPITokens()
-		config.Mu.Unlock()
-
 		if r.persistence != nil {
 			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-				log.Warn().Err(err).Msg("Failed to persist API tokens during security setup")
+				r.config.APITokens = previousTokens
+				r.config.SortAPITokens()
+				config.Mu.Unlock()
+				log.Error().Err(err).Msg("Failed to persist API tokens during security setup")
+				http.Error(w, "Password authentication was saved, but the API token could not be saved", http.StatusInternalServerError)
+				return
 			}
 		}
+		config.Mu.Unlock()
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
 
 		if err := r.establishSession(w, req, setupRequest.Username); err != nil {
@@ -712,16 +717,21 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	setAPITokenOwnerUserID(tokenRecord, apiTokenOwnerUserIDForRequest(r.config, rq))
 
 	config.Mu.Lock()
+	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 	r.config.APITokens = []config.APITokenRecord{*tokenRecord}
 	r.config.SortAPITokens()
-	config.Mu.Unlock()
-	log.Info().Msg("Runtime config updated with new API token - active immediately")
-
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist regenerated API token")
+			r.config.APITokens = previousTokens
+			r.config.SortAPITokens()
+			config.Mu.Unlock()
+			log.Error().Err(err).Msg("Failed to persist regenerated API token")
+			http.Error(w, "Failed to save token", http.StatusInternalServerError)
+			return
 		}
 	}
+	config.Mu.Unlock()
+	log.Info().Msg("Runtime config updated with new API token - active immediately")
 
 	log.Info().Msg("API token regenerated successfully")
 

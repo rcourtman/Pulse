@@ -15,6 +15,32 @@ import (
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
+type failingWriteFileSystem struct{}
+
+func (failingWriteFileSystem) ReadFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
+
+func (failingWriteFileSystem) WriteFile(string, []byte, os.FileMode) error {
+	return errors.New("forced write failure")
+}
+
+func (failingWriteFileSystem) Rename(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
+}
+
+func (failingWriteFileSystem) Remove(name string) error {
+	return os.Remove(name)
+}
+
+func (failingWriteFileSystem) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
+
+func (failingWriteFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
 func TestDetectServiceName_Default(t *testing.T) {
 	t.Setenv("PATH", "")
 
@@ -115,6 +141,57 @@ func TestHandleRegenerateAPITokenInheritsOwnerFromCallerToken(t *testing.T) {
 	}
 	if got := cfg.APITokens[0].Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
 		t.Fatalf("regenerated token owner_user_id=%q, want alice", got)
+	}
+}
+
+func TestHandleRegenerateAPITokenRollsBackWhenPersistenceFails(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "state")
+	rawCallerToken := "regen-persistence-token-123.12345678"
+	callerRecord, err := config.NewAPITokenRecord(rawCallerToken, "existing-admin-token", []string{config.ScopeSettingsWrite})
+	if err != nil {
+		t.Fatalf("new caller token record: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*callerRecord},
+	}
+	cfg.SortAPITokens()
+	previousPrimaryToken := cfg.APIToken
+
+	// Block persistence after construction so the handler must restore the
+	// complete live credential inventory rather than expose a transient token.
+	persistence := config.NewConfigPersistence(dataDir)
+	if err := os.RemoveAll(dataDir); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(dataDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+	router := &Router{config: cfg, persistence: persistence}
+
+	authLimiter.Reset("127.0.0.1")
+	req := newLoopbackRequest(http.MethodPost, "/api/security/regenerate-token", nil)
+	req.Header.Set("X-API-Token", rawCallerToken)
+	rec := httptest.NewRecorder()
+
+	router.HandleRegenerateAPIToken(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != callerRecord.ID {
+		t.Fatalf("live token inventory changed after failed persistence: %+v", cfg.APITokens)
+	}
+	if cfg.APIToken != previousPrimaryToken {
+		t.Fatalf("legacy primary token = %q, want rollback to %q", cfg.APIToken, previousPrimaryToken)
+	}
+	if strings.Contains(rec.Body.String(), `"token"`) {
+		t.Fatalf("failed regeneration exposed an unpersisted token: %q", rec.Body.String())
+	}
+	if !internalauth.CompareAPIToken(rawCallerToken, cfg.APITokens[0].Hash) {
+		t.Fatal("previous credential no longer authenticates after failed persistence")
 	}
 }
 
@@ -474,6 +551,75 @@ func TestQuickSecuritySetupRotatesWithBasicAuth(t *testing.T) {
 	}
 	if got := GetSessionUsername(sessionCookie.Value); got != "newadmin" {
 		t.Fatalf("session username=%q, want %q", got, "newadmin")
+	}
+}
+
+func TestQuickSecuritySetupRestoresTokensWhenPersistenceFails(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	dataDir := t.TempDir()
+	oldPasswordHash, err := internalauth.HashPassword("ExistingPassword!1")
+	if err != nil {
+		t.Fatalf("hash existing password: %v", err)
+	}
+	rawOldToken := strings.Repeat("ab", 32)
+	oldToken, err := config.NewAPITokenRecord(rawOldToken, "existing token", []string{config.ScopeSettingsWrite})
+	if err != nil {
+		t.Fatalf("new existing token: %v", err)
+	}
+	cfg := &config.Config{
+		AuthUser:   "admin",
+		AuthPass:   oldPasswordHash,
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		APITokens:  []config.APITokenRecord{*oldToken},
+	}
+	cfg.SortAPITokens()
+	previousPrimaryToken := cfg.APIToken
+
+	persistence := config.NewConfigPersistence(dataDir)
+	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		t.Fatalf("save existing tokens: %v", err)
+	}
+	persistence.SetFileSystem(failingWriteFileSystem{})
+	router := &Router{config: cfg, persistence: persistence}
+
+	authLimiter.Reset("198.51.100.17")
+	newRawToken := strings.Repeat("cd", 32)
+	payload := `{"username":"newadmin","password":"NewPassword!1","apiToken":"` + newRawToken + `","force":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	req.RemoteAddr = "198.51.100.17:54321"
+	req.Header.Set("X-API-Token", rawOldToken)
+	rec := httptest.NewRecorder()
+
+	handleQuickSecuritySetupFixed(router)(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != oldToken.ID {
+		t.Fatalf("live token inventory changed after failed persistence: %+v", cfg.APITokens)
+	}
+	if cfg.APIToken != previousPrimaryToken {
+		t.Fatalf("legacy primary token = %q, want rollback to %q", cfg.APIToken, previousPrimaryToken)
+	}
+	if !internalauth.CompareAPIToken(rawOldToken, cfg.APITokens[0].Hash) {
+		t.Fatal("previous credential no longer authenticates after failed persistence")
+	}
+	if cfg.AuthUser != "newadmin" || !internalauth.CheckPasswordHash("NewPassword!1", cfg.AuthPass) {
+		t.Fatal("persisted password authentication was not applied to live state")
+	}
+	if strings.Contains(rec.Body.String(), newRawToken) {
+		t.Fatalf("failure response exposed API token: %q", rec.Body.String())
+	}
+
+	persisted, err := persistence.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("load persisted tokens: %v", err)
+	}
+	if len(persisted) != 1 || persisted[0].ID != oldToken.ID {
+		t.Fatalf("persisted token inventory changed after failed write: %+v", persisted)
 	}
 }
 

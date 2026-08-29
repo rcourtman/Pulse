@@ -8118,12 +8118,14 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 
 	config.Mu.Lock()
+	previousTokens := append([]config.APITokenRecord(nil), activeConfig.APITokens...)
 	activeConfig.APITokens = append(activeConfig.APITokens, *record)
 	activeConfig.SortAPITokens()
 
 	if activePersistence != nil {
 		if err := activePersistence.SaveAPITokens(activeConfig.APITokens); err != nil {
-			activeConfig.RemoveAPIToken(record.ID)
+			activeConfig.APITokens = previousTokens
+			activeConfig.SortAPITokens()
 			config.Mu.Unlock()
 			log.Error().Err(err).Msg("Failed to persist API tokens after container runtime migration generation")
 			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to persist API token", nil)
