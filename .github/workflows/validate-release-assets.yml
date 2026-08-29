@@ -198,6 +198,8 @@ jobs:
           gh api --paginate \
             "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets?per_page=100" \
             --slurp > "$RUNNER_TEMP/release-assets.json"
+          gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
+            --jq '.body // ""' > "$RUNNER_TEMP/release-body.md"
           count="$(jq '[.[][]] | length' "$RUNNER_TEMP/release-assets.json")"
           if [ "$count" -eq 0 ]; then
             echo "::error::No assets found in release"
@@ -304,6 +306,7 @@ jobs:
           CANDIDATE_MANIFEST_ARTIFACT: ${{ inputs.candidate_manifest_artifact }}
         run: |
           set +e
+          set -o pipefail
           echo "Running validation script..."
           OUTPUT_FILE=$(mktemp)
 
@@ -313,7 +316,8 @@ jobs:
               --manifest release-candidate-manifest/release-candidate.json \
               --assets-json "$RUNNER_TEMP/release-assets.json" \
               --version "${{ steps.context.outputs.version }}" \
-              --source-sha "${{ steps.context.outputs.target_commitish }}" 2>&1 | tee "$OUTPUT_FILE"
+              --source-sha "${{ steps.context.outputs.target_commitish }}" \
+              --release-body-file "$RUNNER_TEMP/release-body.md" 2>&1 | tee "$OUTPUT_FILE"
           elif [ "${{ steps.docker.outputs.image_available }}" = "true" ]; then
             echo "Running full validation (Docker + assets)..."
             scripts/validate-release.sh \
@@ -328,7 +332,7 @@ jobs:
               "release" 2>&1 | tee "$OUTPUT_FILE"
           fi
 
-          VALIDATION_EXIT_CODE=$?
+          VALIDATION_EXIT_CODE=${PIPESTATUS[0]}
 
           echo "VALIDATION_OUTPUT<<EOF" >> $GITHUB_OUTPUT
           cat "$OUTPUT_FILE" >> $GITHUB_OUTPUT

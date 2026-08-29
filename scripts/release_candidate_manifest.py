@@ -20,6 +20,11 @@ RELEASE_NOTE_VISUAL_PATTERN = re.compile(
     r"^release-note-[a-z0-9]+(?:-[a-z0-9]+)*-(?:before|now)\.png$"
 )
 MAX_RELEASE_NOTE_VISUAL_ASSETS = 20
+RELEASE_NOTE_VISUAL_URL_PATTERN = re.compile(
+    r"https://github\.com/[^/\s)]+/[^/\s)]+/releases/download/"
+    r"(?P<tag>v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|alpha|beta)\.[0-9]+)?)/"
+    r"(?P<name>release-note-[a-z0-9]+(?:-[a-z0-9]+)*-(?:before|now)\.png)"
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -168,8 +173,43 @@ def load_release_assets(path: Path) -> list[dict[str, Any]]:
     return payload
 
 
-def verify_release(manifest: dict[str, Any], release_assets: list[dict[str, Any]]) -> None:
+def release_note_visual_assets(body: str, expected_tag: str) -> set[str]:
+    assets: set[str] = set()
+    for match in RELEASE_NOTE_VISUAL_URL_PATTERN.finditer(body):
+        if match.group("tag") == expected_tag:
+            assets.add(match.group("name"))
+    if len(assets) > MAX_RELEASE_NOTE_VISUAL_ASSETS:
+        raise ValueError(
+            "release body references too many release-note visual sidecars: "
+            f"{len(assets)} > {MAX_RELEASE_NOTE_VISUAL_ASSETS}"
+        )
+    return assets
+
+
+def verify_release(
+    manifest: dict[str, Any],
+    release_assets: list[dict[str, Any]],
+    auxiliary_assets: set[str] | None = None,
+) -> None:
     expected = manifest_assets_by_name(manifest)
+    expected_auxiliary = set(auxiliary_assets or ())
+    overlap = sorted(set(expected) & expected_auxiliary)
+    if overlap:
+        raise ValueError(f"auxiliary assets overlap candidate manifest: {overlap}")
+    invalid_auxiliary = sorted(
+        name
+        for name in expected_auxiliary
+        if not RELEASE_NOTE_VISUAL_PATTERN.fullmatch(name)
+    )
+    if invalid_auxiliary:
+        raise ValueError(
+            f"invalid release-note visual sidecar name(s): {invalid_auxiliary}"
+        )
+    if len(expected_auxiliary) > MAX_RELEASE_NOTE_VISUAL_ASSETS:
+        raise ValueError(
+            "published release contains too many release-note visual sidecars: "
+            f"{len(expected_auxiliary)} > {MAX_RELEASE_NOTE_VISUAL_ASSETS}"
+        )
     actual: dict[str, dict[str, Any]] = {}
     for index, asset in enumerate(release_assets):
         name = asset.get("name")
@@ -179,33 +219,11 @@ def verify_release(manifest: dict[str, Any], release_assets: list[dict[str, Any]
             raise ValueError(f"release contains duplicate asset: {name}")
         actual[name] = asset
 
-    missing = sorted(set(expected) - set(actual))
-    extra = sorted(set(actual) - set(expected))
-    invalid_extra = [
-        name for name in extra if not RELEASE_NOTE_VISUAL_PATTERN.fullmatch(name)
-    ]
-    if missing or invalid_extra:
+    expected_names = set(expected) | expected_auxiliary
+    if set(actual) != expected_names:
+        missing = sorted(expected_names - set(actual))
+        extra = sorted(set(actual) - expected_names)
         raise ValueError(f"published asset set mismatch: missing={missing}, extra={extra}")
-    if len(extra) > MAX_RELEASE_NOTE_VISUAL_ASSETS:
-        raise ValueError(
-            "published release contains too many release-note visual sidecars: "
-            f"{len(extra)} > {MAX_RELEASE_NOTE_VISUAL_ASSETS}"
-        )
-
-    # Release-note comparisons are generated and uploaded after the immutable
-    # binary candidate manifest is sealed. They are presentation-only, but
-    # recovery still constrains them to non-empty PNG sidecars with GitHub's
-    # server-side SHA-256 metadata instead of accepting arbitrary extra assets.
-    for name in extra:
-        visual = actual[name]
-        size = visual.get("size")
-        digest = visual.get("digest")
-        if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
-            raise ValueError(f"release-note visual has invalid size: {name}")
-        if not isinstance(digest, str) or not re.fullmatch(
-            r"sha256:[0-9a-f]{64}", digest
-        ):
-            raise ValueError(f"release-note visual has invalid digest: {name}")
 
     for name, expected_asset in expected.items():
         actual_asset = actual[name]
@@ -217,6 +235,19 @@ def verify_release(manifest: dict[str, Any], release_assets: list[dict[str, Any]
                 f"published asset digest mismatch: {name}; "
                 f"expected {expected_digest}, got {actual_asset.get('digest')!r}"
             )
+
+    for name in sorted(expected_auxiliary):
+        asset = actual[name]
+        if (
+            not isinstance(asset.get("size"), int)
+            or isinstance(asset["size"], bool)
+            or asset["size"] <= 0
+        ):
+            raise ValueError(f"published auxiliary asset is empty: {name}")
+        if not isinstance(asset.get("digest"), str) or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", asset["digest"]
+        ):
+            raise ValueError(f"published auxiliary asset has no SHA-256 digest: {name}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -240,6 +271,7 @@ def parse_args() -> argparse.Namespace:
     release.add_argument("--assets-json", type=Path, required=True)
     release.add_argument("--version", required=True)
     release.add_argument("--source-sha", required=True)
+    release.add_argument("--release-body-file", type=Path)
     return parser.parse_args()
 
 
@@ -268,9 +300,16 @@ def main() -> int:
             manifest = load_manifest(args.manifest)
             verify_manifest_identity(manifest, args.version, args.source_sha)
             release_assets = load_release_assets(args.assets_json)
-            verify_release(manifest, release_assets)
+            auxiliary_assets: set[str] = set()
+            if args.release_body_file is not None:
+                body = args.release_body_file.read_text(encoding="utf-8")
+                auxiliary_assets = release_note_visual_assets(
+                    body, f"v{args.version}"
+                )
+            verify_release(manifest, release_assets, auxiliary_assets)
             print(
                 f"Published release matches candidate: assets={len(manifest['assets'])} "
+                f"auxiliary_assets={len(auxiliary_assets)} "
                 f"version={manifest['version']} source_sha={manifest['source_sha']}"
             )
     except (OSError, ValueError) as exc:

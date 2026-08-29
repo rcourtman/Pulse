@@ -449,6 +449,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("failure outside the recoverable activation boundary", job)
         self.assertIn("release-candidate-manifest-${source_sha}-${version}", job)
         self.assertIn("scripts/release_candidate_manifest.py verify-release", job)
+        self.assertIn('--release-body-file "${release_body}"', job)
+        self.assertLess(
+            job.index("--jq '.body // \"\"' > \"${release_body}\""),
+            job.index("scripts/release_candidate_manifest.py verify-release"),
+        )
         self.assertIn('(any(.assets[]?; .name == "release-activation.json") | not)', job)
         self.assertIn("release-convergence.yml/dispatches", job)
         self.assertIn("return_run_details: true", job)
@@ -1459,6 +1464,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertIn("candidate_manifest_artifact:", validation_workflow)
         self.assertIn("release_candidate_manifest.py verify-release", validation_workflow)
+        self.assertIn('--release-body-file "$RUNNER_TEMP/release-body.md"', validation_workflow)
+        self.assertIn("VALIDATION_EXIT_CODE=${PIPESTATUS[0]}", validation_workflow)
         self.assertIn("if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}", content)
         self.assertIn("issues: write", content)
         self.assertIn("statuses: write", content)

@@ -10,6 +10,7 @@ from release_candidate_manifest import (
     create_manifest,
     load_release_assets,
     manifest_assets_by_name,
+    release_note_visual_assets,
     verify_local,
     verify_release,
 )
@@ -98,7 +99,7 @@ class ReleaseCandidateManifestTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "published asset digest mismatch"):
                 verify_release(manifest, release_assets)
 
-    def test_verify_release_allows_only_governed_visual_sidecars(self) -> None:
+    def test_verify_release_accepts_only_body_referenced_visual_assets(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             release_dir = self.create_release_dir(Path(temp_dir))
             manifest = create_manifest(release_dir, "6.1.0", SOURCE_SHA)
@@ -110,28 +111,54 @@ class ReleaseCandidateManifestTest(unittest.TestCase):
                 }
                 for asset in manifest["assets"]
             ]
-            release_assets.extend(
-                [
-                    {
-                        "name": "release-note-inline-view-before.png",
-                        "size": 123,
-                        "digest": "sha256:" + "2" * 64,
-                    },
-                    {
-                        "name": "release-note-inline-view-now.png",
-                        "size": 456,
-                        "digest": "sha256:" + "3" * 64,
-                    },
-                ]
+            visual_name = "release-note-settings-before.png"
+            release_assets.append(
+                {
+                    "name": visual_name,
+                    "size": 123,
+                    "digest": "sha256:" + "2" * 64,
+                }
             )
+            body = (
+                "![Settings](https://github.com/rcourtman/Pulse/releases/download/"
+                f"v6.1.0/{visual_name})"
+            )
+            visuals = release_note_visual_assets(body, "v6.1.0")
 
-            verify_release(manifest, release_assets)
+            self.assertEqual(visuals, {visual_name})
+            verify_release(manifest, release_assets, visuals)
 
-            release_assets[-1]["name"] = "release-note-inline-view-later.png"
-            with self.assertRaisesRegex(ValueError, "published asset set mismatch"):
-                verify_release(manifest, release_assets)
+            release_assets.append(
+                {
+                    "name": "release-note-stale.png",
+                    "size": 456,
+                    "digest": "sha256:" + "3" * 64,
+                }
+            )
+            with self.assertRaisesRegex(ValueError, "release-note-stale.png"):
+                verify_release(manifest, release_assets, visuals)
 
-    def test_verify_release_rejects_unverifiable_visual_sidecar(self) -> None:
+    def test_verify_release_requires_every_body_referenced_visual(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            release_dir = self.create_release_dir(Path(temp_dir))
+            manifest = create_manifest(release_dir, "6.1.0", SOURCE_SHA)
+            release_assets = [
+                {
+                    "name": asset["name"],
+                    "size": asset["size"],
+                    "digest": f"sha256:{asset['sha256']}",
+                }
+                for asset in manifest["assets"]
+            ]
+
+            with self.assertRaisesRegex(ValueError, "release-note-missing.png"):
+                verify_release(
+                    manifest,
+                    release_assets,
+                    {"release-note-missing.png"},
+                )
+
+    def test_verify_release_rejects_invalid_or_empty_visual_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             release_dir = self.create_release_dir(Path(temp_dir))
             manifest = create_manifest(release_dir, "6.1.0", SOURCE_SHA)
@@ -151,8 +178,18 @@ class ReleaseCandidateManifestTest(unittest.TestCase):
                 }
             )
 
-            with self.assertRaisesRegex(ValueError, "invalid size"):
-                verify_release(manifest, release_assets)
+            with self.assertRaisesRegex(ValueError, "empty"):
+                verify_release(
+                    manifest,
+                    release_assets,
+                    {"release-note-settings-now.png"},
+                )
+            with self.assertRaisesRegex(ValueError, "invalid release-note"):
+                verify_release(
+                    manifest,
+                    release_assets,
+                    {"release-note-settings-later.png"},
+                )
 
     def test_release_metadata_loader_flattens_paginated_arrays(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

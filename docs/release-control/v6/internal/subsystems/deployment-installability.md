@@ -2005,6 +2005,24 @@ and the other independent release gates, but it must depend on successful
 draft creation or recovery so release-line validation always observes the
 current immutable tag target.
 
+Stable release run `33223712880` at exact source SHA
+`58b07ef36cc815c2309ba43874ca5365f928ff77` subsequently passed every
+immutable release gate on failed-job attempt 2, including the complete
+race-enabled backend suite and release readiness. Activation remained
+fail-closed because the first attempt's convergence owner had already ended
+after the original backend failure. Activation-only recovery run `33227557895`
+then exposed two independent draft-integrity conditions before publication:
+the draft retained two unreferenced screenshot assets from a superseded visual
+plan, and the manifest verifier treated all release-note screenshots as
+unexpected even when the validated release body referenced them. The reusable
+validation workflow had detected that mismatch but lost the Python exit status
+through `tee`, so its job incorrectly reported success. Release validation and
+activation recovery must preserve the verifier's pipeline status, require the
+immutable candidate asset set plus exactly the non-empty, server-digested
+release-note screenshots referenced by the validated body, and reject every
+unreferenced asset. Recovery remains activation-only and may not rebuild or
+replace the qualified candidate.
+
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
 passed preparation, frontend bundle, Windows installer smoke, release smoke,

@@ -162,13 +162,14 @@ jobs:
           gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" \
             | jq '[.[][]]' > "${release_assets}"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            --jq '.body // ""' > "${release_body}"
           python3 scripts/release_candidate_manifest.py verify-release \
             --manifest "${manifest_dir}/release-candidate.json" \
             --assets-json "${release_assets}" \
             --version "${VERSION}" \
-            --source-sha "${SOURCE_SHA}"
-          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
-            --jq '.body // ""' > "${release_body}"
+            --source-sha "${SOURCE_SHA}" \
+            --release-body-file "${release_body}"
           python3 scripts/release_control/render_release_body.py \
             --version "${VERSION}" \
             --validate-body-file "${release_body}"

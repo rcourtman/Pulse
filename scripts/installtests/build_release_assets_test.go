@@ -2749,6 +2749,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		`.path == ".github/workflows/create-release.yml"`,
 		`release-candidate-manifest-${source_sha}-${version}`,
 		`scripts/release_candidate_manifest.py verify-release`,
+		`--release-body-file "${release_body}"`,
 		`failure outside the recoverable activation boundary`,
 		`release-convergence.yml/dispatches`,
 		`activation_recovery_run_id`,
@@ -2794,6 +2795,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	for _, needle := range []string{
 		`inputs.candidate_manifest_artifact != ''`,
 		`scripts/release_candidate_manifest.py verify-release`,
+		`--release-body-file "$RUNNER_TEMP/release-body.md"`,
+		`VALIDATION_EXIT_CODE=${PIPESTATUS[0]}`,
 		`inputs.candidate_manifest_artifact == ''`,
 	} {
 		if !strings.Contains(validationWorkflow, needle) {
