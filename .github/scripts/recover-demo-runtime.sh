@@ -28,6 +28,14 @@ EXPECTED_BINARY="/opt/pulse/bin/pulse"
 EXPECTED_UNIT="/etc/systemd/system/pulse.service"
 MUTATED=false
 BACKUP_DIR=""
+HISTORY_BACKUP_ARCHIVE=""
+DEMO_HISTORY_PATHS=(
+  ai_incidents.json
+  ai_incidents.json.tmp
+  alerts/events.db
+  alerts/events.db-shm
+  alerts/events.db-wal
+)
 
 for fixture_count in \
   "$MOCK_NODES" \
@@ -113,8 +121,41 @@ cleanup_config_backup() {
   [ -n "$BACKUP_DIR" ] || return 0
   sudo unlink "$BACKUP_DIR/runtime.env" 2>/dev/null || true
   sudo unlink "$BACKUP_DIR/billing.json" 2>/dev/null || true
+  if [ -n "$HISTORY_BACKUP_ARCHIVE" ]; then
+    sudo unlink "$HISTORY_BACKUP_ARCHIVE" 2>/dev/null || true
+    HISTORY_BACKUP_ARCHIVE=""
+  fi
   rmdir "$BACKUP_DIR" 2>/dev/null || true
   BACKUP_DIR=""
+}
+
+clear_demo_operational_history() {
+  local rel_path
+  local -a existing=()
+  for rel_path in "${DEMO_HISTORY_PATHS[@]}"; do
+    if sudo test -f "/etc/pulse/${rel_path}"; then
+      existing+=("$rel_path")
+    fi
+  done
+  ((${#existing[@]} > 0)) || return 0
+
+  HISTORY_BACKUP_ARCHIVE="$BACKUP_DIR/demo-operational-history.tar"
+  sudo tar --create --preserve-permissions \
+    --file "$HISTORY_BACKUP_ARCHIVE" --directory /etc/pulse -- "${existing[@]}"
+  for rel_path in "${existing[@]}"; do
+    sudo unlink "/etc/pulse/${rel_path}"
+  done
+}
+
+restore_demo_operational_history() {
+  local rel_path
+  [ -n "$HISTORY_BACKUP_ARCHIVE" ] || return 0
+  sudo test -f "$HISTORY_BACKUP_ARCHIVE" || return 0
+  for rel_path in "${DEMO_HISTORY_PATHS[@]}"; do
+    sudo unlink "/etc/pulse/${rel_path}" 2>/dev/null || true
+  done
+  sudo tar --extract --preserve-permissions \
+    --file "$HISTORY_BACKUP_ARCHIVE" --directory /etc/pulse
 }
 
 restore_runtime_config() {
@@ -264,6 +305,7 @@ rollback_on_error() {
     log "recovery validation failed; compensating by stopping only pulse.service"
     sudo systemctl stop "$SERVICE_NAME" || true
     restore_runtime_config || true
+    restore_demo_operational_history || true
   fi
   emit_evidence compensated_unavailable "$BEFORE_PID" \
     "$(systemctl show "$SERVICE_NAME" --property=MainPID --value || true)" \
@@ -302,6 +344,12 @@ set_env_value PULSE_MOCK_TRENDS_SAMPLE_INTERVAL "$MOCK_SAMPLE_INTERVAL"
 set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
 sudo chown pulse:pulse /etc/pulse/.env
 sudo chmod 600 /etc/pulse/.env
+# Alert lifecycle and AI incident history on this host are generated demo
+# operational memory. A failed 50-node bootstrap can leave thousands of
+# lifecycle events whose v6.4 replay queues one serialized incident save per
+# event before HTTP opens. Back up and clear only those fixed demo-history
+# files; compensation restores them if the bounded profile still fails.
+clear_demo_operational_history
 sudo systemctl restart "$SERVICE_NAME"
 
 for _ in $(seq 1 12); do

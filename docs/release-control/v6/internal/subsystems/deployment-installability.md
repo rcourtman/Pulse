@@ -2049,6 +2049,14 @@ it, retaining a bounded Go goroutine dump instead of guessing which persisted
 store is blocking synchronous startup. Diagnostics run after compensation-safe
 recovery failure, carry a hard SSH timeout, and remain part of the existing
 14-day recovery artifact rather than widening the recovery mutation boundary.
+The retained stack for run `33229793872` proved that the failed large bootstrap
+left more than 5,000 `IncidentStore.saveAsync` goroutines contending on one
+persistence mutex while durable mock alert lifecycle events were replayed.
+Stable-demo recovery therefore archives and clears only the fixed generated
+demo operational-memory files (`ai_incidents.json` and `alerts/events.db` plus
+SQLite sidecars) before restart. A failed bounded restart restores that archive;
+success discards it. Customer configuration, active-alert recovery state,
+metrics history, the binary, unit, and Relay remain outside this reset.
 
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
