@@ -1087,6 +1087,39 @@ func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName strin
 	return host, nil
 }
 
+// lookupRemovedDockerHost reports whether any of the presented Docker host
+// identities is blocked by a deliberate removal, returning the blocked entry's
+// ID and removal time. It consults the in-memory map first and the persisted
+// store second: the map resets on restart while the persisted entry keeps
+// blocking (#1581), so memory absence alone must not admit a blocked host.
+func (m *Monitor) lookupRemovedDockerHost(ids []string) (string, time.Time, bool) {
+	m.mu.RLock()
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if ts, ok := m.removedDockerHosts[id]; ok {
+			m.mu.RUnlock()
+			return id, ts, true
+		}
+	}
+	m.mu.RUnlock()
+
+	for _, entry := range m.state.GetRemovedDockerHosts() {
+		entryID := strings.TrimSpace(entry.ID)
+		if entryID == "" {
+			continue
+		}
+		for _, id := range ids {
+			if strings.TrimSpace(id) == entryID {
+				return entryID, entry.RemovedAt, true
+			}
+		}
+	}
+	return "", time.Time{}, false
+}
+
 // AllowDockerHostReenroll removes a host ID from the removal blocklist so it can report again.
 func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
 	hostID = strings.TrimSpace(hostID)
@@ -1759,22 +1792,34 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		return models.DockerHost{}, fmt.Errorf("docker report missing agent identifier")
 	}
 
-	// Check if this host was deliberately removed - reject report to prevent resurrection
-	m.mu.RLock()
-	removedAt, wasRemoved := m.removedDockerHosts[identifier]
-	if !wasRemoved {
-		for _, legacyID := range legacyIDs {
-			if legacyID == "" || legacyID == identifier {
-				continue
-			}
-			if ts, ok := m.removedDockerHosts[legacyID]; ok {
-				removedAt = ts
-				wasRemoved = true
-				break
-			}
+	// Check if this host was deliberately removed - reject report to prevent
+	// resurrection. Both stores must be consulted: the in-memory map resets on
+	// restart while the persisted entry keeps blocking (#1581), so a restart
+	// must not silently lift a deliberate block.
+	blockedID, removedAt, wasRemoved := m.lookupRemovedDockerHost(append([]string{identifier}, legacyIDs...))
+
+	if wasRemoved && tokenRecord != nil &&
+		!tokenRecord.CreatedAt.IsZero() && tokenRecord.CreatedAt.After(removedAt) {
+		// A token minted after the host was removed means the user generated a
+		// fresh install command for this machine: that is explicit re-enroll
+		// intent, so clear the block instead of rejecting until the TTL
+		// expires or Allow reconnect is clicked. A still-running old agent
+		// keeps presenting its pre-removal token and stays blocked. This
+		// mirrors the host-agent rule from #1581.
+		if err := m.AllowDockerHostReenroll(blockedID); err != nil {
+			log.Warn().
+				Err(err).
+				Str("dockerHostID", blockedID).
+				Msg("Failed to clear Docker host removal block for fresh re-enroll token; report remains blocked")
+		} else {
+			log.Info().
+				Str("dockerHostID", blockedID).
+				Time("removedAt", removedAt).
+				Time("tokenCreatedAt", tokenRecord.CreatedAt).
+				Msg("Cleared Docker host removal block: report presented a token created after removal")
+			wasRemoved = false
 		}
 	}
-	m.mu.RUnlock()
 
 	if wasRemoved {
 		log.Info().
