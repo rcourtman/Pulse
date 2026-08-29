@@ -1298,12 +1298,11 @@ func smartAlertEvidenceFromArgs(class string, args map[string]any) (int64, bool,
 			return *value, true, 0, false
 		}
 	case "smartspareblockcount", "smartspareblockcountalert":
-		value := readInt64PtrAny(args, "sb")
 		// TrueNAS publishes the normalized spare-block reserve as a percentage.
-		// Reject malformed/out-of-range values rather than projecting them onto
-		// the canonical percentage field.
-		if value != nil && *value >= 0 && *value <= 100 {
-			return 0, false, int(*value), true
+		// Parse directly into the canonical integer width and reject malformed or
+		// out-of-range values before projecting them onto the percentage field.
+		if value, ok := readSMARTPercentageAny(args, "sb"); ok {
+			return 0, false, value, true
 		}
 	}
 	return 0, false, 0, false
@@ -4786,6 +4785,64 @@ func readInt64PtrAny(record map[string]any, keys ...string) *int64 {
 		}
 	}
 	return nil
+}
+
+func readSMARTPercentageAny(record map[string]any, keys ...string) (int, bool) {
+	if record == nil {
+		return 0, false
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if parsed, ok := parseSMARTPercentageAny(value); ok {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func parseSMARTPercentageAny(value any) (int, bool) {
+	var parsed int
+	switch typed := value.(type) {
+	case int:
+		parsed = typed
+	case int64:
+		if typed < 0 || typed > 100 {
+			return 0, false
+		}
+		parsed = int(typed)
+	case float64:
+		if math.Trunc(typed) != typed || typed < 0 || typed > 100 {
+			return 0, false
+		}
+		parsed = int(typed)
+	case json.Number:
+		return parseSMARTPercentageAny(typed.String())
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return 0, false
+		}
+		integer, err := strconv.Atoi(trimmed)
+		if err != nil {
+			return 0, false
+		}
+		parsed = integer
+	case map[string]any:
+		if nested, ok := firstAny(typed, "parsed", "value", "rawvalue", "raw"); ok {
+			return parseSMARTPercentageAny(nested)
+		}
+		return 0, false
+	default:
+		return 0, false
+	}
+
+	if parsed < 0 || parsed > 100 {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func parseInt64Any(value any) (int64, bool) {

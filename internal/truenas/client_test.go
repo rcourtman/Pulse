@@ -374,8 +374,18 @@ func TestSMARTAlertEvidenceFromArgsUsesOnlyTypedNativeFields(t *testing.T) {
 			name: "spare reserve", class: "SMARTSpareBlockCountAlert",
 			args: map[string]any{"sb": "8"}, wantSpare: 8, wantSpareSeen: true,
 		},
+		{
+			name: "zero spare reserve", class: "SMARTSpareBlockCount",
+			args: map[string]any{"sb": json.Number("0")}, wantSpareSeen: true,
+		},
+		{
+			name: "maximum spare reserve", class: "SMARTSpareBlockCountAlert",
+			args: map[string]any{"sb": map[string]any{"parsed": int64(100)}}, wantSpare: 100, wantSpareSeen: true,
+		},
 		{name: "negative counter rejected", class: "SMARTUncorrectedErrors", args: map[string]any{"ue": -1}},
 		{name: "out of range percentage rejected", class: "SMARTSpareBlockCount", args: map[string]any{"sb": 101}},
+		{name: "oversized percentage rejected", class: "SMARTSpareBlockCount", args: map[string]any{"sb": "9223372036854775807"}},
+		{name: "fractional percentage rejected", class: "SMARTSpareBlockCount", args: map[string]any{"sb": 8.5}},
 		{name: "formatted text is not parsed", class: "SMARTUncorrectedErrors", args: map[string]any{"text": "53 errors"}},
 		{name: "unrelated alert cannot inject smart data", class: "DiskTemperatureAlert", args: map[string]any{"ue": 53, "sb": 8}},
 	}

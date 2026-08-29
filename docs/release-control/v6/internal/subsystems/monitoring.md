@@ -2643,7 +2643,9 @@ classes, typed `ue` and `sb` arguments from `alert.list` project onto canonical
 media-error and available-spare SMART fields after exact disk resolution. The
 provider must reject negative or out-of-range values, retain the worst value
 when duplicate evidence is present, and never derive a counter from formatted
-alert text.
+alert text. Available-spare parsing must validate the integer and its 0..100
+domain before conversion to the canonical `int` field; oversized, fractional,
+or wrapped malformed values are rejected rather than narrowed or truncated.
 The same boundary owns TrueNAS `smart_status` normalization. `internal/truenas/client.go`
 must parse REST and RPC SMART status separately from native disk state, and
 `internal/truenas/disk_health.go` plus `internal/truenas/provider.go` must map
