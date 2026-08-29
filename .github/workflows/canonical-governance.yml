@@ -252,6 +252,9 @@ jobs:
       - name: Run release promotion policy unit tests
         run: python3 scripts/release_control/release_promotion_policy_test.py
 
+      - name: Run release container identity verifier unit tests
+        run: python3 scripts/release_control/verify_release_container_images_test.py
+
       - name: Run immutable release integrity unit tests
         run: python3 scripts/release_control/verify_github_release_integrity_test.py
 

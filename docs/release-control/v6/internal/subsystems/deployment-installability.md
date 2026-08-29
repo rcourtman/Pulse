@@ -146,6 +146,10 @@ failing status and requires an explicit corrective release path.
 The activation marker is part of that complete draft packet: its stored digest
 must be checked before publication, and customer convergence is forbidden until
 GitHub reports the release immutable and its signed release attestation verifies.
+The marker must also retain the verified server and provider control-plane image
+digests. Normal and activation-recovery publication both fail closed without
+those identities, and convergence may forward only the values read from the
+immutable marker to public-container alias promotion.
 
 The accelerated exact-SHA release worker must preserve release-gate fidelity
 under its own resource envelope. Bounded frontend static checks and integration
@@ -295,6 +299,8 @@ release-latency optimization.
 96. `.github/scripts/setup-demo-ssh.sh`
 97. `scripts/trigger-stable-patch.sh`
 98. `scripts/verify-github-release-integrity.sh`
+99. `scripts/verify-release-container-images.sh`
+100. `scripts/release_control/verify_release_container_images_test.py`
 
 ## Shared Boundaries
 
@@ -630,7 +636,7 @@ artifact-selection behaviour.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/verify-github-release-integrity.sh`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/verify-github-release-integrity.sh`, `scripts/verify-release-container-images.sh`, `scripts/release_control/verify_release_container_images_test.py`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/recover-release-activation.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
    The governed release-build surface also includes
    `scripts/prepare-release-container-context.sh` for exact-candidate container
    assembly.
@@ -791,9 +797,12 @@ artifact-selection behaviour.
    promotion. The exact-version server and provider control-plane image builds
    are independent consumers of the same immutable container payload and must
    publish and attest in separate matrix jobs. Each matrix leg independently
-   verifies the exact checkout and candidate manifest; the reusable workflow
-   succeeds only after both legs finish, so parallel assembly cannot weaken the
-   readiness join or the shared source-SHA boundary.
+   verifies the exact checkout and candidate manifest. After both legs finish,
+   the reusable workflow must resolve the `v`-prefixed and unprefixed tags on
+   Docker Hub and GHCR to one digest per image, verify each registry's keyless
+   provenance against the exact source SHA and reusable signer workflow, and
+   export those two digests. Parallel assembly therefore cannot weaken the
+   readiness join or leave activation trusting a mutable registry tag.
    The backend runner must compile the race-enabled `internal/api` test binary
    once, enumerate every top-level test from that exact binary, and generate a
    deterministic manifest proving a complete, disjoint partition. Each
@@ -1204,7 +1213,7 @@ artifact-selection behaviour.
    the helper must wait for the Organization selector to hold the requested org
    before a scenario navigates onward, so an interrupted org-list bootstrap
    cannot fall back to `default` and mask the scoped UI under test.
-6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, stable-promotion rehearsal summaries, or the optional exact-SHA external-worker acceleration through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/mobile_release_gate_test.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
+6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, stable-promotion rehearsal summaries, or the optional exact-SHA external-worker acceleration through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/recover-release-activation.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/mobile_release_gate_test.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level
    `docs/RELEASE_NOTES.md` index must continue to point at the current shipped
@@ -1636,9 +1645,14 @@ artifact-selection behaviour.
    publisher must publish only immutable version tags; `promote-floating-tags`
    is the sole owner of `rc`, `latest`, major, and major/minor aliases for both
    `pulse` and `pulse-control-plane` on Docker Hub and GHCR. It must expose
-   `workflow_call` inputs (`tag`, `prerelease`), refuse a draft or quarantined
-   GitHub release, and depend on successful activation in the create-release
-   wiring so every alias points at an already-public, verified release.
+   `workflow_call` inputs for the tag, channel, source SHA, and both
+   activation-committed image digests; refuse a draft or quarantined GitHub
+   release; and depend on successful activation in the create-release wiring.
+   Immediately before mutation it must re-resolve all exact-version tags and
+   reverify both registries' provenance against those committed identities.
+   Alias creation must use registry-specific `image@sha256:...` sources rather
+   than dereferencing the mutable version tag again, and every resulting alias
+   must resolve back to the expected digest before convergence succeeds.
    Generated chart docs are part of the packaged release artifact, not a
    disposable byproduct: when the stable candidate version changes, the checked
    in `deploy/helm/pulse/README.md` output must be regenerated from the same

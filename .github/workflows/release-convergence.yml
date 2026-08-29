@@ -53,6 +53,8 @@ jobs:
     outputs:
       activation_owner_run_id: ${{ steps.marker.outputs.activation_owner_run_id }}
       activation_marker_sha256: ${{ steps.marker.outputs.activation_marker_sha256 }}
+      server_image_digest: ${{ steps.marker.outputs.server_image_digest }}
+      control_plane_image_digest: ${{ steps.marker.outputs.control_plane_image_digest }}
     steps:
       - name: Checkout release integrity control
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -107,7 +109,7 @@ jobs:
                  --arg release_id "${EXPECTED_RELEASE_ID}" \
                  --arg source_run_id "${EXPECTED_SOURCE_RUN_ID}" \
                  --arg r2_prefix "${EXPECTED_R2_PREFIX}" \
-                 '.schema_version == 1 and .tag == $tag and .target_commitish == $commit and .release_id == $release_id and .source_release_run_id == $source_run_id and (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix' \
+                 '.schema_version == 1 and .tag == $tag and .target_commitish == $commit and .release_id == $release_id and .source_release_run_id == $source_run_id and (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix and (.server_image_digest | test("^sha256:[0-9a-f]{64}$")) and (.control_plane_image_digest | test("^sha256:[0-9a-f]{64}$"))' \
                  "${marker}" >/dev/null; then
                 rm -f "${marker}"
                 echo "::error::Public activation marker for ${TAG} does not match the expected immutable release identity."
@@ -136,8 +138,12 @@ jobs:
                 exit 1
               fi
               activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
+              server_image_digest="$(jq -r '.server_image_digest' "${marker}")"
+              control_plane_image_digest="$(jq -r '.control_plane_image_digest' "${marker}")"
               echo "activation_owner_run_id=${activation_owner_run_id}" >> "$GITHUB_OUTPUT"
               echo "activation_marker_sha256=${activation_marker_sha256}" >> "$GITHUB_OUTPUT"
+              echo "server_image_digest=${server_image_digest}" >> "$GITHUB_OUTPUT"
+              echo "control_plane_image_digest=${control_plane_image_digest}" >> "$GITHUB_OUTPUT"
               rm -f "${marker}"
               echo "[OK] ${TAG} crossed the immutable, attested activation commit point."
               exit 0
@@ -198,6 +204,8 @@ jobs:
       desired_tag: ${{ steps.admit.outputs.desired_tag }}
       owner_asset_name: ${{ steps.owner.outputs.owner_asset_name }}
       owner_asset_sha256: ${{ steps.owner.outputs.owner_asset_sha256 }}
+      server_image_digest: ${{ needs.await_activation_commit.outputs.server_image_digest }}
+      control_plane_image_digest: ${{ needs.await_activation_commit.outputs.control_plane_image_digest }}
     steps:
       - name: Checkout release control
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -333,6 +341,9 @@ jobs:
     with:
       tag: ${{ inputs.tag }}
       prerelease: ${{ inputs.prerelease }}
+      source_sha: ${{ inputs.target_commitish }}
+      server_digest: ${{ needs.acquire_customer_promotion_lease.outputs.server_image_digest }}
+      control_plane_digest: ${{ needs.acquire_customer_promotion_lease.outputs.control_plane_image_digest }}
 
   publish_helm_pages:
     name: Converge Helm Pages

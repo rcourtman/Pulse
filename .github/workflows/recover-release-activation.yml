@@ -23,6 +23,7 @@ concurrency:
 permissions:
   actions: write
   contents: write
+  packages: read
 
 jobs:
   recover_activation:
@@ -175,6 +176,32 @@ jobs:
             --validate-body-file "${release_body}"
           echo "[OK] GitHub's stored RC packet still matches the immutable source-run manifest."
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Revalidate exact container identities and provenance
+        id: container_proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ./scripts/verify-release-container-images.sh \
+            "${{ inputs.tag }}" "${{ steps.qualify.outputs.source_sha }}" \
+            "${{ github.repository }}" >> "$GITHUB_OUTPUT"
+
       - name: Dispatch a fresh durable convergence owner
         id: dispatch
         env:
@@ -238,6 +265,8 @@ jobs:
           IS_PRERELEASE: ${{ steps.qualify.outputs.is_prerelease }}
           R2_PREFIX: ${{ steps.qualify.outputs.r2_prefix }}
           CONVERGENCE_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+          SERVER_IMAGE_DIGEST: ${{ steps.container_proof.outputs.server_digest }}
+          CONTROL_PLANE_IMAGE_DIGEST: ${{ steps.container_proof.outputs.control_plane_digest }}
         run: |
           set -euo pipefail
           release_json=$(mktemp)
@@ -334,6 +363,11 @@ jobs:
           jq -n '{draft: true, make_latest: "false"}' > "${quarantine_payload}"
 
           require_viable_convergence_owner
+          if [[ ! "${SERVER_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || \
+             [[ ! "${CONTROL_PLANE_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Verified public container digests are required before recovered activation."
+            exit 1
+          fi
           jq -n \
             --arg tag "${TAG}" \
             --arg target_commitish "${EXPECTED_COMMIT}" \
@@ -342,6 +376,8 @@ jobs:
             --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
             --arg r2_prefix "${R2_PREFIX}" \
             --arg activation_recovery_run_id "${GITHUB_RUN_ID}" \
+            --arg server_image_digest "${SERVER_IMAGE_DIGEST}" \
+            --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
             '{
               schema_version: 1,
               tag: $tag,
@@ -350,7 +386,9 @@ jobs:
               source_release_run_id: $source_release_run_id,
               convergence_run_id: $convergence_run_id,
               r2_prefix: $r2_prefix,
-              activation_recovery_run_id: $activation_recovery_run_id
+              activation_recovery_run_id: $activation_recovery_run_id,
+              server_image_digest: $server_image_digest,
+              control_plane_image_digest: $control_plane_image_digest
             }' > "${activation_marker}"
           gh release upload "${TAG}" \
             "${activation_marker}" --clobber \
@@ -412,11 +450,15 @@ jobs:
             --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
             --arg r2_prefix "${R2_PREFIX}" \
             --arg activation_recovery_run_id "${GITHUB_RUN_ID}" \
+            --arg server_image_digest "${SERVER_IMAGE_DIGEST}" \
+            --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
             '.schema_version == 1 and .tag == $tag and
              .target_commitish == $target_commitish and .release_id == $release_id and
              .source_release_run_id == $source_release_run_id and
              .convergence_run_id == $convergence_run_id and .r2_prefix == $r2_prefix and
-             .activation_recovery_run_id == $activation_recovery_run_id' \
+             .activation_recovery_run_id == $activation_recovery_run_id and
+             .server_image_digest == $server_image_digest and
+             .control_plane_image_digest == $control_plane_image_digest' \
             "${verified_marker}" >/dev/null
           trap - ERR
           echo "[OK] Recovered, immutably committed, and attested ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."
