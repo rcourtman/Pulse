@@ -73,6 +73,10 @@ Normal stable publication and stable dry runs select `signpath` directly.
   policy is invalid.
 - Release checksums and detached signatures are published alongside artifacts
   and verified independently after publication.
+- Release activation requires GitHub CLI 2.97.0 or newer, which includes the
+  literal signer-identity matcher fix. The published checksum manifest must
+  carry build provenance from the exact `create-release.yml` workflow and
+  release source commit; repository-level provenance is not sufficient.
 - Every new release is assembled and validated as a draft. Its activation
   marker is uploaded and digest-checked before publication; GitHub must then
   report the published release as immutable, protecting its tag and complete
@@ -81,8 +85,11 @@ Normal stable publication and stable dry runs select `signpath` directly.
   environments are not promoted until `gh release verify <tag> --repo
   rcourtman/Pulse` validates GitHub's signed release attestation and `gh release
   verify-asset <tag> <downloaded-asset> --repo rcourtman/Pulse` binds the
-  downloaded activation marker to that attestation. Operators can use the same
-  commands to verify the packet and any downloaded release asset independently.
+  downloaded activation marker to that attestation. The activation verifier
+  also binds the release's downloaded `checksums.txt` to that immutable packet
+  and verifies its exact workflow and source provenance. Operators can use the
+  same commands to verify the packet and any downloaded release asset
+  independently.
 
 ## Project roles
 

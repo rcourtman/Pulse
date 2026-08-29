@@ -23,6 +23,8 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         *,
         verification_succeeds: bool = True,
         asset_verification_succeeds: bool = True,
+        provenance_verification_succeeds: bool = True,
+        gh_version: str = "2.97.0",
     ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -33,6 +35,10 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                     f"""\
                     #!/usr/bin/env bash
                     set -euo pipefail
+                    if [ "$1" = version ]; then
+                      printf 'gh version %s (test)\\n' "$GH_VERSION"
+                      exit 0
+                    fi
                     printf '%s\\n' "$*" >> {calls!s}
                     if [ "$1" = api ]; then
                       cat <<'JSON'
@@ -49,6 +55,7 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                         if [ "$1" = --dir ]; then
                           mkdir -p "$2"
                           printf '%s\\n' '{{"schema_version": 1}}' > "$2/release-activation.json"
+                          printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$2/checksums.txt"
                           exit 0
                         fi
                         shift
@@ -58,6 +65,9 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                     if [ "$1 $2" = "release verify-asset" ]; then
                       printf '%s\\n' '{{"verified": true}}'
                       exit {0 if asset_verification_succeeds else 1}
+                    fi
+                    if [ "$1 $2" = "attestation verify" ]; then
+                      exit {0 if provenance_verification_succeeds else 1}
                     fi
                     exit 64
                     """
@@ -71,6 +81,7 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                     "PATH": f"{root}:{env['PATH']}",
                     "PULSE_RELEASE_ATTESTATION_ATTEMPTS": "1",
                     "PULSE_RELEASE_ATTESTATION_RETRY_DELAY": "0",
+                    "GH_VERSION": gh_version,
                 }
             )
             result = subprocess.run(
@@ -107,9 +118,19 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
     def test_accepts_immutable_release_with_verified_attestation(self) -> None:
         result, calls = self.run_verifier(self.release())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("is immutable, attested, and activation-asset-bound", result.stdout)
+        self.assertIn(
+            "is immutable, release-attested, activation-asset-bound, and build-provenance-bound",
+            result.stdout,
+        )
         self.assertIn("release verify v6.5.0 --repo rcourtman/Pulse --format json", calls)
         self.assertIn("release verify-asset v6.5.0", calls)
+        self.assertIn("attestation verify ", calls)
+        self.assertIn(
+            "--signer-workflow github.com/rcourtman/Pulse/.github/workflows/create-release.yml",
+            calls,
+        )
+        self.assertIn(f"--source-digest {SOURCE_SHA}", calls)
+        self.assertIn("--predicate-type https://slsa.dev/provenance/v1", calls)
 
     def test_rejects_mutable_release_before_attestation(self) -> None:
         result, calls = self.run_verifier(self.release(immutable=False))
@@ -125,9 +146,7 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         self.assertIn("activation marker", result.stderr)
 
     def test_rejects_failed_release_attestation(self) -> None:
-        result, _ = self.run_verifier(
-            self.release(), verification_succeeds=False
-        )
+        result, _ = self.run_verifier(self.release(), verification_succeeds=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("attestation verification failed", result.stderr)
 
@@ -138,6 +157,20 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("activation asset verification failed", result.stderr)
         self.assertIn("release verify-asset v6.5.0", calls)
+
+    def test_rejects_checksum_manifest_without_build_provenance(self) -> None:
+        result, calls = self.run_verifier(
+            self.release(), provenance_verification_succeeds=False
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("checksum manifest build provenance verification failed", result.stderr)
+        self.assertIn("attestation verify", calls)
+
+    def test_rejects_an_unsafe_github_cli_before_release_lookup(self) -> None:
+        result, calls = self.run_verifier(self.release(), gh_version="2.96.1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("too old for release attestation policy enforcement", result.stderr)
+        self.assertEqual(calls, "")
 
 
 if __name__ == "__main__":

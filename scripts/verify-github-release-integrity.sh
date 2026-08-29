@@ -7,15 +7,15 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 4 ]; then
-    echo "Usage: $0 <tag> <owner/repo> [expected-release-id] [expected-source-sha]" >&2
+if [ "$#" -ne 4 ]; then
+    echo "Usage: $0 <tag> <owner/repo> <expected-release-id> <expected-source-sha>" >&2
     exit 1
 fi
 
 TAG="$1"
 REPO="$2"
-EXPECTED_RELEASE_ID="${3:-}"
-EXPECTED_SOURCE_SHA="${4:-}"
+EXPECTED_RELEASE_ID="$3"
+EXPECTED_SOURCE_SHA="$4"
 ATTESTATION_ATTEMPTS="${PULSE_RELEASE_ATTESTATION_ATTEMPTS:-12}"
 ATTESTATION_RETRY_DELAY="${PULSE_RELEASE_ATTESTATION_RETRY_DELAY:-5}"
 
@@ -27,11 +27,11 @@ if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
     echo "Invalid GitHub repository: ${REPO}" >&2
     exit 1
 fi
-if [ -n "$EXPECTED_RELEASE_ID" ] && [[ ! "$EXPECTED_RELEASE_ID" =~ ^[0-9]+$ ]]; then
+if [[ ! "$EXPECTED_RELEASE_ID" =~ ^[0-9]+$ ]]; then
     echo "Invalid expected release id: ${EXPECTED_RELEASE_ID}" >&2
     exit 1
 fi
-if [ -n "$EXPECTED_SOURCE_SHA" ] && [[ ! "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+if [[ ! "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
     echo "Invalid expected source SHA: ${EXPECTED_SOURCE_SHA}" >&2
     exit 1
 fi
@@ -51,10 +51,15 @@ for command in gh jq; do
     fi
 done
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"${SCRIPT_DIR}/require-safe-gh-attestation.sh"
+
 release_json="$(mktemp)"
 attestation_json="$(mktemp)"
 activation_dir="$(mktemp -d)"
 activation_asset="${activation_dir}/release-activation.json"
+checksums_asset="${activation_dir}/checksums.txt"
+SIGNER_WORKFLOW="github.com/${REPO}/.github/workflows/create-release.yml"
 cleanup() {
     rm -f "$release_json" "$attestation_json"
     rm -rf "$activation_dir"
@@ -123,8 +128,10 @@ for attempt in $(seq 1 "$ATTESTATION_ATTEMPTS"); do
     if gh release download "$TAG" \
         --repo "$REPO" \
         --pattern release-activation.json \
+        --pattern checksums.txt \
         --dir "$activation_dir" && \
-       [ -s "$activation_asset" ]; then
+       [ -s "$activation_asset" ] && \
+       [ -s "$checksums_asset" ]; then
         downloaded=true
         break
     fi
@@ -148,7 +155,33 @@ if ! jq -e 'type == "object" or type == "array"' "$attestation_json" >/dev/null;
     exit 1
 fi
 
+# checksums.txt is the transitive identity of the executable release packet:
+# every primary binary, archive, installer, chart, and SBOM is named and
+# digest-bound there, while their detached signatures are checked separately.
+# First bind those exact checksum bytes to the immutable release, then require
+# build provenance from the one workflow and source commit authorized to
+# assemble the packet. Repository-level provenance alone is intentionally not
+# sufficient because other workflows in this repository can issue attestations.
+if ! gh release verify-asset "$TAG" "$checksums_asset" \
+    --repo "$REPO" --format json > "$attestation_json"; then
+    echo "GitHub release checksum manifest verification failed for ${TAG}." >&2
+    exit 1
+fi
+if ! jq -e 'type == "object" or type == "array"' "$attestation_json" >/dev/null; then
+    echo "GitHub release checksum manifest verification returned malformed JSON for ${TAG}." >&2
+    exit 1
+fi
+if ! gh attestation verify "$checksums_asset" \
+    --repo "$REPO" \
+    --signer-workflow "$SIGNER_WORKFLOW" \
+    --source-digest "$EXPECTED_SOURCE_SHA" \
+    --predicate-type https://slsa.dev/provenance/v1 \
+    >/dev/null; then
+    echo "Release checksum manifest build provenance verification failed for ${TAG}." >&2
+    exit 1
+fi
+
 release_id="$(jq -r '.id' "$release_json")"
 source_sha="$(jq -r '.target_commitish' "$release_json")"
 asset_count="$(jq -r '.assets | length' "$release_json")"
-echo "[OK] GitHub release ${TAG} is immutable, attested, and activation-asset-bound: release_id=${release_id} source_sha=${source_sha} assets=${asset_count}."
+echo "[OK] GitHub release ${TAG} is immutable, release-attested, activation-asset-bound, and build-provenance-bound: release_id=${release_id} source_sha=${source_sha} assets=${asset_count}."

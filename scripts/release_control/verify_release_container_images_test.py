@@ -22,6 +22,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
         *,
         overrides: dict[str, str] | None = None,
         gh_exit: int = 0,
+        gh_version: str = "2.97.0",
         tag: str = "v6.4.1",
         source_sha: str = SOURCE_SHA,
     ) -> tuple[subprocess.CompletedProcess[str], str]:
@@ -63,6 +64,10 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
                 textwrap.dedent(
                     """\
                     #!/bin/sh
+                    if [ "$1" = version ]; then
+                      printf 'gh version %s (test)\n' "$GH_VERSION"
+                      exit 0
+                    fi
                     printf '%s\n' "$*" >> "$GH_LOG"
                     exit "$GH_EXIT"
                     """
@@ -79,6 +84,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
                     "DIGEST_FILE": str(digest_file),
                     "GH_LOG": str(gh_log),
                     "GH_EXIT": str(gh_exit),
+                    "GH_VERSION": gh_version,
                 }
             )
             result = subprocess.run(
@@ -109,6 +115,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
             calls,
         )
         self.assertIn(f"--source-digest {SOURCE_SHA}", calls)
+        self.assertIn("--predicate-type https://slsa.dev/provenance/v1", calls)
 
     def test_rejects_a_moved_exact_version_tag_before_attestation(self) -> None:
         changed = "sha256:" + "c" * 64
@@ -125,6 +132,13 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len(calls.splitlines()), 1)
+
+    def test_rejects_an_unsafe_github_cli_before_registry_calls(self) -> None:
+        result, calls = self.run_verifier(gh_version="2.96.1")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("too old for release attestation policy enforcement", result.stderr)
+        self.assertEqual(calls, "")
 
     def test_rejects_invalid_release_identity_without_registry_calls(self) -> None:
         result, calls = self.run_verifier(source_sha="main")

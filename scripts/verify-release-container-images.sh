@@ -39,6 +39,9 @@ for command in docker gh jq; do
     fi
 done
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"${SCRIPT_DIR}/require-safe-gh-attestation.sh"
+
 resolve_digest() {
     local reference="$1"
     local manifest
@@ -75,6 +78,7 @@ verify_image() {
             --bundle-from-oci \
             --signer-workflow "$SIGNER_WORKFLOW" \
             --source-digest "$SOURCE_SHA" \
+            --predicate-type https://slsa.dev/provenance/v1 \
             >/dev/null
     done
 
