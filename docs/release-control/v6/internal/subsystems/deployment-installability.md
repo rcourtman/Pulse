@@ -184,8 +184,8 @@ release-latency optimization.
 23c. `.github/scripts/resolve-demo-runtime-profile.sh`
 24. `.github/workflows/validate-release-assets.yml`
 25. `.github/workflows/install-sh-smoke.yml`
-26. `scripts/check-github-release-immutability.sh`
-27. `scripts/release_control/customer_promotion_lease.sh`
+25a. `scripts/check-github-release-immutability.sh`
+26. `scripts/release_control/customer_promotion_lease.sh`
 27. `pulse-enterprise:.github/workflows/build-pro-release.yml`
 28. `pulse-enterprise:scripts/build-pro-binaries.sh`
 29. `pulse-enterprise:scripts/build-pro-release.sh`
