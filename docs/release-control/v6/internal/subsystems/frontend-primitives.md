@@ -3868,12 +3868,17 @@ interactive provider-support content belongs behind
 boundary. `DetailSectionTable` keeps the single bordered table at narrow widths
 where density matters, then presents those same canonical rows as bounded
 section cards on desktop. Desktop cards share the available row width, stretch
-to the same row height, balance five- and six-section drawers across three-card
-rows, and use a bounded local label column with left-aligned values so the
-layout has no ragged fixed-width island, stranded full-width final card, or
-full-drawer scan distance. Unified-resource technical summaries are part of
-this boundary and must not retain a full-width local table on desktop. The
-responsive presentation stays owned by the shared primitive;
+to the same row height, and use stable three- or four-column tracks. An
+incomplete final row must fill those same tracks with explicit integral spans;
+it must not independently flex-grow every remaining card into unrelated column
+edges. Five- and six-section drawers remain balanced across three-column rows,
+while seven-section drawers use a two-column span for the first card in the
+final row so the remaining cards keep the four-column alignment. Cards use a
+bounded local label column with left-aligned values so the layout has no ragged
+fixed-width island, stranded full-width final card, or full-drawer scan
+distance. Unified-resource technical summaries are part of this boundary and
+must not retain a full-width local table on desktop. The responsive
+presentation stays owned by the shared primitive;
 provider drawers must not fork their own desktop card renderers. Monitoring
 Optional detail-row progress is also owned by that shared presentation: the
 value text remains visible, `DetailSectionTable` composes `ProgressBar` for the

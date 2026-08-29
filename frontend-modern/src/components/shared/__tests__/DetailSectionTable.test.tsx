@@ -87,8 +87,8 @@ describe('DetailSectionTable', () => {
     expect(sections).toHaveLength(2);
     expect(sections[0]).toHaveClass(
       'lg:flex',
-      'lg:flex-1',
-      'lg:basis-[calc(25%-0.5rem)]',
+      'lg:flex-none',
+      'lg:basis-[calc(50%-0.25rem)]',
       'lg:rounded',
       'lg:border',
       'lg:p-3',
@@ -185,7 +185,7 @@ describe('DetailSectionTable', () => {
     expect(fill?.firstElementChild).toHaveClass('bg-emerald-500');
   });
 
-  it('balances five desktop sections across three- and two-card rows', () => {
+  it('fills five desktop sections on the same three-column tracks', () => {
     const { container } = render(() => (
       <DetailSectionTable
         sections={Array.from({ length: 5 }, (_, index) => ({
@@ -197,7 +197,31 @@ describe('DetailSectionTable', () => {
 
     const sections = container.querySelectorAll('tbody');
     expect(sections).toHaveLength(5);
-    sections.forEach((section) => expect(section).toHaveClass('lg:basis-[calc(33.333%-0.5rem)]'));
+    Array.from(sections)
+      .slice(0, 3)
+      .forEach((section) => expect(section).toHaveClass('lg:basis-[calc(33.333%-0.333rem)]'));
+    expect(sections[3]).toHaveClass('lg:basis-[calc(66.667%-0.167rem)]');
+    expect(sections[4]).toHaveClass('lg:basis-[calc(33.333%-0.333rem)]');
+  });
+
+  it('fills seven desktop sections on the same four-column tracks', () => {
+    const { container } = render(() => (
+      <DetailSectionTable
+        sections={Array.from({ length: 7 }, (_, index) => ({
+          label: `Section ${index + 1}`,
+          rows: [{ label: 'Value', value: String(index + 1) }],
+        }))}
+      />
+    ));
+
+    const sections = container.querySelectorAll('tbody');
+    expect(sections).toHaveLength(7);
+    Array.from(sections)
+      .slice(0, 4)
+      .forEach((section) => expect(section).toHaveClass('lg:basis-[calc(25%-0.375rem)]'));
+    expect(sections[4]).toHaveClass('lg:basis-[calc(50%-0.25rem)]');
+    expect(sections[5]).toHaveClass('lg:basis-[calc(25%-0.375rem)]');
+    expect(sections[6]).toHaveClass('lg:basis-[calc(25%-0.375rem)]');
   });
 
   it('lazily renders technical details with the same compact section rows', () => {

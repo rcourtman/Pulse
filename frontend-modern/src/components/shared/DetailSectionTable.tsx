@@ -26,10 +26,40 @@ const detailValueToneClass = (tone: DetailValueTone | undefined): string => {
   return 'text-base-content';
 };
 
-const detailSectionDesktopBasisClass = (sectionCount: number): string =>
-  sectionCount === 5 || sectionCount === 6
-    ? 'lg:basis-[calc(33.333%-0.5rem)]'
-    : 'lg:basis-[calc(25%-0.5rem)]';
+const detailSectionDesktopColumnCount = (sectionCount: number): 1 | 2 | 3 | 4 => {
+  if (sectionCount <= 1) return 1;
+  if (sectionCount === 2) return 2;
+  if (sectionCount === 3 || sectionCount === 5 || sectionCount === 6) return 3;
+  return 4;
+};
+
+const detailSectionDesktopSpan = (sectionCount: number, sectionIndex: number): number => {
+  const columnCount = detailSectionDesktopColumnCount(sectionCount);
+  const remainder = sectionCount % columnCount;
+  if (remainder === 0 || sectionIndex < sectionCount - remainder) return 1;
+
+  const remainderIndex = sectionIndex - (sectionCount - remainder);
+  const baseSpan = Math.floor(columnCount / remainder);
+  const widerSectionCount = columnCount % remainder;
+  return baseSpan + (remainderIndex < widerSectionCount ? 1 : 0);
+};
+
+const detailSectionDesktopBasisClass = (sectionCount: number, sectionIndex: number): string => {
+  const columnCount = detailSectionDesktopColumnCount(sectionCount);
+  const span = detailSectionDesktopSpan(sectionCount, sectionIndex);
+  if (span >= columnCount) return 'lg:basis-full';
+
+  if (columnCount === 4) {
+    if (span === 3) return 'lg:basis-[calc(75%-0.125rem)]';
+    if (span === 2) return 'lg:basis-[calc(50%-0.25rem)]';
+    return 'lg:basis-[calc(25%-0.375rem)]';
+  }
+  if (columnCount === 3) {
+    if (span === 2) return 'lg:basis-[calc(66.667%-0.167rem)]';
+    return 'lg:basis-[calc(33.333%-0.333rem)]';
+  }
+  return 'lg:basis-[calc(50%-0.25rem)]';
+};
 
 export const DetailSectionTable: Component<{
   sections: DetailSection[];
@@ -45,10 +75,10 @@ export const DetailSectionTable: Component<{
       wrapperClass="lg:overflow-visible"
     >
       <For each={props.sections}>
-        {(section) => (
+        {(section, sectionIndex) => (
           <TableBody
             data-testid={section.testId}
-            class={`divide-y divide-border lg:flex lg:min-w-[16rem] lg:flex-1 lg:flex-col lg:overflow-hidden lg:rounded lg:border lg:border-border lg:bg-surface lg:p-3 lg:shadow-sm lg:divide-y-0 ${detailSectionDesktopBasisClass(props.sections.length)}`}
+            class={`divide-y divide-border lg:flex lg:min-w-0 lg:flex-none lg:flex-col lg:overflow-hidden lg:rounded lg:border lg:border-border lg:bg-surface lg:p-3 lg:shadow-sm lg:divide-y-0 ${detailSectionDesktopBasisClass(props.sections.length, sectionIndex())}`}
           >
             <TableRow class="bg-surface-alt lg:mb-1 lg:block lg:bg-transparent lg:hover:bg-transparent">
               <TableHead

@@ -1,22 +1,19 @@
 {
   "version": 1,
-  "base_sha": "0df9747bd7ef97d768d5320e1952116ad4e675ea",
-  "verified_at": "2026-08-29T13:46:17Z",
+  "base_sha": "974f102333d5e394ce6ddf966ad2759d1888386f",
+  "verified_at": "2026-08-29T15:34:14Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/settings.ts"
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/settings.ts": "6b3b67e14054d6b93a0eeb92107426384b4d2badeec7c52798b7c00cf6f5e920"
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "9164c52fe67c6e6504a961a48e562479613d498d8d12ae10411d5b193dba36b5"
   },
-  "routes": [
-    "/settings/system-general",
-    "/docs/PRIVACY"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1920,
+      "height": 900
     },
     {
       "width": 390,
@@ -24,17 +21,13 @@
     }
   ],
   "states": [
-    "authenticated General settings with outbound telemetry disabled by PULSE_TELEMETRY=false",
-    "schema-14 heartbeat payload preview expanded at desktop width",
-    "schema-14 heartbeat payload preview expanded without document overflow at narrow width",
-    "rotating pseudonymous install ID refreshed after operator confirmation",
-    "shipped privacy document opened from the telemetry disclosure"
+    "mock-backed Proxmox Overview with a seven-section node drawer expanded",
+    "desktop node details aligned to four shared column tracks across both rows",
+    "compact mobile node details retained as one full-width bordered table"
   ],
   "interactions": [
-    "opened General settings at 1280x800 and selected Preview payload",
-    "confirmed schema_version 14 and representative alert severity, resolution-time, and persistence-health aggregates in the rendered payload",
-    "resized the current interaction to 390x844, confirmed the payload stayed visible, and verified no horizontal document overflow",
-    "selected Reset ID at narrow width, accepted the confirmation dialog, and confirmed the rendered install ID rotated",
-    "opened Full details and confirmed the shipped /docs/PRIVACY document rendered in a browser popup"
+    "opened Proxmox Overview at 1920x900, expanded Analytics A, and confirmed the four first-row cards share equal quarter-width tracks",
+    "confirmed Network spans two desktop tracks while Storage and Telemetry each span one, filling the final row with aligned card edges",
+    "repeated the expanded drawer at 390x844 and confirmed every section remains a full-width table row group with adjacent labels and values"
   ]
 }

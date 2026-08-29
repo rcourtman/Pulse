@@ -7976,8 +7976,13 @@ describe('shared primitive guardrails', () => {
     expect(detailSectionTableSource).toContain('DetailSectionTable');
     expect(detailSectionTableSource).toContain('InlineDetailPanel');
     expect(detailSectionTableSource).toContain('ObjectDrawerHeader');
-    expect(detailSectionTableSource).toContain('lg:basis-[calc(25%-0.5rem)]');
-    expect(detailSectionTableSource).toContain('lg:basis-[calc(33.333%-0.5rem)]');
+    expect(detailSectionTableSource).toContain('detailSectionDesktopSpan');
+    expect(detailSectionTableSource).toContain('lg:basis-[calc(25%-0.375rem)]');
+    expect(detailSectionTableSource).toContain('lg:basis-[calc(50%-0.25rem)]');
+    expect(detailSectionTableSource).toContain('lg:basis-[calc(33.333%-0.333rem)]');
+    expect(detailSectionTableSource).toContain('lg:basis-[calc(66.667%-0.167rem)]');
+    expect(detailSectionTableSource).toContain('lg:flex-none');
+    expect(detailSectionTableSource).not.toContain('lg:flex-1');
     expect(detailSectionTableSource).toContain('lg:grid-cols-[7rem_minmax(0,1fr)]');
     expect(detailSectionTableSource).toContain('lg:text-left');
     expect(detailSectionTableSource).toContain('lg:divide-y-0');
