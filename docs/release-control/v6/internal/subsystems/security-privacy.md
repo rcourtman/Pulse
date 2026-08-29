@@ -74,6 +74,10 @@ than accepting secret values.
 The canonical and shipped privacy documents must state this retained-data and
 telemetry boundary explicitly and remain byte-for-byte synchronized, so the
 promise visible inside the product cannot drift from the repository policy.
+Their telemetry table must identify the current schema version and name every
+outbound JSON field individually. Grouped prose may explain related aggregates,
+but it cannot replace field-level disclosure or make a newly added counter
+invisible to operators reviewing exactly what Pulse sends.
 
 ## Canonical Files
 

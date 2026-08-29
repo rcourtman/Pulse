@@ -37,7 +37,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `13` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `14` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -93,17 +93,30 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Alerts fired 30d | `18` | Count unique locally retained alert occurrences in the current 30-day window without sending alert text, resource IDs, or timestamps |
 | Alerts acknowledged 30d | `7` | Count acknowledgements in the current 30-day window without sending actors, reasons, alert IDs, or timestamps |
 | Alerts resolved 30d | `12` | Count resolved alert records in the current 30-day window without sending resolution details, alert IDs, or resource IDs |
-| Active alerts by severity | `1` info, `2` warning, `1` critical | Three aggregate counts that reconcile to active alerts |
-| Active alert age buckets | `1` under 1h, `2` 1h-24h, `1` 1d-7d, `0` 7d+ | Four closed age buckets with no alert timestamps |
-| Alerts fired by severity 30d | `2` info, `10` warning, `6` critical | Three aggregate occurrence counts that reconcile to alerts fired 30d |
-| Alerts resolved by severity 30d | `1` info, `7` warning, `4` critical | Three aggregate occurrence counts that reconcile to alerts resolved 30d |
-| Alert resolution duration buckets 30d | `3` under 15m, `2` 15m-1h, `5` 1h-24h, `2` 1d-7d, `0` 7d+ | Five closed time-to-resolution buckets with no occurrence timestamps |
-| Repeat alert occurrences 30d | `4` | Count occurrences after the first local occurrence of the same canonical alert identity, without sending that identity |
-| Snoozed alert occurrences 30d | `3` | Count occurrences with a durable suppression lifecycle transition |
+| Active alerts info | `1` | Count currently active info alerts without sending alert content or identity |
+| Active alerts warning | `2` | Count currently active warning alerts without sending alert content or identity |
+| Active alerts critical | `1` | Count currently active critical alerts without sending alert content or identity |
+| Active alerts age under 1h | `1` | Count active alerts in the closed under-one-hour age bucket without sending timestamps |
+| Active alerts age 1h 24h | `2` | Count active alerts in the closed one-hour-to-one-day age bucket without sending timestamps |
+| Active alerts age 1d 7d | `1` | Count active alerts in the closed one-day-to-seven-day age bucket without sending timestamps |
+| Active alerts age 7d plus | `0` | Count active alerts in the closed seven-days-or-more age bucket without sending timestamps |
+| Alerts fired info 30d | `2` | Count info alert occurrences in the current 30-day window without sending alert content or identity |
+| Alerts fired warning 30d | `10` | Count warning alert occurrences in the current 30-day window without sending alert content or identity |
+| Alerts fired critical 30d | `6` | Count critical alert occurrences in the current 30-day window without sending alert content or identity |
+| Alerts resolved info 30d | `1` | Count resolved info alert occurrences in the current 30-day window without sending alert content or identity |
+| Alerts resolved warning 30d | `7` | Count resolved warning alert occurrences in the current 30-day window without sending alert content or identity |
+| Alerts resolved critical 30d | `4` | Count resolved critical alert occurrences in the current 30-day window without sending alert content or identity |
+| Alerts resolution under 15m 30d | `3` | Count resolved occurrences in the closed under-15-minute duration bucket without sending timestamps |
+| Alerts resolution 15m 1h 30d | `2` | Count resolved occurrences in the closed 15-minute-to-one-hour duration bucket without sending timestamps |
+| Alerts resolution 1h 24h 30d | `5` | Count resolved occurrences in the closed one-hour-to-one-day duration bucket without sending timestamps |
+| Alerts resolution 1d 7d 30d | `2` | Count resolved occurrences in the closed one-day-to-seven-day duration bucket without sending timestamps |
+| Alerts resolution 7d plus 30d | `0` | Count resolved occurrences in the closed seven-days-or-more duration bucket without sending timestamps |
+| Alerts repeat occurrences 30d | `4` | Count occurrences after the first local occurrence of the same canonical alert identity, without sending that identity |
+| Alerts snoozed occurrences 30d | `3` | Count occurrences with a durable suppression lifecycle transition |
 | Alerts resolved while snoozed 30d | `2` | Count snoozed occurrences whose recovery transition arrived before an unsnooze transition |
 | Alert manager tenants | `2` | Denominator for tenant-level alert configuration and persistence fields |
 | Alert delivery active tenants | `2` | Count tenant alert managers with delivery enabled and activation state active |
-| Alert flapping detection enabled tenants | `2` | Count tenant alert managers with flapping detection configured, not detected flapping episodes |
+| Alert flapping enabled tenants | `2` | Count tenant alert managers with flapping detection configured, not detected flapping episodes |
 | Alert intent policy configured tenants | `1` | Count tenant alert managers with an explicitly revised default, resource-type, or resource intent policy |
 | Alert event history authoritative tenants | `2` | Count tenant alert managers whose durable event history is authoritative |
 | Alert active state authoritative tenants | `2` | Count tenant alert managers whose durable active-state projection is authoritative |

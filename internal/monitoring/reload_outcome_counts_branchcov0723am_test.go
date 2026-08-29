@@ -157,13 +157,11 @@ func TestBranchcov0723Am_AccumulateInstallOutcomeCounts(t *testing.T) {
 		assert.Equal(t, sentryCounts(), counts)
 	})
 
-	t.Run("alert_manager_with_empty_history_increments_nothing", func(t *testing.T) {
+	t.Run("alert_manager_with_empty_history_reports_configuration_adoption", func(t *testing.T) {
 		// Covers the alertManager != nil true-arm. A freshly-constructed alert
-		// manager has no history, so GetAlertHistorySince returns nothing and
-		// no alert-outcome counts accrue. (Deeper history-driven counting is
-		// exercised directly on accumulateAlertOutcomeCounts above; history
-		// cannot be injected into an alerts.Manager from outside the alerts
-		// package without driving the full evaluation pipeline.)
+		// manager has no history, so no lifecycle outcome counts accrue. It does
+		// still contribute one manager and its default-enabled flapping posture;
+		// those are configuration adoption denominators rather than outcomes.
 		alertMgr := alerts.NewManagerWithDataDir(t.TempDir())
 		defer alertMgr.Stop()
 
@@ -172,7 +170,10 @@ func TestBranchcov0723Am_AccumulateInstallOutcomeCounts(t *testing.T) {
 
 		counts := sentryCounts()
 		accumulateInstallOutcomeCounts(&counts, mon, now)
-		assert.Equal(t, sentryCounts(), counts, "empty history must not change any count")
+		expected := sentryCounts()
+		expected.AlertQuality.ManagerTenants = 1
+		expected.AlertQuality.FlappingEnabledTenants = 1
+		assert.Equal(t, expected, counts, "empty history must only add configuration adoption")
 	})
 }
 
