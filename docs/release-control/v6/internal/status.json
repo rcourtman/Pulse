@@ -9763,9 +9763,82 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "agent-privilege-boundary-separation",
+      "summary": "The Unified Agent still combines networked collection, root or root-equivalent host access, self-update authority, and optional arbitrary command execution in one runtime. The optional least-privilege profile reduces some access but adds the service account to the rootful Docker group when present, lets it own and replace its binary, forwards caller-controlled arguments through privileged sudo helpers, and does not separate monitoring credentials from remediation authority consistently. Addressing the trust concern requires a governed cross-surface redesign: API-first monitoring, an unprivileged collector, a typed no-network privileged helper, and a separately installed and credentialed action runner, with explicit migration and per-platform qualification.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-08-29",
+      "lane_ids": [
+        "L1",
+        "L6",
+        "L14",
+        "L16",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "api-contracts",
+        "deployment-installability",
+        "security-privacy"
+      ],
+      "proposed_resolution": "new-lane",
+      "coverage_impact": 8,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/AGENT_PRIVILEGE_BOUNDARY_PLAN.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agenttokens/install.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/commands.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/install.sh",
+          "kind": "file"
+        }
+      ]
     }
   ],
-  "candidate_lanes": [],
+  "candidate_lanes": [
+    {
+      "id": "secure-agent-runtime-separation",
+      "name": "Secure Agent Runtime Separation",
+      "summary": "Separate monitoring, exceptional host privilege, update activation, and remediation into independently owned and credentialed runtimes: API-only collection where sufficient, an unprivileged collector by default, a typed no-network privileged helper, and an explicit action runner. Qualify the boundary through migration, rollback, adversarial, platform, and live telemetry proof before changing the product-wide default claim.",
+      "status": "proposed",
+      "recorded_at": "2026-08-29",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L1",
+        "L6",
+        "L14",
+        "L16",
+        "L20"
+      ],
+      "coverage_gap_ids": [
+        "agent-privilege-boundary-separation"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "api-contracts",
+        "deployment-installability",
+        "security-privacy"
+      ],
+      "demand_evidence": [
+        "community-feedback: https://www.youtube.com/watch?v=cdaA-CJG-Ds",
+        "architecture-plan: docs/release-control/v6/internal/AGENT_PRIVILEGE_BOUNDARY_PLAN.md"
+      ]
+    }
+  ],
   "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",

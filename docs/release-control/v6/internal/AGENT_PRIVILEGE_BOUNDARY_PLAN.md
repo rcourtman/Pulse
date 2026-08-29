@@ -1,0 +1,422 @@
+# Unified Agent Privilege-Boundary Plan
+
+Last updated: 2026-08-29
+Status: PROPOSED
+Governance surfaces:
+- `status.json.coverage_gaps.agent-privilege-boundary-separation`
+- `status.json.candidate_lanes.secure-agent-runtime-separation`
+
+## Intent
+
+Pulse should keep broad host visibility without asking operators to trust one
+network-connected, root-running process with monitoring, update, and arbitrary
+command authority.
+
+The target is a split runtime:
+
+1. API-only monitoring remains the recommended path where a platform API can
+   provide the required inventory and health signals.
+2. The Unified Agent collector runs as an unprivileged service account by
+   default on supported general-purpose Linux hosts.
+3. Narrow privileged reads and update activation cross a local typed helper
+   boundary instead of widening the collector process.
+4. Remediation is a separately installed, separately credentialed runtime with
+   explicit action policy. It is never implied by installing monitoring.
+
+This is a trust-boundary change, not an installer-default cleanup. It crosses
+agent lifecycle, token authority, installer ownership, platform visibility,
+action governance, updates, UI guidance, and migration compatibility. It
+therefore needs its own governed lane rather than an untracked expansion of
+the complete agent-lifecycle lane.
+
+## Product Sentence
+
+Pulse monitors with the least authority the selected data source requires,
+isolates exceptional host privileges behind typed local operations, and grants
+remediation authority only through a separate operator-enabled runtime and
+credential.
+
+## Current Baseline
+
+The current implementation has useful hardening, but it does not yet establish
+that product sentence:
+
+- `scripts/install.sh` defaults the Unified Agent service to `root`; the
+  optional `--least-privilege` profile is not the generated setup default.
+- A Proxmox systemd unit can receive ambient `CAP_SETUID` and `CAP_SETGID` even
+  when commands are not enabled, because later remote command enablement is
+  anticipated by the unit.
+- The least-privilege installer adds `pulse-agent` to the rootful Docker group
+  when present. Access to a rootful Docker socket is root-equivalent authority,
+  even if Pulse currently intends only read operations.
+- The least-privilege service account owns the installed agent binary so the
+  in-process updater can replace it. A compromised collector can therefore
+  persist by replacing its own executable.
+- SMART and `pct` access use sudo wrappers that forward caller-controlled
+  arguments to privileged binaries. The wrapper and sudoers entry do not form
+  a typed operation boundary.
+- `internal/api/agenttokens/install.go` gives Proxmox install credentials
+  `agent:exec` unconditionally, while host install credentials grant it only
+  when commands are enabled.
+- `internal/hostagent/commands.go` carries typed operations and arbitrary shell
+  execution in the same command channel; `read_file` also reaches a command
+  execution path, and trusted internal requests can bypass human approval.
+- Setup copy correctly recommends API inventory where possible, but the
+  agent-mode path describes a supported root service rather than offering a
+  safe default privilege profile.
+
+Existing hardening such as a dedicated listener, token binding, command policy,
+systemd sandboxing, scoped API tokens, and the optional least-privilege profile
+is retained as useful input. None of it substitutes for separating monitoring
+from root-equivalent and remediation authority.
+
+## Target Architecture
+
+### 1. API-Only Monitoring
+
+API-backed platform integrations remain first choice when they meet the
+support floor. Installing an agent must not be presented as a security upgrade
+over an adequate API connection.
+
+API credentials stay scoped to collection. They do not grant host command or
+remediation authority.
+
+### 2. Unprivileged Collector
+
+The default supported Linux collector runs as `pulse-agent` and owns only its
+mutable state, logs, and credential files. Its executable and unit definition
+remain root-owned and not writable by the service account.
+
+The collector may:
+
+- gather unprivileged OS telemetry
+- connect outbound to the Pulse agent listener
+- receive its credential through a narrowly permissioned service mechanism
+- request a versioned local privileged operation
+- report capability loss explicitly when a privileged provider is unavailable
+
+The collector may not:
+
+- hold `agent:exec`
+- join a root-equivalent daemon group
+- hold ambient privilege-escalation capabilities
+- invoke arbitrary sudo commands
+- replace its installed executable directly
+- accept arbitrary remote shell or file-read requests
+
+### 3. Typed Privileged Helper
+
+A small root-owned helper provides only the privileged operations that have a
+documented monitoring or update need. It has no Pulse credential and no
+outbound network access. The preferred transport is a root-owned local Unix
+socket with peer-credential validation and a versioned request/response
+schema.
+
+Initial operation families are expected to be:
+
+- SMART device discovery and bounded health reads
+- Proxmox guest/container inventory needed for host-level visibility
+- bounded Docker/Podman inventory through the daemon without granting the
+  collector direct socket access
+- activation and rollback of an already downloaded, signature-verified agent
+  update
+
+Each operation must define allowed fields, validation, time limit, output
+limit, stable error classes, audit metadata, and platform support. The helper
+must reject unknown operation versions and arbitrary command arguments. It
+must not expose a generic exec, shell, file-read, daemon-proxy, or path-read
+primitive.
+
+The helper is not automatically installed merely because the collector is
+installed. The setup flow selects required operation bundles from the
+operator's enabled telemetry providers and shows the resulting authority.
+
+### 4. Separate Action Runner
+
+Remediation moves out of the collector process into a separate service and
+install choice. The action runner has its own host-bound credential and only
+that credential may carry `agent:exec`.
+
+The runner receives typed, versioned actions after the server-side action
+governance path has completed authorization, approval, lease, freshness, and
+audit admission. It returns durable receipts using the existing idempotency
+model.
+
+Arbitrary shell and unrestricted file reads are not part of the safe target
+architecture. If compatibility requires a transition period, they remain only
+in an explicitly named full-trust legacy profile with separate disclosure,
+credentialing, install action, and deprecation tracking. They must not be
+described as least privilege.
+
+### 5. Appliance Profiles
+
+TrueNAS, Synology, QNAP, Unraid, FreeBSD, and other appliance or non-systemd
+platforms do not silently inherit the Linux claim. Each platform keeps an
+explicit capability profile until its own service-manager, filesystem, update,
+and privileged-read boundaries are proven.
+
+An unsupported safe profile fails closed with clear setup guidance. It does
+not silently fall back to root.
+
+## Security Invariants
+
+These are completion conditions, not implementation preferences:
+
+1. A monitoring-only install credential never includes `agent:exec`.
+2. Remote configuration cannot promote a monitoring collector into a command
+   runtime or cause new ambient capabilities to appear.
+3. The collector service account cannot mutate its executable, unit, helper,
+   or root-owned update staging metadata.
+4. The collector has no direct rootful Docker socket access and is not a member
+   of a root-equivalent runtime group.
+5. The privileged helper has no network credential, outbound network path, or
+   generic execution primitive.
+6. Helper requests authenticate the local caller, validate a versioned typed
+   operation, and enforce time and output bounds before returning data.
+7. A compromised collector can request only the same bounded operations needed
+   for configured telemetry; it cannot convert them into arbitrary host writes
+   or command execution.
+8. Update activation verifies signed artifact identity and target paths before
+   an atomic root-owned swap, preserves a last-known-good binary, and produces
+   a durable result.
+9. Installing or enabling remediation is a separate operator action with a
+   separate service, credential, status, and uninstall path.
+10. A trusted server-side origin does not turn an untyped command string into
+    an approved action.
+11. Doctor and fleet status report effective privilege profile, helper
+    operation availability, action-runner state, credential authority, and
+    degraded telemetry separately.
+12. Setup and migration never claim a safe profile when the running process or
+    effective groups/capabilities contradict it.
+
+## Execution Slices
+
+The slices are ordered to reduce current authority before the full helper and
+runner split lands. Each slice must remain releasable and must not claim the
+final architecture early.
+
+### Slice A: Immediate Authority Containment
+
+Deliver:
+
+- remove unconditional `agent:exec` from Proxmox monitoring install tokens
+- make command authority explicit at every install-token call site
+- stop provisioning ambient `CAP_SETUID`/`CAP_SETGID` for monitoring-only
+  agents in anticipation of future remote configuration
+- prevent remote settings from promoting a monitoring-only runtime into a
+  command-capable runtime
+- expose monitoring versus remediation authority in generated setup guidance
+  and Doctor output
+- label current root and optional least-privilege modes accurately; do not
+  overstate either as the completed split architecture
+
+Required proof:
+
+- token tests show monitoring credentials reject `agent:exec`
+- installer tests show command-disabled units receive no command-only ambient
+  capabilities
+- remote-config tests show authority cannot widen without reinstalling or
+  explicitly enrolling the action runtime
+- upgrade tests preserve existing installations without silently changing
+  telemetry or command behavior
+
+### Slice B: Safe Collector Profile and Migration
+
+Deliver:
+
+- make the unprivileged collector the default on supported Linux systemd hosts
+- keep the binary, service unit, and helper root-owned
+- keep mutable state and credentials narrowly accessible to `pulse-agent`
+- remove automatic Docker-group membership
+- generate install commands with a typed privilege profile and required
+  telemetry bundles
+- provide an inspect-only migration command that reports expected telemetry
+  changes before applying them
+- provide explicit apply and rollback operations; never silently convert an
+  existing root install during ordinary update
+
+Required proof:
+
+- fresh-install tests verify user, groups, ownership, modes, capabilities, and
+  unit sandboxing
+- upgrade tests verify existing root installs remain stable until an operator
+  selects migration
+- migration rehearsal verifies preflight, apply, rollback, credential
+  preservation, and honest degraded capability reporting
+- setup UI and generated commands describe unsupported appliance profiles
+  without a root fallback masquerading as success
+
+### Slice C: Typed Privileged Helper
+
+Deliver:
+
+- add the local protocol, root-owned socket/unit, peer authentication, request
+  validation, audit fields, timeouts, and output bounds
+- implement SMART and Proxmox operation bundles
+- implement bounded container-runtime inventory without exposing the daemon
+  socket to the collector
+- move signed update activation and rollback behind a root-owned operation
+- remove sudo argument-forwarding wrappers and their grants after parity is
+  proven
+
+Required proof:
+
+- protocol conformance tests cover every accepted and rejected operation
+  version and field
+- adversarial tests reject path traversal, argument injection, unknown ops,
+  oversized output, timeout abuse, symlink swaps, and unauthorized peers
+- process/network proof shows the helper cannot make outbound connections
+- telemetry parity tests compare the safe profile with the current root
+  baseline and classify every intentional difference
+- update tests prove signature identity, atomic activation, restart, health
+  verification, and rollback while the collector cannot write its binary
+
+### Slice D: Separate Action Runner
+
+Deliver:
+
+- create a separate action-runner install, service, credential, registration,
+  health, and uninstall lifecycle
+- route typed host, Proxmox, and container remediation through that runtime
+- bind action-runner sessions to organization, canonical host identity, token,
+  and action capability
+- preserve server-side approval, policy lease, audit, cancellation, and durable
+  terminal receipts
+- remove arbitrary shell and unrestricted file read from the normal collector
+  protocol
+- bound any necessary legacy full-trust compatibility with explicit status and
+  removal criteria
+
+Required proof:
+
+- monitoring-only hosts cannot open action sessions or receive actions
+- collector credentials are rejected by the action listener and action
+  credentials are rejected for collector report/config paths unless explicitly
+  granted
+- typed action schema, policy admission, target binding, replay protection,
+  cancellation, and receipts pass adversarial tests
+- disabling or uninstalling the runner leaves monitoring intact
+- no trusted-origin flag bypasses typed action validation or live policy
+  admission
+
+### Slice E: Qualification and Default Ratchet
+
+Deliver:
+
+- publish the per-platform privilege and telemetry matrix
+- run migration rehearsals on representative Proxmox, Linux, Docker/Podman,
+  SMART, and update environments
+- complete an external security review focused on the local helper protocol,
+  update boundary, action credential separation, and migration
+- make the setup UI default to the safe supported profile only after proof
+  meets the matrix
+- retain a clearly named legacy/full-trust path only for platforms or features
+  with an owned residual and a removal condition
+
+Required proof:
+
+- fresh installs and migrations produce the declared profile on live hosts
+- the capability matrix matches observed telemetry and action behavior
+- failures degrade visibly and never fall back to broader privilege
+- support and troubleshooting material can distinguish collector, helper, and
+  action-runner failures without asking operators to run the whole agent as
+  root
+
+## File-Level Change Map
+
+Expected primary surfaces:
+
+- `scripts/install.sh`: profile selection, service ownership, helper/runner
+  units, migration, rollback, and uninstall
+- `scripts/installtests/`: install, upgrade, migration, ownership, capability,
+  and appliance-profile proof
+- `internal/api/agenttokens/install.go`: monitoring and action credential scope
+  separation
+- `internal/api/configapi/install_command.go`: typed privilege and action
+  profile generation
+- `internal/hostagent/`: collector-only transport, capability reporting, and
+  removal of command authority
+- a new narrowly owned helper package/command: typed local privileged protocol
+  and implementations
+- a new action-runner package/command: remediation transport and typed action
+  execution
+- `internal/agentexec/` and action APIs: runner-specific admission, target
+  binding, health, and receipts
+- Infrastructure and Agent Doctor frontend surfaces: effective authority,
+  capability differences, migration preflight, and separate remediation
+  enrollment
+- `docs/AGENT_SECURITY.md`, `docs/PRODUCTION_SECURITY.md`, install docs, and
+  troubleshooting docs: supported privilege claims and migration guidance
+
+Before implementation, every path must be resolved through
+`subsystem_lookup.py`; the owning subsystem contracts and registry entries must
+be updated in the same slice when the canonical ownership boundary moves.
+
+## Migration and Compatibility
+
+Existing installations are not silently switched from root to the safe
+profile during an update. The migration flow is:
+
+1. inspect the running unit, user, groups, capabilities, binary ownership,
+   enabled providers, command state, and platform support
+2. calculate the target collector/helper/runner profile and list telemetry or
+   action differences
+3. require an explicit operator apply action
+4. stage root-owned units and binaries, preserve credentials and identity, and
+   perform a health check before declaring success
+5. roll back service definitions and binaries if the new profile cannot reach
+   its declared health floor
+6. retain the previous profile label and reason in Doctor/fleet history
+
+Current command-enabled installations map to two choices: monitoring-only safe
+migration with remediation disabled, or safe collector plus explicit action
+runner enrollment. They never receive action authority merely because the old
+combined process had it.
+
+## Rollback Boundaries
+
+- Collector rollback restores the prior signed binary and unit while retaining
+  agent identity and report credential.
+- Helper rollback disables its socket and restores the previous declared
+  telemetry profile; it does not add the collector to privileged groups.
+- Action-runner rollback disables and revokes its credential without disabling
+  monitoring.
+- A platform that cannot meet the safe profile remains on an explicitly named
+  legacy/full-trust profile until a platform-specific plan lands. Rollback
+  never silently broadens privilege.
+
+## Explicit Exclusions
+
+This plan does not:
+
+- promise a single non-root implementation for every appliance platform
+- make API-only integrations depend on an agent
+- treat rootful Docker-group membership as least privilege
+- build a generic privileged daemon proxy
+- preserve arbitrary remote shell as part of the safe architecture
+- redesign the full server-side action-approval model except where runtime and
+  credential separation require contract changes
+- change the current release gate merely because the proposal is recorded
+
+## Candidate-Lane Completion Definition
+
+The proposed secure-agent-runtime-separation lane can close only when:
+
+1. supported Linux monitoring installs default to the unprivileged collector
+2. monitoring credentials and processes have no remediation authority
+3. privileged reads and update activation use the typed local helper with the
+   security invariants and adversarial proof above
+4. root-equivalent Docker access, ambient command capabilities, writable agent
+   binaries, and sudo argument-forwarding wrappers are absent from the safe
+   profile
+5. remediation runs only through the separately installed and credentialed
+   action runner
+6. migration, rollback, Doctor, fleet, setup UI, and documentation expose the
+   effective profile accurately
+7. platform exceptions are explicit residuals with owners and removal criteria
+8. subsystem contracts, registry ownership, tests, and live proof agree with
+   the shipped architecture
+
+Until those conditions are met, Pulse may describe the current optional
+least-privilege profile and hardening controls factually, but must not claim
+that monitoring, host privilege, and remediation are fully separated.
