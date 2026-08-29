@@ -4418,9 +4418,13 @@ fail and compensate the still-mutable publication back to a marker-free draft.
 `scripts/verify-github-release-integrity.sh` is the shared post-publication
 check. It binds the release database ID, tag, exact source SHA, immutable state,
 and single digest-bearing activation marker, then requires `gh release verify`
-to validate GitHub's signed release attestation. The source release verdict,
-activation-only recovery, and `release-convergence.yml` must all use that
-check. Convergence must not acquire the customer-promotion lease or mutate a
-floating image tag, Helm index, paid-runtime pointer, or live environment until
-the check passes. Repository release immutability must therefore be enabled
-before merging or running this activation path.
+to validate GitHub's signed release attestation. It must then download the
+activation marker from that release and require `gh release verify-asset` to
+bind the exact consumed bytes to the signed release attestation. Filename,
+stored digest presence, and marker JSON identity are not substitutes for this
+asset proof. The source release verdict, activation-only recovery, and
+`release-convergence.yml` must all use that check. Convergence must not acquire
+the customer-promotion lease or mutate a floating image tag, Helm index,
+paid-runtime pointer, or live environment until the check passes. Repository
+release immutability must therefore be enabled before merging or running this
+activation path.

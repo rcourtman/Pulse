@@ -53,7 +53,12 @@ done
 
 release_json="$(mktemp)"
 attestation_json="$(mktemp)"
-cleanup() { rm -f "$release_json" "$attestation_json"; }
+activation_dir="$(mktemp -d)"
+activation_asset="${activation_dir}/release-activation.json"
+cleanup() {
+    rm -f "$release_json" "$attestation_json"
+    rm -rf "$activation_dir"
+}
 trap cleanup EXIT
 
 gh api \
@@ -108,7 +113,42 @@ if ! jq -e 'type == "object" or type == "array"' "$attestation_json" >/dev/null;
     exit 1
 fi
 
+# Release verification proves that GitHub signed the immutable packet. Bind the
+# activation marker that convergence consumes to that packet as a separate
+# proof: verify-asset checks the downloaded bytes' digest against the signed
+# release attestation rather than trusting filename and JSON identity alone.
+downloaded=false
+for attempt in $(seq 1 "$ATTESTATION_ATTEMPTS"); do
+    rm -f "$activation_asset"
+    if gh release download "$TAG" \
+        --repo "$REPO" \
+        --pattern release-activation.json \
+        --dir "$activation_dir" && \
+       [ -s "$activation_asset" ]; then
+        downloaded=true
+        break
+    fi
+    if [ "$attempt" -lt "$ATTESTATION_ATTEMPTS" ]; then
+        echo "Activation asset for ${TAG} is not downloadable yet (${attempt}/${ATTESTATION_ATTEMPTS}); retrying." >&2
+        sleep "$ATTESTATION_RETRY_DELAY"
+    fi
+done
+if [ "$downloaded" != true ]; then
+    echo "GitHub release activation asset download failed for ${TAG}." >&2
+    exit 1
+fi
+
+if ! gh release verify-asset "$TAG" "$activation_asset" \
+    --repo "$REPO" --format json > "$attestation_json"; then
+    echo "GitHub release activation asset verification failed for ${TAG}." >&2
+    exit 1
+fi
+if ! jq -e 'type == "object" or type == "array"' "$attestation_json" >/dev/null; then
+    echo "GitHub release activation asset verification returned malformed JSON for ${TAG}." >&2
+    exit 1
+fi
+
 release_id="$(jq -r '.id' "$release_json")"
 source_sha="$(jq -r '.target_commitish' "$release_json")"
 asset_count="$(jq -r '.assets | length' "$release_json")"
-echo "[OK] GitHub release ${TAG} is immutable and attested: release_id=${release_id} source_sha=${source_sha} assets=${asset_count}."
+echo "[OK] GitHub release ${TAG} is immutable, attested, and activation-asset-bound: release_id=${release_id} source_sha=${source_sha} assets=${asset_count}."

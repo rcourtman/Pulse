@@ -17,7 +17,13 @@ SOURCE_SHA = "a" * 40
 
 
 class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
-    def run_verifier(self, release: dict, *, verification_succeeds: bool = True):
+    def run_verifier(
+        self,
+        release: dict,
+        *,
+        verification_succeeds: bool = True,
+        asset_verification_succeeds: bool = True,
+    ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             calls = root / "calls"
@@ -37,6 +43,21 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                     if [ "$1 $2" = "release verify" ]; then
                       printf '%s\\n' '{{"verified": true}}'
                       exit {0 if verification_succeeds else 1}
+                    fi
+                    if [ "$1 $2" = "release download" ]; then
+                      while [ "$#" -gt 0 ]; do
+                        if [ "$1" = --dir ]; then
+                          mkdir -p "$2"
+                          printf '%s\\n' '{{"schema_version": 1}}' > "$2/release-activation.json"
+                          exit 0
+                        fi
+                        shift
+                      done
+                      exit 65
+                    fi
+                    if [ "$1 $2" = "release verify-asset" ]; then
+                      printf '%s\\n' '{{"verified": true}}'
+                      exit {0 if asset_verification_succeeds else 1}
                     fi
                     exit 64
                     """
@@ -86,8 +107,9 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
     def test_accepts_immutable_release_with_verified_attestation(self) -> None:
         result, calls = self.run_verifier(self.release())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("is immutable and attested", result.stdout)
+        self.assertIn("is immutable, attested, and activation-asset-bound", result.stdout)
         self.assertIn("release verify v6.5.0 --repo rcourtman/Pulse --format json", calls)
+        self.assertIn("release verify-asset v6.5.0", calls)
 
     def test_rejects_mutable_release_before_attestation(self) -> None:
         result, calls = self.run_verifier(self.release(immutable=False))
@@ -108,6 +130,14 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("attestation verification failed", result.stderr)
+
+    def test_rejects_activation_asset_outside_release_attestation(self) -> None:
+        result, calls = self.run_verifier(
+            self.release(), asset_verification_succeeds=False
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("activation asset verification failed", result.stderr)
+        self.assertIn("release verify-asset v6.5.0", calls)
 
 
 if __name__ == "__main__":

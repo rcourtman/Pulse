@@ -79,8 +79,10 @@ Normal stable publication and stable dry runs select `signpath` directly.
   asset set from replacement.
 - Customer-facing image aliases, Helm indexes, paid-runtime pointers, and demo
   environments are not promoted until `gh release verify <tag> --repo
-  rcourtman/Pulse` validates GitHub's signed release attestation. Operators can
-  use the same command to verify the packet independently.
+  rcourtman/Pulse` validates GitHub's signed release attestation and `gh release
+  verify-asset <tag> <downloaded-asset> --repo rcourtman/Pulse` binds the
+  downloaded activation marker to that attestation. Operators can use the same
+  commands to verify the packet and any downloaded release asset independently.
 
 ## Project roles
 
