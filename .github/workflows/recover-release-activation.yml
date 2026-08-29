@@ -230,6 +230,7 @@ jobs:
       - name: Commit the recovered activation
         env:
           GH_TOKEN: ${{ github.token }}
+          IMMUTABILITY_ADMIN_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           TAG: ${{ inputs.tag }}
           SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
           EXPECTED_COMMIT: ${{ steps.qualify.outputs.source_sha }}
@@ -371,6 +372,13 @@ jobs:
           fi
 
           require_viable_convergence_owner
+          if [ -z "${IMMUTABILITY_ADMIN_TOKEN:-}" ]; then
+            echo "::error::WORKFLOW_PAT with repository Administration (read) is required to prove release immutability."
+            exit 1
+          fi
+          GH_TOKEN="${IMMUTABILITY_ADMIN_TOKEN}" \
+            ./scripts/check-github-release-immutability.sh "${GITHUB_REPOSITORY}"
+          unset IMMUTABILITY_ADMIN_TOKEN
           gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
             -X PATCH --input "${publish_payload}" > "${release_json}"
           activated=true

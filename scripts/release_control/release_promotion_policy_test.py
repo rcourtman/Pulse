@@ -351,6 +351,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dispatch = workflow_job_block(workflow, "dispatch_release_convergence")
         activation = workflow_job_block(workflow, "activate_release")
         commit_verdict = workflow_job_block(workflow, "release_commit_verdict")
+        recovery = read(".github/workflows/recover-release-activation.yml")
+        recovery_activation = workflow_job_block(recovery, "recover_activation")
 
         for dependency in (
             "create_release",
@@ -402,6 +404,20 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("verify-github-release-integrity.sh", activation)
         self.assertIn("verify-github-release-integrity.sh", convergence)
         self.assertIn("verify-github-release-integrity.sh", commit_verdict)
+        for publication_job in (activation, recovery_activation):
+            with self.subTest(publication_job=publication_job[:40]):
+                self.assertIn(
+                    "IMMUTABILITY_ADMIN_TOKEN: ${{ secrets.WORKFLOW_PAT }}",
+                    publication_job,
+                )
+                self.assertIn("check-github-release-immutability.sh", publication_job)
+                setting_check = publication_job.index(
+                    "check-github-release-immutability.sh"
+                )
+                self.assertLess(
+                    setting_check,
+                    publication_job.index('-X PATCH --input', setting_check),
+                )
         marker_upload = activation.index('gh release upload "${TAG}"')
         publish_patch = activation.index(
             '-X PATCH --input "$publish_payload"', marker_upload
@@ -779,7 +795,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             '.status == "completed" and .conclusion == "success"', verdict
         )
         self.assertLess(
-            activation.index("require_viable_convergence_owner\n          gh api"),
+            activation.index(
+                "require_viable_convergence_owner\n"
+                "          if [ -z \"${IMMUTABILITY_ADMIN_TOKEN:-}\" ]"
+            ),
             activation.index("-X PATCH --input \"$publish_payload\""),
         )
         marker_upload = activation.index('gh release upload "${TAG}"')

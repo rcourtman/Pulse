@@ -1558,6 +1558,7 @@ jobs:
       - name: Publish the fully staged release
         env:
           GH_TOKEN: ${{ github.token }}
+          IMMUTABILITY_ADMIN_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
           EXPECTED_COMMIT: ${{ needs.create_release.outputs.target_commitish }}
@@ -1775,8 +1776,18 @@ jobs:
           fi
 
           # Publication is now the only irreversible boundary. GitHub must
-          # report the complete release as immutable before this job commits.
+          # confirm the repository setting before publication and report the
+          # complete release as immutable afterward. The immediate setting
+          # check prevents a mutable public interval if configuration drifts;
+          # the response check remains defense in depth.
           require_viable_convergence_owner
+          if [ -z "${IMMUTABILITY_ADMIN_TOKEN:-}" ]; then
+            echo "::error::WORKFLOW_PAT with repository Administration (read) is required to prove release immutability."
+            exit 1
+          fi
+          GH_TOKEN="${IMMUTABILITY_ADMIN_TOKEN}" \
+            ./scripts/check-github-release-immutability.sh "${GITHUB_REPOSITORY}"
+          unset IMMUTABILITY_ADMIN_TOKEN
           gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
             -X PATCH --input "$publish_payload" > "$release_json"
           activated=true

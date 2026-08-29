@@ -184,7 +184,8 @@ release-latency optimization.
 23c. `.github/scripts/resolve-demo-runtime-profile.sh`
 24. `.github/workflows/validate-release-assets.yml`
 25. `.github/workflows/install-sh-smoke.yml`
-26. `scripts/release_control/customer_promotion_lease.sh`
+26. `scripts/check-github-release-immutability.sh`
+27. `scripts/release_control/customer_promotion_lease.sh`
 27. `pulse-enterprise:.github/workflows/build-pro-release.yml`
 28. `pulse-enterprise:scripts/build-pro-binaries.sh`
 29. `pulse-enterprise:scripts/build-pro-release.sh`
@@ -4412,8 +4413,13 @@ GitHub release immutability is a mandatory activation control. The release
 workflow must create and validate a draft, stage `release-activation.json`, and
 compare GitHub's stored SHA-256 digest for that marker with the local bytes
 before publication. Publication, not a later asset upload, is the irreversible
-boundary. GitHub must return `immutable: true`; otherwise the workflow must
-fail and compensate the still-mutable publication back to a marker-free draft.
+boundary. Immediately before both normal and recovery publication, an
+authenticated Administration-read request to GitHub's repository immutable
+releases endpoint must prove that the setting is enabled. An unavailable,
+unauthorized, malformed, or disabled response fails closed while the release is
+still a draft. GitHub must also return `immutable: true` after publication;
+otherwise the workflow must fail and compensate the still-mutable publication
+back to a marker-free draft.
 
 `scripts/verify-github-release-integrity.sh` is the shared post-publication
 check. It binds the release database ID, tag, exact source SHA, immutable state,
