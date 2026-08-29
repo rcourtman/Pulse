@@ -16,6 +16,10 @@ SCHEMA_VERSION = 1
 VERSION_PATTERN = re.compile(
     r"^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|alpha|beta)\.[0-9]+)?$"
 )
+RELEASE_NOTE_VISUAL_PATTERN = re.compile(
+    r"^release-note-[a-z0-9]+(?:-[a-z0-9]+)*-(?:before|now)\.png$"
+)
+MAX_RELEASE_NOTE_VISUAL_ASSETS = 20
 
 
 def sha256_file(path: Path) -> str:
@@ -175,10 +179,33 @@ def verify_release(manifest: dict[str, Any], release_assets: list[dict[str, Any]
             raise ValueError(f"release contains duplicate asset: {name}")
         actual[name] = asset
 
-    if set(actual) != set(expected):
-        missing = sorted(set(expected) - set(actual))
-        extra = sorted(set(actual) - set(expected))
+    missing = sorted(set(expected) - set(actual))
+    extra = sorted(set(actual) - set(expected))
+    invalid_extra = [
+        name for name in extra if not RELEASE_NOTE_VISUAL_PATTERN.fullmatch(name)
+    ]
+    if missing or invalid_extra:
         raise ValueError(f"published asset set mismatch: missing={missing}, extra={extra}")
+    if len(extra) > MAX_RELEASE_NOTE_VISUAL_ASSETS:
+        raise ValueError(
+            "published release contains too many release-note visual sidecars: "
+            f"{len(extra)} > {MAX_RELEASE_NOTE_VISUAL_ASSETS}"
+        )
+
+    # Release-note comparisons are generated and uploaded after the immutable
+    # binary candidate manifest is sealed. They are presentation-only, but
+    # recovery still constrains them to non-empty PNG sidecars with GitHub's
+    # server-side SHA-256 metadata instead of accepting arbitrary extra assets.
+    for name in extra:
+        visual = actual[name]
+        size = visual.get("size")
+        digest = visual.get("digest")
+        if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
+            raise ValueError(f"release-note visual has invalid size: {name}")
+        if not isinstance(digest, str) or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", digest
+        ):
+            raise ValueError(f"release-note visual has invalid digest: {name}")
 
     for name, expected_asset in expected.items():
         actual_asset = actual[name]

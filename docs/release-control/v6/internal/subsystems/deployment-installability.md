@@ -1985,6 +1985,16 @@ non-oversubscribed `1/1/1` API allocation plus one non-API package worker. The
 existing 10-GiB admission floor still degrades the shard count on constrained
 hosts instead of weakening the watchdog.
 
+Activation-only recovery must distinguish the immutable binary packet from
+governed release-note presentation sidecars. Release run `33223712880` passed
+its immutable readiness join and retained draft release `378812881`, but its
+first recovery rejected the generated comparison PNGs as assets outside the
+candidate manifest. `verify-release` therefore permits only bounded,
+non-empty `release-note-*-before.png` and `release-note-*-now.png` sidecars
+with GitHub-provided SHA-256 metadata. Missing or changed candidate assets and
+every other extra filename remain hard failures; recovery does not rebuild or
+replace the qualified candidate.
+
 Recovery run `33223074961` retargeted the unpublished draft and annotated tag
 to corrected source SHA `148b9a0e329c488d1a4401060008543988c81113`, but its two
 exact-version Docker publication legs validated release-line policy before the
