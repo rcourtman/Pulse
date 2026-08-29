@@ -1157,8 +1157,134 @@ func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.Host
 	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, int64Value(thresholds.SMARTCRCErrorDelta))...)
 	healthReasons, wearReasons := splitSMARTAlertReasons(assessment.Reasons)
 
-	m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
-	m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-wearout", wearReasons)
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-health", disk, healthReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
+	}
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-wearout", disk, wearReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-wearout", wearReasons)
+	}
+}
+
+// hostSMARTDiskAlertEvidenceKnown prevents an unavailable SMART field from
+// being interpreted as a healthy zero. A standby report deliberately carries
+// stable disk identity without waking the device to collect health evidence.
+// Existing reasons therefore remain active until every still-enabled signal
+// that raised the alert is observed again. Explicitly disabling the relevant
+// rule remains authoritative and can clear the alert without a disk reading.
+func (m *Manager) hostSMARTDiskAlertEvidenceKnown(resourceID, alertType string, disk models.HostDiskSMART, currentReasons []storagehealth.Reason, thresholds storagehealth.SMARTThresholds, crcMinimumDelta int64) bool {
+	stateID := buildCanonicalStateID(resourceID, resourceID+"-"+alertType)
+
+	m.mu.RLock()
+	activeAlert, active := m.getActiveAlertNoLock(stateID)
+	var activeCodes []string
+	if active && activeAlert != nil {
+		activeCodes = hostSMARTRiskCodes(activeAlert.Metadata["riskCodes"])
+	}
+	m.mu.RUnlock()
+
+	if active && len(activeCodes) == 0 {
+		// A restored pre-metadata alert may be reaffirmed by current bad
+		// evidence, but absence of reasons is not sufficient recovery proof.
+		return len(currentReasons) > 0
+	}
+
+	remainingEnabledReasons := 0
+	for _, code := range activeCodes {
+		if !hostSMARTRiskRuleEnabled(code, thresholds, crcMinimumDelta) {
+			continue
+		}
+		remainingEnabledReasons++
+		if disk.Standby || !hostSMARTRiskReasonObserved(code, disk) {
+			return false
+		}
+	}
+	if active && remainingEnabledReasons == 0 {
+		return true
+	}
+	if disk.Standby {
+		return false
+	}
+
+	return hostSMARTAlertFamilyObserved(alertType, disk)
+}
+
+func hostSMARTRiskCodes(value interface{}) []string {
+	switch codes := value.(type) {
+	case []string:
+		return append([]string(nil), codes...)
+	case []interface{}:
+		result := make([]string, 0, len(codes))
+		for _, code := range codes {
+			if normalized := strings.TrimSpace(fmt.Sprint(code)); normalized != "" {
+				result = append(result, normalized)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func hostSMARTRiskRuleEnabled(code string, thresholds storagehealth.SMARTThresholds, crcMinimumDelta int64) bool {
+	switch code {
+	case "health_status":
+		return thresholds.HealthFailure
+	case "reallocated_sectors":
+		return thresholds.ReallocatedSectors > 0
+	case "pending_sectors":
+		return thresholds.PendingSectors > 0
+	case "offline_uncorrectable":
+		return thresholds.OfflineUncorrectable > 0
+	case "media_errors":
+		return thresholds.MediaErrors > 0
+	case "crc_errors_increased":
+		return crcMinimumDelta > 0
+	case "wearout_low", "nvme_percentage_used_high":
+		return thresholds.LifeWarning > 0 || thresholds.LifeCritical > 0
+	case "nvme_available_spare_low":
+		return thresholds.AvailableSpareWarn > 0 || thresholds.AvailableSpareCrit > 0
+	default:
+		return true
+	}
+}
+
+func hostSMARTRiskReasonObserved(code string, disk models.HostDiskSMART) bool {
+	attrs := disk.Attributes
+	switch code {
+	case "health_status":
+		health := strings.ToUpper(strings.TrimSpace(disk.Health))
+		return health != "" && health != "UNKNOWN"
+	case "reallocated_sectors":
+		return attrs != nil && attrs.ReallocatedSectors != nil
+	case "pending_sectors":
+		return attrs != nil && attrs.PendingSectors != nil
+	case "offline_uncorrectable":
+		return attrs != nil && attrs.OfflineUncorrectable != nil
+	case "media_errors":
+		return attrs != nil && attrs.MediaErrors != nil
+	case "crc_errors_increased":
+		return attrs != nil && attrs.UDMACRCErrors != nil
+	case "wearout_low", "nvme_percentage_used_high":
+		return attrs != nil && attrs.PercentageUsed != nil
+	case "nvme_available_spare_low":
+		return attrs != nil && attrs.AvailableSpare != nil
+	default:
+		return false
+	}
+}
+
+func hostSMARTAlertFamilyObserved(alertType string, disk models.HostDiskSMART) bool {
+	if alertType == "disk-wearout" {
+		return hostSMARTRiskReasonObserved("nvme_percentage_used_high", disk) ||
+			hostSMARTRiskReasonObserved("nvme_available_spare_low", disk)
+	}
+
+	return hostSMARTRiskReasonObserved("health_status", disk) ||
+		hostSMARTRiskReasonObserved("reallocated_sectors", disk) ||
+		hostSMARTRiskReasonObserved("pending_sectors", disk) ||
+		hostSMARTRiskReasonObserved("offline_uncorrectable", disk) ||
+		hostSMARTRiskReasonObserved("media_errors", disk) ||
+		hostSMARTRiskReasonObserved("crc_errors_increased", disk)
 }
 
 // hostSMARTCounterGrowthReasons turns a newly increased SMART counter into an

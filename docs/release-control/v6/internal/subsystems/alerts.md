@@ -139,6 +139,17 @@ round-trip every rule without changing these defaults. Linked Proxmox host
 agents continue to defer risk alert ownership even when their resolved SMART
 policy differs.
 
+Host SMART recovery is field-evidence-aware. A standby report preserves disk
+identity but carries no health authority, so it must not open or clear either
+the canonical `disk-health` or `disk-wearout` assessment. For an active SMART
+alert, every still-enabled reason that raised the occurrence must be observed
+again before recovery evaluation; an omitted counter or endurance field is
+unknown rather than a healthy zero. Explicitly disabling the owning SMART rule
+remains authoritative and may clear the alert without waking the disk.
+`TestCheckHostSMARTDiskAlertRequiresRelevantRecoveryEvidence` in
+`internal/alerts/alerts_test.go` pins the fire, standby hold, partial-evidence
+hold, and authoritative recovery sequence.
+
 Threshold sections are keyed by override identity, not by resource type. The
 Virtualization Hosts section reads and writes overrides on the bare resource id,
 while the Machines section resolves through the agent-derived identity

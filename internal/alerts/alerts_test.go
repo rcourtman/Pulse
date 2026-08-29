@@ -4369,6 +4369,73 @@ func TestCheckHostSMARTDiskHealthAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 }
 
+func TestCheckHostSMARTDiskAlertRequiresRelevantRecoveryEvidence(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	reallocated := int64(16)
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sdc",
+			Model:  "Seagate IronWolf",
+			Serial: "SERIAL-TOWER-SDC",
+			Health: "PASSED",
+			Attributes: &models.SMARTAttributes{
+				ReallocatedSectors: &reallocated,
+			},
+		}}},
+	}
+	alertID := buildCanonicalStateID("agent:tower-host/disk:sdc", "agent:tower-host/disk:sdc-disk-health")
+
+	m.CheckHost(host)
+	fired := testRequireActiveAlert(t, m, alertID)
+	originalStart := fired.StartTime
+	if codes, ok := fired.Metadata["riskCodes"].([]string); !ok || !reflect.DeepEqual(codes, []string{"reallocated_sectors"}) {
+		t.Fatalf("riskCodes = %#v, want reallocated_sectors", fired.Metadata["riskCodes"])
+	}
+	if got := len(m.historyManager.GetAllHistory(1000)); got != 1 {
+		t.Fatalf("history entries after fire = %d, want 1", got)
+	}
+
+	host.Sensors.SMART[0].Standby = true
+	host.Sensors.SMART[0].Health = "UNKNOWN"
+	host.Sensors.SMART[0].Attributes = nil
+	m.CheckHost(host)
+
+	held := testRequireActiveAlert(t, m, alertID)
+	if !held.StartTime.Equal(originalStart) {
+		t.Fatalf("standby report changed alert start from %v to %v", originalStart, held.StartTime)
+	}
+	if _, resolved := testLookupResolvedAlert(t, m, alertID); resolved {
+		t.Fatal("standby report must not resolve the SMART alert")
+	}
+
+	// Waking the disk but omitting the counter that raised the alert is still
+	// insufficient recovery evidence for that specific rule.
+	host.Sensors.SMART[0].Standby = false
+	host.Sensors.SMART[0].Health = "PASSED"
+	host.Sensors.SMART[0].Attributes = &models.SMARTAttributes{}
+	m.CheckHost(host)
+	if !testHasActiveAlert(t, m, alertID) {
+		t.Fatal("missing reallocated-sector evidence must hold the SMART alert")
+	}
+
+	zero := int64(0)
+	host.Sensors.SMART[0].Attributes.ReallocatedSectors = &zero
+	m.CheckHost(host)
+	if testHasActiveAlert(t, m, alertID) {
+		t.Fatal("authoritative zero reallocated sectors should resolve the SMART alert")
+	}
+	if _, resolved := testLookupResolvedAlert(t, m, alertID); !resolved {
+		t.Fatal("expected resolved SMART alert after authoritative healthy evidence")
+	}
+	if got := len(m.historyManager.GetAllHistory(1000)); got != 1 {
+		t.Fatalf("history entries after recovery = %d, want one occurrence", got)
+	}
+}
+
 func TestCheckHostSkipsSMARTDiskRiskAlertsWhenLinkedToProxmoxNode(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
