@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -130,5 +131,84 @@ func TestResetFirstRunSecurityClearsEnvBackedAuthFromStatus(t *testing.T) {
 	}
 	if got := payload["detailLevel"]; got != securityStatusDetailPublic {
 		t.Fatalf("detailLevel = %v, want %q", got, securityStatusDetailPublic)
+	}
+}
+
+func TestResetFirstRunSecurityPreservesLiveCredentialsWhenTokenPersistenceFails(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("NODE_ENV", "")
+	t.Setenv("PULSE_AUTH_USER", "admin")
+	t.Setenv("PULSE_AUTH_PASS", "hashed-password")
+	t.Setenv("REQUIRE_AUTH", "true")
+
+	rawToken := "reset-first-run-token-persist-failure.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed-password"
+	cfg.SortAPITokens()
+	authEnvContent := []byte("PULSE_AUTH_USER='admin'\nPULSE_AUTH_PASS='hashed-password'\nREQUIRE_AUTH='true'\n")
+	authEnvPath, err := writeAuthEnvFile(cfg.ConfigPath, cfg.DataPath, authEnvContent)
+	if err != nil {
+		t.Fatalf("write auth environment file: %v", err)
+	}
+
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		t.Fatalf("persist initial API tokens: %v", err)
+	}
+	persistence.SetFileSystem(failingWriteFileSystem{})
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.persistence = persistence
+	sessionToken := "reset-first-run-session-persist-failure"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "admin")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if cfg.AuthUser != "admin" || cfg.AuthPass != "hashed-password" {
+		t.Fatalf("failed reset changed live password auth: user=%q pass=%q", cfg.AuthUser, cfg.AuthPass)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != record.ID {
+		t.Fatalf("failed reset changed live API tokens: %+v", cfg.APITokens)
+	}
+	if cfg.APIToken != record.Hash || !cfg.IsValidAPIToken(rawToken) {
+		t.Fatal("failed reset changed the live primary API token projection")
+	}
+	if !ValidateSession(sessionToken) {
+		t.Fatal("failed reset invalidated an existing user session")
+	}
+	if _, err := os.Stat(filepath.Join(cfg.DataPath, bootstrapTokenFilename)); !os.IsNotExist(err) {
+		t.Fatalf("failed reset left a staged bootstrap token behind: %v", err)
+	}
+	gotAuthEnv, err := os.ReadFile(authEnvPath)
+	if err != nil {
+		t.Fatalf("failed reset did not restore auth environment file: %v", err)
+	}
+	if string(gotAuthEnv) != string(authEnvContent) {
+		t.Fatalf("restored auth environment file = %q, want %q", gotAuthEnv, authEnvContent)
+	}
+	for key, want := range map[string]string{
+		"PULSE_AUTH_USER": "admin",
+		"PULSE_AUTH_PASS": "hashed-password",
+		"REQUIRE_AUTH":    "true",
+	} {
+		if got := os.Getenv(key); got != want {
+			t.Fatalf("failed reset changed %s=%q, want %q", key, got, want)
+		}
+	}
+
+	persisted, err := config.NewConfigPersistence(cfg.DataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatalf("load persisted API tokens: %v", err)
+	}
+	if len(persisted) != 1 || persisted[0].ID != record.ID {
+		t.Fatalf("failed reset changed restart-time API tokens: %+v", persisted)
 	}
 }
