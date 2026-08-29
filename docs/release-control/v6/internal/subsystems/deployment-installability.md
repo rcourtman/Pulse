@@ -2037,6 +2037,11 @@ when it carries an explicit `mockLargeEstateStartupReady` marker earned by that
 complete startup and browser proof. The eager-history and update-cohort source
 markers remain necessary but are not sufficient. Runtimes without the explicit
 proof marker use the governed 8-node, two-hour-seed legacy-bounded profile.
+Failed stable-demo recovery must also retain bounded, redacted service evidence:
+structured systemd state, bounded process metadata, and only startup- or
+health-relevant recent journal lines. Diagnostics run after compensation-safe
+recovery failure, carry a hard SSH timeout, and remain part of the existing
+14-day recovery artifact rather than widening the recovery mutation boundary.
 
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`

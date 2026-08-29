@@ -120,6 +120,35 @@ jobs:
             demo-runtime-recovery.json
           echo "mutated=$(jq -r '.mutated' demo-runtime-recovery.json)" >> "$GITHUB_OUTPUT"
 
+      - name: Capture bounded Pulse failure diagnostics
+        if: failure()
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 45s \
+            ssh -i ~/.ssh/id_ed25519 \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile=~/.ssh/known_hosts \
+              "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+              'bash -s' > demo-runtime-diagnostics.txt <<'EOF'
+          set -uo pipefail
+          systemctl show pulse \
+            --property=ActiveState,SubState,Result,MainPID,NRestarts,ExecMainCode,ExecMainStatus,StateChangeTimestamp \
+            --no-pager
+          ps -C pulse -o pid=,ppid=,stat=,etime=,pcpu=,pmem=,rss=,vsz=,cmd= || true
+          sudo journalctl -u pulse --since '-30 minutes' --no-pager -o cat \
+            | grep -Ei 'panic|fatal|error|warn|mock|metric|database|migration|listen|health|startup|started|failed|timeout' \
+            | tail -200 \
+            | sed -E \
+                -e 's/(Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/g' \
+                -e 's/((token|secret|password|authorization|api[_-]?key)[^=: ]*[=: ][[:space:]]*)[^ ,"]+/\1[REDACTED]/Ig' \
+            || true
+          EOF
+          cat demo-runtime-diagnostics.txt
+
       - name: Verify public health
         run: curl --connect-timeout 5 --max-time 20 -fsS "$DEMO_PUBLIC_HEALTH_URL"
 
@@ -179,6 +208,7 @@ jobs:
           path: |
             demo-runtime-recovery.json
             demo-runtime-rollback.json
+            demo-runtime-diagnostics.txt
           if-no-files-found: warn
           retention-days: 14
 
