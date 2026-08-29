@@ -41,7 +41,10 @@ and installer tooling.
 - State the Pulse version and image or package you are actually running.
 - Include screenshots, logs, API output, or diagnostics when they clarify the
   problem.
-- Separate bug reports from feature requests; avoid mixing both into one issue.
+- Lead with one primary bug or operator outcome. If the context also exposes
+  another actionable topic, put it in the issue form's dedicated field. Triage
+  will preserve it with a linked disposition; you do not need to refile text
+  you already supplied. See [Issue Triage and Topic Integrity](docs/ISSUE_TRIAGE.md).
 
 ---
 
