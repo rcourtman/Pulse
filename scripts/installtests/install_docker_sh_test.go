@@ -325,7 +325,8 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 		)
 	} else {
 		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-			"Windows Authenticode remains mandatory for `v"+version+"`",
+			"standing SignPath-unavailable policy from `v6.3.2` onward",
+			"Public Unknown Publisher disclosure",
 		)
 	}
 }

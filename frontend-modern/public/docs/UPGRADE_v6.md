@@ -4,10 +4,15 @@ This guide covers practical upgrade steps for existing Pulse installs moving to 
 
 For the current stable v6 packet, see:
 
+- `docs/releases/RELEASE_NOTES_v6.4.1.md`
+- `docs/releases/V6_CHANGELOG_v6.4.1.md`
+
+For the preceding stable v6 packet, see:
+
 - `docs/releases/RELEASE_NOTES_v6.4.0.md`
 - `docs/releases/V6_CHANGELOG_v6.4.0.md`
 
-For the preceding stable v6 packet, see:
+For the earlier stable v6 packet, see:
 
 - `docs/releases/RELEASE_NOTES_v6.3.2.md`
 - `docs/releases/V6_CHANGELOG_v6.3.2.md`

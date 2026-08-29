@@ -2145,6 +2145,20 @@ version. It opened the `v6.4.0` candidate line from `main` with
 `rollback_version=v6.3.1` and did not move stable/latest install pointers or
 stable semver aliases.
 
+The active stable `v6.4.1` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.4.1` release version. This patch
+release uses the stable hotfix path with `rollback_version=v6.4.0`,
+`hotfix_exception=true`, a release-owner reason, and no fabricated same-version
+RC tag. The active customer harm is the published `v6.4.0` server image's
+non-executable embedded Unified Agent, which breaks Helm agent workloads and
+direct agent entrypoints. The exact pushed `main` SHA must pass the integrated
+candidate checks before publication, including the new pre-publication image
+mode proof. No governed mobile-facing path changed from `v6.4.0`, so the
+release decision is `no-mobile-impact`. The standing SignPath-unavailable
+policy from `v6.3.2` onward still applies, with Public Unknown Publisher
+disclosure and the existing signed integrity controls.
+
 The preceding stable `v6.3.2` cut set the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
 Helm chart release metadata to the same `6.3.2` release version. This patch
@@ -2569,13 +2583,15 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active stable `v6.4.0` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.0` until the next
+For the active stable `v6.4.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.1` until the next
 governed release moves them forward. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
 release-packet blocker.
+For the preceding stable `v6.4.0` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback both pinned `6.4.0`.
 For the preceding stable `v6.3.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback both pinned `6.3.2`.
 For the preceding stable `v6.3.1` cut, the repo-root compose default and
