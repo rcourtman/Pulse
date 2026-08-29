@@ -2597,13 +2597,15 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	publishDockerJob := workflowJobBlock(t, createWorkflow, "publish_docker")
 	for _, needle := range []string{
 		"- build_release_candidate",
+		"- create_release",
+		"needs.create_release.result == 'success'",
 		`source_sha: ${{ github.sha }}`,
 	} {
 		if !strings.Contains(publishDockerJob, needle) {
-			t.Fatalf("inert exact-version Docker staging missing acceleration contract: %s", needle)
+			t.Fatalf("inert exact-version Docker staging missing recovery-safe dependency contract: %s", needle)
 		}
 	}
-	for _, forbiddenDependency := range []string{"- qualify_release_containers", "- create_release"} {
+	for _, forbiddenDependency := range []string{"- qualify_release_containers"} {
 		if strings.Contains(publishDockerJob, forbiddenDependency) {
 			t.Fatalf("inert exact-version Docker staging must overlap independent qualification: %s", forbiddenDependency)
 		}

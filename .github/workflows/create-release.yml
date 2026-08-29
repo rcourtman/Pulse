@@ -1217,7 +1217,8 @@ jobs:
     needs:
       - prepare
       - build_release_candidate
-    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+      - create_release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
       packages: write

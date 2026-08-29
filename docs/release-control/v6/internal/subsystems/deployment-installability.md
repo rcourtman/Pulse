@@ -1985,6 +1985,16 @@ non-oversubscribed `1/1/1` API allocation plus one non-API package worker. The
 existing 10-GiB admission floor still degrades the shard count on constrained
 hosts instead of weakening the watchdog.
 
+Recovery run `33223074961` retargeted the unpublished draft and annotated tag
+to corrected source SHA `148b9a0e329c488d1a4401060008543988c81113`, but its two
+exact-version Docker publication legs validated release-line policy before the
+independent draft-resume job had moved the tag. Both failed closed on the old
+tag target without publishing or activating customer pointers. Exact-version
+Docker staging may continue to overlap container qualification, backend tests,
+and the other independent release gates, but it must depend on successful
+draft creation or recovery so release-line validation always observes the
+current immutable tag target.
+
 The preceding `v6.4.0-rc.8` qualification attempt used exact source SHA
 `bac7e5d9526d76a6b4e34738511b07609dda80ed`. Release run `33128595650`
 passed preparation, frontend bundle, Windows installer smoke, release smoke,
