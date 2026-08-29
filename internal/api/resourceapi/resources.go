@@ -1942,34 +1942,36 @@ func storageSummaryAffectedDatastoreCount(resource unified.Resource) int {
 
 // Filtering helpers.
 type listFilters struct {
-	types     map[unified.ResourceType]struct{}
-	sources   map[unified.DataSource]struct{}
-	statuses  map[unified.ResourceStatus]struct{}
-	parent    string
-	cluster   string
-	namespace string
-	query     string
-	tags      map[string]struct{}
-	page      int
-	limit     int
-	sortField string
-	sortOrder string
+	types           map[unified.ResourceType]struct{}
+	sources         map[unified.DataSource]struct{}
+	excludedSources map[unified.DataSource]struct{}
+	statuses        map[unified.ResourceStatus]struct{}
+	parent          string
+	cluster         string
+	namespace       string
+	query           string
+	tags            map[string]struct{}
+	page            int
+	limit           int
+	sortField       string
+	sortOrder       string
 }
 
 func parseListFilters(r *http.Request) listFilters {
 	filters := listFilters{
-		types:     parseResourceTypes(r.URL.Query().Get("type")),
-		sources:   parseSources(r.URL.Query().Get("source")),
-		statuses:  parseStatuses(r.URL.Query().Get("status")),
-		parent:    strings.TrimSpace(r.URL.Query().Get("parent")),
-		cluster:   strings.TrimSpace(r.URL.Query().Get("cluster")),
-		namespace: strings.TrimSpace(r.URL.Query().Get("namespace")),
-		query:     strings.TrimSpace(strings.ToLower(r.URL.Query().Get("q"))),
-		tags:      parseTags(r.URL.Query().Get("tags")),
-		page:      parseIntDefault(r.URL.Query().Get("page"), 1),
-		limit:     parseIntDefault(r.URL.Query().Get("limit"), 50),
-		sortField: strings.TrimSpace(r.URL.Query().Get("sort")),
-		sortOrder: strings.TrimSpace(strings.ToLower(r.URL.Query().Get("order"))),
+		types:           parseResourceTypes(r.URL.Query().Get("type")),
+		sources:         parseSources(r.URL.Query().Get("source")),
+		excludedSources: parseSources(r.URL.Query().Get("excludeSource")),
+		statuses:        parseStatuses(r.URL.Query().Get("status")),
+		parent:          strings.TrimSpace(r.URL.Query().Get("parent")),
+		cluster:         strings.TrimSpace(r.URL.Query().Get("cluster")),
+		namespace:       strings.TrimSpace(r.URL.Query().Get("namespace")),
+		query:           strings.TrimSpace(strings.ToLower(r.URL.Query().Get("q"))),
+		tags:            parseTags(r.URL.Query().Get("tags")),
+		page:            parseIntDefault(r.URL.Query().Get("page"), 1),
+		limit:           parseIntDefault(r.URL.Query().Get("limit"), 50),
+		sortField:       strings.TrimSpace(r.URL.Query().Get("sort")),
+		sortOrder:       strings.TrimSpace(strings.ToLower(r.URL.Query().Get("order"))),
 	}
 	if filters.page < 1 {
 		filters.page = 1
@@ -2006,6 +2008,18 @@ func applyFilters(resources []unified.Resource, filters listFilters) []unified.R
 				}
 			}
 			if !matched {
+				continue
+			}
+		}
+		if len(filters.excludedSources) > 0 {
+			excluded := false
+			for _, source := range r.Sources {
+				if _, ok := filters.excludedSources[source]; ok {
+					excluded = true
+					break
+				}
+			}
+			if excluded {
 				continue
 			}
 		}

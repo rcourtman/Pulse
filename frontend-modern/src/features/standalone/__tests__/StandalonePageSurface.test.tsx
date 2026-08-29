@@ -174,7 +174,8 @@ describe('StandalonePageSurface', () => {
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
       expect.objectContaining({
-        query: 'type=agent,network-endpoint',
+        query:
+          'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,network-endpoint',
       }),
     );
     expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(

@@ -83,7 +83,10 @@ describe('truenasPageModel', () => {
       }),
     ]);
 
-    expect(getTrueNASPageTabSpecs(systemOnlyModel).map((tab) => tab.id)).toEqual(['overview']);
+    expect(getTrueNASPageTabSpecs(systemOnlyModel).map((tab) => tab.id)).toEqual([
+      'overview',
+      'protection',
+    ]);
     expect(
       getTrueNASPageTabSpecs(inventoryModel, { hasProtectionInventory: true }).map((tab) => tab.id),
     ).toEqual(['overview', 'storage', 'services', 'apps', 'vms', 'shares', 'protection']);

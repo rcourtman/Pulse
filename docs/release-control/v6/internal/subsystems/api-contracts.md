@@ -4244,6 +4244,17 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Unified resource source exclusion is canonical query policy
+
+`GET /api/resources` accepts `excludeSource` as a comma-separated negative
+source-membership filter alongside the inclusive `source` filter. A resource
+is rejected when any canonical source matches the exclusion set, which lets a
+consumer retain additive standalone facets such as Agent plus Docker while
+excluding provider-owned Agent merges before pagination and serialization.
+The filter uses the same normalized source vocabulary and VMware aliases as
+`source`; `TestResourceListFiltersExcludeAnyMatchingSource` pins the combined
+inclusive and exclusive behavior.
+
 ### Telemetry preview is the canonical schema-v14 alert-quality payload
 
 The system settings telemetry preview continues to return the exact `Ping`

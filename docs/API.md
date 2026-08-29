@@ -100,6 +100,7 @@ Returns the unified resource list with pagination + aggregations. Requires `moni
 Query params:
 - `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
 - `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
+- `excludeSource`: comma-separated list of sources that must not be present on a matching resource
 - `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
 - `parent`: parent resource ID
 - `cluster`: cluster name

@@ -4451,3 +4451,40 @@ func TestParseSources_AcceptsVMwareAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestResourceListFiltersExcludeAnyMatchingSource(t *testing.T) {
+	resources := []unified.Resource{
+		{
+			ID:      "standalone-agent",
+			Name:    "standalone-agent",
+			Type:    unified.ResourceTypeAgent,
+			Sources: []unified.DataSource{unified.SourceAgent, unified.SourceDocker},
+		},
+		{
+			ID:      "proxmox-agent",
+			Name:    "proxmox-agent",
+			Type:    unified.ResourceTypeAgent,
+			Sources: []unified.DataSource{unified.SourceAgent, unified.SourceProxmox},
+		},
+		{
+			ID:      "availability-target",
+			Name:    "availability-target",
+			Type:    unified.ResourceTypeNetworkEndpoint,
+			Sources: []unified.DataSource{unified.SourceAvailability},
+		},
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/resources?source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware-vsphere&type=agent,network-endpoint",
+		nil,
+	)
+	filtered := applyFilters(resources, parseListFilters(req))
+
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 standalone resources, got %d: %#v", len(filtered), filtered)
+	}
+	if filtered[0].ID != "standalone-agent" || filtered[1].ID != "availability-target" {
+		t.Fatalf("unexpected standalone resource projection: %#v", filtered)
+	}
+}

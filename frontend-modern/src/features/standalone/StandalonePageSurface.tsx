@@ -43,7 +43,13 @@ import {
   type StandalonePostureSummary,
 } from './standalonePageModel';
 
-const STANDALONE_RESOURCE_QUERY = 'type=agent,network-endpoint';
+// Machines owns standalone Pulse Agent hosts plus standalone availability
+// targets. Provider-owned agents are excluded at the API boundary so this
+// surface does not hydrate the rest of the infrastructure estate and discard
+// it again in buildStandalonePageModel. Docker remains additive here because
+// a standalone Pulse Agent host can also contribute a Docker facet.
+const STANDALONE_RESOURCE_QUERY =
+  'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,network-endpoint';
 const STANDALONE_TAB_SPECS = [
   { id: 'machines', label: 'Machines', path: buildStandalonePath('machines') },
   { id: 'availability', label: 'Availability checks', path: buildStandalonePath('availability') },

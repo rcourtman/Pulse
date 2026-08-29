@@ -196,7 +196,11 @@ const hasTrueNASTabInventory = (
     case 'shares':
       return model.shares.length > 0;
     case 'protection':
-      return Boolean(options.hasProtectionInventory);
+      // Protection is a first-class TrueNAS workflow. Keep the route visible
+      // once a system exists so the page can defer the recovery inventory
+      // request until the operator opens it without creating a discovery
+      // request on every other TrueNAS tab.
+      return model.systems.length > 0 || Boolean(options.hasProtectionInventory);
   }
 };
 

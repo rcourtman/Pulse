@@ -976,6 +976,94 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('applies inclusive and exclusive source filters to websocket hydration and updates', async () => {
+    const standaloneAgent = createWsResource({
+      id: 'standalone-agent',
+      name: 'standalone-agent',
+      displayName: 'standalone-agent',
+      platformId: 'standalone-agent',
+      sources: ['agent', 'docker'],
+      discoveryTarget: {
+        resourceType: 'agent',
+        agentId: 'standalone-agent',
+        resourceId: 'standalone-agent',
+      },
+    });
+    const providerAgent = createWsResource({
+      id: 'provider-agent',
+      name: 'provider-agent',
+      displayName: 'provider-agent',
+      platformId: 'provider-agent',
+      type: 'vm',
+      sources: ['agent', 'proxmox'],
+      discoveryTarget: {
+        resourceType: 'agent',
+        agentId: 'provider-agent',
+        resourceId: 'provider-agent',
+      },
+    });
+    const availabilityTarget = createWsResource({
+      id: 'availability-target',
+      name: 'availability-target',
+      displayName: 'availability-target',
+      type: 'network-endpoint',
+      platformType: 'availability',
+      sources: ['availability'],
+    });
+    setWsState('resources', [standaloneAgent, providerAgent, availabilityTarget]);
+    setWsResourceChange({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query:
+          'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,vm,network-endpoint',
+        cacheKey: 'standalone-excluded-source-projection',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForValue(() => result!.resources().length, 2);
+    expect(result!.resources().map((resource) => resource.id)).toEqual([
+      'standalone-agent',
+      'availability-target',
+    ]);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    batch(() => {
+      setWsState('resources', [
+        standaloneAgent,
+        providerAgent,
+        availabilityTarget,
+        createWsResource({
+          id: 'truenas-agent',
+          name: 'truenas-agent',
+          displayName: 'truenas-agent',
+          platformId: 'truenas-agent',
+          type: 'vm',
+          sources: ['agent', 'truenas'],
+          discoveryTarget: {
+            resourceType: 'agent',
+            agentId: 'truenas-agent',
+            resourceId: 'truenas-agent',
+          },
+        }),
+      ]);
+      setWsResourceChange({ version: 2, changedIds: new Set(['truenas-agent']) });
+      setWsState('lastUpdate', 1738843205000);
+    });
+
+    await flushAsync();
+    expect(result!.resources().map((resource) => resource.id)).toEqual([
+      'standalone-agent',
+      'availability-target',
+    ]);
+
+    dispose();
+  });
+
   it('paints from websocket before revalidating prefer-ws-then-rest screens in the background', async () => {
     let resolveFetch:
       | ((value: { ok: true; json: () => Promise<{ data: Array<typeof v2Resource> }> }) => void)

@@ -2403,6 +2403,16 @@ vdev layout is reported` in
 
 ## Current State
 
+### TrueNAS protection inventory hydrates only on its owning route
+
+The TrueNAS Protection tab is a first-class workflow once a TrueNAS system is
+present, so route discovery no longer depends on preloading recovery points.
+`TrueNASPageSurface.tsx` requests the platform-scoped recovery inventory only
+when `/truenas/protection` is active; Overview, Storage, Services, Apps, VMs,
+and Shares do not compete with that independent request during first paint.
+The surface contract pins both the inactive null query and the direct-route
+query parameters.
+
 ### Fresh agent command policy preserves the existing recovery authority boundary
 
 New self-hosted install-command tokens project their explicit command-policy

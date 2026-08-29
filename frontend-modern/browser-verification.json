@@ -1,21 +1,24 @@
 {
   "version": 1,
-  "base_sha": "28be70071e8a7c2d0b9663f5d2eab5f5ba2f6528",
-  "verified_at": "2026-08-29T23:37:43Z",
+  "base_sha": "5b2e3778434891d9bfef7ce47b5d1e52e0b07162",
+  "verified_at": "2026-08-29T23:39:56Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/agentDiagnostics.ts",
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
-    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts"
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/agentDiagnostics.ts": "1e3c207615fd27fedf811b40830789f779b80b570085c54970cfb277f54eb07f",
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "0053b3fa0be0fbf463a6569c4fef4d977401647fe7c717a27543eb023a69e8ff",
-    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "5157fd513d3d149fdd844e0e807d0d73879661ab165cf2850efa8286a888ecbf"
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "5e05d2b068ccdcf0b00965ee94cf428549687c099a808b0d46843c8a612d663a",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "18f4fd22154a87184f7fc8e0aac6343681abdfcbec08bbb775773641fa6130d9",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "505265ffa886d1ad615beca19a62c622c4ddadc6027148d50000bd63b0a71070",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "a20ab17f175fbf747b0be7c8ec361e8ddb99ba34466895f9a9f9df54c02ab824"
   },
   "routes": [
-    "/settings/infrastructure/agent-doctor",
-    "/settings/infrastructure/agent-doctor?agents=host-node-mock-cluster-4-pve22"
+    "/truenas/overview",
+    "/truenas/protection",
+    "/standalone/machines"
   ],
   "viewports": [
     {
@@ -28,17 +31,15 @@
     }
   ],
   "states": [
-    "full fleet summary and expanded legacy Linux agent with explicit safe-profile inspect and apply guidance",
-    "eligible monitoring-only collector with typed-helper configuration and no action-runner credential or session",
-    "one-time host-bound action-runner credential reveal with private token prompt and separate runner installer handoff",
-    "credential-cleared page-session state with repeat issuance disabled",
-    "eligible safe collector at desktop and narrow viewport widths"
+    "populated TrueNAS Overview with provider-scoped resources and no recovery request",
+    "populated TrueNAS Overview at narrow width with no document overflow",
+    "TrueNAS Protection direct route with lazy platform recovery inventory",
+    "populated standalone Machines inventory with provider-owned agents excluded"
   ],
   "interactions": [
-    "expanded a legacy Linux agent and copied the standalone safe-profile inspection command",
-    "issued an isolated non-persistent action-runner credential fixture and verified the normalized host identity, closed runtime role, and typed capability before reveal",
-    "verified the revealed secret was absent from the private token-file command, installer command, URL, and diagnostic report",
-    "cleared the one-time credential and verified the secret disappeared while repeat issuance stayed disabled for the page session",
-    "verified the 390 by 844 layout had no document overflow, checked the rendered pixels, reset the viewport override, and removed the temporary request fixture"
+    "captured and asserted the exact TrueNAS resource request while confirming no recovery inventory on Overview",
+    "opened TrueNAS Protection and confirmed the recovery request starts only on its owning route",
+    "captured and asserted the standalone Agent and availability request with Proxmox, Kubernetes, TrueNAS, and VMware exclusions",
+    "inspected desktop and 390 by 844 screenshots for populated rows, coherent layout, and horizontal overflow"
   ]
 }

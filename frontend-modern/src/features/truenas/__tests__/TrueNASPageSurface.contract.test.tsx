@@ -149,7 +149,18 @@ describe('TrueNASPageSurface contract', () => {
 
     render(() => <TrueNASPageSurface />);
 
+    expect(mockUseUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: 'source=truenas&type=agent,vm,app-container,network-share,storage,physical_disk',
+      }),
+    );
+    const recoveryOptions = mockUseRecoveryPoints.mock.calls.at(-1)?.[0] as () => unknown;
+    expect(recoveryOptions()).toBeNull();
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'overview,protection',
+    );
     expect(screen.getByTestId('systems-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent('truenas-scale is running an older Pulse agent (v5.1.34).');
@@ -160,5 +171,25 @@ describe('TrueNASPageSurface contract', () => {
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-truenas-scale',
     );
+  });
+
+  it('loads recovery inventory only on the Protection route', () => {
+    mockPathname.mockReturnValue('/truenas/protection');
+    setResources([
+      makeResource({
+        id: 'agent:truenas-scale',
+        type: 'agent',
+      }),
+    ]);
+
+    render(() => <TrueNASPageSurface />);
+
+    const recoveryOptions = mockUseRecoveryPoints.mock.calls.at(-1)?.[0] as () => unknown;
+    expect(recoveryOptions()).toEqual({ platform: 'truenas', page: 1, limit: 200 });
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
+      'data-active',
+      'protection',
+    );
+    expect(screen.getByTestId('protection-table')).toBeInTheDocument();
   });
 });

@@ -2061,6 +2061,12 @@ Proxmox route queries likewise declare their exact PVE, PBS, PMG, or agent
 source boundary. Backups extend the source-scoped Overview guest snapshot with
 a PBS-only snapshot, so a route transition composes canonical resources rather
 than repeating the guest enumeration under another cache key.
+TrueNAS follows the same rule: a merged agent-backed appliance retains its
+`truenas` source, so the page queries that provider alone instead of admitting
+the whole Agent estate. The standalone Machines owner combines the inclusive
+Agent and availability sources with canonical provider exclusions; the shared
+WebSocket projection applies those exclusions on every snapshot and delta so
+REST filtering cannot be undone by a later realtime update.
 
 ### Agent libvirt domains use a provider-neutral VM facet
 

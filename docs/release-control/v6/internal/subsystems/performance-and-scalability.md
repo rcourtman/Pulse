@@ -1397,6 +1397,14 @@ local WebSocket projection boundaries. Focused page contracts must pin the
 exact query ownership, and browser verification must show only the active
 route's resource request before first paint at desktop and phone widths.
 
+TrueNAS likewise queries only `source=truenas`; the merged appliance source
+contract preserves agent enrichment without downloading unrelated agents.
+Its recovery-point inventory is inactive outside the Protection route, while
+the Protection tab remains discoverable from the presence of a TrueNAS system.
+Standalone Machines uses the resource API's inclusive Agent/availability
+scope plus provider-source exclusions so provider-owned merged agents are
+removed before paging, payload construction, and browser-side projection.
+
 ### Command-session liveness lookup stays bounded and in-memory
 
 The connections ledger's command-channel liveness check

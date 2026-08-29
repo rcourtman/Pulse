@@ -36,11 +36,11 @@ import {
 // (with `storage.topology` differentiating them) — they are not
 // first-class type tokens and including them triggers a 400 from
 // `/api/resources`. The page model still buckets by topology
-// client-side. Keep `agent` in the source filter so a TrueNAS host that
-// reports through the Pulse agent can still appear as the top-level appliance
-// while native TrueNAS API inventory remains the primary source.
+// client-side. Canonical TrueNAS systems retain `truenas` in their merged
+// source set even when a Pulse agent enriches the same appliance, so the page
+// can stay provider-scoped without hydrating every agent in the estate.
 const TRUENAS_RESOURCE_QUERY =
-  'source=truenas,agent&type=agent,vm,app-container,network-share,storage,physical_disk';
+  'source=truenas&type=agent,vm,app-container,network-share,storage,physical_disk';
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
@@ -60,7 +60,7 @@ export function TrueNASPageSurface() {
   });
   const model = createMemo(() => buildTrueNASPageModel(resources()));
   const protection = useRecoveryPoints(() =>
-    model().resources.length > 0
+    requestedTab() === 'protection' && model().systems.length > 0
       ? {
           platform: TRUENAS_PLATFORM_FILTER,
           page: 1,
@@ -68,11 +68,10 @@ export function TrueNASPageSurface() {
         }
       : null,
   );
-  const hasProtectionInventory = createMemo(
-    () => protection.meta().total > 0 || protection.points().length > 0,
-  );
   const tabs = createMemo(() =>
-    getTrueNASPageTabSpecs(model(), { hasProtectionInventory: hasProtectionInventory() }),
+    getTrueNASPageTabSpecs(model(), {
+      hasProtectionInventory: protection.meta().total > 0 || protection.points().length > 0,
+    }),
   );
   const activeTab = createMemo<TrueNASPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',

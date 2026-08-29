@@ -1133,6 +1133,7 @@ const enrichCanonicalAllResourcesCache = (
 type UnifiedResourcesLocalFilter = {
   types: Set<ResourceType>;
   sources: Set<string>;
+  excludedSources: Set<string>;
 };
 
 const normalizeUnifiedResourceSource = (source: string): string => {
@@ -1168,9 +1169,10 @@ const parseUnifiedResourcesLocalFilter = (query: string): UnifiedResourcesLocalF
   const params = new URLSearchParams(normalizedQuery);
   const types = new Set<ResourceType>();
   const sources = new Set<string>();
+  const excludedSources = new Set<string>();
 
   for (const [key, value] of params.entries()) {
-    if (key !== 'type' && key !== 'source') {
+    if (key !== 'type' && key !== 'source' && key !== 'excludeSource') {
       return null;
     }
 
@@ -1185,12 +1187,18 @@ const parseUnifiedResourcesLocalFilter = (query: string): UnifiedResourcesLocalF
         }
         const normalizedSource = normalizeUnifiedResourceSource(candidate);
         if (SUPPORTED_UNIFIED_RESOURCE_SOURCES.has(normalizedSource)) {
-          sources.add(normalizedSource);
+          if (key === 'excludeSource') {
+            excludedSources.add(normalizedSource);
+          } else {
+            sources.add(normalizedSource);
+          }
         }
       });
   }
 
-  return types.size > 0 || sources.size > 0 ? { types, sources } : null;
+  return types.size > 0 || sources.size > 0 || excludedSources.size > 0
+    ? { types, sources, excludedSources }
+    : null;
 };
 
 const filterCanonicalUnifiedResources = (
@@ -1209,19 +1217,20 @@ const filterCanonicalUnifiedResources = (
     if (localFilter.types.size > 0 && !localFilter.types.has(resolveType(resource.type))) {
       return false;
     }
-    if (localFilter.sources.size === 0) {
-      return true;
-    }
     const platformSources = resource.platformData?.sources;
     const resourceSources = [
       ...(resource.sources ?? []),
       ...(Array.isArray(platformSources)
         ? platformSources.filter((source): source is string => typeof source === 'string')
         : []),
-    ];
-    return resourceSources.some((source) =>
-      localFilter.sources.has(normalizeUnifiedResourceSource(source)),
-    );
+    ].map(normalizeUnifiedResourceSource);
+    if (
+      localFilter.sources.size > 0 &&
+      !resourceSources.some((source) => localFilter.sources.has(source))
+    ) {
+      return false;
+    }
+    return !resourceSources.some((source) => localFilter.excludedSources.has(source));
   });
 };
 
