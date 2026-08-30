@@ -1402,7 +1402,10 @@
             ],
             "match_files": [
               "cmd/pulse-agent-runner/main.go",
-              "internal/dockeragent/action_runtime.go"
+              "internal/dockeragent/action_runtime.go",
+              "internal/hostagent/action_runner_client.go",
+              "internal/hostagent/action_runner_health_persistence_unix.go",
+              "internal/hostagent/action_runner_health_persistence_windows.go"
             ],
             "allow_same_subsystem_tests": true,
             "test_prefixes": [

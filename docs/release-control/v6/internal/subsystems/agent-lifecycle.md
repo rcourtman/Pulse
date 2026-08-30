@@ -84,6 +84,11 @@ credential self-revoke before deleting local state. The delete route may
 remove only the caller's exact host-bound action-runner record; an unreachable
 server cannot prevent local runner removal and leaves an explicit operator
 revocation residual.
+Runner readiness is exposed through a bounded, secret-free health marker that
+is replaced atomically only after its contents reach stable storage. POSIX
+targets must sync the containing directory after rename; Windows targets must
+use a write-through replacement rather than attempting to flush the read-only
+directory handle returned by the standard library.
 Fresh installs carry an explicit local command-authority profile. The closed
 values are `monitoring-only`, `command-capable`, and `legacy`. A
 `monitoring-only` service may accept remote configuration that keeps commands

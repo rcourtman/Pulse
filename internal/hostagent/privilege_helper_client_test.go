@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func (f *fakePrivilegedTelemetry) ProxmoxLXCFilesystems(context.Context) (*agent
 func testPrivilegeHelperTelemetry(t *testing.T, result agenthelper.HealthResult) *privilegeHelperTelemetry {
 	t.Helper()
 	client, err := agenthelper.NewClient(agenthelper.ClientConfig{
-		SocketPath:  "/run/pulse-agent/helper.sock",
+		SocketPath:  filepath.Join(t.TempDir(), "helper.sock"),
 		MaxDeadline: privilegeHelperOperationDeadline,
 		NewRequestID: func() (string, error) {
 			return "health-request", nil

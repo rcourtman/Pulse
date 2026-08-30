@@ -97,6 +97,9 @@ func TestActionRunnerHealthIsAtomicBoundedAndSecretFree(t *testing.T) {
 		StateDir: filepath.Join(dir, "state"), HealthPath: healthPath, Logger: &logger,
 	}, "agent-1", "host-1", "v1")
 	t.Cleanup(func() { _ = client.Close() })
+	if err := os.WriteFile(healthPath, []byte("stale-health-marker"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := client.writeActionRunnerHealth(); err != nil {
 		t.Fatal(err)
 	}

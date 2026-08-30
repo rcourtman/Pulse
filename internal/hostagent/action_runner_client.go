@@ -127,13 +127,8 @@ func (c *CommandClient) writeActionRunnerHealth() error {
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tempPath, c.healthPath); err != nil {
+	if err := replaceActionRunnerHealthFile(tempPath, c.healthPath); err != nil {
 		return err
 	}
-	directory, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
+	return syncActionRunnerHealthDirectory(dir)
 }
