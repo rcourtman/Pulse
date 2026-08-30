@@ -31,6 +31,35 @@ Run it on the host that already has the v5 `pulse-agent` service to replace the
 binary and service configuration in place; do not uninstall the old service
 first unless you are intentionally removing that host from Pulse.
 
+### Moving Pulse to a new address
+
+Configuration export/import restores the server-side agent records and API
+tokens. It cannot rewrite the primary Pulse URL on remote machines because
+agents initiate the connection. Prefer a stable DNS name for the primary URL
+so replacing the Pulse host does not require an agent migration.
+
+After importing the configuration on a Pulse server with a different address,
+retarget each existing standard Linux agent from that agent machine:
+
+```bash
+curl -fsSL https://pulse.example.com:7655/install.sh | \
+  sudo bash -s -- --retarget --url https://pulse.example.com:7655
+```
+
+The retarget operation recovers the existing token, agent ID, enabled
+collectors, and other service options. It does not carry the old endpoint's
+TLS bypass, custom CA, or certificate fingerprint to the new address. Supply
+`--cacert`, `--server-fingerprint`, or (only on a trusted network)
+`--insecure` explicitly when the new endpoint requires it. The script must
+come from the new server so it supports the retarget operation. A newly
+generated full installation command from **Settings → Infrastructure → Install
+on a host** remains the fallback.
+
+On Windows, run the full generated PowerShell installation command from the
+new Pulse server as Administrator, including the desired collector options.
+Do not expect the configuration import itself to make agent-only machines
+appear at the new address.
+
 An installed agent has one **primary** Pulse URL and token. The primary is the
 only server allowed to supply remote configuration, commands, enrollment, or
 updates. The same collection can also be sent to explicitly configured,

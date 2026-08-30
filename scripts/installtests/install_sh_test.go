@@ -889,8 +889,12 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`--update            Update an existing agent using saved connection state`,
+		`--retarget              Point an existing agent at --url using saved identity and token`,
 		`UPDATE_ONLY="false"`,
+		`RETARGET_ONLY="false"`,
 		`--update) UPDATE_ONLY="true"; shift ;;`,
+		`--retarget) RETARGET_ONLY="true"; UPDATE_ONLY="true"; shift ;;`,
+		`--retarget requires the new Pulse endpoint in --url`,
 		`if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" ]]; then`,
 		`lifecycle_conn_env=$(find_connection_state_file || true)`,
 		`recover_connection_state "$lifecycle_conn_env"`,
@@ -924,6 +928,158 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing saved-state update mode contract: %s", needle)
 		}
+	}
+}
+
+func TestInstallSHRetargetPreservesIdentityWithoutOldEndpointTrust(t *testing.T) {
+	stateDir := t.TempDir()
+	tokenPath := filepath.Join(stateDir, "token")
+	if err := os.WriteFile(tokenPath, []byte("deadbeef\n"), 0600); err != nil {
+		t.Fatalf("write token fixture: %v", err)
+	}
+	connectionPath := filepath.Join(stateDir, "connection.env")
+	connection := strings.Join([]string{
+		"PULSE_URL='https://old-pulse.example.test:7655'",
+		"PULSE_TOKEN_FILE='" + tokenPath + "'",
+		"PULSE_AGENT_ID='agent-123'",
+		"PULSE_HOSTNAME='pve-one'",
+		"PULSE_INSECURE_SKIP_VERIFY='true'",
+		"PULSE_SERVER_FINGERPRINT='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+		"PULSE_CACERT='/etc/pulse/old-ca.pem'",
+	}, "\n") + "\n"
+	if err := os.WriteFile(connectionPath, []byte(connection), 0600); err != nil {
+		t.Fatalf("write connection fixture: %v", err)
+	}
+
+	script := `
+		PULSE_URL="https://new-pulse.example.test:7655"
+		PULSE_TOKEN=""
+		RETARGET_ONLY="true"
+		INSECURE="false"
+		SERVER_FINGERPRINT=""
+		CURL_CA_BUNDLE=""
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		REPORT_IP=""
+		STATE_DIR="/var/lib/pulse-agent"
+		STATE_DIR_SOURCE="default"
+		DEFAULT_STATE_DIR="/var/lib/pulse-agent"
+		TRUENAS_STATE_DIR="/data/pulse-agent"
+` + extractInstallShellFunction(t, "read_connection_state_value") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractInstallShellFunction(t, "recover_connection_state") + `
+		recover_connection_state "${PULSE_TEST_CONNECTION:?}"
+		printf 'URL=%s\nTOKEN=%s\nAGENT_ID=%s\nHOSTNAME=%s\nINSECURE=%s\nFINGERPRINT=%s\nCACERT=%s\n' \
+			"$PULSE_URL" "$PULSE_TOKEN" "$AGENT_ID" "$HOSTNAME_OVERRIDE" "$INSECURE" "$SERVER_FINGERPRINT" "$CURL_CA_BUNDLE"
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "PULSE_TEST_CONNECTION="+connectionPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, needle := range []string{
+		"URL=https://new-pulse.example.test:7655",
+		"TOKEN=deadbeef",
+		"AGENT_ID=agent-123",
+		"HOSTNAME=pve-one",
+		"INSECURE=false",
+		"FINGERPRINT=",
+		"CACERT=",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("retarget state missing %q:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "old-pulse") || strings.Contains(got, "old-ca") || strings.Contains(got, "aaaaaaaa") {
+		t.Fatalf("retarget carried old endpoint trust or URL:\n%s", got)
+	}
+}
+
+func TestInstallSHRetargetDoesNotRecoverLegacyServiceTrust(t *testing.T) {
+	script := `
+		PULSE_URL="https://new-pulse.example.test:7655"
+		PULSE_TOKEN=""
+		RETARGET_ONLY="true"
+		INSECURE="false"
+		INSECURE_EXPLICIT="false"
+		SERVER_FINGERPRINT=""
+		CURL_CA_BUNDLE=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		COMMAND_AUTHORITY_SOURCE=""
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		REPORT_IP=""
+		STATE_DIR="/var/lib/pulse-agent"
+		STATE_DIR_SOURCE="default"
+		OBSERVERS_FILE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		DISK_INCLUDES=()
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
+		recover_connection_state_from_arg_stream <<'ARGS'
+/usr/local/bin/pulse-agent
+--url=https://old-pulse.example.test:7655
+--token=deadbeef
+--agent-id=agent-123
+--hostname=pve-one
+--insecure
+--cacert=/etc/pulse/old-ca.pem
+--server-fingerprint=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ARGS
+		recover_connection_state_from_env_stream <<'ENV'
+PULSE_INSECURE_SKIP_VERIFY=true
+PULSE_CACERT=/etc/pulse/older-ca.pem
+PULSE_SERVER_FINGERPRINT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ENV
+		printf 'URL=%s\nTOKEN=%s\nAGENT_ID=%s\nHOSTNAME=%s\nINSECURE=%s\nFINGERPRINT=%s\nCACERT=%s\n' \
+			"$PULSE_URL" "$PULSE_TOKEN" "$AGENT_ID" "$HOSTNAME_OVERRIDE" "$INSECURE" "$SERVER_FINGERPRINT" "$CURL_CA_BUNDLE"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, needle := range []string{
+		"URL=https://new-pulse.example.test:7655",
+		"TOKEN=deadbeef",
+		"AGENT_ID=agent-123",
+		"HOSTNAME=pve-one",
+		"INSECURE=false",
+		"FINGERPRINT=",
+		"CACERT=",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("retarget service recovery missing %q:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "old-pulse") || strings.Contains(got, "old-ca") || strings.Contains(got, "aaaaaaaa") || strings.Contains(got, "bbbbbbbb") {
+		t.Fatalf("retarget carried old service trust or URL:\n%s", got)
 	}
 }
 

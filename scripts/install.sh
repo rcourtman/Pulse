@@ -97,8 +97,10 @@ ENABLE_KUBERNETES=""  # Empty means "auto-detect"
 ENABLE_PROXMOX=""  # Empty means "auto-detect"
 PROXMOX_TYPE=""
 UPDATE_ONLY="false"
+RETARGET_ONLY="false"
 UNINSTALL="false"
 INSECURE="false"
+INSECURE_EXPLICIT="false"
 SERVER_FINGERPRINT="${PULSE_SERVER_FINGERPRINT:-}"
 OBSERVERS_FILE="${PULSE_OBSERVERS_FILE:-}"
 AGENT_ID=""
@@ -125,7 +127,7 @@ AGENT_LOG_FILE="" # When set, pass --log-file so the agent's rotating log writer
 DEFAULT_STATE_DIR="/var/lib/pulse-agent"
 STATE_DIR="$DEFAULT_STATE_DIR"  # Persistent state directory (overridden per platform)
 STATE_DIR_SOURCE="default"      # default, explicit, recovered, or platform
-CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
+CURL_CA_BUNDLE="${PULSE_CACERT:-}" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
 NON_INTERACTIVE="false"
 TOKEN_FILE_PATH=""       # Path to file containing the token
 RUNTIME_TOKEN_FILE=""    # Secure token file passed to the installed service
@@ -576,6 +578,7 @@ Options:
   --safe-profile-rollback Restore the prior collector/helper snapshot from the last committed safe-profile migration
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
   --update                Update an existing agent using saved connection state
+  --retarget              Point an existing agent at --url using saved identity and token
   --uninstall             Remove the agent
   --non-interactive       Skip TTY prompts (for automated/scripted installs)
   --token-file <path>     Read token from file (alternative to --token)
@@ -3325,17 +3328,17 @@ recover_connection_state() {
     if [[ -z "$REPORT_IP" ]]; then
         REPORT_IP=$(read_connection_state_value "$file" "PULSE_REPORT_IP")
     fi
-    if [[ "$INSECURE" != "true" ]]; then
+    if [[ "${RETARGET_ONLY:-false}" != "true" && "$INSECURE" != "true" ]]; then
         local saved_insecure=""
         saved_insecure=$(read_connection_state_value "$file" "PULSE_INSECURE_SKIP_VERIFY")
         if [[ "$saved_insecure" == "true" ]]; then
             INSECURE="true"
         fi
     fi
-    if [[ -z "$SERVER_FINGERPRINT" ]]; then
+    if [[ "${RETARGET_ONLY:-false}" != "true" && -z "$SERVER_FINGERPRINT" ]]; then
         SERVER_FINGERPRINT=$(read_connection_state_value "$file" "PULSE_SERVER_FINGERPRINT")
     fi
-    if [[ -z "$CURL_CA_BUNDLE" ]]; then
+    if [[ "${RETARGET_ONLY:-false}" != "true" && -z "$CURL_CA_BUNDLE" ]]; then
         CURL_CA_BUNDLE=$(read_connection_state_value "$file" "PULSE_CACERT")
     fi
 }
@@ -3398,11 +3401,11 @@ apply_recovered_agent_arg_value() {
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
         cacert)
-            if [[ -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
+            if [[ "${RETARGET_ONLY:-false}" != "true" && -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
         server-fingerprint)
-            if [[ -z "$SERVER_FINGERPRINT" ]]; then SERVER_FINGERPRINT="$value"; fi
+            if [[ "${RETARGET_ONLY:-false}" != "true" && -z "$SERVER_FINGERPRINT" ]]; then SERVER_FINGERPRINT="$value"; fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
         observers-file)
@@ -3565,7 +3568,9 @@ recover_connection_state_from_arg_stream() {
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
             --insecure|-insecure)
-                INSECURE="true"
+                if [[ "${RETARGET_ONLY:-false}" != "true" || "${INSECURE_EXPLICIT:-false}" == "true" ]]; then
+                    INSECURE="true"
+                fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
             --enable-commands|-enable-commands)
@@ -3645,17 +3650,19 @@ recover_connection_state_from_env_stream() {
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
             PULSE_INSECURE_SKIP_VERIFY=true)
-                INSECURE="true"
+                if [[ "${RETARGET_ONLY:-false}" != "true" || "${INSECURE_EXPLICIT:-false}" == "true" ]]; then
+                    INSECURE="true"
+                fi
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
             PULSE_CACERT=*)
                 value="${env_line#*=}"
-                if [[ -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
+                if [[ "${RETARGET_ONLY:-false}" != "true" && -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
             PULSE_SERVER_FINGERPRINT=*)
                 value="${env_line#*=}"
-                if [[ -z "$SERVER_FINGERPRINT" ]]; then SERVER_FINGERPRINT="$value"; fi
+                if [[ "${RETARGET_ONLY:-false}" != "true" && -z "$SERVER_FINGERPRINT" ]]; then SERVER_FINGERPRINT="$value"; fi
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
         esac
@@ -4090,7 +4097,7 @@ while [[ $# -gt 0 ]]; do
         --enable-proxmox=false) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
-        --insecure) INSECURE="true"; shift ;;
+        --insecure) INSECURE="true"; INSECURE_EXPLICIT="true"; shift ;;
         --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
         --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
         --observers-file) OBSERVERS_FILE="$2"; shift 2 ;;
@@ -4111,6 +4118,7 @@ while [[ $# -gt 0 ]]; do
         --safe-profile-rollback) SAFE_PROFILE_ACTION="rollback"; shift ;;
         --enroll) ENROLL="true"; shift ;;
         --update) UPDATE_ONLY="true"; shift ;;
+        --retarget) RETARGET_ONLY="true"; UPDATE_ONLY="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
@@ -4128,6 +4136,13 @@ while [[ $# -gt 0 ]]; do
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+if [[ "$RETARGET_ONLY" == "true" && -z "$PULSE_URL" ]]; then
+    fail "--retarget requires the new Pulse endpoint in --url" "$EXIT_MISSING_ARGS"
+fi
+if [[ "$RETARGET_ONLY" == "true" && "$UNINSTALL" == "true" ]]; then
+    fail "--retarget cannot be combined with --uninstall" "$EXIT_MISSING_ARGS"
+fi
 
 case "$SAFE_PROFILE_ACTION" in
     "") ;;

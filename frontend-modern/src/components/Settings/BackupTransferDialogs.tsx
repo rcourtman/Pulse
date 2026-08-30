@@ -270,10 +270,17 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </div>
 
               <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded p-3">
-                <p class="text-xs text-yellow-700 dark:text-yellow-300">
-                  <strong>Warning:</strong> Importing will replace all current configuration. This
-                  action cannot be undone.
-                </p>
+                <div class="space-y-2 text-xs text-yellow-700 dark:text-yellow-300">
+                  <p>
+                    <strong>Warning:</strong> Importing will replace all current configuration. This
+                    action cannot be undone.
+                  </p>
+                  <p>
+                    <strong>Agent migration:</strong> The backup restores server-side agent records
+                    and credentials, but it cannot change the Pulse URL stored on remote agents. If
+                    this server has a different address, retarget each agent after the import.
+                  </p>
+                </div>
               </div>
 
               <div class="flex justify-end space-x-3">

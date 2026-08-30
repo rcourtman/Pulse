@@ -370,6 +370,11 @@ You can auto-import an encrypted backup on first startup. This is useful for aut
 
 > **Note**: `PULSE_INIT_CONFIG_URL` is only supported by the hidden `pulse config auto-import` command, not by the server startup auto-import.
 
+Configuration import restores server-side agent credentials, but it cannot
+change the primary Pulse URL persisted on remote agents. When restoring onto a
+server with a different address, retarget those agents after import. See
+[Moving Pulse to a new address](UNIFIED_AGENT.md#moving-pulse-to-a-new-address).
+
 ### Developer/Test Overrides (Environment Variables)
 
 These are primarily for development or test harnesses and should not be used in production.

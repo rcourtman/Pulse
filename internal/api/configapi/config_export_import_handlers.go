@@ -207,5 +207,9 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "Configuration imported successfully",
+		"remoteAgentEndpoints": map[string]bool{
+			"reconfigured":                         false,
+			"actionRequiredIfServerAddressChanged": true,
+		},
 	})
 }

@@ -174,6 +174,16 @@ func TestHandleImportConfig(t *testing.T) {
 				if resp["status"] != "success" {
 					t.Errorf("expected status success, got %v", resp["status"])
 				}
+				remoteEndpoints, ok := resp["remoteAgentEndpoints"].(map[string]interface{})
+				if !ok {
+					t.Fatalf("expected remote agent endpoint import disclosure, got %T", resp["remoteAgentEndpoints"])
+				}
+				if remoteEndpoints["reconfigured"] != false {
+					t.Errorf("configuration import must not claim to reconfigure remote agents: %v", remoteEndpoints)
+				}
+				if remoteEndpoints["actionRequiredIfServerAddressChanged"] != true {
+					t.Errorf("expected changed-address action disclosure, got %v", remoteEndpoints)
+				}
 			},
 		},
 		{
