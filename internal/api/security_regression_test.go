@@ -737,7 +737,7 @@ func TestActionRunnerCredentialRotationRevokesPreviousSecretOnlyAtActivation(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := agenttokens.ActivateActionRunnerAndPersist(cfg, nil, firstRecord.ID, "machine-a", "node.example"); err != nil {
+	if _, _, _, err := agenttokens.ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), firstRecord.ID, "machine-a", "node.example"); err != nil {
 		t.Fatal(err)
 	}
 	router := &Router{config: cfg}
@@ -760,7 +760,7 @@ func TestActionRunnerCredentialRotationRevokesPreviousSecretOnlyAtActivation(t *
 	if admission, ok := router.admitAgentExecToken(secondToken, "machine-a", "renamed.example"); !ok || !admission.ActivationPending {
 		t.Fatal("replacement action runner credential was rejected")
 	}
-	if _, revoked, changed, err := agenttokens.ActivateActionRunnerAndPersist(cfg, nil, secondRecord.ID, "machine-a", "renamed.example"); err != nil || !changed || len(revoked) != 1 || revoked[0].ID != firstRecord.ID {
+	if _, revoked, changed, err := agenttokens.ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), secondRecord.ID, "machine-a", "renamed.example"); err != nil || !changed || len(revoked) != 1 || revoked[0].ID != firstRecord.ID {
 		t.Fatalf("rotation activation = revoked %#v, changed %v, error %v", revoked, changed, err)
 	}
 	if _, ok := router.admitAgentExecToken(firstToken, "machine-a", "node.example"); ok {

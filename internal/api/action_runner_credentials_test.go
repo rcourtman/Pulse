@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,8 +229,8 @@ func TestIssueActionRunnerCredentialRotationCommitsOnlyAfterReplacementHealthHan
 	pendingConn, pendingServer := connectActionRunnerCredentialForTest(t, router.agentExecServer, second)
 	defer pendingConn.Close()
 	defer pendingServer.Close()
-	if router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
-		t.Fatal("pending replacement became dispatchable before activation")
+	if !router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		t.Fatal("pending replacement interrupted active dispatch before activation")
 	}
 	if rec := requestActionRunnerActivationForTest(t, router, second); rec.Code != http.StatusNoContent {
 		t.Fatalf("activation status = %d, body=%s", rec.Code, rec.Body.String())
@@ -267,6 +268,85 @@ func TestIssueActionRunnerCredentialPersistenceFailureKeepsPriorLiveSession(t *t
 	}
 	if !router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
 		t.Fatal("failed persistence invalidated the prior live session")
+	}
+}
+
+func TestCancelPendingActionRunnerCredentialActivationIsSelfOnlyAnd204IsRollbackAuthority(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
+	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
+	handler := RequireAuth(cfg, RequireScope(config.ScopeAgentExec, router.handleCancelPendingActionRunnerCredentialActivation))
+	request := func(token, organizationID, body string) *httptest.ResponseRecorder {
+		var reader io.Reader
+		if body != "" {
+			reader = strings.NewReader(body)
+		}
+		req := httptest.NewRequest(http.MethodDelete, "/api/agents/action-runner/credential/activation", reader)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, organizationID))
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		return rec
+	}
+
+	pending := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	if rec := request("", "default", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("missing bearer status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := request(pending.Token, "other", ""); rec.Code == http.StatusNoContent {
+		t.Fatal("cross-organization bearer returned rollback-authorizing 204")
+	}
+	if rec := request(pending.Token, "default", `{"agentId":"other","hostname":"other"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("selector body status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	for index := range cfg.APITokens {
+		if cfg.APITokens[index].ID == pending.TokenID {
+			cfg.APITokens[index].Scopes = append(cfg.APITokens[index].Scopes, config.ScopeSettingsWrite)
+		}
+	}
+	if rec := request(pending.Token, "default", ""); rec.Code == http.StatusNoContent {
+		t.Fatal("excess-scope runner bearer returned rollback-authorizing 204")
+	}
+	for index := range cfg.APITokens {
+		if cfg.APITokens[index].ID == pending.TokenID {
+			cfg.APITokens[index].Scopes = []string{config.ScopeAgentExec}
+		}
+	}
+	legacyRaw := "legacy-cancel-token-1234567890.12345678"
+	legacy, err := config.NewAPITokenRecord(legacyRaw, "legacy exec", []string{config.ScopeAgentExec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy.OrgID = "default"
+	legacy.Metadata = map[string]string{agenttokens.RuntimeRoleMetadataKey: agenttokens.CredentialKindLegacyFullTrust, "bound_agent_id": hostID, "bound_hostname": "host-1.local"}
+	cfg.APITokens = append(cfg.APITokens, *legacy)
+	if rec := request(legacyRaw, "default", ""); rec.Code == http.StatusNoContent {
+		t.Fatal("wrong-role exec bearer returned rollback-authorizing 204")
+	}
+	for index := range cfg.APITokens {
+		if cfg.APITokens[index].ID == legacy.ID {
+			cfg.APITokens = append(cfg.APITokens[:index], cfg.APITokens[index+1:]...)
+			break
+		}
+	}
+	if rec := request(pending.Token, "default", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("pending cancel status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 0 {
+		t.Fatalf("cancelled pending credential remained: %#v", cfg.APITokens)
+	}
+	if rec := request(pending.Token, "default", ""); rec.Code == http.StatusNoContent {
+		t.Fatal("removed credential incorrectly returned rollback-authorizing 204")
+	}
+
+	active := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	commitActionRunnerCredentialForTest(t, router, active)
+	if rec := request(active.Token, "default", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("committed cancel status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != active.TokenID {
+		t.Fatalf("committed cancel changed active credential: %#v", cfg.APITokens)
 	}
 }
 
@@ -313,6 +393,26 @@ func TestActivateActionRunnerCredentialRequiresExactRegisteredSession(t *testing
 	}
 }
 
+func TestActivateActionRunnerCredentialRequiresDurablePersistenceWithoutChangingTokenOrSession(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
+	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
+	issued := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	pendingConn, pendingServer := connectActionRunnerCredentialForTest(t, router.agentExecServer, issued)
+	defer pendingConn.Close()
+	defer pendingServer.Close()
+	router.persistence = nil
+	if rec := requestActionRunnerActivationForTest(t, router, issued); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("nil persistence activation status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != issued.TokenID || cfg.APITokens[0].ExpiresAt == nil || cfg.APITokens[0].Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey] != "true" {
+		t.Fatalf("nil persistence activation changed inventory = %#v", cfg.APITokens)
+	}
+	admission, ok := router.admitAgentExecToken(issued.Token, issued.AgentID, issued.Hostname)
+	if !ok || !admission.ActivationPending || !router.agentExecServer.HasActionRunnerSession(admission) {
+		t.Fatalf("nil persistence activation changed pending session = %#v, %v", admission, ok)
+	}
+}
+
 func TestSelfRevokeActionRunnerCredentialRequiresExactBearerBindingAndClosesSession(t *testing.T) {
 	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
 	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
@@ -350,6 +450,36 @@ func TestSelfRevokeActionRunnerCredentialRequiresExactBearerBindingAndClosesSess
 	}
 	if router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
 		t.Fatal("self-revoked session remained connected")
+	}
+}
+
+func TestSelfRevokeActionRunnerCredentialRequiresDurablePersistence(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
+	issued := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	request := func() *httptest.ResponseRecorder {
+		body, _ := json.Marshal(actionRunnerCredentialSelfRevokeRequest{AgentID: issued.AgentID, Hostname: issued.Hostname})
+		req := httptest.NewRequest(http.MethodDelete, "/api/agents/action-runner/credential", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+issued.Token)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+		rec := httptest.NewRecorder()
+		actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleActivateActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)(rec, req)
+		return rec
+	}
+	originalPersistence := router.persistence
+	router.persistence = nil
+	if rec := request(); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("nil persistence status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != issued.TokenID {
+		t.Fatalf("nil persistence mutated inventory: %#v", cfg.APITokens)
+	}
+	router.persistence = originalPersistence
+	router.persistence.SetFileSystem(actionRunnerFailingPersistenceFS{})
+	if rec := request(); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("failed persistence status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != issued.TokenID {
+		t.Fatalf("failed persistence mutated inventory: %#v", cfg.APITokens)
 	}
 }
 
@@ -587,14 +717,14 @@ func TestActionRunnerRotationProductionRouterTLSPersistenceRestart(t *testing.T)
 		t.Fatal("rotation prepare rejected the first secret")
 	}
 	secondConn, registered := dial(server, second)
-	if !registered.Success || router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+	if !registered.Success || !router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
 		secondConn.Close()
 		firstConn.Close()
 		shutdown(router, monitor, server)
 		t.Fatalf("prepared second registration = %#v", registered)
 	}
-	requireSocketClosed(firstConn, "superseded runner")
 	activate(server, second)
+	requireSocketClosed(firstConn, "superseded runner")
 	if _, ok := cfg.ValidateAPIToken(first.Token); ok {
 		secondConn.Close()
 		firstConn.Close()

@@ -380,6 +380,7 @@ var allRouteAllowlist = []string{
 	"/api/agents/docker/report",
 	"/api/agents/kubernetes/report",
 	"/api/agents/action-runner/credential",
+	"/api/agents/action-runner/credential/activation",
 	"/api/agents/collector/reduce-authority",
 	"/api/agents/agent/report",
 	"/api/agents/host/report",

@@ -9,8 +9,12 @@ import (
 	"time"
 )
 
-const defaultMaxOperationTimeout = 30 * time.Second
-const responseWriteTimeout = 5 * time.Second
+const (
+	defaultMaxConcurrentConnections = 16
+	defaultMaxOperationTimeout      = 30 * time.Second
+	defaultPreFrameTimeout          = 2 * time.Second
+	responseWriteTimeout            = 5 * time.Second
+)
 
 type Peer struct {
 	UID uint32
@@ -54,19 +58,23 @@ type AuditEvent struct {
 type AuditHook func(AuditEvent)
 
 type ServerConfig struct {
-	AllowedUID          uint32
-	PeerResolver        PeerResolver
-	Registry            *Registry
-	MaxOperationTimeout time.Duration
-	Audit               AuditHook
-	Now                 func() time.Time
+	AllowedUID               uint32
+	PeerResolver             PeerResolver
+	Registry                 *Registry
+	MaxConcurrentConnections int
+	MaxOperationTimeout      time.Duration
+	PreFrameTimeout          time.Duration
+	Audit                    AuditHook
+	Now                      func() time.Time
 }
 
 type Server struct {
 	allowedUID          uint32
 	peerResolver        PeerResolver
 	registry            *Registry
+	connectionSlots     chan struct{}
 	maxOperationTimeout time.Duration
+	preFrameTimeout     time.Duration
 	audit               AuditHook
 	now                 func() time.Time
 }
@@ -78,12 +86,32 @@ func NewServer(config ServerConfig) (*Server, error) {
 	if config.Registry == nil {
 		return nil, errors.New("operation registry is required")
 	}
+	maxConnections := config.MaxConcurrentConnections
+	if maxConnections < 0 {
+		return nil, errors.New("maximum concurrent connections must not be negative")
+	}
+	if maxConnections == 0 {
+		maxConnections = defaultMaxConcurrentConnections
+	}
 	maxTimeout := config.MaxOperationTimeout
-	if maxTimeout <= 0 {
+	if maxTimeout < 0 {
+		return nil, errors.New("maximum operation timeout must not be negative")
+	}
+	if maxTimeout == 0 {
 		maxTimeout = defaultMaxOperationTimeout
 	}
 	if maxTimeout < time.Millisecond {
 		return nil, errors.New("maximum operation timeout must be at least 1ms")
+	}
+	preFrameTimeout := config.PreFrameTimeout
+	if preFrameTimeout < 0 {
+		return nil, errors.New("pre-frame timeout must not be negative")
+	}
+	if preFrameTimeout == 0 {
+		preFrameTimeout = defaultPreFrameTimeout
+	}
+	if preFrameTimeout < time.Millisecond {
+		return nil, errors.New("pre-frame timeout must be at least 1ms")
 	}
 	now := config.Now
 	if now == nil {
@@ -93,7 +121,9 @@ func NewServer(config ServerConfig) (*Server, error) {
 		allowedUID:          config.AllowedUID,
 		peerResolver:        config.PeerResolver,
 		registry:            config.Registry,
+		connectionSlots:     make(chan struct{}, maxConnections),
 		maxOperationTimeout: maxTimeout,
+		preFrameTimeout:     preFrameTimeout,
 		audit:               config.Audit,
 		now:                 now,
 	}, nil
@@ -112,11 +142,40 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 			}
 			return fmt.Errorf("accept helper connection: %w", err)
 		}
-		go s.HandleConnection(ctx, conn)
+		if !s.tryAcquireConnection() {
+			_ = conn.Close()
+			continue
+		}
+		go func() {
+			defer s.releaseConnection()
+			s.handleConnection(ctx, conn)
+		}()
 	}
 }
 
 func (s *Server) HandleConnection(parent context.Context, conn net.Conn) {
+	if !s.tryAcquireConnection() {
+		_ = conn.Close()
+		return
+	}
+	defer s.releaseConnection()
+	s.handleConnection(parent, conn)
+}
+
+func (s *Server) tryAcquireConnection() bool {
+	select {
+	case s.connectionSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) releaseConnection() {
+	<-s.connectionSlots
+}
+
+func (s *Server) handleConnection(parent context.Context, conn net.Conn) {
 	defer conn.Close()
 	started := s.now()
 	event := AuditEvent{StartedAt: started}
@@ -127,7 +186,8 @@ func (s *Server) HandleConnection(parent context.Context, conn net.Conn) {
 		}
 	}()
 
-	_ = conn.SetDeadline(started.Add(s.maxOperationTimeout))
+	preFrameTimeout := min(s.preFrameTimeout, s.maxOperationTimeout)
+	_ = conn.SetDeadline(started.Add(preFrameTimeout))
 	peer, err := s.peerResolver.Resolve(conn)
 	event.Peer = peer
 	if err != nil || peer.UID != s.allowedUID {
@@ -150,6 +210,7 @@ func (s *Server) HandleConnection(parent context.Context, conn net.Conn) {
 	event.RequestID = request.RequestID
 	event.Operation = request.Operation
 	event.OperationVersion = request.OperationVersion
+	_ = conn.SetDeadline(started.Add(s.maxOperationTimeout))
 
 	if validationError := s.validateRequest(request); validationError != nil {
 		s.writeResponse(conn, &event, errorResponse(request, validationError))

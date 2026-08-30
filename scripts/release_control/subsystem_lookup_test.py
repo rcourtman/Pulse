@@ -4652,6 +4652,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/agentupdate/coverage_test.go",
+                "internal/hostagent/action_runner_client_test.go",
                 "internal/hostagent/agent_flushbuffer_test.go",
                 "internal/hostagent/agent_metrics_test.go",
                 "internal/hostagent/agent_new_test.go",

@@ -74,6 +74,30 @@ func TestReduceCollectorAuthorityRejectsCrossHostBinding(t *testing.T) {
 	}
 }
 
+func TestCollectorAuthorityHostnamesEquivalent(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		bound     string
+		requested string
+		want      bool
+	}{
+		{name: "short to FQDN", bound: "node-a", requested: "node-a.example.test", want: true},
+		{name: "FQDN to short", bound: "node-a.example.test", requested: "node-a", want: true},
+		{name: "same FQDN case and trailing dot", bound: "Node-A.Example.Test.", requested: "node-a.example.test", want: true},
+		{name: "distinct same-label FQDN", bound: "node-a.one.test", requested: "node-a.two.test", want: false},
+		{name: "same IPv4 literal", bound: "192.0.2.10", requested: "192.0.2.10", want: true},
+		{name: "distinct IPv4 literal", bound: "192.0.2.10", requested: "192.0.2.11", want: false},
+		{name: "same IPv6 literal", bound: "2001:DB8::10", requested: "2001:db8::10", want: true},
+		{name: "IP and hostname", bound: "192.0.2.10", requested: "node-a", want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := collectorAuthorityHostnamesEquivalent(test.bound, test.requested); got != test.want {
+				t.Fatalf("collectorAuthorityHostnamesEquivalent(%q, %q) = %v, want %v", test.bound, test.requested, got, test.want)
+			}
+		})
+	}
+}
+
 func TestReduceCollectorAuthorityRejectsUnboundCredential(t *testing.T) {
 	record := &config.APITokenRecord{ID: "token-a", OrgID: "org-a", Scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec}}
 	cfg := &config.Config{APITokens: []config.APITokenRecord{*record}}

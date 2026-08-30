@@ -116,22 +116,55 @@ identity file is present. Issuance and every runner boundary use the same
 bounded action-identity vocabulary. Credential
 rotation is a prepare/commit transaction. Issuance stores a ten-minute pending
 replacement beside the active predecessor; the pending transport may register
-but is not dispatchable. The runner first durably replaces a private health
-marker carrying the current installer-generated activation nonce, then calls
-the authenticated activation method. Activation atomically removes the exact
-predecessor set, removes the replacement expiry/pending state, and promotes the
-exact registered session. Failure before that commit leaves the predecessor
-valid, while persistence failure restores both records. The installer removes
+but is staged in a separate bounded session slot and is not dispatchable.
+Pending reconnect or flood traffic may replace only that pending slot; the
+active predecessor remains connected and dispatchable until commit. The runner
+first durably replaces a private pending
+health marker carrying the current installer-generated activation nonce, then
+calls the authenticated activation method. Activation atomically removes the
+exact predecessor set, removes the replacement expiry/pending state, and
+promotes the exact registered pending session while the token inventory lock
+serializes both decisions. The server persists the activated inventory before
+the bounded session-map swap and closes the displaced predecessor transport
+only after both locks are released. If the exact pending transport vanished or
+was replaced, the server durably restores the prior inventory and returns
+conflict; if that compensating persistence fails, memory remains aligned with
+the last known durable activated inventory and the response is indeterminate,
+never a false success. Only after a successful response may the runner replace the
+marker with activated state. Failure before that commit leaves the predecessor
+valid, while initial persistence failure or a successful compensating save
+restores both records. Installer rollback is
+authorized only by a bodyless, self-only cancellation that durably removes the
+exact still-pending replacement under the same inventory lock as activation. A
+committed replacement returns conflict; persistence or admission-tombstone
+uncertainty is never rollback authority. The installer removes
 the prior marker before restart, ignores wall-clock mtime as authority, and
 accepts only an activated marker whose nonce and canonical agent ID match the
-current attempt; rollback never restores a prior marker. An already-started
+current attempt; rollback never restores a prior marker. If readiness fails,
+the installer stops the replacement and restores the predecessor only after
+that atomic cancellation succeeds. Activation conflict, transport/TLS failure,
+persistence failure, or indeterminate cancellation retains the replacement
+with an explicit
+repair-required result, because restoring the potentially revoked predecessor
+would create a credential/runtime split. Before restart or predecessor-backup
+removal, that path atomically and durably rewrites the exact requested
+replacement bearer to the root-owned token file; failure leaves the runner
+stopped, does not restore the predecessor, and requires re-enrollment. An
+already-started
 host mutation remains governed by its typed receipt and best-effort
 cancellation semantics rather than being described as rolled back. Runner
-uninstall attempts an authenticated
-credential self-revoke before deleting local state. The delete route may
-remove only the caller's exact host-bound action-runner record; an unreachable
-server cannot prevent local runner removal and leaves an explicit operator
-revocation residual.
+uninstall stops and disables the runner, then requires an authenticated durable
+credential self-revoke before deleting any local artifact. The delete route may
+remove only the caller's exact host-bound action-runner record. An unreachable
+or untrusted server, missing credential, or persistence failure retains all
+root-only recovery material for retry or manual server-side revocation.
+Runner WS registration and activation, cancellation, and self-revocation HTTP
+calls require HTTPS/WSS with normal trust, a configured CA, or an enforced
+certificate-DER fingerprint. Plaintext HTTP/WS accepts only exact `localhost`,
+`127/8`, or `::1` literals (not `*.localhost`) and never
+inherits generic installer insecure or curl `-k` behavior. Bearer-bearing
+activation, cancellation, and self-revocation clients connect directly and do
+not inherit ambient HTTP proxy variables.
 Runner readiness is exposed through a bounded, secret-free health marker that
 is replaced atomically only after its contents reach stable storage. The
 marker distinguishes registered/pending from activated and carries only the
@@ -375,9 +408,11 @@ installer download and the agent's subsequent Pulse TLS connection.
    5i. `internal/agenthelper/`
    5j. `internal/actionrunner/`
    5k. `internal/dockeragent/action_runtime.go`
+   5l. `internal/collectorlifecycle/`
 6. `cmd/pulse-agent/main.go`
    6a. `cmd/pulse-agent-helper/main.go`
    6b. `cmd/pulse-agent-runner/main.go`
+   6c. `cmd/pulse-agent/collector_lifecycle.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
    8a. `.github/workflows/unified-agent-native.yml`
@@ -1540,6 +1575,17 @@ hierarchy must compose frontend-primitives' `EmptyState` `variant="panel"`
 instead of lifecycle-local centered icon/text shells.
 
 ## Extension Points
+
+Safe-profile installation and migration invoke the private lifecycle commands
+in `cmd/pulse-agent/collector_lifecycle.go`, backed by
+`internal/collectorlifecycle/`, for collector authority reduction and
+authoritative registration proof. These commands are installer-only lifecycle
+boundaries: they read the bearer from one bounded, no-follow descriptor owned
+by root or the configured collector UID; use system/custom CA trust or exact
+DER pinning; reject redirects and ambient proxies; and permit plaintext only
+for literal loopback hosts. Any new bearer-bearing collector transition must
+extend this client and its installer negative tests instead of adding a curl
+or generic insecure-transport path.
 
 The authenticated runtime-display projection under shared `internal/api/` may
 carry the effective global `disableDockerUpdateActions` boolean so non-admin

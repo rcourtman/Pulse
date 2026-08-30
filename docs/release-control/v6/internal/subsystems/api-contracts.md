@@ -53,12 +53,25 @@ deadline, not predecessor secrets.
 commit. It requires the current `agent:exec` bearer, exact organization,
 canonical agent/hostname binding, and an exact registered pending transport.
 A pending transport is visible to this commit proof but unavailable to action
-dispatch. The commit clears the pending expiry, durably removes only the
-server-recorded predecessor IDs, restores the complete inventory on persistence
-failure, promotes the exact replacement session, and invalidates exact stale
-sessions without allowing a caller-selected token ID. Repeating activation for
-an already active exact session is idempotent so a lost HTTP response can be
-reconciled safely.
+dispatch and cannot evict or interrupt the active predecessor. The commit
+requires durable token persistence, clears the pending expiry, removes only the
+server-recorded predecessor IDs, and atomically promotes the exact replacement
+session while invalidating exact stale sessions without allowing a
+caller-selected token ID. Persistence or promotion failure preserves one
+coherent durable inventory/session outcome; the route never reports success for
+an in-memory-only activation or a vanished pending connection. Repeating
+activation for an already active exact session is idempotent so a lost HTTP
+response can be reconciled safely.
+
+`DELETE /api/agents/action-runner/credential/activation` is the only
+rollback-authorizing cancellation boundary for an installer-held replacement.
+It accepts no request body, authenticates the exact pending replacement bearer,
+and serializes with activation under the same durable token-inventory lock. A
+successful `204` durably removes that replacement and tombstones its exact
+admission so a pre-admitted or late transport cannot commit afterward. If
+activation has already won, the route returns conflict; persistence failure or
+any indeterminate state returns an error and must never authorize restoring the
+predecessor credential or files.
 
 `DELETE /api/agents/action-runner/credential` is the runner's narrowly scoped
 self-revoke operation. It requires the current `agent:exec` bearer credential,

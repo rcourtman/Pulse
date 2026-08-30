@@ -642,6 +642,105 @@ warn_agent_token_rejected() {
     log_warn "Re-run the full agent install command from the Pulse UI to mint a fresh token. The agent will keep reporting 401/403 until the credential is replaced."
 }
 
+# Resolve the newly downloaded/installed pulse-agent command surface used for
+# authenticated installer lifecycle operations. Safe-profile preflight runs
+# after download but before replacement, so it must prefer the new binary over
+# an older installed agent that does not yet expose these commands.
+collector_lifecycle_binary() {
+    if [[ -n "${COLLECTOR_LIFECYCLE_BINARY_PATH:-}" && -x "$COLLECTOR_LIFECYCLE_BINARY_PATH" ]]; then
+        printf '%s\n' "$COLLECTOR_LIFECYCLE_BINARY_PATH"
+        return 0
+    fi
+    if [[ -n "${TMP_BIN:-}" && -x "$TMP_BIN" ]]; then
+        printf '%s\n' "$TMP_BIN"
+        return 0
+    fi
+    if [[ -x "${INSTALL_DIR%/}/${BINARY_NAME}" ]]; then
+        printf '%s\n' "${INSTALL_DIR%/}/${BINARY_NAME}"
+        return 0
+    fi
+    return 1
+}
+
+resolve_safe_profile_hostname() {
+    local resolved_hostname="${HOSTNAME_OVERRIDE:-}"
+    if [[ -z "$resolved_hostname" ]]; then
+        resolved_hostname=$(hostname -f 2>/dev/null || true)
+    fi
+    if [[ -z "$resolved_hostname" ]]; then
+        resolved_hostname=$(hostname 2>/dev/null || true)
+    fi
+    resolved_hostname=$(printf '%s' "$resolved_hostname" | tr '[:upper:]' '[:lower:]')
+    resolved_hostname="${resolved_hostname%.}"
+    [[ ${#resolved_hostname} -ge 1 && ${#resolved_hostname} -le 253 &&
+       "$resolved_hostname" =~ ^[a-z0-9][a-z0-9._:-]*$ ]] || return 1
+    HOSTNAME_OVERRIDE="$resolved_hostname"
+}
+
+# Select the bearer actually used by the collector without copying it through
+# argv. Enrolled runtime state wins over the bootstrap token. PULSE_TOKEN-only
+# installs get a root-only temporary file that is removed after each command.
+prepare_collector_lifecycle_token_file() {
+    local candidate=""
+    local temp_token=""
+
+    COLLECTOR_LIFECYCLE_TOKEN_FILE=""
+    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE=""
+    for candidate in \
+        "${STATE_DIR%/}/runtime.token" \
+        "${RUNTIME_TOKEN_FILE:-}" \
+        "${STATE_DIR%/}/token"; do
+        [[ -n "$candidate" ]] || continue
+        if [[ -s "$candidate" && -f "$candidate" && ! -L "$candidate" ]]; then
+            COLLECTOR_LIFECYCLE_TOKEN_FILE="$candidate"
+            return 0
+        fi
+    done
+
+    [[ -n "$PULSE_TOKEN" && "$PULSE_TOKEN" != *$'\r'* && "$PULSE_TOKEN" != *$'\n'* ]] || return 1
+    temp_token=$(mktemp) || return 1
+    chmod 0600 "$temp_token" || { rm -f "$temp_token"; return 1; }
+    if ! printf '%s' "$PULSE_TOKEN" > "$temp_token"; then
+        rm -f "$temp_token"
+        return 1
+    fi
+    COLLECTOR_LIFECYCLE_TOKEN_FILE="$temp_token"
+    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE="$temp_token"
+    return 0
+}
+
+run_collector_lifecycle_command() {
+    local command_name="$1"
+    shift
+    local lifecycle_binary=""
+    local collector_uid=""
+    local lifecycle_rc=1
+    local -a lifecycle_args
+
+    lifecycle_binary=$(collector_lifecycle_binary) || return 1
+    prepare_collector_lifecycle_token_file || return 1
+    lifecycle_args=("$command_name" --url "$PULSE_URL" --token-file "$COLLECTOR_LIFECYCLE_TOKEN_FILE")
+    collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+    if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
+        lifecycle_args+=(--token-owner-uid "$collector_uid")
+    fi
+    [[ -n "$CURL_CA_BUNDLE" ]] && lifecycle_args+=(--cacert "$CURL_CA_BUNDLE")
+    [[ -n "$SERVER_FINGERPRINT" ]] && lifecycle_args+=(--server-fingerprint "$SERVER_FINGERPRINT")
+    lifecycle_args+=("$@")
+
+    if "$lifecycle_binary" "${lifecycle_args[@]}"; then
+        lifecycle_rc=0
+    else
+        lifecycle_rc=$?
+    fi
+    if [[ -n "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE" ]]; then
+        rm -f "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE"
+    fi
+    COLLECTOR_LIFECYCLE_TOKEN_FILE=""
+    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE=""
+    return "$lifecycle_rc"
+}
+
 # verify_agent_server_registration returns:
 #   0 - the server confirmed this agent's registration
 #   1 - registration not confirmed yet (transient: agent not reported, network)
@@ -651,15 +750,9 @@ verify_agent_server_registration() {
     local required_previous_last_seen="${1:-}"
     local lookup_id="${AGENT_ID}"
     local lookup_hostname="${HOSTNAME_OVERRIDE}"
-    local lookup_query=""
-    local lookup_out=""
-    local lookup_status=""
-    local lookup_body=""
     local lookup_last_seen=""
-    # No -f: we need the response body AND the HTTP status even on 4xx so a
-    # rejected token (401/403) can be told apart from "not reported yet". The
-    # -w format appends "\n<http_code>" after the body.
-    local lookup_args=(-sSL --connect-timeout 5 --max-time 10 -w $'\n%{http_code}')
+    local lookup_rc=1
+    local -a lookup_args=(collector-verify-registration)
 
     if [[ -z "$PULSE_URL" ]]; then
         return 1
@@ -674,45 +767,26 @@ verify_agent_server_registration() {
         lookup_hostname=$(hostname 2>/dev/null || true)
     fi
     if [[ -n "$lookup_id" ]]; then
-        lookup_query="id=$(url_encode "$lookup_id")"
-    elif [[ -n "$lookup_hostname" ]]; then
-        lookup_query="hostname=$(url_encode "$lookup_hostname")"
-    else
+        lookup_args+=(--agent-id "$lookup_id")
+    fi
+    if [[ -n "$lookup_hostname" ]]; then
+        lookup_args+=(--hostname "$lookup_hostname")
+    fi
+    if [[ ${#lookup_args[@]} -eq 1 ]]; then
         return 1
     fi
-
-    if [[ "$INSECURE" == "true" ]]; then lookup_args+=(-k); fi
-    if [[ -n "$CURL_CA_BUNDLE" ]]; then lookup_args+=(--cacert "$CURL_CA_BUNDLE"); fi
-
-    lookup_out=$(curl_with_pulse_token "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?${lookup_query}" 2>/dev/null || true)
-    lookup_status="${lookup_out##*$'\n'}"
-    lookup_body="${lookup_out%$'\n'*}"
-
-    # Authentication failure and missing reporting scope are definitive. A
-    # lookup can instead hit the previous registration during first-use token
-    # binding; agent_lookup_forbidden is transient until the new ownership is
-    # visible, so keep polling rather than falsely condemning the fresh token.
-    case "$lookup_status" in
-        401) return 2 ;;
-        403)
-            if echo "$lookup_body" | grep -q '"code"[[:space:]]*:[[:space:]]*"agent_lookup_forbidden"'; then
-                return 1
-            fi
-            return 2
-            ;;
-    esac
-
+    [[ -n "$required_previous_last_seen" ]] && lookup_args+=(--previous-last-seen "$required_previous_last_seen")
     AGENT_REGISTRATION_LAST_SEEN=""
-    if echo "$lookup_body" | grep -q '"agent"[[:space:]]*:' && echo "$lookup_body" | grep -q '"id"[[:space:]]*:'; then
-        lookup_last_seen=$(printf '%s' "$lookup_body" | tr -d '\r\n' |
-            sed -n 's/.*"lastSeen"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    if lookup_last_seen=$(run_collector_lifecycle_command "${lookup_args[@]}" 2>/dev/null); then
+        lookup_rc=0
+    else
+        lookup_rc=$?
+    fi
+    if [[ $lookup_rc -eq 0 && -n "$lookup_last_seen" ]]; then
         AGENT_REGISTRATION_LAST_SEEN="$lookup_last_seen"
-        if [[ -n "$required_previous_last_seen" ]] &&
-           [[ -z "$lookup_last_seen" || "$lookup_last_seen" == "$required_previous_last_seen" ]]; then
-            return 1
-        fi
         return 0
     fi
+    [[ $lookup_rc -eq 2 ]] && return 2
     return 1
 }
 
@@ -966,20 +1040,26 @@ revoke_action_runner_credential() {
     local runner_agent_id_direct=""
     local runner_agent_id_file=""
     local runner_agent_id=""
-    local runner_token_file=""
-    local runner_token=""
-    local token_mode=""
-    local token_size=""
-    local curl_config=""
-    local payload=""
-    local -a revoke_args
+	local runner_token_file=""
+	local runner_server_fingerprint=""
+	local runner_ca_file=""
+	local runner_insecure=""
+	local lifecycle_binary=""
+	local collector_uid=""
+	local -a identity_args
+	local -a revoke_args
 
     runner_url=$(read_action_runner_env_value "PULSE_URL" || true)
     runner_hostname=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" || true)
     runner_agent_id_direct=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" || true)
     runner_agent_id_file=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" || true)
     runner_token_file=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" || true)
-    [[ "$runner_url" =~ ^https?://[^[:space:]]+$ && -n "$runner_hostname" ]] || return 1
+	runner_server_fingerprint=$(read_action_runner_env_value "PULSE_SERVER_FINGERPRINT" || true)
+	runner_ca_file=$(read_action_runner_env_value "SSL_CERT_FILE" || true)
+	runner_insecure=$(read_action_runner_env_value "PULSE_INSECURE" || true)
+	action_runner_url_transport_allowed "$runner_url" || return 1
+	[[ -n "$runner_hostname" ]] || return 1
+	[[ -x "$ACTION_RUNNER_BINARY_PATH" ]] || return 1
     [[ "$runner_token_file" == /* && "$runner_token_file" != *'/../'* &&
        -f "$runner_token_file" && ! -L "$runner_token_file" ]] || return 1
     if [[ -n "$runner_agent_id_direct" ]]; then
@@ -987,95 +1067,63 @@ revoke_action_runner_credential() {
     else
         [[ "$runner_agent_id_file" == /* && "$runner_agent_id_file" != *'/../'* &&
            -f "$runner_agent_id_file" && ! -L "$runner_agent_id_file" ]] || return 1
-        runner_agent_id=$(head -1 "$runner_agent_id_file" 2>/dev/null || true)
+		lifecycle_binary=$(collector_lifecycle_binary) || return 1
+		identity_args=(collector-read-agent-id --agent-id-file "$runner_agent_id_file")
+		collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+		if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
+			identity_args+=(--token-owner-uid "$collector_uid")
+		fi
+		runner_agent_id=$("$lifecycle_binary" "${identity_args[@]}" 2>/dev/null || true)
     fi
     (( ${#runner_agent_id} >= 1 && ${#runner_agent_id} <= 128 &&
        ${#runner_hostname} >= 1 && ${#runner_hostname} <= 253 )) || return 1
     [[ "$runner_agent_id" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ &&
        "$runner_hostname" =~ ^[A-Za-z0-9._:-]+$ ]] || return 1
-    token_mode=$(stat -c '%a' "$runner_token_file" 2>/dev/null || true)
-    token_size=$(wc -c < "$runner_token_file" 2>/dev/null | tr -d ' ' || true)
-    [[ "$token_mode" =~ ^[0-7]{3,4}$ && "$token_size" =~ ^[0-9]+$ ]] || return 1
-    (( (8#$token_mode & 8#077) == 0 && token_size >= 1 && token_size <= 4096 )) || return 1
-    runner_token=$(head -1 "$runner_token_file" 2>/dev/null || true)
-    [[ -n "$runner_token" && "$runner_token" != *$'\r'* && "$runner_token" != *$'\n'* ]] || return 1
-
-    curl_config=$(mktemp)
-    chmod 0600 "$curl_config"
-    printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' \
-        "$runner_token" > "$curl_config"
-    runner_token=""
-    payload="{\"agentId\":\"${runner_agent_id}\",\"hostname\":\"${runner_hostname}\"}"
-    revoke_args=(--config "$curl_config" -fsS --connect-timeout 5 --max-time 10 -X DELETE --data-binary "$payload")
-    if grep -q '^PULSE_INSECURE="true"$' "$ACTION_RUNNER_ENV_FILE" 2>/dev/null; then
-        revoke_args+=(-k)
-    fi
-    if curl "${revoke_args[@]}" "${runner_url%/}/api/agents/action-runner/credential" >/dev/null 2>&1; then
-        rm -f "$curl_config"
-        return 0
-    fi
-    rm -f "$curl_config"
-    return 1
+	revoke_args=(revoke-credential --url "$runner_url" --token-file "$runner_token_file" --agent-id "$runner_agent_id" --hostname "$runner_hostname")
+	[[ -n "$runner_ca_file" ]] && revoke_args+=(--cacert "$runner_ca_file")
+	[[ -n "$runner_server_fingerprint" ]] && revoke_args+=(--server-fingerprint "$runner_server_fingerprint")
+	if action_runner_url_uses_loopback_http "$runner_url" && [[ "$runner_insecure" == "true" ]]; then
+		revoke_args+=(--insecure-loopback)
+	fi
+	"$ACTION_RUNNER_BINARY_PATH" "${revoke_args[@]}"
 }
 
 reduce_safe_profile_collector_authority() {
-    local active_token_file="${STATE_DIR%/}/runtime.token"
-    local active_token=""
-    local curl_config=""
-    local payload=""
-    local -a reduce_args
-
-    if [[ ! -s "$active_token_file" || -L "$active_token_file" ]]; then
-        active_token_file=""
-        active_token="$PULSE_TOKEN"
-    else
-        active_token=$(head -1 "$active_token_file" 2>/dev/null || true)
-    fi
-    [[ -n "$active_token" && "$active_token" != *$'\r'* && "$active_token" != *$'\n'* ]] || return 1
     [[ -n "$AGENT_ID" && ${#AGENT_ID} -le 256 && "$AGENT_ID" =~ ^[A-Za-z0-9._:-]+$ ]] || return 1
     [[ -n "$HOSTNAME_OVERRIDE" && ${#HOSTNAME_OVERRIDE} -le 253 && "$HOSTNAME_OVERRIDE" =~ ^[A-Za-z0-9._:-]+$ ]] || return 1
-    [[ "$PULSE_URL" =~ ^https?://[^[:space:]]+$ ]] || return 1
-
-    curl_config=$(mktemp)
-    chmod 0600 "$curl_config"
-    printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' \
-        "$active_token" > "$curl_config"
-    active_token=""
-    payload="{\"agentId\":\"${AGENT_ID}\",\"hostname\":\"${HOSTNAME_OVERRIDE}\"}"
-    reduce_args=(--config "$curl_config" -fsS --connect-timeout 5 --max-time 15 -X POST --data-binary "$payload")
-    if [[ "$INSECURE" == "true" ]]; then
-        reduce_args+=(-k)
-    elif [[ -n "$CURL_CA_BUNDLE" ]]; then
-        reduce_args+=(--cacert "$CURL_CA_BUNDLE")
-    fi
-    if curl "${reduce_args[@]}" "${PULSE_URL%/}/api/agents/collector/reduce-authority" >/dev/null 2>&1; then
-        rm -f "$curl_config"
+    if run_collector_lifecycle_command collector-reduce-authority \
+        --agent-id "$AGENT_ID" --hostname "$HOSTNAME_OVERRIDE" >/dev/null 2>&1; then
         log_info "Durably removed execution and cross-host management scopes from the collector credential before migration."
         return 0
     fi
-    rm -f "$curl_config"
     return 1
 }
 
 teardown_action_runner_service() {
-    local had_runner_config="false"
-    if [[ -f "$ACTION_RUNNER_ENV_FILE" || -f "$ACTION_RUNNER_TOKEN_FILE" ]]; then
-        had_runner_config="true"
-    fi
-    if revoke_action_runner_credential; then
-        log_info "Revoked the action-runner credential before removing local runner state."
-    elif [[ "$had_runner_config" == "true" ]]; then
-        log_warn "Could not self-revoke the action-runner credential; local runner removal will continue. Revoke the credential from Pulse if the server was unreachable."
-    fi
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
-        systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
-        rm -f "$ACTION_RUNNER_SERVICE_UNIT"
-        systemctl daemon-reload 2>/dev/null || true
-        systemctl reset-failed "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
-    fi
-    rm -f "$ACTION_RUNNER_BINARY_PATH"
-    rm -rf "$ACTION_RUNNER_CONFIG_DIR" "$ACTION_RUNNER_STATE_DIR"
+	local had_runner_artifact="false"
+	if [[ -e "$ACTION_RUNNER_BINARY_PATH" || -e "$ACTION_RUNNER_SERVICE_UNIT" ||
+	      -e "$ACTION_RUNNER_CONFIG_DIR" || -e "$ACTION_RUNNER_STATE_DIR" ]]; then
+		had_runner_artifact="true"
+	fi
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+		systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+	fi
+	if [[ "$had_runner_artifact" == "true" ]]; then
+		if revoke_action_runner_credential; then
+			log_info "Revoked the action-runner credential before removing local runner recovery material."
+		else
+			log_error "Could not confirm action-runner credential revocation. The runner is stopped and disabled; every local artifact was retained for a safe retry or manual server-side revoke."
+			fail "Action runner removal requires a successful credential revocation; retry with the exact root-only credential, or revoke it in Pulse before manual cleanup" "$EXIT_GENERAL"
+		fi
+	fi
+	rm -f "$ACTION_RUNNER_SERVICE_UNIT"
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload 2>/dev/null || true
+		systemctl reset-failed "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+	fi
+	rm -f "$ACTION_RUNNER_BINARY_PATH"
+	rm -rf "$ACTION_RUNNER_CONFIG_DIR" "$ACTION_RUNNER_STATE_DIR"
 }
 
 teardown_openrc_agent_service() {
@@ -1299,6 +1347,9 @@ ProtectControlGroups=true
 LockPersonality=true
 RestrictSUIDSGID=true
 SystemCallArchitectures=native
+TasksMax=64
+LimitNOFILE=256
+MemoryMax=256M
 ReadOnlyPaths=${PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR}
 ReadWritePaths=${PRIVILEGED_HELPER_STATE_DIR} /usr/local/bin
 EOF
@@ -1343,12 +1394,19 @@ EOF
 
 write_action_runner_config() {
     local runner_hostname="$HOSTNAME_OVERRIDE"
+    local runner_agent_id=""
     if [[ -L "$ACTION_RUNNER_CONFIG_DIR" || -L "$ACTION_RUNNER_STATE_DIR" ||
           -L "$ACTION_RUNNER_TOKEN_FILE" || -L "$ACTION_RUNNER_ENV_FILE" ]]; then
         fail "Refusing unsafe symlink in the action-runner config or state boundary" "$EXIT_GENERAL"
     fi
     install -d -o root -g root -m 0700 "$ACTION_RUNNER_CONFIG_DIR"
     install -d -o root -g root -m 0700 "$ACTION_RUNNER_STATE_DIR"
+	action_runner_url_transport_allowed "$PULSE_URL" ||
+		fail "Action runner requires HTTPS/WSS; plaintext HTTP/WS is allowed only for loopback local use" "$EXIT_MISSING_ARGS"
+	if [[ "$INSECURE" == "true" && "$PULSE_URL" =~ ^[Hh][Tt][Tt][Pp][Ss]:// &&
+	      -z "$CURL_CA_BUNDLE" && -z "$SERVER_FINGERPRINT" ]]; then
+		fail "Action runner refuses generic insecure HTTPS; configure a trusted CA bundle or exact server fingerprint" "$EXIT_MISSING_ARGS"
+	fi
 
     if [[ -n "$ACTION_TOKEN" ]]; then
         printf '%s\n' "$ACTION_TOKEN" > "$ACTION_RUNNER_TOKEN_FILE"
@@ -1366,6 +1424,9 @@ write_action_runner_config() {
 		fail "Action runner requires a canonical hostname" "$EXIT_MISSING_ARGS"
 	[[ "$ACTION_RUNNER_ACTIVATION_NONCE" =~ ^[a-f0-9]{64}$ ]] ||
 		fail "Action runner requires a fresh activation nonce" "$EXIT_GENERAL"
+	runner_agent_id=$(resolve_action_runner_agent_id) ||
+		fail "Action runner requires a safely resolved canonical collector identity" "$EXIT_MISSING_ARGS"
+	AGENT_ID="$runner_agent_id"
 
     : > "$ACTION_RUNNER_ENV_FILE"
     chmod 0600 "$ACTION_RUNNER_ENV_FILE"
@@ -1374,12 +1435,7 @@ write_action_runner_config() {
     write_action_runner_env_value "PULSE_AGENT_RUNNER_STATE_DIR" "$ACTION_RUNNER_STATE_DIR"
 	write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"
 	write_action_runner_env_value "PULSE_AGENT_RUNNER_ACTIVATION_NONCE" "$ACTION_RUNNER_ACTIVATION_NONCE"
-    if [[ -n "$AGENT_ID" ]]; then
-        [[ ${#AGENT_ID} -le 128 && "$AGENT_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] ||
-            fail "Action runner requires a valid canonical agent identity" "$EXIT_MISSING_ARGS"
-        write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" "$AGENT_ID"
-    fi
-    write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"
+	write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" "$runner_agent_id"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" "$runner_hostname"
     if [[ -n "$SERVER_FINGERPRINT" ]]; then
         write_action_runner_env_value "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"
@@ -1387,7 +1443,7 @@ write_action_runner_config() {
     if [[ -n "$CURL_CA_BUNDLE" ]]; then
         write_action_runner_env_value "SSL_CERT_FILE" "$CURL_CA_BUNDLE"
     fi
-    if [[ "$INSECURE" == "true" ]]; then
+    if [[ "$INSECURE" == "true" ]] && action_runner_url_uses_loopback_http "$PULSE_URL"; then
         write_action_runner_env_value "PULSE_INSECURE" "true"
     fi
     chown root:root "$ACTION_RUNNER_ENV_FILE"
@@ -1420,6 +1476,128 @@ action_runner_health_matches_activation() {
 	[[ "$health_agent_id" == "$expected_agent_id" && "$health_activation_nonce" == "$expected_nonce" ]]
 }
 
+# Print pending or active for the exact installed runner credential. Failure is
+# intentionally indeterminate: callers must not restore a predecessor because
+# an unreachable server may already have committed and revoked it.
+action_runner_url_uses_loopback_http() {
+	local raw_url="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+	local authority=""
+	local host=""
+	local octet=""
+	local -a octets
+
+	[[ "$raw_url" =~ ^http://[^[:space:]]+$ ]] || return 1
+	authority="${raw_url#http://}"
+	authority="${authority%%/*}"
+	[[ -n "$authority" && "$authority" != *'@'* ]] || return 1
+	if [[ "$authority" == \[* ]]; then
+		host="${authority#\[}"
+		host="${host%%\]*}"
+		[[ "$authority" == "[${host}]" || "$authority" == "[${host}]:"* ]] || return 1
+		[[ "$host" == "::1" ]]
+		return
+	fi
+	[[ "$authority" != *:*:* ]] || return 1
+	host="${authority%%:*}"
+	host="${host%.}"
+	if [[ "$host" == "localhost" ]]; then
+		return 0
+	fi
+	[[ "$host" =~ ^127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
+	IFS='.' read -r -a octets <<< "$host"
+	for octet in "${octets[@]}"; do
+		(( 10#$octet <= 255 )) || return 1
+	done
+	return 0
+}
+
+action_runner_url_transport_allowed() {
+	local raw_url="$1"
+	local lower_url="$(printf '%s' "$raw_url" | tr '[:upper:]' '[:lower:]')"
+	if [[ "$lower_url" =~ ^https://[^[:space:]]+$ && "$lower_url" != *'@'* ]]; then
+		return 0
+	fi
+	action_runner_url_uses_loopback_http "$raw_url"
+}
+
+# Atomically cancel the exact pending replacement. Only the runner command's
+# zero exit (server HTTP 204) authorizes predecessor restore. The bearer is
+# written to a private temporary file and never appears in argv or curl.
+cancel_pending_action_runner_credential() {
+	local expected_agent_id="$1"
+	local expected_hostname="$2"
+	local replacement_token="$3"
+	local token_tmp=""
+	local old_umask=""
+	local -a cancel_args
+
+	[[ -x "$ACTION_RUNNER_BINARY_PATH" && -d "$ACTION_RUNNER_CONFIG_DIR" && ! -L "$ACTION_RUNNER_CONFIG_DIR" ]] || return 1
+	[[ -n "$expected_agent_id" && -n "$expected_hostname" && -n "$replacement_token" ]] || return 1
+	action_runner_url_transport_allowed "$PULSE_URL" || return 1
+	old_umask=$(umask)
+	umask 077
+	token_tmp=$(mktemp "${ACTION_RUNNER_CONFIG_DIR%/}/.cancel-token.XXXXXX") || {
+		umask "$old_umask"
+		return 1
+	}
+	if ! printf '%s\n' "$replacement_token" > "$token_tmp" ||
+	   ! chown root:root "$token_tmp" || ! chmod 0600 "$token_tmp" || ! sync -f "$token_tmp"; then
+		rm -f "$token_tmp"
+		umask "$old_umask"
+		return 1
+	fi
+	umask "$old_umask"
+	cancel_args=(cancel-pending-credential --url "$PULSE_URL" --token-file "$token_tmp")
+	[[ -n "${CURL_CA_BUNDLE:-}" ]] && cancel_args+=(--cacert "$CURL_CA_BUNDLE")
+	[[ -n "${SERVER_FINGERPRINT:-}" ]] && cancel_args+=(--server-fingerprint "$SERVER_FINGERPRINT")
+	action_runner_url_uses_loopback_http "$PULSE_URL" && cancel_args+=(--insecure-loopback)
+	if "$ACTION_RUNNER_BINARY_PATH" "${cancel_args[@]}"; then
+		rm -f "$token_tmp"
+		return 0
+	fi
+	rm -f "$token_tmp"
+	return 1
+}
+
+persist_action_runner_replacement_token() {
+	local replacement_token="$1"
+	local token_dir="$(dirname "$ACTION_RUNNER_TOKEN_FILE")"
+	local token_tmp=""
+	local old_umask=""
+	local token_owner=""
+	local token_mode=""
+
+	[[ -n "$replacement_token" && "$replacement_token" != *$'\r'* && "$replacement_token" != *$'\n'* ]] || return 1
+	[[ "$ACTION_RUNNER_TOKEN_FILE" == "${ACTION_RUNNER_CONFIG_DIR%/}/"* &&
+	   -d "$token_dir" && ! -L "$token_dir" ]] || return 1
+	[[ ! -e "$ACTION_RUNNER_TOKEN_FILE" || ( -f "$ACTION_RUNNER_TOKEN_FILE" && ! -L "$ACTION_RUNNER_TOKEN_FILE" ) ]] || return 1
+	old_umask=$(umask)
+	umask 077
+	token_tmp=$(mktemp "${token_dir}/.replacement-token.XXXXXX") || {
+		umask "$old_umask"
+		return 1
+	}
+	if ! printf '%s\n' "$replacement_token" > "$token_tmp" ||
+	   ! chown root:root "$token_tmp" ||
+	   ! chmod 0600 "$token_tmp" ||
+	   ! sync -f "$token_tmp" ||
+	   ! mv -f "$token_tmp" "$ACTION_RUNNER_TOKEN_FILE"; then
+		rm -f "$token_tmp"
+		umask "$old_umask"
+		return 1
+	fi
+	token_tmp=""
+	if ! sync -f "$token_dir"; then
+		umask "$old_umask"
+		return 1
+	fi
+	umask "$old_umask"
+	token_owner=$(stat -c '%u' "$ACTION_RUNNER_TOKEN_FILE" 2>/dev/null || true)
+	token_mode=$(stat -c '%a' "$ACTION_RUNNER_TOKEN_FILE" 2>/dev/null || true)
+	[[ "$token_owner" == "0" && "$token_mode" == "600" &&
+	   -f "$ACTION_RUNNER_TOKEN_FILE" && ! -L "$ACTION_RUNNER_TOKEN_FILE" ]]
+}
+
 write_action_runner_env_value() {
     local key="$1"
     local value="$2"
@@ -1433,8 +1611,23 @@ write_action_runner_env_value() {
 
 resolve_action_runner_agent_id() {
     local agent_id="${AGENT_ID:-}"
-    if [[ -z "$agent_id" && -s "${STATE_DIR%/}/agent-id" && ! -L "${STATE_DIR%/}/agent-id" ]]; then
-        agent_id=$(head -1 "${STATE_DIR%/}/agent-id" 2>/dev/null || true)
+    local persisted_agent_id=""
+    local lifecycle_binary=""
+    local collector_uid=""
+    local -a identity_args
+
+    if [[ -z "$agent_id" && -f "${ACTION_RUNNER_ENV_FILE:-}" && ! -L "${ACTION_RUNNER_ENV_FILE:-}" ]]; then
+        agent_id=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" 2>/dev/null || true)
+    fi
+    if [[ -z "$agent_id" ]]; then
+        lifecycle_binary=$(collector_lifecycle_binary) || return 1
+        identity_args=(collector-read-agent-id --agent-id-file "${STATE_DIR%/}/agent-id")
+        collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+        if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
+            identity_args+=(--token-owner-uid "$collector_uid")
+        fi
+        persisted_agent_id=$("$lifecycle_binary" "${identity_args[@]}" 2>/dev/null || true)
+        agent_id="$persisted_agent_id"
     fi
     [[ ${#agent_id} -ge 1 && ${#agent_id} -le 128 && "$agent_id" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] || return 1
     printf '%s\n' "$agent_id"
@@ -1450,6 +1643,18 @@ provision_action_runner() {
 	local runner_active="false"
 	local apply_succeeded="false"
 	local activation_nonce=""
+	local credential_replacement_requested="false"
+	local replacement_action_token=""
+	local expected_agent_id=""
+	local expected_hostname="$HOSTNAME_OVERRIDE"
+
+	if [[ -n "$ACTION_TOKEN" ]]; then
+		credential_replacement_requested="true"
+		replacement_action_token="$ACTION_TOKEN"
+	fi
+	if [[ -z "$expected_hostname" ]]; then
+		expected_hostname=$(hostname 2>/dev/null || true)
+	fi
 
     if [[ -d "$ACTION_RUNNER_STATE_DIR" ]]; then
         had_state_dir="true"
@@ -1483,6 +1688,7 @@ provision_action_runner() {
         chmod 0644 "${ACTION_RUNNER_SERVICE_UNIT}.new"
         mv "${ACTION_RUNNER_SERVICE_UNIT}.new" "$ACTION_RUNNER_SERVICE_UNIT"
         systemctl daemon-reload
+        action_runner_verify_effective_target
         systemctl enable "${ACTION_RUNNER_NAME}.service"
         systemctl restart "${ACTION_RUNNER_NAME}.service"
     ); then
@@ -1505,10 +1711,35 @@ provision_action_runner() {
         done
     fi
 
-    if [[ "$runner_active" != "true" ]]; then
-        log_error "New action runner did not become healthy; rolling back runner-only files while leaving monitoring active."
-        systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
-        systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+	if [[ "$runner_active" != "true" ]]; then
+		systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+		if [[ "$credential_replacement_requested" == "true" ]]; then
+			expected_agent_id=$(resolve_action_runner_agent_id || true)
+			if ! cancel_pending_action_runner_credential "$expected_agent_id" "$expected_hostname" "$replacement_action_token"; then
+				log_error "The server did not durably confirm cancellation of the pending action-runner credential. The predecessor cannot be restored because activation may already be committed."
+				if ! persist_action_runner_replacement_token "$replacement_action_token"; then
+					replacement_action_token=""
+					log_error "Could not durably persist the exact replacement action-runner credential. The runner remains stopped, the predecessor was not restored, and action-runner re-enrollment is required."
+					ACTION_RUNNER_ACTIVATION_NONCE=""
+					fail "Action runner credential recovery requires re-enrollment; no predecessor credential was restored" "$EXIT_GENERAL"
+				fi
+				log_error "The exact replacement credential and runtime were retained durably; repair is required."
+				replacement_action_token=""
+				rm -f "${ACTION_RUNNER_BINARY_PATH}.new" "${ACTION_RUNNER_SERVICE_UNIT}.new"
+				rm -f \
+					"${ACTION_RUNNER_BINARY_PATH}${backup_suffix}" \
+					"${ACTION_RUNNER_SERVICE_UNIT}${backup_suffix}" \
+					"${ACTION_RUNNER_ENV_FILE}${backup_suffix}" \
+					"${ACTION_RUNNER_TOKEN_FILE}${backup_suffix}"
+				systemctl daemon-reload 2>/dev/null || true
+				systemctl enable --now "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+				ACTION_RUNNER_ACTIVATION_NONCE=""
+				fail "Action runner activation requires repair; the new credential and runtime were retained and the previous credential was not restored" "$EXIT_GENERAL"
+			fi
+			replacement_action_token=""
+		fi
+		log_error "New action runner did not become healthy before server activation committed; rolling back runner-only files while leaving monitoring active."
+		systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
         rm -f "${ACTION_RUNNER_BINARY_PATH}.new" "${ACTION_RUNNER_SERVICE_UNIT}.new"
 		rm -f "$ACTION_RUNNER_HEALTH_FILE"
 		for path in "$ACTION_RUNNER_BINARY_PATH" "$ACTION_RUNNER_SERVICE_UNIT" "$ACTION_RUNNER_ENV_FILE" "$ACTION_RUNNER_TOKEN_FILE"; do
@@ -1531,6 +1762,7 @@ provision_action_runner() {
 		fail "Action runner activation failed and its previous installation was restored; collector monitoring was not stopped or removed" "$EXIT_GENERAL"
     fi
 
+	replacement_action_token=""
     rm -f \
         "${ACTION_RUNNER_BINARY_PATH}${backup_suffix}" \
 		"${ACTION_RUNNER_SERVICE_UNIT}${backup_suffix}" \
@@ -1593,29 +1825,146 @@ safe_profile_unit_property() {
     esac
 }
 
-safe_profile_effective_unit_unoverridden() {
+systemd_effective_unit_property() {
+    local unit_name="$1"
+    local property="$2"
+    systemctl show "$unit_name" --property "$property" --value 2>/dev/null
+}
+
+systemd_effective_unit_unoverridden() {
+    local unit_name="$1"
+    local expected_fragment="$2"
     local fragment_path=""
     local drop_in_paths=""
-    fragment_path=$(systemctl show "${AGENT_NAME}.service" --property FragmentPath --value 2>/dev/null) || return 1
-    drop_in_paths=$(systemctl show "${AGENT_NAME}.service" --property DropInPaths --value 2>/dev/null) || return 1
-    [[ "$fragment_path" == "$SAFE_PROFILE_COLLECTOR_UNIT" && -z "$drop_in_paths" ]]
+    fragment_path=$(systemd_effective_unit_property "$unit_name" FragmentPath) || return 1
+    drop_in_paths=$(systemd_effective_unit_property "$unit_name" DropInPaths) || return 1
+    [[ "$fragment_path" == "$expected_fragment" && -z "$drop_in_paths" ]]
+}
+
+systemd_effective_exec_argv() {
+    local unit_name="$1"
+    local exec_start=""
+    local argv=""
+    exec_start=$(systemd_effective_unit_property "$unit_name" ExecStart) || return 1
+    [[ "$exec_start" == *"argv[]="* ]] || return 1
+    argv="${exec_start#*argv[]=}"
+    argv="${argv%% ;*}"
+    printf '%s\n' "$argv"
+}
+
+systemd_effective_exec_exact() {
+    local unit_name="$1"
+    local expected_binary="$2"
+    local argv=""
+    argv=$(systemd_effective_exec_argv "$unit_name") || return 1
+    [[ "$argv" == "$expected_binary" ]]
+}
+
+systemd_effective_words_equal() {
+    local unit_name="$1"
+    local property="$2"
+    shift 2
+    local actual=""
+    local expected=""
+    actual=$(systemd_effective_unit_property "$unit_name" "$property") || return 1
+    actual=$(printf '%s\n' "$actual" | tr '[:space:]' '\n' | sed '/^$/d' | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    expected=$(printf '%s\n' "$@" | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    [[ "$actual" == "$expected" ]]
+}
+
+systemd_effective_common_hardening() {
+    local unit_name="$1"
+    [[ "$(systemd_effective_unit_property "$unit_name" UMask)" == "0077" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" NoNewPrivileges)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" PrivateTmp)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" PrivateDevices)" == "no" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" ProtectKernelTunables)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" ProtectKernelModules)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" ProtectControlGroups)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" LockPersonality)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" RestrictSUIDSGID)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$unit_name" SystemCallArchitectures)" == "native" ]] || return 1
+}
+
+safe_profile_verify_helper_effective_target() {
+    local helper_service="${PRIVILEGED_HELPER_NAME}.service"
+    local helper_socket="${PRIVILEGED_HELPER_NAME}.socket"
+    local listen=""
+    local environment_files=""
+
+    systemd_effective_unit_unoverridden "$helper_service" "$PRIVILEGED_HELPER_SERVICE_UNIT" || return 1
+    systemd_effective_unit_unoverridden "$helper_socket" "$PRIVILEGED_HELPER_SOCKET_UNIT" || return 1
+    systemd_effective_exec_exact "$helper_service" "$PRIVILEGED_HELPER_BINARY_PATH" || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" User)" == "root" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" Group)" == "root" ]] || return 1
+    [[ -z "$(systemd_effective_unit_property "$helper_service" AmbientCapabilities)" ]] || return 1
+    systemd_effective_common_hardening "$helper_service" || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" PrivateNetwork)" == "yes" ]] || return 1
+    systemd_effective_words_equal "$helper_service" RestrictAddressFamilies AF_UNIX || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" ProtectSystem)" == "strict" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" ProtectHome)" == "yes" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" TasksMax)" == "64" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" LimitNOFILE)" == "256" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_service" MemoryMax)" == "268435456" ]] || return 1
+    [[ -z "$(systemd_effective_unit_property "$helper_service" Environment)" ]] || return 1
+    environment_files=$(systemd_effective_unit_property "$helper_service" EnvironmentFiles) || return 1
+    [[ -z "$environment_files" ]] || return 1
+    systemd_effective_words_equal "$helper_service" ReadOnlyPaths "$PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR" || return 1
+    systemd_effective_words_equal "$helper_service" ReadWritePaths "$PRIVILEGED_HELPER_STATE_DIR" /usr/local/bin || return 1
+
+    [[ "$(systemd_effective_unit_property "$helper_socket" SocketUser)" == "root" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_socket" SocketGroup)" == "$LEAST_PRIVILEGE_USER" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_socket" SocketMode)" == "0660" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_socket" DirectoryMode)" == "0755" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$helper_socket" RemoveOnStop)" == "yes" ]] || return 1
+    listen=$(systemd_effective_unit_property "$helper_socket" Listen) || return 1
+    [[ "$listen" == *"${PRIVILEGED_HELPER_SOCKET_PATH}"* && "$listen" == *"Stream"* ]] || return 1
+}
+
+action_runner_verify_effective_target() {
+    local runner_service="${ACTION_RUNNER_NAME}.service"
+    local environment_files=""
+
+    systemd_effective_unit_unoverridden "$runner_service" "$ACTION_RUNNER_SERVICE_UNIT" || return 1
+    systemd_effective_exec_exact "$runner_service" "$ACTION_RUNNER_BINARY_PATH" || return 1
+    [[ "$(systemd_effective_unit_property "$runner_service" User)" == "root" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$runner_service" Group)" == "root" ]] || return 1
+    [[ -z "$(systemd_effective_unit_property "$runner_service" AmbientCapabilities)" ]] || return 1
+    systemd_effective_common_hardening "$runner_service" || return 1
+    [[ "$(systemd_effective_unit_property "$runner_service" PrivateNetwork)" == "no" ]] || return 1
+    systemd_effective_words_equal "$runner_service" RestrictAddressFamilies AF_UNIX AF_INET AF_INET6 || return 1
+    [[ "$(systemd_effective_unit_property "$runner_service" ProtectSystem)" == "no" ]] || return 1
+    [[ "$(systemd_effective_unit_property "$runner_service" ProtectHome)" == "yes" ]] || return 1
+    systemd_effective_words_equal "$runner_service" ReadWritePaths "$ACTION_RUNNER_STATE_DIR" || return 1
+    environment_files=$(systemd_effective_unit_property "$runner_service" EnvironmentFiles) || return 1
+    [[ "$environment_files" == "$ACTION_RUNNER_ENV_FILE (ignore_errors=no)" ]]
+}
+
+safe_profile_effective_unit_unoverridden() {
+    systemd_effective_unit_unoverridden "${AGENT_NAME}.service" "$SAFE_PROFILE_COLLECTOR_UNIT"
 }
 
 safe_profile_verify_effective_target() {
     local unit_user=""
     local ambient=""
-    local exec_start=""
+    local exec_argv=""
     local environment=""
 
     safe_profile_effective_unit_unoverridden || return 1
     unit_user=$(safe_profile_unit_property User)
     ambient=$(safe_profile_unit_property AmbientCapabilities)
-    exec_start=$(safe_profile_unit_property ExecStart)
+    exec_argv=$(systemd_effective_exec_argv "${AGENT_NAME}.service") || return 1
     environment=$(safe_profile_unit_property Environment)
     [[ "$unit_user" == "$LEAST_PRIVILEGE_USER" ]] || return 1
     [[ -z "$ambient" ]] || return 1
-    [[ "$exec_start" != *"--enable-commands"* ]] || return 1
+    systemd_effective_common_hardening "${AGENT_NAME}.service" || return 1
+    [[ "$exec_argv" == "${INSTALL_DIR}/${BINARY_NAME}" || "$exec_argv" == "${INSTALL_DIR}/${BINARY_NAME} "* ]] || return 1
+    [[ "$exec_argv" != *"--enable-commands"* ]] || return 1
     [[ "$environment" == *"PULSE_AGENT_HELPER_SOCKET=${PRIVILEGED_HELPER_SOCKET_PATH}"* ]] || return 1
+    safe_profile_verify_helper_effective_target || return 1
+    if [[ -e "$ACTION_RUNNER_SERVICE_UNIT" ]]; then
+        action_runner_verify_effective_target || return 1
+    fi
 }
 
 safe_profile_inspect() {
@@ -4870,9 +5219,8 @@ fi
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     safe_profile_platform_supported ||
         fail "Safe-profile migration is supported only on standard Linux systemd hosts; no broader-privilege fallback was applied" "$EXIT_MISSING_ARGS"
-    safe_profile_begin_transaction
-    reduce_safe_profile_collector_authority ||
-        fail "Safe-profile migration could not durably remove command and cross-host management authority from the existing collector credential; no privilege change was retained" "$EXIT_AUTH_REJECTED"
+    resolve_safe_profile_hostname ||
+        fail "Safe-profile migration could not resolve a canonical local hostname" "$EXIT_MISSING_ARGS"
 fi
 
 # Create the dedicated service account for the least-privilege profile and
@@ -5051,6 +5399,9 @@ provision_typed_privileged_helper() {
     append_service_env "PULSE_AGENT_HELPER_SOCKET" "$PRIVILEGED_HELPER_SOCKET_PATH"
 
     systemctl daemon-reload
+    if ! safe_profile_verify_helper_effective_target; then
+        fail "Refusing typed-helper activation because the effective helper service or socket differs from the installer-owned safe profile" "$EXIT_GENERAL"
+    fi
     if ! systemctl enable --now "${PRIVILEGED_HELPER_NAME}.socket"; then
         fail "Failed to enable the typed privileged helper socket" "$EXIT_GENERAL"
     fi
@@ -5433,7 +5784,26 @@ if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
 fi
 
 chmod 0755 "$TMP_BIN"
-NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
+if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+    # The irreversible server-side reduction must run only through the staged
+    # binary whose checksum/signature have just been verified. The installed
+    # predecessor may not expose the authenticated lifecycle commands yet.
+    # Snapshot first, then reduce, before stopping or replacing any local
+    # runtime so a failed reduction leaves the legacy install untouched.
+    safe_profile_begin_transaction
+    SAFE_PROFILE_STAGED_COLLECTOR="${INSTALL_DIR}/.${BINARY_NAME}.safe-profile-new.$$"
+    TMP_FILES+=("$SAFE_PROFILE_STAGED_COLLECTOR")
+    install -o root -g root -m 0755 "$TMP_BIN" "$SAFE_PROFILE_STAGED_COLLECTOR" ||
+        fail "Safe-profile migration could not stage the verified collector on the installation filesystem" "$EXIT_GENERAL"
+    COLLECTOR_LIFECYCLE_BINARY_PATH="$SAFE_PROFILE_STAGED_COLLECTOR"
+    reduce_safe_profile_collector_authority ||
+        fail "Safe-profile migration could not durably remove command and cross-host management authority from the existing collector credential; no privilege change was retained" "$EXIT_AUTH_REJECTED"
+fi
+VERSION_PROBE_BINARY="$TMP_BIN"
+if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+    VERSION_PROBE_BINARY="$SAFE_PROFILE_STAGED_COLLECTOR"
+fi
+NEW_VERSION=$("$VERSION_PROBE_BINARY" --version 2>/dev/null | head -1 || echo "unknown")
 
 # Compare versions with any leading "v" stripped so the agent binary's "v6.0.4"
 # and the server /api/version "6.0.4" are treated as equal. Only a genuine
@@ -5509,10 +5879,10 @@ fi
 log_info "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mkdir -p "$INSTALL_DIR"
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
-    SAFE_PROFILE_STAGED_COLLECTOR="${INSTALL_DIR}/.${BINARY_NAME}.safe-profile-new.$$"
-    TMP_FILES+=("$SAFE_PROFILE_STAGED_COLLECTOR")
-    install -o root -g root -m 0755 "$TMP_BIN" "$SAFE_PROFILE_STAGED_COLLECTOR"
+    [[ -x "$SAFE_PROFILE_STAGED_COLLECTOR" && -f "$SAFE_PROFILE_STAGED_COLLECTOR" ]] ||
+        fail "Verified safe-profile collector staging artifact is unavailable" "$EXIT_GENERAL"
     mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"
+    COLLECTOR_LIFECYCLE_BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 else
     mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"

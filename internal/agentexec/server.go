@@ -64,6 +64,7 @@ var hostStorageCleanupFingerprintPattern = regexp.MustCompile(`^sha256:[a-f0-9]{
 type Server struct {
 	mu                                 sync.RWMutex
 	agents                             map[string]*agentConn                           // organizationID + agentID -> connection
+	pendingActionRunners               map[string]*agentConn                           // organizationID + agentID -> exact prepared runner transport
 	pendingReqs                        map[string]chan CommandResultPayload            // scoped request key -> response channel
 	pendingHostStorageCleanups         map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
 	pendingHostUpdates                 map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
@@ -87,6 +88,7 @@ type Server struct {
 	newCommandApprovalGrant            func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
 	now                                func() time.Time
 	agentRegisteredNotifier            func(AgentAdmission)
+	actionRunnerAdmissionTombstones    map[string]time.Time
 }
 
 const defaultOrganizationID = "default"
@@ -197,6 +199,8 @@ func NewServerWithAdmissionValidator(admit AgentRegistrationValidator, validateS
 
 	return &Server{
 		agents:                             make(map[string]*agentConn),
+		pendingActionRunners:               make(map[string]*agentConn),
+		actionRunnerAdmissionTombstones:    make(map[string]time.Time),
 		pendingReqs:                        make(map[string]chan CommandResultPayload),
 		pendingHostStorageCleanups:         make(map[string]chan HostStorageCleanupResultPayload),
 		pendingHostUpdates:                 make(map[string]chan HostUpdateResultPayload),
@@ -218,6 +222,60 @@ func NewServerWithAdmissionValidator(admit AgentRegistrationValidator, validateS
 		newCommandApprovalGrant:            NewCommandApprovalGrant,
 		now:                                time.Now,
 	}
+}
+
+func actionRunnerAdmissionTombstoneKey(admission AgentAdmission) string {
+	return strings.Join([]string{
+		normalizeOrganizationID(admission.OrganizationID),
+		strings.TrimSpace(admission.TokenID),
+		strings.TrimSpace(admission.AgentID),
+		unifiedresources.NormalizeFullHostname(admission.Hostname),
+		strings.TrimSpace(admission.RuntimeRole),
+		strings.TrimSpace(admission.ActionCapability),
+	}, "\x00")
+}
+
+// TombstoneActionRunnerAdmission prevents an already-admitted prepared socket
+// from registering after its credential has been durably cancelled. The
+// tombstone is exact and bounded to the preparation window.
+func (s *Server) TombstoneActionRunnerAdmission(admission AgentAdmission, until time.Time) bool {
+	if s == nil || strings.TrimSpace(admission.TokenID) == "" || strings.TrimSpace(admission.AgentID) == "" ||
+		strings.TrimSpace(admission.Hostname) == "" ||
+		strings.TrimSpace(admission.RuntimeRole) != RuntimeRoleActionRunner ||
+		strings.TrimSpace(admission.ActionCapability) != ActionCapabilityTypedV1 {
+		return false
+	}
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+	maximum := now.Add(10 * time.Minute)
+	if !until.After(now) || until.After(maximum) {
+		until = maximum
+	}
+	key := actionRunnerAdmissionTombstoneKey(admission)
+	s.mu.Lock()
+	if s.actionRunnerAdmissionTombstones == nil {
+		s.actionRunnerAdmissionTombstones = make(map[string]time.Time)
+	}
+	for existingKey, expiry := range s.actionRunnerAdmissionTombstones {
+		if !expiry.After(now) {
+			delete(s.actionRunnerAdmissionTombstones, existingKey)
+		}
+	}
+	s.actionRunnerAdmissionTombstones[key] = until
+	sessionKey := agentSessionKey(admission.OrganizationID, admission.AgentID)
+	var invalidated *agentConn
+	if existing, ok := s.pendingActionRunners[sessionKey]; ok && actionRunnerAdmissionTombstoneKey(existing.admission) == key {
+		delete(s.pendingActionRunners, sessionKey)
+		invalidated = existing
+	}
+	s.mu.Unlock()
+	if invalidated != nil {
+		invalidated.signalDone()
+		_ = invalidated.conn.Close()
+	}
+	return true
 }
 
 // WithOrganizationID scopes command-session lookup and dispatch to a tenant.
@@ -358,13 +416,9 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 	if !ok {
 		return nil, false
 	}
-	// A prepared action-runner credential may establish the authenticated
-	// transport needed to commit activation, but it is not dispatch authority.
-	// Promotion clears this bit only after the server durably revokes the prior
-	// credential set.
-	if ac.admission.ActivationPending {
-		return nil, false
-	}
+	// Prepared action runners live only in pendingActionRunners. Membership in
+	// the active map is the immutable dispatch-authority decision; do not read
+	// or mutate admission state outside the server lock during promotion.
 	if s.validateSession == nil || s.validateSession(ac.admission) {
 		return ac, true
 	}
@@ -393,27 +447,52 @@ func (s *Server) HasActionRunnerSession(admission AgentAdmission) bool {
 	}
 	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
 	s.mu.RLock()
-	current, ok := s.agents[key]
+	current, ok := s.pendingActionRunners[key]
 	s.mu.RUnlock()
-	return ok && current != nil && sameActionRunnerAdmission(current.admission, admission) &&
-		current.admission.ActivationPending == admission.ActivationPending
+	return ok && current != nil && admission.ActivationPending && sameActionRunnerAdmission(current.admission, admission)
 }
 
-// PromoteActionRunnerSession makes an exact prepared session dispatchable
-// after its credential activation has been durably committed.
-func (s *Server) PromoteActionRunnerSession(admission AgentAdmission) bool {
+// PromoteActionRunnerSessionForCommit performs only the bounded map mutation
+// needed by the credential transaction. Callers may invoke it while holding
+// config.Mu; they must run the returned cleanup only after releasing that lock.
+// This preserves the sole nested order config.Mu -> Server.mu and keeps socket
+// close/logging I/O outside both locks.
+func (s *Server) PromoteActionRunnerSessionForCommit(admission AgentAdmission) (func(), bool) {
 	if s == nil {
-		return false
+		return nil, false
 	}
 	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, ok := s.agents[key]
-	if !ok || current == nil || !sameActionRunnerAdmission(current.admission, admission) {
-		return false
+	pending, ok := s.pendingActionRunners[key]
+	if !ok || pending == nil || !admission.ActivationPending || !sameActionRunnerAdmission(pending.admission, admission) {
+		s.mu.Unlock()
+		return nil, false
 	}
-	current.admission.ActivationPending = false
-	return true
+	delete(s.pendingActionRunners, key)
+	displaced := s.agents[key]
+	s.agents[key] = pending
+	s.mu.Unlock()
+	var cleanup func()
+	if displaced != nil && displaced != pending {
+		cleanup = func() {
+			displaced.signalDone()
+			if displaced.conn != nil {
+				_ = displaced.conn.Close()
+			}
+		}
+	}
+	return cleanup, true
+}
+
+// PromoteActionRunnerSession is the non-transactional compatibility wrapper.
+// Production activation uses PromoteActionRunnerSessionForCommit and defers
+// cleanup until after config.Mu has been released.
+func (s *Server) PromoteActionRunnerSession(admission AgentAdmission) bool {
+	cleanup, promoted := s.PromoteActionRunnerSessionForCommit(admission)
+	if cleanup != nil {
+		cleanup()
+	}
+	return promoted
 }
 
 // InvalidateActionRunnerSession closes exactly the currently admitted typed
@@ -438,13 +517,18 @@ func (s *Server) InvalidateActionRunnerSession(admission AgentAdmission) bool {
 	}
 	key := agentSessionKey(expected.OrganizationID, expected.AgentID)
 	s.mu.Lock()
-	current, ok := s.agents[key]
-	if !ok || current == nil || !sameActionRunnerAdmission(current.admission, expected) {
-		s.mu.Unlock()
+	var current *agentConn
+	if active, ok := s.agents[key]; ok && active != nil && sameActionRunnerAdmission(active.admission, expected) {
+		delete(s.agents, key)
+		current = active
+	} else if pending, ok := s.pendingActionRunners[key]; ok && pending != nil && sameActionRunnerAdmission(pending.admission, expected) {
+		delete(s.pendingActionRunners, key)
+		current = pending
+	}
+	s.mu.Unlock()
+	if current == nil {
 		return false
 	}
-	delete(s.agents, key)
-	s.mu.Unlock()
 
 	current.signalDone()
 	if current.conn != nil {
@@ -1186,6 +1270,25 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Register agent - after this point, other goroutines can access the connection
 	s.mu.Lock()
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+	for key, expiry := range s.actionRunnerAdmissionTombstones {
+		if !expiry.After(now) {
+			delete(s.actionRunnerAdmissionTombstones, key)
+		}
+	}
+	if expiry, cancelled := s.actionRunnerAdmissionTombstones[actionRunnerAdmissionTombstoneKey(admission)]; cancelled && expiry.After(now) {
+		s.mu.Unlock()
+		log.Warn().Str("agent_id", reg.AgentID).Msg("Action runner registration rejected: prepared credential was cancelled")
+		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "action runner credential preparation was cancelled"})
+		if err == nil {
+			_ = s.sendMessage(conn, rejectedMsg)
+		}
+		closeConn("Failed to close cancelled action runner registration")
+		return
+	}
 	for key, existing := range s.agents {
 		if key != ac.sessionKey &&
 			normalizeOrganizationID(existing.admission.OrganizationID) == admission.OrganizationID &&
@@ -1205,38 +1308,49 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Close existing connection if any
-	if existing, ok := s.agents[ac.sessionKey]; ok {
-		preparedActionRunnerRename := admission.ActivationPending &&
-			admission.RuntimeRole == RuntimeRoleActionRunner &&
-			existing.admission.RuntimeRole == RuntimeRoleActionRunner
-		if !unifiedresources.HostnamesEquivalent(existing.agent.Hostname, ac.agent.Hostname) && !preparedActionRunnerRename {
-			s.mu.Unlock()
-			log.Warn().
-				Str("organization_id", admission.OrganizationID).
-				Str("agent_id", admission.AgentID).
-				Str("connected_hostname", existing.agent.Hostname).
-				Str("requested_hostname", admission.Hostname).
-				Msg("Agent registration rejected: duplicate identity is already connected from another host")
-			rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent identity is already connected from another host"})
-			if err == nil {
-				_ = s.sendMessage(conn, rejectedMsg)
+	var replaced *agentConn
+	if admission.ActivationPending && admission.RuntimeRole == RuntimeRoleActionRunner {
+		// A prepared transport is staged separately. Reconnect/flood traffic can
+		// replace only the one bounded pending slot and cannot evict or interrupt
+		// the active dispatch session before durable activation.
+		replaced = s.pendingActionRunners[ac.sessionKey]
+		s.pendingActionRunners[ac.sessionKey] = ac
+	} else {
+		if existing, ok := s.agents[ac.sessionKey]; ok {
+			if !unifiedresources.HostnamesEquivalent(existing.agent.Hostname, ac.agent.Hostname) {
+				s.mu.Unlock()
+				log.Warn().
+					Str("organization_id", admission.OrganizationID).
+					Str("agent_id", admission.AgentID).
+					Str("connected_hostname", existing.agent.Hostname).
+					Str("requested_hostname", admission.Hostname).
+					Msg("Agent registration rejected: duplicate identity is already connected from another host")
+				rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent identity is already connected from another host"})
+				if err == nil {
+					_ = s.sendMessage(conn, rejectedMsg)
+				}
+				closeConn("Failed to close duplicate agent identity connection")
+				return
 			}
-			closeConn("Failed to close duplicate agent identity connection")
-			return
+			replaced = existing
 		}
+		s.agents[ac.sessionKey] = ac
+	}
+	s.mu.Unlock()
+	if replaced != nil && replaced != ac {
 		log.Info().
 			Str("organization_id", admission.OrganizationID).
 			Str("agent_id", admission.AgentID).
 			Str("hostname", admission.Hostname).
+			Bool("activation_pending", admission.ActivationPending).
 			Msg("Replacing existing agent connection")
-		existing.signalDone()
-		if err := existing.conn.Close(); err != nil {
-			log.Debug().Err(err).Str("agent_id", admission.AgentID).Msg("Failed to close existing connection during reconnect")
+		replaced.signalDone()
+		if replaced.conn != nil {
+			if err := replaced.conn.Close(); err != nil {
+				log.Debug().Err(err).Str("agent_id", admission.AgentID).Msg("Failed to close existing connection during reconnect")
+			}
 		}
 	}
-	s.agents[ac.sessionKey] = ac
-	s.mu.Unlock()
 
 	log.Info().
 		Str("organization_id", admission.OrganizationID).
@@ -1262,6 +1376,9 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Msg("Failed to send registration ack")
 		ac.writeMu.Unlock()
 		s.mu.Lock()
+		if existing, ok := s.pendingActionRunners[ac.sessionKey]; ok && existing == ac {
+			delete(s.pendingActionRunners, ac.sessionKey)
+		}
 		if existing, ok := s.agents[ac.sessionKey]; ok && existing == ac {
 			delete(s.agents, ac.sessionKey)
 		}
@@ -1290,15 +1407,21 @@ func (s *Server) readLoop(ac *agentConn) {
 		agentID := ac.agent.AgentID
 		sessionKey := connectionSessionKey(ac)
 		s.mu.Lock()
-		existing, sessionExists := s.agents[sessionKey]
-		ownsSession := !sessionExists || existing == ac
-		if sessionExists && existing == ac {
+		wasActive := false
+		ownsSession := false
+		if existing, exists := s.agents[sessionKey]; exists && existing == ac {
 			delete(s.agents, sessionKey)
+			wasActive = true
+			ownsSession = true
+		}
+		if existing, exists := s.pendingActionRunners[sessionKey]; exists && existing == ac {
+			delete(s.pendingActionRunners, sessionKey)
+			ownsSession = true
 		}
 		// Close all deploy progress subscriptions for this agent so
 		// processPreflightProgress goroutines unblock and detect disconnect.
 		var closeChs []chan DeployProgressPayload
-		if ownsSession {
+		if ownsSession && wasActive {
 			prefix := sessionKey + "\x00"
 			for key, ch := range s.deploySubs {
 				if strings.HasPrefix(key, prefix) {
@@ -1729,11 +1852,15 @@ func (s *Server) Shutdown() {
 		close(s.shutdown)
 
 		s.mu.Lock()
-		agents := make([]*agentConn, 0, len(s.agents))
+		agents := make([]*agentConn, 0, len(s.agents)+len(s.pendingActionRunners))
 		for _, ac := range s.agents {
 			agents = append(agents, ac)
 		}
+		for _, ac := range s.pendingActionRunners {
+			agents = append(agents, ac)
+		}
 		s.agents = make(map[string]*agentConn)
+		s.pendingActionRunners = make(map[string]*agentConn)
 		s.mu.Unlock()
 
 		for _, ac := range agents {

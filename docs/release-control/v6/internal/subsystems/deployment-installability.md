@@ -148,11 +148,29 @@ and the already selected typed helper profile. The runner binary, unit,
 configuration, credential, health record, and receipt database are root-owned
 and independent from collector state. Activation is transactional: the server
 keeps the prior credential valid while a bounded replacement registers without
-dispatch authority; the runner durably writes an installer-nonce-bound health
-marker and commits activation before the installer removes backups. The
+dispatch authority in a separate pending session slot. Pending reconnects can
+replace only that slot and cannot evict or interrupt the active dispatch
+transport. The runner durably writes an installer-nonce-bound health
+marker in pending state, commits activation, and then replaces the marker with
+activated state before the installer removes backups. Commit durably writes
+the activated token inventory and, under the same inventory transaction,
+performs a bounded exact pending-to-active session-map swap; displaced-socket
+cleanup happens only after transaction locks are released. A missing or
+superseded pending transport causes a durable inventory rollback and conflict.
+If that compensating save fails, memory follows the last known durable active
+inventory and activation is reported indeterminate so recovery retains repair
+material rather than claiming success. The
 installer deletes the prior marker before restart, does not trust filesystem
-timestamps, never restores a prior marker, and restores the previous runner-only
-files if the current nonce never reaches activated state. Disable and uninstall
+timestamps, and never restores a prior marker. If readiness fails, it stops the
+replacement and restores previous runner-only files only when a bodyless self-
+cancellation durably removes the exact pending replacement under the activation
+transaction lock. Activation conflict, transport/TLS failure, persistence
+failure, or admission-fence uncertainty retains the new credential/runtime and returns a
+repair-required failure rather than restoring a potentially revoked secret. It
+must first atomically and durably restore the exact requested replacement
+bearer to the root-only token file; if that write fails, the runner remains
+stopped and re-enrollment is required without predecessor restoration.
+Disable and uninstall
 remove only remediation and leave monitoring running. The action
 credential is never placed in argv or reused as the collector token. The
 installer persists the canonical enrollment hostname for runner admission. If
@@ -163,10 +181,13 @@ file remains the fallback for later-generated IDs. The direct binding takes
 precedence consistently during runner startup, activation health, and
 self-revocation, and issuance rejects identities outside the runner's bounded
 action-identity vocabulary. The installer
-uses a private curl configuration for best-effort exact self-revocation before
-local teardown, so the bearer secret does not enter argv. Server unreachability
-is warned explicitly but does not make local removal depend on the remote
-control plane.
+uses the Go lifecycle client with a root-only token file for exact durable self-
+revocation before local teardown, so the bearer secret does not enter argv. If
+any runner artifact exists, server unreachability, TLS/auth failure, or missing
+credential stops and disables the runner but retains every artifact for retry or
+manual server-side revocation. Runner WS and lifecycle HTTP require HTTPS/WSS
+with system/custom CA trust or exact certificate-DER pinning; plaintext is
+loopback-only and generic installer insecure/curl `-k` is never inherited.
 The runner must retain a writable host filesystem because its closed protocol
 performs real package, storage, guest, and container mutations;
 `ProtectSystem=strict` is therefore forbidden for that unit. This exception

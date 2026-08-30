@@ -99,6 +99,14 @@ without changing the product default:
   collector-owned rootless socket exists. Explicit or automatic rollback may
   restore the old root service identity, but it removes `--enable-commands`
   and cannot resurrect the reduced server-side authority;
+- the safe-profile declaration is bound to effective systemd state, not unit
+  file contents or socket health alone. The collector, helper service, helper
+  socket, and installed action runner must have the installer-owned
+  `FragmentPath`, no `DropInPaths`, and the expected effective executable,
+  identity, environment-file, address-family, network, and filesystem
+  hardening properties. The typed helper is additionally bounded to 64 tasks,
+  256 file descriptors, and 256 MiB of memory, and those effective limits are
+  override-tested. Existing overrides fail closed;
 - the root action runner is networked and host-mutating by design. Its unit
   retains kernel/home/control-plane hardening but does not set the host
   filesystem read-only, because apt and Proxmox operations require their
@@ -153,6 +161,41 @@ replacement admission closes the exact predecessor socket; successful
 activation durably replaces its secret; restart rejects the predecessor; and
 self-revoke survives a second restart. That code-level transport proof is not
 part of the systemd receipt or an exact release-candidate exercise. The
+committed schema-v5 contract added the three helper-update recovery scenarios
+and remains immutable at its original ordered fifteen-scenario definition.
+Schema v6 is a separate twenty-scenario contract. It adds effective helper
+service, helper resource-limit, helper socket, and runner override rejection
+plus the host-canary helper-network-namespace exercise, and binds those claims to
+`secure_runtime_source_manifest_v6.json`. It does not reinterpret schema-v4 or
+schema-v5 evidence.
+
+Schema-v6 release-candidate classification does not trust a local ref or Go
+VCS stamp. Pulse release tags are workflow-created annotated tags rather than
+signed tags, so tag presence alone is not authority. RC classification
+requires the exact canonical remote tag object and peeled commit, the immutable
+GitHub Release and release attestation, release-attested `checksums.txt`, the
+portable hosted-assembly provenance from `build-release-candidate.yml`, a
+separate provenance bundle that binds every qualification binary to
+`compile-release-payload.yml` with self-hosted runners denied, and a signed
+secure-runtime build contract. That contract must bind every qualification
+artifact to the checksums and record both workflow identities, a
+GitHub-hosted-only compiler policy, the source commit, Go toolchain, package,
+target, `CGO_ENABLED`, `-trimpath`, `-buildvcs=false`, exact ldflags, version,
+and production update-key fingerprint. Hosted assembly of a payload emitted by
+a self-hosted compiler is not trusted compilation provenance. The current
+compiler workflow is self-hosted and the release workflow does not yet publish
+the compiler provenance, secure-runtime build contract, or full multi-version
+qualification artifact set. Therefore release-candidate classification fails
+closed, and current local lab evidence remains committed-main, artifact-bound,
+and self-attested even if a local tag exists.
+
+Schema-v6 committed-main classification is likewise not caller-relative. The
+attester accepts only `origin/main`, requires the canonical Pulse origin URL,
+and compares the local remote-tracking commit with a fresh `refs/heads/main`
+query before proving ancestry. `HEAD`, a local branch, or an arbitrary ref can
+never receive the committed-main label.
+
+The
 repository still needs a fresh exact committed release-candidate run,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
@@ -197,10 +240,13 @@ The collector may not:
 ### 3. Typed Privileged Helper
 
 A small root-owned helper provides only the privileged operations that have a
-documented monitoring or update need. It has no Pulse credential and no
-outbound network access. The preferred transport is a root-owned local Unix
-socket with peer-credential validation and a versioned request/response
-schema.
+documented monitoring or update need. It has no Pulse credential and runs in a
+private network namespace restricted to `AF_UNIX`. The preferred transport is
+a root-owned local Unix socket with peer-credential validation and a versioned
+request/response schema. A qualification receipt may claim only the exercised
+network boundary: a host-reachable non-loopback TCP canary was unreachable
+from the live helper namespace. Broader platform-wide non-connectivity remains
+unqualified until exercised on that platform.
 
 Initial operation families are expected to be:
 
@@ -355,7 +401,11 @@ Required proof:
   version and field
 - adversarial tests reject path traversal, argument injection, unknown ops,
   oversized output, timeout abuse, symlink swaps, and unauthorized peers
-- process/network proof shows the helper cannot make outbound connections
+- process/network proof first reaches a non-loopback host-interface TCP canary
+  from the host namespace, then enters the live helper process's network
+  namespace and proves that the same connection is denied. This is evidence
+  for the exercised helper namespace and endpoint, not a universal claim about
+  every Linux distribution, firewall, address family, or future systemd build
 - telemetry parity tests compare the safe profile with the current root
   baseline and classify every intentional difference
 - update tests prove signature identity, atomic activation, restart, health

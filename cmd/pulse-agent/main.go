@@ -258,6 +258,16 @@ func (m *multiValue) Set(value string) error {
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+	if len(os.Args) > 1 && isCollectorLifecycleCommand(os.Args[1]) {
+		err := runCollectorLifecycleCommand(ctx, os.Args[1], os.Args[2:], os.Stdout, os.Stderr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
+		if code := collectorLifecycleExitCode(err); code != 0 {
+			os.Exit(code)
+		}
+		return
+	}
 
 	if err := run(ctx, os.Args[1:], os.Getenv); err != nil {
 		if err == flag.ErrHelp {

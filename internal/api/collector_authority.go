@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -75,7 +76,7 @@ func (r *Router) handleReduceCollectorAuthority(w http.ResponseWriter, req *http
 		boundHostname := strings.TrimSpace(candidate.Metadata["bound_hostname"])
 		if len(orgs) != 1 || strings.TrimSpace(orgs[0]) != organizationID ||
 			boundAgentID == "" || boundAgentID != payload.AgentID ||
-			boundHostname == "" || !strings.EqualFold(boundHostname, payload.Hostname) {
+			boundHostname == "" || !collectorAuthorityHostnamesEquivalent(boundHostname, payload.Hostname) {
 			config.Mu.Unlock()
 			http.Error(w, "Collector credential binding mismatch", http.StatusForbidden)
 			return
@@ -123,4 +124,10 @@ func (r *Router) handleReduceCollectorAuthority(w http.ResponseWriter, req *http
 	}
 	LogAuditEventForTenant(organizationID, "collector_authority_reduced", caller.Name, GetClientIP(req), req.URL.Path, true, "Reduced collector credential to its exact monitoring scope allowlist")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func collectorAuthorityHostnamesEquivalent(bound, requested string) bool {
+	bound = strings.TrimSpace(bound)
+	requested = strings.TrimSpace(requested)
+	return strings.EqualFold(bound, requested) || unifiedresources.HostnamesEquivalent(bound, requested)
 }

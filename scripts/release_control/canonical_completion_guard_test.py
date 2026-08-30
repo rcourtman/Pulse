@@ -768,6 +768,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/agentupdate/coverage_test.go",
+                        "internal/hostagent/action_runner_client_test.go",
                         "internal/hostagent/agent_flushbuffer_test.go",
                         "internal/hostagent/agent_metrics_test.go",
                         "internal/hostagent/agent_new_test.go",
@@ -2430,6 +2431,7 @@ None yet.
                         "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
                         "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertDeadManDestinationSection.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertIncidentSynthesisSummary.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
@@ -2440,6 +2442,7 @@ None yet.
                         "frontend-modern/src/features/alerts/__tests__/useAlertDestinationsState.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/useAlertOverridesState.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/useAlertOverviewState.test.tsx",
                         "frontend-modern/src/features/alerts/identity.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx",

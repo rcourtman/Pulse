@@ -164,16 +164,49 @@ collector-writable direct-replacement fallback.
 
 Exceptional telemetry crosses `/run/pulse-agent/helper.sock` to a separate
 root process. The socket admits only the `pulse-agent` UID, and the helper has
-no Pulse URL, API token, or network namespace. Its protocol exposes bounded,
+no Pulse URL or API token and runs in a private network namespace rather than
+the host network namespace. Its protocol exposes bounded,
 versioned SMART, Proxmox LXC filesystem, and fixed-endpoint container summary
 snapshots, not a shell, executable path, device path, VMID, daemon endpoint,
 environment, or caller-selected arguments. The helper
 service keeps `PrivateNetwork=true`, `RestrictAddressFamilies=AF_UNIX`,
 `NoNewPrivileges=true`, `ProtectSystem=strict`, and `ProtectHome=true`.
+It also bounds the helper cgroup to `TasksMax=64`, `LimitNOFILE=256`, and
+`MemoryMax=256M`. These limits leave headroom for the typed helper and its
+short-lived platform tools while preventing an overridden or malformed request
+from consuming unbounded process, descriptor, or memory resources.
 `PrivateDevices` is intentionally not enabled because SMART needs the host
 block devices. If the helper is missing, incompatible, or rejects a request,
 only the affected telemetry disappears; the collector does not fall back to
 sudo, root, or a broader local command path.
+
+The installer treats the effective systemd configuration as part of the safe
+profile boundary. The collector, helper service, helper socket, and an
+installed action runner must load from the installer-owned `FragmentPath` with
+no `DropInPaths`. Their effective executable, identity, environment-file,
+address-family, network, and filesystem-hardening properties must match the
+rendered profile. A healthy socket or process cannot override that check.
+Qualification of helper network isolation is deliberately narrower than a
+claim about every Linux network path: the guarded systemd lab must first reach
+a TCP canary on a non-loopback host interface from the host namespace, then
+show that a process entered into the live helper's network namespace cannot
+connect to the same canary. That proves the exercised helper namespace cannot
+reach that host-interface endpoint. It does not by itself qualify every Linux
+distribution, firewall configuration, or future systemd version.
+
+The committed schema-v5 qualification contract remains immutable at its
+original ordered fifteen scenarios. The effective-unit, bounded-resource, and network-isolation
+requirements use a separate schema-v6 receipt and source manifest, so earlier
+evidence is not silently reinterpreted. A schema-v6 local lab remains
+committed-main, artifact-bound self-attestation. Release-candidate
+classification additionally requires the canonical remote RC tag and commit,
+an immutable signed GitHub Release packet, release-attested checksums, trusted
+hosted-builder SLSA provenance, and a signed build contract that binds every
+qualification artifact to its package, toolchain, exact build settings and
+ldflags, version, production update-key fingerprint, and release checksum.
+The current release workflow does not yet emit that complete secure-runtime
+build contract or the four-version qualification artifact set, so a local tag
+or VCS-stamped lab binary cannot upgrade the proof to RC status.
 
 The typed-helper profile cannot be combined with `--grant-smart` or
 `--grant-pct`. The collector never joins the rootful Docker group. When no

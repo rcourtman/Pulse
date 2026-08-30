@@ -70,7 +70,7 @@ func (r *Router) handleIssueActionRunnerCredential(w http.ResponseWriter, req *h
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if r == nil || r.config == nil {
+	if r == nil || r.config == nil || r.persistence == nil {
 		http.Error(w, "Action runner credential service unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -132,15 +132,15 @@ func (r *Router) handleIssueActionRunnerCredential(w http.ResponseWriter, req *h
 
 // handleActivateActionRunnerCredential commits a prepared rotation only after
 // the exact replacement runner has registered and durably written its local
-// activation proof. The runner calls this endpoint itself; no plaintext token
-// or caller-selected predecessor identity crosses the boundary.
+// pending proof. The runner calls this endpoint itself; no plaintext token or
+// caller-selected predecessor identity crosses the boundary.
 func (r *Router) handleActivateActionRunnerCredential(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPatch {
 		w.Header().Set("Allow", http.MethodPatch)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if r == nil || r.config == nil || r.agentExecServer == nil {
+	if r == nil || r.config == nil || r.persistence == nil || r.agentExecServer == nil {
 		http.Error(w, "Action runner activation service unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -166,7 +166,6 @@ func (r *Router) handleActivateActionRunnerCredential(w http.ResponseWriter, req
 		http.Error(w, "Action runner credential binding mismatch", http.StatusForbidden)
 		return
 	}
-	pending := strings.TrimSpace(caller.Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey]) == "true"
 	admission := agentexec.AgentAdmission{
 		OrganizationID:    organizationID,
 		TokenID:           strings.TrimSpace(caller.ID),
@@ -174,31 +173,101 @@ func (r *Router) handleActivateActionRunnerCredential(w http.ResponseWriter, req
 		Hostname:          strings.TrimSpace(caller.Metadata["bound_hostname"]),
 		RuntimeRole:       agentexec.RuntimeRoleActionRunner,
 		ActionCapability:  agentexec.ActionCapabilityTypedV1,
-		ActivationPending: pending,
+		ActivationPending: true,
 	}
-	if !r.agentExecServer.HasActionRunnerSession(admission) {
-		http.Error(w, "Exact action runner session is not registered", http.StatusConflict)
-		return
-	}
-	_, revoked, changed, err := agenttokens.ActivateActionRunnerAndPersist(
+	var promotionCleanup func()
+	_, revoked, changed, err := agenttokens.ActivateActionRunnerAndPersistWithPromotion(
 		r.config, r.persistence, caller.ID, payload.AgentID, payload.Hostname,
+		func() bool {
+			cleanup, promoted := r.agentExecServer.PromoteActionRunnerSessionForCommit(admission)
+			if promoted {
+				promotionCleanup = cleanup
+			}
+			return promoted
+		},
 	)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, agenttokens.ErrRecord) {
 			status = http.StatusForbidden
+		} else if errors.Is(err, agenttokens.ErrActionRunnerSessionUnavailable) {
+			status = http.StatusConflict
 		}
 		http.Error(w, "Failed to activate action runner credential", status)
 		return
 	}
 	if changed {
+		if promotionCleanup != nil {
+			promotionCleanup()
+		}
 		for _, previous := range revoked {
 			r.invalidateActionRunnerRecord(previous)
 		}
-		admission.ActivationPending = false
-		r.agentExecServer.PromoteActionRunnerSession(admission)
 		LogAuditEventForTenant(organizationID, "action_runner_credential_activated", auth.GetUser(req.Context()), GetClientIP(req), req.URL.Path, true, "Activated host-bound typed action runner credential")
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleCancelPendingActionRunnerCredentialActivation is the sole authority
+// for installer rollback. It durably removes the exact still-pending
+// replacement under the same token-inventory lock as activation; a committed
+// credential returns conflict and can never authorize predecessor restore.
+func (r *Router) handleCancelPendingActionRunnerCredentialActivation(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodDelete)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if r == nil || r.config == nil || r.agentExecServer == nil {
+		http.Error(w, "Action runner activation service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if req.Body != nil {
+		bodyPrefix, err := io.ReadAll(io.LimitReader(req.Body, 1))
+		if err != nil || len(bodyPrefix) != 0 {
+			http.Error(w, "Action runner activation cancellation accepts no request body", http.StatusBadRequest)
+			return
+		}
+	}
+	caller := getAPITokenRecordFromRequest(req)
+	if caller == nil {
+		http.Error(w, "Action runner bearer credential required", http.StatusForbidden)
+		return
+	}
+	organizationID := strings.TrimSpace(GetOrgID(req.Context()))
+	agentID := strings.TrimSpace(caller.Metadata["bound_agent_id"])
+	hostname := strings.TrimSpace(caller.Metadata["bound_hostname"])
+	if len(caller.GetBoundOrgs()) != 1 || strings.TrimSpace(caller.GetBoundOrgs()[0]) != organizationID ||
+		!agentbinding.EvaluateActionRunner(caller, agentID, hostname).Admit {
+		http.Error(w, "Action runner credential binding mismatch", http.StatusForbidden)
+		return
+	}
+	removed, err := agenttokens.CancelPendingActionRunnerAndPersist(r.config, r.persistence, caller.ID, organizationID, agentID, hostname)
+	if err != nil {
+		if errors.Is(err, agenttokens.ErrActionRunnerAlreadyActivated) {
+			http.Error(w, "Action runner credential activation already committed", http.StatusConflict)
+			return
+		}
+		http.Error(w, "Could not establish rollback-safe action runner credential state", http.StatusInternalServerError)
+		return
+	}
+	admission := agentexec.AgentAdmission{
+		OrganizationID:   organizationID,
+		TokenID:          strings.TrimSpace(removed.ID),
+		AgentID:          strings.TrimSpace(removed.Metadata["bound_agent_id"]),
+		Hostname:         strings.TrimSpace(removed.Metadata["bound_hostname"]),
+		RuntimeRole:      strings.TrimSpace(removed.Metadata[agenttokens.RuntimeRoleMetadataKey]),
+		ActionCapability: strings.TrimSpace(removed.Metadata[agenttokens.ActionCapabilityMetadataKey]),
+	}
+	until := time.Now().UTC().Add(agenttokens.ActionRunnerActivationWindow)
+	if removed.ExpiresAt != nil && removed.ExpiresAt.After(time.Now()) {
+		until = *removed.ExpiresAt
+	}
+	if !r.agentExecServer.TombstoneActionRunnerAdmission(admission, until) {
+		http.Error(w, "Could not establish rollback-safe action runner admission state", http.StatusInternalServerError)
+		return
+	}
+	LogAuditEventForTenant(organizationID, "action_runner_credential_activation_cancelled", auth.GetUser(req.Context()), GetClientIP(req), req.URL.Path, true, "Cancelled pending host-bound typed action runner credential")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -211,7 +280,7 @@ func (r *Router) handleSelfRevokeActionRunnerCredential(w http.ResponseWriter, r
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if r == nil || r.config == nil {
+	if r == nil || r.config == nil || r.persistence == nil {
 		http.Error(w, "Action runner credential service unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -260,14 +329,12 @@ func (r *Router) handleSelfRevokeActionRunnerCredential(w http.ResponseWriter, r
 	}
 	r.config.APITokens = append(r.config.APITokens[:index], r.config.APITokens[index+1:]...)
 	r.config.SortAPITokens()
-	if r.persistence != nil {
-		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			r.config.APITokens = previousTokens
-			r.config.SortAPITokens()
-			config.Mu.Unlock()
-			http.Error(w, "Failed to revoke action runner credential", http.StatusInternalServerError)
-			return
-		}
+	if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+		r.config.APITokens = previousTokens
+		r.config.SortAPITokens()
+		config.Mu.Unlock()
+		http.Error(w, "Failed to revoke action runner credential", http.StatusInternalServerError)
+		return
 	}
 	config.Mu.Unlock()
 

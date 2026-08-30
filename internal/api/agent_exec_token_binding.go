@@ -150,15 +150,17 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			return agentexec.AgentAdmission{}, false
 		}
 		capability := strings.TrimSpace(record.Metadata[agenttokens.ActionCapabilityMetadataKey])
+		canonicalHostname := strings.TrimSpace(record.Metadata["bound_hostname"])
+		activationPending := strings.TrimSpace(record.Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey]) == "true"
 		config.Mu.Unlock()
 		return agentexec.AgentAdmission{
 			OrganizationID:    organizationID,
 			TokenID:           tokenID,
 			AgentID:           requestedID,
-			Hostname:          requestedHost,
+			Hostname:          canonicalHostname,
 			RuntimeRole:       agentexec.RuntimeRoleActionRunner,
 			ActionCapability:  capability,
-			ActivationPending: strings.TrimSpace(record.Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey]) == "true",
+			ActivationPending: activationPending,
 		}, true
 	}
 	if runtimeRole != "" && runtimeRole != agenttokens.CredentialKindLegacyFullTrust {

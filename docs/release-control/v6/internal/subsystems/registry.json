@@ -1299,6 +1299,7 @@
         "internal/agenthelper/",
         "internal/agenttarget/",
         "internal/agentupdate/",
+        "internal/collectorlifecycle/",
         "internal/hostagent/",
         "scripts/intelligence_lab/"
       ],
@@ -1306,6 +1307,7 @@
         ".github/workflows/unified-agent-native.yml",
         "cmd/pulse-agent-helper/main.go",
         "cmd/pulse-agent-runner/main.go",
+        "cmd/pulse-agent/collector_lifecycle.go",
         "cmd/pulse-agent/main.go",
         "cmd/pulse-agent/service_windows.go",
         "frontend-modern/src/api/agentProfiles.ts",
@@ -1395,6 +1397,25 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "collector-lifecycle-installer-transport",
+            "label": "authenticated collector authority transition and registration proof",
+            "match_prefixes": [
+              "internal/collectorlifecycle/"
+            ],
+            "match_files": [
+              "cmd/pulse-agent/collector_lifecycle.go"
+            ],
+            "allow_same_subsystem_tests": true,
+            "test_prefixes": [
+              "internal/collectorlifecycle/"
+            ],
+            "exact_files": [
+              "cmd/pulse-agent/collector_lifecycle_test.go",
+              "internal/api/collector_authority_test.go",
+              "scripts/installtests/install_sh_test.go"
+            ]
+          },
+          {
             "id": "action-runner-runtime",
             "label": "separate typed action runner and durable receipt proof",
             "match_prefixes": [
@@ -1477,6 +1498,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "cmd/pulse-agent/collector_lifecycle_test.go",
               "cmd/pulse-agent/main_test.go",
               "cmd/pulse-agent/observers_config_test.go",
               "scripts/installtests/agent_state_dir_lifecycle_test.go"
@@ -1625,6 +1647,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/agentupdate/coverage_test.go",
+              "internal/hostagent/action_runner_client_test.go",
               "internal/hostagent/agent_flushbuffer_test.go",
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",

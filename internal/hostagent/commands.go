@@ -143,6 +143,7 @@ type CommandClient struct {
 	healthPath            string
 	healthCapabilities    []string
 	actionActivationNonce string
+	actionHealthWriter    func(bool) error
 }
 
 // NewCommandClient creates a new command execution client
@@ -369,7 +370,14 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	c.logger.Debug().Str("url", wsURL).Msg("Connecting to Pulse command server")
 
 	// Create dialer with TLS config
-	tlsConfig, err := agenttls.NewClientTLSConfig(c.caCertPath, c.insecureSkipVerify, c.serverFingerprint)
+	effectiveInsecure := c.insecureSkipVerify
+	if c.actionRunnerOnly {
+		effectiveInsecure, err = effectiveActionRunnerInsecureMode(c.pulseURL, c.insecureSkipVerify, c.caCertPath, c.serverFingerprint)
+		if err != nil {
+			return fmt.Errorf("validate action-runner websocket TLS mode: %w", err)
+		}
+	}
+	tlsConfig, err := agenttls.NewClientTLSConfig(c.caCertPath, effectiveInsecure, c.serverFingerprint)
 	if err != nil {
 		return fmt.Errorf("build websocket TLS config: %w", err)
 	}
@@ -420,13 +428,13 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 		return fmt.Errorf("registration failed: %w", err)
 	}
 	if c.actionRunnerOnly {
-		if err := c.writeActionRunnerHealth(false); err != nil {
+		if err := c.persistActionRunnerHealth(false); err != nil {
 			return fmt.Errorf("write action-runner health: %w", err)
 		}
 		if err := c.activateActionRunnerCredential(ctx); err != nil {
 			return err
 		}
-		if err := c.writeActionRunnerHealth(true); err != nil {
+		if err := c.persistActionRunnerHealth(true); err != nil {
 			return fmt.Errorf("write activated action-runner health: %w", err)
 		}
 	}
@@ -460,9 +468,14 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 }
 
 func (c *CommandClient) buildWebSocketURL() (string, error) {
-	parsed, err := securityutil.NormalizePulseWebSocketBaseURLWithOptions(c.pulseURL, securityutil.PulseURLValidationOptions{
-		AllowLocalNetworkHTTP: true,
-	})
+	options := securityutil.PulseURLValidationOptions{AllowLocalNetworkHTTP: true}
+	if c.actionRunnerOnly {
+		options = securityutil.PulseURLValidationOptions{}
+		if _, err := effectiveActionRunnerInsecureMode(c.pulseURL, c.insecureSkipVerify, c.caCertPath, c.serverFingerprint); err != nil {
+			return "", err
+		}
+	}
+	parsed, err := securityutil.NormalizePulseWebSocketBaseURLWithOptions(c.pulseURL, options)
 	if err != nil {
 		return "", err
 	}
@@ -480,9 +493,14 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 }
 
 func (c *CommandClient) buildWebSocketOrigin() (string, error) {
-	return securityutil.HTTPOriginForWebSocketBaseURLWithOptions(c.pulseURL, securityutil.PulseURLValidationOptions{
-		AllowLocalNetworkHTTP: true,
-	})
+	options := securityutil.PulseURLValidationOptions{AllowLocalNetworkHTTP: true}
+	if c.actionRunnerOnly {
+		options = securityutil.PulseURLValidationOptions{}
+		if _, err := effectiveActionRunnerInsecureMode(c.pulseURL, c.insecureSkipVerify, c.caCertPath, c.serverFingerprint); err != nil {
+			return "", err
+		}
+	}
+	return securityutil.HTTPOriginForWebSocketBaseURLWithOptions(c.pulseURL, options)
 }
 
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {

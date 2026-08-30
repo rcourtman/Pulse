@@ -492,7 +492,7 @@ func TestPreparedActionRunnerSessionIsNotDispatchableUntilPromoted(t *testing.T)
 		ActionCapability: ActionCapabilityTypedV1, ActivationPending: true,
 	}
 	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
-	s.agents[key] = &agentConn{admission: admission, agent: ConnectedAgent{AgentID: admission.AgentID}, done: make(chan struct{})}
+	s.pendingActionRunners[key] = &agentConn{admission: admission, agent: ConnectedAgent{AgentID: admission.AgentID}, done: make(chan struct{})}
 	if _, ok := s.connectionForOrganization("org-a", "agent-1"); ok {
 		t.Fatal("prepared runner was dispatchable")
 	}

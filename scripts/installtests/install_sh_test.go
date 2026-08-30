@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -2745,6 +2746,28 @@ func extractInstallShellFunction(t *testing.T, name string) string {
 	return string(match)
 }
 
+func extractCollectorLifecycleShellFunctions(t *testing.T, includeVerify bool) string {
+	t.Helper()
+	functions := extractInstallShellFunction(t, "collector_lifecycle_binary") + "\n" +
+		extractInstallShellFunction(t, "prepare_collector_lifecycle_token_file") + "\n" +
+		extractInstallShellFunction(t, "run_collector_lifecycle_command")
+	if includeVerify {
+		functions += "\n" + extractInstallShellFunction(t, "verify_agent_server_registration")
+	}
+	return functions
+}
+
+func buildPulseAgentLifecycleBinary(t *testing.T) string {
+	t.Helper()
+	binary := filepath.Join(t.TempDir(), "pulse-agent")
+	build := exec.Command("go", "build", "-o", binary, "./cmd/pulse-agent")
+	build.Dir = filepath.Dir(repoFile("go.mod"))
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build pulse-agent lifecycle binary: %v\n%s", err, output)
+	}
+	return binary
+}
+
 func extractRootInstallShellFunction(t *testing.T, name string) string {
 	t.Helper()
 
@@ -5082,9 +5105,8 @@ func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing
 // transient "agent has not reported yet" state, so the installer can surface an
 // actionable error instead of leaving a silent 401 loop behind (issue #1515).
 func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T) {
-	urlEncode := extractInstallShellFunction(t, "url_encode")
-	curlWithPulseToken := extractInstallShellFunction(t, "curl_with_pulse_token")
-	verifyFn := extractInstallShellFunction(t, "verify_agent_server_registration")
+	pulseAgent := buildPulseAgentLifecycleBinary(t)
+	verifyFns := extractCollectorLifecycleShellFunctions(t, true)
 
 	cases := []struct {
 		name   string
@@ -5095,13 +5117,14 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 		{"rejected token 401", http.StatusUnauthorized, `{"error":"Authentication required"}`, "rc=2"},
 		{"rejected token 403", http.StatusForbidden, `{"error":"missing_scope"}`, "rc=2"},
 		{"previous hostname owner during binding", http.StatusForbidden, `{"error":{"code":"agent_lookup_forbidden","message":"Agent does not belong to this API token"}}`, "rc=1"},
-		{"registered", http.StatusOK, `{"success":true,"agent":{"id":"agent-omv"}}`, "rc=0"},
+		{"registered", http.StatusOK, `{"success":true,"agent":{"id":"agent-omv","hostname":"omv","lastSeen":"2026-08-30T12:00:01Z"}}`, "rc=0"},
 		{"not reported yet", http.StatusNotFound, `{"error":"agent_not_found"}`, "rc=1"},
 	}
 
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			stateDir := t.TempDir()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if !strings.HasPrefix(r.URL.Path, "/api/agents/agent/lookup") {
 					http.Error(w, "not found", http.StatusNotFound)
@@ -5115,13 +5138,16 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 			script := `
 				PULSE_URL="` + server.URL + `"
 				PULSE_TOKEN="stale-token"
+				STATE_DIR="` + stateDir + `"
+				RUNTIME_TOKEN_FILE=""
+				COLLECTOR_LIFECYCLE_BINARY_PATH="` + pulseAgent + `"
+				LEAST_PRIVILEGE_USER="$(id -un)"
+				SERVER_FINGERPRINT=""
 				AGENT_ID=""
 				HOSTNAME_OVERRIDE="omv"
 				INSECURE="false"
 				CURL_CA_BUNDLE=""
-` + curlWithPulseToken + `
-` + urlEncode + `
-` + verifyFn + `
+` + verifyFns + `
 				verify_agent_server_registration
 				echo "rc=$?"
 			`
@@ -5137,9 +5163,8 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 }
 
 func TestInstallSHVerifyAgentServerRegistrationPrefersCanonicalAgentID(t *testing.T) {
-	urlEncode := extractInstallShellFunction(t, "url_encode")
-	curlWithPulseToken := extractInstallShellFunction(t, "curl_with_pulse_token")
-	verifyFn := extractInstallShellFunction(t, "verify_agent_server_registration")
+	pulseAgent := buildPulseAgentLifecycleBinary(t)
+	verifyFns := extractCollectorLifecycleShellFunctions(t, true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Query().Get("id"); got != "agent-current" {
@@ -5148,20 +5173,23 @@ func TestInstallSHVerifyAgentServerRegistrationPrefersCanonicalAgentID(t *testin
 		if got := r.URL.Query().Get("hostname"); got != "" {
 			t.Errorf("hostname lookup = %q, want ID-only lookup", got)
 		}
-		_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-current"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-current","hostname":"hostname-owned-by-previous-token","lastSeen":"2026-08-30T12:00:01Z"}}`))
 	}))
 	defer server.Close()
 
 	script := `
 		PULSE_URL="` + server.URL + `"
 		PULSE_TOKEN="install-token"
+		STATE_DIR="` + t.TempDir() + `"
+		RUNTIME_TOKEN_FILE=""
+		COLLECTOR_LIFECYCLE_BINARY_PATH="` + pulseAgent + `"
+		LEAST_PRIVILEGE_USER="$(id -un)"
+		SERVER_FINGERPRINT=""
 		AGENT_ID="agent-current"
 		HOSTNAME_OVERRIDE="hostname-owned-by-previous-token"
 		INSECURE="false"
 		CURL_CA_BUNDLE=""
-` + curlWithPulseToken + `
-` + urlEncode + `
-` + verifyFn + `
+` + verifyFns + `
 		verify_agent_server_registration
 		echo "rc=$?"
 	`
@@ -5181,9 +5209,8 @@ func TestInstallSHVerifyAgentServerRegistrationPrefersCanonicalAgentID(t *testin
 // registration (issue #1644). A rejected token still short-circuits because
 // more polling cannot change a definitive 401/403.
 func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) {
-	urlEncode := extractInstallShellFunction(t, "url_encode")
-	curlWithPulseToken := extractInstallShellFunction(t, "curl_with_pulse_token")
-	verifyFn := extractInstallShellFunction(t, "verify_agent_server_registration")
+	pulseAgent := buildPulseAgentLifecycleBinary(t)
+	verifyFns := extractCollectorLifecycleShellFunctions(t, true)
 	retryFn := extractInstallShellFunction(t, "verify_agent_server_registration_with_retry")
 
 	verifyStarted := extractInstallShellFunction(t, "verify_agent_started")
@@ -5220,7 +5247,7 @@ func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) 
 				}
 				w.WriteHeader(tc.statuses[idx])
 				if tc.statuses[idx] == http.StatusOK {
-					_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-1644"}}`))
+					_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-1644","hostname":"pve-1644","lastSeen":"2026-08-30T12:00:01Z"}}`))
 				} else {
 					_, _ = w.Write([]byte(`{"error":"agent_not_found"}`))
 				}
@@ -5230,14 +5257,17 @@ func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) 
 			script := `
 				PULSE_URL="` + server.URL + `"
 				PULSE_TOKEN="install-token"
+				STATE_DIR="` + t.TempDir() + `"
+				RUNTIME_TOKEN_FILE=""
+				COLLECTOR_LIFECYCLE_BINARY_PATH="` + pulseAgent + `"
+				LEAST_PRIVILEGE_USER="$(id -un)"
+				SERVER_FINGERPRINT=""
 				AGENT_ID=""
 				HOSTNAME_OVERRIDE="pve-1644"
 				INSECURE="false"
 				CURL_CA_BUNDLE=""
 				sleep() { :; }
-` + curlWithPulseToken + `
-` + urlEncode + `
-` + verifyFn + `
+` + verifyFns + `
 ` + retryFn + `
 				verify_agent_server_registration_with_retry
 				echo "rc=$?"
@@ -5952,14 +5982,15 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 		`The action runner must use a separate credential from the collector token`,
 		`Preserving existing separately enabled action-runner profile`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"`,
-		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" "$AGENT_ID"`,
-		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"`,
+		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" "$runner_agent_id"`,
+		`collector-read-agent-id --agent-id-file "${STATE_DIR%/}/agent-id"`,
+		`identity_args=(collector-read-agent-id --agent-id-file "$runner_agent_id_file")`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_ACTIVATION_NONCE" "$ACTION_RUNNER_ACTIVATION_NONCE"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" "$runner_hostname"`,
-		`DELETE --data-binary "$payload"`,
-		`/api/agents/action-runner/credential`,
-		`Could not self-revoke the action-runner credential`,
+		`revoke-credential --url "$runner_url" --token-file "$runner_token_file"`,
+		`cancel-pending-credential --url "$PULSE_URL" --token-file "$token_tmp"`,
+		`Action runner removal requires a successful credential revocation`,
 		`/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}`,
 		`verify_download_signature "$TMP_ACTION_RUNNER_BIN" "$runner_signature"`,
 		`install -o root -g root -m 0755 "$TMP_ACTION_RUNNER_BIN"`,
@@ -5967,6 +5998,11 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 		`ACTION_TOKEN=""`,
 		`action_runner_health_matches_activation "$expected_agent_id" "$activation_nonce"`,
 		`[[ "$health_agent_id" == "$expected_agent_id" && "$health_activation_nonce" == "$expected_nonce" ]]`,
+		`cancel_pending_action_runner_credential "$expected_agent_id" "$expected_hostname" "$replacement_action_token"`,
+		`persist_action_runner_replacement_token "$replacement_action_token"`,
+		`if ! cancel_pending_action_runner_credential`,
+		`The exact replacement credential and runtime were retained durably`,
+		`did not durably confirm cancellation`,
 		`rolling back runner-only files while leaving monitoring active`,
 		`Pulse action runner removed. Collector monitoring was left installed and running.`,
 	} {
@@ -5977,6 +6013,9 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 	teardown := extractInstallShellFunction(t, "teardown_action_runner_service")
 	if strings.Contains(teardown, "teardown_systemd_agent_service") || strings.Contains(teardown, `rm -f "${INSTALL_DIR}/${BINARY_NAME}"`) {
 		t.Fatalf("runner teardown must not remove the monitoring collector:\n%s", teardown)
+	}
+	if strings.Contains(script, `head -1 "$runner_agent_id_file"`) {
+		t.Fatal("legacy runner removal must not path-read the collector-owned identity file")
 	}
 }
 
@@ -6005,6 +6044,9 @@ fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
 chown() { return 0; }
 ` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
+` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
 ` + extractInstallShellFunction(t, "write_action_runner_config") + `
 write_action_runner_config
 `
@@ -6018,6 +6060,44 @@ write_action_runner_config
 	want := `PULSE_AGENT_RUNNER_AGENT_ID="agent-bound-before-collector-report"`
 	if !strings.Contains(string(content), want) {
 		t.Fatalf("action-runner environment missing immediate identity binding %q:\n%s", want, content)
+	}
+}
+
+func TestInstallSHActionRunnerRejectsGenericInsecureHTTPSBeforeCredentialWrite(t *testing.T) {
+	root := t.TempDir()
+	tokenPath := filepath.Join(root, "config", "token")
+	script := `
+set -u
+ACTION_RUNNER_CONFIG_DIR="` + filepath.Join(root, "config") + `"
+ACTION_RUNNER_STATE_DIR="` + filepath.Join(root, "state") + `"
+ACTION_RUNNER_TOKEN_FILE="` + tokenPath + `"
+ACTION_RUNNER_ENV_FILE="` + filepath.Join(root, "config", "runner.env") + `"
+ACTION_RUNNER_HEALTH_FILE="` + filepath.Join(root, "state", "health.json") + `"
+ACTION_RUNNER_ACTIVATION_NONCE="` + strings.Repeat("a", 64) + `"
+STATE_DIR="` + filepath.Join(root, "collector") + `"
+HOSTNAME_OVERRIDE="host.local"
+AGENT_ID="agent-1"
+ACTION_TOKEN="must-not-be-written"
+PULSE_URL="https://pulse.example"
+SERVER_FINGERPRINT=""
+CURL_CA_BUNDLE=""
+INSECURE="true"
+EXIT_GENERAL=1
+EXIT_MISSING_ARGS=2
+fail() { printf '%s\n' "$1" >&2; exit "$2"; }
+install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
+` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
+` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "write_action_runner_config") + `
+write_action_runner_config
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "refuses generic insecure HTTPS") {
+		t.Fatalf("generic insecure HTTPS was not rejected: %v\n%s", err, out)
+	}
+	if _, statErr := os.Stat(tokenPath); !os.IsNotExist(statErr) {
+		t.Fatalf("runner credential was written before transport rejection: %v", statErr)
 	}
 }
 
@@ -6037,6 +6117,108 @@ resolve_action_runner_agent_id
 	}
 	if got := strings.TrimSpace(string(out)); got != "current-agent-id" {
 		t.Fatalf("resolved action-runner identity = %q, want direct binding", got)
+	}
+}
+
+func TestInstallSHActionRunnerPersistsResolvedIdentityOutsideCollectorState(t *testing.T) {
+	root := t.TempDir()
+	stateDir := filepath.Join(root, "collector-state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	identityPath := filepath.Join(stateDir, "agent-id")
+	if err := os.WriteFile(identityPath, []byte("agent-canonical\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	pulseAgent := buildPulseAgentLifecycleBinary(t)
+	envFile := filepath.Join(root, "runner-config", "runner.env")
+	script := `
+set -euo pipefail
+COLLECTOR_LIFECYCLE_BINARY_PATH="` + pulseAgent + `"
+LEAST_PRIVILEGE_USER="$(id -un)"
+INSTALL_DIR="` + root + `"
+BINARY_NAME="legacy-agent"
+TMP_BIN=""
+ACTION_RUNNER_CONFIG_DIR="` + filepath.Join(root, "runner-config") + `"
+ACTION_RUNNER_STATE_DIR="` + filepath.Join(root, "runner-state") + `"
+ACTION_RUNNER_TOKEN_FILE="` + filepath.Join(root, "runner-config", "token") + `"
+ACTION_RUNNER_ENV_FILE="` + envFile + `"
+ACTION_RUNNER_HEALTH_FILE="` + filepath.Join(root, "runner-state", "health.json") + `"
+ACTION_RUNNER_ACTIVATION_NONCE="` + strings.Repeat("a", 64) + `"
+STATE_DIR="` + stateDir + `"
+HOSTNAME_OVERRIDE="secure-runtime.lab"
+AGENT_ID=""
+ACTION_TOKEN="runner-secret"
+PULSE_URL="https://pulse.example"
+SERVER_FINGERPRINT=""
+CURL_CA_BUNDLE=""
+INSECURE="false"
+EXIT_GENERAL=1
+EXIT_MISSING_ARGS=2
+fail() { printf '%s\n' "$1" >&2; exit "$2"; }
+install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
+chown() { return 0; }
+` + extractInstallShellFunction(t, "collector_lifecycle_binary") + `
+` + extractInstallShellFunction(t, "read_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
+` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
+` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "write_action_runner_config") + `
+write_action_runner_config
+printf 'attacker-rewrite\n' > "${STATE_DIR}/agent-id"
+grep '^PULSE_AGENT_RUNNER_AGENT_ID="agent-canonical"$' "$ACTION_RUNNER_ENV_FILE"
+if grep -q 'PULSE_AGENT_RUNNER_AGENT_ID_FILE' "$ACTION_RUNNER_ENV_FILE"; then exit 9; fi
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("persist action-runner identity: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHSafeProfileLifecycleUsesVerifiedInstallFilesystemStage(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "pulse-agent")
+	tmpSource := filepath.Join(root, "download.tmp")
+	staged := filepath.Join(root, ".pulse-agent.safe-profile-new")
+	logPath := filepath.Join(root, "binary.log")
+	mustWrite(t, legacy, "#!/bin/sh\nprintf 'legacy:%s\\n' \"$*\" >> \""+logPath+"\"\nexit 91\n")
+	mustWrite(t, tmpSource, "verified bytes that cannot execute on a noexec mount\n")
+	if err := os.Chmod(tmpSource, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, staged, "#!/bin/sh\nprintf 'staged:%s\\n' \"$*\" >> \""+logPath+"\"\nexit 0\n")
+	script := `
+set -euo pipefail
+INSTALL_DIR="` + root + `"
+BINARY_NAME="pulse-agent"
+TMP_BIN="` + tmpSource + `"
+COLLECTOR_LIFECYCLE_BINARY_PATH="` + staged + `"
+` + extractInstallShellFunction(t, "collector_lifecycle_binary") + `
+resolved=$(collector_lifecycle_binary)
+[[ "$resolved" == "` + staged + `" ]]
+"$resolved" collector-reduce-authority
+`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("select staged lifecycle binary: %v\n%s", err, out)
+	}
+	logData, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(logData), "legacy:") || !strings.Contains(string(logData), "staged:collector-reduce-authority") {
+		t.Fatalf("lifecycle binary selection log: %s", logData)
+	}
+	installScript, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(installScript)
+	stageAt := strings.Index(source, `install -o root -g root -m 0755 "$TMP_BIN" "$SAFE_PROFILE_STAGED_COLLECTOR"`)
+	reduceAt := strings.Index(source, `reduce_safe_profile_collector_authority ||`)
+	moveAt := strings.Index(source, `mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"`)
+	if stageAt < 0 || reduceAt <= stageAt || moveAt <= reduceAt {
+		t.Fatalf("safe-profile staged lifecycle ordering invalid: stage=%d reduce=%d move=%d", stageAt, reduceAt, moveAt)
 	}
 }
 
@@ -6095,6 +6277,250 @@ action_runner_health_matches_activation "agent-1" "` + nonce + `"
 	}
 }
 
+func TestInstallSHActionRunnerPostCommitReadinessFailureRetainsReplacement(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		cancelBody     string
+		persistFailure bool
+		rollback       bool
+		tokenWriteBody string
+		wantToken      string
+	}{
+		{
+			name: "durable pending cancellation authorizes rollback", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 0`, rollback: true,
+			tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "old:token\n",
+		},
+		{
+			name: "activation committed or cancel indeterminate", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 1`,
+			tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
+		},
+		{
+			name: "replacement token durable write failure", cancelBody: "return 1", persistFailure: true,
+			tokenWriteBody: `: > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testInstallSHActionRunnerReadinessFailureRetainsReplacement(t, test.cancelBody, test.persistFailure, test.rollback, test.tokenWriteBody, test.wantToken)
+		})
+	}
+}
+
+func testInstallSHActionRunnerReadinessFailureRetainsReplacement(t *testing.T, cancelBody string, persistFailure, rollback bool, tokenWriteBody, wantToken string) {
+	t.Helper()
+	cancelFunction := `cancel_pending_action_runner_credential() { ` + cancelBody + `; }`
+	persistFunction := extractInstallShellFunction(t, "persist_action_runner_replacement_token")
+	if persistFailure {
+		persistFunction = `persist_action_runner_replacement_token() { return 1; }`
+	}
+	root := t.TempDir()
+	binPath := filepath.Join(root, "bin", "pulse-agent-runner")
+	unitPath := filepath.Join(root, "systemd", "pulse-agent-runner.service")
+	envPath := filepath.Join(root, "config", "runner.env")
+	tokenPath := filepath.Join(root, "config", "token")
+	stateDir := filepath.Join(root, "state")
+	for _, path := range []string{binPath, unitPath, envPath, tokenPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, path, "old:"+filepath.Base(path)+"\n")
+	}
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	newBinary := filepath.Join(root, "new-runner")
+	mustWrite(t, newBinary, "new:runner\n")
+	serviceLog := filepath.Join(root, "systemctl.log")
+
+	script := `
+set -u
+ACTION_RUNNER_NAME="pulse-agent-runner"
+ACTION_RUNNER_BINARY_PATH="` + binPath + `"
+ACTION_RUNNER_SERVICE_UNIT="` + unitPath + `"
+ACTION_RUNNER_ENV_FILE="` + envPath + `"
+ACTION_RUNNER_TOKEN_FILE="` + tokenPath + `"
+ACTION_RUNNER_HEALTH_FILE="` + filepath.Join(stateDir, "health.json") + `"
+ACTION_RUNNER_STATE_DIR="` + stateDir + `"
+ACTION_RUNNER_CONFIG_DIR="` + filepath.Dir(tokenPath) + `"
+PRIVILEGE_HELPER_DIR="` + filepath.Join(root, "helper") + `"
+TMP_ACTION_RUNNER_BIN="` + newBinary + `"
+ACTION_TOKEN="new-runner-token"
+ACTION_RUNNER_ACTIVATION_NONCE=""
+HOSTNAME_OVERRIDE="host-1.local"
+STATE_DIR="` + filepath.Join(root, "collector-state") + `"
+PULSE_URL="http://127.0.0.1:7655"
+INSECURE="true"
+CURL_CA_BUNDLE=""
+EXIT_GENERAL=1
+generate_action_runner_activation_nonce() { printf '%064d\n' 0; }
+restore_selinux_contexts() { return 0; }
+write_action_runner_config() {
+    ` + tokenWriteBody + `
+    printf 'new:env\n' > "$ACTION_RUNNER_ENV_FILE"
+}
+render_action_runner_service_unit() { printf 'new:unit\n' > "$1"; }
+install() {
+    local source="${@: -2:1}"
+    local destination="${@: -1}"
+    mkdir -p "$(dirname "$destination")"
+    cp "$source" "$destination"
+}
+chown() { return 0; }
+chmod() { return 0; }
+stat() {
+    case "$1:$2" in
+        '-c:%u') printf '0\n' ;;
+        '-c:%a') printf '600\n' ;;
+        *) command stat "$@" ;;
+    esac
+}
+systemctl() {
+    printf '%s\n' "$*" >> "` + serviceLog + `"
+    return 0
+}
+action_runner_health_matches_activation() { return 1; }
+resolve_action_runner_agent_id() { printf 'agent-1\n'; }
+` + cancelFunction + `
+sleep() { return 0; }
+log_error() { printf 'ERROR: %s\n' "$1" >&2; }
+log_info() { printf 'INFO: %s\n' "$1"; }
+fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
+` + persistFunction + `
+` + extractInstallShellFunction(t, "provision_action_runner") + `
+provision_action_runner
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err == nil {
+		t.Fatalf("post-commit readiness failure unexpectedly succeeded:\n%s", out)
+	}
+	if rollback {
+		if !strings.Contains(string(out), "rolling back runner-only files") || strings.Contains(string(out), "retained durably") {
+			t.Fatalf("204 cancellation did not exclusively authorize predecessor restore:\n%s", out)
+		}
+	} else if persistFailure {
+		if strings.Contains(string(out), "retained durably") || !strings.Contains(string(out), "re-enrollment") {
+			t.Fatalf("durable token failure did not fail closed for re-enrollment:\n%s", out)
+		}
+	} else if !strings.Contains(string(out), "replacement credential and runtime were retained durably") || !strings.Contains(string(out), "repair") {
+		t.Fatalf("missing repair-required result:\n%s", out)
+	}
+	if !rollback && !strings.Contains(string(out), "did not durably confirm cancellation") {
+		t.Fatalf("missing atomic cancellation diagnostic:\n%s", out)
+	}
+	wantBinary, wantUnit, wantEnv := "new:runner\n", "new:unit\n", "new:env\n"
+	if rollback {
+		wantBinary, wantUnit, wantEnv = "old:pulse-agent-runner\n", "old:pulse-agent-runner.service\n", "old:runner.env\n"
+	}
+	for path, want := range map[string]string{
+		binPath:   wantBinary,
+		unitPath:  wantUnit,
+		envPath:   wantEnv,
+		tokenPath: wantToken,
+	} {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read retained %s: %v", path, readErr)
+		}
+		if string(data) != want {
+			t.Fatalf("retained %s = %q, want %q", path, data, want)
+		}
+	}
+	backups, err := filepath.Glob(filepath.Join(root, "**", "*.pulse-install-backup.*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persistFailure && len(backups) == 0 {
+		t.Fatal("durable token failure removed every predecessor backup before repair")
+	}
+	if !persistFailure && len(backups) != 0 {
+		t.Fatalf("revoked predecessor backups retained: %v", backups)
+	}
+	serviceCalls, err := os.ReadFile(serviceLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(serviceCalls), "stop pulse-agent-runner.service") {
+		t.Fatalf("replacement was not stopped before classification: %s", serviceCalls)
+	}
+	if persistFailure && strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
+		t.Fatalf("runner restarted without a durably retained replacement credential: %s", serviceCalls)
+	}
+	if !persistFailure && !strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
+		t.Fatalf("replacement was not stopped for classification and restarted for repair: %s", serviceCalls)
+	}
+}
+
+func TestInstallSHActionRunnerAtomicCancelUsesPrivateGoTransportAndRequires204(t *testing.T) {
+	const token = "runner-cancel-secret"
+	root := t.TempDir()
+	runnerBinary := filepath.Join(root, "pulse-agent-runner")
+	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
+	build.Dir = filepath.Dir(repoFile("go.mod"))
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build action runner: %v\n%s", err, output)
+	}
+	caSource := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer caSource.Close()
+	caFile := filepath.Join(root, "runner-ca.pem")
+	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caSource.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name       string
+		statusCode int
+		wantOK     bool
+	}{{"durable cancellation", http.StatusNoContent, true}, {"activation committed", http.StatusConflict, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotAuthorization, gotMethod, gotBody string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotAuthorization = r.Header.Get("Authorization")
+				gotMethod = r.Method
+				body, _ := io.ReadAll(r.Body)
+				gotBody = string(body)
+				w.WriteHeader(tc.statusCode)
+			}))
+			defer server.Close()
+			configDir := filepath.Join(root, strings.ReplaceAll(tc.name, " ", "-"))
+			if err := os.MkdirAll(configDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			argsLog := filepath.Join(configDir, "args.log")
+			wrapper := filepath.Join(configDir, "runner-wrapper")
+			mustWrite(t, wrapper, "#!/bin/bash\nprintf '%s\\n' \"$@\" > \""+argsLog+"\"\nexec \""+runnerBinary+"\" \"$@\"\n")
+			if err := os.Chmod(wrapper, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			script := `
+set -euo pipefail
+ACTION_RUNNER_BINARY_PATH="` + wrapper + `"
+ACTION_RUNNER_CONFIG_DIR="` + configDir + `"
+PULSE_URL="` + server.URL + `"
+CURL_CA_BUNDLE="` + caFile + `"
+SERVER_FINGERPRINT="` + strings.Repeat("ab", 32) + `"
+chown() { return 0; }
+sync() { return 0; }
+` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
+` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "cancel_pending_action_runner_credential") + `
+cancel_pending_action_runner_credential "agent-1" "host-1.local" "` + token + `"
+`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if (err == nil) != tc.wantOK {
+				t.Fatalf("cancel result error=%v, want success=%v\n%s", err, tc.wantOK, out)
+			}
+			if gotAuthorization != "Bearer "+token || gotMethod != http.MethodDelete || gotBody != "" {
+				t.Fatalf("cancel request auth=%q method=%q body=%q", gotAuthorization, gotMethod, gotBody)
+			}
+			if strings.Contains(string(out), token) {
+				t.Fatalf("cancel credential leaked in output: %s", out)
+			}
+			args, readErr := os.ReadFile(argsLog)
+			if readErr != nil || !strings.Contains(string(args), "--cacert\n"+caFile) || !strings.Contains(string(args), "--server-fingerprint\n"+strings.Repeat("ab", 32)) {
+				t.Fatalf("runner lifecycle CA/pin args = %q, error=%v", args, readErr)
+			}
+		})
+	}
+}
+
 func TestInstallSHActionRunnerSelfRevokeUsesPrivateCredential(t *testing.T) {
 	const token = "runner-secret-that-must-not-appear-in-output"
 	var gotAuthorization string
@@ -6108,12 +6534,17 @@ func TestInstallSHActionRunnerSelfRevokeUsesPrivateCredential(t *testing.T) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"success":true}`)
+		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
 
 	root := t.TempDir()
+	runnerBinary := filepath.Join(root, "pulse-agent-runner")
+	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
+	build.Dir = filepath.Dir(repoFile("go.mod"))
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build action runner: %v\n%s", err, output)
+	}
 	envFile := filepath.Join(root, "runner.env")
 	tokenFile := filepath.Join(root, "token")
 	mustWrite(t, tokenFile, token+"\n")
@@ -6126,16 +6557,20 @@ func TestInstallSHActionRunnerSelfRevokeUsesPrivateCredential(t *testing.T) {
 		`PULSE_AGENT_RUNNER_AGENT_ID="agent-secure-runtime"`,
 		`PULSE_AGENT_RUNNER_AGENT_ID_FILE="` + filepath.Join(root, "missing-agent-id") + `"`,
 		`PULSE_AGENT_RUNNER_TOKEN_FILE="` + tokenFile + `"`,
+		`PULSE_INSECURE="true"`,
 	}, "\n")+"\n")
 
 	script := `
 set -euo pipefail
 ACTION_RUNNER_ENV_FILE="` + envFile + `"
+ACTION_RUNNER_BINARY_PATH="` + runnerBinary + `"
 stat() {
   if [[ "$1" == "-c" && "$2" == "%a" ]]; then printf '600\n'; return 0; fi
   command stat "$@"
 }
 ` + extractInstallShellFunction(t, "read_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
+` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
 ` + extractInstallShellFunction(t, "revoke_action_runner_credential") + `
 revoke_action_runner_credential
 printf 'revoked\n'
@@ -6158,6 +6593,58 @@ printf 'revoked\n'
 	}
 }
 
+func TestInstallSHActionRunnerUninstallRetainsRecoveryMaterialWhenRevokeIsUnconfirmed(t *testing.T) {
+	root := t.TempDir()
+	paths := []string{
+		filepath.Join(root, "bin", "pulse-agent-runner"),
+		filepath.Join(root, "systemd", "pulse-agent-runner.service"),
+		filepath.Join(root, "config", "runner.env"),
+		filepath.Join(root, "config", "token"),
+		filepath.Join(root, "state", "health.json"),
+	}
+	for _, path := range paths {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, path, "retained\n")
+	}
+	serviceLog := filepath.Join(root, "systemctl.log")
+	script := `
+set -u
+ACTION_RUNNER_NAME="pulse-agent-runner"
+ACTION_RUNNER_BINARY_PATH="` + paths[0] + `"
+ACTION_RUNNER_SERVICE_UNIT="` + paths[1] + `"
+ACTION_RUNNER_ENV_FILE="` + paths[2] + `"
+ACTION_RUNNER_TOKEN_FILE="` + paths[3] + `"
+ACTION_RUNNER_CONFIG_DIR="` + filepath.Dir(paths[3]) + `"
+ACTION_RUNNER_STATE_DIR="` + filepath.Dir(paths[4]) + `"
+EXIT_GENERAL=1
+systemctl() { printf '%s\n' "$*" >> "` + serviceLog + `"; return 0; }
+revoke_action_runner_credential() { return 1; }
+log_error() { printf 'ERROR: %s\n' "$1" >&2; }
+log_info() { printf 'INFO: %s\n' "$1"; }
+fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
+` + extractInstallShellFunction(t, "teardown_action_runner_service") + `
+teardown_action_runner_service
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "successful credential revocation") || !strings.Contains(string(out), "retained for a safe retry") {
+		t.Fatalf("unconfirmed revoke did not fail closed: %v\n%s", err, out)
+	}
+	for _, path := range paths {
+		if _, statErr := os.Stat(path); statErr != nil {
+			t.Fatalf("recovery material %s was removed: %v", path, statErr)
+		}
+	}
+	serviceCalls, readErr := os.ReadFile(serviceLog)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(serviceCalls), "stop pulse-agent-runner.service") || !strings.Contains(string(serviceCalls), "disable pulse-agent-runner.service") {
+		t.Fatalf("runner was not stopped and disabled before failed revoke: %s", serviceCalls)
+	}
+}
+
 func TestInstallSHSafeProfileDurablyReducesCollectorAuthority(t *testing.T) {
 	const token = "collector-secret-that-must-not-appear-in-output"
 	var gotAuthorization string
@@ -6176,18 +6663,31 @@ func TestInstallSHSafeProfileDurablyReducesCollectorAuthority(t *testing.T) {
 	defer server.Close()
 
 	stateDir := t.TempDir()
-	mustWrite(t, filepath.Join(stateDir, "runtime.token"), token+"\n")
+	tokenPath := filepath.Join(stateDir, "runtime.token")
+	mustWrite(t, tokenPath, token+"\n")
+	if err := os.Chmod(tokenPath, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	pulseAgent := buildPulseAgentLifecycleBinary(t)
 	script := `
 set -euo pipefail
 STATE_DIR="` + stateDir + `"
+RUNTIME_TOKEN_FILE=""
+COLLECTOR_LIFECYCLE_BINARY_PATH="` + pulseAgent + `"
+LEAST_PRIVILEGE_USER="$(id -un)"
 PULSE_TOKEN=""
 AGENT_ID="agent-secure-runtime"
-HOSTNAME_OVERRIDE="secure-runtime.lab"
+HOSTNAME_OVERRIDE=""
 PULSE_URL="` + server.URL + `"
 INSECURE="false"
 CURL_CA_BUNDLE=""
+SERVER_FINGERPRINT=""
+hostname() { printf 'Secure-Runtime.Lab.\n'; }
 log_info() { printf '%s\n' "$*"; }
+` + extractCollectorLifecycleShellFunctions(t, false) + `
+` + extractInstallShellFunction(t, "resolve_safe_profile_hostname") + `
 ` + extractInstallShellFunction(t, "reduce_safe_profile_collector_authority") + `
+resolve_safe_profile_hostname
 reduce_safe_profile_collector_authority
 `
 	out, err := exec.Command("bash", "-c", script).CombinedOutput()
@@ -6202,6 +6702,69 @@ reduce_safe_profile_collector_authority
 	}
 	if gotBody["agentId"] != "agent-secure-runtime" || gotBody["hostname"] != "secure-runtime.lab" {
 		t.Fatalf("authority reduction body = %#v", gotBody)
+	}
+}
+
+func TestInstallSHCollectorLifecycleRejectsActiveMITMForgedSuccess(t *testing.T) {
+	const token = "collector-mitm-secret"
+	var authorizationSeen bool
+	mitm := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			authorizationSeen = true
+		}
+		if r.URL.Path == "/api/agents/collector/reduce-authority" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-secure-runtime","hostname":"secure-runtime.lab","lastSeen":"2026-08-30T12:00:02Z"}}`))
+	}))
+	defer mitm.Close()
+
+	stateDir := t.TempDir()
+	tokenPath := filepath.Join(stateDir, "runtime.token")
+	mustWrite(t, tokenPath, token)
+	if err := os.Chmod(tokenPath, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	pulseAgent := buildPulseAgentLifecycleBinary(t)
+	script := `
+set -u
+STATE_DIR="` + stateDir + `"
+RUNTIME_TOKEN_FILE=""
+COLLECTOR_LIFECYCLE_BINARY_PATH="` + pulseAgent + `"
+LEAST_PRIVILEGE_USER="$(id -un)"
+PULSE_TOKEN=""
+AGENT_ID="agent-secure-runtime"
+HOSTNAME_OVERRIDE="secure-runtime.lab"
+PULSE_URL="` + mitm.URL + `"
+INSECURE="true"
+CURL_CA_BUNDLE=""
+SERVER_FINGERPRINT="` + strings.Repeat("00", 32) + `"
+log_info() { printf '%s\n' "$*"; }
+` + extractCollectorLifecycleShellFunctions(t, true) + `
+` + extractInstallShellFunction(t, "reduce_safe_profile_collector_authority") + `
+if reduce_safe_profile_collector_authority; then
+  printf 'forged reduction accepted\n'
+  exit 3
+fi
+if verify_agent_server_registration "2026-08-30T12:00:01Z"; then
+  printf 'forged registration accepted\n'
+  exit 4
+fi
+printf 'forged success rejected\n'
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("MITM rejection script: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "forged success rejected") {
+		t.Fatalf("missing forged-success rejection: %s", out)
+	}
+	if strings.Contains(string(out), token) {
+		t.Fatalf("collector bearer leaked in output: %s", out)
+	}
+	if authorizationSeen {
+		t.Fatal("MITM handler received the collector Authorization header")
 	}
 }
 

@@ -17,6 +17,8 @@ func safeProfileInspectFunctions(t *testing.T) string {
 	return extractInstallShellFunction(t, "safe_profile_platform_supported") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_detect_current_profile") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_unit_property") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_unit_property") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_unit_unoverridden") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_effective_unit_unoverridden") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_inspect")
 }
@@ -24,6 +26,8 @@ func safeProfileInspectFunctions(t *testing.T) string {
 func safeProfileTransactionFunctions(t *testing.T) string {
 	t.Helper()
 	return extractInstallShellFunction(t, "safe_profile_detect_current_profile") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_unit_property") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_unit_unoverridden") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_effective_unit_unoverridden") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_snapshot_entry") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_manifest_value") + "\n" +
@@ -34,6 +38,21 @@ func safeProfileTransactionFunctions(t *testing.T) string {
 		extractInstallShellFunction(t, "safe_profile_remove_collector_command_authority") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_restore_transaction") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_commit_transaction")
+}
+
+func safeProfileEffectiveSystemdFunctions(t *testing.T) string {
+	t.Helper()
+	return extractInstallShellFunction(t, "safe_profile_unit_property") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_unit_property") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_unit_unoverridden") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_exec_argv") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_exec_exact") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_words_equal") + "\n" +
+		extractInstallShellFunction(t, "systemd_effective_common_hardening") + "\n" +
+		extractInstallShellFunction(t, "safe_profile_verify_helper_effective_target") + "\n" +
+		extractInstallShellFunction(t, "action_runner_verify_effective_target") + "\n" +
+		extractInstallShellFunction(t, "safe_profile_effective_unit_unoverridden") + "\n" +
+		extractInstallShellFunction(t, "safe_profile_verify_effective_target")
 }
 
 func TestSafeProfileInspectIsReadOnlyAndReportsDifferences(t *testing.T) {
@@ -271,6 +290,104 @@ func TestSafeProfileFailsClosedOnEffectiveSystemdOverrides(t *testing.T) {
 	}
 }
 
+func TestSafeProfileValidatesEveryEffectiveSystemdBoundary(t *testing.T) {
+	testCases := []struct {
+		name, unit, property, value string
+	}{
+		{name: "collector drop-in", unit: "pulse-agent.service", property: "DropInPaths", value: "/etc/systemd/system/pulse-agent.service.d/override.conf"},
+		{name: "collector executable", unit: "pulse-agent.service", property: "ExecStart", value: "{ path=/tmp/collector ; argv[]=/tmp/collector ; }"},
+		{name: "collector hardening", unit: "pulse-agent.service", property: "NoNewPrivileges", value: "no"},
+		{name: "helper service fragment", unit: "pulse-agent-helper.service", property: "FragmentPath", value: "/usr/lib/systemd/system/pulse-agent-helper.service"},
+		{name: "helper service drop-in", unit: "pulse-agent-helper.service", property: "DropInPaths", value: "/etc/systemd/system/pulse-agent-helper.service.d/override.conf"},
+		{name: "helper executable", unit: "pulse-agent-helper.service", property: "ExecStart", value: "{ path=/tmp/helper ; argv[]=/tmp/helper ; }"},
+		{name: "helper private network", unit: "pulse-agent-helper.service", property: "PrivateNetwork", value: "no"},
+		{name: "helper common hardening", unit: "pulse-agent-helper.service", property: "ProtectKernelModules", value: "no"},
+		{name: "helper task limit", unit: "pulse-agent-helper.service", property: "TasksMax", value: "infinity"},
+		{name: "helper descriptor limit", unit: "pulse-agent-helper.service", property: "LimitNOFILE", value: "1048576"},
+		{name: "helper memory limit", unit: "pulse-agent-helper.service", property: "MemoryMax", value: "infinity"},
+		{name: "helper address families", unit: "pulse-agent-helper.service", property: "RestrictAddressFamilies", value: "AF_UNIX AF_INET"},
+		{name: "helper environment", unit: "pulse-agent-helper.service", property: "Environment", value: "PULSE_URL=https://attacker.invalid"},
+		{name: "helper writable paths", unit: "pulse-agent-helper.service", property: "ReadWritePaths", value: "/"},
+		{name: "helper socket fragment", unit: "pulse-agent-helper.socket", property: "FragmentPath", value: "/usr/lib/systemd/system/pulse-agent-helper.socket"},
+		{name: "helper socket drop-in", unit: "pulse-agent-helper.socket", property: "DropInPaths", value: "/etc/systemd/system/pulse-agent-helper.socket.d/override.conf"},
+		{name: "helper socket mode", unit: "pulse-agent-helper.socket", property: "SocketMode", value: "0666"},
+		{name: "helper socket target", unit: "pulse-agent-helper.socket", property: "Listen", value: "/tmp/attacker.sock (Stream)"},
+		{name: "runner fragment", unit: "pulse-agent-runner.service", property: "FragmentPath", value: "/usr/lib/systemd/system/pulse-agent-runner.service"},
+		{name: "runner drop-in", unit: "pulse-agent-runner.service", property: "DropInPaths", value: "/etc/systemd/system/pulse-agent-runner.service.d/override.conf"},
+		{name: "runner executable", unit: "pulse-agent-runner.service", property: "ExecStart", value: "{ path=/tmp/runner ; argv[]=/tmp/runner ; }"},
+		{name: "runner environment file", unit: "pulse-agent-runner.service", property: "EnvironmentFiles", value: "/tmp/attacker.env (ignore_errors=no)"},
+		{name: "runner address families", unit: "pulse-agent-runner.service", property: "RestrictAddressFamilies", value: "AF_UNIX AF_INET AF_INET6 AF_NETLINK"},
+		{name: "runner common hardening", unit: "pulse-agent-runner.service", property: "LockPersonality", value: "no"},
+		{name: "runner filesystem", unit: "pulse-agent-runner.service", property: "ProtectSystem", value: "strict"},
+	}
+
+	functions := safeProfileEffectiveSystemdFunctions(t)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			script := effectiveSystemdHarness(t, testCase.unit, testCase.property, testCase.value) + "\n" + functions + `
+if safe_profile_verify_effective_target; then
+  echo 'unsafe effective systemd profile was accepted' >&2
+  exit 1
+fi
+`
+			if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+				t.Fatalf("effective override rehearsal: %v\n%s", err, out)
+			}
+		})
+	}
+
+	t.Run("canonical profile", func(t *testing.T) {
+		script := effectiveSystemdHarness(t, "", "", "") + "\n" + functions + "\nsafe_profile_verify_effective_target\n"
+		if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+			t.Fatalf("canonical effective profile rejected: %v\n%s", err, out)
+		}
+	})
+}
+
+func TestActionRunnerProvisionChecksEffectiveUnitBeforeStart(t *testing.T) {
+	provision := extractInstallShellFunction(t, "provision_action_runner")
+	validation := strings.Index(provision, "action_runner_verify_effective_target")
+	enable := strings.Index(provision, `systemctl enable "${ACTION_RUNNER_NAME}.service"`)
+	restart := strings.Index(provision, `systemctl restart "${ACTION_RUNNER_NAME}.service"`)
+	if validation < 0 || enable < 0 || restart < 0 || validation > enable || validation > restart {
+		t.Fatal("action-runner effective systemd validation does not precede service enable/restart")
+	}
+}
+
+func TestTypedHelperProvisionChecksEffectiveUnitsBeforeSocketActivation(t *testing.T) {
+	provision := extractInstallShellFunction(t, "provision_typed_privileged_helper")
+	validation := strings.Index(provision, "safe_profile_verify_helper_effective_target")
+	enable := strings.Index(provision, `systemctl enable --now "${PRIVILEGED_HELPER_NAME}.socket"`)
+	if validation < 0 || enable < 0 || validation > enable {
+		t.Fatal("typed-helper effective systemd validation does not precede socket activation")
+	}
+}
+
+func TestTypedHelperUnitRendersBoundedResources(t *testing.T) {
+	unitPath := filepath.Join(t.TempDir(), "pulse-agent-helper.service")
+	render := extractInstallShellFunction(t, "render_privileged_helper_service_unit")
+	script := `
+set -euo pipefail
+PRIVILEGED_HELPER_NAME=pulse-agent-helper
+PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR=/var/lib/pulse-agent/update-quarantine
+PRIVILEGED_HELPER_STATE_DIR=/var/lib/pulse-agent-helper
+` + render + `
+render_privileged_helper_service_unit "` + unitPath + `" /usr/local/lib/pulse-agent/pulse-agent-helper
+`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("render typed-helper unit: %v\n%s", err, out)
+	}
+	content, err := os.ReadFile(unitPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, directive := range []string{"TasksMax=64", "LimitNOFILE=256", "MemoryMax=256M"} {
+		if !strings.Contains(string(content), directive+"\n") {
+			t.Errorf("typed-helper unit omitted %s", directive)
+		}
+	}
+}
+
 func TestSafeProfileRegistrationMustAdvanceLastSeen(t *testing.T) {
 	functions := extractInstallShellFunction(t, "verify_agent_server_registration")
 	script := `
@@ -278,18 +395,29 @@ set -euo pipefail
 AGENT_ID=agent-1
 HOSTNAME_OVERRIDE=
 PULSE_URL=https://pulse.example
-INSECURE=false
-CURL_CA_BUNDLE=
 AGENT_REGISTRATION_LAST_SEEN=
-url_encode() { printf '%s' "$1"; }
-curl_with_pulse_token() { printf '%s\n200\n' "$LOOKUP_BODY"; }
+LOOKUP_LAST_SEEN=
+LOOKUP_RC=0
+run_collector_lifecycle_command() {
+  test "$1" = collector-verify-registration
+  shift
+  test "$1" = --agent-id
+  test "$2" = agent-1
+  test "$3" = --previous-last-seen
+  test "$4" = '2026-08-30T10:00:00Z'
+  if [[ "$LOOKUP_RC" -ne 0 ]]; then
+    return "$LOOKUP_RC"
+  fi
+  printf '%s\n' "$LOOKUP_LAST_SEEN"
+}
 ` + functions + `
-LOOKUP_BODY='{"agent":{"id":"agent-1","lastSeen":"2026-08-30T10:00:00Z"}}'
+LOOKUP_RC=1
 if verify_agent_server_registration '2026-08-30T10:00:00Z'; then
   echo 'stale registration was accepted' >&2
   exit 1
 fi
-LOOKUP_BODY='{"agent":{"id":"agent-1","lastSeen":"2026-08-30T10:00:31Z"}}'
+LOOKUP_RC=0
+LOOKUP_LAST_SEEN='2026-08-30T10:00:31Z'
 verify_agent_server_registration '2026-08-30T10:00:00Z'
 test "$AGENT_REGISTRATION_LAST_SEEN" = '2026-08-30T10:00:31Z'
 `
@@ -556,6 +684,97 @@ stat() {
   /usr/bin/stat "$@"
 }
 ` + safeProfileTransactionFunctions(t) + "\n"
+}
+
+func effectiveSystemdHarness(t *testing.T, overrideUnit, overrideProperty, overrideValue string) string {
+	t.Helper()
+	root := t.TempDir()
+	collectorUnit := filepath.Join(root, "pulse-agent.service")
+	helperServiceUnit := filepath.Join(root, "pulse-agent-helper.service")
+	helperSocketUnit := filepath.Join(root, "pulse-agent-helper.socket")
+	runnerUnit := filepath.Join(root, "pulse-agent-runner.service")
+	for _, path := range []string{collectorUnit, helperServiceUnit, helperSocketUnit, runnerUnit} {
+		mustWrite(t, path, "fixture unit\n")
+	}
+	return `
+set -euo pipefail
+AGENT_NAME=pulse-agent
+BINARY_NAME=pulse-agent
+INSTALL_DIR=/usr/local/bin
+LEAST_PRIVILEGE_USER=pulse-agent
+SAFE_PROFILE_COLLECTOR_UNIT="` + collectorUnit + `"
+PRIVILEGED_HELPER_NAME=pulse-agent-helper
+PRIVILEGED_HELPER_SERVICE_UNIT="` + helperServiceUnit + `"
+PRIVILEGED_HELPER_SOCKET_UNIT="` + helperSocketUnit + `"
+PRIVILEGED_HELPER_BINARY_PATH=/usr/local/lib/pulse-agent/pulse-agent-helper
+PRIVILEGED_HELPER_SOCKET_PATH=/run/pulse-agent/helper.sock
+PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR=/var/lib/pulse-agent/update-quarantine
+PRIVILEGED_HELPER_STATE_DIR=/var/lib/pulse-agent-helper
+ACTION_RUNNER_NAME=pulse-agent-runner
+ACTION_RUNNER_SERVICE_UNIT="` + runnerUnit + `"
+ACTION_RUNNER_BINARY_PATH=/usr/local/lib/pulse-agent/pulse-agent-runner
+ACTION_RUNNER_ENV_FILE=/etc/pulse-agent-runner/runner.env
+ACTION_RUNNER_STATE_DIR=/var/lib/pulse-agent-runner
+OVERRIDE_UNIT='` + overrideUnit + `'
+OVERRIDE_PROPERTY='` + overrideProperty + `'
+OVERRIDE_VALUE='` + overrideValue + `'
+systemctl() {
+  [[ "${1:-}" == show ]]
+  local unit="${2:-}"
+  local property="${4:-}"
+  if [[ "$unit" == "$OVERRIDE_UNIT" && "$property" == "$OVERRIDE_PROPERTY" ]]; then
+    printf '%s\n' "$OVERRIDE_VALUE"
+    return 0
+  fi
+  case "$unit:$property" in
+    pulse-agent.service:FragmentPath) printf '%s\n' "$SAFE_PROFILE_COLLECTOR_UNIT" ;;
+    pulse-agent.service:DropInPaths|pulse-agent.service:AmbientCapabilities) printf '\n' ;;
+    pulse-agent.service:User) printf 'pulse-agent\n' ;;
+    pulse-agent.service:ExecStart) printf '{ path=/usr/local/bin/pulse-agent ; argv[]=/usr/local/bin/pulse-agent --enable-host --command-authority monitoring-only ; }\n' ;;
+    pulse-agent.service:Environment) printf 'PULSE_AGENT_HELPER_SOCKET=/run/pulse-agent/helper.sock\n' ;;
+    pulse-agent.service:UMask) printf '0077\n' ;;
+    pulse-agent.service:NoNewPrivileges|pulse-agent.service:PrivateTmp|pulse-agent.service:ProtectKernelTunables|pulse-agent.service:ProtectKernelModules|pulse-agent.service:ProtectControlGroups|pulse-agent.service:LockPersonality|pulse-agent.service:RestrictSUIDSGID) printf 'yes\n' ;;
+    pulse-agent.service:PrivateDevices) printf 'no\n' ;;
+    pulse-agent.service:SystemCallArchitectures) printf 'native\n' ;;
+    pulse-agent-helper.service:FragmentPath) printf '%s\n' "$PRIVILEGED_HELPER_SERVICE_UNIT" ;;
+    pulse-agent-helper.service:DropInPaths|pulse-agent-helper.service:AmbientCapabilities|pulse-agent-helper.service:Environment|pulse-agent-helper.service:EnvironmentFiles) printf '\n' ;;
+    pulse-agent-helper.service:ExecStart) printf '{ path=/usr/local/lib/pulse-agent/pulse-agent-helper ; argv[]=/usr/local/lib/pulse-agent/pulse-agent-helper ; }\n' ;;
+    pulse-agent-helper.service:User|pulse-agent-helper.service:Group) printf 'root\n' ;;
+    pulse-agent-helper.service:UMask) printf '0077\n' ;;
+    pulse-agent-helper.service:NoNewPrivileges|pulse-agent-helper.service:PrivateTmp|pulse-agent-helper.service:ProtectKernelTunables|pulse-agent-helper.service:ProtectKernelModules|pulse-agent-helper.service:ProtectControlGroups|pulse-agent-helper.service:LockPersonality|pulse-agent-helper.service:RestrictSUIDSGID|pulse-agent-helper.service:PrivateNetwork|pulse-agent-helper.service:ProtectHome) printf 'yes\n' ;;
+    pulse-agent-helper.service:PrivateDevices) printf 'no\n' ;;
+    pulse-agent-helper.service:SystemCallArchitectures) printf 'native\n' ;;
+    pulse-agent-helper.service:ProtectSystem) printf 'strict\n' ;;
+    pulse-agent-helper.service:RestrictAddressFamilies) printf 'AF_UNIX\n' ;;
+    pulse-agent-helper.service:TasksMax) printf '64\n' ;;
+    pulse-agent-helper.service:LimitNOFILE) printf '256\n' ;;
+    pulse-agent-helper.service:MemoryMax) printf '268435456\n' ;;
+    pulse-agent-helper.service:ReadOnlyPaths) printf '/var/lib/pulse-agent/update-quarantine\n' ;;
+    pulse-agent-helper.service:ReadWritePaths) printf '/usr/local/bin /var/lib/pulse-agent-helper\n' ;;
+    pulse-agent-helper.socket:FragmentPath) printf '%s\n' "$PRIVILEGED_HELPER_SOCKET_UNIT" ;;
+    pulse-agent-helper.socket:DropInPaths) printf '\n' ;;
+    pulse-agent-helper.socket:SocketUser) printf 'root\n' ;;
+    pulse-agent-helper.socket:SocketGroup) printf 'pulse-agent\n' ;;
+    pulse-agent-helper.socket:SocketMode) printf '0660\n' ;;
+    pulse-agent-helper.socket:DirectoryMode) printf '0755\n' ;;
+    pulse-agent-helper.socket:RemoveOnStop) printf 'yes\n' ;;
+    pulse-agent-helper.socket:Listen) printf '/run/pulse-agent/helper.sock (Stream)\n' ;;
+    pulse-agent-runner.service:FragmentPath) printf '%s\n' "$ACTION_RUNNER_SERVICE_UNIT" ;;
+    pulse-agent-runner.service:DropInPaths|pulse-agent-runner.service:AmbientCapabilities) printf '\n' ;;
+    pulse-agent-runner.service:ExecStart) printf '{ path=/usr/local/lib/pulse-agent/pulse-agent-runner ; argv[]=/usr/local/lib/pulse-agent/pulse-agent-runner ; }\n' ;;
+    pulse-agent-runner.service:User|pulse-agent-runner.service:Group) printf 'root\n' ;;
+    pulse-agent-runner.service:UMask) printf '0077\n' ;;
+    pulse-agent-runner.service:NoNewPrivileges|pulse-agent-runner.service:PrivateTmp|pulse-agent-runner.service:ProtectKernelTunables|pulse-agent-runner.service:ProtectKernelModules|pulse-agent-runner.service:ProtectControlGroups|pulse-agent-runner.service:LockPersonality|pulse-agent-runner.service:RestrictSUIDSGID|pulse-agent-runner.service:ProtectHome) printf 'yes\n' ;;
+    pulse-agent-runner.service:PrivateDevices) printf 'no\n' ;;
+    pulse-agent-runner.service:SystemCallArchitectures) printf 'native\n' ;;
+    pulse-agent-runner.service:PrivateNetwork|pulse-agent-runner.service:ProtectSystem) printf 'no\n' ;;
+    pulse-agent-runner.service:RestrictAddressFamilies) printf 'AF_INET6 AF_UNIX AF_INET\n' ;;
+    pulse-agent-runner.service:ReadWritePaths) printf '/var/lib/pulse-agent-runner\n' ;;
+    pulse-agent-runner.service:EnvironmentFiles) printf '/etc/pulse-agent-runner/runner.env (ignore_errors=no)\n' ;;
+    *) printf '\n' ;;
+  esac
+}
+`
 }
 
 func mustMkdirAll(t *testing.T, dirs ...string) {

@@ -43,9 +43,9 @@ package installtests
 //     PULSE_SECURE_RUNTIME_HELPER="$repo/.lab-artifacts/pulse-agent-helper" \
 //     PULSE_SECURE_RUNTIME_RUNNER="$repo/.lab-artifacts/pulse-agent-runner" \
 //     PULSE_SECURE_RUNTIME_RECEIPT=/tmp/secure-runtime-receipt.json \
-//     PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v5.json \
+//     PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v6.json \
 //     PULSE_SECURE_RUNTIME_TRANSCRIPT=/tmp/secure-runtime-transcript.jsonl \
-//     PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v5.jsonl \
+//     PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v6.jsonl \
 //     sh -c 'cd "$1/scripts/installtests" && exec "$1/.lab-artifacts/installtests-linux-arm64.test" -test.run "^TestSecureRuntimeSystemdLab$" -test.count=1 -test.v' sh "$repo"
 //
 // Use the VM's GOARCH in place of arm64 when qualifying another architecture.
@@ -70,6 +70,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -129,6 +130,12 @@ var secureRuntimeScenarioClaims = map[string][]string{
 	"legacy_root_command_capable_install": {"legacy_root_command_authority_observed"},
 	"read_only_inspect":                   {"inspection_left_stable_files_unchanged"},
 	"drop_in_fail_closed_rehearsal":       {"drop_in_rejected_before_mutation"},
+	"helper_service_override_rejection":   {"helper_service_effective_override_detected"},
+	"helper_resource_limit_override_rejection": {
+		"helper_resource_limits_enforced",
+		"helper_resource_limit_override_detected",
+	},
+	"helper_socket_override_rejection": {"helper_socket_effective_override_detected"},
 	"safe_profile_apply": {
 		"collector_non_root",
 		"collector_monitoring_only",
@@ -155,7 +162,12 @@ var secureRuntimeScenarioClaims = map[string][]string{
 		"prior_active_binary_restored_from_rollback_slot",
 		"collector_reporting_resumed_after_helper_recovery",
 	},
-	"separate_action_runner_install": {"action_runner_registered_separately"},
+	"separate_action_runner_install":   {"action_runner_registered_separately"},
+	"action_runner_override_rejection": {"action_runner_effective_override_detected"},
+	"helper_network_namespace_isolation": {
+		"helper_host_interface_tcp_denied",
+		"helper_network_namespace_isolated",
+	},
 	"typed_action_receipt": {
 		"typed_mutation_verified",
 		"terminal_receipt_replayed",
@@ -225,7 +237,14 @@ func (f *secureRuntimeLabFixture) admitActionRunner(secret, agentID, hostname st
 func (f *secureRuntimeLabFixture) validateActionRunnerSession(admission agentexec.AgentAdmission) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return !f.actionRevoked && admission == f.actionAdmissionLocked()
+	expected := f.actionAdmissionLocked()
+	return !f.actionRevoked &&
+		admission.OrganizationID == expected.OrganizationID &&
+		admission.TokenID == expected.TokenID &&
+		admission.AgentID == expected.AgentID &&
+		admission.Hostname == expected.Hostname &&
+		admission.RuntimeRole == expected.RuntimeRole &&
+		admission.ActionCapability == expected.ActionCapability
 }
 
 func (f *secureRuntimeLabFixture) actionAdmissionLocked() agentexec.AgentAdmission {
@@ -921,6 +940,21 @@ func TestSecureRuntimeSourceManifestCoversTransitiveProviders(t *testing.T) {
 		"internal/securityutil/secure_storage_dir.go",
 		"pkg/auth/scopes.go",
 		"pkg/securityutil/httpurl.go",
+		"scripts/release_control/secure_runtime_attestation.py",
+		"scripts/release_control/secure_runtime_attestation_v6.py",
+		".github/workflows/build-release-candidate.yml",
+		".github/workflows/compile-release-payload.yml",
+		".github/workflows/create-release.yml",
+		"scripts/build-release-binaries.sh",
+		"scripts/build-release.sh",
+		"scripts/release_asset_common.sh",
+		"scripts/release_build_targets.sh",
+		"scripts/release_candidate_manifest.py",
+		"scripts/release_ldflags.sh",
+		"scripts/release_update_key.go",
+		"scripts/require-safe-gh-attestation.sh",
+		"scripts/validate-release.sh",
+		"scripts/verify-github-release-integrity.sh",
 	} {
 		if _, ok := hashes[required]; !ok {
 			t.Fatalf("secure-runtime source manifest omitted transitive boundary source %s", required)
@@ -1016,7 +1050,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	startedAt := time.Now().UTC()
 	sourceManifest, sourceHashes := secureRuntimeLoadSourceBoundary(t, runtime.GOARCH)
 	receipt := secureRuntimeLabReceipt{
-		SchemaVersion:         5,
+		SchemaVersion:         6,
 		RecordPath:            recordPath,
 		StartedAt:             startedAt.Format(time.RFC3339Nano),
 		SourceManifest:        sourceManifest,
@@ -1181,6 +1215,30 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeContinuity)+1, 20*time.Second)
 	pass("final_safe_profile_apply", "collector continued reporting after committed migration", map[string]any{"collector_service_user": "pulse-agent", "continuity_report_observed": true})
 
+	helperServiceRejection := secureRuntimeExerciseUnitOverrideDetection(t,
+		"pulse-agent-helper.service", "Service", "PrivateNetwork=false", false)
+	pass("helper_service_override_rejection", "effective helper service validation rejected an existing systemd drop-in", map[string]any{
+		"override_directive": "PrivateNetwork=false",
+		"validation_error":   helperServiceRejection,
+	})
+	helperResourceRejection := secureRuntimeExerciseUnitOverrideDetection(t,
+		"pulse-agent-helper.service", "Service", "TasksMax=infinity", false)
+	pass("helper_resource_limit_override_rejection", "effective helper service validation enforced bounded task, descriptor, and memory resources and rejected an unbounded task override", map[string]any{
+		"override_directive": "TasksMax=infinity",
+		"tasks_max":          "64",
+		"limit_nofile":       "256",
+		"memory_max_bytes":   "268435456",
+		"validation_error":   helperResourceRejection,
+	})
+	helperSocketRejection := secureRuntimeExerciseUnitOverrideDetection(t,
+		"pulse-agent-helper.socket", "Socket", "SocketMode=0666", false)
+	pass("helper_socket_override_rejection", "effective helper socket validation rejected an existing systemd drop-in", map[string]any{
+		"override_directive": "SocketMode=0666",
+		"validation_error":   helperSocketRejection,
+	})
+	helperNetworkObservations := secureRuntimeAssertHelperOutboundNetworkDenied(t)
+	pass("helper_network_namespace_isolation", "the helper network namespace could not establish TCP to a host-interface canary that was reachable from the host namespace", helperNetworkObservations)
+
 	collectorV2SHA256 := secureRuntimeHash(collectorV2)
 	collectorV3SHA256 := secureRuntimeHash(collectorV3)
 	collectorV4SHA256 := secureRuntimeHash(collectorV4)
@@ -1292,6 +1350,12 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	}
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeRunner)+1, 20*time.Second)
 	pass("separate_action_runner_install", "root action runner registered and activated independently while the collector remained non-root and reporting", map[string]any{"runner_service_user": "root", "collector_service_user": "pulse-agent", "fixture_activation_requests": 1})
+	runnerOverrideRejection := secureRuntimeExerciseUnitOverrideDetection(t,
+		"pulse-agent-runner.service", "Service", "EnvironmentFile=-/tmp/unsafe-runner.env", true)
+	pass("action_runner_override_rejection", "effective action-runner validation rejected an existing systemd drop-in", map[string]any{
+		"override_directive": "EnvironmentFile=-/tmp/unsafe-runner.env",
+		"validation_error":   runnerOverrideRejection,
+	})
 
 	actionContext, cancelAction := context.WithTimeout(agentexec.WithOrganizationID(context.Background(), secureRuntimeLabOrgID), 30*time.Second)
 	defer cancelAction()
@@ -1645,13 +1709,13 @@ func secureRuntimeLoadSourceBoundary(t *testing.T, targetArch string) (secureRun
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
 	}
-	manifestRelative := "scripts/release_control/secure_runtime_source_manifest_v5.json"
+	manifestRelative := "scripts/release_control/secure_runtime_source_manifest_v6.json"
 	manifestRaw := secureRuntimeReadFile(t, filepath.Join(repoRoot, filepath.FromSlash(manifestRelative)))
 	var manifest secureRuntimeSourceManifest
 	if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
 		t.Fatalf("decode secure-runtime source manifest: %v", err)
 	}
-	if manifest.SchemaVersion != 1 || manifest.ManifestID != "secure-runtime-linux-v5" || manifest.TargetOS != "linux" {
+	if manifest.SchemaVersion != 1 || manifest.ManifestID != "secure-runtime-linux-v6" || manifest.TargetOS != "linux" {
 		t.Fatalf("unsupported secure-runtime source manifest: %+v", manifest)
 	}
 	sourceHashes := make(map[string]string)
@@ -1850,17 +1914,227 @@ func secureRuntimeCommand(t *testing.T, timeout time.Duration, name string, args
 
 func secureRuntimeSystemdProperty(t *testing.T, property string) string {
 	t.Helper()
-	return secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", "pulse-agent.service", "--property="+property, "--value")
+	return secureRuntimeUnitProperty(t, "pulse-agent.service", property)
 }
 
 func secureRuntimeActionRunnerSystemdProperty(t *testing.T, property string) string {
 	t.Helper()
-	return secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", "pulse-agent-runner.service", "--property="+property, "--value")
+	return secureRuntimeUnitProperty(t, "pulse-agent-runner.service", property)
+}
+
+func secureRuntimeUnitProperty(t *testing.T, unit, property string) string {
+	t.Helper()
+	return secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", unit, "--property="+property, "--value")
+}
+
+func secureRuntimeReadUnitProperty(unit, property string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "systemctl", "show", unit, "--property="+property, "--value").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("systemctl show %s %s: %w: %s", unit, property, err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func secureRuntimeCheckUnitProperty(unit, property, expected string) error {
+	actual, err := secureRuntimeReadUnitProperty(unit, property)
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return fmt.Errorf("%s effective %s = %q, want %q", unit, property, actual, expected)
+	}
+	return nil
+}
+
+func secureRuntimeCheckUnitWordSet(unit, property string, expected ...string) error {
+	actual, err := secureRuntimeReadUnitProperty(unit, property)
+	if err != nil {
+		return err
+	}
+	actualWords := strings.Fields(actual)
+	expectedWords := append([]string(nil), expected...)
+	sort.Strings(actualWords)
+	sort.Strings(expectedWords)
+	if strings.Join(actualWords, "\x00") != strings.Join(expectedWords, "\x00") {
+		return fmt.Errorf("%s effective %s words = %q, want %q", unit, property, actualWords, expectedWords)
+	}
+	return nil
+}
+
+func secureRuntimeExecStartArgv(value string) []string {
+	const marker = "argv[]="
+	start := strings.Index(value, marker)
+	if start < 0 {
+		return nil
+	}
+	value = value[start+len(marker):]
+	if end := strings.Index(value, " ;"); end >= 0 {
+		value = value[:end]
+	}
+	return strings.Fields(strings.TrimSpace(value))
+}
+
+func secureRuntimeCheckExactExecStart(unit, expectedBinary string) error {
+	actual, err := secureRuntimeReadUnitProperty(unit, "ExecStart")
+	if err != nil {
+		return err
+	}
+	argv := secureRuntimeExecStartArgv(actual)
+	if len(argv) != 1 || argv[0] != expectedBinary {
+		return fmt.Errorf("%s effective ExecStart argv = %q, want only %q", unit, argv, expectedBinary)
+	}
+	return nil
+}
+
+func secureRuntimeCheckInstallerUnitBoundary(unit, expectedFragment string) error {
+	if err := secureRuntimeCheckUnitProperty(unit, "FragmentPath", expectedFragment); err != nil {
+		return err
+	}
+	return secureRuntimeCheckUnitProperty(unit, "DropInPaths", "")
+}
+
+func secureRuntimeCheckSafeProfileSystemd(includeRunner bool) error {
+	for _, check := range []struct {
+		unit, property, expected string
+	}{
+		{"pulse-agent.service", "FragmentPath", "/etc/systemd/system/pulse-agent.service"},
+		{"pulse-agent.service", "DropInPaths", ""},
+		{"pulse-agent.service", "User", "pulse-agent"},
+		{"pulse-agent.service", "AmbientCapabilities", ""},
+		{"pulse-agent.service", "UMask", "0077"},
+		{"pulse-agent.service", "NoNewPrivileges", "yes"},
+		{"pulse-agent.service", "PrivateTmp", "yes"},
+		{"pulse-agent.service", "PrivateDevices", "no"},
+		{"pulse-agent.service", "ProtectKernelTunables", "yes"},
+		{"pulse-agent.service", "ProtectKernelModules", "yes"},
+		{"pulse-agent.service", "ProtectControlGroups", "yes"},
+		{"pulse-agent.service", "LockPersonality", "yes"},
+		{"pulse-agent.service", "RestrictSUIDSGID", "yes"},
+		{"pulse-agent.service", "SystemCallArchitectures", "native"},
+		{"pulse-agent-helper.service", "FragmentPath", "/etc/systemd/system/pulse-agent-helper.service"},
+		{"pulse-agent-helper.service", "DropInPaths", ""},
+		{"pulse-agent-helper.service", "User", "root"},
+		{"pulse-agent-helper.service", "Group", "root"},
+		{"pulse-agent-helper.service", "AmbientCapabilities", ""},
+		{"pulse-agent-helper.service", "UMask", "0077"},
+		{"pulse-agent-helper.service", "NoNewPrivileges", "yes"},
+		{"pulse-agent-helper.service", "PrivateTmp", "yes"},
+		{"pulse-agent-helper.service", "PrivateDevices", "no"},
+		{"pulse-agent-helper.service", "PrivateNetwork", "yes"},
+		{"pulse-agent-helper.service", "ProtectSystem", "strict"},
+		{"pulse-agent-helper.service", "ProtectHome", "yes"},
+		{"pulse-agent-helper.service", "ProtectKernelTunables", "yes"},
+		{"pulse-agent-helper.service", "ProtectKernelModules", "yes"},
+		{"pulse-agent-helper.service", "ProtectControlGroups", "yes"},
+		{"pulse-agent-helper.service", "LockPersonality", "yes"},
+		{"pulse-agent-helper.service", "RestrictSUIDSGID", "yes"},
+		{"pulse-agent-helper.service", "SystemCallArchitectures", "native"},
+		{"pulse-agent-helper.service", "TasksMax", "64"},
+		{"pulse-agent-helper.service", "LimitNOFILE", "256"},
+		{"pulse-agent-helper.service", "MemoryMax", "268435456"},
+		{"pulse-agent-helper.socket", "FragmentPath", "/etc/systemd/system/pulse-agent-helper.socket"},
+		{"pulse-agent-helper.socket", "DropInPaths", ""},
+		{"pulse-agent-helper.socket", "SocketUser", "root"},
+		{"pulse-agent-helper.socket", "SocketGroup", "pulse-agent"},
+		{"pulse-agent-helper.socket", "SocketMode", "0660"},
+		{"pulse-agent-helper.socket", "DirectoryMode", "0755"},
+		{"pulse-agent-helper.socket", "RemoveOnStop", "yes"},
+	} {
+		if err := secureRuntimeCheckUnitProperty(check.unit, check.property, check.expected); err != nil {
+			return err
+		}
+	}
+	collectorExec, err := secureRuntimeReadUnitProperty("pulse-agent.service", "ExecStart")
+	if err != nil {
+		return err
+	}
+	collectorArgv := secureRuntimeExecStartArgv(collectorExec)
+	if len(collectorArgv) == 0 || collectorArgv[0] != "/usr/local/bin/pulse-agent" {
+		return fmt.Errorf("pulse-agent.service effective ExecStart argv = %q", collectorArgv)
+	}
+	for _, argument := range collectorArgv[1:] {
+		if argument == "--enable-commands" {
+			return errors.New("pulse-agent.service effective ExecStart retained --enable-commands")
+		}
+	}
+	collectorEnvironment, err := secureRuntimeReadUnitProperty("pulse-agent.service", "Environment")
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(collectorEnvironment, "PULSE_AGENT_HELPER_SOCKET=/run/pulse-agent/helper.sock") {
+		return fmt.Errorf("pulse-agent.service effective Environment lacks the typed-helper socket: %q", collectorEnvironment)
+	}
+	if err := secureRuntimeCheckExactExecStart("pulse-agent-helper.service", "/usr/local/lib/pulse-agent/pulse-agent-helper"); err != nil {
+		return err
+	}
+	if err := secureRuntimeCheckUnitWordSet("pulse-agent-helper.service", "RestrictAddressFamilies", "AF_UNIX"); err != nil {
+		return err
+	}
+	listen, err := secureRuntimeReadUnitProperty("pulse-agent-helper.socket", "Listen")
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(listen, "/run/pulse-agent/helper.sock") || !strings.Contains(listen, "Stream") {
+		return fmt.Errorf("pulse-agent-helper.socket effective Listen = %q", listen)
+	}
+	if !includeRunner {
+		return nil
+	}
+	for _, check := range []struct {
+		property, expected string
+	}{
+		{"FragmentPath", "/etc/systemd/system/pulse-agent-runner.service"},
+		{"DropInPaths", ""},
+		{"User", "root"},
+		{"Group", "root"},
+		{"AmbientCapabilities", ""},
+		{"UMask", "0077"},
+		{"NoNewPrivileges", "yes"},
+		{"PrivateTmp", "yes"},
+		{"PrivateDevices", "no"},
+		{"PrivateNetwork", "no"},
+		{"ProtectHome", "yes"},
+		{"ProtectSystem", "no"},
+		{"ProtectKernelTunables", "yes"},
+		{"ProtectKernelModules", "yes"},
+		{"ProtectControlGroups", "yes"},
+		{"LockPersonality", "yes"},
+		{"RestrictSUIDSGID", "yes"},
+		{"SystemCallArchitectures", "native"},
+	} {
+		if err := secureRuntimeCheckUnitProperty("pulse-agent-runner.service", check.property, check.expected); err != nil {
+			return err
+		}
+	}
+	if err := secureRuntimeCheckExactExecStart("pulse-agent-runner.service", "/usr/local/lib/pulse-agent/pulse-agent-runner"); err != nil {
+		return err
+	}
+	if err := secureRuntimeCheckUnitWordSet("pulse-agent-runner.service", "RestrictAddressFamilies", "AF_UNIX", "AF_INET", "AF_INET6"); err != nil {
+		return err
+	}
+	environmentFiles, err := secureRuntimeReadUnitProperty("pulse-agent-runner.service", "EnvironmentFiles")
+	if err != nil {
+		return err
+	}
+	if environmentFiles != "/etc/pulse-agent-runner/runner.env (ignore_errors=no)" {
+		return fmt.Errorf("pulse-agent-runner.service effective EnvironmentFiles = %q", environmentFiles)
+	}
+	return nil
+}
+
+func secureRuntimeAssertSafeProfileSystemd(t *testing.T, includeRunner bool) {
+	t.Helper()
+	if err := secureRuntimeCheckSafeProfileSystemd(includeRunner); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func secureRuntimeAssertActionRunnerInstalled(t *testing.T) {
 	t.Helper()
 	secureRuntimeCommand(t, 10*time.Second, "systemctl", "is-active", "pulse-agent-runner.service")
+	secureRuntimeAssertSafeProfileSystemd(t, true)
 	if user := secureRuntimeActionRunnerSystemdProperty(t, "User"); user != "root" {
 		t.Fatalf("action-runner systemd User = %q, want root", user)
 	}
@@ -1961,6 +2235,7 @@ func secureRuntimeAssertRootMonitoringProfile(t *testing.T) {
 
 func secureRuntimeAssertSafeProfile(t *testing.T) {
 	t.Helper()
+	secureRuntimeAssertSafeProfileSystemd(t, false)
 	if user := secureRuntimeSystemdProperty(t, "User"); user != "pulse-agent" {
 		t.Fatalf("safe collector systemd User = %q, want pulse-agent", user)
 	}
@@ -1995,6 +2270,135 @@ func secureRuntimeAssertSafeProfile(t *testing.T) {
 	}
 	secureRuntimeCommand(t, 10*time.Second, "systemctl", "is-active", "pulse-agent.service")
 	secureRuntimeCommand(t, 10*time.Second, "systemctl", "is-active", "pulse-agent-helper.socket")
+}
+
+func secureRuntimeExerciseUnitOverrideDetection(t *testing.T, unit, section, directive string, includeRunner bool) string {
+	t.Helper()
+	dropInDir := filepath.Join("/etc/systemd/system", unit+".d")
+	dropInPath := filepath.Join(dropInDir, "secure-runtime-adversarial.conf")
+	if err := os.MkdirAll(dropInDir, 0o755); err != nil {
+		t.Fatalf("create %s drop-in directory: %v", unit, err)
+	}
+	if err := os.WriteFile(dropInPath, []byte("["+section+"]\n"+directive+"\n"), 0o644); err != nil {
+		t.Fatalf("write %s adversarial drop-in: %v", unit, err)
+	}
+	removed := false
+	t.Cleanup(func() {
+		if !removed {
+			_ = os.Remove(dropInPath)
+			_ = os.Remove(dropInDir)
+			_ = exec.Command("systemctl", "daemon-reload").Run()
+		}
+	})
+	secureRuntimeCommand(t, 20*time.Second, "systemctl", "daemon-reload")
+	err := secureRuntimeCheckSafeProfileSystemd(includeRunner)
+	if err == nil {
+		t.Fatalf("effective systemd validation accepted %s drop-in %q", unit, directive)
+	}
+	dropIns, propertyErr := secureRuntimeReadUnitProperty(unit, "DropInPaths")
+	if propertyErr != nil {
+		t.Fatal(propertyErr)
+	}
+	if !strings.Contains(dropIns, dropInPath) {
+		t.Fatalf("%s effective DropInPaths = %q, want %s", unit, dropIns, dropInPath)
+	}
+	if err := os.Remove(dropInPath); err != nil {
+		t.Fatalf("remove %s adversarial drop-in: %v", unit, err)
+	}
+	_ = os.Remove(dropInDir)
+	removed = true
+	secureRuntimeCommand(t, 20*time.Second, "systemctl", "daemon-reload")
+	secureRuntimeAssertSafeProfileSystemd(t, includeRunner)
+	return err.Error()
+}
+
+func secureRuntimeNonLoopbackIPv4(t *testing.T) string {
+	t.Helper()
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("list host interfaces: %v", err)
+	}
+	for _, networkInterface := range interfaces {
+		if networkInterface.Flags&net.FlagUp == 0 || networkInterface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addresses, err := networkInterface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, address := range addresses {
+			var ip net.IP
+			switch typed := address.(type) {
+			case *net.IPNet:
+				ip = typed.IP
+			case *net.IPAddr:
+				ip = typed.IP
+			}
+			if ipv4 := ip.To4(); ipv4 != nil && !ipv4.IsLoopback() {
+				return ipv4.String()
+			}
+		}
+	}
+	t.Fatal("disposable systemd host has no non-loopback IPv4 address for the helper network canary")
+	return ""
+}
+
+func secureRuntimeAssertHelperOutboundNetworkDenied(t *testing.T) map[string]any {
+	t.Helper()
+	secureRuntimeAssertHelperProtocol(t)
+	hostIP := secureRuntimeNonLoopbackIPv4(t)
+	listener, err := net.Listen("tcp4", "0.0.0.0:0")
+	if err != nil {
+		t.Fatalf("listen for helper network-isolation canary: %v", err)
+	}
+	server := &http.Server{Handler: http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+	})}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(listener) }()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+		<-serveDone
+	})
+	port := listener.Addr().(*net.TCPAddr).Port
+	canaryURL := fmt.Sprintf("http://%s/secure-runtime-network-canary", net.JoinHostPort(hostIP, strconv.Itoa(port)))
+	hostClient := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			Proxy: nil,
+		},
+	}
+	response, err := hostClient.Get(canaryURL)
+	if err != nil {
+		t.Fatalf("host network could not reach its canary %s: %v", canaryURL, err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("host network canary status = %s", response.Status)
+	}
+	mainPID := secureRuntimeUnitProperty(t, "pulse-agent-helper.service", "MainPID")
+	if mainPID == "" || mainPID == "0" {
+		t.Fatalf("typed helper has no live MainPID: %q", mainPID)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx,
+		"nsenter", "--target", mainPID, "--net", "--",
+		"curl", "--noproxy", "*", "-fsS", "--connect-timeout", "2", "--max-time", "3", canaryURL,
+	).CombinedOutput()
+	secureRuntimeAssertNoCredentialExposure(t, out)
+	secureRuntimeRecordCommandOutput("helper namespace outbound TCP canary", out)
+	if err == nil {
+		t.Fatalf("helper network namespace reached host-interface canary %s", canaryURL)
+	}
+	return map[string]any{
+		"canary_scope":                "host-interface-tcp",
+		"host_canary_reachable":       true,
+		"helper_namespace_connection": "denied",
+		"helper_main_pid":             mainPID,
+	}
 }
 
 func secureRuntimeStableFileIdentity(t *testing.T, path string) secureRuntimeFileIdentity {

@@ -78,7 +78,7 @@ func TestResolveRunnerAgentIDRejectsInvalidFileIdentity(t *testing.T) {
 	if err := os.WriteFile(path, []byte("bad agent\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := resolveRunnerAgentID(runtimeConfig{AgentIDFile: path}); err == nil || !strings.Contains(err.Error(), "valid agent identity") {
+	if _, err := resolveRunnerAgentID(runtimeConfig{AgentIDFile: path}); err == nil || !strings.Contains(err.Error(), "identity file is invalid") {
 		t.Fatalf("resolveRunnerAgentID error = %v", err)
 	}
 }
@@ -144,5 +144,56 @@ func TestLoadConfigRejectsTokenInArgvEquivalentAndInsecureHTTPByDefault(t *testi
 	_, err := loadConfig()
 	if err == nil || !strings.Contains(err.Error(), "HTTPS") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestLoadConfigPlaintextPolicyIsLoopbackOnlyEvenWhenInsecure(t *testing.T) {
+	for _, rawURL := range []string{"http://pulse.example.com:7655", "http://192.168.1.20:7655", "http://agent.localhost:7655"} {
+		t.Run(rawURL, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PULSE_URL", rawURL)
+			t.Setenv("PULSE_AGENT_RUNNER_TOKEN_FILE", filepath.Join(dir, "token"))
+			t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
+			t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
+			t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID", "agent-1")
+			t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("f", 32))
+			t.Setenv("PULSE_INSECURE", "true")
+			if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "loopback") {
+				t.Fatalf("loadConfig(%q) error = %v, want non-loopback plaintext rejection", rawURL, err)
+			}
+		})
+	}
+	t.Run("generic insecure HTTPS rejected", func(t *testing.T) {
+		dir := t.TempDir()
+		token := filepath.Join(dir, "token")
+		if err := os.WriteFile(token, []byte("runner-secret\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PULSE_URL", "https://pulse.example")
+		t.Setenv("PULSE_AGENT_RUNNER_TOKEN_FILE", token)
+		t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
+		t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
+		t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID", "agent-1")
+		t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("f", 32))
+		t.Setenv("PULSE_INSECURE", "true")
+		if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "generic insecure HTTPS") {
+			t.Fatalf("generic insecure HTTPS error = %v", err)
+		}
+	})
+
+	dir := t.TempDir()
+	token := filepath.Join(dir, "token")
+	if err := os.WriteFile(token, []byte("runner-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PULSE_URL", "http://127.0.0.1:7655")
+	t.Setenv("PULSE_AGENT_RUNNER_TOKEN_FILE", token)
+	t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
+	t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
+	t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID", "agent-1")
+	t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("f", 32))
+	t.Setenv("PULSE_INSECURE", "true")
+	if _, err := loadConfig(); err != nil {
+		t.Fatalf("loopback HTTP config rejected: %v", err)
 	}
 }

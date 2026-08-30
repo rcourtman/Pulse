@@ -3,18 +3,23 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionrunner"
+	"github.com/rcourtman/pulse-go-rewrite/internal/collectorlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog"
 )
 
@@ -61,9 +66,18 @@ func loadConfig() (runtimeConfig, error) {
 		}
 		config.Hostname = hostname
 	}
-	parsed, err := url.Parse(config.PulseURL)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && !(config.Insecure && parsed.Scheme == "http")) {
-		return runtimeConfig{}, errors.New("PULSE_URL must be HTTPS unless PULSE_INSECURE=true explicitly permits HTTP")
+	if err := actionrunner.ValidatePulseURL(config.PulseURL); err != nil {
+		return runtimeConfig{}, fmt.Errorf("PULSE_URL must use HTTPS or an exact literal loopback host: %w", err)
+	}
+	normalizedURL, err := securityutil.NormalizePulseHTTPBaseURL(config.PulseURL)
+	if err != nil {
+		return runtimeConfig{}, fmt.Errorf("PULSE_URL must use HTTPS except for loopback local use: %w", err)
+	}
+	if normalizedURL.Scheme == "https" && config.Insecure && config.ServerFingerprint == "" {
+		if config.CAFile == "" {
+			return runtimeConfig{}, errors.New("generic insecure HTTPS is forbidden for the action runner; configure a trusted CA or exact server fingerprint")
+		}
+		config.Insecure = false
 	}
 	if _, err := readPrivateValue(config.TokenFile, "runner token"); err != nil {
 		return runtimeConfig{}, err
@@ -134,11 +148,66 @@ func run() error {
 	return nil
 }
 
+func runCredentialLifecycleCommand(command string, args []string) error {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	pulseURL := flags.String("url", "", "Pulse server URL")
+	tokenFile := flags.String("token-file", "", "private runner token file")
+	agentID := flags.String("agent-id", "", "bound runner agent identity")
+	hostname := flags.String("hostname", "", "bound runner hostname")
+	caFile := flags.String("cacert", "", "custom CA certificate")
+	serverFingerprint := flags.String("server-fingerprint", "", "pinned server certificate fingerprint")
+	insecureLoopback := flags.Bool("insecure-loopback", false, "allow plaintext only for a loopback Pulse URL")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 || strings.TrimSpace(*pulseURL) == "" || strings.TrimSpace(*tokenFile) == "" {
+		return errors.New("lifecycle command requires --url and --token-file")
+	}
+	normalizedHostname := ""
+	if command == "revoke-credential" {
+		if !actionrunner.IsValidBoundedID(strings.TrimSpace(*agentID)) {
+			return errors.New("revoke command requires --agent-id and --hostname")
+		}
+		var err error
+		normalizedHostname, err = normalizeRunnerHostname(*hostname)
+		if err != nil {
+			return err
+		}
+	}
+	normalizedURL, err := securityutil.NormalizePulseHTTPBaseURL(*pulseURL)
+	if err != nil {
+		return fmt.Errorf("action-runner lifecycle URL: %w", err)
+	}
+	if *insecureLoopback && normalizedURL.Scheme != "http" {
+		return errors.New("--insecure-loopback is valid only for a loopback HTTP URL")
+	}
+	token, err := readPrivateValue(*tokenFile, "runner token")
+	if err != nil {
+		return err
+	}
+	config := actionrunner.CredentialLifecycleConfig{
+		PulseURL: normalizedURL.String(), APIToken: token,
+		InsecureSkipVerify: *insecureLoopback, CACertPath: strings.TrimSpace(*caFile),
+		ServerFingerprint: strings.TrimSpace(*serverFingerprint),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	switch command {
+	case "cancel-pending-credential":
+		return actionrunner.CancelPendingCredential(ctx, config)
+	case "revoke-credential":
+		return actionrunner.RevokeCredential(ctx, config, strings.TrimSpace(*agentID), normalizedHostname)
+	default:
+		return fmt.Errorf("unknown action-runner command %q", command)
+	}
+}
+
 func resolveRunnerAgentID(config runtimeConfig) (string, error) {
 	if config.AgentID != "" {
 		return config.AgentID, nil
 	}
-	agentID, err := readPrivateValue(config.AgentIDFile, "runner agent identity")
+	agentID, err := collectorlifecycle.ReadAgentIDFile(config.AgentIDFile, dedicatedCollectorUID())
 	if err != nil {
 		return "", err
 	}
@@ -146,6 +215,18 @@ func resolveRunnerAgentID(config runtimeConfig) (string, error) {
 		return "", errors.New("runner agent identity file must contain a valid agent identity")
 	}
 	return agentID, nil
+}
+
+func dedicatedCollectorUID() *uint64 {
+	account, err := user.Lookup("pulse-agent")
+	if err != nil || account == nil {
+		return nil
+	}
+	uid, err := strconv.ParseUint(account.Uid, 10, 32)
+	if err != nil {
+		return nil
+	}
+	return &uid
 }
 
 func normalizeRunnerHostname(value string) (string, error) {
@@ -175,22 +256,21 @@ func runnerHostnameLabelByte(value byte) bool {
 }
 
 func readPrivateValue(path, label string) (string, error) {
-	info, err := os.Lstat(path)
+	value, err := collectorlifecycle.ReadPrivateValueFile(path, nil)
 	if err != nil {
 		return "", fmt.Errorf("%s file: %w", label, err)
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return "", fmt.Errorf("%s file must be regular and inaccessible to group/other", label)
-	}
-	value, err := os.ReadFile(path)
-	if err != nil || strings.TrimSpace(string(value)) == "" {
-		return "", fmt.Errorf("%s file is unreadable or empty", label)
-	}
-	return strings.TrimSpace(string(value)), nil
+	return value, nil
 }
 
 func main() {
-	if err := run(); err != nil {
+	var err error
+	if len(os.Args) > 1 && (os.Args[1] == "cancel-pending-credential" || os.Args[1] == "revoke-credential") {
+		err = runCredentialLifecycleCommand(os.Args[1], os.Args[2:])
+	} else {
+		err = run()
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

@@ -97,21 +97,47 @@ older unactivated replacements. Issuance, root-owned runtime configuration,
 session admission, typed payloads, and receipts share one bounded
 action-identity vocabulary, so an unsafe or unrepresentable host identity is
 rejected before any action credential is minted. The pending credential may authenticate one
-exact runner transport but cannot become dispatch authority. After the runner
-durably records its current activation nonce, its authenticated activation
-request atomically promotes the replacement and revokes the server-recorded
-predecessor set. A persistence failure restores both sides of the transition;
+exact runner transport in a separate bounded pending slot but cannot become
+dispatch authority. Pending reconnects replace only that slot; they cannot
+close or displace the active predecessor, which remains the dispatch target
+until commit. After the runner
+durably records its current activation nonce as pending, its authenticated
+activation request durably activates the replacement and revokes the
+server-recorded predecessor set, then atomically promotes the exact pending
+transport under the same token-inventory transaction; displaced transport
+cleanup occurs outside both locks and the local activated marker follows that
+commit. If the pending transport vanished or was superseded, a compensating
+durable save restores both sides of the transition and returns conflict. If the
+compensating save itself fails, memory remains aligned with the last known
+durable activated inventory and the response is indeterminate rather than a
+false success. An initial persistence failure also restores both sides;
 an unactivated replacement expires without revoking the predecessor.
+Installer recovery stops the replacement and may restore a predecessor only
+after a bodyless self-cancellation durably removes the exact pending credential
+under the activation transaction lock. Activation conflict or any transport,
+TLS, persistence, or admission-tombstone uncertainty retains the new
+credential/runtime and surfaces repair-required rather than reinstalling a
+secret that the server may already have revoked. Retention is claimed only
+after the exact requested replacement bearer is atomically and durably
+reinstalled with root-only ownership; failure keeps the runner stopped and
+requires re-enrollment without restoring the predecessor.
 That invalidation is exact and post-persistence: it matches organization,
 token, canonical agent, hostname, runtime role, and typed capability before
 closing the session, so a stale rotation cannot evict a replacement. Activation
-is idempotent for the exact live session so transport-level response loss is
-recoverable. The
+is idempotent for an already committed exact credential so transport-level
+response loss is recoverable without requiring a stale pending-session
+snapshot. The
 runner may also delete only its own matching record using its bearer
 credential; browser sessions and a caller-selected token ID are rejected, and
 persistence failure restores the prior inventory. Installer teardown keeps the
-secret in a private file/config boundary rather than argv and reports remote
-revocation failure without retaining local remediation authority.
+secret in a private file/config boundary rather than argv, stops and disables
+the runner first, and removes no artifact until self-revocation is durably
+confirmed. Runner WS and lifecycle HTTP use HTTPS/WSS with normal/custom CA
+trust or exact DER pinning; plaintext accepts only exact `localhost`, `127/8`,
+or `::1` literals, never resolver-controlled `*.localhost`, and curl `-k` never
+carries the runner bearer. These bearer-bearing lifecycle clients also disable
+ambient proxy discovery so an unconfigured `HTTP_PROXY`/`HTTPS_PROXY` cannot
+receive the credential.
 Safe-profile migration uses the authenticated
 `POST /api/agents/collector/reduce-authority` transition. The server accepts
 only the caller's exact organization, agent, and canonical hostname; rejects
@@ -347,6 +373,15 @@ with missing, unknown, or unrelated scopes fail closed.
 18. `pkg/extensions/audit_admin.go` shared with `api-contracts`: the enterprise audit endpoint and canonical store configuration seam is both a security persistence trust boundary and a canonical API extension contract.
 
 ## Extension Points
+
+The agent-lifecycle-owned `internal/collectorlifecycle/` package and
+`cmd/pulse-agent/collector_lifecycle.go` are the security boundary for
+bearer-authenticated safe-profile migration calls. They must preserve direct
+transport, redirect rejection, normal/custom CA or exact DER-leaf pin trust,
+literal-loopback-only plaintext, and single-open bounded credential-file
+validation with an explicit root-or-collector-owner matrix. Installer changes
+must not replace this boundary with curl `-k`, plaintext to a non-loopback
+host, proxy-aware transport, or a bearer supplied in argv.
 
 Catalog edits in `frontend-modern/src/i18n/` that add or promote Patrol-trigger
 copy (such as an alert's primary "Have Patrol investigate" action) must stay

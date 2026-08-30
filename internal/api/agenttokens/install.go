@@ -35,9 +35,12 @@ const (
 )
 
 var (
-	ErrGeneration = errors.New("agent install token generation failed")
-	ErrRecord     = errors.New("agent install token record failed")
-	ErrPersist    = errors.New("agent install token persistence failed")
+	ErrGeneration                          = errors.New("agent install token generation failed")
+	ErrRecord                              = errors.New("agent install token record failed")
+	ErrPersist                             = errors.New("agent install token persistence failed")
+	ErrActionRunnerAlreadyActivated        = errors.New("action runner credential activation already committed")
+	ErrActionRunnerSessionUnavailable      = errors.New("exact prepared action runner session unavailable")
+	ErrActionRunnerActivationIndeterminate = errors.New("action runner credential activation is indeterminate")
 )
 
 type IssueOptions struct {
@@ -306,8 +309,28 @@ func IssueActionRunnerAndPersistDetailed(cfg *config.Config, persistence *config
 // ActivateActionRunnerAndPersist commits a prepared credential and revokes the
 // exact predecessor set in the same durable token-inventory transaction.
 func ActivateActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
+	return activateActionRunnerAndPersist(cfg, persistence, tokenID, agentID, hostname, false, nil)
+}
+
+// ActivateActionRunnerAndPersistWithPromotion durably activates an action
+// runner credential only when the exact prepared transport can be promoted in
+// the same serialized transaction. The promotion callback must perform only a
+// bounded in-memory mutation: it runs while config.Mu is held and may acquire
+// the agent-exec server mutex, establishing the sole nested lock order
+// config.Mu -> agentexec.Server.mu. It must not close sockets, log, or wait.
+func ActivateActionRunnerAndPersistWithPromotion(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string, promote func() bool) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
+	return activateActionRunnerAndPersist(cfg, persistence, tokenID, agentID, hostname, true, promote)
+}
+
+func activateActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string, requireDurablePromotion bool, promote func() bool) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
 	if cfg == nil {
 		return nil, nil, false, fmt.Errorf("%w: config is required", ErrRecord)
+	}
+	if persistence == nil {
+		return nil, nil, false, fmt.Errorf("%w: durable persistence is required", ErrPersist)
+	}
+	if requireDurablePromotion && promote == nil {
+		return nil, nil, false, fmt.Errorf("%w: prepared session promotion is required", ErrActionRunnerSessionUnavailable)
 	}
 	tokenID = strings.TrimSpace(tokenID)
 	agentID = strings.TrimSpace(agentID)
@@ -362,14 +385,88 @@ func ActivateActionRunnerAndPersist(cfg *config.Config, persistence *config.Conf
 	}
 	cfg.APITokens = nextTokens
 	cfg.SortAPITokens()
-	if persistence != nil {
-		if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-			cfg.APITokens = previousTokens
-			cfg.SortAPITokens()
-			return nil, nil, false, fmt.Errorf("%w: %w", ErrPersist, err)
+	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		cfg.APITokens = previousTokens
+		cfg.SortAPITokens()
+		return nil, nil, false, fmt.Errorf("%w: %w", ErrPersist, err)
+	}
+	if promote != nil && !promote() {
+		if err := persistence.SaveAPITokens(previousTokens); err != nil {
+			// The activation inventory was the last state known to reach durable
+			// storage. Keep memory aligned with that state and force repair rather
+			// than exposing pending memory against an active on-disk credential.
+			return &activated, revoked, true, fmt.Errorf("%w: rollback persistence failed: %v", ErrActionRunnerActivationIndeterminate, err)
 		}
+		cfg.APITokens = previousTokens
+		cfg.SortAPITokens()
+		return nil, nil, false, ErrActionRunnerSessionUnavailable
 	}
 	return &activated, revoked, true, nil
+}
+
+// CancelPendingActionRunnerAndPersist atomically makes a prepared replacement
+// unusable before an installer restores its predecessor. A status snapshot is
+// deliberately insufficient: only successful durable removal under the same
+// inventory lock used by activation is rollback authority.
+func CancelPendingActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, organizationID, agentID, hostname string) (*config.APITokenRecord, error) {
+	if cfg == nil || persistence == nil {
+		return nil, fmt.Errorf("%w: config and durable persistence are required", ErrPersist)
+	}
+	tokenID = strings.TrimSpace(tokenID)
+	organizationID = strings.TrimSpace(organizationID)
+	agentID = strings.TrimSpace(agentID)
+	hostname = unifiedresources.NormalizeFullHostname(hostname)
+	if tokenID == "" || organizationID == "" || agentID == "" || hostname == "" {
+		return nil, fmt.Errorf("%w: complete cancellation identity is required", ErrRecord)
+	}
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+	index := -1
+	for candidateIndex := range cfg.APITokens {
+		if strings.TrimSpace(cfg.APITokens[candidateIndex].ID) == tokenID {
+			index = candidateIndex
+			break
+		}
+	}
+	if index < 0 {
+		return nil, fmt.Errorf("%w: action runner credential not found", ErrRecord)
+	}
+	record := &cfg.APITokens[index]
+	boundOrgs := record.GetBoundOrgs()
+	if record.IsExpired() || len(boundOrgs) != 1 || strings.TrimSpace(boundOrgs[0]) != organizationID ||
+		strings.TrimSpace(record.OrgID) != organizationID ||
+		strings.TrimSpace(record.Metadata[CredentialKindMetadataKey]) != CredentialKindActionRunner ||
+		strings.TrimSpace(record.Metadata[RuntimeRoleMetadataKey]) != CredentialKindActionRunner ||
+		strings.TrimSpace(record.Metadata[ActionCapabilityMetadataKey]) != ActionCapabilityTypedV1 ||
+		strings.TrimSpace(record.Metadata[ActionBindingVersionMetadataKey]) != ActionBindingVersion ||
+		strings.TrimSpace(record.Metadata["bound_agent_id"]) != agentID ||
+		!unifiedresources.HostnamesEquivalent(record.Metadata["bound_hostname"], hostname) {
+		return nil, fmt.Errorf("%w: action runner cancellation binding mismatch", ErrRecord)
+	}
+	if err := internalauth.ValidateRoleScopes(CredentialKindActionRunner, record.Scopes); err != nil {
+		return nil, fmt.Errorf("%w: action runner cancellation authority mismatch: %v", ErrRecord, err)
+	}
+	if strings.TrimSpace(record.Metadata[ActionRunnerActivationPendingMetadataKey]) != "true" {
+		return nil, ErrActionRunnerAlreadyActivated
+	}
+	for _, replacedID := range strings.Split(record.Metadata[ActionRunnerReplacesTokenIDsMetadataKey], ",") {
+		replacedID = strings.TrimSpace(replacedID)
+		if replacedID == tokenID {
+			return nil, fmt.Errorf("%w: invalid pending replacement structure", ErrRecord)
+		}
+	}
+
+	previousTokens := cloneAPITokenRecords(cfg.APITokens)
+	removed := record.Clone()
+	cfg.APITokens = append(cfg.APITokens[:index], cfg.APITokens[index+1:]...)
+	cfg.SortAPITokens()
+	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		cfg.APITokens = previousTokens
+		cfg.SortAPITokens()
+		return nil, fmt.Errorf("%w: %w", ErrPersist, err)
+	}
+	return &removed, nil
 }
 
 func normalizeCredentialKind(record *config.APITokenRecord) error {

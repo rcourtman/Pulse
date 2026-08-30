@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,6 +35,135 @@ type ActionRunnerClientConfig struct {
 	Logger                           *zerolog.Logger
 	DockerContainerUpdater           DockerContainerUpdater
 	DockerContainerLifecycleOperator DockerContainerLifecycleOperator
+}
+
+// ActionRunnerCredentialLifecycleConfig carries the exact non-browser inputs
+// used by installer recovery and uninstall. The bearer is read from a private
+// file by the runner command and is never passed in argv or to curl.
+type ActionRunnerCredentialLifecycleConfig struct {
+	PulseURL           string
+	APIToken           string
+	InsecureSkipVerify bool
+	CACertPath         string
+	ServerFingerprint  string
+}
+
+func normalizeActionRunnerHTTPBaseURL(raw string) (*url.URL, error) {
+	parsed, err := securityutil.NormalizePulseHTTPBaseURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Scheme != "http" {
+		return parsed, nil
+	}
+	hostname := strings.TrimSpace(strings.ToLower(parsed.Hostname()))
+	if hostname == "localhost" {
+		return parsed, nil
+	}
+	ip := net.ParseIP(hostname)
+	if ip == nil || !ip.IsLoopback() {
+		return nil, fmt.Errorf("plaintext action-runner URL requires a literal loopback host")
+	}
+	return parsed, nil
+}
+
+// ValidateActionRunnerPulseURL enforces the runner's stricter plaintext
+// boundary. Unlike generic URL handling, *.localhost is not accepted because
+// a resolver can direct that name away from the local host.
+func ValidateActionRunnerPulseURL(raw string) error {
+	_, err := normalizeActionRunnerHTTPBaseURL(raw)
+	return err
+}
+
+func effectiveActionRunnerInsecureMode(pulseURL string, insecure bool, caCertPath, serverFingerprint string) (bool, error) {
+	parsed, err := normalizeActionRunnerHTTPBaseURL(pulseURL)
+	if err != nil {
+		return false, err
+	}
+	if parsed.Scheme != "https" || !insecure {
+		return insecure, nil
+	}
+	if strings.TrimSpace(serverFingerprint) != "" {
+		return true, nil // agenttls replaces insecure verification with the exact DER pin.
+	}
+	if strings.TrimSpace(caCertPath) != "" {
+		return false, nil // custom CA verification must remain enabled.
+	}
+	return false, fmt.Errorf("generic insecure HTTPS is forbidden for the action runner")
+}
+
+// newActionRunnerHTTPClient deliberately bypasses ambient proxy variables.
+// Runner bearers are host-bound control-plane credentials and must never be
+// disclosed to an operator-unconfigured HTTP_PROXY intermediary.
+func newActionRunnerHTTPClient(caCertPath string, insecureSkipVerify bool, serverFingerprint string) (*http.Client, error) {
+	client, err := newAgentHTTPClient(caCertPath, insecureSkipVerify, serverFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		return nil, fmt.Errorf("action-runner HTTP transport is unavailable")
+	}
+	direct := transport.Clone()
+	direct.Proxy = nil
+	client.Transport = direct
+	return client, nil
+}
+
+func performActionRunnerCredentialLifecycle(ctx context.Context, config ActionRunnerCredentialLifecycleConfig, method, path, agentID, hostname string, includeBindingBody bool) error {
+	baseURL, err := normalizeActionRunnerHTTPBaseURL(config.PulseURL)
+	if err != nil {
+		return fmt.Errorf("validate action-runner lifecycle URL: %w", err)
+	}
+	effectiveInsecure, err := effectiveActionRunnerInsecureMode(config.PulseURL, config.InsecureSkipVerify, config.CACertPath, config.ServerFingerprint)
+	if err != nil {
+		return fmt.Errorf("validate action-runner lifecycle TLS mode: %w", err)
+	}
+	token := strings.TrimSpace(config.APIToken)
+	if token == "" || strings.ContainsAny(token, "\r\n") {
+		return fmt.Errorf("action-runner lifecycle bearer is invalid")
+	}
+	var body io.Reader
+	if includeBindingBody {
+		encoded, err := json.Marshal(map[string]string{"agentId": strings.TrimSpace(agentID), "hostname": strings.TrimSpace(hostname)})
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(encoded)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(baseURL.String(), "/")+path, body)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	if includeBindingBody {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	client, err := newActionRunnerHTTPClient(config.CACertPath, effectiveInsecure, config.ServerFingerprint)
+	if err != nil {
+		return fmt.Errorf("build action-runner lifecycle client: %w", err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("action-runner lifecycle request: %w", err)
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+	if response.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("action-runner lifecycle request: server returned %s", response.Status)
+	}
+	return nil
+}
+
+// CancelPendingActionRunnerCredential durably cancels a prepared replacement.
+// Only a nil result (HTTP 204) is safe authority to restore a predecessor.
+func CancelPendingActionRunnerCredential(ctx context.Context, config ActionRunnerCredentialLifecycleConfig) error {
+	return performActionRunnerCredentialLifecycle(ctx, config, http.MethodDelete, "/api/agents/action-runner/credential/activation", "", "", false)
+}
+
+// RevokeActionRunnerCredential removes the exact active runner credential.
+func RevokeActionRunnerCredential(ctx context.Context, config ActionRunnerCredentialLifecycleConfig, agentID, hostname string) error {
+	return performActionRunnerCredentialLifecycle(ctx, config, http.MethodDelete, "/api/agents/action-runner/credential", agentID, hostname, true)
 }
 
 // NewActionRunnerClient constructs the separately credentialed, typed-only
@@ -94,6 +225,13 @@ type actionRunnerHealth struct {
 	Hostname        string    `json:"hostname"`
 	Capabilities    []string  `json:"capabilities"`
 	RegisteredAt    time.Time `json:"registered_at"`
+}
+
+func (c *CommandClient) persistActionRunnerHealth(activated bool) error {
+	if c != nil && c.actionHealthWriter != nil {
+		return c.actionHealthWriter(activated)
+	}
+	return c.writeActionRunnerHealth(activated)
 }
 
 func (c *CommandClient) writeActionRunnerHealth(activated bool) error {
@@ -167,13 +305,21 @@ func (c *CommandClient) activateActionRunnerCredential(ctx context.Context) erro
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPatch, strings.TrimRight(c.pulseURL, "/")+"/api/agents/action-runner/credential", bytes.NewReader(body))
+	baseURL, err := securityutil.NormalizePulseHTTPBaseURL(c.pulseURL)
+	if err != nil {
+		return fmt.Errorf("validate action-runner activation URL: %w", err)
+	}
+	effectiveInsecure, err := effectiveActionRunnerInsecureMode(c.pulseURL, c.insecureSkipVerify, c.caCertPath, c.serverFingerprint)
+	if err != nil {
+		return fmt.Errorf("validate action-runner activation TLS mode: %w", err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPatch, strings.TrimRight(baseURL.String(), "/")+"/api/agents/action-runner/credential", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	request.Header.Set("Authorization", "Bearer "+c.apiToken)
 	request.Header.Set("Content-Type", "application/json")
-	client, err := newAgentHTTPClient(c.caCertPath, c.insecureSkipVerify, c.serverFingerprint)
+	client, err := newActionRunnerHTTPClient(c.caCertPath, effectiveInsecure, c.serverFingerprint)
 	if err != nil {
 		return fmt.Errorf("build action-runner activation client: %w", err)
 	}

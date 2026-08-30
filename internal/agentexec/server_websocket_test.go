@@ -272,6 +272,154 @@ func TestActionRunnerRegistrationRequiresCredentialBoundRuntimeRoleAndCapability
 	}
 }
 
+func TestPreparedActionRunnerReconnectCannotDisplaceActiveDispatchAndExactPromotionSwaps(t *testing.T) {
+	active := AgentAdmission{
+		OrganizationID: "org-a", TokenID: "active-token", AgentID: "machine-a", Hostname: "node.example",
+		RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1,
+	}
+	pendingOne := active
+	pendingOne.TokenID = "pending-token-1"
+	pendingOne.ActivationPending = true
+	pendingTwo := pendingOne
+	pendingTwo.TokenID = "pending-token-2"
+	admissions := map[string]AgentAdmission{
+		active.TokenID:     active,
+		pendingOne.TokenID: pendingOne,
+		pendingTwo.TokenID: pendingTwo,
+	}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		admission, ok := admissions[token]
+		return admission, ok
+	}, func(AgentAdmission) bool { return true })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	register := func(admission AgentAdmission) *websocket.Conn {
+		t.Helper()
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+			AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID,
+			RuntimeRole: admission.RuntimeRole, ActionCapability: admission.ActionCapability,
+		}))
+		if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+			conn.Close()
+			t.Fatalf("registration for %s failed: %s", admission.TokenID, ack.Message)
+		}
+		return conn
+	}
+	requirePong := func(conn *websocket.Conn, label string) {
+		t.Helper()
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentPing, "", nil))
+		if msg := wsReadRawMessage(t, conn); msg.Type != MsgTypePong {
+			t.Fatalf("%s message type = %q, want pong", label, msg.Type)
+		}
+	}
+
+	activeConn := register(active)
+	defer activeConn.Close()
+	pendingOneConn := register(pendingOne)
+	defer pendingOneConn.Close()
+
+	if current, ok := s.connectionForOrganization(active.OrganizationID, active.AgentID); !ok || current.admission.TokenID != active.TokenID {
+		t.Fatalf("pending registration displaced active dispatch: %#v, %v", current, ok)
+	}
+	requirePong(activeConn, "active runner while replacement pending")
+	if !s.HasActionRunnerSession(pendingOne) {
+		t.Fatal("first exact pending transport was not staged")
+	}
+
+	pendingTwoConn := register(pendingTwo)
+	defer pendingTwoConn.Close()
+	if _, err := wsReadRawMessageWithTimeout(pendingOneConn, 2*time.Second); err == nil {
+		t.Fatal("replaced pending transport remained connected")
+	}
+	if current, ok := s.connectionForOrganization(active.OrganizationID, active.AgentID); !ok || current.admission.TokenID != active.TokenID {
+		t.Fatalf("pending reconnect displaced active dispatch: %#v, %v", current, ok)
+	}
+	requirePong(activeConn, "active runner after pending reconnect")
+	if s.HasActionRunnerSession(pendingOne) {
+		t.Fatal("superseded pending transport remained promotable")
+	}
+	if !s.HasActionRunnerSession(pendingTwo) {
+		t.Fatal("latest exact pending transport was not staged")
+	}
+	if cleanup, promoted := s.PromoteActionRunnerSessionForCommit(pendingOne); promoted || cleanup != nil {
+		t.Fatal("stale Has/promote snapshot displaced the current transport")
+	}
+	cleanup, promoted := s.PromoteActionRunnerSessionForCommit(pendingTwo)
+	if !promoted {
+		t.Fatal("latest exact pending transport was not promoted")
+	}
+	if current, ok := s.connectionForOrganization(active.OrganizationID, active.AgentID); !ok || current.admission.TokenID != pendingTwo.TokenID {
+		t.Fatalf("promotion did not atomically swap dispatch: %#v, %v", current, ok)
+	}
+	if cleanup == nil {
+		t.Fatal("promotion did not return displaced active cleanup")
+	}
+	cleanup()
+	if _, err := wsReadRawMessageWithTimeout(activeConn, 2*time.Second); err == nil {
+		t.Fatal("displaced active transport remained connected after deferred cleanup")
+	}
+	requirePong(pendingTwoConn, "promoted runner")
+
+	s.mu.RLock()
+	activeCount := len(s.agents)
+	pendingCount := len(s.pendingActionRunners)
+	s.mu.RUnlock()
+	if activeCount != 1 || pendingCount != 0 {
+		t.Fatalf("session maps after promotion = active %d pending %d", activeCount, pendingCount)
+	}
+}
+
+func TestActionRunnerPromotionVersusDisconnectNeverRetainsDeadSession(t *testing.T) {
+	for attempt := 0; attempt < 20; attempt++ {
+		admission := AgentAdmission{
+			OrganizationID: "org-a", TokenID: fmt.Sprintf("pending-%d", attempt), AgentID: "machine-a", Hostname: "node.example",
+			RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1, ActivationPending: true,
+		}
+		s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+			return admission, token == admission.TokenID
+		}, func(AgentAdmission) bool { return true })
+		ts := newWSServer(t, s)
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			ts.Close()
+			t.Fatal(err)
+		}
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+			AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID,
+			RuntimeRole: admission.RuntimeRole, ActionCapability: admission.ActionCapability,
+		}))
+		if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+			conn.Close()
+			ts.Close()
+			t.Fatalf("attempt %d registration failed: %s", attempt, ack.Message)
+		}
+		start := make(chan struct{})
+		promotionDone := make(chan func(), 1)
+		go func() {
+			<-start
+			cleanup, _ := s.PromoteActionRunnerSessionForCommit(admission)
+			promotionDone <- cleanup
+		}()
+		close(start)
+		_ = conn.Close()
+		cleanup := <-promotionDone
+		if cleanup != nil {
+			cleanup()
+		}
+		waitFor(t, 2*time.Second, func() bool {
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+			key := agentSessionKey(admission.OrganizationID, admission.AgentID)
+			return s.agents[key] == nil && s.pendingActionRunners[key] == nil
+		})
+		ts.Close()
+	}
+}
+
 func TestLegacyCredentialCannotAssertActionRunnerRole(t *testing.T) {
 	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
 		return AgentAdmission{TokenID: token, AgentID: "a1", Hostname: "host1", RuntimeRole: RuntimeRoleLegacyFullTrust}, token == "legacy"
@@ -1303,6 +1451,132 @@ func TestInvalidateActionRunnerSessionClosesExactSessionAndUnblocksInflightDispa
 		ExpectedInventoryHash: "sha256:" + strings.Repeat("b", 64), Timeout: 1,
 	}); err == nil || !strings.Contains(err.Error(), "not connected") {
 		t.Fatalf("new dispatch after invalidation = %v", err)
+	}
+}
+
+func TestActionRunnerAdmissionTombstoneFencesDelayedCanonicalRegistrationAndIsExact(t *testing.T) {
+	cancelled := AgentAdmission{OrganizationID: "org-a", TokenID: "pending-token", AgentID: "agent-a", Hostname: "node.example", RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1, ActivationPending: true}
+	other := cancelled
+	other.TokenID = "other-token"
+	admitted := make(chan struct{})
+	release := make(chan struct{})
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		if token == cancelled.TokenID {
+			close(admitted)
+			<-release
+			return cancelled, true
+		}
+		return other, token == other.TokenID
+	}, func(AgentAdmission) bool { return true })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: cancelled.AgentID, Hostname: "NODE", Token: cancelled.TokenID, RuntimeRole: cancelled.RuntimeRole, ActionCapability: cancelled.ActionCapability}))
+	select {
+	case <-admitted:
+	case <-time.After(time.Second):
+		t.Fatal("registration did not reach pre-insertion admission point")
+	}
+	if !s.TombstoneActionRunnerAdmission(cancelled, time.Now().Add(time.Minute)) {
+		t.Fatal("exact pending admission was not tombstoned")
+	}
+	close(release)
+	if ack := wsReadRegisteredPayload(t, conn); ack.Success {
+		t.Fatal("pre-admitted cancelled socket registered after durable cancellation")
+	}
+	otherConn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer otherConn.Close()
+	wsWriteMessage(t, otherConn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: other.AgentID, Hostname: "NODE", Token: other.TokenID, RuntimeRole: other.RuntimeRole, ActionCapability: other.ActionCapability}))
+	if ack := wsReadRegisteredPayload(t, otherConn); !ack.Success {
+		t.Fatalf("exact tombstone rejected another credential: %s", ack.Message)
+	}
+}
+
+func TestActionRunnerAdmissionTombstoneKeyIsolatesEveryBoundField(t *testing.T) {
+	base := AgentAdmission{
+		OrganizationID: "org-a", TokenID: "pending-token", AgentID: "agent-a", Hostname: "node.a.example",
+		RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1,
+	}
+	baseKey := actionRunnerAdmissionTombstoneKey(base)
+	canonicalSpelling := base
+	canonicalSpelling.Hostname = " NODE.A.EXAMPLE. "
+	if got := actionRunnerAdmissionTombstoneKey(canonicalSpelling); got != baseKey {
+		t.Fatalf("equivalent canonical hostname produced a distinct key: %q != %q", got, baseKey)
+	}
+
+	mutations := map[string]func(*AgentAdmission){
+		"organization": func(candidate *AgentAdmission) { candidate.OrganizationID = "org-b" },
+		"token":        func(candidate *AgentAdmission) { candidate.TokenID = "other-token" },
+		"agent":        func(candidate *AgentAdmission) { candidate.AgentID = "agent-b" },
+		"full hostname": func(candidate *AgentAdmission) {
+			// The short label is intentionally unchanged: separate FQDNs must
+			// never share a cancellation fence.
+			candidate.Hostname = "node.b.example"
+		},
+		"runtime role": func(candidate *AgentAdmission) { candidate.RuntimeRole = RuntimeRoleLegacyFullTrust },
+		"capability":   func(candidate *AgentAdmission) { candidate.ActionCapability = "typed_actions.v2" },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			candidate := base
+			mutate(&candidate)
+			if got := actionRunnerAdmissionTombstoneKey(candidate); got == baseKey {
+				t.Fatalf("%s change did not isolate tombstone key", name)
+			}
+		})
+	}
+}
+
+func TestActionRunnerAdmissionTombstoneExpiresAndClosesCurrentExactSession(t *testing.T) {
+	now := time.Now().UTC()
+	admission := AgentAdmission{OrganizationID: "org-a", TokenID: "pending-token", AgentID: "agent-a", Hostname: "node.example", RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1, ActivationPending: true}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) { return admission, token == admission.TokenID }, func(AgentAdmission) bool { return true })
+	s.now = func() time.Time { return now }
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	register := func() *websocket.Conn {
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID, RuntimeRole: admission.RuntimeRole, ActionCapability: admission.ActionCapability}))
+		return conn
+	}
+	current := register()
+	defer current.Close()
+	if ack := wsReadRegisteredPayload(t, current); !ack.Success {
+		t.Fatalf("initial registration failed: %s", ack.Message)
+	}
+	if !s.TombstoneActionRunnerAdmission(admission, now.Add(time.Second)) {
+		t.Fatal("current exact session was not tombstoned")
+	}
+	if s.IsAgentConnectedForOrganization(admission.OrganizationID, admission.AgentID) {
+		t.Fatal("tombstoned current session remained connected")
+	}
+	if err := current.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := current.ReadMessage(); err == nil {
+		t.Fatal("tombstoned current websocket remained open")
+	}
+	now = now.Add(2 * time.Second)
+	afterExpiry := register()
+	defer afterExpiry.Close()
+	if ack := wsReadRegisteredPayload(t, afterExpiry); !ack.Success {
+		t.Fatalf("expired tombstone rejected registration: %s", ack.Message)
+	}
+	s.mu.RLock()
+	tombstoneCount := len(s.actionRunnerAdmissionTombstones)
+	s.mu.RUnlock()
+	if tombstoneCount != 0 {
+		t.Fatalf("expired admission tombstone was not pruned: %d entries remain", tombstoneCount)
 	}
 }
 

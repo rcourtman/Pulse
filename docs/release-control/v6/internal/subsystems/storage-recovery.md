@@ -40,14 +40,19 @@ the runner and session protocol. That fail-closed identity result cannot select,
 delete, restore, or reclassify storage/recovery state.
 Runner credential rotation follows the shared two-phase token-inventory commit
 boundary: issuance durably prepares a bounded, non-dispatchable replacement
-without removing the active predecessor; activation after durable runner health
-proof promotes the exact registered replacement and removes only its recorded
-predecessor set. Failed persistence restores the complete inventory, and an
-unactivated replacement expires without changing the predecessor. Exact bearer
-self-revocation uses the same durable boundary and cannot select another token,
-organization, or host. That rollback protects restart-time
-credential truth only; it is not a customer backup, recovery point, restore
-operation, or storage-cleanup grant.
+without removing or disconnecting the active predecessor; activation after
+durable runner health proof requires durable token persistence and atomically
+promotes the exact registered replacement while removing only its recorded
+predecessor set. The installer may restore predecessor files only after the
+server atomically cancels and durably removes the exact still-pending bearer;
+activation-winning, persistence-failure, and indeterminate outcomes retain the
+replacement instead. Failed persistence or session promotion preserves one
+coherent token/session outcome, and an unactivated replacement expires without
+changing the predecessor. Exact bearer self-revocation uses the same durable
+boundary and cannot select another token, organization, or host. These
+credential rollback rules protect restart-time authentication truth only; they
+are not a customer backup, recovery point, restore operation, or
+storage-cleanup grant.
 The adjacent collector authority-reduction route removes `agent:exec` and
 `agent:manage` only from the caller's exact host-bound credential and closes
 only its matching command session after durable persistence. This transition

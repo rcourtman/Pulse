@@ -4,12 +4,79 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+type actionRunnerTestFS struct {
+	blockOnce sync.Once
+	entered   chan struct{}
+	release   chan struct{}
+	writeErr  error
+}
+
+type actionRunnerFailAfterWritesFS struct {
+	mu          sync.Mutex
+	writes      int
+	allowWrites int
+}
+
+func (fs *actionRunnerFailAfterWritesFS) ReadFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
+func (fs *actionRunnerFailAfterWritesFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	fs.mu.Lock()
+	fs.writes++
+	writes := fs.writes
+	fs.mu.Unlock()
+	if writes > fs.allowWrites {
+		return errors.New("injected rollback persistence failure")
+	}
+	return os.WriteFile(name, data, perm)
+}
+func (fs *actionRunnerFailAfterWritesFS) Rename(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
+}
+func (fs *actionRunnerFailAfterWritesFS) Remove(name string) error { return os.Remove(name) }
+func (fs *actionRunnerFailAfterWritesFS) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
+func (fs *actionRunnerFailAfterWritesFS) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
+func (fs *actionRunnerTestFS) ReadFile(name string) ([]byte, error) { return os.ReadFile(name) }
+func (fs *actionRunnerTestFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	blocked := false
+	fs.blockOnce.Do(func() {
+		blocked = fs.entered != nil
+		if blocked {
+			close(fs.entered)
+		}
+	})
+	if blocked {
+		<-fs.release
+	}
+	if fs.writeErr != nil {
+		return fs.writeErr
+	}
+	return os.WriteFile(name, data, perm)
+}
+func (fs *actionRunnerTestFS) Rename(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
+}
+func (fs *actionRunnerTestFS) Remove(name string) error { return os.Remove(name) }
+func (fs *actionRunnerTestFS) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
+func (fs *actionRunnerTestFS) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
 
 func TestIssueAndPersistInstallToken(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
@@ -96,7 +163,7 @@ func TestIssueActionRunnerAndPersistPreparesRotationWithoutRevokingActiveCredent
 	if err != nil {
 		t.Fatalf("first IssueActionRunnerAndPersist: %v", err)
 	}
-	if _, _, changed, err := ActivateActionRunnerAndPersist(cfg, nil, first.ID, "machine-123", "node.example"); err != nil || !changed {
+	if _, _, changed, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), first.ID, "machine-123", "node.example"); err != nil || !changed {
 		t.Fatalf("activate first credential = changed %v, error %v", changed, err)
 	}
 	_, otherHost, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
@@ -164,7 +231,7 @@ func TestActivateActionRunnerAndPersistAtomicallyPromotesAndRevokesPredecessor(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, nil, first.ID, "machine-123", "node.example"); err != nil {
+	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), first.ID, "machine-123", "node.example"); err != nil {
 		t.Fatal(err)
 	}
 	secondToken, second, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
@@ -187,8 +254,27 @@ func TestActivateActionRunnerAndPersistAtomicallyPromotesAndRevokesPredecessor(t
 	if _, ok := cfg.ValidateAPIToken(secondToken); !ok {
 		t.Fatal("activated replacement is not valid")
 	}
-	if _, revoked, changed, err := ActivateActionRunnerAndPersist(cfg, nil, second.ID, "machine-123", "node.example"); err != nil || changed || len(revoked) != 0 {
+	if _, revoked, changed, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), second.ID, "machine-123", "node.example"); err != nil || changed || len(revoked) != 0 {
 		t.Fatalf("idempotent activation = revoked %#v, changed %v, error %v", revoked, changed, err)
+	}
+}
+
+func TestActivateActionRunnerAndPersistRequiresDurablePersistenceWithoutMutation(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, pending, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := cloneAPITokenRecords(cfg.APITokens)
+	if activated, revoked, changed, err := ActivateActionRunnerAndPersist(
+		cfg, nil, pending.ID, "machine-123", "node.example",
+	); !errors.Is(err, ErrPersist) || activated != nil || revoked != nil || changed {
+		t.Fatalf("nil persistence activation = activated %#v revoked %#v changed %v err %v", activated, revoked, changed, err)
+	}
+	if !reflect.DeepEqual(cfg.APITokens, before) {
+		t.Fatalf("nil persistence mutated inventory: before %#v after %#v", before, cfg.APITokens)
 	}
 }
 
@@ -198,7 +284,7 @@ func TestActivateActionRunnerAndPersistFailureRestoresPendingAndActiveInventory(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, nil, first.ID, "machine-123", "node.example"); err != nil {
+	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), first.ID, "machine-123", "node.example"); err != nil {
 		t.Fatal(err)
 	}
 	_, second, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
@@ -223,6 +309,245 @@ func TestActivateActionRunnerAndPersistFailureRestoresPendingAndActiveInventory(
 		if record.ID == second.ID && (record.ExpiresAt == nil || record.Metadata[ActionRunnerActivationPendingMetadataKey] != "true" || record.Metadata[ActionRunnerReplacesTokenIDsMetadataKey] != first.ID) {
 			t.Fatalf("pending replacement was not fully restored: %#v", record)
 		}
+	}
+}
+
+func TestActivateActionRunnerAndPersistWithPromotionRollsBackWhenExactTransportVanished(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, predecessor, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), predecessor.ID, "machine-123", "node.example"); err != nil {
+		t.Fatal(err)
+	}
+	_, pending, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	promotionCalls := 0
+	activated, revoked, changed, err := ActivateActionRunnerAndPersistWithPromotion(cfg, persistence, pending.ID, "machine-123", "node.example", func() bool {
+		promotionCalls++
+		return false
+	})
+	if !errors.Is(err, ErrActionRunnerSessionUnavailable) || activated != nil || revoked != nil || changed {
+		t.Fatalf("vanished transport activation = activated %#v revoked %#v changed %v err %v", activated, revoked, changed, err)
+	}
+	if promotionCalls != 1 {
+		t.Fatalf("promotion calls = %d, want 1", promotionCalls)
+	}
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("rolled-back inventory = %#v", cfg.APITokens)
+	}
+	var foundPredecessor, foundPending bool
+	for _, record := range cfg.APITokens {
+		switch record.ID {
+		case predecessor.ID:
+			foundPredecessor = record.ExpiresAt == nil
+		case pending.ID:
+			foundPending = record.ExpiresAt != nil && record.Metadata[ActionRunnerActivationPendingMetadataKey] == "true"
+		}
+	}
+	if !foundPredecessor || !foundPending {
+		t.Fatalf("rollback did not restore predecessor and pending replacement: %#v", cfg.APITokens)
+	}
+	persisted, err := config.NewConfigPersistence(cfg.DataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted) != 2 {
+		t.Fatalf("durable rollback inventory = %#v", persisted)
+	}
+}
+
+func TestActivateActionRunnerPromotionRollbackPersistenceFailureKeepsLastDurableActivation(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, predecessor, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), predecessor.ID, "machine-123", "node.example"); err != nil {
+		t.Fatal(err)
+	}
+	_, pending, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	// The pre-existing durable predecessor inventory causes activation to write
+	// one backup plus the new token file. Permit both, then fail the compensating
+	// rollback writes.
+	persistence.SetFileSystem(&actionRunnerFailAfterWritesFS{allowWrites: 2})
+	activated, revoked, changed, err := ActivateActionRunnerAndPersistWithPromotion(cfg, persistence, pending.ID, "machine-123", "node.example", func() bool { return false })
+	if !errors.Is(err, ErrActionRunnerActivationIndeterminate) || activated == nil || activated.ID != pending.ID || len(revoked) != 1 || revoked[0].ID != predecessor.ID || !changed {
+		t.Fatalf("rollback persistence failure = activated %#v revoked %#v changed %v err %v", activated, revoked, changed, err)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != pending.ID || cfg.APITokens[0].ExpiresAt != nil || cfg.APITokens[0].Metadata[ActionRunnerActivationPendingMetadataKey] != "" {
+		t.Fatalf("memory diverged from last durable activation: %#v", cfg.APITokens)
+	}
+	persisted, err := config.NewConfigPersistence(cfg.DataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted) != 1 || persisted[0].ID != pending.ID || persisted[0].ExpiresAt != nil || persisted[0].Metadata[ActionRunnerActivationPendingMetadataKey] != "" {
+		t.Fatalf("last durable activation inventory = %#v", persisted)
+	}
+}
+
+func TestCancelPendingActionRunnerAndPersistSerializesWithActivationInBothOrders(t *testing.T) {
+	seed := func(t *testing.T) (*config.Config, *config.ConfigPersistence, *config.APITokenRecord, *config.APITokenRecord) {
+		t.Helper()
+		cfg := &config.Config{DataPath: t.TempDir()}
+		_, first, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, _, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), first.ID, "machine-123", "node.example"); err != nil {
+			t.Fatal(err)
+		}
+		_, second, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg, config.NewConfigPersistence(cfg.DataPath), first, second
+	}
+
+	t.Run("cancel wins", func(t *testing.T) {
+		cfg, persistence, first, second := seed(t)
+		removed, err := CancelPendingActionRunnerAndPersist(cfg, persistence, second.ID, "org-a", "machine-123", "NODE")
+		if err != nil || removed == nil || removed.ID != second.ID {
+			t.Fatalf("cancel = (%#v, %v)", removed, err)
+		}
+		if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != first.ID {
+			t.Fatalf("cancelled inventory = %#v", cfg.APITokens)
+		}
+		if _, _, _, err := ActivateActionRunnerAndPersist(cfg, persistence, second.ID, "machine-123", "node.example"); !errors.Is(err, ErrRecord) {
+			t.Fatalf("late activation error = %v, want ErrRecord", err)
+		}
+	})
+
+	t.Run("activation wins", func(t *testing.T) {
+		cfg, persistence, _, second := seed(t)
+		if _, _, changed, err := ActivateActionRunnerAndPersist(cfg, persistence, second.ID, "machine-123", "node.example"); err != nil || !changed {
+			t.Fatalf("activation = changed %v, error %v", changed, err)
+		}
+		if removed, err := CancelPendingActionRunnerAndPersist(cfg, persistence, second.ID, "org-a", "machine-123", "node.example"); !errors.Is(err, ErrActionRunnerAlreadyActivated) || removed != nil {
+			t.Fatalf("post-commit cancel = (%#v, %v)", removed, err)
+		}
+		if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != second.ID || cfg.APITokens[0].ExpiresAt != nil {
+			t.Fatalf("activated inventory = %#v", cfg.APITokens)
+		}
+	})
+}
+
+func TestCancelPendingActionRunnerAndPersistContendsUnderOneDurableTransaction(t *testing.T) {
+	seed := func(t *testing.T) (*config.Config, *config.ConfigPersistence, *config.APITokenRecord, *config.APITokenRecord) {
+		t.Helper()
+		cfg := &config.Config{DataPath: t.TempDir()}
+		_, first, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, _, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), first.ID, "machine-123", "node.example"); err != nil {
+			t.Fatal(err)
+		}
+		_, pending, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg, config.NewConfigPersistence(cfg.DataPath), first, pending
+	}
+	waitSignal := func(t *testing.T, signal <-chan struct{}, label string) {
+		t.Helper()
+		select {
+		case <-signal:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for %s", label)
+		}
+	}
+	waitErr := func(t *testing.T, result <-chan error, label string) error {
+		t.Helper()
+		select {
+		case err := <-result:
+			return err
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for %s", label)
+			return nil
+		}
+	}
+
+	t.Run("cancel owns lock before activation", func(t *testing.T) {
+		cfg, persistence, predecessor, pending := seed(t)
+		fs := &actionRunnerTestFS{entered: make(chan struct{}), release: make(chan struct{})}
+		persistence.SetFileSystem(fs)
+		cancelResult := make(chan error, 1)
+		go func() {
+			_, err := CancelPendingActionRunnerAndPersist(cfg, persistence, pending.ID, "org-a", "machine-123", "node.example")
+			cancelResult <- err
+		}()
+		waitSignal(t, fs.entered, "cancel persistence")
+		activateResult := make(chan error, 1)
+		go func() {
+			_, _, _, err := ActivateActionRunnerAndPersist(cfg, persistence, pending.ID, "machine-123", "node.example")
+			activateResult <- err
+		}()
+		close(fs.release)
+		if err := waitErr(t, cancelResult, "cancel result"); err != nil {
+			t.Fatalf("cancel error = %v", err)
+		}
+		if err := waitErr(t, activateResult, "late activation result"); !errors.Is(err, ErrRecord) {
+			t.Fatalf("late activation error = %v, want ErrRecord", err)
+		}
+		if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != predecessor.ID {
+			t.Fatalf("cancel-wins inventory = %#v", cfg.APITokens)
+		}
+	})
+
+	t.Run("activation owns lock before cancel", func(t *testing.T) {
+		cfg, persistence, predecessor, pending := seed(t)
+		fs := &actionRunnerTestFS{entered: make(chan struct{}), release: make(chan struct{})}
+		persistence.SetFileSystem(fs)
+		activateResult := make(chan error, 1)
+		go func() {
+			_, _, _, err := ActivateActionRunnerAndPersist(cfg, persistence, pending.ID, "machine-123", "node.example")
+			activateResult <- err
+		}()
+		waitSignal(t, fs.entered, "activation persistence")
+		cancelResult := make(chan error, 1)
+		go func() {
+			_, err := CancelPendingActionRunnerAndPersist(cfg, persistence, pending.ID, "org-a", "machine-123", "node.example")
+			cancelResult <- err
+		}()
+		close(fs.release)
+		if err := waitErr(t, activateResult, "activation result"); err != nil {
+			t.Fatalf("activation error = %v", err)
+		}
+		if err := waitErr(t, cancelResult, "post-commit cancel result"); !errors.Is(err, ErrActionRunnerAlreadyActivated) {
+			t.Fatalf("post-commit cancel error = %v, want ErrActionRunnerAlreadyActivated", err)
+		}
+		if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != pending.ID || cfg.APITokens[0].ExpiresAt != nil || cfg.APITokens[0].Metadata[ActionRunnerActivationPendingMetadataKey] != "" || cfg.APITokens[0].ID == predecessor.ID {
+			t.Fatalf("activation-wins inventory = %#v", cfg.APITokens)
+		}
+	})
+}
+
+func TestCancelPendingActionRunnerAndPersistFailureNeverAuthorizesRollback(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, pending, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	persistence.SetFileSystem(&actionRunnerTestFS{writeErr: errors.New("injected persistence failure")})
+	if removed, err := CancelPendingActionRunnerAndPersist(cfg, persistence, pending.ID, "org-a", "machine-123", "node.example"); !errors.Is(err, ErrPersist) || removed != nil {
+		t.Fatalf("persistence failure = (%#v, %v)", removed, err)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != pending.ID || cfg.APITokens[0].Metadata[ActionRunnerActivationPendingMetadataKey] != "true" {
+		t.Fatalf("failed cancel changed inventory = %#v", cfg.APITokens)
+	}
+	if removed, err := CancelPendingActionRunnerAndPersist(cfg, nil, pending.ID, "org-a", "machine-123", "node.example"); !errors.Is(err, ErrPersist) || removed != nil {
+		t.Fatalf("nil persistence = (%#v, %v)", removed, err)
 	}
 }
 

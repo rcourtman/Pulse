@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -316,6 +318,205 @@ func TestServerRejectsUnauthorizedPeer(t *testing.T) {
 	requireErrorCode(t, response, ErrorUnauthorizedPeer)
 	_ = clientConn.Close()
 	<-done
+}
+
+func TestServerBoundsConcurrentConnectionsAndRecovers(t *testing.T) {
+	const maxConnections = 2
+	resolved := make(chan struct{}, maxConnections+1)
+	audited := make(chan AuditEvent, maxConnections+1)
+	server, err := NewServer(ServerConfig{
+		AllowedUID: 1000,
+		PeerResolver: PeerResolverFunc(func(net.Conn) (Peer, error) {
+			resolved <- struct{}{}
+			return Peer{UID: 1000, GID: 2000, PID: 3000}, nil
+		}),
+		Registry:                 NewRegistry(nil, nil),
+		MaxConcurrentConnections: maxConnections,
+		MaxOperationTimeout:      5 * time.Second,
+		PreFrameTimeout:          5 * time.Second,
+		Audit:                    func(event AuditEvent) { audited <- event },
+	})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	socketDir, err := os.MkdirTemp("", "pah-")
+	if err != nil {
+		t.Fatalf("create short socket directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socketPath := filepath.Join(socketDir, "helper.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(ctx, listener) }()
+	t.Cleanup(func() {
+		cancel()
+		_ = listener.Close()
+		if err := <-serveDone; err != nil {
+			t.Errorf("Serve: %v", err)
+		}
+	})
+
+	held := make([]net.Conn, 0, maxConnections)
+	for i := 0; i < maxConnections; i++ {
+		conn, dialErr := net.Dial("unix", socketPath)
+		if dialErr != nil {
+			t.Fatalf("dial held connection %d: %v", i, dialErr)
+		}
+		held = append(held, conn)
+		select {
+		case <-resolved:
+		case <-time.After(time.Second):
+			t.Fatalf("held connection %d was not admitted", i)
+		}
+	}
+	t.Cleanup(func() {
+		for _, conn := range held {
+			_ = conn.Close()
+		}
+	})
+
+	overload, err := net.Dial("unix", socketPath)
+	if err != nil {
+		t.Fatalf("dial overloaded connection: %v", err)
+	}
+	defer overload.Close()
+	if err := overload.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("set overload deadline: %v", err)
+	}
+	buffer := make([]byte, 1)
+	if _, err := overload.Read(buffer); err == nil {
+		t.Fatal("overloaded connection remained open")
+	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		t.Fatal("overloaded connection was not rejected promptly")
+	}
+	select {
+	case <-resolved:
+		t.Fatal("overloaded connection reached peer authentication")
+	default:
+	}
+
+	if err := held[0].Close(); err != nil {
+		t.Fatalf("release held connection: %v", err)
+	}
+	select {
+	case event := <-audited:
+		if event.Success || event.ErrorCode != ErrorInvalidFrame {
+			t.Fatalf("released connection audit = %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("released connection was not cleaned up")
+	}
+	deadline := time.Now().Add(time.Second)
+	for len(server.connectionSlots) != maxConnections-1 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := len(server.connectionSlots); got != maxConnections-1 {
+		t.Fatalf("active connection slots = %d, want %d", got, maxConnections-1)
+	}
+
+	client, err := NewClient(ClientConfig{
+		SocketPath:   socketPath,
+		MaxDeadline:  time.Second,
+		NewRequestID: func() (string, error) { return "post-overload-health", nil },
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	var health HealthResult
+	if _, err := client.Call(t.Context(), OperationHealth, OperationVersion1, time.Second, nil, &health); err != nil {
+		t.Fatalf("health after releasing connection slot: %v", err)
+	}
+	if health.Status != "ok" {
+		t.Fatalf("health status = %q, want ok", health.Status)
+	}
+}
+
+func TestServerAppliesShortPreFrameTimeout(t *testing.T) {
+	audited := make(chan AuditEvent, 1)
+	server, err := NewServer(ServerConfig{
+		AllowedUID:          1000,
+		PeerResolver:        authorizedResolver(1000),
+		Registry:            NewRegistry(nil, nil),
+		MaxOperationTimeout: time.Second,
+		PreFrameTimeout:     25 * time.Millisecond,
+		Audit:               func(event AuditEvent) { audited <- event },
+	})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	serverConn, clientConn := net.Pipe()
+	done := make(chan struct{})
+	started := time.Now()
+	go func() {
+		server.HandleConnection(context.Background(), serverConn)
+		close(done)
+	}()
+	payload, err := readFrame(clientConn, MaxResponseBytes)
+	if err != nil {
+		t.Fatalf("read timeout response: %v", err)
+	}
+	response, err := DecodeResponse(payload)
+	if err != nil {
+		t.Fatalf("decode timeout response: %v", err)
+	}
+	requireErrorCode(t, response, ErrorInvalidFrame)
+	_ = clientConn.Close()
+	<-done
+	if elapsed := time.Since(started); elapsed >= 500*time.Millisecond {
+		t.Fatalf("pre-frame timeout took %s, want less than 500ms", elapsed)
+	}
+	event := <-audited
+	if event.RequestID != "" || event.Operation != "" || event.RequestBytes != 0 || event.ErrorCode != ErrorInvalidFrame {
+		t.Fatalf("pre-frame audit exposed unexpected metadata: %#v", event)
+	}
+}
+
+func TestNewServerValidatesConnectionLimitsAndTimeouts(t *testing.T) {
+	base := ServerConfig{
+		AllowedUID:      1000,
+		PeerResolver:    authorizedResolver(1000),
+		Registry:        NewRegistry(nil, nil),
+		PreFrameTimeout: time.Second,
+	}
+	tests := []struct {
+		name   string
+		mutate func(*ServerConfig)
+	}{
+		{name: "negative connection limit", mutate: func(config *ServerConfig) { config.MaxConcurrentConnections = -1 }},
+		{name: "negative operation timeout", mutate: func(config *ServerConfig) { config.MaxOperationTimeout = -1 }},
+		{name: "sub-millisecond operation timeout", mutate: func(config *ServerConfig) { config.MaxOperationTimeout = time.Nanosecond }},
+		{name: "negative pre-frame timeout", mutate: func(config *ServerConfig) { config.PreFrameTimeout = -1 }},
+		{name: "sub-millisecond pre-frame timeout", mutate: func(config *ServerConfig) { config.PreFrameTimeout = time.Nanosecond }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := base
+			test.mutate(&config)
+			if _, err := NewServer(config); err == nil {
+				t.Fatal("NewServer succeeded with invalid configuration")
+			}
+		})
+	}
+
+	server, err := NewServer(ServerConfig{
+		AllowedUID:   1000,
+		PeerResolver: authorizedResolver(1000),
+		Registry:     NewRegistry(nil, nil),
+	})
+	if err != nil {
+		t.Fatalf("NewServer defaults: %v", err)
+	}
+	if cap(server.connectionSlots) != defaultMaxConcurrentConnections {
+		t.Fatalf("default connection limit = %d, want %d", cap(server.connectionSlots), defaultMaxConcurrentConnections)
+	}
+	if server.preFrameTimeout != defaultPreFrameTimeout {
+		t.Fatalf("default pre-frame timeout = %s, want %s", server.preFrameTimeout, defaultPreFrameTimeout)
+	}
 }
 
 func TestServerBoundsOperationDeadline(t *testing.T) {
