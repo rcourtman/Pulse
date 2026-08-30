@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog"
 )
 
@@ -120,9 +121,12 @@ func TestActionRunnerHealthIsAtomicBoundedAndSecretFree(t *testing.T) {
 	if !health.Registered || health.RuntimeRole != agentexec.RuntimeRoleActionRunner || health.HostID != "agent-1" || health.Server != "https://pulse.example" || health.RegisteredAt.IsZero() {
 		t.Fatalf("health = %+v", health)
 	}
-	info, err := os.Stat(healthPath)
-	if err != nil || info.Mode().Perm() != 0600 {
-		t.Fatalf("health mode = %v, %v", info.Mode().Perm(), err)
+	info, err := os.Lstat(healthPath)
+	if err != nil {
+		t.Fatalf("inspect health marker: %v", err)
+	}
+	if err := securityutil.ValidatePrivatePath(healthPath, info); err != nil {
+		t.Fatalf("health marker is not private: %v", err)
 	}
 	matches, err := filepath.Glob(filepath.Join(dir, ".health-*.tmp"))
 	if err != nil || len(matches) != 0 {

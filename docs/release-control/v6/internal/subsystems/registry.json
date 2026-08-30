@@ -7185,6 +7185,8 @@
         "internal/config/watcher.go",
         "internal/crypto/crypto.go",
         "internal/logging/logging.go",
+        "internal/securityutil/private_path_other.go",
+        "internal/securityutil/private_path_windows.go",
         "internal/securityutil/secure_storage_dir.go",
         "internal/telemetry/service_health.go",
         "internal/telemetry/telemetry.go",
@@ -7364,6 +7366,21 @@
               "internal/config/config_load_test.go",
               "internal/config/watcher_test.go",
               "pkg/tlsutil/tlsutil_test.go"
+            ]
+          },
+          {
+            "id": "private-platform-paths",
+            "label": "platform-native private path hardening proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/securityutil/private_path_other.go",
+              "internal/securityutil/private_path_windows.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/securityutil/private_path_test.go",
+              "internal/securityutil/private_path_windows_test.go"
             ]
           },
           {

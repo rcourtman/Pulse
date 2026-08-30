@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 const privilegedUpdateQuarantineDir = "/var/lib/pulse-agent/update-quarantine"
@@ -164,19 +165,13 @@ func validPrivilegedArtifactID(value string) bool {
 	return err == nil
 }
 
-func syncUpdateDirectory(path string) error {
-	dir, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
-}
-
 func PersistPendingPrivilegedUpdate(stateDir, previousVersion string, activation agenthelper.UpdateResult) error {
 	path, err := pendingPrivilegedUpdatePath(stateDir)
 	if err != nil {
 		return err
+	}
+	if err := securityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
+		return fmt.Errorf("harden pending update state directory: %w", err)
 	}
 	if err := validatePendingUpdateStateDir(stateDir); err != nil {
 		return err
@@ -198,7 +193,7 @@ func PersistPendingPrivilegedUpdate(stateDir, previousVersion string, activation
 	}
 	tempPath := temp.Name()
 	defer os.Remove(tempPath)
-	if err := temp.Chmod(0o600); err != nil {
+	if err := securityutil.HardenPrivatePath(tempPath, 0o600); err != nil {
 		_ = temp.Close()
 		return err
 	}
@@ -213,7 +208,7 @@ func PersistPendingPrivilegedUpdate(stateDir, previousVersion string, activation
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tempPath, path); err != nil {
+	if err := replacePendingUpdateFile(tempPath, path); err != nil {
 		return err
 	}
 	return syncUpdateDirectory(stateDir)
@@ -234,8 +229,11 @@ func LoadPendingPrivilegedUpdate(stateDir string) (*PendingPrivilegedUpdate, err
 	if err := validatePendingUpdateStateDir(stateDir); err != nil {
 		return nil, err
 	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() || before.Mode().Perm()&0o077 != 0 {
+	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
 		return nil, errors.New("pending update handoff is not a private regular file")
+	}
+	if err := securityutil.ValidatePrivatePath(path, before); err != nil {
+		return nil, fmt.Errorf("pending update handoff is not private: %w", err)
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -288,8 +286,11 @@ func pendingPrivilegedUpdatePath(stateDir string) (string, error) {
 
 func validatePendingUpdateStateDir(stateDir string) error {
 	info, err := os.Lstat(stateDir)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return errors.New("pending update state directory must be a private real directory")
+	}
+	if err := securityutil.ValidatePrivatePath(stateDir, info); err != nil {
+		return fmt.Errorf("pending update state directory must be private: %w", err)
 	}
 	return nil
 }

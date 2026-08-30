@@ -88,7 +88,11 @@ Runner readiness is exposed through a bounded, secret-free health marker that
 is replaced atomically only after its contents reach stable storage. POSIX
 targets must sync the containing directory after rename; Windows targets must
 use a write-through replacement rather than attempting to flush the read-only
-directory handle returned by the standard library.
+directory handle returned by the standard library. The marker and helper-update
+handoff must also enforce platform-native privacy: owner-only modes on POSIX,
+and a protected DACL limited to the owning identity, LocalSystem, and
+Administrators on Windows. Unix-looking mode values are not Windows access
+control.
 Fresh installs carry an explicit local command-authority profile. The closed
 values are `monitoring-only`, `command-capable`, and `legacy`. A
 `monitoring-only` service may accept remote configuration that keeps commands

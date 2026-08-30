@@ -41,7 +41,7 @@ func TestPrivilegedUpdateRollbackFailurePreservesPendingHandoff(t *testing.T) {
 	sum := sha256.Sum256(binary)
 	digest := hex.EncodeToString(sum[:])
 	helper := &fakePrivilegedUpdate{root: t.TempDir(), rollbackErr: errors.New("helper unavailable")}
-	if err := os.Chmod(helper.root, 0o700); err != nil {
+	if err := securityutil.HardenPrivatePath(helper.root, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog"
 )
 
@@ -106,15 +107,18 @@ func (c *CommandClient) writeActionRunnerHealth() error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
+	if err := securityutil.HardenPrivatePath(dir, 0o700); err != nil {
+		return fmt.Errorf("harden action-runner health directory: %w", err)
+	}
 	temp, err := os.CreateTemp(dir, ".health-*.tmp")
 	if err != nil {
 		return err
 	}
 	tempPath := temp.Name()
 	defer os.Remove(tempPath)
-	if err := temp.Chmod(0600); err != nil {
+	if err := securityutil.HardenPrivatePath(tempPath, 0o600); err != nil {
 		temp.Close()
-		return err
+		return fmt.Errorf("harden action-runner health marker: %w", err)
 	}
 	if _, err := temp.Write(encoded); err != nil {
 		temp.Close()
@@ -129,6 +133,16 @@ func (c *CommandClient) writeActionRunnerHealth() error {
 	}
 	if err := replaceActionRunnerHealthFile(tempPath, c.healthPath); err != nil {
 		return err
+	}
+	info, err := os.Lstat(c.healthPath)
+	if err != nil {
+		return fmt.Errorf("inspect replaced action-runner health marker: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fmt.Errorf("action-runner health marker is not a real regular file")
+	}
+	if err := securityutil.ValidatePrivatePath(c.healthPath, info); err != nil {
+		return fmt.Errorf("validate private action-runner health marker: %w", err)
 	}
 	return syncActionRunnerHealthDirectory(dir)
 }

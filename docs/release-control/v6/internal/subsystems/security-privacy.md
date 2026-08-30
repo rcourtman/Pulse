@@ -1589,6 +1589,12 @@ file-hardened at `0600`. The mount root itself must be validated as the real
 directory path rather than a symlink or other filesystem object, but its mode
 bits are not a fatal startup gate when Kubernetes or another runtime owns that
 mount point.
+Agent lifecycle state that explicitly requires a private local path uses the
+stricter shared `internal/securityutil/private_path_*` contract. It must reject
+symlinks and special files before hardening. POSIX paths must grant no group or
+other access; Windows paths must disable DACL inheritance and grant access only
+to an approved owner identity, LocalSystem, and Administrators. `os.Chmod`
+success and Unix-style mode bits are not evidence of Windows privacy.
 That same Security Overview surface must stay action-oriented once those
 low-risk states are demoted out of the global banner:
 `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` and

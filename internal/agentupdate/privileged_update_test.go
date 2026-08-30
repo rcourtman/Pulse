@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 type fakePrivilegedUpdate struct {
@@ -82,7 +83,7 @@ func TestPrivilegedUpdateStagesActivatesAndRollsBackRestartFailure(t *testing.T)
 	sum := sha256.Sum256(binary)
 	digest := hex.EncodeToString(sum[:])
 	helper := &fakePrivilegedUpdate{root: t.TempDir()}
-	if err := os.Chmod(helper.root, 0o700); err != nil {
+	if err := securityutil.HardenPrivatePath(helper.root, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
@@ -111,7 +112,7 @@ func TestPrivilegedUpdateFailsClosedBeforeActivation(t *testing.T) {
 	runtimeGOOS = goOSLinux
 	binary := append([]byte{0x7f, 'E', 'L', 'F'}, []byte("update")...)
 	helper := &fakePrivilegedUpdate{root: t.TempDir()}
-	if err := os.Chmod(helper.root, 0o700); err != nil {
+	if err := securityutil.HardenPrivatePath(helper.root, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
@@ -128,7 +129,7 @@ func TestPrivilegedUpdateFailsClosedBeforeActivation(t *testing.T) {
 
 func TestPendingPrivilegedUpdateHandoffIsDurableAndStrict(t *testing.T) {
 	stateDir := t.TempDir()
-	if err := os.Chmod(stateDir, 0o700); err != nil {
+	if err := securityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	activation := agenthelper.UpdateResult{
@@ -143,8 +144,10 @@ func TestPendingPrivilegedUpdateHandoffIsDurableAndStrict(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(stateDir, pendingPrivilegedUpdateFile)
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("handoff mode=%v err=%v", info, err)
+	if info, err := os.Lstat(path); err != nil {
+		t.Fatalf("inspect handoff: %v", err)
+	} else if err := securityutil.ValidatePrivatePath(path, info); err != nil {
+		t.Fatalf("handoff is not private: %v", err)
 	}
 	loaded, err := LoadPendingPrivilegedUpdate(stateDir)
 	if err != nil {
@@ -163,7 +166,7 @@ func TestPendingPrivilegedUpdateHandoffIsDurableAndStrict(t *testing.T) {
 
 func TestPendingPrivilegedUpdateHandoffRejectsUnsafeState(t *testing.T) {
 	stateDir := t.TempDir()
-	if err := os.Chmod(stateDir, 0o700); err != nil {
+	if err := securityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(stateDir, pendingPrivilegedUpdateFile)

@@ -23,6 +23,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
+	internalSecurityutil "github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog"
 )
@@ -1902,7 +1903,7 @@ func testPendingUpdate(t *testing.T, stateDir string) *agentupdate.PendingPrivil
 
 func TestPendingPrivilegedUpdateCommitsOnlyAfterReadinessAndAcceptedReport(t *testing.T) {
 	stateDir := t.TempDir()
-	if err := os.Chmod(stateDir, 0o700); err != nil {
+	if err := internalSecurityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	pending := testPendingUpdate(t, stateDir)
@@ -1952,7 +1953,7 @@ func TestPendingPrivilegedUpdateCommitsOnlyAfterReadinessAndAcceptedReport(t *te
 
 func TestPendingPrivilegedUpdateCancellationRollsBackAndClearsHandoff(t *testing.T) {
 	stateDir := t.TempDir()
-	if err := os.Chmod(stateDir, 0o700); err != nil {
+	if err := internalSecurityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	pending := testPendingUpdate(t, stateDir)
@@ -1987,7 +1988,7 @@ func TestPendingPrivilegedUpdateCancellationRollsBackAndClearsHandoff(t *testing
 
 func TestPendingPrivilegedUpdateRollbackFailurePreservesHandoff(t *testing.T) {
 	stateDir := t.TempDir()
-	if err := os.Chmod(stateDir, 0o700); err != nil {
+	if err := internalSecurityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	pending := testPendingUpdate(t, stateDir)
