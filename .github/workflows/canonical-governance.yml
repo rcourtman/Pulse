@@ -256,6 +256,9 @@ jobs:
       - name: Run release container identity verifier unit tests
         run: python3 scripts/release_control/verify_release_container_images_test.py
 
+      - name: Run stable container alias verifier unit tests
+        run: python3 scripts/release_control/verify_stable_container_aliases_test.py
+
       - name: Run immutable release integrity unit tests
         run: python3 scripts/release_control/verify_github_release_integrity_test.py
 

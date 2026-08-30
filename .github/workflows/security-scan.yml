@@ -10,6 +10,9 @@ on:
   schedule:
     - cron: '30 5 * * 1' # weekly, Monday 05:30 UTC, before the 06:00 triage run
   workflow_dispatch:
+  workflow_run:
+    workflows: [Release Convergence]
+    types: [completed]
 
 permissions:
   contents: read
@@ -17,6 +20,10 @@ permissions:
 jobs:
   release-continuity:
     name: Latest stable release continuity
+    # Stable convergence gets an immediate independent read-back. Prerelease
+    # convergence is excluded because this job intentionally follows the
+    # advertised stable channel; the weekly and manual backstops always run.
+    if: ${{ github.event_name != 'workflow_run' || !contains(github.event.workflow_run.display_title, '-') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -135,6 +142,19 @@ jobs:
             exit 1
           fi
 
+      - name: Verify stable container discovery aliases
+        id: aliases
+        if: ${{ always() && steps.release.outcome == 'success' }}
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          EXPECTED_SERVER_DIGEST: ${{ steps.release.outputs.server_image_digest }}
+          EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}
+          REGISTRY_OWNER: ${{ github.repository_owner }}
+        run: >-
+          ./scripts/verify-stable-container-aliases.sh
+          "${TAG}" "${EXPECTED_SERVER_DIGEST}" "${EXPECTED_CONTROL_PLANE_DIGEST}"
+          "${REGISTRY_OWNER}"
+
       - name: Verify exact-version Helm identity
         id: helm
         if: ${{ always() && steps.release.outcome == 'success' }}
@@ -154,6 +174,11 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          CONVERGENCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          CONVERGENCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          CONVERGENCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CONVERGENCE_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
           TAG: ${{ steps.release.outputs.tag }}
           RELEASE_ID: ${{ steps.release.outputs.release_id }}
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
@@ -165,6 +190,7 @@ jobs:
           PACKET_RESULT: ${{ steps.packet.outcome }}
           ASSET_RESULT: ${{ steps.assets.outcome }}
           CONTAINER_RESULT: ${{ steps.containers.outcome }}
+          ALIAS_RESULT: ${{ steps.aliases.outcome }}
           HELM_RESULT: ${{ steps.helm.outcome }}
         run: |
           set -euo pipefail
@@ -176,6 +202,11 @@ jobs:
             --arg repository "${REPOSITORY}" \
             --arg run_id "${RUN_ID}" \
             --arg run_attempt "${RUN_ATTEMPT}" \
+            --arg trigger_event "${TRIGGER_EVENT}" \
+            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+            --arg convergence_run_attempt "${CONVERGENCE_RUN_ATTEMPT}" \
+            --arg convergence_conclusion "${CONVERGENCE_CONCLUSION}" \
+            --arg convergence_display_title "${CONVERGENCE_DISPLAY_TITLE}" \
             --arg tag "${TAG}" \
             --arg release_id "${RELEASE_ID}" \
             --arg source_sha "${SOURCE_SHA}" \
@@ -187,12 +218,22 @@ jobs:
             --arg packet_result "${PACKET_RESULT}" \
             --arg asset_result "${ASSET_RESULT}" \
             --arg container_result "${CONTAINER_RESULT}" \
+            --arg alias_result "${ALIAS_RESULT}" \
             --arg helm_result "${HELM_RESULT}" \
             '{
               schema_version: ($schema_version | tonumber),
               checked_at: $checked_at,
               repository: $repository,
               workflow_run: {id: $run_id, attempt: $run_attempt},
+              trigger: {
+                event: $trigger_event,
+                release_convergence_run: {
+                  id: $convergence_run_id,
+                  attempt: $convergence_run_attempt,
+                  conclusion: $convergence_conclusion,
+                  display_title: $convergence_display_title
+                }
+              },
               release: {
                 tag: $tag,
                 id: $release_id,
@@ -207,6 +248,7 @@ jobs:
                 immutable_packet_and_provenance: $packet_result,
                 authenticated_assets: $asset_result,
                 container_identities: $container_result,
+                stable_container_aliases: $alias_result,
                 helm_identity: $helm_result
               }
             }' > release-continuity-evidence/continuity-evidence.json
@@ -223,6 +265,7 @@ jobs:
 
   container-lifecycle:
     name: Container trust and support window
+    if: ${{ github.event_name != 'workflow_run' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -242,6 +285,7 @@ jobs:
 
   govulncheck:
     name: Go Vulnerability Scan (${{ matrix.directory }})
+    if: ${{ github.event_name != 'workflow_run' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -269,6 +313,7 @@ jobs:
 
   npm-audit:
     name: npm Dependency Audit (${{ matrix.name }})
+    if: ${{ github.event_name != 'workflow_run' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false

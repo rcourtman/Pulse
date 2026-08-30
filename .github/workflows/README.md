@@ -19,12 +19,15 @@ data and must never be interpolated into the generated shell program.
 
 ## Release Continuity
 
-The weekly `security-scan.yml` backstop also verifies the latest advertised
-stable release from the public surfaces customers use. It binds the immutable
-GitHub release and activation marker to one source commit, authenticates every
-checksummed release asset and SSH signature, re-verifies release and build
-attestations, and requires the exact Docker Hub, GHCR, and OCI Helm identities
-to remain equal to the digests committed at activation. Every run retains a
+The weekly `security-scan.yml` backstop and an immediate read-back after every
+stable release convergence verify the latest advertised stable release from
+the public surfaces customers use. They bind the immutable
+GitHub release and activation marker to one source commit, authenticate every
+checksummed release asset and SSH signature, re-verify release and build
+attestations, and require the exact Docker Hub, GHCR, and OCI Helm identities
+to remain equal to the digests committed at activation. Stable Docker Hub and
+GHCR discovery aliases (`latest`, major, and major-minor) must also retain
+those identities. Every run retains a
 machine-readable evidence packet for 90 days, including partial outcomes when
 a check fails. The job is read-only and requires the public
 `PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable.

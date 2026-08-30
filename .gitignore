@@ -278,6 +278,7 @@ scripts/release_control/*
 !scripts/release_control/subsystem_lookup.py
 !scripts/release_control/subsystem_lookup_test.py
 !scripts/release_control/verify_github_release_integrity_test.py
+!scripts/release_control/verify_stable_container_aliases_test.py
 !scripts/release_control/ssh_host_key_policy_test.py
 !scripts/release_control/work_claim.py
 !scripts/release_control/work_claim_test.py

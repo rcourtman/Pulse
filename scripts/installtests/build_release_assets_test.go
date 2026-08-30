@@ -151,6 +151,9 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	}
 	workflow := string(content)
 	required := []string{
+		"workflow_run:",
+		"workflows: [Release Convergence]",
+		`github.event_name != 'workflow_run' || !contains(github.event.workflow_run.display_title, '-')`,
 		"release-continuity:",
 		"Latest stable release continuity",
 		"docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5",
@@ -163,6 +166,10 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`./scripts/verify-release-container-images.sh`,
 		`EXPECTED_SERVER_DIGEST: ${{ steps.release.outputs.server_image_digest }}`,
 		`EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}`,
+		`./scripts/verify-stable-container-aliases.sh`,
+		`stable_container_aliases: $alias_result`,
+		`CONVERGENCE_RUN_ID: ${{ github.event.workflow_run.id }}`,
+		`release_convergence_run: {`,
 		`./scripts/verify-release-helm-chart.sh`,
 		`EXPECTED_HELM_DIGEST: ${{ steps.release.outputs.helm_chart_digest }}`,
 		"continuity-evidence.json",
@@ -175,6 +182,11 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	}
 	if strings.Contains(workflowJobBlock(t, workflow, "release-continuity"), "contents: write") {
 		t.Fatal("scheduled release continuity check must remain read-only")
+	}
+	for _, jobName := range []string{"container-lifecycle", "govulncheck", "npm-audit"} {
+		if !strings.Contains(workflowJobBlock(t, workflow, jobName), `github.event_name != 'workflow_run'`) {
+			t.Fatalf("%s must not run for the post-convergence continuity trigger", jobName)
+		}
 	}
 }
 
