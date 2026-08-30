@@ -2045,6 +2045,12 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
 
 ## Current State
 
+Discovery-led availability proposals present their evidence and canonical
+attachment boundary as short, complete sentences in both the inline card and
+machine-wide review. The colocated component test pins that operator-facing
+copy so the shared copy-style audit cannot regress it back to semicolon-joined
+instructions.
+
 ### Provider workflows hydrate only their active route inventory
 
 Docker / Podman, Kubernetes, TrueNAS, and VMware surfaces declare an explicit

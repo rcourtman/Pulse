@@ -1,37 +1,13 @@
 {
   "version": 1,
-  "base_sha": "65bec55229d7b0ce94115740c8e45f19481f25c9",
-  "verified_at": "2026-08-30T17:24:54Z",
+  "base_sha": "defc24af837b91428fbee939d09cd31e9559fb4f",
+  "verified_at": "2026-08-30T18:33:03Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/api/discovery.ts",
-    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
-    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
-    "frontend-modern/src/components/Discovery/availabilityProposalModel.ts",
-    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
-    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
-    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
-    "frontend-modern/src/types/discovery.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx"],
   "content_sha256": {
-    "frontend-modern/src/api/discovery.ts": "ab530402b9f781725360f2f3a493d249e5e2460fc7b000fecd071ea482245b91",
-    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx": "fd730057d1ce530737d4db85406ab373300e7cb80aff08a3cebb1997703feaea",
-    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx": "34d9bbe317f04e03a475c7f008a09cb0aec7c55d6cc16111887ad1084173a83b",
-    "frontend-modern/src/components/Discovery/availabilityProposalModel.ts": "3b4836202ccd7ea3e3e5a77984066d0992baa1f2aca1ab939d6c646e00de8e73",
-    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts": "8fe05c6c687fae58871b7cd169d571e6e4e20e0f3658a919f1a4bd1303fee8c6",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "2da737d42e57b846e2f38872114b352dcf2e19d6f5be06ad5ba394f8d39abf3c",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "b4d13cc0b945e15d73f0b5d3cc5f07d7081728c1b81673566c7b65af9e444938",
-    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "7516b22879ff63eca143e1b76f18bc1b86602ddb20d9fd6af74be01a529a6ab5",
-    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "6b43a190bab1a666a41395edfe8e4dda6fa0554dd276121155148a846accf781",
-    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "5d1125eddecc8a9d543c7497af4a1ba67032a11af6402aae22265a7bc10aa7e5",
-    "frontend-modern/src/types/discovery.ts": "4831b27ebf6577411f634f8bad01c7735e47bc4d212f8d4ad29790a68e4cf251"
+    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx": "8432b423e90ebb0e8dbc56ae82535b992bb7715be688cf6f95be34c1d12564e4"
   },
-  "routes": [
-    "/docker/overview?q=uptime-kuma"
-  ],
+  "routes": ["/docker/overview?q=uptime-kuma"],
   "viewports": [
     {
       "width": 1280,
@@ -43,17 +19,14 @@
     }
   ],
   "states": [
-    "discovered Uptime Kuma service with an evidence-bound inactive verification proposal",
-    "operator-edited check name and five-minute cadence with Pulse server observation",
-    "safe proposal test reporting an unresolved discovered hostname without creating a check",
-    "machine-wide review listing HTTP service proposals without guessing canonical attachments",
-    "desktop and phone-width proposal card and machine-review dialog layouts"
+    "current-build AvailabilityProposalCard with a discovered Uptime Kuma verification proposal",
+    "inline proposal evidence and canonical attachment copy",
+    "open machine assurance suggestions dialog with one reviewable HTTP service",
+    "desktop and phone-width proposal card and dialog layouts"
   ],
   "interactions": [
-    "opened a Docker workload drawer, Manage, Access, and embedded Discovery analysis",
-    "changed the operator-owned name and interval while preserving the inferred endpoint",
-    "ran Test proposal and confirmed failure feedback remained inside the proposal",
-    "opened and closed Review machine suggestions and inspected the scrollable service list",
-    "verified the proposal card and machine-review dialog at desktop and phone widths"
+    "opened Review machine suggestions and verified the evidence-specific dismissal copy",
+    "closed the machine suggestions dialog with Escape",
+    "verified card and dialog bounds, wrapping, scrolling, and absence of horizontal overflow at desktop and phone widths"
   ]
 }

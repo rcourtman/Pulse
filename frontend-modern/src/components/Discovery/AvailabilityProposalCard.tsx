@@ -230,8 +230,8 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                 </span>
               </div>
               <p class="mt-1 max-w-2xl text-xs text-blue-800 dark:text-blue-200">
-                Pulse inferred a useful check from this service. Review exactly what will run;
-                nothing is created until you choose the active-check action below.
+                Pulse inferred a useful check from this service. Review exactly what will run.
+                Nothing is created until you choose the active-check action below.
               </p>
             </div>
             <Button size="sm" variant="ghost" onClick={() => setShowBulkReview(true)}>
@@ -408,8 +408,8 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                   </h2>
                   <p class="mt-1 text-sm text-muted">
                     Review the services discovered through{' '}
-                    {props.discovery.hostname || props.targetId}. Dismissing is evidence-specific;
-                    creating a check still happens from its canonical resource so Pulse never
+                    {props.discovery.hostname || props.targetId}. Dismissing is evidence-specific.
+                    Creating a check still happens from its canonical resource so Pulse never
                     guesses the attachment.
                   </p>
                 </div>

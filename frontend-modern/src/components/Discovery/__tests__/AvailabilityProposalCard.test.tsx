@@ -103,7 +103,19 @@ describe('AvailabilityProposalCard', () => {
     expect(screen.getByText('Endpoint · inferred')).toBeInTheDocument();
     expect(screen.getByText('Expected behavior · reviewed default')).toBeInTheDocument();
     expect(screen.getByText('GET returns HTTP 200–399')).toBeInTheDocument();
-    expect(screen.getByText(/nothing is created until/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse inferred a useful check from this service. Review exactly what will run. Nothing is created until you choose the active-check action below.',
+      ),
+    ).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Review machine suggestions' }));
+    expect(
+      screen.getByText(
+        'Review the services discovered through docker-1. Dismissing is evidence-specific. Creating a check still happens from its canonical resource so Pulse never guesses the attachment.',
+      ),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Close machine suggestions' }));
 
     await fireEvent.change(screen.getByLabelText('Observation location · you control'), {
       target: { value: 'edge-1' },
