@@ -137,11 +137,12 @@ type CommandClient struct {
 	// actionRunnerOnly is an immutable constructor-selected protocol ceiling.
 	// It permits only the closed typed action families and their receipt,
 	// preflight, observation, cancellation, and liveness messages.
-	actionRunnerOnly   bool
-	runtimeRole        string
-	actionCapability   string
-	healthPath         string
-	healthCapabilities []string
+	actionRunnerOnly      bool
+	runtimeRole           string
+	actionCapability      string
+	healthPath            string
+	healthCapabilities    []string
+	actionActivationNonce string
 }
 
 // NewCommandClient creates a new command execution client
@@ -419,8 +420,14 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 		return fmt.Errorf("registration failed: %w", err)
 	}
 	if c.actionRunnerOnly {
-		if err := c.writeActionRunnerHealth(); err != nil {
+		if err := c.writeActionRunnerHealth(false); err != nil {
 			return fmt.Errorf("write action-runner health: %w", err)
+		}
+		if err := c.activateActionRunnerCredential(ctx); err != nil {
+			return err
+		}
+		if err := c.writeActionRunnerHealth(true); err != nil {
+			return fmt.Errorf("write activated action-runner health: %w", err)
 		}
 	}
 

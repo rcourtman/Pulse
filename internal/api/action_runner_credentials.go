@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
@@ -24,13 +25,15 @@ type actionRunnerCredentialRequest struct {
 }
 
 type actionRunnerCredentialResponse struct {
-	Token            string `json:"token"`
-	TokenID          string `json:"tokenId"`
-	OrganizationID   string `json:"organizationId"`
-	AgentID          string `json:"agentId"`
-	Hostname         string `json:"hostname"`
-	RuntimeRole      string `json:"runtimeRole"`
-	ActionCapability string `json:"actionCapability"`
+	Token              string     `json:"token"`
+	TokenID            string     `json:"tokenId"`
+	OrganizationID     string     `json:"organizationId"`
+	AgentID            string     `json:"agentId"`
+	Hostname           string     `json:"hostname"`
+	RuntimeRole        string     `json:"runtimeRole"`
+	ActionCapability   string     `json:"actionCapability"`
+	ActivationPending  bool       `json:"activationPending"`
+	ActivationDeadline *time.Time `json:"activationDeadline,omitempty"`
 }
 
 type actionRunnerCredentialSelfRevokeRequest struct {
@@ -38,17 +41,20 @@ type actionRunnerCredentialSelfRevokeRequest struct {
 	Hostname string `json:"hostname"`
 }
 
-func actionRunnerCredentialRoute(cfg *config.Config, issue, selfRevoke http.HandlerFunc) http.HandlerFunc {
+func actionRunnerCredentialRoute(cfg *config.Config, issue, activate, selfRevoke http.HandlerFunc) http.HandlerFunc {
 	issue = RequireAdmin(cfg, RequireScope(config.ScopeSettingsWrite, RequireScope(config.ScopeActionsExecute, issue)))
+	activate = RequireAuth(cfg, RequireScope(config.ScopeAgentExec, activate))
 	selfRevoke = RequireAuth(cfg, RequireScope(config.ScopeAgentExec, selfRevoke))
 	return func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodPost:
 			issue(w, req)
+		case http.MethodPatch:
+			activate(w, req)
 		case http.MethodDelete:
 			selfRevoke(w, req)
 		default:
-			w.Header().Set("Allow", http.MethodPost+", "+http.MethodDelete)
+			w.Header().Set("Allow", http.MethodPost+", "+http.MethodPatch+", "+http.MethodDelete)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}
@@ -112,14 +118,88 @@ func (r *Router) handleIssueActionRunnerCredential(w http.ResponseWriter, req *h
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(actionRunnerCredentialResponse{
-		Token:            issued.Token,
-		TokenID:          record.ID,
-		OrganizationID:   record.OrgID,
-		AgentID:          record.Metadata["bound_agent_id"],
-		Hostname:         record.Metadata["bound_hostname"],
-		RuntimeRole:      record.Metadata[agenttokens.RuntimeRoleMetadataKey],
-		ActionCapability: record.Metadata[agenttokens.ActionCapabilityMetadataKey],
+		Token:              issued.Token,
+		TokenID:            record.ID,
+		OrganizationID:     record.OrgID,
+		AgentID:            record.Metadata["bound_agent_id"],
+		Hostname:           record.Metadata["bound_hostname"],
+		RuntimeRole:        record.Metadata[agenttokens.RuntimeRoleMetadataKey],
+		ActionCapability:   record.Metadata[agenttokens.ActionCapabilityMetadataKey],
+		ActivationPending:  strings.TrimSpace(record.Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey]) == "true",
+		ActivationDeadline: record.ExpiresAt,
 	})
+}
+
+// handleActivateActionRunnerCredential commits a prepared rotation only after
+// the exact replacement runner has registered and durably written its local
+// activation proof. The runner calls this endpoint itself; no plaintext token
+// or caller-selected predecessor identity crosses the boundary.
+func (r *Router) handleActivateActionRunnerCredential(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPatch {
+		w.Header().Set("Allow", http.MethodPatch)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if r == nil || r.config == nil || r.agentExecServer == nil {
+		http.Error(w, "Action runner activation service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	caller := getAPITokenRecordFromRequest(req)
+	if caller == nil {
+		http.Error(w, "Action runner bearer credential required", http.StatusForbidden)
+		return
+	}
+	decoder := json.NewDecoder(io.LimitReader(req.Body, maxActionRunnerCredentialRequestBytes+1))
+	decoder.DisallowUnknownFields()
+	var payload actionRunnerCredentialSelfRevokeRequest
+	if err := decoder.Decode(&payload); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	organizationID := strings.TrimSpace(GetOrgID(req.Context()))
+	if len(caller.GetBoundOrgs()) != 1 || strings.TrimSpace(caller.GetBoundOrgs()[0]) != organizationID ||
+		!agentbinding.EvaluateActionRunner(caller, payload.AgentID, payload.Hostname).Admit {
+		http.Error(w, "Action runner credential binding mismatch", http.StatusForbidden)
+		return
+	}
+	pending := strings.TrimSpace(caller.Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey]) == "true"
+	admission := agentexec.AgentAdmission{
+		OrganizationID:    organizationID,
+		TokenID:           strings.TrimSpace(caller.ID),
+		AgentID:           strings.TrimSpace(caller.Metadata["bound_agent_id"]),
+		Hostname:          strings.TrimSpace(caller.Metadata["bound_hostname"]),
+		RuntimeRole:       agentexec.RuntimeRoleActionRunner,
+		ActionCapability:  agentexec.ActionCapabilityTypedV1,
+		ActivationPending: pending,
+	}
+	if !r.agentExecServer.HasActionRunnerSession(admission) {
+		http.Error(w, "Exact action runner session is not registered", http.StatusConflict)
+		return
+	}
+	_, revoked, changed, err := agenttokens.ActivateActionRunnerAndPersist(
+		r.config, r.persistence, caller.ID, payload.AgentID, payload.Hostname,
+	)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, agenttokens.ErrRecord) {
+			status = http.StatusForbidden
+		}
+		http.Error(w, "Failed to activate action runner credential", status)
+		return
+	}
+	if changed {
+		for _, previous := range revoked {
+			r.invalidateActionRunnerRecord(previous)
+		}
+		admission.ActivationPending = false
+		r.agentExecServer.PromoteActionRunnerSession(admission)
+		LogAuditEventForTenant(organizationID, "action_runner_credential_activated", auth.GetUser(req.Context()), GetClientIP(req), req.URL.Path, true, "Activated host-bound typed action runner credential")
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleSelfRevokeActionRunnerCredential lets the separately credentialed

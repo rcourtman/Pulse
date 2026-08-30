@@ -35,7 +35,7 @@ func TestSelfRevokeActionRunnerCredentialRejectsNonRunnerExecBearer(t *testing.T
 	req.Header.Set("Authorization", "Bearer "+raw)
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
 	rec := httptest.NewRecorder()
-	actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)(rec, req)
+	actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleActivateActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)(rec, req)
 	if rec.Code != http.StatusForbidden || len(cfg.APITokens) != 1 {
 		t.Fatalf("legacy self revoke = status %d tokens %#v body=%s", rec.Code, cfg.APITokens, rec.Body.String())
 	}

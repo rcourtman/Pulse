@@ -89,16 +89,21 @@ set, so `ProtectSystem=strict` is not a valid runner sandbox claim. Its separate
 credential, no-listener transport, typed admission, target and digest binding,
 bounded capabilities, state privacy, and durable receipts are the compensating
 boundary; collector and helper filesystem hardening remains independent.
-Action-runner issuance and rotation are one durable host-bound transition per
-organization and canonical agent ID. Re-issuance replaces the prior runner
-record even when the monitored hostname has changed, returns the new plaintext
-secret only after persistence succeeds, and restores the complete prior token
-inventory if persistence fails. A successful rotation invalidates the previous
-secret immediately; it never widens the collector credential or turns a
-monitoring session into an action session.
+Action-runner issuance and rotation are a two-phase durable host-bound
+transition per organization and canonical agent ID. Re-issuance prepares a
+ten-minute replacement credential while retaining the prior active record,
+returns the new plaintext secret only after persistence succeeds, and removes
+older unactivated replacements. The pending credential may authenticate one
+exact runner transport but cannot become dispatch authority. After the runner
+durably records its current activation nonce, its authenticated activation
+request atomically promotes the replacement and revokes the server-recorded
+predecessor set. A persistence failure restores both sides of the transition;
+an unactivated replacement expires without revoking the predecessor.
 That invalidation is exact and post-persistence: it matches organization,
 token, canonical agent, hostname, runtime role, and typed capability before
-closing the session, so a stale rotation cannot evict a replacement. The
+closing the session, so a stale rotation cannot evict a replacement. Activation
+is idempotent for the exact live session so transport-level response loss is
+recoverable. The
 runner may also delete only its own matching record using its bearer
 credential; browser sessions and a caller-selected token ID are rejected, and
 persistence failure restores the prior inventory. Installer teardown keeps the

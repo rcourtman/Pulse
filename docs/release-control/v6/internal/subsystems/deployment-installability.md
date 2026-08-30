@@ -146,9 +146,14 @@ The same supported Linux systemd profile can install `pulse-agent-runner` only
 through the separate `--enable-action-runner` choice, a private token file,
 and the already selected typed helper profile. The runner binary, unit,
 configuration, credential, health record, and receipt database are root-owned
-and independent from collector state. Activation is transactional and restores
-the previous runner-only files if health does not become current; disable and
-uninstall remove only remediation and leave monitoring running. The action
+and independent from collector state. Activation is transactional: the server
+keeps the prior credential valid while a bounded replacement registers without
+dispatch authority; the runner durably writes an installer-nonce-bound health
+marker and commits activation before the installer removes backups. The
+installer deletes the prior marker before restart, does not trust filesystem
+timestamps, never restores a prior marker, and restores the previous runner-only
+files if the current nonce never reaches activated state. Disable and uninstall
+remove only remediation and leave monitoring running. The action
 credential is never placed in argv or reused as the collector token. The
 installer persists the canonical enrollment hostname for runner admission and
 uses a private curl configuration for best-effort exact self-revocation before

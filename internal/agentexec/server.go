@@ -97,12 +97,13 @@ type organizationContextKey struct{}
 // session. The raw bearer token is deliberately not retained after
 // registration.
 type AgentAdmission struct {
-	OrganizationID   string
-	TokenID          string
-	AgentID          string
-	Hostname         string
-	RuntimeRole      string
-	ActionCapability string
+	OrganizationID    string
+	TokenID           string
+	AgentID           string
+	Hostname          string
+	RuntimeRole       string
+	ActionCapability  string
+	ActivationPending bool
 }
 
 // AgentRegistrationValidator authenticates and binds a registration to one
@@ -357,6 +358,13 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 	if !ok {
 		return nil, false
 	}
+	// A prepared action-runner credential may establish the authenticated
+	// transport needed to commit activation, but it is not dispatch authority.
+	// Promotion clears this bit only after the server durably revokes the prior
+	// credential set.
+	if ac.admission.ActivationPending {
+		return nil, false
+	}
 	if s.validateSession == nil || s.validateSession(ac.admission) {
 		return ac, true
 	}
@@ -374,6 +382,38 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 		_ = ac.conn.Close()
 	}
 	return nil, false
+}
+
+// HasActionRunnerSession reports whether the exact runner transport is
+// currently registered. It intentionally bypasses dispatch readiness: the
+// activation endpoint uses this proof to promote a pending session.
+func (s *Server) HasActionRunnerSession(admission AgentAdmission) bool {
+	if s == nil {
+		return false
+	}
+	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
+	s.mu.RLock()
+	current, ok := s.agents[key]
+	s.mu.RUnlock()
+	return ok && current != nil && sameActionRunnerAdmission(current.admission, admission) &&
+		current.admission.ActivationPending == admission.ActivationPending
+}
+
+// PromoteActionRunnerSession makes an exact prepared session dispatchable
+// after its credential activation has been durably committed.
+func (s *Server) PromoteActionRunnerSession(admission AgentAdmission) bool {
+	if s == nil {
+		return false
+	}
+	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, ok := s.agents[key]
+	if !ok || current == nil || !sameActionRunnerAdmission(current.admission, admission) {
+		return false
+	}
+	current.admission.ActivationPending = false
+	return true
 }
 
 // InvalidateActionRunnerSession closes exactly the currently admitted typed
@@ -1167,7 +1207,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	// Close existing connection if any
 	if existing, ok := s.agents[ac.sessionKey]; ok {
-		if !unifiedresources.HostnamesEquivalent(existing.agent.Hostname, ac.agent.Hostname) {
+		preparedActionRunnerRename := admission.ActivationPending &&
+			admission.RuntimeRole == RuntimeRoleActionRunner &&
+			existing.admission.RuntimeRole == RuntimeRoleActionRunner
+		if !unifiedresources.HostnamesEquivalent(existing.agent.Hostname, ac.agent.Hostname) && !preparedActionRunnerRename {
 			s.mu.Unlock()
 			log.Warn().
 				Str("organization_id", admission.OrganizationID).

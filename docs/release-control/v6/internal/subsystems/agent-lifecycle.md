@@ -106,18 +106,28 @@ proving generic command denial.
 The runner service persists the same normalized canonical hostname used when
 its credential was issued; it must not substitute the machine's incidental OS
 hostname when the collector was enrolled under an override. Credential
-rotation invalidates exactly the superseded organization/token/agent/hostname
-session only after the replacement token inventory is durably stored. That
-invalidation removes the session from dispatch, closes its transport, and
-unblocks server-side waits; an already-started host mutation remains governed
-by its typed receipt and best-effort cancellation semantics rather than being
-described as rolled back. Runner uninstall attempts an authenticated
+rotation is a prepare/commit transaction. Issuance stores a ten-minute pending
+replacement beside the active predecessor; the pending transport may register
+but is not dispatchable. The runner first durably replaces a private health
+marker carrying the current installer-generated activation nonce, then calls
+the authenticated activation method. Activation atomically removes the exact
+predecessor set, removes the replacement expiry/pending state, and promotes the
+exact registered session. Failure before that commit leaves the predecessor
+valid, while persistence failure restores both records. The installer removes
+the prior marker before restart, ignores wall-clock mtime as authority, and
+accepts only an activated marker whose nonce and canonical agent ID match the
+current attempt; rollback never restores a prior marker. An already-started
+host mutation remains governed by its typed receipt and best-effort
+cancellation semantics rather than being described as rolled back. Runner
+uninstall attempts an authenticated
 credential self-revoke before deleting local state. The delete route may
 remove only the caller's exact host-bound action-runner record; an unreachable
 server cannot prevent local runner removal and leaves an explicit operator
 revocation residual.
 Runner readiness is exposed through a bounded, secret-free health marker that
-is replaced atomically only after its contents reach stable storage. POSIX
+is replaced atomically only after its contents reach stable storage. The
+marker distinguishes registered/pending from activated and carries only the
+per-attempt nonce, never the bearer credential. POSIX
 targets must sync the containing directory after rename; Windows targets must
 use a write-through replacement rather than attempting to flush the read-only
 directory handle returned by the standard library. The marker and helper-update

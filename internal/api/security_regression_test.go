@@ -716,12 +716,15 @@ func TestActionRunnerCredentialAdmissionRejectsWrongIdentityAndUnboundOrganizati
 	}
 }
 
-func TestActionRunnerCredentialRotationRevokesPreviousSession(t *testing.T) {
+func TestActionRunnerCredentialRotationRevokesPreviousSecretOnlyAtActivation(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	firstToken, firstRecord, err := agenttokens.IssueActionRunnerAndPersist(cfg, nil, agenttokens.ActionRunnerIssueOptions{
 		OrgID: "org-a", AgentID: "machine-a", Hostname: "node.example",
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := agenttokens.ActivateActionRunnerAndPersist(cfg, nil, firstRecord.ID, "machine-a", "node.example"); err != nil {
 		t.Fatal(err)
 	}
 	router := &Router{config: cfg}
@@ -735,14 +738,20 @@ func TestActionRunnerCredentialRotationRevokesPreviousSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if firstRecord.ID == secondRecord.ID || firstToken == secondToken || len(cfg.APITokens) != 1 {
-		t.Fatalf("rotation did not replace the prior credential: %#v", cfg.APITokens)
+	if firstRecord.ID == secondRecord.ID || firstToken == secondToken || len(cfg.APITokens) != 2 {
+		t.Fatalf("rotation did not prepare beside the prior credential: %#v", cfg.APITokens)
+	}
+	if _, ok := router.admitAgentExecToken(firstToken, "machine-a", "node.example"); !ok {
+		t.Fatal("prepared rotation revoked the prior action runner credential")
+	}
+	if admission, ok := router.admitAgentExecToken(secondToken, "machine-a", "renamed.example"); !ok || !admission.ActivationPending {
+		t.Fatal("replacement action runner credential was rejected")
+	}
+	if _, revoked, changed, err := agenttokens.ActivateActionRunnerAndPersist(cfg, nil, secondRecord.ID, "machine-a", "renamed.example"); err != nil || !changed || len(revoked) != 1 || revoked[0].ID != firstRecord.ID {
+		t.Fatalf("rotation activation = revoked %#v, changed %v, error %v", revoked, changed, err)
 	}
 	if _, ok := router.admitAgentExecToken(firstToken, "machine-a", "node.example"); ok {
-		t.Fatal("replaced action runner credential remained admissible")
-	}
-	if _, ok := router.admitAgentExecToken(secondToken, "machine-a", "renamed.example"); !ok {
-		t.Fatal("replacement action runner credential was rejected")
+		t.Fatal("activated rotation left prior action runner credential valid")
 	}
 }
 

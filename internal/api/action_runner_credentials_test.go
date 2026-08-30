@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,7 +16,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type actionRunnerFailingPersistenceFS struct{}
@@ -68,6 +71,24 @@ func issueActionRunnerCredentialForTest(t *testing.T, router *Router, hostID, ho
 		t.Fatal(err)
 	}
 	return response
+}
+
+func commitActionRunnerCredentialForTest(t *testing.T, router *Router, credential actionRunnerCredentialResponse) {
+	t.Helper()
+	if _, _, _, err := agenttokens.ActivateActionRunnerAndPersist(router.config, router.persistence, credential.TokenID, credential.AgentID, credential.Hostname); err != nil {
+		t.Fatalf("activate action runner credential: %v", err)
+	}
+}
+
+func requestActionRunnerActivationForTest(t *testing.T, router *Router, credential actionRunnerCredentialResponse) *httptest.ResponseRecorder {
+	t.Helper()
+	body, _ := json.Marshal(actionRunnerCredentialSelfRevokeRequest{AgentID: credential.AgentID, Hostname: credential.Hostname})
+	req := httptest.NewRequest(http.MethodPatch, "/api/agents/action-runner/credential", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+credential.Token)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, credential.OrganizationID))
+	rec := httptest.NewRecorder()
+	actionRunnerCredentialRoute(router.config, router.handleIssueActionRunnerCredential, router.handleActivateActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)(rec, req)
+	return rec
 }
 
 func connectActionRunnerCredentialForTest(t *testing.T, server *agentexec.Server, credential actionRunnerCredentialResponse) (*websocket.Conn, *httptest.Server) {
@@ -152,7 +173,7 @@ func TestIssueActionRunnerCredentialRejectsUnknownOrMismatchedHost(t *testing.T)
 	}
 }
 
-func TestIssueActionRunnerCredentialRouteRotatesExistingHostBinding(t *testing.T) {
+func TestIssueActionRunnerCredentialRoutePreparesExistingHostRotation(t *testing.T) {
 	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
 	issue := func() actionRunnerCredentialResponse {
 		t.Helper()
@@ -169,19 +190,24 @@ func TestIssueActionRunnerCredentialRouteRotatesExistingHostBinding(t *testing.T
 		return response
 	}
 	first := issue()
+	commitActionRunnerCredentialForTest(t, router, first)
 	second := issue()
 	if first.TokenID == second.TokenID || first.Token == second.Token {
 		t.Fatalf("re-enrollment did not rotate credential: first=%#v second=%#v", first, second)
 	}
-	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != second.TokenID {
-		t.Fatalf("route accumulated host-bound credentials: %#v", cfg.APITokens)
+	if !second.ActivationPending || second.ActivationDeadline == nil {
+		t.Fatalf("prepared response = %#v", second)
+	}
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("route did not retain active predecessor during prepare: %#v", cfg.APITokens)
 	}
 }
 
-func TestIssueActionRunnerCredentialRotationClosesReplacedLiveSessionAfterPersistence(t *testing.T) {
-	router, _, hostID := newActionRunnerCredentialTestRouter(t)
+func TestIssueActionRunnerCredentialRotationCommitsOnlyAfterReplacementHealthHandshake(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
 	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
 	first := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	commitActionRunnerCredentialForTest(t, router, first)
 	conn, ts := connectActionRunnerCredentialForTest(t, router.agentExecServer, first)
 	defer conn.Close()
 	defer ts.Close()
@@ -193,8 +219,29 @@ func TestIssueActionRunnerCredentialRotationClosesReplacedLiveSessionAfterPersis
 	if second.TokenID == first.TokenID {
 		t.Fatal("credential did not rotate")
 	}
+	if !router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		t.Fatal("prepare step revoked the prior runner before replacement activation")
+	}
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("prepared rotation inventory = %#v", cfg.APITokens)
+	}
+	pendingConn, pendingServer := connectActionRunnerCredentialForTest(t, router.agentExecServer, second)
+	defer pendingConn.Close()
+	defer pendingServer.Close()
 	if router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
-		t.Fatal("replaced action-runner session remained connected")
+		t.Fatal("pending replacement became dispatchable before activation")
+	}
+	if rec := requestActionRunnerActivationForTest(t, router, second); rec.Code != http.StatusNoContent {
+		t.Fatalf("activation status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if !router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		t.Fatal("activated replacement did not become dispatchable")
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != second.TokenID || cfg.APITokens[0].ExpiresAt != nil {
+		t.Fatalf("committed rotation inventory = %#v", cfg.APITokens)
+	}
+	if _, ok := router.admitAgentExecToken(first.Token, hostID, first.Hostname); ok {
+		t.Fatal("committed rotation left prior secret valid")
 	}
 }
 
@@ -202,6 +249,7 @@ func TestIssueActionRunnerCredentialPersistenceFailureKeepsPriorLiveSession(t *t
 	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
 	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
 	first := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	commitActionRunnerCredentialForTest(t, router, first)
 	conn, ts := connectActionRunnerCredentialForTest(t, router.agentExecServer, first)
 	defer conn.Close()
 	defer ts.Close()
@@ -222,15 +270,59 @@ func TestIssueActionRunnerCredentialPersistenceFailureKeepsPriorLiveSession(t *t
 	}
 }
 
+func TestActivateActionRunnerCredentialPersistenceFailureKeepsBothCredentialsAndPendingSession(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
+	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
+	first := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	commitActionRunnerCredentialForTest(t, router, first)
+	second := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	pendingConn, pendingServer := connectActionRunnerCredentialForTest(t, router.agentExecServer, second)
+	defer pendingConn.Close()
+	defer pendingServer.Close()
+	router.persistence.SetFileSystem(actionRunnerFailingPersistenceFS{})
+
+	rec := requestActionRunnerActivationForTest(t, router, second)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("activation status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("failed activation inventory = %#v", cfg.APITokens)
+	}
+	if _, ok := router.admitAgentExecToken(first.Token, hostID, first.Hostname); !ok {
+		t.Fatal("failed activation revoked the prior credential")
+	}
+	secondAdmission, ok := router.admitAgentExecToken(second.Token, hostID, second.Hostname)
+	if !ok || !secondAdmission.ActivationPending {
+		t.Fatalf("failed activation did not restore pending replacement: %#v, %v", secondAdmission, ok)
+	}
+	if router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		t.Fatal("failed activation made the pending runner dispatchable")
+	}
+}
+
+func TestActivateActionRunnerCredentialRequiresExactRegisteredSession(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
+	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
+	issued := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	rec := requestActionRunnerActivationForTest(t, router, issued)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("activation status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != issued.TokenID || cfg.APITokens[0].ExpiresAt == nil || cfg.APITokens[0].Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey] != "true" {
+		t.Fatalf("unregistered activation changed inventory = %#v", cfg.APITokens)
+	}
+}
+
 func TestSelfRevokeActionRunnerCredentialRequiresExactBearerBindingAndClosesSession(t *testing.T) {
 	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
 	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
 	issued := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	commitActionRunnerCredentialForTest(t, router, issued)
 	conn, ts := connectActionRunnerCredentialForTest(t, router.agentExecServer, issued)
 	defer conn.Close()
 	defer ts.Close()
 
-	handler := actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)
+	handler := actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleActivateActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)
 	request := func(organizationID, agentID, hostname, token string) *httptest.ResponseRecorder {
 		t.Helper()
 		body, _ := json.Marshal(actionRunnerCredentialSelfRevokeRequest{AgentID: agentID, Hostname: hostname})
@@ -265,7 +357,7 @@ func TestActionRunnerCredentialRouteAuthSupportsAdminSessionAndScopedToken(t *te
 	for _, mode := range []string{"api-token", "admin-session"} {
 		t.Run(mode, func(t *testing.T) {
 			router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
-			handler := actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)
+			handler := actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleActivateActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)
 			req := httptest.NewRequest(http.MethodPost, "/api/agents/action-runner/credential", actionRunnerCredentialBody(hostID, "host-1.local"))
 			switch mode {
 			case "api-token":
@@ -315,5 +407,158 @@ func TestActionRunnerCredentialCannotUseCollectorReportOrConfigScopes(t *testing
 		if called || authRec.Code != http.StatusForbidden {
 			t.Fatalf("action credential scope %q = called=%v status=%d body=%s", scope, called, authRec.Code, authRec.Body.String())
 		}
+	}
+}
+
+func TestActionRunnerRotationProductionRouterTLSPersistenceRestart(t *testing.T) {
+	dataPath := t.TempDir()
+	hashedPassword, err := internalauth.HashPassword("production-router-test-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRuntime := func(cfg *config.Config) (*Router, *monitoring.Monitor, *httptest.Server) {
+		t.Helper()
+		monitor, err := monitoring.New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "test")
+		return router, monitor, httptest.NewTLSServer(router.Handler())
+	}
+	shutdown := func(router *Router, monitor *monitoring.Monitor, server *httptest.Server) {
+		server.Close()
+		if router.agentExecServer != nil {
+			router.agentExecServer.Shutdown()
+		}
+		router.shutdownBackgroundWorkers()
+		router.ShutdownResourceStores()
+		router.ShutdownRBAC()
+		monitor.StopDiscoveryService()
+		monitor.Stop()
+	}
+	dial := func(server *httptest.Server, credential actionRunnerCredentialResponse) (*websocket.Conn, agentexec.RegisteredPayload) {
+		t.Helper()
+		transport, ok := server.Client().Transport.(*http.Transport)
+		if !ok || transport.TLSClientConfig == nil {
+			t.Fatal("TLS test server client has no TLS transport")
+		}
+		dialer := websocket.Dialer{TLSClientConfig: transport.TLSClientConfig.Clone()}
+		conn, _, err := dialer.Dial(wsURLForHTTP(server.URL)+"/api/agent/ws", wsHeadersForHTTP(t, server.URL))
+		if err != nil {
+			t.Fatal(err)
+		}
+		message, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+			AgentID: credential.AgentID, Hostname: credential.Hostname, Token: credential.Token,
+			RuntimeRole: credential.RuntimeRole, ActionCapability: credential.ActionCapability,
+			OperationReceiptVersion: operationreceipt.ProtocolVersion,
+		})
+		if err != nil {
+			conn.Close()
+			t.Fatal(err)
+		}
+		if err := conn.WriteJSON(message); err != nil {
+			conn.Close()
+			t.Fatal(err)
+		}
+		return conn, readRegisteredPayload(t, conn)
+	}
+	issue := func(server *httptest.Server, hostID string) actionRunnerCredentialResponse {
+		t.Helper()
+		body, _ := json.Marshal(actionRunnerCredentialRequest{AgentID: hostID, Hostname: "host-1.local"})
+		req, _ := http.NewRequest(http.MethodPost, server.URL+"/api/agents/action-runner/credential", bytes.NewReader(body))
+		req.SetBasicAuth("admin", "production-router-test-password")
+		req.Header.Set("Content-Type", "application/json")
+		response, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusCreated {
+			payload, _ := io.ReadAll(response.Body)
+			t.Fatalf("issue status = %d, body=%s", response.StatusCode, payload)
+		}
+		var credential actionRunnerCredentialResponse
+		if err := json.NewDecoder(response.Body).Decode(&credential); err != nil {
+			t.Fatal(err)
+		}
+		return credential
+	}
+	activate := func(server *httptest.Server, credential actionRunnerCredentialResponse) {
+		t.Helper()
+		body, _ := json.Marshal(actionRunnerCredentialSelfRevokeRequest{AgentID: credential.AgentID, Hostname: credential.Hostname})
+		req, _ := http.NewRequest(http.MethodPatch, server.URL+"/api/agents/action-runner/credential", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+credential.Token)
+		req.Header.Set("Content-Type", "application/json")
+		response, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			payload, _ := io.ReadAll(response.Body)
+			t.Fatalf("activation status = %d, body=%s", response.StatusCode, payload)
+		}
+	}
+
+	cfg := &config.Config{DataPath: dataPath, ConfigPath: dataPath, AuthUser: "admin", AuthPass: hashedPassword, AllowedOrigins: "*", EnvOverrides: map[string]bool{}}
+	router, monitor, server := newRuntime(cfg)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	first := issue(server, hostID)
+	firstConn, registered := dial(server, first)
+	if !registered.Success || router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatalf("prepared first registration = %#v", registered)
+	}
+	activate(server, first)
+	if !router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatal("first credential did not become active")
+	}
+
+	second := issue(server, hostID)
+	if _, ok := cfg.ValidateAPIToken(first.Token); !ok {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatal("rotation prepare rejected the first secret")
+	}
+	secondConn, registered := dial(server, second)
+	if !registered.Success || router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		secondConn.Close()
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatalf("prepared second registration = %#v", registered)
+	}
+	activate(server, second)
+	if _, ok := cfg.ValidateAPIToken(first.Token); ok {
+		secondConn.Close()
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatal("activation retained first secret")
+	}
+	secondConn.Close()
+	firstConn.Close()
+	shutdown(router, monitor, server)
+
+	persisted, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted) != 1 || persisted[0].ID != second.TokenID || persisted[0].ExpiresAt != nil {
+		t.Fatalf("persisted activated inventory = %#v", persisted)
+	}
+	restartedConfig := &config.Config{DataPath: dataPath, ConfigPath: dataPath, AuthUser: "admin", AuthPass: hashedPassword, AllowedOrigins: "*", EnvOverrides: map[string]bool{}, APITokens: persisted}
+	restartedRouter, restartedMonitor, restartedServer := newRuntime(restartedConfig)
+	defer shutdown(restartedRouter, restartedMonitor, restartedServer)
+	oldConn, oldRegistration := dial(restartedServer, first)
+	oldConn.Close()
+	if oldRegistration.Success {
+		t.Fatal("durably revoked predecessor registered after server restart")
+	}
+	newConn, newRegistration := dial(restartedServer, second)
+	defer newConn.Close()
+	if !newRegistration.Success || !restartedRouter.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		t.Fatalf("durably activated replacement after restart = %#v", newRegistration)
 	}
 }

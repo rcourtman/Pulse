@@ -137,6 +137,7 @@ func applyAgentFleetActionRunnerState(
 
 func actionRunnerCredentialActive(record config.APITokenRecord, now time.Time) bool {
 	return record.HasScope(config.ScopeAgentExec) &&
+		strings.TrimSpace(record.Metadata[agenttokens.ActionRunnerActivationPendingMetadataKey]) != "true" &&
 		strings.TrimSpace(record.Metadata[agenttokens.ActionCapabilityMetadataKey]) == agenttokens.ActionCapabilityTypedV1 &&
 		strings.TrimSpace(record.Metadata[agenttokens.ActionBindingVersionMetadataKey]) == agenttokens.ActionBindingVersion &&
 		(record.ExpiresAt == nil || record.ExpiresAt.After(now))

@@ -1,8 +1,12 @@
 package hostagent
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,6 +26,7 @@ type ActionRunnerClientConfig struct {
 	APIToken                         string
 	StateDir                         string
 	HealthPath                       string
+	ActivationNonce                  string
 	InsecureSkipVerify               bool
 	CACertPath                       string
 	ServerFingerprint                string
@@ -53,6 +58,7 @@ func NewActionRunnerClient(config ActionRunnerClientConfig, agentID, hostname, v
 	client.runtimeRole = agentexec.RuntimeRoleActionRunner
 	client.actionCapability = agentexec.ActionCapabilityTypedV1
 	client.healthPath = strings.TrimSpace(config.HealthPath)
+	client.actionActivationNonce = strings.TrimSpace(config.ActivationNonce)
 	client.healthCapabilities = []string{
 		"host.storage_cleanup.v1",
 		"host.update.v1",
@@ -79,24 +85,30 @@ func allowedActionRunnerMessage(message messageType) bool {
 }
 
 type actionRunnerHealth struct {
-	Registered   bool      `json:"registered"`
-	RuntimeRole  string    `json:"runtime_role"`
-	Server       string    `json:"server"`
-	HostID       string    `json:"host_id"`
-	Hostname     string    `json:"hostname"`
-	Capabilities []string  `json:"capabilities"`
-	RegisteredAt time.Time `json:"registered_at"`
+	Registered      bool      `json:"registered"`
+	Activated       bool      `json:"activated"`
+	ActivationNonce string    `json:"activation_nonce"`
+	RuntimeRole     string    `json:"runtime_role"`
+	Server          string    `json:"server"`
+	HostID          string    `json:"host_id"`
+	Hostname        string    `json:"hostname"`
+	Capabilities    []string  `json:"capabilities"`
+	RegisteredAt    time.Time `json:"registered_at"`
 }
 
-func (c *CommandClient) writeActionRunnerHealth() error {
+func (c *CommandClient) writeActionRunnerHealth(activated bool) error {
 	if c == nil || !c.actionRunnerOnly || strings.TrimSpace(c.healthPath) == "" {
 		return fmt.Errorf("action-runner health path is required")
+	}
+	if nonce := strings.TrimSpace(c.actionActivationNonce); len(nonce) < 32 || len(nonce) > 128 {
+		return fmt.Errorf("action-runner activation nonce is invalid")
 	}
 	capabilities := append([]string(nil), c.healthCapabilities...)
 	sort.Strings(capabilities)
 	health := actionRunnerHealth{
-		Registered: true, RuntimeRole: agentexec.RuntimeRoleActionRunner,
-		Server: c.pulseURL, HostID: c.agentID, Hostname: c.hostname,
+		Registered: true, Activated: activated, ActivationNonce: c.actionActivationNonce,
+		RuntimeRole: agentexec.RuntimeRoleActionRunner,
+		Server:      c.pulseURL, HostID: c.agentID, Hostname: c.hostname,
 		Capabilities: capabilities, RegisteredAt: time.Now().UTC(),
 	}
 	encoded, err := json.Marshal(health)
@@ -145,4 +157,34 @@ func (c *CommandClient) writeActionRunnerHealth() error {
 		return fmt.Errorf("validate private action-runner health marker: %w", err)
 	}
 	return syncActionRunnerHealthDirectory(dir)
+}
+
+func (c *CommandClient) activateActionRunnerCredential(ctx context.Context) error {
+	if c == nil || !c.actionRunnerOnly {
+		return fmt.Errorf("action-runner activation requires the typed runner")
+	}
+	body, err := json.Marshal(map[string]string{"agentId": c.agentID, "hostname": c.hostname})
+	if err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPatch, strings.TrimRight(c.pulseURL, "/")+"/api/agents/action-runner/credential", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+c.apiToken)
+	request.Header.Set("Content-Type", "application/json")
+	client, err := newAgentHTTPClient(c.caCertPath, c.insecureSkipVerify, c.serverFingerprint)
+	if err != nil {
+		return fmt.Errorf("build action-runner activation client: %w", err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("activate action-runner credential: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return fmt.Errorf("activate action-runner credential: server returned %s", response.Status)
+	}
+	return nil
 }

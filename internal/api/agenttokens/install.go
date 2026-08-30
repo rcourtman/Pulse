@@ -13,21 +13,24 @@ import (
 )
 
 const (
-	IssuedAtMetadataKey                    = "install_issued_at"
-	OwnerUserIDMetadataKey                 = "owner_user_id"
-	CommandPolicyIntentMetadataKey         = "command_policy_intent"
-	CommandPolicyAppliedAgentIDMetadataKey = "command_policy_applied_agent_id"
-	CommandPolicyIntentEnabled             = "enabled"
-	CommandPolicyIntentDisabled            = "disabled"
-	RuntimeRoleMetadataKey                 = internalauth.RuntimeRoleMetadataKey
-	CredentialKindMetadataKey              = RuntimeRoleMetadataKey
-	CredentialKindMonitoringCollector      = internalauth.RuntimeRoleMonitoringCollector
-	CredentialKindActionRunner             = internalauth.RuntimeRoleActionRunner
-	CredentialKindLegacyFullTrust          = internalauth.RuntimeRoleLegacyFullTrust
-	ActionCapabilityMetadataKey            = "agent_action_capability"
-	ActionCapabilityTypedV1                = "typed_actions.v1"
-	ActionBindingVersionMetadataKey        = "action_runner_binding_version"
-	ActionBindingVersion                   = "1"
+	IssuedAtMetadataKey                      = "install_issued_at"
+	OwnerUserIDMetadataKey                   = "owner_user_id"
+	CommandPolicyIntentMetadataKey           = "command_policy_intent"
+	CommandPolicyAppliedAgentIDMetadataKey   = "command_policy_applied_agent_id"
+	CommandPolicyIntentEnabled               = "enabled"
+	CommandPolicyIntentDisabled              = "disabled"
+	RuntimeRoleMetadataKey                   = internalauth.RuntimeRoleMetadataKey
+	CredentialKindMetadataKey                = RuntimeRoleMetadataKey
+	CredentialKindMonitoringCollector        = internalauth.RuntimeRoleMonitoringCollector
+	CredentialKindActionRunner               = internalauth.RuntimeRoleActionRunner
+	CredentialKindLegacyFullTrust            = internalauth.RuntimeRoleLegacyFullTrust
+	ActionCapabilityMetadataKey              = "agent_action_capability"
+	ActionCapabilityTypedV1                  = "typed_actions.v1"
+	ActionBindingVersionMetadataKey          = "action_runner_binding_version"
+	ActionBindingVersion                     = "1"
+	ActionRunnerActivationPendingMetadataKey = "action_runner_activation_pending"
+	ActionRunnerReplacesTokenIDsMetadataKey  = "action_runner_replaces_token_ids"
+	ActionRunnerActivationWindow             = 10 * time.Minute
 )
 
 var (
@@ -63,6 +66,14 @@ type ActionRunnerIssueResult struct {
 	Token    string
 	Record   *config.APITokenRecord
 	Replaced []config.APITokenRecord
+}
+
+func cloneAPITokenRecords(records []config.APITokenRecord) []config.APITokenRecord {
+	cloned := make([]config.APITokenRecord, len(records))
+	for index := range records {
+		cloned[index] = records[index].Clone()
+	}
+	return cloned
 }
 
 func ProxmoxScopes(enableCommands bool) []string {
@@ -164,7 +175,7 @@ func issueAndPersistReplacing(
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
-	previousTokens := append([]config.APITokenRecord(nil), cfg.APITokens...)
+	previousTokens := cloneAPITokenRecords(cfg.APITokens)
 	replaced := make([]config.APITokenRecord, 0, 1)
 	if replace == nil {
 		cfg.APITokens = append(cfg.APITokens, *record)
@@ -202,9 +213,11 @@ func IssueActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigP
 	return result.Token, result.Record, err
 }
 
-// IssueActionRunnerAndPersistDetailed is the rotation-aware form used by the
-// API boundary. Replaced contains records only when the new credential was
-// durably committed; persistence failure returns an empty result.
+// IssueActionRunnerAndPersistDetailed prepares a bounded action-runner
+// activation. The prior active credential remains valid until the replacement
+// runner explicitly commits activation after writing its durable health proof.
+// Replaced contains only older unactivated credentials removed by this prepare
+// step; persistence failure returns an empty result.
 func IssueActionRunnerAndPersistDetailed(cfg *config.Config, persistence *config.ConfigPersistence, opts ActionRunnerIssueOptions) (ActionRunnerIssueResult, error) {
 	agentID := strings.TrimSpace(opts.AgentID)
 	hostname := unifiedresources.NormalizeFullHostname(opts.Hostname)
@@ -226,28 +239,136 @@ func IssueActionRunnerAndPersistDetailed(cfg *config.Config, persistence *config
 	if tokenName == "" {
 		tokenName = "action-runner:" + hostname
 	}
-	rawToken, record, replaced, err := issueAndPersistReplacing(cfg, persistence, IssueOptions{
-		TokenName:   tokenName,
-		OrgID:       organizationID,
-		OwnerUserID: opts.OwnerUserID,
-		Scopes:      ActionRunnerScopes(),
-		Metadata: map[string]string{
-			CredentialKindMetadataKey:       CredentialKindActionRunner,
-			ActionCapabilityMetadataKey:     ActionCapabilityTypedV1,
-			ActionBindingVersionMetadataKey: ActionBindingVersion,
-			"bound_agent_id":                agentID,
-			"bound_hostname":                hostname,
-			"bound_at":                      time.Now().UTC().Format(time.RFC3339),
-		},
-	}, func(record config.APITokenRecord) bool {
-		return strings.TrimSpace(record.OrgID) == organizationID &&
-			strings.TrimSpace(record.Metadata[CredentialKindMetadataKey]) == CredentialKindActionRunner &&
-			strings.TrimSpace(record.Metadata["bound_agent_id"]) == agentID
-	})
+	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
-		return ActionRunnerIssueResult{}, err
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: %w", ErrGeneration, err)
 	}
+	record, err := config.NewAPITokenRecord(rawToken, tokenName, ActionRunnerScopes())
+	if err != nil {
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: %w", ErrRecord, err)
+	}
+	record.OrgID = organizationID
+	setOwnerUserID(record, opts.OwnerUserID)
+	record.Metadata = map[string]string{
+		CredentialKindMetadataKey:                CredentialKindActionRunner,
+		ActionCapabilityMetadataKey:              ActionCapabilityTypedV1,
+		ActionBindingVersionMetadataKey:          ActionBindingVersion,
+		ActionRunnerActivationPendingMetadataKey: "true",
+		"bound_agent_id":                         agentID,
+		"bound_hostname":                         hostname,
+		"bound_at":                               time.Now().UTC().Format(time.RFC3339),
+		IssuedAtMetadataKey:                      record.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if err := normalizeCredentialKind(record); err != nil {
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: %w", ErrRecord, err)
+	}
+	deadline := time.Now().UTC().Add(ActionRunnerActivationWindow)
+	record.ExpiresAt = &deadline
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+	previousTokens := cloneAPITokenRecords(cfg.APITokens)
+	nextTokens := make([]config.APITokenRecord, 0, len(cfg.APITokens)+1)
+	replaced := make([]config.APITokenRecord, 0, 1)
+	activeIDs := make([]string, 0, 1)
+	for _, existing := range cfg.APITokens {
+		matchingBinding := strings.TrimSpace(existing.OrgID) == organizationID &&
+			strings.TrimSpace(existing.Metadata[CredentialKindMetadataKey]) == CredentialKindActionRunner &&
+			strings.TrimSpace(existing.Metadata["bound_agent_id"]) == agentID
+		if !matchingBinding {
+			nextTokens = append(nextTokens, existing)
+			continue
+		}
+		if strings.TrimSpace(existing.Metadata[ActionRunnerActivationPendingMetadataKey]) == "true" {
+			replaced = append(replaced, existing.Clone())
+			continue
+		}
+		activeIDs = append(activeIDs, strings.TrimSpace(existing.ID))
+		nextTokens = append(nextTokens, existing)
+	}
+	if len(activeIDs) > 0 {
+		record.Metadata[ActionRunnerReplacesTokenIDsMetadataKey] = strings.Join(activeIDs, ",")
+	}
+	cfg.APITokens = append(nextTokens, *record)
+	cfg.SortAPITokens()
+	if persistence != nil {
+		if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+			cfg.APITokens = previousTokens
+			cfg.SortAPITokens()
+			return ActionRunnerIssueResult{}, fmt.Errorf("%w: %w", ErrPersist, err)
+		}
+	}
+
 	return ActionRunnerIssueResult{Token: rawToken, Record: record, Replaced: replaced}, nil
+}
+
+// ActivateActionRunnerAndPersist commits a prepared credential and revokes the
+// exact predecessor set in the same durable token-inventory transaction.
+func ActivateActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
+	if cfg == nil {
+		return nil, nil, false, fmt.Errorf("%w: config is required", ErrRecord)
+	}
+	tokenID = strings.TrimSpace(tokenID)
+	agentID = strings.TrimSpace(agentID)
+	hostname = unifiedresources.NormalizeFullHostname(hostname)
+	if tokenID == "" || agentID == "" || hostname == "" {
+		return nil, nil, false, fmt.Errorf("%w: complete activation identity is required", ErrRecord)
+	}
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+	index := -1
+	for candidateIndex := range cfg.APITokens {
+		candidate := &cfg.APITokens[candidateIndex]
+		if candidate.ID == tokenID {
+			index = candidateIndex
+			break
+		}
+	}
+	if index < 0 {
+		return nil, nil, false, fmt.Errorf("%w: action runner credential not found", ErrRecord)
+	}
+	record := &cfg.APITokens[index]
+	if record.IsExpired() || strings.TrimSpace(record.Metadata[CredentialKindMetadataKey]) != CredentialKindActionRunner ||
+		strings.TrimSpace(record.Metadata["bound_agent_id"]) != agentID ||
+		!unifiedresources.HostnamesEquivalent(record.Metadata["bound_hostname"], hostname) {
+		return nil, nil, false, fmt.Errorf("%w: action runner activation binding mismatch", ErrRecord)
+	}
+	if strings.TrimSpace(record.Metadata[ActionRunnerActivationPendingMetadataKey]) != "true" {
+		clone := record.Clone()
+		return &clone, nil, false, nil
+	}
+
+	previousTokens := cloneAPITokenRecords(cfg.APITokens)
+	replaceIDs := make(map[string]struct{})
+	for _, replacedID := range strings.Split(record.Metadata[ActionRunnerReplacesTokenIDsMetadataKey], ",") {
+		if replacedID = strings.TrimSpace(replacedID); replacedID != "" && replacedID != tokenID {
+			replaceIDs[replacedID] = struct{}{}
+		}
+	}
+	delete(record.Metadata, ActionRunnerActivationPendingMetadataKey)
+	delete(record.Metadata, ActionRunnerReplacesTokenIDsMetadataKey)
+	record.ExpiresAt = nil
+	activated := record.Clone()
+	revoked := make([]config.APITokenRecord, 0, len(replaceIDs))
+	nextTokens := make([]config.APITokenRecord, 0, len(cfg.APITokens))
+	for _, existing := range cfg.APITokens {
+		if _, remove := replaceIDs[existing.ID]; remove {
+			revoked = append(revoked, existing.Clone())
+			continue
+		}
+		nextTokens = append(nextTokens, existing)
+	}
+	cfg.APITokens = nextTokens
+	cfg.SortAPITokens()
+	if persistence != nil {
+		if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+			cfg.APITokens = previousTokens
+			cfg.SortAPITokens()
+			return nil, nil, false, fmt.Errorf("%w: %w", ErrPersist, err)
+		}
+	}
+	return &activated, revoked, true, nil
 }
 
 func normalizeCredentialKind(record *config.APITokenRecord) error {

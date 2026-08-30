@@ -74,13 +74,16 @@ func TestIssueActionRunnerAndPersistRejectsIncompleteBinding(t *testing.T) {
 	}
 }
 
-func TestIssueActionRunnerAndPersistReplacesMatchingBoundCredential(t *testing.T) {
+func TestIssueActionRunnerAndPersistPreparesRotationWithoutRevokingActiveCredential(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
-	_, first, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+	firstToken, first, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
 		OrgID: "org-a", AgentID: "machine-123", Hostname: "Node.EXAMPLE",
 	})
 	if err != nil {
 		t.Fatalf("first IssueActionRunnerAndPersist: %v", err)
+	}
+	if _, _, changed, err := ActivateActionRunnerAndPersist(cfg, nil, first.ID, "machine-123", "node.example"); err != nil || !changed {
+		t.Fatalf("activate first credential = changed %v, error %v", changed, err)
 	}
 	_, otherHost, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
 		OrgID: "org-a", AgentID: "machine-456", Hostname: "other.example",
@@ -99,8 +102,8 @@ func TestIssueActionRunnerAndPersistReplacesMatchingBoundCredential(t *testing.T
 	if replacement.ID == first.ID {
 		t.Fatalf("replacement reused token id %q", replacement.ID)
 	}
-	if len(cfg.APITokens) != 2 {
-		t.Fatalf("token inventory = %#v, want one replacement plus other host", cfg.APITokens)
+	if len(cfg.APITokens) != 3 {
+		t.Fatalf("token inventory = %#v, want pending replacement, active predecessor, and other host", cfg.APITokens)
 	}
 	foundReplacement, foundOther, foundFirst := false, false, false
 	for _, record := range cfg.APITokens {
@@ -108,8 +111,14 @@ func TestIssueActionRunnerAndPersistReplacesMatchingBoundCredential(t *testing.T
 		foundOther = foundOther || record.ID == otherHost.ID
 		foundFirst = foundFirst || record.ID == first.ID
 	}
-	if !foundReplacement || !foundOther || foundFirst {
+	if !foundReplacement || !foundOther || !foundFirst {
 		t.Fatalf("replacement inventory = %#v", cfg.APITokens)
+	}
+	if _, ok := cfg.ValidateAPIToken(firstToken); !ok {
+		t.Fatal("prepare step revoked the active predecessor")
+	}
+	if replacement.ExpiresAt == nil || replacement.Metadata[ActionRunnerActivationPendingMetadataKey] != "true" || replacement.Metadata[ActionRunnerReplacesTokenIDsMetadataKey] != first.ID {
+		t.Fatalf("prepared replacement = %#v", replacement)
 	}
 }
 
@@ -132,6 +141,74 @@ func TestIssueActionRunnerAndPersistDetailedReturnsOnlyDurablyReplacedRecords(t 
 	}
 	if result.Record.ID == prior.ID || len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != result.Record.ID {
 		t.Fatalf("persisted replacement = %#v", cfg.APITokens)
+	}
+}
+
+func TestActivateActionRunnerAndPersistAtomicallyPromotesAndRevokesPredecessor(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	firstToken, first, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, nil, first.ID, "machine-123", "node.example"); err != nil {
+		t.Fatal(err)
+	}
+	secondToken, second, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activated, revoked, changed, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), second.ID, "machine-123", "NODE")
+	if err != nil || !changed {
+		t.Fatalf("activation = (%#v, %#v, %v, %v)", activated, revoked, changed, err)
+	}
+	if activated.ExpiresAt != nil || activated.Metadata[ActionRunnerActivationPendingMetadataKey] != "" || len(revoked) != 1 || revoked[0].ID != first.ID {
+		t.Fatalf("activation result = activated %#v, revoked %#v", activated, revoked)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != second.ID {
+		t.Fatalf("activated inventory = %#v", cfg.APITokens)
+	}
+	if _, ok := cfg.ValidateAPIToken(firstToken); ok {
+		t.Fatal("activated rotation left predecessor valid")
+	}
+	if _, ok := cfg.ValidateAPIToken(secondToken); !ok {
+		t.Fatal("activated replacement is not valid")
+	}
+	if _, revoked, changed, err := ActivateActionRunnerAndPersist(cfg, nil, second.ID, "machine-123", "node.example"); err != nil || changed || len(revoked) != 0 {
+		t.Fatalf("idempotent activation = revoked %#v, changed %v, error %v", revoked, changed, err)
+	}
+}
+
+func TestActivateActionRunnerAndPersistFailureRestoresPendingAndActiveInventory(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, first, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, nil, first.ID, "machine-123", "node.example"); err != nil {
+		t.Fatal(err)
+	}
+	_, second, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(t.TempDir(), "blocked-state")
+	persistence := config.NewConfigPersistence(statePath)
+	if err := os.RemoveAll(statePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, changed, err := ActivateActionRunnerAndPersist(cfg, persistence, second.ID, "machine-123", "node.example"); !errors.Is(err, ErrPersist) || changed {
+		t.Fatalf("activation = changed %v, error %v", changed, err)
+	}
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("restored inventory = %#v", cfg.APITokens)
+	}
+	for _, record := range cfg.APITokens {
+		if record.ID == second.ID && (record.ExpiresAt == nil || record.Metadata[ActionRunnerActivationPendingMetadataKey] != "true" || record.Metadata[ActionRunnerReplacesTokenIDsMetadataKey] != first.ID) {
+			t.Fatalf("pending replacement was not fully restored: %#v", record)
+		}
 	}
 }
 

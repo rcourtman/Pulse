@@ -142,6 +142,46 @@ func TestCommandClientHandlesTypedHostUpdateWithoutExecuteCommand(t *testing.T) 
 	}
 }
 
+func TestActionRunnerHealthSeparatesRegisteredFromActivated(t *testing.T) {
+	dir := t.TempDir()
+	healthPath := filepath.Join(dir, "health.json")
+	logger := zerolog.Nop()
+	client := NewActionRunnerClient(ActionRunnerClientConfig{
+		PulseURL: "https://pulse.example", APIToken: "runner-secret",
+		StateDir: filepath.Join(dir, "state"), HealthPath: healthPath,
+		ActivationNonce: strings.Repeat("e", 32), Logger: &logger,
+	}, "agent-1", "host-1.local", "v1")
+	defer client.Close()
+	if err := client.writeActionRunnerHealth(false); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(healthPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pending actionRunnerHealth
+	if err := json.Unmarshal(data, &pending); err != nil {
+		t.Fatal(err)
+	}
+	if !pending.Registered || pending.Activated {
+		t.Fatalf("pending health = %+v", pending)
+	}
+	if err := client.writeActionRunnerHealth(true); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(healthPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var active actionRunnerHealth
+	if err := json.Unmarshal(data, &active); err != nil {
+		t.Fatal(err)
+	}
+	if !active.Registered || !active.Activated || active.ActivationNonce != strings.Repeat("e", 32) {
+		t.Fatalf("activated health = %+v", active)
+	}
+}
+
 func TestHostUpdateInventoryDriftReceiptCompletesAndReplaysWithAdmittedIdentity(t *testing.T) {
 	receipts, err := operationreceipt.Open(filepath.Join(t.TempDir(), "receipts.db"), hostOperationReceiptConfig())
 	if err != nil {

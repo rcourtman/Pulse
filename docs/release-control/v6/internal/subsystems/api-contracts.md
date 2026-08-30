@@ -39,12 +39,22 @@ monitored `agentId` / `hostname` pair and returns a new, separately persisted
 runtime role `action-runner`, binding version 1, and capability
 `typed_actions.v1`. The route re-resolves the pair against exactly one live,
 non-conflicted, non-integration host in the request tenant. Issuing again
-atomically replaces only the earlier action-runner record for that tenant and
-agent ID; a persistence failure restores the complete token inventory and
-returns no usable new secret. Only after that durable replacement may the
-server close the exact superseded live action-runner session, remove it from
-new dispatch, and unblock its outstanding server waits. The created response
-is non-cacheable.
+atomically prepares a ten-minute replacement beside the current active record;
+older unactivated replacements are removed, while persistence failure restores
+the complete token inventory and returns no usable new secret. The created
+response is non-cacheable and exposes the activation-pending state and
+deadline, not predecessor secrets.
+
+`PATCH /api/agents/action-runner/credential` is the runner-owned activation
+commit. It requires the current `agent:exec` bearer, exact organization,
+canonical agent/hostname binding, and an exact registered pending transport.
+A pending transport is visible to this commit proof but unavailable to action
+dispatch. The commit clears the pending expiry, durably removes only the
+server-recorded predecessor IDs, restores the complete inventory on persistence
+failure, promotes the exact replacement session, and invalidates exact stale
+sessions without allowing a caller-selected token ID. Repeating activation for
+an already active exact session is idempotent so a lost HTTP response can be
+reconciled safely.
 
 `DELETE /api/agents/action-runner/credential` is the runner's narrowly scoped
 self-revoke operation. It requires the current `agent:exec` bearer credential,

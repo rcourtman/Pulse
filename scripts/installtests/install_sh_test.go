@@ -3,6 +3,7 @@ package installtests
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -5953,6 +5954,7 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"`,
+		`write_action_runner_env_value "PULSE_AGENT_RUNNER_ACTIVATION_NONCE" "$ACTION_RUNNER_ACTIVATION_NONCE"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" "$runner_hostname"`,
 		`DELETE --data-binary "$payload"`,
 		`/api/agents/action-runner/credential`,
@@ -5962,10 +5964,8 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 		`install -o root -g root -m 0755 "$TMP_ACTION_RUNNER_BIN"`,
 		`chmod 0600 "$ACTION_RUNNER_TOKEN_FILE"`,
 		`ACTION_TOKEN=""`,
-		`health_mtime=$(stat -c '%Y' "$ACTION_RUNNER_HEALTH_FILE"`,
-		`"registered"[[:space:]]*:[[:space:]]*true`,
-		`"host_id"[[:space:]]*:[[:space:]]*`,
-		`[[ "$health_agent_id" == "$expected_agent_id" ]]`,
+		`action_runner_health_matches_activation "$expected_agent_id" "$activation_nonce"`,
+		`[[ "$health_agent_id" == "$expected_agent_id" && "$health_activation_nonce" == "$expected_nonce" ]]`,
 		`rolling back runner-only files while leaving monitoring active`,
 		`Pulse action runner removed. Collector monitoring was left installed and running.`,
 	} {
@@ -5976,6 +5976,61 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 	teardown := extractInstallShellFunction(t, "teardown_action_runner_service")
 	if strings.Contains(teardown, "teardown_systemd_agent_service") || strings.Contains(teardown, `rm -f "${INSTALL_DIR}/${BINARY_NAME}"`) {
 		t.Fatalf("runner teardown must not remove the monitoring collector:\n%s", teardown)
+	}
+}
+
+func TestInstallSHActionRunnerReadinessRequiresCurrentActivationNonce(t *testing.T) {
+	root := t.TempDir()
+	healthPath := filepath.Join(root, "health.json")
+	currentNonce := strings.Repeat("a", 64)
+	priorNonce := strings.Repeat("b", 64)
+	writeHealth := func(activated bool, nonce string) {
+		t.Helper()
+		payload := fmt.Sprintf(`{"registered":true,"activated":%t,"activation_nonce":%q,"host_id":"agent-1"}`, activated, nonce)
+		if err := os.WriteFile(healthPath, []byte(payload), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		future := time.Now().Add(24 * time.Hour)
+		if err := os.Chtimes(healthPath, future, future); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(nonce string) bool {
+		t.Helper()
+		script := `
+set -euo pipefail
+ACTION_RUNNER_HEALTH_FILE="` + healthPath + `"
+stat() {
+    case "$1" in
+        -c) case "$2" in '%u') printf '0\n' ;; '%a') printf '600\n' ;; esac ;;
+    esac
+}
+` + extractInstallShellFunction(t, "action_runner_health_matches_activation") + `
+action_runner_health_matches_activation "agent-1" "` + nonce + `"
+`
+		return exec.Command("bash", "-c", script).Run() == nil
+	}
+
+	writeHealth(true, priorNonce)
+	if check(currentNonce) {
+		t.Fatal("stale marker from a prior activation nonce was accepted")
+	}
+	writeHealth(false, currentNonce)
+	if check(currentNonce) {
+		t.Fatal("registered but uncommitted marker was accepted")
+	}
+	writeHealth(true, currentNonce)
+	if !check(currentNonce) {
+		t.Fatal("current activated marker was rejected because of filesystem clock skew")
+	}
+	if err := os.Remove(healthPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "missing"), healthPath); err != nil {
+		t.Fatal(err)
+	}
+	if check(currentNonce) {
+		t.Fatal("symlinked activation marker was accepted")
 	}
 }
 

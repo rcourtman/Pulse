@@ -34,10 +34,12 @@ preserves collector identity and installation files only; it must not rewrite
 storage/recovery evidence or reinterpret a restored legacy collector profile as
 recovery success. Typed `host.storage_cleanup` remains governed remediation,
 not storage-recovery authority inferred from the credential itself.
-Runner credential rotation follows the shared token-inventory commit boundary:
-failed persistence restores the complete prior inventory and returns no new
-secret, while successful persistence replaces the previous organization/agent
-binding and invalidates only that superseded live session. Exact bearer
+Runner credential rotation follows the shared two-phase token-inventory commit
+boundary: issuance durably prepares a bounded, non-dispatchable replacement
+without removing the active predecessor; activation after durable runner health
+proof promotes the exact registered replacement and removes only its recorded
+predecessor set. Failed persistence restores the complete inventory, and an
+unactivated replacement expires without changing the predecessor. Exact bearer
 self-revocation uses the same durable boundary and cannot select another token,
 organization, or host. That rollback protects restart-time
 credential truth only; it is not a customer backup, recovery point, restore

@@ -22,6 +22,7 @@ func TestLoadConfigUsesDedicatedEnvironmentAndPrivateTokenFile(t *testing.T) {
 	t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
 	t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
 	t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE", agentID)
+	t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("a", 32))
 	t.Setenv("PULSE_AGENT_RUNNER_HOSTNAME", " Node.Example. ")
 	t.Setenv("PULSE_SERVER_FINGERPRINT", "sha256:test")
 	config, err := loadConfig()
@@ -44,6 +45,7 @@ func TestLoadConfigRejectsInvalidCanonicalHostnameOverride(t *testing.T) {
 	t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
 	t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
 	t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE", filepath.Join(dir, "agent-id"))
+	t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("b", 32))
 	for _, hostname := range []string{"bad host", "-node.example", "node/example", strings.Repeat("a", 64) + ".example"} {
 		t.Run(hostname, func(t *testing.T) {
 			t.Setenv("PULSE_AGENT_RUNNER_HOSTNAME", hostname)
@@ -67,6 +69,7 @@ func TestLoadConfigRejectsTokenInArgvEquivalentAndInsecureHTTPByDefault(t *testi
 	t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
 	t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
 	t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE", filepath.Join(dir, "agent-id"))
+	t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("c", 32))
 	_, err := loadConfig()
 	if err == nil || !strings.Contains(err.Error(), "HTTPS") {
 		t.Fatalf("error = %v", err)

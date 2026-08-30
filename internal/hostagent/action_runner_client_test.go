@@ -21,7 +21,8 @@ func TestNewActionRunnerClientIsTypedOnlyAndEmitsExplicitRole(t *testing.T) {
 	logger := zerolog.Nop()
 	client := NewActionRunnerClient(ActionRunnerClientConfig{
 		PulseURL: "https://pulse.example", APIToken: "separate-secret",
-		StateDir: t.TempDir(), HealthPath: filepath.Join(t.TempDir(), "health.json"), Logger: &logger,
+		StateDir: t.TempDir(), HealthPath: filepath.Join(t.TempDir(), "health.json"),
+		ActivationNonce: strings.Repeat("a", 32), Logger: &logger,
 	}, "agent-1", "host-1", "v1")
 	t.Cleanup(func() { _ = client.Close() })
 	if !client.actionRunnerOnly || client.runtimeRole != agentexec.RuntimeRoleActionRunner || client.actionCapability != agentexec.ActionCapabilityTypedV1 {
@@ -43,6 +44,10 @@ func TestActionRunnerTransportRegistersRoleWritesHealthAndRejectsGenericExec(t *
 	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 	registration := make(chan registerPayload, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPatch {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		conn, err := upgrader.Upgrade(w, request, nil)
 		if err != nil {
 			return
@@ -68,7 +73,7 @@ func TestActionRunnerTransportRegistersRoleWritesHealthAndRejectsGenericExec(t *
 	logger := zerolog.Nop()
 	client := NewActionRunnerClient(ActionRunnerClientConfig{
 		PulseURL: server.URL, APIToken: "runner-token", StateDir: filepath.Join(dir, "state"),
-		HealthPath: healthPath, InsecureSkipVerify: true, Logger: &logger,
+		HealthPath: healthPath, ActivationNonce: strings.Repeat("b", 32), InsecureSkipVerify: true, Logger: &logger,
 	}, "agent-1", "host-1", "v1")
 	defer client.Close()
 	err := client.connectAndHandle(context.Background())
@@ -84,7 +89,7 @@ func TestActionRunnerTransportRegistersRoleWritesHealthAndRejectsGenericExec(t *
 		t.Fatal(err)
 	}
 	var health actionRunnerHealth
-	if json.Unmarshal(data, &health) != nil || !health.Registered || health.HostID != "agent-1" {
+	if json.Unmarshal(data, &health) != nil || !health.Registered || !health.Activated || health.HostID != "agent-1" || health.ActivationNonce != strings.Repeat("b", 32) {
 		t.Fatalf("health = %s", data)
 	}
 }
@@ -95,13 +100,14 @@ func TestActionRunnerHealthIsAtomicBoundedAndSecretFree(t *testing.T) {
 	logger := zerolog.Nop()
 	client := NewActionRunnerClient(ActionRunnerClientConfig{
 		PulseURL: "https://pulse.example", APIToken: "must-not-appear",
-		StateDir: filepath.Join(dir, "state"), HealthPath: healthPath, Logger: &logger,
+		StateDir: filepath.Join(dir, "state"), HealthPath: healthPath,
+		ActivationNonce: strings.Repeat("c", 32), Logger: &logger,
 	}, "agent-1", "host-1", "v1")
 	t.Cleanup(func() { _ = client.Close() })
 	if err := os.WriteFile(healthPath, []byte("stale-health-marker"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.writeActionRunnerHealth(); err != nil {
+	if err := client.writeActionRunnerHealth(true); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(healthPath)
@@ -118,7 +124,7 @@ func TestActionRunnerHealthIsAtomicBoundedAndSecretFree(t *testing.T) {
 	if err := json.Unmarshal(data, &health); err != nil {
 		t.Fatal(err)
 	}
-	if !health.Registered || health.RuntimeRole != agentexec.RuntimeRoleActionRunner || health.HostID != "agent-1" || health.Server != "https://pulse.example" || health.RegisteredAt.IsZero() {
+	if !health.Registered || !health.Activated || health.ActivationNonce != strings.Repeat("c", 32) || health.RuntimeRole != agentexec.RuntimeRoleActionRunner || health.HostID != "agent-1" || health.Server != "https://pulse.example" || health.RegisteredAt.IsZero() {
 		t.Fatalf("health = %+v", health)
 	}
 	info, err := os.Lstat(healthPath)
@@ -131,6 +137,51 @@ func TestActionRunnerHealthIsAtomicBoundedAndSecretFree(t *testing.T) {
 	matches, err := filepath.Glob(filepath.Join(dir, ".health-*.tmp"))
 	if err != nil || len(matches) != 0 {
 		t.Fatalf("temporary health files = %v, %v", matches, err)
+	}
+}
+
+func TestActionRunnerActivationFailureLeavesOnlyPendingHealthProof(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPatch {
+			http.Error(w, "persistence unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, request, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var message wsMessage
+		if conn.ReadJSON(&message) != nil {
+			return
+		}
+		ack, _ := json.Marshal(registeredPayload{Success: true})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: ack})
+		_, _, _ = conn.ReadMessage()
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	healthPath := filepath.Join(dir, "health.json")
+	logger := zerolog.Nop()
+	client := NewActionRunnerClient(ActionRunnerClientConfig{
+		PulseURL: server.URL, APIToken: "runner-token", StateDir: filepath.Join(dir, "state"),
+		HealthPath: healthPath, ActivationNonce: strings.Repeat("d", 32), InsecureSkipVerify: true, Logger: &logger,
+	}, "agent-1", "host-1", "v1")
+	defer client.Close()
+	if err := client.connectAndHandle(context.Background()); err == nil || !strings.Contains(err.Error(), "503 Service Unavailable") {
+		t.Fatalf("activation error = %v", err)
+	}
+	data, err := os.ReadFile(healthPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var health actionRunnerHealth
+	if err := json.Unmarshal(data, &health); err != nil {
+		t.Fatal(err)
+	}
+	if !health.Registered || health.Activated || health.ActivationNonce != strings.Repeat("d", 32) {
+		t.Fatalf("pending health = %+v", health)
 	}
 }
 

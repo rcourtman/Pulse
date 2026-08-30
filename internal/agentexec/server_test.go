@@ -481,3 +481,28 @@ func TestGetAgentForHostKeepsDistinctFQDNsSeparate(t *testing.T) {
 		t.Fatalf("GetAgentForHost(%q) = (%q, %v), want (a2, true)", "prox97.b.local", agentID, ok)
 	}
 }
+
+func TestPreparedActionRunnerSessionIsNotDispatchableUntilPromoted(t *testing.T) {
+	s := NewServerWithAdmissionValidator(func(string, string, string) (AgentAdmission, bool) {
+		return AgentAdmission{}, false
+	}, func(AgentAdmission) bool { return true })
+	admission := AgentAdmission{
+		OrganizationID: "org-a", TokenID: "pending-token", AgentID: "agent-1",
+		Hostname: "host-1.local", RuntimeRole: RuntimeRoleActionRunner,
+		ActionCapability: ActionCapabilityTypedV1, ActivationPending: true,
+	}
+	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
+	s.agents[key] = &agentConn{admission: admission, agent: ConnectedAgent{AgentID: admission.AgentID}, done: make(chan struct{})}
+	if _, ok := s.connectionForOrganization("org-a", "agent-1"); ok {
+		t.Fatal("prepared runner was dispatchable")
+	}
+	if !s.HasActionRunnerSession(admission) {
+		t.Fatal("exact prepared transport was not available to activation")
+	}
+	if !s.PromoteActionRunnerSession(admission) {
+		t.Fatal("exact prepared transport was not promoted")
+	}
+	if _, ok := s.connectionForOrganization("org-a", "agent-1"); !ok {
+		t.Fatal("promoted runner did not become dispatchable")
+	}
+}

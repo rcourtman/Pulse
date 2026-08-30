@@ -182,6 +182,7 @@ ACTION_RUNNER_ENV_FILE="${ACTION_RUNNER_CONFIG_DIR}/runner.env"
 ACTION_RUNNER_TOKEN_FILE="${ACTION_RUNNER_CONFIG_DIR}/token"
 ACTION_RUNNER_STATE_DIR="/var/lib/pulse-agent-runner"
 ACTION_RUNNER_HEALTH_FILE="${ACTION_RUNNER_STATE_DIR}/health.json"
+ACTION_RUNNER_ACTIVATION_NONCE=""
 ACTION_TOKEN=""
 ACTION_TOKEN_FILE_PATH=""
 TMP_ACTION_RUNNER_BIN=""
@@ -1355,15 +1356,18 @@ write_action_runner_config() {
     if [[ -z "$runner_hostname" ]]; then
         runner_hostname=$(hostname 2>/dev/null || true)
     fi
-    [[ -n "$runner_hostname" && "$runner_hostname" != *$'\r'* && "$runner_hostname" != *$'\n'* ]] ||
-        fail "Action runner requires a canonical hostname" "$EXIT_MISSING_ARGS"
+	[[ -n "$runner_hostname" && "$runner_hostname" != *$'\r'* && "$runner_hostname" != *$'\n'* ]] ||
+		fail "Action runner requires a canonical hostname" "$EXIT_MISSING_ARGS"
+	[[ "$ACTION_RUNNER_ACTIVATION_NONCE" =~ ^[a-f0-9]{64}$ ]] ||
+		fail "Action runner requires a fresh activation nonce" "$EXIT_GENERAL"
 
     : > "$ACTION_RUNNER_ENV_FILE"
     chmod 0600 "$ACTION_RUNNER_ENV_FILE"
     write_action_runner_env_value "PULSE_URL" "$PULSE_URL"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_STATE_DIR" "$ACTION_RUNNER_STATE_DIR"
-    write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"
+	write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"
+	write_action_runner_env_value "PULSE_AGENT_RUNNER_ACTIVATION_NONCE" "$ACTION_RUNNER_ACTIVATION_NONCE"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" "$runner_hostname"
     if [[ -n "$SERVER_FINGERPRINT" ]]; then
@@ -1376,6 +1380,33 @@ write_action_runner_config() {
         write_action_runner_env_value "PULSE_INSECURE" "true"
     fi
     chown root:root "$ACTION_RUNNER_ENV_FILE"
+}
+
+generate_action_runner_activation_nonce() {
+	local nonce=""
+	nonce=$(od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d '[:space:]' || true)
+	[[ "$nonce" =~ ^[a-f0-9]{64}$ ]] || return 1
+	printf '%s\n' "$nonce"
+}
+
+action_runner_health_matches_activation() {
+	local expected_agent_id="$1"
+	local expected_nonce="$2"
+	local health_agent_id=""
+	local health_activation_nonce=""
+	local health_owner=""
+	local health_mode=""
+
+	[[ -n "$expected_agent_id" && "$expected_nonce" =~ ^[a-f0-9]{64}$ ]] || return 1
+	[[ -f "$ACTION_RUNNER_HEALTH_FILE" && ! -L "$ACTION_RUNNER_HEALTH_FILE" ]] || return 1
+	health_owner=$(stat -c '%u' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
+	health_mode=$(stat -c '%a' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
+	health_agent_id=$(sed -n 's/.*"host_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACTION_RUNNER_HEALTH_FILE" | head -1)
+	health_activation_nonce=$(sed -n 's/.*"activation_nonce"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACTION_RUNNER_HEALTH_FILE" | head -1)
+	[[ "$health_owner" == "0" && "$health_mode" =~ ^(400|600)$ ]] || return 1
+	grep -Eq '"registered"[[:space:]]*:[[:space:]]*true([[:space:],}]|$)' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || return 1
+	grep -Eq '"activated"[[:space:]]*:[[:space:]]*true([[:space:],}]|$)' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || return 1
+	[[ "$health_agent_id" == "$expected_agent_id" && "$health_activation_nonce" == "$expected_nonce" ]]
 }
 
 write_action_runner_env_value() {
@@ -1396,9 +1427,9 @@ provision_action_runner() {
     local had_unit="false"
     local had_state_dir="false"
     local had_config_dir="false"
-    local runner_active="false"
-    local apply_succeeded="false"
-    local activation_started_at=""
+	local runner_active="false"
+	local apply_succeeded="false"
+	local activation_nonce=""
 
     if [[ -d "$ACTION_RUNNER_STATE_DIR" ]]; then
         had_state_dir="true"
@@ -1406,7 +1437,7 @@ provision_action_runner() {
     if [[ -d "$ACTION_RUNNER_CONFIG_DIR" ]]; then
         had_config_dir="true"
     fi
-    for path in "$ACTION_RUNNER_BINARY_PATH" "$ACTION_RUNNER_SERVICE_UNIT" "$ACTION_RUNNER_ENV_FILE" "$ACTION_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_HEALTH_FILE"; do
+	for path in "$ACTION_RUNNER_BINARY_PATH" "$ACTION_RUNNER_SERVICE_UNIT" "$ACTION_RUNNER_ENV_FILE" "$ACTION_RUNNER_TOKEN_FILE"; do
         if [[ -e "$path" ]]; then
             cp -a "$path" "${path}${backup_suffix}"
             case "$path" in
@@ -1414,11 +1445,14 @@ provision_action_runner() {
                 "$ACTION_RUNNER_SERVICE_UNIT") had_unit="true" ;;
             esac
         fi
-    done
+	done
 
-    activation_started_at=$(date +%s)
-    if (
-        set -e
+	activation_nonce=$(generate_action_runner_activation_nonce) ||
+		fail "Could not generate an action-runner activation nonce" "$EXIT_GENERAL"
+	ACTION_RUNNER_ACTIVATION_NONCE="$activation_nonce"
+	if (
+		set -e
+		rm -f "$ACTION_RUNNER_HEALTH_FILE"
         mkdir -p "$PRIVILEGE_HELPER_DIR"
         install -o root -g root -m 0755 "$TMP_ACTION_RUNNER_BIN" "${ACTION_RUNNER_BINARY_PATH}.new"
         mv "${ACTION_RUNNER_BINARY_PATH}.new" "$ACTION_RUNNER_BINARY_PATH"
@@ -1438,26 +1472,13 @@ provision_action_runner() {
 
     if [[ "$apply_succeeded" == "true" ]]; then
         local attempt=0
-        while [[ "$attempt" -lt 30 ]]; do
-            local expected_agent_id="${AGENT_ID}"
-            local health_agent_id=""
-            local health_mtime=""
-            local health_owner=""
-            local health_mode=""
-            if [[ -s "${STATE_DIR%/}/agent-id" ]]; then
-                expected_agent_id=$(head -1 "${STATE_DIR%/}/agent-id" 2>/dev/null || true)
-            fi
-            if [[ -n "$expected_agent_id" && -f "$ACTION_RUNNER_HEALTH_FILE" && ! -L "$ACTION_RUNNER_HEALTH_FILE" ]]; then
-                health_mtime=$(stat -c '%Y' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
-                health_owner=$(stat -c '%u' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
-                health_mode=$(stat -c '%a' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null || true)
-                health_agent_id=$(sed -n 's/.*"host_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ACTION_RUNNER_HEALTH_FILE" | head -1)
-            fi
-            if systemctl is-active --quiet "${ACTION_RUNNER_NAME}.service" &&
-               [[ "$health_mtime" =~ ^[0-9]+$ ]] && [[ "$health_mtime" -ge "$activation_started_at" ]] &&
-               [[ "$health_owner" == "0" ]] && [[ "$health_mode" =~ ^(400|600)$ ]] &&
-               grep -Eq '"registered"[[:space:]]*:[[:space:]]*true([[:space:],}]|$)' "$ACTION_RUNNER_HEALTH_FILE" 2>/dev/null &&
-               [[ "$health_agent_id" == "$expected_agent_id" ]]; then
+		while [[ "$attempt" -lt 30 ]]; do
+			local expected_agent_id="${AGENT_ID}"
+			if [[ -s "${STATE_DIR%/}/agent-id" ]]; then
+				expected_agent_id=$(head -1 "${STATE_DIR%/}/agent-id" 2>/dev/null || true)
+			fi
+			if systemctl is-active --quiet "${ACTION_RUNNER_NAME}.service" &&
+			   action_runner_health_matches_activation "$expected_agent_id" "$activation_nonce"; then
                 runner_active="true"
                 break
             fi
@@ -1471,7 +1492,8 @@ provision_action_runner() {
         systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
         systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
         rm -f "${ACTION_RUNNER_BINARY_PATH}.new" "${ACTION_RUNNER_SERVICE_UNIT}.new"
-        for path in "$ACTION_RUNNER_BINARY_PATH" "$ACTION_RUNNER_SERVICE_UNIT" "$ACTION_RUNNER_ENV_FILE" "$ACTION_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_HEALTH_FILE"; do
+		rm -f "$ACTION_RUNNER_HEALTH_FILE"
+		for path in "$ACTION_RUNNER_BINARY_PATH" "$ACTION_RUNNER_SERVICE_UNIT" "$ACTION_RUNNER_ENV_FILE" "$ACTION_RUNNER_TOKEN_FILE"; do
             rm -f "$path"
             if [[ -e "${path}${backup_suffix}" ]]; then
                 mv "${path}${backup_suffix}" "$path"
@@ -1486,16 +1508,17 @@ provision_action_runner() {
         systemctl daemon-reload 2>/dev/null || true
         if [[ "$had_unit" == "true" && "$had_binary" == "true" ]]; then
             systemctl enable --now "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
-        fi
-        fail "Action runner activation failed and its previous installation was restored; collector monitoring was not stopped or removed" "$EXIT_GENERAL"
+		fi
+		ACTION_RUNNER_ACTIVATION_NONCE=""
+		fail "Action runner activation failed and its previous installation was restored; collector monitoring was not stopped or removed" "$EXIT_GENERAL"
     fi
 
     rm -f \
         "${ACTION_RUNNER_BINARY_PATH}${backup_suffix}" \
-        "${ACTION_RUNNER_SERVICE_UNIT}${backup_suffix}" \
-        "${ACTION_RUNNER_ENV_FILE}${backup_suffix}" \
-        "${ACTION_RUNNER_TOKEN_FILE}${backup_suffix}" \
-        "${ACTION_RUNNER_HEALTH_FILE}${backup_suffix}"
+		"${ACTION_RUNNER_SERVICE_UNIT}${backup_suffix}" \
+		"${ACTION_RUNNER_ENV_FILE}${backup_suffix}" \
+		"${ACTION_RUNNER_TOKEN_FILE}${backup_suffix}"
+	ACTION_RUNNER_ACTIVATION_NONCE=""
     TMP_ACTION_RUNNER_BIN=""
     log_info "Typed action runner enabled as a separate root service with its own credential; collector monitoring remains independently active."
 }

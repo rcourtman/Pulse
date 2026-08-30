@@ -25,6 +25,7 @@ type runtimeConfig struct {
 	TokenFile         string
 	StateDir          string
 	HealthFile        string
+	ActivationNonce   string
 	AgentIDFile       string
 	Hostname          string
 	ServerFingerprint string
@@ -38,14 +39,15 @@ func loadConfig() (runtimeConfig, error) {
 		TokenFile:         strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_TOKEN_FILE")),
 		StateDir:          strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_STATE_DIR")),
 		HealthFile:        strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_HEALTH_FILE")),
+		ActivationNonce:   strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE")),
 		AgentIDFile:       strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE")),
 		Hostname:          strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_HOSTNAME")),
 		ServerFingerprint: strings.TrimSpace(os.Getenv("PULSE_SERVER_FINGERPRINT")),
 		CAFile:            strings.TrimSpace(os.Getenv("SSL_CERT_FILE")),
 		Insecure:          strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_INSECURE")), "true"),
 	}
-	if config.PulseURL == "" || config.TokenFile == "" || config.StateDir == "" || config.HealthFile == "" || config.AgentIDFile == "" {
-		return runtimeConfig{}, errors.New("PULSE_URL and the action-runner token, state, health, and agent identity file settings are required")
+	if config.PulseURL == "" || config.TokenFile == "" || config.StateDir == "" || config.HealthFile == "" || config.AgentIDFile == "" || len(config.ActivationNonce) < 32 || len(config.ActivationNonce) > 128 {
+		return runtimeConfig{}, errors.New("PULSE_URL and the action-runner token, state, health, agent identity, and activation nonce settings are required")
 	}
 	if config.Hostname != "" {
 		hostname, err := normalizeRunnerHostname(config.Hostname)
@@ -105,7 +107,8 @@ func run() error {
 	transportConfig := actionrunner.TransportConfig{
 		PulseURL: config.PulseURL, APIToken: token, StateDir: config.StateDir,
 		HealthPath: config.HealthFile, InsecureSkipVerify: config.Insecure,
-		CACertPath: config.CAFile, ServerFingerprint: config.ServerFingerprint,
+		ActivationNonce: config.ActivationNonce,
+		CACertPath:      config.CAFile, ServerFingerprint: config.ServerFingerprint,
 		Logger: &logger,
 	}
 	containerRuntime, runtimeErr := dockeragent.NewActionRuntime(strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_CONTAINER_RUNTIME")), &logger)

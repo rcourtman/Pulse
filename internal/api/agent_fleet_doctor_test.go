@@ -75,6 +75,7 @@ func TestApplyAgentFleetActionRunnerStateMatchesOnlyBoundTypedRunner(t *testing.
 			},
 		},
 		{AgentID: "host-b", Hostname: "host-b.example"},
+		{AgentID: "host-c", Hostname: "host-c.example"},
 	}}
 	applyAgentFleetActionRunnerState(&diagnostics, []config.APITokenRecord{
 		{
@@ -95,11 +96,21 @@ func TestApplyAgentFleetActionRunnerStateMatchesOnlyBoundTypedRunner(t *testing.
 				"bound_agent_id":                            "host-b",
 			},
 		},
+		{
+			OrgID: "default", Scopes: []string{config.ScopeAgentExec},
+			Metadata: map[string]string{
+				agenttokens.CredentialKindMetadataKey:                agenttokens.CredentialKindActionRunner,
+				agenttokens.ActionCapabilityMetadataKey:              agenttokens.ActionCapabilityTypedV1,
+				agenttokens.ActionBindingVersionMetadataKey:          agenttokens.ActionBindingVersion,
+				agenttokens.ActionRunnerActivationPendingMetadataKey: "true",
+				"bound_agent_id": "host-c",
+			},
+		},
 		{OrgID: "other-org", Metadata: map[string]string{agenttokens.CredentialKindMetadataKey: agenttokens.CredentialKindActionRunner, "bound_agent_id": "host-a"}},
 	}, []agentexec.ConnectedAgent{
 		{AgentID: "host-a", RuntimeRole: agentexec.RuntimeRoleActionRunner, ActionCapability: agentexec.ActionCapabilityTypedV1, Version: "6.3.0-linux-amd64", ConnectedAt: connectedAt, OperationReceiptVersion: 1, ActionPreflightVersion: 2, DockerObservationVersion: 2},
 		{AgentID: "host-b", RuntimeRole: agentexec.RuntimeRoleLegacyFullTrust, ActionCapability: agentexec.ActionCapabilityTypedV1, Version: "legacy"},
-		{AgentID: "host-c", RuntimeRole: agentexec.RuntimeRoleActionRunner, ActionCapability: agentexec.ActionCapabilityTypedV1, Version: "other-host"},
+		{AgentID: "host-d", RuntimeRole: agentexec.RuntimeRoleActionRunner, ActionCapability: agentexec.ActionCapabilityTypedV1, Version: "other-host"},
 	}, "default", connectedAt)
 
 	hostA := diagnostics.Agents[0].Privilege
@@ -114,5 +125,9 @@ func TestApplyAgentFleetActionRunnerStateMatchesOnlyBoundTypedRunner(t *testing.
 	hostB := diagnostics.Agents[1].Privilege
 	if hostB == nil || !hostB.ActionRunnerCredentialIssued || hostB.ActionRunnerCredentialActive || hostB.ActionRunnerConnected {
 		t.Fatalf("host-b credential/session posture = %+v", hostB)
+	}
+	hostC := diagnostics.Agents[2].Privilege
+	if hostC == nil || !hostC.ActionRunnerCredentialIssued || hostC.ActionRunnerCredentialActive || hostC.ActionRunnerConnected {
+		t.Fatalf("host-c pending credential/session posture = %+v", hostC)
 	}
 }
