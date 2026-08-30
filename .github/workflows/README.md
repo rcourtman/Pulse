@@ -1,5 +1,17 @@
 # GitHub Actions Workflows
 
+## Trust contract
+
+`scripts/check_workflow_trust.py` validates every workflow during the script
+smoke suite. Remote actions and reusable workflows must use full commit SHAs,
+container actions must use SHA-256 digests, and GitHub-hosted runners must use
+dated image labels rather than moving `-latest` aliases.
+
+Every `actions/checkout` step must also set `persist-credentials` explicitly.
+Use `false` unless a later command in the same job performs an authenticated
+Git write. The small number of write-path exceptions use `true` with the
+machine-checked `# required: authenticated git writes` rationale.
+
 ## Issue Triage Automation
 
 **Files**:

@@ -58,6 +58,8 @@ jobs:
     steps:
       - name: Checkout release integrity control
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Wait for verified public activation marker
         id: marker
@@ -211,7 +213,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: true  # required: authenticated git writes
 
       - name: Acquire repository-ref lease
         id: acquire
@@ -465,7 +467,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: true  # required: authenticated git writes
 
       - name: Release owned repository-ref lease
         env:

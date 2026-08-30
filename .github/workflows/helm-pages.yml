@@ -151,7 +151,7 @@ jobs:
           ref: gh-pages
           path: gh-pages
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: true  # required: authenticated git writes
 
       - name: Publish chart release and merge Pages index
         env:
