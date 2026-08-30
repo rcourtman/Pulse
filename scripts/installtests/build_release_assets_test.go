@@ -1443,11 +1443,11 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	}
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
-		`FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder`,
-		`FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS backend-builder`,
+		`FROM --platform=linux/amd64 node:20-alpine@sha256:`,
+		`FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`,
 		`FROM backend-builder AS release-assets-builder`,
-		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime`,
-		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-foundation`,
+		`AS agent_runtime`,
+		`AS pulse-runtime-foundation`,
 		`FROM pulse-runtime-foundation AS pulse-runtime-base`,
 		`FROM pulse-runtime-foundation AS prebuilt-runtime-base`,
 		`FROM pulse-runtime-base AS hosted_runtime`,
@@ -1478,6 +1478,9 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 			t.Fatalf("Dockerfile missing canonical release ldflags usage: %s", needle)
 		}
 	}
+	assertDigestPinnedDockerBase(t, dockerfile, `FROM --platform=linux/amd64 node:20-alpine@sha256:`)
+	assertDigestPinnedDockerBase(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`)
+	assertDigestPinnedDockerBase(t, dockerfile, `FROM alpine:3.20@sha256:`)
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
 	runtimeStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS runtime`)
 	if hostedStart == -1 || runtimeStart == -1 || hostedStart > runtimeStart {

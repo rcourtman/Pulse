@@ -303,11 +303,11 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 	text := string(dockerfileBytes)
 	assertContainsAll(t, text,
 		"# syntax=docker/dockerfile:1.7",
-		"FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder",
+		"FROM --platform=linux/amd64 node:20-alpine@sha256:",
 		"npm ci",
 		"npm run build",
-		"FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS builder",
-		"FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+		"FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine@sha256:",
+		"FROM alpine:3.20@sha256:",
 		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
 		"ARG TARGETOS",
 		"ARG TARGETARCH",
@@ -332,6 +332,9 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		"FROM alpine:3.21",
 		"CGO_ENABLED=0 go build -o /pulse-control-plane ./cmd/pulse-control-plane",
 	)
+	assertDigestPinnedDockerBase(t, text, `FROM --platform=linux/amd64 node:20-alpine@sha256:`)
+	assertDigestPinnedDockerBase(t, text, `FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine@sha256:`)
+	assertDigestPinnedDockerBase(t, text, `FROM alpine:3.20@sha256:`)
 }
 
 func assertContainsAll(t *testing.T, text string, required ...string) {
