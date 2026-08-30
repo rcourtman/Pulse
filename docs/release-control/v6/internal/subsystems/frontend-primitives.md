@@ -69,6 +69,14 @@ catalog, reads PBS instance plus datastore identity from the recovery model,
 and persists unchanged between the By date and Coverage views. Clearing the
 shared filter rail must remove that route value along with the other active
 facets; the feature must not replace the shared rail with a page-local select.
+The TrueNAS Storage `Storage type` scope follows the same boundary with stable
+`volumes` and `disks` route values. It composes the shared filter bar, exposes
+the current option through pressed-state semantics, preserves the scope in the
+URL across reload, and removes the query value for the default `all` state.
+On narrow screens the physical-disk scope may reprioritize its canonical table
+columns to endurance, temperature, and health while retaining the shared table
+overflow and touch-target behavior; it must not introduce a second mobile-only
+filter or table shell.
 
 Large-estate platform pages must keep one canonical inventory snapshot for the
 initial read and explicit refresh path. The Proxmox and VMware vSphere

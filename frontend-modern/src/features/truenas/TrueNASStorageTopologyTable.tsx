@@ -1,4 +1,5 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import type { FilterDef } from '@/components/shared/FilterBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -36,9 +37,11 @@ import type { Resource } from '@/types/resource';
 import {
   buildTrueNASStorageTopologyRows,
   filterTrueNASStorageTopologyRows,
+  filterTrueNASStorageTopologyRowsByKind,
   getTrueNASResourceDisplayStatus,
   mapTrueNASStorageStatus,
   type TrueNASStorageStatusFilter,
+  type TrueNASStorageKindFilter,
   type TrueNASStorageTopologyKind,
   type TrueNASStorageTopologyRow,
 } from './truenasPageModel';
@@ -63,6 +66,16 @@ const TRUENAS_STORAGE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASStorageSt
     tone: 'danger',
     leading: filterChipStatusDot('bg-red-500'),
   },
+];
+
+const TRUENAS_STORAGE_KIND_OPTIONS: ReadonlyArray<{
+  value: TrueNASStorageKindFilter;
+  label: string;
+  compactLabel?: string;
+}> = [
+  { value: 'all', label: 'All' },
+  { value: 'volumes', label: 'Volumes' },
+  { value: 'disks', label: 'Physical disks', compactLabel: 'Disks' },
 ];
 
 const resourceName = (resource: Resource): string =>
@@ -130,6 +143,56 @@ const CapacityCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
   );
 };
 
+const diskEndurance = (
+  row: TrueNASStorageTopologyRow,
+): { value: number; label: string; class: string } | undefined => {
+  const disk = row.resource.physicalDisk;
+  const diskType = asTrimmedString(disk?.diskType)?.toLowerCase() ?? '';
+  const wearout = disk?.wearout;
+  if (
+    typeof wearout === 'number' &&
+    Number.isFinite(wearout) &&
+    (wearout > 0 || (wearout === 0 && (diskType === 'ssd' || diskType === 'nvme')))
+  ) {
+    const value = Math.max(0, Math.min(100, wearout));
+    return {
+      value,
+      label: `${value.toFixed(0)}% left`,
+      class:
+        value < 20
+          ? 'text-red-600 dark:text-red-400'
+          : value < 50
+            ? 'text-amber-600 dark:text-amber-400'
+            : 'text-emerald-600 dark:text-emerald-400',
+    };
+  }
+  const percentageUsed = disk?.smart?.percentageUsed;
+  if (typeof percentageUsed !== 'number' || !Number.isFinite(percentageUsed)) return undefined;
+  const used = Math.max(0, Math.min(100, percentageUsed));
+  return {
+    value: 100 - used,
+    label: `${used.toFixed(0)}% used`,
+    class:
+      used >= 90
+        ? 'text-red-600 dark:text-red-400'
+        : used >= 80
+          ? 'text-amber-600 dark:text-amber-400'
+          : 'text-base-content',
+  };
+};
+
+const DiskEnduranceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
+  const endurance = () => diskEndurance(props.row);
+  return (
+    <span
+      class={`tabular-nums ${endurance()?.class ?? 'text-muted'}`}
+      title={endurance() ? `Disk endurance: ${endurance()!.label}` : 'Endurance not reported'}
+    >
+      {endurance()?.label ?? '-'}
+    </span>
+  );
+};
+
 const riskLabel = (row: TrueNASStorageTopologyRow): string => {
   const risk =
     asTrimmedString(row.resource.storage?.risk?.level) ||
@@ -171,7 +234,15 @@ const RiskPill: Component<{ row: TrueNASStorageTopologyRow }> = (props) => (
 // Columns a user can sort by. Usage / Size orders pools and datasets on their
 // used percentage and disks on their raw size, so same-kind siblings compare
 // on the number their cell actually shows.
-const TRUENAS_STORAGE_SORT_KEYS = ['resource', 'kind', 'usage', 'disks', 'temp', 'health'] as const;
+const TRUENAS_STORAGE_SORT_KEYS = [
+  'resource',
+  'kind',
+  'usage',
+  'disks',
+  'endurance',
+  'temp',
+  'health',
+] as const;
 
 type TrueNASStorageSortKey = (typeof TRUENAS_STORAGE_SORT_KEYS)[number];
 
@@ -193,6 +264,8 @@ const getTrueNASStorageSortValue = (
     }
     case 'disks':
       return row.kind === 'pool' ? row.counts.disks : null;
+    case 'endurance':
+      return row.kind === 'disk' ? (diskEndurance(row)?.value ?? null) : null;
     case 'temp': {
       if (row.kind !== 'disk') return null;
       const temperature = row.resource.physicalDisk?.temperature;
@@ -283,13 +356,52 @@ export const TrueNASStorageTopologyTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  kindFilter?: TrueNASStorageKindFilter;
+  onKindFilterChange?: (value: TrueNASStorageKindFilter) => void;
 }> = (props) => {
   const rows = createMemo(() => buildTrueNASStorageTopologyRows(props.resources));
+  const [internalKindFilter, setInternalKindFilter] = createSignal<TrueNASStorageKindFilter>('all');
+  const kindFilter = () => props.kindFilter ?? internalKindFilter();
+  const setKindFilter = (value: TrueNASStorageKindFilter) => {
+    if (props.onKindFilterChange) {
+      props.onKindFilterChange(value);
+      return;
+    }
+    setInternalKindFilter(value);
+  };
+  const scopedRows = createMemo(() => filterTrueNASStorageTopologyRowsByKind(rows(), kindFilter()));
   const tableState = createPlatformTableFilterState({
-    resources: rows,
+    resources: scopedRows,
     initialStatus: 'all' as TrueNASStorageStatusFilter,
     filter: filterTrueNASStorageTopologyRows,
   });
+  const kindFilters = createMemo<FilterDef[]>(() => [
+    {
+      id: 'storage-kind',
+      label: 'Storage type',
+      group: 'scope',
+      inline: true,
+      options: () =>
+        TRUENAS_STORAGE_KIND_OPTIONS.map((option) => ({
+          value: option.value,
+          label: option.label,
+          compactLabel: option.compactLabel,
+          count: filterTrueNASStorageTopologyRows(
+            filterTrueNASStorageTopologyRowsByKind(rows(), option.value),
+            tableState.search(),
+            tableState.status(),
+          ).length,
+        })),
+      value: kindFilter,
+      setValue: (value) => setKindFilter(value === 'volumes' || value === 'disks' ? value : 'all'),
+      defaultValue: 'all',
+    },
+  ]);
+  const hasActiveFilters = () => tableState.hasActiveFilters() || kindFilter() !== 'all';
+  const resetFilters = () => {
+    tableState.resetFilters();
+    setKindFilter('all');
+  };
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-storage-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const sort = createPlatformTableSortState({
@@ -323,9 +435,12 @@ export const TrueNASStorageTopologyTable: Component<{
               TRUENAS_STORAGE_STATUS_OPTIONS,
               tableState.countForStatus,
             )}
+            filters={kindFilters()}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="items"
+            hasActiveFilters={hasActiveFilters()}
+            onResetFilters={resetFilters}
           />
         </Show>
 
@@ -335,7 +450,7 @@ export const TrueNASStorageTopologyTable: Component<{
             <PlatformTableEmptyState
               icon={props.emptyIcon}
               title="No storage items match current filters"
-              description="Adjust the search or status filter to see more TrueNAS storage."
+              description="Adjust the search, status, or storage type filter to see more TrueNAS storage."
             />
           }
         >
@@ -356,7 +471,9 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class={`${
+                    kindFilter() === 'disks' ? 'hidden md:table-cell' : 'table-cell'
+                  } platform-table-mobile-w-15 md:w-[10%]`}
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -371,16 +488,16 @@ export const TrueNASStorageTopologyTable: Component<{
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
-                  sortKey="disks"
+                  sortKey={kindFilter() === 'disks' ? 'endurance' : 'disks'}
                   class="platform-table-mobile-w-15 md:w-[8%]"
                 >
-                  Disks
+                  {kindFilter() === 'disks' ? 'Endurance' : 'Disks'}
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class="hidden lg:table-cell md:w-[8%]"
+                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[8%]`}
                 >
                   Temp
                 </PlatformSortableTableHead>
@@ -388,7 +505,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="health"
-                  class="platform-table-phone-hidden md:w-[14%]"
+                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'platform-table-phone-hidden'} md:w-[14%]`}
                 >
                   <PlatformResponsiveTableLabel compact="H" full="Health" />
                 </PlatformSortableTableHead>
@@ -429,7 +546,9 @@ export const TrueNASStorageTopologyTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} ${
+                              kindFilter() === 'disks' ? 'hidden md:table-cell' : 'table-cell'
+                            }`}
                           >
                             <span class="text-base-content">{kindLabel(row.kind)}</span>
                           </TableCell>
@@ -439,13 +558,22 @@ export const TrueNASStorageTopologyTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <PlatformTableNumberValue
-                              value={row.kind === 'pool' ? row.counts.disks : undefined}
-                              emptyText="-"
-                            />
+                            <Show
+                              when={kindFilter() === 'disks'}
+                              fallback={
+                                <PlatformTableNumberValue
+                                  value={row.kind === 'pool' ? row.counts.disks : undefined}
+                                  emptyText="-"
+                                />
+                              }
+                            >
+                              <DiskEnduranceCell row={row} />
+                            </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} ${
+                              kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'
+                            } text-base-content`}
                           >
                             <PlatformTableTemperatureValue
                               value={
@@ -457,7 +585,11 @@ export const TrueNASStorageTopologyTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                            class={`${getPlatformTableCellClassForKind('badge')} ${
+                              kindFilter() === 'disks'
+                                ? 'table-cell'
+                                : 'platform-table-phone-hidden'
+                            }`}
                           >
                             <RiskPill row={row} />
                           </TableCell>

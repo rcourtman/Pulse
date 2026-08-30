@@ -17,6 +17,7 @@ export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASShareStatusFilter = 'all' | 'active' | 'attention' | 'disabled';
 export type TrueNASIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
 export type TrueNASStorageStatusFilter = 'all' | 'healthy' | 'attention' | 'offline';
+export type TrueNASStorageKindFilter = 'all' | 'volumes' | 'disks';
 export type TrueNASProtectionStatusFilter =
   'all' | 'attention' | 'success' | 'warning' | 'failed' | 'running' | 'unknown';
 export type TrueNASProtectionStatusBucket = Exclude<
@@ -581,6 +582,15 @@ export function filterTrueNASStorageTopologyRows(
   }
 
   return rows.filter((row) => directMatches.has(row.id));
+}
+
+export function filterTrueNASStorageTopologyRowsByKind(
+  rows: readonly TrueNASStorageTopologyRow[],
+  kind: TrueNASStorageKindFilter,
+): TrueNASStorageTopologyRow[] {
+  if (kind === 'all') return [...rows];
+  if (kind === 'disks') return rows.filter((row) => row.kind === 'disk');
+  return rows.filter((row) => row.kind === 'pool' || row.kind === 'dataset');
 }
 
 const normalize = (value: unknown): string =>

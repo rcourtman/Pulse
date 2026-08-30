@@ -1,4 +1,4 @@
-import { useLocation } from '@solidjs/router';
+import { useLocation, useSearchParams } from '@solidjs/router';
 import { Show, createMemo, type Accessor } from 'solid-js';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
@@ -30,6 +30,7 @@ import {
   getTrueNASPageTabSpecs,
   type TrueNASPageModel,
   type TrueNASPageTabId,
+  type TrueNASStorageKindFilter,
 } from './truenasPageModel';
 
 // `pool` and `dataset` collapse into `storage` at the API boundary
@@ -49,6 +50,7 @@ const truenasIcon = () => <TrueNASIcon class="h-6 w-6 text-slate-400" />;
 
 export function TrueNASPageSurface() {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: TRUENAS_RESOURCE_QUERY,
     cacheKey: 'truenas-workspace',
@@ -76,6 +78,12 @@ export function TrueNASPageSurface() {
   const activeTab = createMemo<TrueNASPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+  const storageKindFilter = (): TrueNASStorageKindFilter => {
+    const value = searchParams.kind;
+    return value === 'volumes' || value === 'disks' ? value : 'all';
+  };
+  const setStorageKindFilter = (value: TrueNASStorageKindFilter) =>
+    setSearchParams({ kind: value === 'all' ? null : value }, { replace: true });
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
   );
@@ -136,7 +144,11 @@ export function TrueNASPageSurface() {
               </div>
             </Show>
             <Show when={activeTab() === 'storage'}>
-              <TrueNASStorage model={model} />
+              <TrueNASStorage
+                model={model}
+                kindFilter={storageKindFilter()}
+                onKindFilterChange={setStorageKindFilter}
+              />
             </Show>
             <Show when={activeTab() === 'services'}>
               <TrueNASServices model={model} />
@@ -164,7 +176,12 @@ interface TrueNASOverviewProps {
   model: Accessor<TrueNASPageModel>;
 }
 
-function TrueNASStorage(props: TrueNASOverviewProps) {
+interface TrueNASStorageProps extends TrueNASOverviewProps {
+  kindFilter: TrueNASStorageKindFilter;
+  onKindFilterChange: (value: TrueNASStorageKindFilter) => void;
+}
+
+function TrueNASStorage(props: TrueNASStorageProps) {
   return (
     <TrueNASStorageTopologyTable
       resources={props.model().resources}
@@ -172,6 +189,8 @@ function TrueNASStorage(props: TrueNASOverviewProps) {
       emptyIcon={truenasIcon()}
       emptyTitle="No TrueNAS storage inventory"
       emptyDescription="Pools, datasets, and physical disks appear here once the TrueNAS API reports storage inventory."
+      kindFilter={props.kindFilter}
+      onKindFilterChange={props.onKindFilterChange}
     />
   );
 }

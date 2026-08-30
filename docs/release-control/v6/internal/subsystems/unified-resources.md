@@ -385,6 +385,14 @@ table frame is frontend-primitives-owned. Docker / Podman, Kubernetes, Proxmox,
 Standalone, TrueNAS, and vSphere platform tables own source-specific row fields,
 filter semantics, drawer handoffs, and resource projections, while
 `PlatformTableShell` owns the shared table card, header row, and body frame.
+The TrueNAS Storage consumer preserves the canonical topology distinction in
+those filter semantics: its `volumes` scope contains pools and datasets, while
+its `disks` scope contains physical-disk resources only. The scope is applied
+before text and status filters so metadata from an excluded disk cannot retain
+its pool or dataset ancestor. Physical-disk presentation may prioritize the
+canonical SMART health, temperature, and endurance evidence; absent wearout or
+percentage-used telemetry remains unknown rather than being rendered as zero
+remaining life.
 That shell also owns responsive width composition. Source tables may declare
 desktop breakpoint floors, but the phone branch must fit its selected columns
 inside the available container without a horizontal rail. Each unified-resource

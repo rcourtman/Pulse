@@ -1,29 +1,31 @@
 {
   "version": 1,
-  "base_sha": "5b2e3778434891d9bfef7ce47b5d1e52e0b07162",
-  "verified_at": "2026-08-29T23:39:56Z",
+  "base_sha": "ee6bb64d727572efd7ded3c5812200c371a7cdc3",
+  "verified_at": "2026-08-30T01:13:52Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
     "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
-    "frontend-modern/src/features/truenas/truenasPageModel.ts",
-    "frontend-modern/src/hooks/useUnifiedResources.ts"
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "5e05d2b068ccdcf0b00965ee94cf428549687c099a808b0d46843c8a612d663a",
-    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "18f4fd22154a87184f7fc8e0aac6343681abdfcbec08bbb775773641fa6130d9",
-    "frontend-modern/src/features/truenas/truenasPageModel.ts": "505265ffa886d1ad615beca19a62c622c4ddadc6027148d50000bd63b0a71070",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "a20ab17f175fbf747b0be7c8ec361e8ddb99ba34466895f9a9f9df54c02ab824"
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "087236d017558f9fe0990530cd8153f738e764c0ee3ddd77e558b92592fc6f20",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "16f808fc87d03ceee9466214f1397e5746f468bc8a96c6ddde280a6d7f6044d3",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "fb4434ed88e6677449eb4b4b85bd8f3c108be45e3605aff2acb33996f230c932"
   },
   "routes": [
-    "/truenas/overview",
-    "/truenas/protection",
-    "/standalone/machines"
+    "/truenas/storage",
+    "/truenas/storage?kind=disks",
+    "/truenas/storage?kind=volumes"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 393,
+      "height": 851
     },
     {
       "width": 390,
@@ -31,15 +33,17 @@
     }
   ],
   "states": [
-    "populated TrueNAS Overview with provider-scoped resources and no recovery request",
-    "populated TrueNAS Overview at narrow width with no document overflow",
-    "TrueNAS Protection direct route with lazy platform recovery inventory",
-    "populated standalone Machines inventory with provider-owned agents excluded"
+    "populated mixed TrueNAS storage inventory with 21 volume and physical-disk rows",
+    "physical-disk scope with 8 rows and contextual Endurance, Temperature, and Health columns",
+    "physical-disk scope after direct reload from the shareable kind query",
+    "volume scope containing pools and datasets with physical disks excluded",
+    "narrow physical-disk scope with the mobile filter controls expanded and the fixed navigation present"
   ],
   "interactions": [
-    "captured and asserted the exact TrueNAS resource request while confirming no recovery inventory on Overview",
-    "opened TrueNAS Protection and confirmed the recovery request starts only on its owning route",
-    "captured and asserted the standalone Agent and availability request with Proxmox, Kubernetes, TrueNAS, and VMware exclusions",
-    "inspected desktop and 390 by 844 screenshots for populated rows, coherent layout, and horizontal overflow"
+    "expanded mobile Filters and selected the counted Physical disks scope with pointer activation",
+    "confirmed Physical disks sets ?kind=disks, marks the control pressed, and removes pool rows",
+    "reloaded the scoped URL and confirmed the Physical disks selection persists",
+    "selected Volumes and confirmed ?kind=volumes while every physical-disk row is removed",
+    "inspected full-page rendered screenshots at desktop, Pixel 5, and iPhone 12 widths for fit, clipping, selected state, and evidence readability"
   ]
 }

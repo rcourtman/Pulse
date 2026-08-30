@@ -7,6 +7,8 @@ const mockUseUnifiedResources = vi.fn();
 const mockUseRecoveryPoints = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/truenas/overview'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
+const mockSearchParams = vi.hoisted(() => ({ value: {} as Record<string, string> }));
+const mockSetSearchParams = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -49,6 +51,7 @@ vi.mock('@solidjs/router', async () => {
   return {
     ...actual,
     useLocation: () => ({ pathname: mockPathname() }),
+    useSearchParams: () => [mockSearchParams.value, mockSetSearchParams],
   };
 });
 
@@ -99,8 +102,20 @@ vi.mock('../TrueNASServicesTable', () => ({
 }));
 
 vi.mock('../TrueNASStorageTopologyTable', () => ({
-  TrueNASStorageTopologyTable: (props: { resources: Resource[] }) => (
-    <div data-testid="storage-table" data-rows={props.resources.length} />
+  TrueNASStorageTopologyTable: (props: {
+    resources: Resource[];
+    kindFilter: string;
+    onKindFilterChange: (value: string) => void;
+  }) => (
+    <div
+      data-testid="storage-table"
+      data-rows={props.resources.length}
+      data-kind-filter={props.kindFilter}
+    >
+      <button type="button" onClick={() => props.onKindFilterChange('disks')}>
+        Show physical disks
+      </button>
+    </div>
   ),
 }));
 
@@ -119,6 +134,7 @@ vi.mock('../TrueNASVirtualMachinesTable', () => ({
 describe('TrueNASPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/truenas/overview');
+    mockSearchParams.value = {};
     mockVersionInfo.mockReturnValue(null);
     mockUseRecoveryPoints.mockReturnValue({
       meta: () => ({ total: 0 }),
@@ -191,5 +207,23 @@ describe('TrueNASPageSurface contract', () => {
       'protection',
     );
     expect(screen.getByTestId('protection-table')).toBeInTheDocument();
+  });
+
+  it('round-trips the storage kind scope through the route query', () => {
+    mockPathname.mockReturnValue('/truenas/storage');
+    mockSearchParams.value = { kind: 'volumes' };
+    setResources([
+      makeResource({
+        id: 'pool:tank',
+        type: 'storage',
+        storage: { topology: 'pool', platform: 'truenas' },
+      }),
+    ]);
+
+    render(() => <TrueNASPageSurface />);
+
+    expect(screen.getByTestId('storage-table')).toHaveAttribute('data-kind-filter', 'volumes');
+    screen.getByRole('button', { name: 'Show physical disks' }).click();
+    expect(mockSetSearchParams).toHaveBeenCalledWith({ kind: 'disks' }, { replace: true });
   });
 });

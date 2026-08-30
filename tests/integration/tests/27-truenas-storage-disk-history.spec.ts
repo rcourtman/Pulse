@@ -45,6 +45,59 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe("TrueNAS storage disk history", () => {
   test.setTimeout(180_000);
 
+  test("separates shareable volume and physical-disk scopes", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/truenas/storage", { waitUntil: "domcontentloaded" });
+    if (testInfo.project.name.startsWith("mobile-")) {
+      await page.getByRole("button", { name: "Filters" }).click();
+    }
+    const storageType = page.getByRole("group", { name: "Storage type" });
+    await expect(storageType).toBeVisible({ timeout: 60_000 });
+
+    await storageType.getByRole("button", { name: /^Physical disks,/ }).click();
+    await expect(page).toHaveURL(/\/truenas\/storage\?kind=disks$/);
+    await expect(
+      storageType.getByRole("button", { name: /^Physical disks,/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.locator('tr[data-truenas-storage-kind="disk"]').first(),
+    ).toBeVisible();
+    const headers = page.locator("thead");
+    await expect(headers).toContainText("Endurance");
+    await expect(headers).toContainText("Temp");
+    await expect(headers).toContainText(/Health|H/);
+    await expect(
+      page.locator('tr[data-truenas-storage-kind="pool"]'),
+    ).toHaveCount(0);
+    await testInfo.attach(`truenas-physical-disks-${testInfo.project.name}`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    if (testInfo.project.name.startsWith("mobile-")) {
+      await page.getByRole("button", { name: /Filters/ }).click();
+    }
+    await expect(
+      page
+        .getByRole("group", { name: "Storage type" })
+        .getByRole("button", { name: /^Physical disks,/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await page
+      .getByRole("group", { name: "Storage type" })
+      .getByRole("button", { name: /^Volumes,/ })
+      .click();
+    await expect(page).toHaveURL(/\/truenas\/storage\?kind=volumes$/);
+    await expect(
+      page.locator('tr[data-truenas-storage-kind="pool"]').first(),
+    ).toBeVisible();
+    await expect(
+      page.locator('tr[data-truenas-storage-kind="disk"]'),
+    ).toHaveCount(0);
+  });
+
   test("serves SMART temperature history from the storage drawer", async ({
     page,
   }, testInfo) => {

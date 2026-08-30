@@ -14,6 +14,7 @@ import {
   filterTrueNASProtectionPoints,
   filterTrueNASServices,
   filterTrueNASStorageTopologyRows,
+  filterTrueNASStorageTopologyRowsByKind,
   filterTrueNASShares,
   filterTrueNASVMs,
   getTrueNASPageTabSpecs,
@@ -60,6 +61,32 @@ describe('truenasPageModel', () => {
       'vms',
       'shares',
       'protection',
+    ]);
+  });
+
+  it('separates volume topology rows from physical disk rows', () => {
+    const rows = buildTrueNASStorageTopologyRows([
+      makeResource({
+        id: 'tank',
+        type: 'storage',
+        storage: { topology: 'pool', platform: 'truenas' },
+      }),
+      makeResource({
+        id: 'tank-media',
+        type: 'storage',
+        parentId: 'tank',
+        storage: { topology: 'dataset', platform: 'truenas' },
+      }),
+      makeResource({ id: 'sda', type: 'physical_disk', parentId: 'tank' }),
+    ]);
+
+    expect(filterTrueNASStorageTopologyRowsByKind(rows, 'all')).toHaveLength(3);
+    expect(filterTrueNASStorageTopologyRowsByKind(rows, 'volumes').map((row) => row.kind)).toEqual([
+      'pool',
+      'dataset',
+    ]);
+    expect(filterTrueNASStorageTopologyRowsByKind(rows, 'disks').map((row) => row.kind)).toEqual([
+      'disk',
     ]);
   });
 
