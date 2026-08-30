@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,6 +24,70 @@ func writeLegacyEncryptedAPITokens(t *testing.T, persistence *ConfigPersistence,
 	}
 	require.NoError(t, os.WriteFile(persistence.apiTokensFile, data, 0o600))
 	return data
+}
+
+func TestLoadAPITokensDurablyReducesRoleScopeExcess(t *testing.T) {
+	persistence := NewConfigPersistence(t.TempDir())
+	writeLegacyEncryptedAPITokens(t, persistence, []APITokenRecord{{
+		ID:        "collector-token",
+		Name:      "collector",
+		Hash:      "collector-hash",
+		CreatedAt: time.Now().UTC(),
+		Scopes: []string{
+			ScopeSettingsWrite,
+			ScopeAgentReport,
+			ScopeAgentConfigRead,
+			ScopeDockerReport,
+			ScopeActionsExecute,
+		},
+		OrgID: "default",
+		Metadata: map[string]string{
+			auth.RuntimeRoleMetadataKey: auth.RuntimeRoleMonitoringCollector,
+		},
+	}})
+
+	loaded, err := persistence.LoadAPITokens()
+	require.NoError(t, err)
+	require.Equal(t, []string{ScopeAgentReport, ScopeAgentConfigRead, ScopeDockerReport}, loaded[0].Scopes)
+
+	reloaded, err := persistence.LoadAPITokens()
+	require.NoError(t, err)
+	require.Equal(t, loaded[0].Scopes, reloaded[0].Scopes)
+}
+
+func TestLoadAPITokensRejectsRoleMissingMandatoryScope(t *testing.T) {
+	persistence := NewConfigPersistence(t.TempDir())
+	writeLegacyEncryptedAPITokens(t, persistence, []APITokenRecord{{
+		ID:        "collector-token",
+		Name:      "collector",
+		Hash:      "collector-hash",
+		CreatedAt: time.Now().UTC(),
+		Scopes:    []string{ScopeAgentReport},
+		OrgID:     "default",
+		Metadata: map[string]string{
+			auth.RuntimeRoleMetadataKey: auth.RuntimeRoleMonitoringCollector,
+		},
+	}})
+
+	loaded, err := persistence.LoadAPITokens()
+	require.ErrorContains(t, err, ScopeAgentConfigRead)
+	require.Nil(t, loaded)
+}
+
+func TestSaveAPITokensRejectsNonCanonicalRoleAuthority(t *testing.T) {
+	persistence := NewConfigPersistence(t.TempDir())
+	err := persistence.SaveAPITokens([]APITokenRecord{{
+		ID:        "collector-token",
+		Name:      "collector",
+		Hash:      "collector-hash",
+		CreatedAt: time.Now().UTC(),
+		Scopes:    []string{ScopeAgentReport, ScopeAgentConfigRead, ScopeSettingsWrite},
+		OrgID:     "default",
+		Metadata: map[string]string{
+			auth.RuntimeRoleMetadataKey: auth.RuntimeRoleMonitoringCollector,
+		},
+	}})
+	require.ErrorContains(t, err, "non-canonical scopes")
 }
 
 func TestLoadAPITokensPersistsCanonicalAuthorizationStateBeforeReturning(t *testing.T) {

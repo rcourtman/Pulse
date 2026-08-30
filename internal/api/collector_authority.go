@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 const maxCollectorAuthorityRequestBytes int64 = 16 << 10
@@ -89,24 +90,14 @@ func (r *Router) handleReduceCollectorAuthority(w http.ResponseWriter, req *http
 		return
 	}
 	record := &r.config.APITokens[index]
-	nextScopes := make([]string, 0, len(record.Scopes))
-	for _, scope := range record.Scopes {
-		if scope == config.ScopeWildcard {
-			config.Mu.Unlock()
-			http.Error(w, "Wildcard credentials cannot be reduced through the collector route", http.StatusForbidden)
-			return
-		}
-		if scope != config.ScopeAgentExec && scope != config.ScopeAgentManage {
-			nextScopes = append(nextScopes, scope)
-		}
-	}
-	record.Scopes = nextScopes
-	if record.HasScope(config.ScopeAgentExec) || !record.HasScope(config.ScopeAgentReport) {
+	nextScopes, _, err := internalauth.CanonicalizeRoleScopes(internalauth.RuntimeRoleMonitoringCollector, record.Scopes)
+	if err != nil {
 		r.config.APITokens = previous
 		config.Mu.Unlock()
 		http.Error(w, "Collector credential scopes cannot be reduced safely", http.StatusForbidden)
 		return
 	}
+	record.Scopes = nextScopes
 	if record.Metadata == nil {
 		record.Metadata = make(map[string]string)
 	}
@@ -130,6 +121,6 @@ func (r *Router) handleReduceCollectorAuthority(w http.ResponseWriter, req *http
 			RuntimeRole:    agentexec.RuntimeRoleLegacyFullTrust,
 		})
 	}
-	LogAuditEventForTenant(organizationID, "collector_authority_reduced", caller.Name, GetClientIP(req), req.URL.Path, true, "Removed execution and cross-host management scopes from collector credential")
+	LogAuditEventForTenant(organizationID, "collector_authority_reduced", caller.Name, GetClientIP(req), req.URL.Path, true, "Reduced collector credential to its exact monitoring scope allowlist")
 	w.WriteHeader(http.StatusNoContent)
 }

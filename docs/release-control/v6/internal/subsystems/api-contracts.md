@@ -198,9 +198,14 @@ TLS for the installer download and passes `--insecure` to the agent; omission
 or false preserves certificate verification. The server, not the browser,
 continues to mint and quote the enrollment token.
 Install-command credentials are monitoring-only unless the request explicitly
-selects command execution. Monitoring credentials carry report and config-read
-scope without `agent:exec` or `agent:manage`; explicit command-capable
-credentials add `agent:exec` only. Hosted PVE, PBS, and PMG commands do not
+selects command execution. Monitoring credentials require `agent:report` and
+`agent:config:read`; host collectors may additionally carry only
+`docker:report` and `kubernetes:report`. They carry no wildcard, operator,
+action, `agent:exec`, or `agent:manage` authority. Issuance and admission reject
+any role-marked credential outside that exact allowlist, while persisted-load
+migration durably removes historical excess authority before admitting the
+inventory. Explicit command-capable credentials add `agent:exec` only. Hosted
+PVE, PBS, and PMG commands do not
 infer execution authority from the target platform. Agent Doctor exposes the
 local command-authority profile and the server-derived credential execution
 scope as separate fields, and reports an over-scoped monitoring credential
@@ -208,10 +213,11 @@ rather than hiding it behind the current command-enabled boolean.
 `POST /api/agents/collector/reduce-authority` is the authenticated, idempotent
 safe-profile migration boundary. Its JSON body identifies the caller's agent
 and canonical hostname; both must match the attached report credential and its
-organization. The transition rejects wildcard credentials, removes
-`agent:exec` and `agent:manage` from that exact token, persists before success,
-restores the full token inventory on persistence failure, and invalidates only
-the exact matching collector session after persistence.
+organization. The transition rejects credentials missing the mandatory
+collector baseline, removes every scope outside the exact collector allowlist
+from that token, persists before success, restores the full token inventory on
+persistence failure, and invalidates only the exact matching collector session
+after persistence.
 
 ## Canonical Files
 

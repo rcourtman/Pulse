@@ -20,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -699,7 +700,10 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 		return nil, fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
-	migrations := canonicalizeAPITokens(tokens)
+	migrations, err := canonicalizeAPITokens(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("validate api token authority in %s: %w", c.apiTokensFile, err)
+	}
 	if migratedPlaintext || migrations.changed() {
 		if err := c.persistAPITokensLocked(tokens); err != nil {
 			return nil, fmt.Errorf("persist canonical api tokens file %s: %w", c.apiTokensFile, err)
@@ -709,6 +713,7 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 			Int("missing_ids", migrations.missingIDs).
 			Int("legacy_scopes", migrations.legacyScopes).
 			Int("legacy_org_bindings", migrations.legacyOrgBindings).
+			Int("role_scope_reductions", migrations.roleScopeReductions).
 			Msg("Migrated API token metadata before loading")
 	}
 
@@ -786,6 +791,10 @@ func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) erro
 		record := tokens[i]
 		record.ensureID()
 		record.ensureScopes()
+		role := strings.TrimSpace(record.Metadata[auth.RuntimeRoleMetadataKey])
+		if err := auth.ValidateRoleScopes(role, record.Scopes); err != nil {
+			return fmt.Errorf("validate api token %q authority before persistence: %w", record.ID, err)
+		}
 		sanitized[i] = record
 	}
 

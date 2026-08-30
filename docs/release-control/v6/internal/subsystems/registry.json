@@ -7193,6 +7193,7 @@
         "pkg/audit/async_logger.go",
         "pkg/audit/audit.go",
         "pkg/audit/sqlite_logger.go",
+        "pkg/auth/agent_credentials.go",
         "pkg/auth/rbac.go",
 		"pkg/auth/rbac_manager.go",
         "pkg/auth/sqlite_manager.go",
@@ -7439,6 +7440,24 @@
               "internal/api/security_tokens_owner_binding_test.go",
               "internal/api/security_tokens_test.go",
               "internal/api/system_settings_telemetry_test.go"
+            ]
+          },
+          {
+            "id": "agent-credential-role-authority",
+            "label": "agent credential role authority proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/auth/agent_credentials.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/agenttokens/install_test.go",
+              "internal/api/collector_authority_test.go",
+              "internal/config/api_token_migration_atomic_test.go",
+              "internal/config/api_tokens_additional_test.go",
+              "internal/monitoring/agent_fleet_doctor_test.go",
+              "pkg/auth/agent_credentials_test.go"
             ]
           },
           {

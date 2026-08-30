@@ -93,6 +93,31 @@ func TestContractProxmoxInstallScopesRequireExplicitCommandChoice(t *testing.T) 
 	}
 }
 
+func TestContractCollectorCredentialUsesClosedScopeAllowlist(t *testing.T) {
+	allowed := []string{
+		config.ScopeAgentReport,
+		config.ScopeAgentConfigRead,
+		config.ScopeDockerReport,
+		config.ScopeKubernetesReport,
+	}
+	if err := authpkg.ValidateRoleScopes(authpkg.RuntimeRoleMonitoringCollector, allowed); err != nil {
+		t.Fatalf("canonical host collector scopes rejected: %v", err)
+	}
+
+	for _, excess := range []string{
+		config.ScopeWildcard,
+		config.ScopeAgentExec,
+		config.ScopeAgentManage,
+		config.ScopeSettingsWrite,
+		config.ScopeActionsExecute,
+	} {
+		scopes := append(append([]string(nil), allowed...), excess)
+		if err := authpkg.ValidateRoleScopes(authpkg.RuntimeRoleMonitoringCollector, scopes); err == nil {
+			t.Fatalf("collector role admitted excess scope %q: %v", excess, scopes)
+		}
+	}
+}
+
 func TestContractPatrolInternalBridgePreservesBoundedToolAuthority(t *testing.T) {
 	allowed := []string{
 		agentcapabilities.PatrolGetFindingsToolName,

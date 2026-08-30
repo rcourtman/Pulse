@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -40,6 +41,7 @@ const (
 	AgentFleetReasonCredentialUnlisted    = "agent_credential_registry_stale"
 	AgentFleetReasonExecScopeMissing      = "agent_exec_scope_missing"
 	AgentFleetReasonExecScopeExcess       = "agent_exec_scope_excess"
+	AgentFleetReasonCredentialScopeExcess = "agent_credential_scope_excess"
 	AgentFleetReasonDuplicateInstallation = "duplicate_host_agent_installation"
 
 	AgentFleetActionAllowReenroll        = "allow_reenroll"
@@ -516,6 +518,7 @@ func diagnoseAgentFleetSubject(
 		result.Reasons,
 		AgentFleetReasonCredentialMissing,
 		AgentFleetReasonCredentialExpired,
+		AgentFleetReasonCredentialScopeExcess,
 		AgentFleetReasonExecScopeMissing,
 	) {
 		platform, supported := safeAgentUpdatePlatform(subject)
@@ -587,7 +590,19 @@ func diagnoseAgentCredential(subject agentFleetSubject, inventory agentFleetToke
 		return nil
 	}
 	if record, ok := inventory.active[tokenID]; ok {
-		reasons := make([]AgentFleetDiagnosticReason, 0, 2)
+		reasons := make([]AgentFleetDiagnosticReason, 0, 3)
+		role := strings.TrimSpace(record.Metadata[internalauth.RuntimeRoleMetadataKey])
+		if unexpected := internalauth.UnexpectedScopes(role, record.Scopes); len(unexpected) > 0 {
+			reasons = append(reasons, AgentFleetDiagnosticReason{
+				Code:     AgentFleetReasonCredentialScopeExcess,
+				Severity: AgentFleetStatusCritical,
+				Message:  "This collector credential carries authority outside its runtime role allowlist.",
+				Evidence: []string{
+					"Credential runtime role: " + role,
+					"Unexpected scopes: " + strings.Join(unexpected, ", "),
+				},
+			})
+		}
 		if subject.host != nil && subject.host.CommandsEnabled && !record.HasScope(config.ScopeAgentExec) {
 			reasons = append(reasons, AgentFleetDiagnosticReason{
 				Code:     AgentFleetReasonExecScopeMissing,

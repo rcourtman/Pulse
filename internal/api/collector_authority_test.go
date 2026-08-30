@@ -15,7 +15,8 @@ import (
 func TestReduceCollectorAuthorityRemovesExecutionScopeIrreversibly(t *testing.T) {
 	raw := "collector-authority-test.12345678"
 	record, err := config.NewAPITokenRecord(raw, "legacy collector", []string{
-		config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentManage, config.ScopeAgentExec,
+		config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeDockerReport, config.ScopeKubernetesReport,
+		config.ScopeAgentManage, config.ScopeAgentExec, config.ScopeSettingsWrite, config.ScopeActionsExecute,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +42,12 @@ func TestReduceCollectorAuthorityRemovesExecutionScopeIrreversibly(t *testing.T)
 	}
 	if cfg.APITokens[0].HasScope(config.ScopeAgentManage) {
 		t.Fatalf("reduced collector retained cross-host management scope: %v", cfg.APITokens[0].Scopes)
+	}
+	if cfg.APITokens[0].HasScope(config.ScopeSettingsWrite) || cfg.APITokens[0].HasScope(config.ScopeActionsExecute) {
+		t.Fatalf("reduced collector retained unrelated authority: %v", cfg.APITokens[0].Scopes)
+	}
+	if !cfg.APITokens[0].HasScope(config.ScopeDockerReport) || !cfg.APITokens[0].HasScope(config.ScopeKubernetesReport) {
+		t.Fatalf("reduced host collector lost provider reporting authority: %v", cfg.APITokens[0].Scopes)
 	}
 	if got := cfg.APITokens[0].Metadata[agenttokens.RuntimeRoleMetadataKey]; got != agenttokens.CredentialKindMonitoringCollector {
 		t.Fatalf("runtime role = %q", got)
@@ -84,7 +91,7 @@ func TestReduceCollectorAuthorityRejectsUnboundCredential(t *testing.T) {
 
 func TestReduceCollectorAuthorityRollsBackMemoryWhenPersistenceFails(t *testing.T) {
 	raw := "collector-authority-persistence.12345678"
-	record, err := config.NewAPITokenRecord(raw, "legacy collector", []string{config.ScopeAgentReport, config.ScopeAgentExec})
+	record, err := config.NewAPITokenRecord(raw, "legacy collector", []string{config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentExec})
 	if err != nil {
 		t.Fatal(err)
 	}

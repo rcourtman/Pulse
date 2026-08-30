@@ -19,11 +19,11 @@ const (
 	CommandPolicyAppliedAgentIDMetadataKey = "command_policy_applied_agent_id"
 	CommandPolicyIntentEnabled             = "enabled"
 	CommandPolicyIntentDisabled            = "disabled"
-	RuntimeRoleMetadataKey                 = "runtime_role"
+	RuntimeRoleMetadataKey                 = internalauth.RuntimeRoleMetadataKey
 	CredentialKindMetadataKey              = RuntimeRoleMetadataKey
-	CredentialKindMonitoringCollector      = "monitoring-collector"
-	CredentialKindActionRunner             = "action-runner"
-	CredentialKindLegacyFullTrust          = "legacy-full-trust"
+	CredentialKindMonitoringCollector      = internalauth.RuntimeRoleMonitoringCollector
+	CredentialKindActionRunner             = internalauth.RuntimeRoleActionRunner
+	CredentialKindLegacyFullTrust          = internalauth.RuntimeRoleLegacyFullTrust
 	ActionCapabilityMetadataKey            = "agent_action_capability"
 	ActionCapabilityTypedV1                = "typed_actions.v1"
 	ActionBindingVersionMetadataKey        = "action_runner_binding_version"
@@ -256,22 +256,24 @@ func normalizeCredentialKind(record *config.APITokenRecord) error {
 	}
 	kind := strings.TrimSpace(record.Metadata[CredentialKindMetadataKey])
 	hasExec := record.HasScope(config.ScopeAgentExec)
-	switch kind {
-	case "":
+	if kind == "" {
 		if hasExec {
 			// Existing combined collector/command issuance remains available only
 			// as an explicit compatibility class while deployments migrate.
-			record.Metadata[CredentialKindMetadataKey] = CredentialKindLegacyFullTrust
+			kind = CredentialKindLegacyFullTrust
 		} else {
-			record.Metadata[CredentialKindMetadataKey] = CredentialKindMonitoringCollector
+			kind = CredentialKindMonitoringCollector
 		}
+		record.Metadata[CredentialKindMetadataKey] = kind
+	}
+	switch kind {
 	case CredentialKindMonitoringCollector:
-		if hasExec {
-			return errors.New("monitoring collector credential cannot carry agent:exec")
+		if err := internalauth.ValidateRoleScopes(kind, record.Scopes); err != nil {
+			return err
 		}
 	case CredentialKindActionRunner:
-		if !hasExec {
-			return errors.New("action runner credential requires agent:exec")
+		if err := internalauth.ValidateRoleScopes(kind, record.Scopes); err != nil {
+			return err
 		}
 		if strings.TrimSpace(record.Metadata[ActionCapabilityMetadataKey]) != ActionCapabilityTypedV1 {
 			return errors.New("action runner credential requires the typed action capability")

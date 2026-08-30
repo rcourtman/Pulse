@@ -293,6 +293,13 @@ recovery-point loss, restore readiness, datastore health, or provider
 identity. Token inventory that is unavailable or deliberately synthetic stays
 unknown rather than fabricating storage or agent incidents.
 
+Collector role-scope enforcement under `internal/api/agenttokens/`,
+`internal/api/collector_authority.go`, `internal/config/`, and `pkg/auth/` is
+likewise an authentication boundary, not storage or recovery evidence. Its
+exact monitoring allowlist and durable excess-scope reduction must not be
+reinterpreted as backup coverage, restore authority, protection health, or
+permission to broaden provider credentials.
+
 Docker / Podman report ingress under `internal/api/docker_agents.go` is outside
 storage/recovery ownership even though storage/recovery routes share the broad
 `internal/api/` extension boundary. Encoded/decoded report ceilings,

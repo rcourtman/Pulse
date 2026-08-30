@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -244,20 +245,21 @@ func bindMissingAPITokenIDs(tokens []APITokenRecord) int {
 }
 
 type apiTokenMigrationSummary struct {
-	missingIDs        int
-	legacyScopes      int
-	legacyOrgBindings int
+	missingIDs          int
+	legacyScopes        int
+	legacyOrgBindings   int
+	roleScopeReductions int
 }
 
 func (s apiTokenMigrationSummary) changed() bool {
-	return s.missingIDs > 0 || s.legacyScopes > 0 || s.legacyOrgBindings > 0
+	return s.missingIDs > 0 || s.legacyScopes > 0 || s.legacyOrgBindings > 0 || s.roleScopeReductions > 0
 }
 
 // canonicalizeAPITokens applies every migration required before token records
 // are safe to admit to live configuration. Callers must persist the resulting
 // inventory successfully before using it: IDs are revocation handles, scopes
 // are authorization state, and organization bindings constrain tenancy.
-func canonicalizeAPITokens(tokens []APITokenRecord) apiTokenMigrationSummary {
+func canonicalizeAPITokens(tokens []APITokenRecord) (apiTokenMigrationSummary, error) {
 	summary := apiTokenMigrationSummary{
 		missingIDs:        bindMissingAPITokenIDs(tokens),
 		legacyOrgBindings: bindLegacyAPITokensToDefault(tokens),
@@ -268,8 +270,17 @@ func canonicalizeAPITokens(tokens []APITokenRecord) apiTokenMigrationSummary {
 			summary.legacyScopes++
 		}
 		tokens[i].Scopes = normalizedScopes
+		role := strings.TrimSpace(tokens[i].Metadata[auth.RuntimeRoleMetadataKey])
+		canonicalScopes, changed, err := auth.CanonicalizeRoleScopes(role, tokens[i].Scopes)
+		if err != nil {
+			return summary, fmt.Errorf("token %q has invalid %s authority: %w", tokens[i].ID, role, err)
+		}
+		if changed {
+			tokens[i].Scopes = canonicalScopes
+			summary.roleScopeReductions++
+		}
 	}
-	return summary
+	return summary, nil
 }
 
 // tokenPrefix returns the first six characters suitable for hints.
@@ -354,9 +365,13 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 				return nil, false
 			}
 			c.APITokens[idx].ensureID()
+			c.APITokens[idx].ensureScopes()
+			role := strings.TrimSpace(c.APITokens[idx].Metadata[auth.RuntimeRoleMetadataKey])
+			if err := auth.ValidateRoleScopes(role, c.APITokens[idx].Scopes); err != nil {
+				return nil, false
+			}
 			now := time.Now().UTC()
 			c.APITokens[idx].LastUsedAt = &now
-			c.APITokens[idx].ensureScopes()
 			return &c.APITokens[idx], true
 		}
 	}
@@ -374,6 +389,11 @@ func (c *Config) IsValidAPIToken(rawToken string) bool {
 	for _, record := range c.APITokens {
 		if auth.CompareAPIToken(rawToken, record.Hash) {
 			if record.IsExpired() {
+				return false
+			}
+			record.ensureScopes()
+			role := strings.TrimSpace(record.Metadata[auth.RuntimeRoleMetadataKey])
+			if err := auth.ValidateRoleScopes(role, record.Scopes); err != nil {
 				return false
 			}
 			return true

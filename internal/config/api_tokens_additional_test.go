@@ -3,7 +3,43 @@ package config
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+func TestValidateAPITokenRejectsNonCanonicalRoleAuthority(t *testing.T) {
+	rawToken := "collector-invalid-scope.12345678"
+	record, err := NewAPITokenRecord(rawToken, "collector", []string{ScopeAgentReport, ScopeAgentConfigRead, ScopeSettingsWrite})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Metadata = map[string]string{auth.RuntimeRoleMetadataKey: auth.RuntimeRoleMonitoringCollector}
+	cfg := &Config{APITokens: []APITokenRecord{*record}}
+
+	if got, ok := cfg.ValidateAPIToken(rawToken); ok || got != nil {
+		t.Fatalf("ValidateAPIToken admitted non-canonical role authority: %#v", got)
+	}
+	if cfg.IsValidAPIToken(rawToken) {
+		t.Fatal("IsValidAPIToken admitted non-canonical role authority")
+	}
+	if cfg.APITokens[0].LastUsedAt != nil {
+		t.Fatal("rejected credential updated last-used metadata")
+	}
+}
+
+func TestValidateAPITokenRejectsUnknownRuntimeRole(t *testing.T) {
+	rawToken := "collector-unknown-role.12345678"
+	record, err := NewAPITokenRecord(rawToken, "collector", []string{ScopeAgentReport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Metadata = map[string]string{auth.RuntimeRoleMetadataKey: "future-unreviewed-role"}
+	cfg := &Config{APITokens: []APITokenRecord{*record}}
+
+	if got, ok := cfg.ValidateAPIToken(rawToken); ok || got != nil {
+		t.Fatalf("ValidateAPIToken admitted unknown runtime role: %#v", got)
+	}
+}
 
 func TestAPITokenRecord_IsLegacyToken(t *testing.T) {
 	record := &APITokenRecord{}

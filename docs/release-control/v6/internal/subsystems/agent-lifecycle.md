@@ -50,12 +50,17 @@ the fail-closed behavior, residual owner, and concrete removal condition.
 Implemented or mocked behavior is never promoted to live-provider
 qualification, and the safe profile cannot become the general default while a
 matrix row required by that default remains unqualified.
-Safe-profile collector credentials carry only `agent:report` and the
-host-bound `agent:config:read` capability; they carry neither `agent:exec` nor
-the broader `agent:manage` scope. Migration to that profile must durably remove
-both scopes from the exact collector token before local privilege separation,
-close only the matching live collector session, and fail closed if persistence
-does not complete. Once the remote authority reduction succeeds, every local
+Safe-profile collector credentials always carry `agent:report` and the
+host-bound `agent:config:read` capability. Host collectors may additionally
+carry only the provider-report capabilities they actively need:
+`docker:report` and `kubernetes:report`. No collector credential may carry
+`agent:exec`, `agent:manage`, an operator scope, an action scope, wildcard, or
+any future scope until that scope is deliberately added to this allowlist.
+Issuance, persisted-token loading, request admission, and Agent Doctor consume
+the same role policy. Migration to that profile must durably reduce the exact
+collector token to this allowlist before local privilege separation, close
+only the matching live collector session, and fail closed if persistence does
+not complete. Once the remote authority reduction succeeds, every local
 rollback path must retain a monitoring-only collector service rather than
 restoring `--enable-commands` or otherwise recreating command authority.
 When that helper socket is configured, collector startup must complete a

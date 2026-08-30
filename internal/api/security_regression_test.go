@@ -47,6 +47,26 @@ func TestSecurityImplicitAgentCredentialOmitsExecutionScope(t *testing.T) {
 	}
 }
 
+func TestSecurityRejectsCollectorRoleWithNonMonitoringScope(t *testing.T) {
+	rawToken := "security-over-scoped-collector.12345678"
+	record, err := config.NewAPITokenRecord(rawToken, "collector", []string{
+		config.ScopeAgentReport,
+		config.ScopeAgentConfigRead,
+		config.ScopeSettingsWrite,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Metadata = map[string]string{
+		auth.RuntimeRoleMetadataKey: auth.RuntimeRoleMonitoringCollector,
+	}
+	cfg := &config.Config{APITokens: []config.APITokenRecord{*record}}
+
+	if admitted, ok := cfg.ValidateAPIToken(rawToken); ok || admitted != nil {
+		t.Fatalf("over-scoped collector authenticated: %#v", admitted)
+	}
+}
+
 func TestSecurityGenericExecTokenCannotApplyInstallCommandPolicy(t *testing.T) {
 	token := config.APITokenRecord{
 		ID:     "generic-exec-token",

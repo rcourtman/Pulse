@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestAgentFleetDiagnosticsDetectsStaleAgentVersion(t *testing.T) {
@@ -34,6 +35,33 @@ func TestAgentFleetDiagnosticsDetectsStaleAgentVersion(t *testing.T) {
 	}
 	if !hasSupportedRepair(agent, "copy_upgrade_command") {
 		t.Fatalf("expected stale version diagnostic to expose the supported upgrade command action: %#v", agent.RepairActions)
+	}
+}
+
+func TestAgentFleetDiagnosticsExposesCollectorRoleScopeExcess(t *testing.T) {
+	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.config.APITokens = []config.APITokenRecord{{
+		ID:     "collector-token",
+		Scopes: []string{config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeSettingsWrite},
+		Metadata: map[string]string{
+			auth.RuntimeRoleMetadataKey: auth.RuntimeRoleMonitoringCollector,
+		},
+	}}
+	monitor.state.UpsertHost(models.Host{
+		ID:           "collector-agent",
+		Hostname:     "collector-node",
+		Platform:     "linux",
+		Status:       "online",
+		LastSeen:     now,
+		AgentVersion: "6.2.0",
+		TokenID:      "collector-token",
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-collector-agent")
+	requireReasonCode(t, agent, AgentFleetReasonCredentialScopeExcess)
+	if agent.Status != AgentFleetStatusCritical {
+		t.Fatalf("status = %q, want %q", agent.Status, AgentFleetStatusCritical)
 	}
 }
 

@@ -38,6 +38,12 @@ command-capable runtime whose monitoring credential cannot re-enable commands
 is a scope-mismatch warning; an actively command-enabled runtime without
 `agent:exec` remains critical. These facts do not change collection truth or
 make a least-privilege service unhealthy by themselves.
+For a credential explicitly marked `monitoring-collector`, Doctor also compares
+the complete scope set against the canonical role allowlist. Any wildcard,
+operator, action, management, execution, or unknown scope is surfaced as the
+critical `agent_credential_scope_excess` reason with only the unexpected scope
+names as evidence; a current heartbeat never hides that server-side authority
+violation.
 Action-runner posture is a server-side join, not collector-reported monitoring
 truth. The collector may report only that its typed local helper is configured;
 Agent Doctor separately overlays the current tenant's host-bound runner-token

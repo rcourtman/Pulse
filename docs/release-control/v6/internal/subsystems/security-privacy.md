@@ -29,9 +29,14 @@ state; `TestConfigWatcher_ReloadAPITokensDoesNotOverwriteConcurrentMutation`
 is the required concurrency proof.
 
 Pulse-minted Unified Agent credentials follow least authority at issuance.
-Implicit and ordinary monitoring installs receive `agent:report` and
-`agent:config:read`, never `agent:exec` or `agent:manage`. Execution scope is
-added only for an explicit command-capable installer choice. Local runtime
+Implicit and ordinary monitoring installs require `agent:report` and
+`agent:config:read`; host collectors may additionally receive only
+`docker:report` and `kubernetes:report`. The role policy denies wildcard,
+operator, action, `agent:exec`, `agent:manage`, and unknown future scopes.
+Issuance and runtime admission reject non-canonical role credentials;
+persisted-token loading durably subtracts historical excess scopes and rejects
+a credential missing its mandatory baseline. Execution scope is added only for
+an explicit command-capable installer choice. Local runtime
 authority remains an independent ceiling: a credential with `agent:exec`
 cannot promote a service installed as `monitoring-only`, and Agent Doctor must
 warn when such excess scope remains attached to that runtime.
@@ -212,10 +217,11 @@ invisible to operators reviewing exactly what Pulse sends.
 48. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
 49. `internal/api/agent_exec_token_binding.go`
 50. `internal/logging/logging.go`
-51. `pkg/auth/rbac.go`
-52. `pkg/auth/rbac_manager.go`
-53. `pkg/auth/sqlite_manager.go`
-54. `pkg/server/server.go`
+51. `pkg/auth/agent_credentials.go`
+52. `pkg/auth/rbac.go`
+53. `pkg/auth/rbac_manager.go`
+54. `pkg/auth/sqlite_manager.go`
+55. `pkg/server/server.go`
 
 ## Shared Boundaries
 

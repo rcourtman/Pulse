@@ -235,6 +235,10 @@ show whether the collector credential is known and execution-scoped, whether
 a host-bound runner credential is active, and whether a compatible
 `action-runner` / `typed_actions.v1` session is actually connected. Missing
 evidence remains unknown; collector health never proves remediation readiness.
+Role-marked monitoring credentials are also checked against the complete
+collector allowlist: `agent:report` and `agent:config:read` are mandatory, while
+`docker:report` and `kubernetes:report` are the only optional provider scopes.
+Any other scope is a critical credential-authority diagnostic.
 
 Runner enrollment is one host at a time. The issuance request must resolve to
 exactly one non-conflicted monitored agent ID and normalized hostname in the

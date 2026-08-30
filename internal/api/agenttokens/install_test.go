@@ -189,6 +189,32 @@ func TestIssueAndPersistRejectsMonitoringRoleWithExecAuthority(t *testing.T) {
 	}
 }
 
+func TestIssueAndPersistRejectsMonitoringRoleWithUnrelatedAuthority(t *testing.T) {
+	for _, scopes := range [][]string{
+		{config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeSettingsWrite},
+		{config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeActionsExecute},
+	} {
+		_, _, err := IssueAndPersist(&config.Config{}, nil, IssueOptions{
+			TokenName: "invalid",
+			Scopes:    scopes,
+			Metadata:  map[string]string{RuntimeRoleMetadataKey: CredentialKindMonitoringCollector},
+		})
+		if !errors.Is(err, ErrRecord) {
+			t.Fatalf("monitoring role with scopes %v error = %v, want ErrRecord", scopes, err)
+		}
+	}
+}
+
+func TestIssueAndPersistRejectsInferredMonitoringRoleWithUnrelatedAuthority(t *testing.T) {
+	_, _, err := IssueAndPersist(&config.Config{}, nil, IssueOptions{
+		TokenName: "invalid inferred collector",
+		Scopes:    []string{config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeSettingsWrite},
+	})
+	if !errors.Is(err, ErrRecord) {
+		t.Fatalf("inferred monitoring role with unrelated authority error = %v, want ErrRecord", err)
+	}
+}
+
 func TestProxmoxScopesRequireExplicitCommandAuthority(t *testing.T) {
 	monitoringScopes := ProxmoxScopes(false)
 	if (&config.APITokenRecord{Scopes: monitoringScopes}).HasScope(config.ScopeAgentExec) {
