@@ -221,22 +221,31 @@ func newSecureRuntimeLabFixture(collector []byte, collectorSignature string, hel
 		rejectedVersions: make(map[string]bool),
 		actionSecret:     secureRuntimeRunnerSecretV1, actionBindingID: secureRuntimeRunnerBindingV1, actionPending: true,
 	}
-	fixture.actionServer = agentexec.NewServerWithAdmissionValidator(fixture.admitActionRunner, fixture.validateActionRunnerSession)
+	fixture.actionServer = agentexec.NewServerWithAdmissionValidator(fixture.admitCommandSession, fixture.validateCommandSession)
 	return fixture
 }
 
-func (f *secureRuntimeLabFixture) admitActionRunner(secret, agentID, hostname string) (agentexec.AgentAdmission, bool) {
+func (f *secureRuntimeLabFixture) admitCommandSession(secret, agentID, hostname string) (agentexec.AgentAdmission, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.actionRevoked || secret != f.actionSecret || strings.TrimSpace(agentID) != secureRuntimeLabAgentID || !strings.EqualFold(strings.TrimSpace(hostname), secureRuntimeLabHostname) {
+	if strings.TrimSpace(agentID) != secureRuntimeLabAgentID || !strings.EqualFold(strings.TrimSpace(hostname), secureRuntimeLabHostname) {
+		return agentexec.AgentAdmission{}, false
+	}
+	if secret == secureRuntimeLabToken {
+		return f.collectorAdmissionLocked(), true
+	}
+	if f.actionRevoked || secret != f.actionSecret {
 		return agentexec.AgentAdmission{}, false
 	}
 	return f.actionAdmissionLocked(), true
 }
 
-func (f *secureRuntimeLabFixture) validateActionRunnerSession(admission agentexec.AgentAdmission) bool {
+func (f *secureRuntimeLabFixture) validateCommandSession(admission agentexec.AgentAdmission) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if admission.RuntimeRole != agentexec.RuntimeRoleActionRunner {
+		return admission == f.collectorAdmissionLocked()
+	}
 	expected := f.actionAdmissionLocked()
 	return !f.actionRevoked &&
 		admission.OrganizationID == expected.OrganizationID &&
@@ -245,6 +254,15 @@ func (f *secureRuntimeLabFixture) validateActionRunnerSession(admission agentexe
 		admission.Hostname == expected.Hostname &&
 		admission.RuntimeRole == expected.RuntimeRole &&
 		admission.ActionCapability == expected.ActionCapability
+}
+
+func (f *secureRuntimeLabFixture) collectorAdmissionLocked() agentexec.AgentAdmission {
+	return agentexec.AgentAdmission{
+		OrganizationID: secureRuntimeLabOrgID,
+		TokenID:        "secure-runtime-collector-binding-v1",
+		AgentID:        secureRuntimeLabAgentID,
+		Hostname:       secureRuntimeLabHostname,
+	}
 }
 
 func (f *secureRuntimeLabFixture) actionAdmissionLocked() agentexec.AgentAdmission {
@@ -1007,6 +1025,26 @@ func TestSecureRuntimeFixturePromotesPendingRunner(t *testing.T) {
 	}
 	if !health.Registered || !health.Activated {
 		t.Fatalf("fixture action-runner health = %+v", health)
+	}
+}
+
+func TestSecureRuntimeFixtureAdmitsCollectorAndRunnerCredentialsSeparately(t *testing.T) {
+	fixture := newSecureRuntimeLabFixture(nil, "", nil, nil, "fixture")
+	defer fixture.actionServer.Shutdown()
+
+	collector, admitted := fixture.admitCommandSession(secureRuntimeLabToken, secureRuntimeLabAgentID, secureRuntimeLabHostname)
+	if !admitted || collector.RuntimeRole == agentexec.RuntimeRoleActionRunner || !fixture.validateCommandSession(collector) {
+		t.Fatalf("collector admission = %+v, admitted=%t", collector, admitted)
+	}
+	actionRunner, admitted := fixture.admitCommandSession(secureRuntimeRunnerSecretV1, secureRuntimeLabAgentID, secureRuntimeLabHostname)
+	if !admitted || actionRunner.RuntimeRole != agentexec.RuntimeRoleActionRunner || !fixture.validateCommandSession(actionRunner) {
+		t.Fatalf("action-runner admission = %+v, admitted=%t", actionRunner, admitted)
+	}
+	if collector.TokenID == actionRunner.TokenID {
+		t.Fatal("collector and action runner shared a fixture token identity")
+	}
+	if _, admitted := fixture.admitCommandSession("wrong-secret", secureRuntimeLabAgentID, secureRuntimeLabHostname); admitted {
+		t.Fatal("fixture admitted an unknown command credential")
 	}
 }
 
