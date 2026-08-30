@@ -1272,10 +1272,12 @@ func TestBackfillReleaseWorkflowRepairsPublishedAssetsWithoutRebuilds(t *testing
 		`SYFT_VERSION="1.42.4"`,
 		`SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"`,
 		`SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"`,
-		`./scripts/backfill-release-assets.sh --tag "${{ inputs.tag }}" --repo "${{ github.repository }}"`,
+		`TAG: ${{ inputs.tag }}`,
+		`REPOSITORY: ${{ github.repository }}`,
+		`./scripts/backfill-release-assets.sh --tag "${TAG}" --repo "${REPOSITORY}"`,
 		`PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
 		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
-		`./scripts/validate-published-release.sh "${{ inputs.tag }}" "${{ github.repository }}"`,
+		`./scripts/validate-published-release.sh "${TAG}" "${REPOSITORY}"`,
 	}
 	for _, needle := range workflowRequired {
 		if !strings.Contains(workflow, needle) {
@@ -1389,6 +1391,12 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	publishedValidator := string(publishedValidatorBytes)
 	publishedRequired := []string{
 		`RELEASE_SBOM="pulse-${TAG}-release.sbom.spdx.json"`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY is required to authenticate published release assets.`,
+		`go -C "$REPO_ROOT" run ./scripts/release_update_key.go public-key-ssh`,
+		`ssh-keygen -Y verify`,
+		`-I pulse-installer`,
+		`-n pulse-install`,
+		`verify_signature "$CHECKSUMS_PATH" "$CHECKSUMS_SIG_PATH"`,
 		`echo "Failed to download ${RELEASE_SBOM} for ${TAG}" >&2`,
 		`echo "${RELEASE_SBOM} is empty for ${TAG}" >&2`,
 		`CHECKSUMS_SIG_PATH="${TMP_DIR}/checksums.txt.sshsig"`,
@@ -1397,7 +1405,8 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		`sshsig_path="${TMP_DIR}/${filename}.sshsig"`,
 		`"${artifact_url}.sshsig"`,
 		`echo "Failed to download ${filename}.sshsig" >&2`,
-		`Published release assets for ${TAG} match checksums.txt, *.sha256 files, and required *.sshsig sidecars.`,
+		`verify_signature "$artifact_path" "$sshsig_path" "$filename"`,
+		`Published release assets for ${TAG} match authenticated checksums.txt, *.sha256 files, and verified *.sshsig sidecars.`,
 	}
 	for _, needle := range publishedRequired {
 		if !strings.Contains(publishedValidator, needle) {
@@ -1421,9 +1430,9 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		"standalone SPDX JSON SBOM",
 		"already-published packet",
 		"derived integrity assets",
-		"and fail validation if",
-		"published artifact or",
-		"`checksums.txt` is missing its `.sshsig` sidecar",
+		"make post-publication validation authenticate",
+		"every listed artifact's `.sshsig` against the configured",
+		"Validation must fail if the trust root is unavailable",
 		"release-packet SBOM is absent",
 		"download endpoints must return checksum and signature headers",
 		"must disable Go's automatic VCS stamping",

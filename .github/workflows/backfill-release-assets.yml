@@ -62,6 +62,7 @@ jobs:
 
       - name: Validate published release packet
         env:
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           REPOSITORY: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
         run: |

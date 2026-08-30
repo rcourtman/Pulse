@@ -1568,6 +1568,18 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"', content)
         self.assertIn("PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
+        self.assertIn(
+            normalize_ws(
+                """
+                - name: Validate published release packet
+                  env:
+                    PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+                  run: |
+                    ./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"
+                """
+            ),
+            normalize_ws(content),
+        )
         self.assertNotIn("pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", docker_build)
         self.assertIn("Validate installer signing key pins", candidate_workflow)
         self.assertIn("timeout-minutes: 60", candidate_workflow)
@@ -1735,6 +1747,20 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('./scripts/backfill-release-assets.sh --tag "${TAG}" --repo "${REPOSITORY}"', backfill_workflow)
         self.assertIn('./scripts/validate-published-release.sh "${TAG}" "${REPOSITORY}"', backfill_workflow)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", backfill_workflow)
+        self.assertIn(
+            normalize_ws(
+                """
+                - name: Validate published release packet
+                  env:
+                    PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+                    REPOSITORY: ${{ github.repository }}
+                    TAG: ${{ inputs.tag }}
+                  run: |
+                    ./scripts/validate-published-release.sh "${TAG}" "${REPOSITORY}"
+                """
+            ),
+            normalize_ws(backfill_workflow),
+        )
         self.assertIn("./scripts/prepare-release-container-context.sh", candidate_workflow)
         self.assertIn('test "${actual_server}" = "${expected_server}"', docker_build)
         self.assertIn('test "${actual_agent}" = "${expected_agent}"', docker_build)

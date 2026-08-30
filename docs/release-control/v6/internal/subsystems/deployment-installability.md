@@ -4313,8 +4313,12 @@ CI release builds, render release installers with that pinned SSH verifier,
 emit both `.sig` and `.sshsig` sidecars for shipped agent
 binaries and installer assets, emit a standalone SPDX JSON SBOM for the
 assembled release packet, upload those security artifacts with the matching
-release packet, and fail validation if any published artifact or
-`checksums.txt` is missing its `.sshsig` sidecar or if the canonical
+release packet, and make post-publication validation authenticate
+`checksums.txt` and every listed artifact's `.sshsig` against the configured
+`PULSE_UPDATE_SIGNING_PUBLIC_KEY`, not merely test that sidecars are present.
+Validation must fail if the trust root is unavailable, if any signature is
+invalid, if any published artifact or `checksums.txt` is missing its
+`.sshsig` sidecar, or if the canonical
 release-packet SBOM is absent so published RC/stable downloads can keep the
 updater and installer trust chain fail-closed instead of downgrading to
 checksum-only trust and can publish a shareable non-image software inventory
