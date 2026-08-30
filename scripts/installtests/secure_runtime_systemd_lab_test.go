@@ -493,6 +493,9 @@ func secureRuntimeStableSnapshot(t *testing.T) secureRuntimeStableIdentity {
 func secureRuntimeSeedAPTPackageCache(t *testing.T) (string, string) {
 	t.Helper()
 	const cacheDir = "/var/cache/apt/archives"
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatalf("create disposable apt package cache: %v", err)
+	}
 	path := filepath.Join(cacheDir, "pulse-secure-runtime-qualification.deb")
 	content := bytes.Repeat([]byte("pulse-secure-runtime\n"), 4096)
 	if err := os.WriteFile(path, content, 0o600); err != nil {
