@@ -1,11 +1,16 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "attestation_tool": "scripts/release_control/secure_runtime_attestation.py",
+  "attestation_tool_sha256": "7ec7ec958cb1352185b5144dbe6d8f87433608cbc16cfff66f4e7d8b3664a9d7",
   "proof_classification": "exact-committed-main",
   "qualified_commit": "cb843e37e8a92c56d88a8a2922c23ccd2e4fd21b",
-  "qualified_ref_at_run": "main",
+  "qualified_ref_at_run": "cb843e37e8a92c56d88a8a2922c23ccd2e4fd21b",
+  "main_ref_verified": "origin/main",
+  "main_ref_commit_at_attestation": "87fda2a235a34bf62071458795237856ac16650d",
+  "qualified_commit_reachable_from_main": true,
   "build_checkout": "detached-worktree",
-  "build_checkout_clean_except_ignored_artifacts": true,
-  "fresh_disposable_vm": true,
+  "build_checkout_clean_except_lab_artifacts": true,
+  "disposable_vm_guard_verified": true,
   "receipt_path": "docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json",
   "receipt_sha256": "adeeec6bf02a73c27483da31d9e058a8686900324e32960399985e847487a271",
   "source_hashes_match_commit": true,
@@ -13,10 +18,17 @@
     "scripts/install.sh": "0b557c9394f3f0741cbf4287e5ee16a88fe03e189678bddf754606458c4e276e",
     "scripts/installtests/secure_runtime_systemd_lab_test.go": "46082cf9247cd626f9b746ec9a3acfcc4f58ca3c1ced762498376d4bfccaf3f1"
   },
+  "artifact_hashes_match_receipt": true,
+  "artifact_hashes": {
+    "collector_v1": "3f3e4bbff51143de399c0da4ee9a27f2e32294187da88f566018ae45e46edc07",
+    "collector_v2": "7bdcfa0a66402700fa9653d3d74ecebf874ea495d74b80cca2b6d0fe7af19e09",
+    "helper": "35afded11d0f2e69a6ab309f839a132fa4cd0be905adda798939de310261b1cd",
+    "runner": "51faf0e967bb8117fd6e05329caca6df56f64e38bec86f5c59f7fb2b35d2eecd"
+  },
   "host": {
     "os": "Ubuntu 24.04.4 LTS",
-    "kernel": "6.8.0-117-generic",
-    "systemd": "255 (255.4-1ubuntu8.15)",
+    "kernel": "Linux 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Thu May  7 17:26:37 UTC 2026 aarch64 GNU/Linux",
+    "systemd": "systemd 255 (255.4-1ubuntu8.15)",
     "architecture": "arm64"
   },
   "scenario_count": 12,

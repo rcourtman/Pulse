@@ -99,8 +99,10 @@ registration, continued reporting, separate runner enrollment, durable typed
 receipt replay, exact credential rotation invalidation, and runner self-revoke;
 its secret-free receipt and commit binding are recorded in
 `internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json` and its
-committed-main attestation. The repository still needs exact committed
-release-candidate reproduction,
+committed-main attestation. The binding now uses the fail-closed
+`scripts/release_control/secure_runtime_attestation.py` verifier, including an
+exact release-candidate-ref mode for the eventual ratchet proof. The repository
+still needs exact committed release-candidate reproduction,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation

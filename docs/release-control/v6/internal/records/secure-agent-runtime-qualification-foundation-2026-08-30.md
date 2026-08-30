@@ -47,8 +47,16 @@ the lab binary. The source hashes in
 receipt has SHA-256
 `adeeec6bf02a73c27483da31d9e058a8686900324e32960399985e847487a271` and the
 separate `secure-agent-runtime-committed-main-attestation-2026-08-30.json`
-binds the receipt, commit, clean checkout, and fresh disposable VM without
-altering the generated receipt.
+binds the receipt, commit, detached checkout, exercised artifacts, and
+disposable-VM guard without altering the generated receipt. The attestation is
+produced with `scripts/release_control/secure_runtime_attestation.py`, which
+fails closed unless the checkout is detached at the full commit, all tracked
+files are clean, untracked files are confined to `.lab-artifacts`, the commit
+is reachable from main, every receipt source hash matches the commit blob,
+all four artifact hashes match the exercised files, and the canonical twelve
+scenarios all passed in order. Supplying `--release-candidate-ref` additionally
+requires that ref to resolve exactly to the qualified commit and changes the
+proof classification to `exact-release-candidate`.
 The guarded lab passed all of these destructive scenarios from a clean VM:
 
 - legacy root/command-capable install with rootful Docker enabled;
