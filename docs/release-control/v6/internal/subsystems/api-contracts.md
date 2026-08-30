@@ -447,10 +447,10 @@ repository. It classifies every declared capability as `mobile-required`,
 scopes, required request/response fields, pairing data, and push navigation;
 and generates both the Go runtime inventory and Pulse Mobile TypeScript
 projection. `pulse-mobile:config/mobile-api-surface.json` is the consumer
-minimum and released-line probe declaration. Canonical Governance must compare
-that consumer against the exact Pulse manifest and retain revision-bound
-evidence. Pulse Mobile's OTA gate separately proves the app against server
-lines already in customers' hands.
+minimum and released-line probe declaration. Canonical Private Governance must
+compare that consumer against the exact Pulse manifest and retain
+revision-bound evidence. Pulse Mobile's OTA gate separately proves the app
+against server lines already in customers' hands.
 
 Proxy-auth administrator evaluation is a shared auth/API contract. Once
 `PROXY_AUTH_ROLE_HEADER` is configured, `internal/api/auth.go` must treat a

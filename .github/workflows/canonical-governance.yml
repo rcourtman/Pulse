@@ -16,8 +16,8 @@ jobs:
   governance:
     runs-on: ubuntu-24.04
     # Keep pull-request governance free of repository credentials. Cross-repo
-    # evidence checks run after merge in canonical-private-governance.yml,
-    # whose workflow definition cannot be replaced by pull-request code.
+    # evidence checks run after merge in canonical-private-governance.yml, so
+    # its credential-bearing job never executes from an unmerged PR revision.
     defaults:
       run:
         working-directory: repos/pulse

@@ -20,7 +20,7 @@ EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
 # github.token because Actions makes that credential available independently of
 # an explicit secrets.GITHUB_TOKEN reference.
 SHELL_DATA_CONTEXT_RE = re.compile(
-    r"(?<![\w.])(?:inputs|secrets)(?:\.|\s*\[)|(?<![\w.])github\.token\b"
+    r"(?<![\w.])(?:inputs|secrets)\b|(?<![\w.])github\.token\b"
 )
 # GitHub documents these event fields as attacker-controlled strings. They may
 # be passed through env, but interpolating them into a generated shell program
@@ -38,9 +38,7 @@ SECRET_CONTEXT_RE = re.compile(
     r"\[\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2\s*\]"
     r")"
 )
-DYNAMIC_SECRET_CONTEXT_RE = re.compile(
-    r"(?<![\w.])secrets\s*\[(?!\s*['\"][A-Za-z_][A-Za-z0-9_]*['\"]\s*\])"
-)
+SECRET_CONTEXT_TOKEN_RE = re.compile(r"(?<![\w.])secrets\b")
 # This value is intentionally public and only uses secret storage as a legacy
 # configuration mechanism. Confidential credentials have no PR exception.
 NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
@@ -127,13 +125,24 @@ def audit_workflow(path: Path) -> list[Finding]:
     if _has_trigger(lines, "pull_request"):
         for index, line in enumerate(lines):
             code = line.split("#", 1)[0]
-            secret_names = {
-                match.group(1) or match.group(3)
-                for match in SECRET_CONTEXT_RE.finditer(code)
-            }
+            expressions = EXPRESSION_RE.findall(code)
+            secret_names: set[str] = set()
+            has_unresolved_secret_reference = False
+            for expression in expressions:
+                static_references = list(SECRET_CONTEXT_RE.finditer(expression))
+                secret_names.update(
+                    match.group(1) or match.group(3) for match in static_references
+                )
+                if len(SECRET_CONTEXT_TOKEN_RE.findall(expression)) != len(
+                    static_references
+                ):
+                    # Whole-context and dynamic references can expose any
+                    # repository secret, so they cannot use the public-key
+                    # exception reserved for a statically named value.
+                    has_unresolved_secret_reference = True
             if (
                 secret_names - NON_CONFIDENTIAL_PULL_REQUEST_SECRETS
-                or DYNAMIC_SECRET_CONTEXT_RE.search(code)
+                or has_unresolved_secret_reference
             ):
                 findings.append(
                     Finding(

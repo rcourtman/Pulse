@@ -122,6 +122,7 @@ jobs:
     steps:
       - run: echo "${{ inputs.name }}"
       - run: echo "${{ inputs['name'] }}"
+      - run: echo "${{ toJSON(secrets) }}"
       - run: |
           echo "${{ secrets.ACCESS_TOKEN }}"
           echo "${{ github.token }}"
@@ -133,7 +134,7 @@ jobs:
         )
         self.assertEqual(
             sum("must enter run scripts through env" in finding for finding in findings),
-            4,
+            5,
         )
 
     def test_rejects_untrusted_github_metadata_in_generated_shell(self) -> None:
@@ -173,6 +174,7 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           GH_TOKEN_BRACKET: ${{ secrets['WORKFLOW_PAT'] }}
           DYNAMIC_SECRET: ${{ secrets[vars.SECRET_NAME] }}
+          WHOLE_SECRET_CONTEXT: ${{ toJSON(secrets) }}
           PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           PUBLIC_KEY_BRACKET: ${{ secrets['PULSE_LICENSE_PUBLIC_KEY'] }}
         run: echo checked
@@ -180,7 +182,7 @@ jobs:
         )
         self.assertEqual(
             sum("must not reference confidential repository secrets" in finding for finding in findings),
-            3,
+            4,
         )
 
         trusted_push = self.audit(

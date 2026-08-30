@@ -111,7 +111,7 @@ dark-site signal and must not be conflated with this per-agent alert.
 5. Keep mobile relay runtime changes tied to explicit proof in `pulse-mobile:src/relay/__tests__/`
 6. Keep the operator Relay incapable of serving v6 grants until it has synchronously drained the authenticated revocation feed, and expose stale feed state through readiness.
 7. Keep feed-applied restrictive events tied to proof that already-connected stale grants are disconnected and their persisted reconnect credentials are invalidated.
-8. Keep exact-revision Pulse/Pulse Mobile compatibility evidence green in Canonical Governance and keep released-line compatibility green in the Pulse Mobile OTA gate.
+8. Keep exact-revision Pulse/Pulse Mobile compatibility evidence green in Canonical Private Governance and keep released-line compatibility green in the Pulse Mobile OTA gate.
 9. Keep server-side mobile operational metric changes tied to Relay bridge, device-store, and metric contract tests. These aggregate service signals must not be presented as unique-user, retention, app-open, screen-view, or feature-usage analytics.
 
 ## Current State

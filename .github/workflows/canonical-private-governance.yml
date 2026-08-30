@@ -1,8 +1,9 @@
 name: Canonical Private Governance
 
 # Repository credentials are deliberately confined to a workflow definition
-# loaded by a push to main. Pull-request code must never be able to replace the
-# instructions that receive WORKFLOW_PAT or execute with private checkouts.
+# loaded by a push to main. Unmerged pull-request code must never be able to
+# replace the instructions that receive WORKFLOW_PAT or execute with private
+# checkouts.
 on:
   push:
     branches:
