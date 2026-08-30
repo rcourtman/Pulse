@@ -77,7 +77,8 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
   const [updatingDisposition, setUpdatingDisposition] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+  const [proposalError, setProposalError] = createSignal<string | null>(null);
+  const [bulkReviewError, setBulkReviewError] = createSignal<string | null>(null);
   const [testResult, setTestResult] = createSignal<AvailabilityTestResponse | null>(null);
   const [createdTarget, setCreatedTarget] = createSignal<AvailabilityTarget | null>(null);
   const [showBulkReview, setShowBulkReview] = createSignal(false);
@@ -97,18 +98,20 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
     setName(current.service_name || props.discovery.service_name || props.discovery.hostname);
     setTestResult(null);
     setCreatedTarget(null);
-    setError(null);
+    setProposalError(null);
+    setBulkReviewError(null);
   });
 
   const duplicate = createMemo(() => {
     const current = proposal();
-    if (!current) return null;
+    if (!current || targets.error) return null;
     return findAvailabilityProposalDuplicate(current, props.canonicalResourceId, targets() ?? []);
   });
   const dismissed = createMemo(() => isAvailabilityProposalDismissed(props.discovery));
-  const bulkItems = createMemo(() =>
-    reviewableAvailabilitySummaries(machineDiscoveries()?.discoveries ?? []),
-  );
+  const bulkItems = createMemo(() => {
+    if (machineDiscoveries.error) return [];
+    return reviewableAvailabilitySummaries(machineDiscoveries()?.discoveries ?? []);
+  });
 
   const buildTarget = (): AvailabilityTarget | null => {
     const current = proposal();
@@ -122,32 +125,33 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
     });
   };
 
-  const handleTest = async () => {
+  const handleTest = async (trigger?: HTMLButtonElement) => {
     const target = buildTarget();
     if (!target) return;
     setTesting(true);
-    setError(null);
+    setProposalError(null);
     setTestResult(null);
     try {
       setTestResult(await AvailabilityTargetsAPI.test(target));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to test this proposal.');
+      setProposalError(cause instanceof Error ? cause.message : 'Failed to test this proposal.');
     } finally {
       setTesting(false);
+      queueMicrotask(() => trigger?.focus());
     }
   };
 
   const handleCreate = async () => {
     const target = buildTarget();
-    if (!target || duplicate()?.kind === 'endpoint') return;
+    if (!target || targets.loading || targets.error || duplicate()?.kind === 'endpoint') return;
     setSaving(true);
-    setError(null);
+    setProposalError(null);
     try {
       const created = await AvailabilityTargetsAPI.create(target);
       setCreatedTarget(created);
       await refetchTargets();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to create this check.');
+      setProposalError(cause instanceof Error ? cause.message : 'Failed to create this check.');
     } finally {
       setSaving(false);
     }
@@ -158,11 +162,11 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
     if (!current) return;
     const fingerprint = current.evidence_fingerprint?.trim();
     if (!fingerprint) {
-      setError('Run discovery again before changing this legacy suggestion.');
+      setProposalError('Run discovery again before changing this legacy suggestion.');
       return;
     }
     setUpdatingDisposition(true);
-    setError(null);
+    setProposalError(null);
     try {
       const updated = await updateAvailabilityProposal(
         props.resourceType,
@@ -174,7 +178,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
       props.onDiscoveryUpdated(updated);
       if (showBulkReview()) await refetchMachineDiscoveries();
     } catch (cause) {
-      setError(
+      setProposalError(
         cause instanceof Error ? cause.message : 'Failed to update this proposal review state.',
       );
     } finally {
@@ -190,11 +194,11 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
     if (!current) return;
     const fingerprint = current.evidence_fingerprint?.trim();
     if (!fingerprint) {
-      setError('Run discovery again before changing this legacy suggestion.');
+      setBulkReviewError('Run discovery again before changing this legacy suggestion.');
       return;
     }
     setUpdatingDisposition(true);
-    setError(null);
+    setBulkReviewError(null);
     try {
       const updated = await updateAvailabilityProposal(
         summary.resource_type,
@@ -206,7 +210,9 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
       if (summary.id === props.discovery.id) props.onDiscoveryUpdated(updated);
       await refetchMachineDiscoveries();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to update the selected proposal.');
+      setBulkReviewError(
+        cause instanceof Error ? cause.message : 'Failed to update the selected proposal.',
+      );
     } finally {
       setUpdatingDisposition(false);
     }
@@ -234,7 +240,14 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                 Nothing is created until you choose the active-check action below.
               </p>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => setShowBulkReview(true)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setBulkReviewError(null);
+                setShowBulkReview(true);
+              }}
+            >
               Review machine suggestions
             </Button>
           </div>
@@ -330,12 +343,36 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
 
             <Show when={duplicate()}>
               {(match) => (
-                <div class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <div
+                  class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+                  role="status"
+                >
                   {match().kind === 'endpoint'
                     ? `Already covered by “${match().target.name || match().target.address}”. Pulse will not create a duplicate endpoint check.`
                     : `This resource already has “${match().target.name || match().target.address}”, but it covers a different endpoint. Review both before adding another.`}
                 </div>
               )}
+            </Show>
+            <Show when={targets.loading}>
+              <div class="mt-3 flex items-center gap-2 text-xs text-muted" role="status">
+                <LoadingSpinner size="sm" /> Checking existing active checks…
+              </div>
+            </Show>
+            <Show when={targets.error}>
+              <div class="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+                <p role="alert">
+                  Pulse could not check for existing active checks. Creating a check is unavailable
+                  until that safety check succeeds.
+                </p>
+                <Button
+                  class="mt-2"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void refetchTargets()}
+                >
+                  Retry existing-check scan
+                </Button>
+              </div>
             </Show>
 
             <Show when={testResult()}>
@@ -346,6 +383,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                       ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200'
                       : 'border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200'
                   }`}
+                  role={result().success ? 'status' : 'alert'}
                 >
                   {testResultLabel(result())}
                 </div>
@@ -353,15 +391,20 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
             </Show>
             <Show when={createdTarget()}>
               {(created) => (
-                <div class="mt-3 flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                <div
+                  class="mt-3 flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
+                  role="status"
+                >
                   <CheckCircleIcon class="h-4 w-4" aria-hidden="true" />
                   Active check “{created().name}” created and attached to this resource.
                 </div>
               )}
             </Show>
-            <Show when={error()}>
+            <Show when={proposalError()}>
               {(message) => (
-                <p class="mt-3 text-xs font-medium text-red-700 dark:text-red-300">{message()}</p>
+                <p class="mt-3 text-xs font-medium text-red-700 dark:text-red-300" role="alert">
+                  {message()}
+                </p>
               )}
             </Show>
 
@@ -370,7 +413,12 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                 size="sm"
                 variant="primary"
                 isLoading={saving()}
-                disabled={Boolean(createdTarget()) || duplicate()?.kind === 'endpoint'}
+                disabled={
+                  targets.loading ||
+                  Boolean(targets.error) ||
+                  Boolean(createdTarget()) ||
+                  duplicate()?.kind === 'endpoint'
+                }
                 onClick={() => void handleCreate()}
               >
                 Create active check
@@ -379,7 +427,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                 size="sm"
                 variant="secondary"
                 isLoading={testing()}
-                onClick={() => void handleTest()}
+                onClick={(event) => void handleTest(event.currentTarget)}
               >
                 Test proposal
               </Button>
@@ -424,69 +472,82 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
               </div>
               <div class="space-y-3 px-5 py-4">
                 <Show when={machineDiscoveries.loading}>
-                  <div class="flex items-center gap-2 py-8 text-sm text-muted">
+                  <div class="flex items-center gap-2 py-8 text-sm text-muted" role="status">
                     <LoadingSpinner size="md" /> Loading discovered services…
                   </div>
                 </Show>
-                <Show
-                  when={bulkItems().length > 0}
-                  fallback={
-                    <p class="rounded-md border border-dashed border-border p-4 text-sm text-muted">
-                      No availability suggestions are currently available for this machine.
-                    </p>
-                  }
-                >
-                  <For each={bulkItems()}>
-                    {(item) => {
-                      const itemProposal = () => item.suggested_availability_probe!;
-                      const itemDismissed = () => isAvailabilityProposalDismissed(item);
-                      return (
-                        <article class="rounded-md border border-border bg-surface p-3">
-                          <div class="flex flex-wrap items-start justify-between gap-3">
-                            <div class="min-w-0">
-                              <div class="flex items-center gap-2">
-                                <MapPinIcon
-                                  class="h-4 w-4 shrink-0 text-blue-500"
-                                  aria-hidden="true"
-                                />
-                                <h3 class="truncate text-sm font-semibold text-base-content">
-                                  {item.service_name || item.hostname || item.resource_id}
-                                </h3>
-                                <Show when={itemDismissed()}>
-                                  <span class="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
-                                    Dismissed
-                                  </span>
-                                </Show>
-                              </div>
-                              <code class="mt-1 block break-all text-xs text-muted">
-                                {endpointLabel(itemProposal())}
-                              </code>
-                              <p class="mt-1 text-[11px] text-muted">
-                                {expectedBehaviorLabel(itemProposal())} · {itemProposal().reason}
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant={itemDismissed() ? 'secondary' : 'ghost'}
-                              disabled={updatingDisposition()}
-                              onClick={() =>
-                                void updateBulkDisposition(
-                                  item,
-                                  itemDismissed() ? 'reviewable' : 'dismissed',
-                                )
-                              }
-                            >
-                              {itemDismissed() ? 'Restore' : 'Dismiss'}
-                            </Button>
-                          </div>
-                        </article>
-                      );
-                    }}
-                  </For>
+                <Show when={machineDiscoveries.error}>
+                  <p
+                    class="rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
+                    role="alert"
+                  >
+                    Pulse could not load this machine’s assurance suggestions. Close this review and
+                    try again.
+                  </p>
                 </Show>
-                <Show when={error()}>
+                <Show when={!machineDiscoveries.loading && !machineDiscoveries.error}>
+                  <Show
+                    when={bulkItems().length > 0}
+                    fallback={
+                      <p class="rounded-md border border-dashed border-border p-4 text-sm text-muted">
+                        No availability suggestions are currently available for this machine.
+                      </p>
+                    }
+                  >
+                    <For each={bulkItems()}>
+                      {(item) => {
+                        const itemProposal = () => item.suggested_availability_probe!;
+                        const itemDismissed = () => isAvailabilityProposalDismissed(item);
+                        return (
+                          <article class="rounded-md border border-border bg-surface p-3">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                              <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                  <MapPinIcon
+                                    class="h-4 w-4 shrink-0 text-blue-500"
+                                    aria-hidden="true"
+                                  />
+                                  <h3 class="truncate text-sm font-semibold text-base-content">
+                                    {item.service_name || item.hostname || item.resource_id}
+                                  </h3>
+                                  <Show when={itemDismissed()}>
+                                    <span class="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
+                                      Dismissed
+                                    </span>
+                                  </Show>
+                                </div>
+                                <code class="mt-1 block break-all text-xs text-muted">
+                                  {endpointLabel(itemProposal())}
+                                </code>
+                                <p class="mt-1 text-[11px] text-muted">
+                                  {expectedBehaviorLabel(itemProposal())} · {itemProposal().reason}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant={itemDismissed() ? 'secondary' : 'ghost'}
+                                disabled={updatingDisposition()}
+                                onClick={() =>
+                                  void updateBulkDisposition(
+                                    item,
+                                    itemDismissed() ? 'reviewable' : 'dismissed',
+                                  )
+                                }
+                              >
+                                {itemDismissed() ? 'Restore' : 'Dismiss'}
+                              </Button>
+                            </div>
+                          </article>
+                        );
+                      }}
+                    </For>
+                  </Show>
+                </Show>
+                <Show when={bulkReviewError()}>
                   {(message) => (
-                    <p class="text-sm font-medium text-red-700 dark:text-red-300">{message()}</p>
+                    <p class="text-sm font-medium text-red-700 dark:text-red-300" role="alert">
+                      {message()}
+                    </p>
                   )}
                 </Show>
               </div>

@@ -1,13 +1,17 @@
 {
   "version": 1,
-  "base_sha": "defc24af837b91428fbee939d09cd31e9559fb4f",
-  "verified_at": "2026-08-30T18:33:03Z",
+  "base_sha": "b0de28c7c406468310dfbef95b00bd71400d8abb",
+  "verified_at": "2026-08-30T19:10:01Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx": "8432b423e90ebb0e8dbc56ae82535b992bb7715be688cf6f95be34c1d12564e4"
+    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx": "0e3c4c5c2bb63ac5c8cd2549cb1fccea3b17d86a8bffa4dd7d0bf0aca7f45000"
   },
-  "routes": ["/docker/overview?q=uptime-kuma"],
+  "routes": [
+    "/browser-assurance-harness.html (temporary current-build Vite harness for the /docker/overview discovery proposal card)"
+  ],
   "viewports": [
     {
       "width": 1280,
@@ -19,14 +23,18 @@
     }
   ],
   "states": [
-    "current-build AvailabilityProposalCard with a discovered Uptime Kuma verification proposal",
-    "inline proposal evidence and canonical attachment copy",
-    "open machine assurance suggestions dialog with one reviewable HTTP service",
-    "desktop and phone-width proposal card and dialog layouts"
+    "existing-check inventory loading, failure, retry recovery, empty inventory, and post-create duplicate detection",
+    "proposal test transport success, application failure, and request failure with scoped status or alert feedback",
+    "created active-check confirmation alongside duplicate protection",
+    "machine-review loading, populated, and load-failure states without false empty-state overlap",
+    "settled desktop and narrow card/dialog pixels from the final current-source Vite render; managed full-app startup was blocked by unrelated pulse-pro go.mod drift"
   ],
   "interactions": [
-    "opened Review machine suggestions and verified the evidence-specific dismissal copy",
-    "closed the machine suggestions dialog with Escape",
-    "verified card and dialog bounds, wrapping, scrolling, and absence of horizontal overflow at desktop and phone widths"
+    "confirmed Create active check stays disabled until existing-check inventory succeeds and retry restores it",
+    "ran successful and failed Test proposal actions and confirmed focus returns after the native loading-button blur",
+    "created an active check and confirmed status plus duplicate feedback",
+    "opened machine review, checked loading and populated states, closed with Escape, and confirmed focus return",
+    "reopened machine review on failure and confirmed proposal errors stay outside the dialog and no false empty state appears",
+    "inspected desktop and 390x844 settled pixels, topmost dialog hit testing, bounds, clipping, scrolling, and horizontal overflow"
   ]
 }

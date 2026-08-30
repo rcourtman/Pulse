@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AvailabilityTargetsAPI } from '@/api/availabilityTargets';
 import { listDiscoveriesByAgent, updateAvailabilityProposal } from '@/api/discovery';
@@ -120,6 +120,9 @@ describe('AvailabilityProposalCard', () => {
     await fireEvent.change(screen.getByLabelText('Observation location · you control'), {
       target: { value: 'edge-1' },
     });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create active check' })).toBeEnabled(),
+    );
     await fireEvent.click(screen.getByRole('button', { name: 'Create active check' }));
 
     await waitFor(() => expect(AvailabilityTargetsAPI.create).toHaveBeenCalledTimes(1));
@@ -135,7 +138,10 @@ describe('AvailabilityProposalCard', () => {
         }),
       }),
     );
-    expect(screen.getByText(/created and attached to this resource/i)).toBeInTheDocument();
+    expect(screen.getByText(/created and attached to this resource/i)).toHaveAttribute(
+      'role',
+      'status',
+    );
   });
 
   it('blocks an equivalent standalone endpoint and records evidence-bound dismissal', async () => {
@@ -164,7 +170,10 @@ describe('AvailabilityProposalCard', () => {
     ));
 
     await waitFor(() =>
-      expect(screen.getByText(/already covered by “Existing Grafana”/i)).toBeInTheDocument(),
+      expect(screen.getByText(/already covered by “Existing Grafana”/i)).toHaveAttribute(
+        'role',
+        'status',
+      ),
     );
     expect(screen.getByRole('button', { name: 'Create active check' })).toBeDisabled();
 
@@ -179,5 +188,170 @@ describe('AvailabilityProposalCard', () => {
       ),
     );
     expect(onDiscoveryUpdated).toHaveBeenCalled();
+  });
+
+  it('keeps creation unavailable until duplicate checking succeeds', async () => {
+    let resolveTargets!: (targets: []) => void;
+    vi.mocked(AvailabilityTargetsAPI.list).mockImplementation(
+      () => new Promise((resolve) => (resolveTargets = resolve)),
+    );
+
+    render(() => (
+      <AvailabilityProposalCard
+        discovery={discovery()}
+        resourceType="app-container"
+        targetId="agent-1"
+        resourceId="grafana"
+        canonicalResourceId="resource:grafana"
+        onDiscoveryUpdated={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('Checking existing active checks…')).toHaveAttribute('role', 'status');
+    const createButton = screen.getByRole('button', { name: 'Create active check' });
+    expect(createButton).toBeDisabled();
+    await fireEvent.click(createButton);
+    expect(AvailabilityTargetsAPI.create).not.toHaveBeenCalled();
+
+    resolveTargets([]);
+    await waitFor(() => expect(createButton).toBeEnabled());
+  });
+
+  it('fails duplicate checking closed and explains why creation is unavailable', async () => {
+    vi.mocked(AvailabilityTargetsAPI.list)
+      .mockRejectedValueOnce(new Error('inventory unavailable'))
+      .mockResolvedValueOnce([]);
+
+    render(() => (
+      <AvailabilityProposalCard
+        discovery={discovery()}
+        resourceType="app-container"
+        targetId="agent-1"
+        resourceId="grafana"
+        canonicalResourceId="resource:grafana"
+        onDiscoveryUpdated={vi.fn()}
+      />
+    ));
+
+    const failure = await screen.findByText(/could not check for existing active checks/i);
+    expect(failure).toHaveAttribute('role', 'alert');
+    const createButton = screen.getByRole('button', { name: 'Create active check' });
+    expect(createButton).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry existing-check scan' }));
+    await waitFor(() => expect(createButton).toBeEnabled());
+  });
+
+  it('announces proposal test success and failure without moving focus', async () => {
+    let resolveTest!: (result: {
+      success: true;
+      latencyMillis: number;
+      application: { outcome: 'passed'; statusCode: number };
+    }) => void;
+    vi.mocked(AvailabilityTargetsAPI.test).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveTest = resolve)),
+    );
+
+    render(() => (
+      <AvailabilityProposalCard
+        discovery={discovery()}
+        resourceType="app-container"
+        targetId="agent-1"
+        resourceId="grafana"
+        canonicalResourceId="resource:grafana"
+        onDiscoveryUpdated={vi.fn()}
+      />
+    ));
+
+    const testButton = screen.getByRole('button', { name: 'Test proposal' });
+    testButton.focus();
+    await fireEvent.click(testButton);
+    testButton.blur();
+    resolveTest({
+      success: true,
+      latencyMillis: 18,
+      application: { outcome: 'passed', statusCode: 200 },
+    });
+    const success = await screen.findByText(/application response passed with HTTP 200/i);
+    expect(success).toHaveAttribute('role', 'status');
+    expect(document.activeElement).toBe(testButton);
+
+    vi.mocked(AvailabilityTargetsAPI.test).mockResolvedValueOnce({
+      success: false,
+      latencyMillis: 0,
+      error: 'Connection refused',
+    });
+    await fireEvent.click(testButton);
+    const failure = await screen.findByText('Connection refused');
+    expect(failure).toHaveAttribute('role', 'alert');
+    expect(document.activeElement).toBe(testButton);
+  });
+
+  it('does not claim machine suggestions are empty while they are still loading', async () => {
+    let resolveDiscoveries!: (result: { discoveries: []; total: 0 }) => void;
+    vi.mocked(listDiscoveriesByAgent).mockImplementation(
+      () => new Promise((resolve) => (resolveDiscoveries = resolve)),
+    );
+
+    render(() => (
+      <AvailabilityProposalCard
+        discovery={discovery()}
+        resourceType="app-container"
+        targetId="agent-1"
+        resourceId="grafana"
+        canonicalResourceId="resource:grafana"
+        onDiscoveryUpdated={vi.fn()}
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Review machine suggestions' }));
+    expect(screen.getByText('Loading discovered services…')).toHaveAttribute('role', 'status');
+    expect(screen.queryByText(/no availability suggestions are currently available/i)).toBeNull();
+
+    resolveDiscoveries({ discoveries: [], total: 0 });
+    expect(
+      await screen.findByText(/no availability suggestions are currently available/i),
+    ).toBeInTheDocument();
+  });
+
+  it('does not leak a proposal action failure into machine review', async () => {
+    vi.mocked(AvailabilityTargetsAPI.test).mockRejectedValueOnce(new Error('Probe test failed'));
+
+    render(() => (
+      <AvailabilityProposalCard
+        discovery={discovery()}
+        resourceType="app-container"
+        targetId="agent-1"
+        resourceId="grafana"
+        canonicalResourceId="resource:grafana"
+        onDiscoveryUpdated={vi.fn()}
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Test proposal' }));
+    expect(await screen.findByText('Probe test failed')).toHaveAttribute('role', 'alert');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Review machine suggestions' }));
+    expect(within(screen.getByRole('dialog')).queryByText('Probe test failed')).toBeNull();
+  });
+
+  it('reports machine suggestion load failures instead of showing an empty state', async () => {
+    vi.mocked(listDiscoveriesByAgent).mockRejectedValue(new Error('discovery unavailable'));
+
+    render(() => (
+      <AvailabilityProposalCard
+        discovery={discovery()}
+        resourceType="app-container"
+        targetId="agent-1"
+        resourceId="grafana"
+        canonicalResourceId="resource:grafana"
+        onDiscoveryUpdated={vi.fn()}
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Review machine suggestions' }));
+    const failure = await screen.findByText(/could not load this machine’s assurance suggestions/i);
+    expect(failure).toHaveAttribute('role', 'alert');
+    expect(screen.queryByText(/no availability suggestions are currently available/i)).toBeNull();
   });
 });
