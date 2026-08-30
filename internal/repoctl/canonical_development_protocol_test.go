@@ -1860,20 +1860,13 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 	workflow := readRepoFile(t, ".github/workflows/canonical-governance.yml")
 	assertContainsAll(t, ".github/workflows/canonical-governance.yml", workflow, []string{
 		"name: Canonical Governance",
-		"repository: rcourtman/pulse-pro",
-		"repository: rcourtman/pulse-enterprise",
-		"repository: rcourtman/pulse-mobile",
+		"pull_request:",
 		"Set up Node.js for frontend governance",
 		"cache-dependency-path: repos/pulse/frontend-modern/package-lock.json",
 		"Install locked frontend governance dependencies",
 		"npm ci --ignore-scripts --no-audit --no-fund",
-		"PULSE_REPO_ROOT_PULSE_PRO",
-		"PULSE_REPO_ROOT_PULSE_ENTERPRISE",
-		"PULSE_REPO_ROOT_PULSE_MOBILE",
 		"python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin",
 		"python3 scripts/release_control/browser_verification_guard.py",
-		"python3 scripts/release_control/status_audit.py --check",
-		"python3 scripts/release_control/control_plane_audit.py --check",
 		"python3 scripts/release_control/registry_audit.py --check",
 		"python3 scripts/release_control/contract_audit.py --check",
 		"python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type automated",
@@ -1889,6 +1882,35 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"python3 scripts/release_control/status_audit_test.py",
 		"python3 scripts/release_control/subsystem_lookup_test.py",
 	})
+	for _, confidentialReference := range []string{
+		"secrets.WORKFLOW_PAT",
+		"repository: rcourtman/pulse-pro",
+		"repository: rcourtman/pulse-enterprise",
+		"repository: rcourtman/pulse-mobile",
+	} {
+		if strings.Contains(workflow, confidentialReference) {
+			t.Fatalf("pull-request governance contains confidential reference %q", confidentialReference)
+		}
+	}
+
+	privateWorkflow := readRepoFile(t, ".github/workflows/canonical-private-governance.yml")
+	assertContainsAll(t, ".github/workflows/canonical-private-governance.yml", privateWorkflow, []string{
+		"name: Canonical Private Governance",
+		"push:",
+		"repository: rcourtman/pulse-pro",
+		"repository: rcourtman/pulse-enterprise",
+		"repository: rcourtman/pulse-mobile",
+		"secrets.WORKFLOW_PAT",
+		"PULSE_REPO_ROOT_PULSE_PRO",
+		"PULSE_REPO_ROOT_PULSE_ENTERPRISE",
+		"PULSE_REPO_ROOT_PULSE_MOBILE",
+		"python3 scripts/release_control/status_audit.py --check",
+		"python3 scripts/release_control/control_plane_audit.py --check",
+		"go test ./internal/repoctl -count=1",
+	})
+	if strings.Contains(privateWorkflow, "pull_request:") || strings.Contains(privateWorkflow, "workflow_dispatch:") {
+		t.Fatal("private governance must only load its credential-bearing definition from main pushes")
+	}
 
 	install := strings.Index(workflow, "Install locked frontend governance dependencies")
 	guard := strings.Index(workflow, "Run canonical completion guard against changed commits")

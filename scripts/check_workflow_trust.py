@@ -20,8 +20,30 @@ EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
 # github.token because Actions makes that credential available independently of
 # an explicit secrets.GITHUB_TOKEN reference.
 SHELL_DATA_CONTEXT_RE = re.compile(
-    r"(?<![\w.])(?:inputs|secrets)\.|(?<![\w.])github\.token\b"
+    r"(?<![\w.])(?:inputs|secrets)(?:\.|\s*\[)|(?<![\w.])github\.token\b"
 )
+# GitHub documents these event fields as attacker-controlled strings. They may
+# be passed through env, but interpolating them into a generated shell program
+# lets quotes and shell metacharacters become code before the runner starts it.
+UNTRUSTED_GITHUB_CONTEXT_RE = re.compile(
+    r"(?<![\w.])github\.(?:"
+    r"head_ref\b|ref\b|"
+    r"event(?:\.[A-Za-z_][A-Za-z0-9_-]*)*\."
+    r"(?:body|default_branch|email|head_branch|head_ref|label|message|name|page_name|ref|title)\b"
+    r")"
+)
+SECRET_CONTEXT_RE = re.compile(
+    r"(?<![\w.])secrets(?:"
+    r"\.([A-Za-z_][A-Za-z0-9_]*)\b|"
+    r"\[\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2\s*\]"
+    r")"
+)
+DYNAMIC_SECRET_CONTEXT_RE = re.compile(
+    r"(?<![\w.])secrets\s*\[(?!\s*['\"][A-Za-z_][A-Za-z0-9_]*['\"]\s*\])"
+)
+# This value is intentionally public and only uses secret storage as a legacy
+# configuration mechanism. Confidential credentials have no PR exception.
+NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
 
@@ -75,9 +97,52 @@ def _run_script_lines(lines: list[str], run_index: int) -> list[tuple[int, str]]
     return script
 
 
+def _has_trigger(lines: list[str], event: str) -> bool:
+    """Return whether the top-level Actions trigger includes *event*."""
+    event_re = re.compile(rf"(?<![\w-]){re.escape(event)}(?![\w-])")
+    for index, line in enumerate(lines):
+        code = line.split("#", 1)[0]
+        match = re.match(r"^on\s*:\s*(.*)$", code)
+        if not match:
+            continue
+        inline = match.group(1).strip()
+        if inline:
+            return bool(event_re.search(inline))
+        for trigger_line in lines[index + 1 :]:
+            trigger_code = trigger_line.split("#", 1)[0]
+            if not trigger_code.strip():
+                continue
+            if _indent(trigger_code) == 0:
+                break
+            if re.match(rf"^\s+{re.escape(event)}\s*:", trigger_code):
+                return True
+        return False
+    return False
+
+
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
     findings: list[Finding] = []
+
+    if _has_trigger(lines, "pull_request"):
+        for index, line in enumerate(lines):
+            code = line.split("#", 1)[0]
+            secret_names = {
+                match.group(1) or match.group(3)
+                for match in SECRET_CONTEXT_RE.finditer(code)
+            }
+            if (
+                secret_names - NON_CONFIDENTIAL_PULL_REQUEST_SECRETS
+                or DYNAMIC_SECRET_CONTEXT_RE.search(code)
+            ):
+                findings.append(
+                    Finding(
+                        path,
+                        index + 1,
+                        "pull_request workflows must not reference confidential "
+                        "repository secrets; isolate privileged work in a non-PR workflow",
+                    )
+                )
 
     permission_declarations = [
         index
@@ -125,6 +190,14 @@ def audit_workflow(path: Path) -> list[Finding]:
                                 path,
                                 script_index + 1,
                                 "workflow inputs and secrets must enter run scripts through env",
+                            )
+                        )
+                    elif UNTRUSTED_GITHUB_CONTEXT_RE.search(expression):
+                        findings.append(
+                            Finding(
+                                path,
+                                script_index + 1,
+                                "untrusted GitHub metadata must enter run scripts through env",
                             )
                         )
 

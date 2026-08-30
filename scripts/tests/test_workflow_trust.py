@@ -121,6 +121,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - run: echo "${{ inputs.name }}"
+      - run: echo "${{ inputs['name'] }}"
       - run: |
           echo "${{ secrets.ACCESS_TOKEN }}"
           echo "${{ github.token }}"
@@ -132,8 +133,69 @@ jobs:
         )
         self.assertEqual(
             sum("must enter run scripts through env" in finding for finding in findings),
+            4,
+        )
+
+    def test_rejects_untrusted_github_metadata_in_generated_shell(self) -> None:
+        findings = self.audit(
+            """on: [pull_request]
+permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "${{ github.event.pull_request.title }}"
+      - run: |
+          echo "${{ github.head_ref }}"
+          echo "${{ github.event.workflow_run.head_branch }}"
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\\n' "$TITLE" >/dev/null
+      - run: echo "${{ github.event.pull_request.base.sha }}"
+"""
+        )
+        self.assertEqual(
+            sum("untrusted GitHub metadata" in finding for finding in findings),
             3,
         )
+
+    def test_pull_request_workflows_cannot_receive_confidential_secrets(self) -> None:
+        findings = self.audit(
+            """on:
+  push:
+  pull_request:
+permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          GH_TOKEN_BRACKET: ${{ secrets['WORKFLOW_PAT'] }}
+          DYNAMIC_SECRET: ${{ secrets[vars.SECRET_NAME] }}
+          PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+          PUBLIC_KEY_BRACKET: ${{ secrets['PULSE_LICENSE_PUBLIC_KEY'] }}
+        run: echo checked
+"""
+        )
+        self.assertEqual(
+            sum("must not reference confidential repository secrets" in finding for finding in findings),
+            3,
+        )
+
+        trusted_push = self.audit(
+            """on: push
+permissions: {}
+jobs:
+  trusted:
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: echo checked
+"""
+        )
+        self.assertEqual(trusted_push, [])
 
     def test_repository_workflows_satisfy_contract(self) -> None:
         findings = workflow_trust.audit_directory(REPO_ROOT / ".github" / "workflows")

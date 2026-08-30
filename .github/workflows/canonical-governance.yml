@@ -15,10 +15,9 @@ permissions:
 jobs:
   governance:
     runs-on: ubuntu-24.04
-    # The release-control audits resolve the workspace layout from the
-    # local checkout: the repo directory must be named exactly "pulse"
-    # (the canonical repo id) and the evidence repos must be checked out
-    # as siblings, mirroring <workspace>/repos/<repo-id> on dev machines.
+    # Keep pull-request governance free of repository credentials. Cross-repo
+    # evidence checks run after merge in canonical-private-governance.yml,
+    # whose workflow definition cannot be replaced by pull-request code.
     defaults:
       run:
         working-directory: repos/pulse
@@ -29,56 +28,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           path: repos/pulse
-
-      - name: Checkout pulse-pro evidence repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: rcourtman/pulse-pro
-          token: ${{ secrets.WORKFLOW_PAT }}
-          persist-credentials: false
-          fetch-depth: 1
-          path: repos/pulse-pro
-
-      - name: Checkout pulse-enterprise evidence repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: rcourtman/pulse-enterprise
-          token: ${{ secrets.WORKFLOW_PAT }}
-          persist-credentials: false
-          fetch-depth: 1
-          path: repos/pulse-enterprise
-
-      - name: Resolve pulse-mobile evidence ref
-        id: pulse-mobile-ref
-        shell: bash
-        env:
-          CANDIDATE_REF: ${{ github.head_ref }}
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-        run: |
-          set -euo pipefail
-          resolved_ref="main"
-          if [ -n "${CANDIDATE_REF}" ]; then
-            matching_ref="$(gh api \
-              "repos/rcourtman/pulse-mobile/git/matching-refs/heads/${CANDIDATE_REF}" \
-              --jq '.[].ref' 2>/dev/null \
-              | grep --fixed-strings --line-regexp -- "refs/heads/${CANDIDATE_REF}" \
-              || true)"
-            if [ -n "${matching_ref}" ]; then
-              resolved_ref="${CANDIDATE_REF}"
-            fi
-          fi
-          echo "ref=${resolved_ref}" >> "${GITHUB_OUTPUT}"
-          echo "Using pulse-mobile ref: ${resolved_ref}"
-
-      - name: Checkout pulse-mobile evidence repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: rcourtman/pulse-mobile
-          ref: ${{ steps.pulse-mobile-ref.outputs.ref }}
-          token: ${{ secrets.WORKFLOW_PAT }}
-          persist-credentials: false
-          fetch-depth: 1
-          path: repos/pulse-mobile
 
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -102,29 +51,6 @@ jobs:
 
       - name: Stub embedded frontend assets for Go tests
         run: bash scripts/ensure_test_assets.sh
-
-      - name: Check Pulse Mobile compatibility contract
-        run: |
-          python3 scripts/release_control/generate_mobile_compatibility_test.py
-          python3 scripts/release_control/mobile_compatibility_test.py
-          python3 scripts/release_control/generate_mobile_compatibility.py --check --mobile-repo ../pulse-mobile
-          python3 scripts/release_control/mobile_compatibility.py \
-            --mobile-repo ../pulse-mobile \
-            --evidence-out "${RUNNER_TEMP}/pulse-mobile-compatibility.json" \
-            --pretty
-          go test ./internal/api \
-            -run 'Test(RelayMobileRuntimeRouteInventory|RelayMobileAccessScopeAllowsGovernedMobileRuntimeEndpoints|RelayMobileAccessScopeDeniesAdjacentAIRoutes|Contract_PatrolAttentionRoutesAcceptMobileRelayCapability)$' \
-            -count=1
-          go test ./internal/relay \
-            -run 'Test(CanonicalActionOutcomeNotificationMatrix|NewPatrolFindingNotification|NewApprovalRequestNotification|NewActionDecisionNotificationUsesCanonicalActionIdentity|NewFixCompletedNotification|NewActionOutcomeNotificationIsHonestAboutVerification)$' \
-            -count=1
-
-      - name: Upload Pulse Mobile compatibility evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: pulse-mobile-compatibility
-          path: ${{ runner.temp }}/pulse-mobile-compatibility.json
-          if-no-files-found: error
 
       - name: Determine governance diff range
         id: diff
@@ -195,27 +121,11 @@ jobs:
           done
           exit ${status}
 
-      - name: Run status audit
-        env:
-          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
-          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
-          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
-          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
-        run: python3 scripts/release_control/status_audit.py --check
-
       - name: Validate Pulse Intelligence release-gate schema
         run: python3 scripts/release_control/pulse_intelligence_gate.py --validate-only --matrix docs/release-control/v6/internal/pulse-intelligence-release-gate.json
 
       - name: Run Pulse Intelligence release-gate unit tests
         run: python3 scripts/release_control/pulse_intelligence_gate_test.py
-
-      - name: Run control plane audit
-        env:
-          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
-          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
-          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
-          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
-        run: python3 scripts/release_control/control_plane_audit.py --check
 
       - name: Run registry audit
         run: python3 scripts/release_control/registry_audit.py --check
@@ -274,12 +184,7 @@ jobs:
       - name: Run subsystem lookup unit tests
         run: python3 scripts/release_control/subsystem_lookup_test.py
 
-      - name: Run repo governance guardrail tests
-        env:
-          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
-          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
-          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
-          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
+      - name: Run repo governance guardrail unit tests
         run: go test ./internal/repoctl -count=1
 
       - name: Run active-target automated readiness assertion proofs

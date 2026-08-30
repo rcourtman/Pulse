@@ -1,0 +1,114 @@
+name: Canonical Private Governance
+
+# Repository credentials are deliberately confined to a workflow definition
+# loaded by a push to main. Pull-request code must never be able to replace the
+# instructions that receive WORKFLOW_PAT or execute with private checkouts.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-private-governance-main
+  cancel-in-progress: false
+
+jobs:
+  private-governance:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: repos/pulse
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          path: repos/pulse
+
+      - name: Checkout pulse-pro evidence repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: rcourtman/pulse-pro
+          token: ${{ secrets.WORKFLOW_PAT }}
+          persist-credentials: false
+          fetch-depth: 1
+          path: repos/pulse-pro
+
+      - name: Checkout pulse-enterprise evidence repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: rcourtman/pulse-enterprise
+          token: ${{ secrets.WORKFLOW_PAT }}
+          persist-credentials: false
+          fetch-depth: 1
+          path: repos/pulse-enterprise
+
+      - name: Checkout pulse-mobile evidence repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: rcourtman/pulse-mobile
+          token: ${{ secrets.WORKFLOW_PAT }}
+          persist-credentials: false
+          fetch-depth: 1
+          path: repos/pulse-mobile
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: repos/pulse/go.mod
+          cache: true
+          cache-dependency-path: repos/pulse/go.sum
+
+      - name: Stub embedded frontend assets for Go tests
+        run: bash scripts/ensure_test_assets.sh
+
+      - name: Check Pulse Mobile compatibility contract
+        run: |
+          python3 scripts/release_control/generate_mobile_compatibility_test.py
+          python3 scripts/release_control/mobile_compatibility_test.py
+          python3 scripts/release_control/generate_mobile_compatibility.py --check --mobile-repo ../pulse-mobile
+          python3 scripts/release_control/mobile_compatibility.py \
+            --mobile-repo ../pulse-mobile \
+            --evidence-out "${RUNNER_TEMP}/pulse-mobile-compatibility.json" \
+            --pretty
+          go test ./internal/api \
+            -run 'Test(RelayMobileRuntimeRouteInventory|RelayMobileAccessScopeAllowsGovernedMobileRuntimeEndpoints|RelayMobileAccessScopeDeniesAdjacentAIRoutes|Contract_PatrolAttentionRoutesAcceptMobileRelayCapability)$' \
+            -count=1
+          go test ./internal/relay \
+            -run 'Test(CanonicalActionOutcomeNotificationMatrix|NewPatrolFindingNotification|NewApprovalRequestNotification|NewActionDecisionNotificationUsesCanonicalActionIdentity|NewFixCompletedNotification|NewActionOutcomeNotificationIsHonestAboutVerification)$' \
+            -count=1
+
+      - name: Upload Pulse Mobile compatibility evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pulse-mobile-compatibility
+          path: ${{ runner.temp }}/pulse-mobile-compatibility.json
+          if-no-files-found: error
+
+      - name: Run status audit
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
+        run: python3 scripts/release_control/status_audit.py --check
+
+      - name: Run control plane audit
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
+        run: python3 scripts/release_control/control_plane_audit.py --check
+
+      - name: Run repo governance guardrail tests
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
+        run: go test ./internal/repoctl -count=1

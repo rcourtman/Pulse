@@ -14,8 +14,17 @@ machine-checked `# required: authenticated git writes` rationale.
 
 Each workflow declares its default `GITHUB_TOKEN` permissions explicitly and
 enumerates scopes instead of using `read-all` or `write-all`. Workflow inputs,
-secrets, and `github.token` are passed to `run` steps through `env`; they are
-data and must never be interpolated into the generated shell program.
+secrets, `github.token`, and attacker-controlled GitHub event metadata are
+passed to `run` steps through `env`; they are data and must never be
+interpolated into the generated shell program.
+
+Workflows triggered by `pull_request` cannot reference confidential repository
+secrets. Canonical governance therefore keeps its pull-request checks local to
+the public checkout. `canonical-private-governance.yml` performs cross-repo
+status, control-plane, mobile compatibility, and repo-governance checks only
+after a push to `main`, so pull-request code cannot replace the instructions
+that receive `WORKFLOW_PAT`. `PULSE_LICENSE_PUBLIC_KEY` is the sole explicit PR
+exception because that legacy secret value is intentionally non-confidential.
 
 ## Release Continuity
 
