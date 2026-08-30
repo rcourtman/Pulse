@@ -43,6 +43,14 @@ host-storage-cleanup, Proxmox guest lifecycle, and container lifecycle/update
 operations. Generic shell, exec, unrestricted `read_file`, and deploy requests
 are forbidden. Removing or disabling the runner leaves collector monitoring
 and the helper unchanged.
+Safe-profile collector credentials carry only `agent:report` and the
+host-bound `agent:config:read` capability; they carry neither `agent:exec` nor
+the broader `agent:manage` scope. Migration to that profile must durably remove
+both scopes from the exact collector token before local privilege separation,
+close only the matching live collector session, and fail closed if persistence
+does not complete. Once the remote authority reduction succeeds, every local
+rollback path must retain a monitoring-only collector service rather than
+restoring `--enable-commands` or otherwise recreating command authority.
 When that helper socket is configured, collector startup must complete a
 versioned `helper.health` request before the runtime may become ready. A
 listening or active systemd socket alone is not helper health. Once the helper
@@ -61,6 +69,12 @@ expired, interrupted, invalid, or uncommitted activation rolls back during
 helper recovery or through the deadline watchdog; commit and rollback remove
 their fixed staging/quarantine artifacts durably. The first accepted report
 retains the previous-version update evidence from that handoff.
+Before staging or activation, the helper must establish that the signed target
+is the Pulse agent Go command, that its declared and operational version equals
+the requested target, and that the target advances the installed version.
+Commit is additionally bound to the activating process ID and to the digest of
+that process's `/proc/<pid>/exe`, preventing an unrelated collector process
+from finalizing a pending replacement.
 
 The runner's server transport currently reuses the combined agent command
 WebSocket envelope as a migration boundary. That compatibility path may carry
@@ -71,6 +85,12 @@ have an action-runner migration path, live action-runner session parity is
 qualified, and no supported client depends on collector command delivery.
 Until those criteria are met, the combined collector command path is explicitly
 legacy/full-trust compatibility, not part of the safe profile.
+Because the typed runner performs real package, storage, guest, and container
+mutations, its systemd service cannot use `ProtectSystem=strict`; the runner
+keeps the remaining identity, network, filesystem, capability, protocol, and
+receipt restrictions, while the collector and helper remain separately
+hardened. Qualification must prove an allowed mutation completes as well as
+proving generic command denial.
 The runner service persists the same normalized canonical hostname used when
 its credential was issued; it must not substitute the machine's incidental OS
 hostname when the collector was enrolled under an override. Credential

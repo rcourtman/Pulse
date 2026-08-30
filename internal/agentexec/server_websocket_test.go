@@ -1306,6 +1306,40 @@ func TestInvalidateActionRunnerSessionClosesExactSessionAndUnblocksInflightDispa
 	}
 }
 
+func TestInvalidateAgentSessionRequiresExactLegacyAdmission(t *testing.T) {
+	admission := AgentAdmission{
+		OrganizationID: "org-a", TokenID: "collector-token", AgentID: "agent-a",
+		Hostname: "node.example", RuntimeRole: RuntimeRoleLegacyFullTrust,
+	}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		return admission, token == admission.TokenID
+	}, func(candidate AgentAdmission) bool { return candidate == admission })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID,
+	}))
+	if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+		t.Fatalf("registration failed: %s", ack.Message)
+	}
+	wrong := admission
+	wrong.TokenID = "other-token"
+	if s.InvalidateAgentSession(wrong) {
+		t.Fatal("mismatched token evicted legacy session")
+	}
+	if !s.InvalidateAgentSession(admission) {
+		t.Fatal("exact legacy admission was not invalidated")
+	}
+	if s.IsAgentConnectedForOrganization("org-a", "agent-a") {
+		t.Fatal("invalidated legacy session remained connected")
+	}
+}
+
 // registerCancelTestAgent registers agent "a1" over the websocket harness and
 // returns after the registration ack has been read.
 func registerCancelTestAgent(t *testing.T, s *Server, tsURL string) *cancelTestConn {

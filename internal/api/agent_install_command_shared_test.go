@@ -235,7 +235,6 @@ func TestContainerRuntimeAgentScopesFollowHostMode(t *testing.T) {
 		config.ScopeDockerReport,
 		config.ScopeAgentReport,
 		config.ScopeAgentConfigRead,
-		config.ScopeAgentManage,
 	}, dualMode)
 
 	require.Equal(t, []string{config.ScopeDockerReport}, containerRuntimeAgentScopes(false))

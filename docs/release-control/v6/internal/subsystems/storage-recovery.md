@@ -42,6 +42,12 @@ self-revocation uses the same durable boundary and cannot select another token,
 organization, or host. That rollback protects restart-time
 credential truth only; it is not a customer backup, recovery point, restore
 operation, or storage-cleanup grant.
+The adjacent collector authority-reduction route removes `agent:exec` and
+`agent:manage` only from the caller's exact host-bound credential and closes
+only its matching command session after durable persistence. This transition
+cannot select, mutate, restore, delete, or reclassify storage/recovery evidence;
+installer rollback retains the reduced credential and restores no
+collector-controlled descendant metadata as a storage snapshot.
 The helper-backed collector updater likewise retains only one fixed
 last-known-good executable and an identity-bound pending/commit receipt. A
 startup recovery or deadline rollback of an uncommitted activation is agent

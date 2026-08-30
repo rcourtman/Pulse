@@ -30,11 +30,11 @@ is the required concurrency proof.
 
 Pulse-minted Unified Agent credentials follow least authority at issuance.
 Implicit and ordinary monitoring installs receive `agent:report` and
-`agent:config:read`, never `agent:exec`. Execution scope is added only for an
-explicit command-capable installer choice. Local runtime authority remains an
-independent ceiling: a credential with `agent:exec` cannot promote a service
-installed as `monitoring-only`, and Agent Doctor must warn when such excess
-scope remains attached to that runtime.
+`agent:config:read`, never `agent:exec` or `agent:manage`. Execution scope is
+added only for an explicit command-capable installer choice. Local runtime
+authority remains an independent ceiling: a credential with `agent:exec`
+cannot promote a service installed as `monitoring-only`, and Agent Doctor must
+warn when such excess scope remains attached to that runtime.
 
 Privileged host telemetry crosses only the local typed helper boundary owned by
 `internal/agenthelper/` and `cmd/pulse-agent-helper/main.go`. That root process
@@ -53,6 +53,11 @@ shape, regular-file identity, symlink resistance, and byte ceiling before
 copying into fixed root-owned staging. Activation and rollback then revalidate
 the root boundary, perform atomic replacement, and durably bind the transition
 identity before changing the root-owned collector binary.
+The helper must identify the candidate statically as the Pulse agent Go
+command, require both its build metadata and bounded `--version` output to
+equal the requested target, and reject a target that does not advance the
+installed version. Commit is accepted only from the activating process ID when
+the digest of its live `/proc/<pid>/exe` equals the pending artifact digest.
 Activation is not final authority: the helper records a bounded pending state
 and last-known-good digest before replacement, and exposes an exact typed
 commit. Only the replacement collector's local readiness plus an accepted new
@@ -74,6 +79,11 @@ shell/exec, unrestricted `read_file`, deploy, and trusted-origin bypasses are
 forbidden. The legacy combined command channel remains a disclosed full-trust
 migration boundary only until runner enrollment and live session parity are
 qualified; it is not safe-profile authority.
+The action runner necessarily has a writable host view for its closed mutation
+set, so `ProtectSystem=strict` is not a valid runner sandbox claim. Its separate
+credential, no-listener transport, typed admission, target and digest binding,
+bounded capabilities, state privacy, and durable receipts are the compensating
+boundary; collector and helper filesystem hardening remains independent.
 Action-runner issuance and rotation are one durable host-bound transition per
 organization and canonical agent ID. Re-issuance replaces the prior runner
 record even when the monitored hostname has changed, returns the new plaintext
@@ -89,6 +99,14 @@ credential; browser sessions and a caller-selected token ID are rejected, and
 persistence failure restores the prior inventory. Installer teardown keeps the
 secret in a private file/config boundary rather than argv and reports remote
 revocation failure without retaining local remediation authority.
+Safe-profile migration uses the authenticated
+`POST /api/agents/collector/reduce-authority` transition. The server accepts
+only the caller's exact organization, agent, and canonical hostname; rejects
+wildcard, cross-host, and cross-organization credentials; durably removes both
+`agent:exec` and `agent:manage`; restores a deep token snapshot on persistence
+failure; and then closes only the superseded live collector session. The
+installer must not undo that server-side reduction during local rollback and
+must strip collector command flags from any restored service definition.
 
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,

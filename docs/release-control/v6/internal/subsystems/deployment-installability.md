@@ -135,9 +135,12 @@ the new binary is trusted. The replacement collector must pass local readiness
 and have a fresh authoritative primary report accepted before it sends the
 typed commit; helper startup/restart recovery and the watchdog restore the
 last-known-good binary when activation is interrupted, expires, or never
-commits. Commit and rollback durably reap the fixed staging and quarantine
-artifacts. A socket-active check is insufficient: installer migration and the
-collector both exercise the versioned helper health protocol.
+commits. Before replacement, the helper proves the signed artifact is the Pulse
+agent command, reports the requested advancing version, and cannot be committed
+by a different process or executable digest. Commit and rollback durably reap
+the fixed staging and quarantine artifacts. A socket-active check is
+insufficient: installer migration and the collector both exercise the
+versioned helper health protocol.
 
 The same supported Linux systemd profile can install `pulse-agent-runner` only
 through the separate `--enable-action-runner` choice, a private token file,
@@ -152,6 +155,11 @@ uses a private curl configuration for best-effort exact self-revocation before
 local teardown, so the bearer secret does not enter argv. Server unreachability
 is warned explicitly but does not make local removal depend on the remote
 control plane.
+The runner must retain a writable host filesystem because its closed protocol
+performs real package, storage, guest, and container mutations;
+`ProtectSystem=strict` is therefore forbidden for that unit. This exception
+does not apply to the collector or helper and does not relax the runner's
+separate identity, credential, network, capability, state, or receipt bounds.
 
 Safe-profile migration is never an ordinary update side effect.
 `--safe-profile-inspect` is read-only and reports the current authority,
@@ -167,9 +175,14 @@ Apply also fails before mutation when the effective collector fragment differs
 from the installer-owned unit or any systemd drop-in is present. Commit requires
 the effective non-root/no-ambient-capability unit, a live helper protocol
 response, and a registration `lastSeen` newer than the frozen legacy
-collector's value. The rollback manifest restores all state-tree ownership and
-modes plus the Proxmox registration markers the apply path can mutate. Rootful
-Docker is an explicit migration degradation: it is disabled unless a
+collector's value. Before the local transition, apply calls the exact
+host-bound authority-reduction API and fails closed unless `agent:exec` and
+`agent:manage` are durably removed. The rollback manifest restores only the
+installer-owned state-root metadata plus the Proxmox registration markers the
+apply path can mutate; it never replays collector-controlled descendant paths,
+and every rollback strips the legacy command flag rather than reversing the
+server-side reduction. Rootful Docker is an explicit migration degradation: it
+is disabled unless a
 collector-owned, readable and writable rootless runtime socket is available;
 the safe profile never restores Docker by adding the collector to a
 root-equivalent group.

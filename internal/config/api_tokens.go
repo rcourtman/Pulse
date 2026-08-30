@@ -111,6 +111,7 @@ func (r *APITokenRecord) IsExpired() bool {
 // Clone returns a copy of the record with duplicated pointer fields.
 func (r *APITokenRecord) Clone() APITokenRecord {
 	clone := *r
+	clone.Scopes = append([]string(nil), r.Scopes...)
 	if r.LastUsedAt != nil {
 		t := *r.LastUsedAt
 		clone.LastUsedAt = &t
@@ -125,6 +126,12 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 	if len(r.OrgIDs) > 0 {
 		clone.OrgIDs = make([]string, len(r.OrgIDs))
 		copy(clone.OrgIDs, r.OrgIDs)
+	}
+	if r.Metadata != nil {
+		clone.Metadata = make(map[string]string, len(r.Metadata))
+		for key, value := range r.Metadata {
+			clone.Metadata[key] = value
+		}
 	}
 	clone.ensureID()
 

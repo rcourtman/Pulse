@@ -69,7 +69,6 @@ func ProxmoxScopes(enableCommands bool) []string {
 	scopes := []string{
 		config.ScopeAgentReport,
 		config.ScopeAgentConfigRead,
-		config.ScopeAgentManage,
 	}
 	if enableCommands {
 		scopes = append(scopes, config.ScopeAgentExec)
@@ -81,7 +80,6 @@ func HostScopes(enableCommands bool) []string {
 	scopes := []string{
 		config.ScopeAgentReport,
 		config.ScopeAgentConfigRead,
-		config.ScopeAgentManage,
 		config.ScopeDockerReport,
 		config.ScopeKubernetesReport,
 	}

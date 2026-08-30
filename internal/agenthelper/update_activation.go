@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 const maxUpdateArtifactBytes = 100 * 1024 * 1024
@@ -25,11 +27,13 @@ const (
 type UpdateActivateRequest struct {
 	ArtifactID string `json:"artifactId"`
 	SHA256     string `json:"sha256"`
+	Version    string `json:"version"`
 }
 
 type UpdateStageRequest struct {
 	ArtifactID string `json:"artifactId"`
 	SHA256     string `json:"sha256"`
+	Version    string `json:"version"`
 }
 
 type UpdateStageResult struct {
@@ -65,6 +69,8 @@ type UpdateActivatorConfig struct {
 	TargetPath              string
 	StatePath               string
 	VerifySignature         func([]byte, string) error
+	InspectVersion          func(context.Context, string) (string, error)
+	ValidateCommitter       func(context.Context, string) error
 	ValidateOwner           func(*os.File) error
 	ValidateQuarantineOwner func(*os.File) error
 	Now                     func() time.Time
@@ -80,6 +86,8 @@ type updateActivator struct {
 	rollbackPath            string
 	statePath               string
 	verifySignature         func([]byte, string) error
+	inspectVersion          func(context.Context, string) (string, error)
+	validateCommitter       func(context.Context, string) error
 	validateOwner           func(*os.File) error
 	validateQuarantineOwner func(*os.File) error
 	now                     func() time.Time
@@ -95,11 +103,12 @@ type durableUpdateState struct {
 	RollbackSHA256   string    `json:"rollbackSha256"`
 	RollbackDeadline time.Time `json:"rollbackDeadline,omitempty"`
 	UpdatedAt        time.Time `json:"updatedAt"`
+	ActivatorPID     int32     `json:"activatorPid,omitempty"`
 }
 
 func NewUpdateActivator(config UpdateActivatorConfig) (UpdateProvider, error) {
-	if config.VerifySignature == nil || config.ValidateOwner == nil || config.ValidateQuarantineOwner == nil {
-		return nil, errors.New("signature, root-ownership, and quarantine-ownership validators are required")
+	if config.VerifySignature == nil || config.InspectVersion == nil || config.ValidateCommitter == nil || config.ValidateOwner == nil || config.ValidateQuarantineOwner == nil {
+		return nil, errors.New("signature, artifact-version, committer, root-ownership, and quarantine-ownership validators are required")
 	}
 	for _, path := range []string{config.QuarantineDir, config.StagingDir, config.TargetPath, config.StatePath} {
 		if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -133,7 +142,7 @@ func NewUpdateActivator(config UpdateActivatorConfig) (UpdateProvider, error) {
 	activator := &updateActivator{
 		quarantineDir: config.QuarantineDir, stagingDir: config.StagingDir, targetPath: config.TargetPath,
 		rollbackPath: config.TargetPath + ".last-known-good", statePath: config.StatePath,
-		verifySignature: config.VerifySignature, validateOwner: config.ValidateOwner,
+		verifySignature: config.VerifySignature, inspectVersion: config.InspectVersion, validateCommitter: config.ValidateCommitter, validateOwner: config.ValidateOwner,
 		validateQuarantineOwner: config.ValidateQuarantineOwner, now: now,
 		rollbackWindow: rollbackWindow, scheduleRollback: scheduleRollback,
 	}
@@ -150,7 +159,8 @@ func NewUpdateActivator(config UpdateActivatorConfig) (UpdateProvider, error) {
 func (u *updateActivator) Stage(ctx context.Context, request UpdateStageRequest) (UpdateStageResult, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if !validArtifactID(request.ArtifactID) || !validSHA256(request.SHA256) {
+	request.Version = strings.TrimSpace(request.Version)
+	if !validArtifactID(request.ArtifactID) || !validSHA256(request.SHA256) || !validArtifactVersion(request.Version) {
 		return UpdateStageResult{}, invalidArtifact("artifact identity or digest is invalid")
 	}
 	if err := u.validateDirectoryWith(u.quarantineDir, u.validateQuarantineOwner); err != nil {
@@ -188,13 +198,33 @@ func (u *updateActivator) Stage(ctx context.Context, request UpdateStageRequest)
 	if err := u.installStagedArtifact(destination, artifact, signature); err != nil {
 		return UpdateStageResult{}, &ProviderError{Code: ErrorInternal, Message: "promote quarantined artifact into root staging"}
 	}
+	removeInvalidStaging := func(message string) (UpdateStageResult, error) {
+		_ = u.removeStagedArtifact(request.ArtifactID)
+		return UpdateStageResult{}, invalidArtifact(message)
+	}
+	candidateVersion, err := u.inspectVersion(ctx, filepath.Join(destination, "pulse-agent"))
+	if err != nil || strings.TrimSpace(candidateVersion) != request.Version {
+		return removeInvalidStaging("signed artifact is not the requested pulse-agent version")
+	}
+	currentVersion, err := u.inspectVersion(ctx, u.targetPath)
+	if err != nil || !validArtifactVersion(strings.TrimSpace(currentVersion)) {
+		return removeInvalidStaging("installed pulse-agent version is unavailable")
+	}
+	if utils.CompareVersions(utils.NormalizeVersion(request.Version), utils.NormalizeVersion(strings.TrimSpace(currentVersion))) <= 0 {
+		return removeInvalidStaging("signed artifact does not advance the installed pulse-agent version")
+	}
 	return UpdateStageResult{Action: "staged", ArtifactID: request.ArtifactID, SHA256: actual, DurableAt: u.now().UTC()}, nil
+}
+
+func validArtifactVersion(version string) bool {
+	return version != "" && version != "dev" && len(version) <= 128 && !strings.ContainsAny(version, "\x00\r\n")
 }
 
 func (u *updateActivator) Activate(ctx context.Context, request UpdateActivateRequest) (UpdateResult, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if !validArtifactID(request.ArtifactID) || !validSHA256(request.SHA256) {
+	request.Version = strings.TrimSpace(request.Version)
+	if !validArtifactID(request.ArtifactID) || !validSHA256(request.SHA256) || !validArtifactVersion(request.Version) {
 		return UpdateResult{}, invalidArtifact("artifact identity or digest is invalid")
 	}
 	if err := u.validateDirectory(u.stagingDir); err != nil {
@@ -221,6 +251,10 @@ func (u *updateActivator) Activate(ctx context.Context, request UpdateActivateRe
 	}
 	if err := u.verifySignature(artifact, strings.TrimSpace(string(signatureBytes))); err != nil {
 		return UpdateResult{}, invalidArtifact("staged artifact signature is invalid")
+	}
+	candidateVersion, err := u.inspectVersion(ctx, filepath.Join(artifactDir, "pulse-agent"))
+	if err != nil || strings.TrimSpace(candidateVersion) != request.Version {
+		return UpdateResult{}, invalidArtifact("staged artifact is not the requested pulse-agent version")
 	}
 	activationID := request.ArtifactID + ":" + actual[:16]
 	if state, err := u.readState(); err == nil {
@@ -256,11 +290,17 @@ func (u *updateActivator) Activate(ctx context.Context, request UpdateActivateRe
 	if err != nil {
 		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "installed agent binary is unavailable or unsafe"}
 	}
+	currentVersion, err := u.inspectVersion(ctx, u.targetPath)
+	if err != nil || !validArtifactVersion(strings.TrimSpace(currentVersion)) ||
+		utils.CompareVersions(utils.NormalizeVersion(request.Version), utils.NormalizeVersion(strings.TrimSpace(currentVersion))) <= 0 {
+		return UpdateResult{}, invalidArtifact("staged artifact does not advance the installed pulse-agent version")
+	}
 	rollbackDigest := sha256Hex(current)
 	deadline := u.now().UTC().Add(u.rollbackWindow)
+	peer, _ := PeerFromContext(ctx)
 	preparing := durableUpdateState{
 		Action: "preparing", ActivationID: activationID, ActiveSHA256: actual,
-		RollbackSHA256: rollbackDigest, RollbackDeadline: deadline, UpdatedAt: u.now().UTC(),
+		RollbackSHA256: rollbackDigest, RollbackDeadline: deadline, UpdatedAt: u.now().UTC(), ActivatorPID: peer.PID,
 	}
 	if err := u.writeDurableState(preparing); err != nil {
 		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist activation intent"}
@@ -272,7 +312,7 @@ func (u *updateActivator) Activate(ctx context.Context, request UpdateActivateRe
 	pending := durableUpdateState{
 		Action: "pending", ActivationID: activationID,
 		ActiveSHA256: actual, RollbackSHA256: rollbackDigest,
-		RollbackDeadline: deadline, UpdatedAt: u.now().UTC(),
+		RollbackDeadline: deadline, UpdatedAt: u.now().UTC(), ActivatorPID: peer.PID,
 	}
 	if err := u.writeDurableState(pending); err != nil {
 		if recoveryErr := u.recoverStateLocked(preparing); recoveryErr != nil {
@@ -308,6 +348,12 @@ func (u *updateActivator) Commit(ctx context.Context, request UpdateCommitReques
 	}
 	if err := ctx.Err(); err != nil {
 		return UpdateResult{}, &ProviderError{Code: ErrorDeadlineExceeded, Message: "update commit deadline exceeded", Retryable: true}
+	}
+	if peer, ok := PeerFromContext(ctx); state.ActivatorPID > 0 && (!ok || peer.PID != state.ActivatorPID) {
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "commit must come from the activated collector process"}
+	}
+	if err := u.validateCommitter(ctx, state.ActiveSHA256); err != nil {
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "commit caller is not the activated collector binary"}
 	}
 	if err := u.validateInstalledState(state); err != nil {
 		return UpdateResult{}, err
@@ -570,7 +616,9 @@ func (u *updateActivator) installStagedArtifact(destination string, artifact, si
 	if err := os.Chmod(tempDir, 0o700); err != nil {
 		return err
 	}
-	binaryTemp, err := writeSyncedTemp(tempDir, ".pulse-agent-*", artifact, 0o600)
+	// Root-owned staging is executable only so the helper can perform the fixed
+	// pulse-agent identity/version probe. The collector cannot modify this tree.
+	binaryTemp, err := writeSyncedTemp(tempDir, ".pulse-agent-*", artifact, 0o700)
 	if err != nil {
 		return err
 	}

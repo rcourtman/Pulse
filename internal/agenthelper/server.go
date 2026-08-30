@@ -18,6 +18,16 @@ type Peer struct {
 	PID int32
 }
 
+type peerContextKey struct{}
+
+// PeerFromContext returns the kernel-authenticated Unix peer for a helper
+// operation. Providers can use it to bind multi-step state transitions to the
+// exact process that initiated them.
+func PeerFromContext(ctx context.Context) (Peer, bool) {
+	peer, ok := ctx.Value(peerContextKey{}).(Peer)
+	return peer, ok
+}
+
 type PeerResolver interface {
 	Resolve(net.Conn) (Peer, error)
 }
@@ -156,7 +166,7 @@ func (s *Server) HandleConnection(parent context.Context, conn net.Conn) {
 		return
 	}
 
-	operationContext, cancel := context.WithTimeout(parent, time.Duration(request.DeadlineMillis)*time.Millisecond)
+	operationContext, cancel := context.WithTimeout(context.WithValue(parent, peerContextKey{}, peer), time.Duration(request.DeadlineMillis)*time.Millisecond)
 	defer cancel()
 	result, operationError := operation.handle(operationContext, request.Payload)
 	if operationError == nil && operationContext.Err() != nil {

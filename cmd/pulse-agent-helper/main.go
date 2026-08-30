@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"debug/buildinfo"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
@@ -86,6 +91,8 @@ func run(args []string) error {
 			}
 			return updatesignature.VerifyBytes(data, signature)
 		},
+		InspectVersion:          inspectPulseAgentVersion,
+		ValidateCommitter:       validatePulseAgentCommitter,
 		ValidateOwner:           agenthelper.StrictRootOwnedFile,
 		ValidateQuarantineOwner: agenthelper.FileOwnedByUID(uid),
 	})
@@ -128,6 +135,64 @@ func run(args []string) error {
 		_ = listener.Close()
 	}()
 	return server.Serve(ctx, listener)
+}
+
+func inspectPulseAgentVersion(parent context.Context, path string) (string, error) {
+	info, err := buildinfo.ReadFile(path)
+	if err != nil || info.Path != "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent" {
+		return "", errors.New("staged command is not the pulse-agent package")
+	}
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, path, "--version")
+	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin"}
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	if err := command.Start(); err != nil {
+		return "", err
+	}
+	output, readErr := io.ReadAll(io.LimitReader(stdout, 4097))
+	if len(output) > 4096 {
+		_ = command.Process.Kill()
+	}
+	waitErr := command.Wait()
+	if readErr != nil {
+		return "", readErr
+	}
+	if waitErr != nil {
+		return "", waitErr
+	}
+	if len(output) > 4096 {
+		return "", errors.New("pulse-agent version output exceeds the bounded size")
+	}
+	version := strings.TrimSpace(string(output))
+	if version == "" || len(version) > 128 || strings.ContainsAny(version, "\x00\r\n") {
+		return "", errors.New("pulse-agent version output is invalid")
+	}
+	return version, nil
+}
+
+func validatePulseAgentCommitter(ctx context.Context, activeDigest string) error {
+	peer, ok := agenthelper.PeerFromContext(ctx)
+	if !ok || peer.PID <= 1 {
+		return errors.New("helper peer process identity is unavailable")
+	}
+	file, err := os.Open(fmt.Sprintf("/proc/%d/exe", peer.PID))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, 100*1024*1024+1))
+	if err != nil || len(data) > 100*1024*1024 {
+		return errors.New("helper peer executable exceeds the bounded agent size")
+	}
+	sum := sha256.Sum256(data)
+	if !strings.EqualFold(hex.EncodeToString(sum[:]), activeDigest) {
+		return errors.New("helper peer is not executing the pending agent binary")
+	}
+	return nil
 }
 
 func parseFlags(args []string) (commandConfig, error) {

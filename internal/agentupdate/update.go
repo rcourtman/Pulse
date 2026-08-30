@@ -942,7 +942,7 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	checksumHeader := strings.TrimSpace(resp.Header.Get(checksumSHA256Header))
 	signatureHeaderValue := strings.TrimSpace(resp.Header.Get(signatureHeader))
 	if u.cfg.PrivilegedUpdate != nil {
-		return u.performPrivilegedUpdate(ctx, execPath, resp.Body, resp.ContentLength, checksumHeader, signatureHeaderValue)
+		return u.performPrivilegedUpdate(ctx, execPath, resp.Body, resp.ContentLength, checksumHeader, signatureHeaderValue, targetVersion)
 	}
 
 	// Resolve symlinks to get the real path for atomic rename
@@ -1075,7 +1075,7 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	return restartProcessFn(execPath)
 }
 
-func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, body io.Reader, contentLength int64, checksumHeader, signature string) error {
+func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, body io.Reader, contentLength int64, checksumHeader, signature, targetVersion string) error {
 	if runtimeGOOS != goOSLinux {
 		return errors.New("typed privilege-helper updates are supported only on Linux")
 	}
@@ -1143,14 +1143,14 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 	if err := u.cfg.PrivilegedUpdate.WriteQuarantinedSignature(artifactID, signature); err != nil {
 		return err
 	}
-	staged, err := u.cfg.PrivilegedUpdate.Stage(ctx, artifactID, digest)
+	staged, err := u.cfg.PrivilegedUpdate.Stage(ctx, artifactID, digest, targetVersion)
 	if err != nil {
 		return fmt.Errorf("stage signed update through typed helper: %w", err)
 	}
 	if staged.Action != "staged" || staged.ArtifactID != artifactID || !strings.EqualFold(staged.SHA256, digest) {
 		return errors.New("typed helper returned an invalid staging result")
 	}
-	activation, err := u.cfg.PrivilegedUpdate.Activate(ctx, artifactID, digest)
+	activation, err := u.cfg.PrivilegedUpdate.Activate(ctx, artifactID, digest, targetVersion)
 	if err != nil {
 		return fmt.Errorf("activate signed update through typed helper: %w", err)
 	}

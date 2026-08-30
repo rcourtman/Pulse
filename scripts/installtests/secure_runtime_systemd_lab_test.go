@@ -42,6 +42,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -103,21 +104,22 @@ type secureRuntimeLabReport struct {
 }
 
 type secureRuntimeLabFixture struct {
-	mu              sync.Mutex
-	collector       []byte
-	helper          []byte
-	runner          []byte
-	serverVersion   string
-	reports         []secureRuntimeLabReport
-	lastSeen        time.Time
-	freezeLastSeen  bool
-	authFailures    int
-	requestFailures []string
-	actionServer    *agentexec.Server
-	actionSecret    string
-	actionBindingID string
-	actionRevoked   bool
-	actionRevokes   int
+	mu                  sync.Mutex
+	collector           []byte
+	helper              []byte
+	runner              []byte
+	serverVersion       string
+	reports             []secureRuntimeLabReport
+	lastSeen            time.Time
+	freezeLastSeen      bool
+	authFailures        int
+	requestFailures     []string
+	actionServer        *agentexec.Server
+	actionSecret        string
+	actionBindingID     string
+	actionRevoked       bool
+	actionRevokes       int
+	authorityReductions int
 }
 
 func newSecureRuntimeLabFixture(collector, helper, runner []byte, version string) *secureRuntimeLabFixture {
@@ -168,6 +170,12 @@ func (f *secureRuntimeLabFixture) actionSnapshot() (agentexec.AgentAdmission, bo
 	return f.actionAdmissionLocked(), f.actionRevoked, f.actionRevokes
 }
 
+func (f *secureRuntimeLabFixture) authorityReductionCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.authorityReductions
+}
+
 func (f *secureRuntimeLabFixture) setCollector(artifact []byte) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -209,6 +217,8 @@ func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		f.actionServer.HandleWebSocket(w, r)
 	case r.URL.Path == "/api/agents/action-runner/credential":
 		f.handleActionRunnerSelfRevoke(w, r)
+	case r.URL.Path == "/api/agents/collector/reduce-authority":
+		f.handleCollectorAuthorityReduction(w, r)
 	case r.URL.Path == "/api/health":
 		writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	case r.URL.Path == "/api/agents/agent/report":
@@ -234,6 +244,32 @@ func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (f *secureRuntimeLabFixture) handleCollectorAuthorityReduction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var request struct {
+		AgentID  string `json:"agentId"`
+		Hostname string `json:"hostname"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	valid := strings.TrimSpace(r.Header.Get("Authorization")) == "Bearer "+secureRuntimeLabToken &&
+		strings.TrimSpace(request.AgentID) == secureRuntimeLabAgentID &&
+		strings.EqualFold(strings.TrimSpace(request.Hostname), secureRuntimeLabHostname)
+	if !valid {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	f.mu.Lock()
+	f.authorityReductions++
+	f.mu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (f *secureRuntimeLabFixture) authorized(r *http.Request) bool {
@@ -454,6 +490,43 @@ func secureRuntimeStableSnapshot(t *testing.T) secureRuntimeStableIdentity {
 	return result
 }
 
+func secureRuntimeSeedAPTPackageCache(t *testing.T) (string, string) {
+	t.Helper()
+	const cacheDir = "/var/cache/apt/archives"
+	path := filepath.Join(cacheDir, "pulse-secure-runtime-qualification.deb")
+	content := bytes.Repeat([]byte("pulse-secure-runtime\n"), 4096)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("seed disposable apt package cache: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+	hasher := sha256.New()
+	err := filepath.WalkDir(cacheDir, func(entryPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".deb") {
+			return nil
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		relative, relativeErr := filepath.Rel(cacheDir, entryPath)
+		if relativeErr != nil {
+			return relativeErr
+		}
+		_, _ = fmt.Fprintf(hasher, "%s\x00%d\x00%d\n", filepath.ToSlash(relative), info.Size(), info.ModTime().UnixNano())
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("fingerprint disposable apt package cache: %v", err)
+	}
+	return path, "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+}
+
 type secureRuntimeScenarioResult struct {
 	Name   string `json:"name"`
 	Passed bool   `json:"passed"`
@@ -461,30 +534,34 @@ type secureRuntimeScenarioResult struct {
 }
 
 type secureRuntimeLabReceipt struct {
-	SchemaVersion           int                           `json:"schema_version"`
-	CompletedAt             string                        `json:"completed_at"`
-	SourceHashes            map[string]string             `json:"source_hashes"`
-	ArtifactHashes          map[string]string             `json:"artifact_hashes"`
-	OSRelease               string                        `json:"os_release"`
-	Kernel                  string                        `json:"kernel"`
-	SystemdVersion          string                        `json:"systemd_version"`
-	Architecture            string                        `json:"architecture"`
-	CollectorServiceUser    string                        `json:"collector_service_user"`
-	CollectorProcessUID     int                           `json:"collector_process_uid"`
-	CollectorAuthority      string                        `json:"collector_authority"`
-	AmbientCapabilitiesNone bool                          `json:"ambient_capabilities_none"`
-	HelperProtocolHealthy   bool                          `json:"helper_protocol_healthy"`
-	StateIdentityPreserved  bool                          `json:"state_identity_preserved"`
-	DockerDegraded          bool                          `json:"docker_degraded"`
-	ActionRunnerQualified   bool                          `json:"action_runner_qualified"`
-	ActionReceiptKind       string                        `json:"action_receipt_kind,omitempty"`
-	CredentialRotated       bool                          `json:"credential_rotated"`
-	SelfRevokeObserved      bool                          `json:"self_revoke_observed"`
-	CollectorContinuity     bool                          `json:"collector_continuity"`
-	ReportCount             int                           `json:"report_count"`
-	FirstReportAt           string                        `json:"first_report_at"`
-	LastReportAt            string                        `json:"last_report_at"`
-	Scenarios               []secureRuntimeScenarioResult `json:"scenarios"`
+	SchemaVersion                              int                           `json:"schema_version"`
+	CompletedAt                                string                        `json:"completed_at"`
+	SourceHashes                               map[string]string             `json:"source_hashes"`
+	ArtifactHashes                             map[string]string             `json:"artifact_hashes"`
+	ArtifactVersions                           map[string]string             `json:"artifact_versions"`
+	DisposableVMGuardHash                      string                        `json:"disposable_vm_guard_sha256"`
+	OSRelease                                  string                        `json:"os_release"`
+	Kernel                                     string                        `json:"kernel"`
+	SystemdVersion                             string                        `json:"systemd_version"`
+	Architecture                               string                        `json:"architecture"`
+	CollectorServiceUser                       string                        `json:"collector_service_user"`
+	CollectorProcessUID                        int                           `json:"collector_process_uid"`
+	CollectorAuthority                         string                        `json:"collector_authority"`
+	AmbientCapabilitiesNone                    bool                          `json:"ambient_capabilities_none"`
+	HelperProtocolHealthy                      bool                          `json:"helper_protocol_healthy"`
+	StateIdentityPreserved                     bool                          `json:"state_identity_preserved"`
+	DockerDegraded                             bool                          `json:"docker_degraded"`
+	ActionRunnerQualified                      bool                          `json:"action_runner_qualified"`
+	ActionMutationVerified                     bool                          `json:"action_mutation_verified"`
+	CollectorAuthorityReductionRequestObserved bool                          `json:"collector_authority_reduction_request_observed"`
+	ActionReceiptKind                          string                        `json:"action_receipt_kind,omitempty"`
+	CredentialRotated                          bool                          `json:"credential_rotated"`
+	SelfRevokeObserved                         bool                          `json:"self_revoke_observed"`
+	CollectorContinuity                        bool                          `json:"collector_continuity"`
+	ReportCount                                int                           `json:"report_count"`
+	FirstReportAt                              string                        `json:"first_report_at"`
+	LastReportAt                               string                        `json:"last_report_at"`
+	Scenarios                                  []secureRuntimeScenarioResult `json:"scenarios"`
 }
 
 func TestSecureRuntimeSystemdLab(t *testing.T) {
@@ -514,13 +591,36 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	defer server.Close()
 
 	receipt := secureRuntimeLabReceipt{
-		SchemaVersion: 2,
+		SchemaVersion: 3,
 		SourceHashes: map[string]string{
 			"scripts/install.sh": secureRuntimeHash(installer),
 			"scripts/installtests/secure_runtime_systemd_lab_test.go": secureRuntimeHash(secureRuntimeReadFile(t, repoFile("scripts", "installtests", "secure_runtime_systemd_lab_test.go"))),
+			"scripts/release_control/secure_runtime_attestation.py":   secureRuntimeHash(secureRuntimeReadFile(t, repoFile("scripts", "release_control", "secure_runtime_attestation.py"))),
+			"internal/agenthelper/update_activation.go":               secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "agenthelper", "update_activation.go"))),
+			"internal/agenthelper/server.go":                          secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "agenthelper", "server.go"))),
+			"internal/agentexec/server.go":                            secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "agentexec", "server.go"))),
+			"internal/agentexec/types.go":                             secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "agentexec", "types.go"))),
+			"internal/agentexec/verifier_postconditions.go":           secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "agentexec", "verifier_postconditions.go"))),
+			"internal/api/collector_authority.go":                     secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "api", "collector_authority.go"))),
+			"internal/api/action_runner_credentials.go":               secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "api", "action_runner_credentials.go"))),
+			"internal/api/agenttokens/install.go":                     secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "api", "agenttokens", "install.go"))),
+			"internal/api/agent_exec_token_binding.go":                secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "api", "agent_exec_token_binding.go"))),
+			"internal/actionrunner/runner.go":                         secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "actionrunner", "runner.go"))),
+			"internal/actionrunner/types.go":                          secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "actionrunner", "types.go"))),
+			"internal/actionrunner/transport.go":                      secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "actionrunner", "transport.go"))),
+			"internal/hostagent/storage_cleanup.go":                   secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "hostagent", "storage_cleanup.go"))),
+			"internal/operationreceipt/store.go":                      secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "operationreceipt", "store.go"))),
+			"internal/operationreceipt/types.go":                      secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "operationreceipt", "types.go"))),
+			"internal/agentupdate/update.go":                          secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "agentupdate", "update.go"))),
+			"internal/agentupdate/privileged_update.go":               secureRuntimeHash(secureRuntimeReadFile(t, repoFile("internal", "agentupdate", "privileged_update.go"))),
+			"cmd/pulse-agent/main.go":                                 secureRuntimeHash(secureRuntimeReadFile(t, repoFile("cmd", "pulse-agent", "main.go"))),
+			"cmd/pulse-agent-helper/main.go":                          secureRuntimeHash(secureRuntimeReadFile(t, repoFile("cmd", "pulse-agent-helper", "main.go"))),
+			"cmd/pulse-agent-runner/main.go":                          secureRuntimeHash(secureRuntimeReadFile(t, repoFile("cmd", "pulse-agent-runner", "main.go"))),
 		},
-		ArtifactHashes: map[string]string{"collector_v1": secureRuntimeHash(collectorV1), "collector_v2": secureRuntimeHash(collectorV2), "helper": secureRuntimeHash(helper), "runner": secureRuntimeHash(runner)},
-		Architecture:   runtime.GOARCH,
+		ArtifactHashes:        map[string]string{"collector_v1": secureRuntimeHash(collectorV1), "collector_v2": secureRuntimeHash(collectorV2), "helper": secureRuntimeHash(helper), "runner": secureRuntimeHash(runner)},
+		ArtifactVersions:      map[string]string{"collector_v1": collectorV1Version, "collector_v2": collectorV2Version},
+		DisposableVMGuardHash: secureRuntimeHash([]byte(secureRuntimeLabMarkerValue + "\n")),
+		Architecture:          runtime.GOARCH,
 	}
 	receipt.OSRelease = strings.TrimSpace(string(secureRuntimeReadFile(t, "/etc/os-release")))
 	receipt.Kernel = secureRuntimeCommand(t, 10*time.Second, "uname", "-srvmo")
@@ -598,6 +698,9 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	}
 	secureRuntimeAssertSafeProfile(t)
 	secureRuntimeAssertHelperProtocol(t)
+	if fixture.authorityReductionCount() < 1 {
+		t.Fatal("safe apply did not durably reduce the collector credential authority")
+	}
 	dockerDegraded := dockerInitiallyEnabled && !secureRuntimeCollectorHasArgument("--enable-docker")
 	if dockerInitiallyEnabled && !secureRuntimeCollectorOwnedRootlessAvailable(t) {
 		if !dockerDegraded || !strings.Contains(applyOutput, "disabled rootful Docker monitoring") {
@@ -609,9 +712,9 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	reportsBeforeRollback, _, _, _ := fixture.snapshot()
 	secureRuntimeRunInstaller(t, installerPath, server.URL, "--safe-profile-rollback")
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeRollback)+1, 45*time.Second)
-	secureRuntimeAssertRootCommandProfile(t)
-	secureRuntimeWaitForStableIdentity(t, legacyBaseline, 10*time.Second, "explicit rollback")
-	pass("explicit_safe_profile_rollback", "legacy binary, unit, authority, and service identity restored")
+	secureRuntimeAssertRootMonitoringProfile(t)
+	secureRuntimeWaitForStableIdentity(t, secureRuntimeWithoutCollectorUnit(legacyBaseline), 10*time.Second, "explicit rollback")
+	pass("explicit_safe_profile_rollback", "legacy binary and service identity restored without resurrecting collector command authority")
 
 	automaticRollbackBaseline := secureRuntimeStableSnapshot(t)
 	fixture.setFrozen(true)
@@ -620,19 +723,19 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	if failedErr == nil || !strings.Contains(failedOutput, "restoring the previous profile") {
 		t.Fatalf("stale lastSeen safe apply unexpectedly succeeded: err=%v\n%s", failedErr, failedOutput)
 	}
-	secureRuntimeWaitForStableIdentity(t, automaticRollbackBaseline, 10*time.Second, "automatic failure rollback")
-	secureRuntimeAssertRootCommandProfile(t)
-	pass("automatic_failure_rollback", "frozen lastSeen prevented commit and restored binary/unit/state identity")
+	secureRuntimeWaitForStableIdentity(t, secureRuntimeWithoutCollectorUnit(automaticRollbackBaseline), 10*time.Second, "automatic failure rollback")
+	secureRuntimeAssertRootMonitoringProfile(t)
+	pass("automatic_failure_rollback", "frozen lastSeen prevented commit and restored binary/state identity without command authority")
 
 	fixture.setCollector(collectorV2)
 	reportsBeforeUpdate, _, _, _ := fixture.snapshot()
 	secureRuntimeRunInstaller(t, installerPath, server.URL, "--update")
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeUpdate)+1, 45*time.Second)
-	secureRuntimeAssertRootCommandProfile(t)
+	secureRuntimeAssertRootMonitoringProfile(t)
 	if got := secureRuntimeHash(secureRuntimeReadFile(t, "/usr/local/bin/pulse-agent")); got != secureRuntimeHash(collectorV2) {
 		t.Fatalf("ordinary update collector hash = %s, want v2 hash", got)
 	}
-	pass("ordinary_update_non_migration", "binary updated while root command-capable profile remained unchanged")
+	pass("ordinary_update_non_migration", "binary updated while the downgraded root monitoring profile remained unchanged")
 
 	fixture.setServerVersion(collectorV2Version)
 	reportsBeforeFinalApply, preFinalLastSeen, _, _ := fixture.snapshot()
@@ -661,10 +764,11 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 
 	actionContext, cancelAction := context.WithTimeout(agentexec.WithOrganizationID(context.Background(), secureRuntimeLabOrgID), 30*time.Second)
 	defer cancelAction()
+	cachePath, cacheFingerprint := secureRuntimeSeedAPTPackageCache(t)
 	cleanupRequest := agentexec.HostStorageCleanupPayload{
 		RequestID: "secure-runtime.receipt.1", ActionID: "secure-runtime-receipt",
 		Operation:           agentexec.HostStorageCleanupOperationPackageCache,
-		ExpectedFingerprint: "sha256:" + strings.Repeat("f", 64), Timeout: 15,
+		ExpectedFingerprint: cacheFingerprint, Timeout: 15,
 	}
 	if err := agentexec.BindHostStorageCleanupPayload(&cleanupRequest); err != nil {
 		t.Fatalf("bind typed receipt qualification request: %v", err)
@@ -673,20 +777,36 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute typed receipt qualification request: %v", err)
 	}
-	if cleanupResult == nil || cleanupResult.MutationStarted {
-		t.Fatalf("typed receipt qualification unexpectedly mutated the host: %+v", cleanupResult)
+	if cleanupResult == nil || !cleanupResult.Success || !cleanupResult.MutationStarted ||
+		cleanupResult.Verification != agentexec.HostStorageCleanupVerificationVerified || cleanupResult.ReclaimedBytes <= 0 {
+		t.Fatalf("typed receipt qualification did not complete a verified host mutation: %+v", cleanupResult)
+	}
+	if _, err := os.Stat(cachePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("typed package-cache cleanup did not remove seeded archive: %v", err)
 	}
 	receiptIdentity := agentexec.HostStorageCleanupOperationIdentity(secureRuntimeLabAgentID, cleanupRequest)
 	query, err := fixture.actionServer.QueryAgentOperation(actionContext, secureRuntimeLabAgentID, receiptIdentity)
 	if err != nil || query.Status != operationreceipt.QueryFoundTerminal || query.Record == nil || query.Record.ResultKind != agentexec.HostStorageCleanupReceiptKind {
 		t.Fatalf("durable typed receipt query = %+v, err=%v", query, err)
 	}
+	refusalRequest := agentexec.HostStorageCleanupPayload{
+		RequestID: "secure-runtime.receipt.2", ActionID: "secure-runtime-refusal",
+		Operation:           agentexec.HostStorageCleanupOperationPackageCache,
+		ExpectedFingerprint: "sha256:" + strings.Repeat("f", 64), Timeout: 15,
+	}
+	if err := agentexec.BindHostStorageCleanupPayload(&refusalRequest); err != nil {
+		t.Fatalf("bind typed refusal qualification request: %v", err)
+	}
+	refusalResult, err := fixture.actionServer.ExecuteHostStorageCleanup(actionContext, secureRuntimeLabAgentID, refusalRequest)
+	if err != nil || refusalResult == nil || refusalResult.MutationStarted {
+		t.Fatalf("typed refusal request was not rejected before mutation: result=%+v err=%v", refusalResult, err)
+	}
 	if _, err := fixture.actionServer.ExecuteCommand(actionContext, secureRuntimeLabAgentID, agentexec.ExecuteCommandPayload{
 		RequestID: "secure-runtime-shell-denial", Command: "true", TargetType: "agent", Trusted: true,
 	}); err == nil || !strings.Contains(err.Error(), "typed action-runner") {
 		t.Fatalf("action runner did not reject generic command dispatch: %v", err)
 	}
-	pass("typed_action_receipt", "closed storage-cleanup request refused before mutation and replayed as a durable terminal receipt; generic command dispatch denied")
+	pass("typed_action_receipt", "verified apt cache mutation and durable terminal receipt; stale fingerprint refused before mutation; generic command dispatch denied")
 
 	currentAdmission, _, _ := fixture.actionSnapshot()
 	wrongAdmission := currentAdmission
@@ -750,6 +870,8 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	receipt.StateIdentityPreserved = true
 	receipt.DockerDegraded = dockerDegraded
 	receipt.ActionRunnerQualified = true
+	receipt.ActionMutationVerified = true
+	receipt.CollectorAuthorityReductionRequestObserved = fixture.authorityReductionCount() > 0
 	receipt.ActionReceiptKind = agentexec.HostStorageCleanupReceiptKind
 	receipt.CredentialRotated = true
 	receipt.SelfRevokeObserved = true
@@ -1067,6 +1189,20 @@ func secureRuntimeAssertRootCommandProfile(t *testing.T) {
 	secureRuntimeCommand(t, 10*time.Second, "systemctl", "is-active", "pulse-agent.service")
 }
 
+func secureRuntimeAssertRootMonitoringProfile(t *testing.T) {
+	t.Helper()
+	if user := secureRuntimeSystemdProperty(t, "User"); user != "root" && user != "" {
+		t.Fatalf("rolled-back collector systemd User = %q, want root", user)
+	}
+	if secureRuntimeCollectorHasArgument("--enable-commands") {
+		t.Fatal("rolled-back collector resurrected --enable-commands after irreversible credential downgrade")
+	}
+	if uid := secureRuntimeCollectorProcessUID(t); uid != 0 {
+		t.Fatalf("rolled-back collector process UID = %d, want 0", uid)
+	}
+	secureRuntimeCommand(t, 10*time.Second, "systemctl", "is-active", "pulse-agent.service")
+}
+
 func secureRuntimeAssertSafeProfile(t *testing.T) {
 	t.Helper()
 	if user := secureRuntimeSystemdProperty(t, "User"); user != "pulse-agent" {
@@ -1196,12 +1332,25 @@ func secureRuntimeIdentitiesEqual(left, right secureRuntimeStableIdentity) bool 
 	return true
 }
 
+func secureRuntimeWithoutCollectorUnit(identity secureRuntimeStableIdentity) secureRuntimeStableIdentity {
+	result := make(secureRuntimeStableIdentity, len(identity)-1)
+	for path, value := range identity {
+		if path != "/etc/systemd/system/pulse-agent.service" {
+			result[path] = value
+		}
+	}
+	return result
+}
+
 func secureRuntimeWaitForStableIdentity(t *testing.T, want secureRuntimeStableIdentity, timeout time.Duration, scenario string) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	var got secureRuntimeStableIdentity
 	for time.Now().Before(deadline) {
 		got = secureRuntimeStableSnapshot(t)
+		if _, compareUnit := want["/etc/systemd/system/pulse-agent.service"]; !compareUnit {
+			delete(got, "/etc/systemd/system/pulse-agent.service")
+		}
 		if secureRuntimeIdentitiesEqual(want, got) {
 			return
 		}

@@ -28,7 +28,18 @@ func testUpdateActivator(t *testing.T, verifier func([]byte, string) error) (Upd
 	}
 	provider, err := NewUpdateActivator(UpdateActivatorConfig{
 		QuarantineDir: quarantine, StagingDir: staging, TargetPath: target, StatePath: filepath.Join(stateDir, "activation.json"),
-		VerifySignature:         verifier,
+		VerifySignature: verifier,
+		InspectVersion: func(_ context.Context, path string) (string, error) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return "", err
+			}
+			if strings.Contains(string(data), "old-signed-binary") {
+				return "1.0.0", nil
+			}
+			return "1.1.0", nil
+		},
+		ValidateCommitter:       func(context.Context, string) error { return nil },
 		ValidateOwner:           func(*os.File) error { return nil },
 		ValidateQuarantineOwner: func(*os.File) error { return nil },
 		Now:                     func() time.Time { return time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC) },
@@ -61,7 +72,7 @@ func stageUpdate(t *testing.T, staging, identity string, binary []byte) string {
 
 func promoteUpdate(t *testing.T, provider UpdateProvider, artifactID, digest string) {
 	t.Helper()
-	result, err := provider.Stage(context.Background(), UpdateStageRequest{ArtifactID: artifactID, SHA256: digest})
+	result, err := provider.Stage(context.Background(), UpdateStageRequest{ArtifactID: artifactID, SHA256: digest, Version: "1.1.0"})
 	if err != nil {
 		t.Fatalf("Stage: %v", err)
 	}
@@ -80,7 +91,7 @@ func TestUpdateActivationAndIdentityBoundRollbackAreDurable(t *testing.T) {
 	newDigest := stageUpdate(t, staging, "release-1", testELF("new-signed-binary"))
 	promoteUpdate(t, provider, "release-1", newDigest)
 	oldDigest := sha256Hex(testELF("old-signed-binary"))
-	activated, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: newDigest})
+	activated, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: newDigest, Version: "1.1.0"})
 	if err != nil {
 		t.Fatalf("Activate: %v", err)
 	}
@@ -96,7 +107,7 @@ func TestUpdateActivationAndIdentityBoundRollbackAreDurable(t *testing.T) {
 	if info, err := os.Stat(state); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("durable state mode=%v err=%v", info, err)
 	}
-	retried, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: newDigest})
+	retried, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: newDigest, Version: "1.1.0"})
 	if err != nil || retried != activated {
 		t.Fatalf("idempotent activation retry = %#v err=%v, want %#v", retried, err, activated)
 	}
@@ -123,7 +134,7 @@ func TestUpdateCommitClosesRollbackWindowAndCleansStaging(t *testing.T) {
 	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
 	digest := stageUpdate(t, quarantine, "release-commit", testELF("committed"))
 	promoteUpdate(t, provider, "release-commit", digest)
-	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-commit", SHA256: digest})
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-commit", SHA256: digest, Version: "1.1.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,11 +166,33 @@ func TestUpdateCommitClosesRollbackWindowAndCleansStaging(t *testing.T) {
 	}
 }
 
+func TestUpdateCommitRequiresActivatingProcessAfterExecTransition(t *testing.T) {
+	provider, quarantine, _, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	digest := stageUpdate(t, quarantine, "process-bound", testELF("new-signed-binary"))
+	promoteUpdate(t, provider, "process-bound", digest)
+	activating := context.WithValue(context.Background(), peerContextKey{}, Peer{UID: 1000, PID: 4321})
+	activation, err := provider.Activate(activating, UpdateActivateRequest{ArtifactID: "process-bound", SHA256: digest, Version: "1.1.0"})
+	if err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+	otherProcess := context.WithValue(context.Background(), peerContextKey{}, Peer{UID: 1000, PID: 4322})
+	if _, err := provider.Commit(otherProcess, UpdateCommitRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256,
+	}); err == nil || !strings.Contains(err.Error(), "activated collector process") {
+		t.Fatalf("different process committed pending activation: %v", err)
+	}
+	if _, err := provider.Commit(activating, UpdateCommitRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256,
+	}); err != nil {
+		t.Fatalf("activating process could not commit after validation: %v", err)
+	}
+}
+
 func TestUpdateActivatorRestartRollsBackUncommittedActivation(t *testing.T) {
 	provider, quarantine, target, state := testUpdateActivator(t, func([]byte, string) error { return nil })
 	digest := stageUpdate(t, quarantine, "release-restart", testELF("uncommitted"))
 	promoteUpdate(t, provider, "release-restart", digest)
-	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-restart", SHA256: digest})
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-restart", SHA256: digest, Version: "1.1.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,6 +205,17 @@ func TestUpdateActivatorRestartRollsBackUncommittedActivation(t *testing.T) {
 		VerifySignature: func([]byte, string) error {
 			return nil
 		},
+		InspectVersion: func(_ context.Context, path string) (string, error) {
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return "", readErr
+			}
+			if strings.Contains(string(data), "old-signed-binary") {
+				return "1.0.0", nil
+			}
+			return "1.1.0", nil
+		},
+		ValidateCommitter:       func(context.Context, string) error { return nil },
 		ValidateOwner:           func(*os.File) error { return nil },
 		ValidateQuarantineOwner: func(*os.File) error { return nil },
 		Now:                     func() time.Time { return activation.RollbackDeadline.Add(-time.Second) },
@@ -191,6 +235,23 @@ func TestUpdateActivatorRestartRollsBackUncommittedActivation(t *testing.T) {
 	}
 }
 
+func TestUpdateStagingRejectsWrongArtifactVersionAndDowngrade(t *testing.T) {
+	provider, quarantine, _, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	digest := stageUpdate(t, quarantine, "wrong-role", testELF("signed-other-component"))
+	if _, err := provider.Stage(context.Background(), UpdateStageRequest{
+		ArtifactID: "wrong-role", SHA256: digest, Version: "9.9.9",
+	}); err == nil || !strings.Contains(err.Error(), "requested pulse-agent version") {
+		t.Fatalf("wrong signed artifact role/version accepted: %v", err)
+	}
+
+	digest = stageUpdate(t, quarantine, "downgrade", testELF("old-signed-binary"))
+	if _, err := provider.Stage(context.Background(), UpdateStageRequest{
+		ArtifactID: "downgrade", SHA256: digest, Version: "1.0.0",
+	}); err == nil || !strings.Contains(err.Error(), "does not advance") {
+		t.Fatalf("signed downgrade accepted: %v", err)
+	}
+}
+
 func TestUpdateRollbackWatchdogRestoresUncommittedActivation(t *testing.T) {
 	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
 	activator := provider.(*updateActivator)
@@ -201,7 +262,7 @@ func TestUpdateRollbackWatchdogRestoresUncommittedActivation(t *testing.T) {
 	}
 	digest := stageUpdate(t, quarantine, "release-watchdog", testELF("uncommitted"))
 	promoteUpdate(t, provider, "release-watchdog", digest)
-	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-watchdog", SHA256: digest})
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-watchdog", SHA256: digest, Version: "1.1.0"})
 	if err != nil || watchdog == nil {
 		t.Fatalf("Activate = %#v, %v; watchdog=%v", activation, err, watchdog != nil)
 	}
@@ -260,14 +321,14 @@ func TestUpdateActivationRejectsTraversalSymlinksAndDigestMismatch(t *testing.T)
 	if _, err := provider.Stage(context.Background(), UpdateStageRequest{ArtifactID: "symlink-release", SHA256: sha256Hex([]byte("attacker"))}); err == nil {
 		t.Fatal("symlink artifact accepted")
 	}
+	promoteUpdate(t, provider, "release-1", validDigest)
 	if err := os.Remove(target); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(outside, target); err != nil {
 		t.Fatal(err)
 	}
-	promoteUpdate(t, provider, "release-1", validDigest)
-	if _, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: validDigest}); err == nil {
+	if _, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: validDigest, Version: "1.1.0"}); err == nil {
 		t.Fatal("symlink install target accepted")
 	}
 }
@@ -290,7 +351,7 @@ func TestUpdateActivationUsesOpenedBytesAcrossStagingSwap(t *testing.T) {
 	digest := stageUpdate(t, staging, "release-swap", testELF("verified-bytes"))
 	stagingBinary = filepath.Join(staging, "release-swap", "pulse-agent")
 	promoteUpdate(t, provider, "release-swap", digest)
-	if _, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-swap", SHA256: digest}); err != nil {
+	if _, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-swap", SHA256: digest, Version: "1.1.0"}); err != nil {
 		t.Fatalf("Activate: %v", err)
 	}
 	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("verified-bytes")) {
@@ -302,7 +363,7 @@ func TestUpdateRollbackRejectsWrongIdentityAndChangedBinary(t *testing.T) {
 	provider, staging, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
 	digest := stageUpdate(t, staging, "release-1", testELF("new"))
 	promoteUpdate(t, provider, "release-1", digest)
-	result, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: digest})
+	result, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-1", SHA256: digest, Version: "1.1.0"})
 	if err != nil {
 		t.Fatal(err)
 	}

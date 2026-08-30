@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"os"
@@ -13,6 +14,16 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 )
+
+func TestInspectPulseAgentVersionRejectsWrongGoCommand(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inspectPulseAgentVersion(context.Background(), executable); err == nil || !strings.Contains(err.Error(), "not the pulse-agent package") {
+		t.Fatalf("helper test command accepted as pulse-agent: %v", err)
+	}
+}
 
 func TestParseFlagsAcceptsOnlyLocalHelperConfiguration(t *testing.T) {
 	config, err := parseFlags([]string{

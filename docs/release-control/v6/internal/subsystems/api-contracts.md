@@ -199,12 +199,19 @@ or false preserves certificate verification. The server, not the browser,
 continues to mint and quote the enrollment token.
 Install-command credentials are monitoring-only unless the request explicitly
 selects command execution. Monitoring credentials carry report and config-read
-scope without `agent:exec`; explicit command-capable credentials add
-`agent:exec`. Hosted PVE, PBS, and PMG commands do not infer execution authority
-from the target platform. Agent Doctor exposes the local command-authority
-profile and the server-derived credential execution scope as separate fields,
-and reports an over-scoped monitoring credential rather than hiding it behind
-the current command-enabled boolean.
+scope without `agent:exec` or `agent:manage`; explicit command-capable
+credentials add `agent:exec` only. Hosted PVE, PBS, and PMG commands do not
+infer execution authority from the target platform. Agent Doctor exposes the
+local command-authority profile and the server-derived credential execution
+scope as separate fields, and reports an over-scoped monitoring credential
+rather than hiding it behind the current command-enabled boolean.
+`POST /api/agents/collector/reduce-authority` is the authenticated, idempotent
+safe-profile migration boundary. Its JSON body identifies the caller's agent
+and canonical hostname; both must match the attached report credential and its
+organization. The transition rejects wildcard credentials, removes
+`agent:exec` and `agent:manage` from that exact token, persists before success,
+restores the full token inventory on persistence failure, and invalidates only
+the exact matching collector session after persistence.
 
 ## Canonical Files
 
@@ -8443,9 +8450,11 @@ top-level preset array that can reintroduce settings-chunk initialization-order
 failures in production bundles.
 The operator-created Agent preset must match the long-lived lifecycle minimum
 used by server-issued agent credentials: `agent:report`, `agent:config:read`,
-and `agent:manage`. The custom create and edit surfaces must expose
-`agent:manage` so an operator can cycle a credential without losing config
-fetch or self-unregister authority. Single-use `agent:enroll`, dedicated
+and no broader management or execution scope. The custom create and edit
+surfaces may expose `agent:manage` only as an explicit operator-management
+choice; it is not part of the Agent preset because it bypasses host-bound
+configuration lookup and carries token-management authority. Single-use
+`agent:enroll`, dedicated
 `relay:mobile:access`, and granular governed-action scopes remain backend-owned
 and must not be presented as general-purpose token choices.
 That same boundary now also includes

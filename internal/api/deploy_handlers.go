@@ -877,7 +877,7 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runtimeScopes := []string{
-		config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentManage,
+		config.ScopeAgentReport, config.ScopeAgentConfigRead,
 		config.ScopeDockerReport, config.ScopeKubernetesReport,
 	}
 	if req.CommandsEnabled {

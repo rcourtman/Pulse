@@ -194,10 +194,16 @@ func TestProxmoxScopesRequireExplicitCommandAuthority(t *testing.T) {
 	if (&config.APITokenRecord{Scopes: monitoringScopes}).HasScope(config.ScopeAgentExec) {
 		t.Fatalf("monitoring-only Proxmox scopes include %s: %v", config.ScopeAgentExec, monitoringScopes)
 	}
+	if (&config.APITokenRecord{Scopes: monitoringScopes}).HasScope(config.ScopeAgentManage) {
+		t.Fatalf("monitoring-only Proxmox scopes include cross-host management: %v", monitoringScopes)
+	}
 
 	commandScopes := ProxmoxScopes(true)
 	if !(&config.APITokenRecord{Scopes: commandScopes}).HasScope(config.ScopeAgentExec) {
 		t.Fatalf("explicit command profile is missing %s: %v", config.ScopeAgentExec, commandScopes)
+	}
+	if (&config.APITokenRecord{Scopes: commandScopes}).HasScope(config.ScopeAgentManage) {
+		t.Fatalf("collector command profile includes cross-host management: %v", commandScopes)
 	}
 }
 

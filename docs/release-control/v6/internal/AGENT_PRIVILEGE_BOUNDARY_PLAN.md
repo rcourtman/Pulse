@@ -82,27 +82,46 @@ without changing the product default:
   the replacement is locally ready and a newly collected authoritative report
   is accepted; explicit commit, restart/power-loss recovery, watchdog rollback,
   and fixed staging/quarantine cleanup preserve the last-known-good binary;
+  the helper independently executes `--version` from root-owned staging,
+  rejects a signed artifact that is not the requested advancing collector
+  version, and binds commit to the same process after it execs the active
+  digest;
 - runner enrollment persists the canonical hostname, durable credential
   rotation invalidates only the superseded live session after storage commits,
   and uninstall performs an exact bearer self-revoke without exposing the
   secret in argv;
 - safe migration rejects effective unit overrides, requires a fresh post-start
-  registration timestamp and live helper protocol response, restores complete
-  state metadata and Proxmox markers on rollback, and disables rootful Docker
-  unless a usable collector-owned rootless socket exists.
+  registration timestamp and live helper protocol response, irreversibly
+  removes `agent:exec` and cross-host `agent:manage` from the host-bound
+  collector credential before local
+  privilege changes, restores only installer-owned state-root metadata and
+  Proxmox markers on rollback, and disables rootful Docker unless a usable
+  collector-owned rootless socket exists. Explicit or automatic rollback may
+  restore the old root service identity, but it removes `--enable-commands`
+  and cannot resurrect the reduced server-side authority;
+- the root action runner is networked and host-mutating by design. Its unit
+  retains kernel/home/control-plane hardening but does not set the host
+  filesystem read-only, because apt and Proxmox operations require their
+  documented host writes.
 
 This is a qualification foundation, not the Slice E ratchet. The generated
-setup default remains the legacy/root profile. A clean disposable arm64 Ubuntu
-systemd exercise now proves exact-committed-main install, migration, explicit
-and automatic rollback, ordinary update isolation, typed helper health, fresh
-registration, continued reporting, separate runner enrollment, durable typed
-receipt replay, exact credential rotation invalidation, and runner self-revoke;
-its secret-free receipt and commit binding are recorded in
+setup default remains the legacy/root profile. The earlier clean disposable
+arm64 Ubuntu systemd exercise remains recorded in
 `internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json` and its
-committed-main attestation. The binding now uses the fail-closed
-`scripts/release_control/secure_runtime_attestation.py` verifier, including an
-exact release-candidate-ref mode for the eventual ratchet proof. The repository
-still needs exact committed release-candidate reproduction,
+committed-main attestation, but it predates the hardening above: its action
+scenario proved a pre-mutation refusal and receipt replay, not a successful
+host mutation; its rollback claim predates irreversible credential reduction;
+and its secret-free receipt is hash-bound but not independently authenticated.
+It is historical evidence, not qualification of the current implementation.
+
+The v3 guarded lab now requires a real verified apt-cache mutation, a separate
+stale-fingerprint refusal, durable receipt replay, an observed collector
+authority-reduction request (with persistence covered by API regressions),
+complete boundary-source hashes, and artifact Go build stamps for
+the exact clean commit. `scripts/release_control/secure_runtime_attestation.py`
+rejects older receipts and labels accepted evidence as artifact-bound,
+self-attested systemd evidence rather than independently authenticated proof.
+The repository still needs a fresh exact committed release-candidate run,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation
@@ -415,7 +434,9 @@ combined process had it.
 ## Rollback Boundaries
 
 - Collector rollback restores the prior signed binary and unit while retaining
-  agent identity and report credential.
+  agent identity and report credential, but it removes the legacy command flag.
+  The pre-migration credential reduction is deliberately irreversible, so
+  rollback cannot restore `agent:exec` or remote command authority.
 - Helper rollback disables its socket and restores the previous declared
   telemetry profile; it does not add the collector to privileged groups.
 - Action-runner rollback disables and revokes its credential without disabling

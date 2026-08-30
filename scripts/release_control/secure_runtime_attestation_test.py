@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -11,9 +12,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from secure_runtime_attestation import (
     ARTIFACT_ARGUMENTS,
     AttestationError,
+    DISPOSABLE_VM_GUARD_SHA256,
+    EXPECTED_ARTIFACT_PACKAGES,
     REQUIRED_SCENARIOS,
+    REQUIRED_SOURCE_PATHS,
     create_attestation,
     sha256_bytes,
+    verify_artifact_build_identity,
 )
 from repo_file_io import strip_local_git_env
 
@@ -28,10 +33,11 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
         self.git("config", "user.name", "Pulse Test")
         self.git("config", "user.email", "pulse-test@example.invalid")
         self.source_hashes = {}
-        for relative, value in {
-            "scripts/install.sh": b"installer\n",
-            "scripts/installtests/secure_runtime_systemd_lab_test.go": b"lab\n",
-        }.items():
+        for relative in sorted(REQUIRED_SOURCE_PATHS):
+            if relative == "scripts/release_control/secure_runtime_attestation.py":
+                value = Path(__file__).with_name("secure_runtime_attestation.py").read_bytes()
+            else:
+                value = f"fixture:{relative}\n".encode()
             path = self.repo / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(value)
@@ -54,13 +60,27 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
         self.receipt.write_text(
             json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "source_hashes": self.source_hashes,
                     "artifact_hashes": artifact_hashes,
+                    "artifact_versions": {"collector_v1": "1.0.0", "collector_v2": "1.1.0"},
+                    "disposable_vm_guard_sha256": DISPOSABLE_VM_GUARD_SHA256,
                     "os_release": 'PRETTY_NAME="Fixture Linux"',
                     "kernel": "Linux fixture",
                     "systemd_version": "systemd 255",
                     "architecture": "arm64",
+                    "collector_service_user": "pulse-agent",
+                    "collector_process_uid": 1000,
+                    "collector_authority": "monitoring-only",
+                    "ambient_capabilities_none": True,
+                    "helper_protocol_healthy": True,
+                    "state_identity_preserved": True,
+                    "action_runner_qualified": True,
+                    "action_mutation_verified": True,
+                    "collector_authority_reduction_request_observed": True,
+                    "credential_rotated": True,
+                    "self_revoke_observed": True,
+                    "collector_continuity": True,
                     "scenarios": [
                         {"name": name, "passed": True, "detail": "passed"}
                         for name in REQUIRED_SCENARIOS
@@ -71,8 +91,17 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
+        self.build_identity = mock.patch(
+            "secure_runtime_attestation.verify_artifact_build_identity",
+            return_value={
+                name: {"package": package, "vcs_revision": self.commit, "vcs_modified": "false"}
+                for name, package in EXPECTED_ARTIFACT_PACKAGES.items()
+            },
+        )
+        self.build_identity.start()
 
     def tearDown(self) -> None:
+        self.build_identity.stop()
         self.temporary.cleanup()
 
     def git(self, *args: str) -> str:
@@ -100,7 +129,7 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
 
     def test_accepts_exact_committed_main_evidence(self) -> None:
         result = self.attest()
-        self.assertEqual(result["proof_classification"], "exact-committed-main")
+        self.assertEqual(result["proof_classification"], "committed-main-artifact-bound-self-attested-systemd")
         self.assertEqual(result["qualified_commit"], self.commit)
         self.assertTrue(result["source_hashes_match_commit"])
         self.assertTrue(result["artifact_hashes_match_receipt"])
@@ -110,7 +139,7 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
     def test_accepts_exact_release_candidate_ref(self) -> None:
         self.git("tag", "v9.0.0-rc.1", self.commit)
         result = self.attest(release_candidate_ref="v9.0.0-rc.1")
-        self.assertEqual(result["proof_classification"], "exact-release-candidate")
+        self.assertEqual(result["proof_classification"], "release-candidate-artifact-bound-self-attested-systemd")
         self.assertNotIn("exact-release-candidate", result["residual_proof"])
 
     def test_rejects_attached_checkout(self) -> None:
@@ -140,11 +169,49 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
         with self.assertRaisesRegex(AttestationError, "artifact digest mismatch"):
             self.attest()
 
+    def test_rejects_wrong_go_command_package(self) -> None:
+        output = (
+            "fixture: go1.25\n"
+            "\tpath\tgithub.com/rcourtman/pulse-go-rewrite/cmd/not-pulse-agent\n"
+            f"\tbuild\tvcs=git\n\tbuild\tvcs.revision={self.commit}\n\tbuild\tvcs.modified=false\n"
+        )
+        with mock.patch("secure_runtime_attestation.subprocess.run", return_value=subprocess.CompletedProcess([], 0, output, "")):
+            with self.assertRaisesRegex(AttestationError, "expected Go command package"):
+                verify_artifact_build_identity(self.receipt_dict(), self.artifacts, self.commit)
+
+    def test_rejects_modified_go_build_identity(self) -> None:
+        def inspect(command, **_kwargs):
+            name = Path(command[-1]).name
+            output = (
+                "fixture: go1.25\n"
+                f"\tpath\t{EXPECTED_ARTIFACT_PACKAGES[name]}\n"
+                f"\tbuild\tvcs=git\n\tbuild\tvcs.revision={self.commit}\n\tbuild\tvcs.modified=true\n"
+            )
+            return subprocess.CompletedProcess(command, 0, output, "")
+
+        with mock.patch("secure_runtime_attestation.subprocess.run", side_effect=inspect):
+            with self.assertRaisesRegex(AttestationError, "modified checkout"):
+                verify_artifact_build_identity(self.receipt_dict(), self.artifacts, self.commit)
+
     def test_rejects_failed_scenario(self) -> None:
         receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
         receipt["scenarios"][-1]["passed"] = False
         self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
         with self.assertRaisesRegex(AttestationError, "did not pass"):
+            self.attest()
+
+    def test_rejects_receipt_without_verified_mutation(self) -> None:
+        receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
+        receipt["action_mutation_verified"] = False
+        self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        with self.assertRaisesRegex(AttestationError, "action_mutation_verified"):
+            self.attest()
+
+    def test_rejects_legacy_receipt_schema(self) -> None:
+        receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
+        receipt["schema_version"] = 2
+        self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        with self.assertRaisesRegex(AttestationError, "schema_version 3"):
             self.attest()
 
     def test_rejects_missing_scenario(self) -> None:
@@ -189,6 +256,9 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
     def test_rejects_nonfinite_elapsed_time(self) -> None:
         with self.assertRaisesRegex(AttestationError, "must be positive"):
             self.attest(elapsed_seconds=float("nan"))
+
+    def receipt_dict(self):
+        return json.loads(self.receipt.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

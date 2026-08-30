@@ -413,6 +413,47 @@ func (s *Server) InvalidateActionRunnerSession(admission AgentAdmission) bool {
 	return true
 }
 
+// InvalidateAgentSession closes exactly the currently admitted session for a
+// credential whose authority has changed. Unlike action-runner rotation this
+// accepts either runtime role, but every admission field must still match so a
+// stale or cross-tenant credential transition cannot evict another session.
+func (s *Server) InvalidateAgentSession(admission AgentAdmission) bool {
+	if s == nil {
+		return false
+	}
+	expected := AgentAdmission{
+		OrganizationID:   normalizeOrganizationID(admission.OrganizationID),
+		TokenID:          strings.TrimSpace(admission.TokenID),
+		AgentID:          strings.TrimSpace(admission.AgentID),
+		Hostname:         strings.TrimSpace(admission.Hostname),
+		RuntimeRole:      strings.TrimSpace(admission.RuntimeRole),
+		ActionCapability: strings.TrimSpace(admission.ActionCapability),
+	}
+	if expected.TokenID == "" || expected.AgentID == "" || expected.Hostname == "" || expected.RuntimeRole == "" {
+		return false
+	}
+	key := agentSessionKey(expected.OrganizationID, expected.AgentID)
+	s.mu.Lock()
+	current, ok := s.agents[key]
+	if !ok || current == nil ||
+		normalizeOrganizationID(current.admission.OrganizationID) != expected.OrganizationID ||
+		strings.TrimSpace(current.admission.TokenID) != expected.TokenID ||
+		strings.TrimSpace(current.admission.AgentID) != expected.AgentID ||
+		!unifiedresources.HostnamesEquivalent(current.admission.Hostname, expected.Hostname) ||
+		strings.TrimSpace(current.admission.RuntimeRole) != expected.RuntimeRole ||
+		strings.TrimSpace(current.admission.ActionCapability) != expected.ActionCapability {
+		s.mu.Unlock()
+		return false
+	}
+	delete(s.agents, key)
+	s.mu.Unlock()
+	current.signalDone()
+	if current.conn != nil {
+		_ = current.conn.Close()
+	}
+	return true
+}
+
 func sameActionRunnerAdmission(current, expected AgentAdmission) bool {
 	return normalizeOrganizationID(current.OrganizationID) == expected.OrganizationID &&
 		strings.TrimSpace(current.TokenID) == expected.TokenID &&

@@ -5887,6 +5887,53 @@ printf 'revoked\n'
 	}
 }
 
+func TestInstallSHSafeProfileDurablyReducesCollectorAuthority(t *testing.T) {
+	const token = "collector-secret-that-must-not-appear-in-output"
+	var gotAuthorization string
+	var gotMethod string
+	var gotBody map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuthorization = r.Header.Get("Authorization")
+		gotMethod = r.Method
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode authority reduction body: %v", err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	mustWrite(t, filepath.Join(stateDir, "runtime.token"), token+"\n")
+	script := `
+set -euo pipefail
+STATE_DIR="` + stateDir + `"
+PULSE_TOKEN=""
+AGENT_ID="agent-secure-runtime"
+HOSTNAME_OVERRIDE="secure-runtime.lab"
+PULSE_URL="` + server.URL + `"
+INSECURE="false"
+CURL_CA_BUNDLE=""
+log_info() { printf '%s\n' "$*"; }
+` + extractInstallShellFunction(t, "reduce_safe_profile_collector_authority") + `
+reduce_safe_profile_collector_authority
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("collector authority reduction: %v\n%s", err, out)
+	}
+	if strings.Contains(string(out), token) {
+		t.Fatalf("collector credential leaked in output: %s", out)
+	}
+	if gotMethod != http.MethodPost || gotAuthorization != "Bearer "+token {
+		t.Fatalf("authority reduction transport: method=%q authorization=%q", gotMethod, gotAuthorization)
+	}
+	if gotBody["agentId"] != "agent-secure-runtime" || gotBody["hostname"] != "secure-runtime.lab" {
+		t.Fatalf("authority reduction body = %#v", gotBody)
+	}
+}
+
 func TestInstallSHRendersHardenedActionRunnerUnit(t *testing.T) {
 	root := t.TempDir()
 	unitPath := filepath.Join(root, "pulse-agent-runner.service")
@@ -5912,7 +5959,7 @@ func TestInstallSHRendersHardenedActionRunnerUnit(t *testing.T) {
 		"Group=root",
 		"NoNewPrivileges=true",
 		"ProtectHome=true",
-		"ProtectSystem=strict",
+		"ProtectSystem=false",
 		"ProtectKernelTunables=true",
 		"ProtectKernelModules=true",
 		"ProtectControlGroups=true",
@@ -5925,6 +5972,9 @@ func TestInstallSHRendersHardenedActionRunnerUnit(t *testing.T) {
 	}
 	if strings.Contains(unit, "PrivateNetwork=true") {
 		t.Fatalf("networked action runner cannot use the helper's private-network sandbox:\n%s", unit)
+	}
+	if strings.Contains(unit, "ProtectSystem=strict") {
+		t.Fatalf("host-mutating action runner cannot make the host filesystem read-only:\n%s", unit)
 	}
 }
 

@@ -193,10 +193,13 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 		t.Fatalf("expected API token to be recorded")
 	}
 	token := router.config.APITokens[0]
-	for _, scope := range []string{config.ScopeDockerReport, config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentManage} {
+	for _, scope := range []string{config.ScopeDockerReport, config.ScopeAgentReport, config.ScopeAgentConfigRead} {
 		if !token.HasScope(scope) {
 			t.Fatalf("expected default migration token to include %q, got %#v", scope, token.Scopes)
 		}
+	}
+	if token.HasScope(config.ScopeAgentManage) {
+		t.Fatalf("default migration token retained cross-host management scope: %#v", token.Scopes)
 	}
 }
 

@@ -25,8 +25,8 @@ const pendingPrivilegedUpdateFile = ".pulse-agent-update-pending.json"
 type PrivilegedUpdate interface {
 	CreateQuarantinedArtifact() (artifactID string, file *os.File, cleanup func() error, err error)
 	WriteQuarantinedSignature(artifactID, signature string) error
-	Stage(context.Context, string, string) (agenthelper.UpdateStageResult, error)
-	Activate(context.Context, string, string) (agenthelper.UpdateResult, error)
+	Stage(context.Context, string, string, string) (agenthelper.UpdateStageResult, error)
+	Activate(context.Context, string, string, string) (agenthelper.UpdateResult, error)
 	Commit(context.Context, agenthelper.UpdateResult) (agenthelper.UpdateResult, error)
 	Rollback(context.Context, agenthelper.UpdateResult) (agenthelper.UpdateResult, error)
 }
@@ -112,15 +112,15 @@ func (p *privilegeHelperUpdate) WriteQuarantinedSignature(artifactID, signature 
 	return syncUpdateDirectory(filepath.Dir(path))
 }
 
-func (p *privilegeHelperUpdate) Stage(ctx context.Context, artifactID, digest string) (agenthelper.UpdateStageResult, error) {
+func (p *privilegeHelperUpdate) Stage(ctx context.Context, artifactID, digest, version string) (agenthelper.UpdateStageResult, error) {
 	var result agenthelper.UpdateStageResult
-	_, err := p.client.Call(ctx, agenthelper.OperationAgentUpdateStage, agenthelper.OperationVersion1, 30*time.Second, agenthelper.UpdateStageRequest{ArtifactID: artifactID, SHA256: digest}, &result)
+	_, err := p.client.Call(ctx, agenthelper.OperationAgentUpdateStage, agenthelper.OperationVersion1, 30*time.Second, agenthelper.UpdateStageRequest{ArtifactID: artifactID, SHA256: digest, Version: version}, &result)
 	return result, err
 }
 
-func (p *privilegeHelperUpdate) Activate(ctx context.Context, artifactID, digest string) (agenthelper.UpdateResult, error) {
+func (p *privilegeHelperUpdate) Activate(ctx context.Context, artifactID, digest, version string) (agenthelper.UpdateResult, error) {
 	var result agenthelper.UpdateResult
-	_, err := p.client.Call(ctx, agenthelper.OperationAgentUpdateActivate, agenthelper.OperationVersion1, 30*time.Second, agenthelper.UpdateActivateRequest{ArtifactID: artifactID, SHA256: digest}, &result)
+	_, err := p.client.Call(ctx, agenthelper.OperationAgentUpdateActivate, agenthelper.OperationVersion1, 30*time.Second, agenthelper.UpdateActivateRequest{ArtifactID: artifactID, SHA256: digest, Version: version}, &result)
 	return result, err
 }
 

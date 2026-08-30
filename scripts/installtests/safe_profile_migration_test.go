@@ -31,6 +31,7 @@ func safeProfileTransactionFunctions(t *testing.T) string {
 		extractInstallShellFunction(t, "safe_profile_restore_state_metadata") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_begin_transaction") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_restore_entry") + "\n" +
+		extractInstallShellFunction(t, "safe_profile_remove_collector_command_authority") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_restore_transaction") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_commit_transaction")
 }
@@ -131,12 +132,17 @@ rm -f "$STATE_DIR/proxmox-pve-registration-blocked" "$STATE_DIR/proxmox-pbs-regi
 printf 'changed-agent-id\n' > "$STATE_DIR/agent-id"
 printf 'changed-connection\n' > "$STATE_DIR/connection.env"
 chmod 0777 "$STATE_DIR" "$STATE_DIR/cache" "$STATE_DIR/cache/sample"
+printf 'outside-state\n' > "$EXPECTED_DIR/outside-target"
+chmod 0600 "$EXPECTED_DIR/outside-target"
+rm -f "$STATE_DIR/cache/sample"
+ln -s "$EXPECTED_DIR/outside-target" "$STATE_DIR/cache/sample"
 mkdir -p "$PRIVILEGED_HELPER_CREDENTIAL_DIR"
 printf 'moved-monitoring-token\n' > "$PRIVILEGED_HELPER_CREDENTIAL_DIR/token"
 printf 'runner-still-independent\n' > "$ACTION_RUNNER_SENTINEL"
 safe_profile_restore_transaction "$transaction" automatic-failure
 cmp "$INSTALL_DIR/$BINARY_NAME" "$EXPECTED_DIR/collector-binary"
-cmp "$SAFE_PROFILE_COLLECTOR_UNIT" "$EXPECTED_DIR/collector-unit"
+grep -q '^User=root$' "$SAFE_PROFILE_COLLECTOR_UNIT"
+! grep -Eq -- '(^|[[:space:]])--enable-commands([[:space:]]|$)' "$SAFE_PROFILE_COLLECTOR_UNIT"
 cmp "$STATE_DIR/token" "$EXPECTED_DIR/state-token"
 cmp "$STATE_DIR/runtime.token" "$EXPECTED_DIR/runtime-token"
 cmp "$STATE_DIR/agent-id" "$EXPECTED_DIR/agent-id"
@@ -148,8 +154,9 @@ grep -q '^legacy-pve-blocked$' "$STATE_DIR/proxmox-pve-registration-blocked"
 grep -q '^legacy-pbs-blocked$' "$STATE_DIR/proxmox-pbs-registration-blocked"
 grep -q '^pve,pbs$' "$STATE_DIR/proxmox-detected-types"
 test "$(stat -c '%a' "$STATE_DIR")" = 750
-test "$(stat -c '%a' "$STATE_DIR/cache")" = 710
-test "$(stat -c '%a' "$STATE_DIR/cache/sample")" = 640
+test "$(stat -c '%a' "$STATE_DIR/cache")" = 777
+test -L "$STATE_DIR/cache/sample"
+test "$(stat -c '%a' "$EXPECTED_DIR/outside-target")" = 600
 test ! -e "$STATE_DIR/cache/runtime.db-wal"
 test ! -e "$PRIVILEGED_HELPER_BINARY_PATH"
 test ! -e "$PRIVILEGED_HELPER_SERVICE_UNIT"

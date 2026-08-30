@@ -36,6 +36,40 @@ ARTIFACT_ARGUMENTS = {
     "helper": "helper",
     "runner": "runner",
 }
+EXPECTED_ARTIFACT_PACKAGES = {
+    "collector_v1": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
+    "collector_v2": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
+    "helper": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent-helper",
+    "runner": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent-runner",
+}
+REQUIRED_SOURCE_PATHS = {
+    "scripts/install.sh",
+    "scripts/installtests/secure_runtime_systemd_lab_test.go",
+    "scripts/release_control/secure_runtime_attestation.py",
+    "internal/agenthelper/update_activation.go",
+    "internal/agenthelper/server.go",
+    "internal/agentexec/server.go",
+    "internal/agentexec/types.go",
+    "internal/agentexec/verifier_postconditions.go",
+    "internal/api/collector_authority.go",
+    "internal/api/action_runner_credentials.go",
+    "internal/api/agenttokens/install.go",
+    "internal/api/agent_exec_token_binding.go",
+    "internal/actionrunner/runner.go",
+    "internal/actionrunner/types.go",
+    "internal/actionrunner/transport.go",
+    "internal/hostagent/storage_cleanup.go",
+    "internal/operationreceipt/store.go",
+    "internal/operationreceipt/types.go",
+    "internal/agentupdate/update.go",
+    "internal/agentupdate/privileged_update.go",
+    "cmd/pulse-agent/main.go",
+    "cmd/pulse-agent-helper/main.go",
+    "cmd/pulse-agent-runner/main.go",
+}
+DISPOSABLE_VM_GUARD_SHA256 = hashlib.sha256(
+    b"PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1\n"
+).hexdigest()
 FORBIDDEN_RECEIPT_KEYS = {
     "api_key",
     "authorization",
@@ -143,8 +177,8 @@ def load_receipt(path: Path) -> tuple[dict[str, Any], bytes]:
         receipt = json.loads(raw)
     except (OSError, json.JSONDecodeError) as exc:
         raise AttestationError(f"unable to load receipt {path}: {exc}") from exc
-    if not isinstance(receipt, dict) or receipt.get("schema_version") != 2:
-        raise AttestationError("receipt must be a schema_version 2 object")
+    if not isinstance(receipt, dict) or receipt.get("schema_version") != 3:
+        raise AttestationError("receipt must be a schema_version 3 object")
     reject_sensitive_keys(receipt)
     return receipt, raw
 
@@ -164,10 +198,38 @@ def verify_scenarios(receipt: dict[str, Any]) -> None:
         raise AttestationError("receipt scenario set or order does not match the canonical 12-scenario qualification")
 
 
+def verify_runtime_claims(receipt: dict[str, Any]) -> None:
+    required_true = (
+        "ambient_capabilities_none",
+        "helper_protocol_healthy",
+        "state_identity_preserved",
+        "action_runner_qualified",
+        "action_mutation_verified",
+        "collector_authority_reduction_request_observed",
+        "credential_rotated",
+        "self_revoke_observed",
+        "collector_continuity",
+    )
+    for key in required_true:
+        if receipt.get(key) is not True:
+            raise AttestationError(f"receipt does not prove required runtime claim {key}")
+    if receipt.get("collector_service_user") != "pulse-agent":
+        raise AttestationError("receipt collector service user is not pulse-agent")
+    if not isinstance(receipt.get("collector_process_uid"), int) or receipt["collector_process_uid"] <= 0:
+        raise AttestationError("receipt collector process UID is not non-root")
+    if receipt.get("collector_authority") != "monitoring-only":
+        raise AttestationError("receipt collector authority is not monitoring-only")
+    if receipt.get("disposable_vm_guard_sha256") != DISPOSABLE_VM_GUARD_SHA256:
+        raise AttestationError("receipt disposable-VM guard claim is missing or invalid")
+
+
 def verify_source_hashes(checkout: Path, commit: str, receipt: dict[str, Any]) -> dict[str, str]:
     source_hashes = receipt.get("source_hashes")
     if not isinstance(source_hashes, dict) or not source_hashes:
         raise AttestationError("receipt source_hashes must be a non-empty object")
+    missing = REQUIRED_SOURCE_PATHS.difference(source_hashes)
+    if missing:
+        raise AttestationError(f"receipt source_hashes omit required boundary sources: {sorted(missing)}")
     verified: dict[str, str] = {}
     for source_path in sorted(source_hashes):
         digest = source_hashes[source_path]
@@ -200,6 +262,51 @@ def verify_artifacts(receipt: dict[str, Any], artifacts: dict[str, Path]) -> dic
     return verified
 
 
+def verify_artifact_build_identity(
+    receipt: dict[str, Any], artifacts: dict[str, Path], qualified_commit: str
+) -> dict[str, dict[str, str]]:
+    versions = receipt.get("artifact_versions")
+    if not isinstance(versions, dict) or set(versions) != {"collector_v1", "collector_v2"}:
+        raise AttestationError("receipt artifact_versions must identify both collector artifacts")
+    if any(not isinstance(value, str) or not value.strip() for value in versions.values()):
+        raise AttestationError("receipt collector artifact version is invalid")
+    if versions["collector_v1"] == versions["collector_v2"]:
+        raise AttestationError("collector qualification artifacts must have distinct versions")
+
+    verified: dict[str, dict[str, str]] = {}
+    for name, artifact in artifacts.items():
+        try:
+            result = subprocess.run(
+                ["go", "version", "-m", str(artifact)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise AttestationError(f"unable to inspect Go build identity for {name}") from exc
+        package = ""
+        settings: dict[str, str] = {}
+        for line in result.stdout.splitlines():
+            fields = line.strip().split("\t")
+            if len(fields) >= 2 and fields[0] == "path":
+                package = fields[1]
+            elif len(fields) >= 2 and fields[0] == "build" and "=" in fields[1]:
+                key, value = fields[1].split("=", 1)
+                settings[key] = value
+        if package != EXPECTED_ARTIFACT_PACKAGES[name]:
+            raise AttestationError(f"artifact {name} is not the expected Go command package")
+        if settings.get("vcs") != "git" or settings.get("vcs.revision") != qualified_commit:
+            raise AttestationError(f"artifact {name} is not build-stamped from the qualified commit")
+        if settings.get("vcs.modified") != "false":
+            raise AttestationError(f"artifact {name} was built from a modified checkout")
+        verified[name] = {
+            "package": package,
+            "vcs_revision": settings["vcs.revision"],
+            "vcs_modified": settings["vcs.modified"],
+        }
+    return verified
+
+
 def create_attestation(
     *,
     checkout: Path,
@@ -224,8 +331,13 @@ def create_attestation(
 
     receipt, receipt_bytes = load_receipt(receipt_path)
     verify_scenarios(receipt)
+    verify_runtime_claims(receipt)
     source_hashes = verify_source_hashes(checkout, qualified_commit, receipt)
+    attestation_tool_hash = sha256_file(Path(__file__))
+    if source_hashes["scripts/release_control/secure_runtime_attestation.py"] != attestation_tool_hash:
+        raise AttestationError("executing attestation tool does not match the qualified commit")
     artifact_hashes = verify_artifacts(receipt, artifacts)
+    artifact_build_identity = verify_artifact_build_identity(receipt, artifacts, qualified_commit)
     record_path = PurePosixPath(receipt_record_path)
     if (
         record_path.is_absolute()
@@ -240,11 +352,11 @@ def create_attestation(
     ):
         raise AttestationError("elapsed seconds must be positive")
 
-    classification = "exact-release-candidate" if release_candidate_ref else "exact-committed-main"
+    classification = "release-candidate-artifact-bound-self-attested-systemd" if release_candidate_ref else "committed-main-artifact-bound-self-attested-systemd"
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "attestation_tool": "scripts/release_control/secure_runtime_attestation.py",
-        "attestation_tool_sha256": sha256_file(Path(__file__)),
+        "attestation_tool_sha256": attestation_tool_hash,
         "proof_classification": classification,
         "qualified_commit": qualified_commit,
         "qualified_ref_at_run": release_candidate_ref or qualified_commit,
@@ -253,13 +365,15 @@ def create_attestation(
         "qualified_commit_reachable_from_main": True,
         "build_checkout": "detached-worktree",
         "build_checkout_clean_except_lab_artifacts": True,
-        "disposable_vm_guard_verified": True,
+        "disposable_vm_guard_receipt_claim_validated": True,
+        "execution_receipt_authentication": "none-secret-free-self-attestation",
         "receipt_path": receipt_record_path,
         "receipt_sha256": sha256_bytes(receipt_bytes),
         "source_hashes_match_commit": True,
         "source_hashes": source_hashes,
         "artifact_hashes_match_receipt": True,
         "artifact_hashes": artifact_hashes,
+        "artifact_build_identity": artifact_build_identity,
         "host": {
             "os": _os_name(receipt.get("os_release")),
             "kernel": receipt.get("kernel"),

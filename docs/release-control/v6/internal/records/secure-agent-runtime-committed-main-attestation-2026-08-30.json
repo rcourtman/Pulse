@@ -2,7 +2,8 @@
   "schema_version": 2,
   "attestation_tool": "scripts/release_control/secure_runtime_attestation.py",
   "attestation_tool_sha256": "7ec7ec958cb1352185b5144dbe6d8f87433608cbc16cfff66f4e7d8b3664a9d7",
-  "proof_classification": "exact-committed-main",
+  "proof_classification": "historical-committed-main-artifact-hash-bound-self-attested-systemd",
+  "superseded_for_current_qualification": true,
   "qualified_commit": "cb843e37e8a92c56d88a8a2922c23ccd2e4fd21b",
   "qualified_ref_at_run": "cb843e37e8a92c56d88a8a2922c23ccd2e4fd21b",
   "main_ref_verified": "origin/main",
@@ -10,7 +11,9 @@
   "qualified_commit_reachable_from_main": true,
   "build_checkout": "detached-worktree",
   "build_checkout_clean_except_lab_artifacts": true,
-  "disposable_vm_guard_verified": true,
+  "disposable_vm_guard_verified": false,
+  "disposable_vm_guard_not_independently_evidenced": true,
+  "execution_receipt_authentication": "none-secret-free-self-attestation",
   "receipt_path": "docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json",
   "receipt_sha256": "adeeec6bf02a73c27483da31d9e058a8686900324e32960399985e847487a271",
   "source_hashes_match_commit": true,
@@ -35,6 +38,12 @@
   "all_scenarios_passed": true,
   "test_elapsed_seconds": 113.43,
   "default_changed": false,
+  "limitations": [
+    "receipt execution was not independently authenticated",
+    "artifact hashes were not checked against Go VCS build identity",
+    "typed action scenario proved refusal before mutation, not successful host mutation",
+    "receipt predates irreversible collector credential reduction and rollback hardening"
+  ],
   "residual_proof": [
     "exact-release-candidate",
     "representative-provider-and-appliance",

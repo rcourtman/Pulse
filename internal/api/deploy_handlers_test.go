@@ -1014,8 +1014,8 @@ func TestHandleEnroll_CommandsEnabledAddsAgentExecScope(t *testing.T) {
 	if !hasExec {
 		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeAgentExec, found.Scopes)
 	}
-	if !hasManage {
-		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeAgentManage, found.Scopes)
+	if hasManage {
+		t.Errorf("runtime collector token must not have %s scope, got scopes: %v", config.ScopeAgentManage, found.Scopes)
 	}
 	if got := found.Metadata["bound_agent_id"]; got != "agent-cmd-host" {
 		t.Errorf("runtime token bound_agent_id = %q, want %q", got, "agent-cmd-host")
@@ -1058,22 +1058,22 @@ func TestHandleEnroll_CommandsDisabledNoAgentExecScope(t *testing.T) {
 		t.Fatal("runtime token not found in config")
 	}
 
-	// Should have report, config:read, and manage — but NOT agent:exec.
+	// Should have report and config:read — but no management or execution scope.
 	for _, s := range found.Scopes {
 		if s == config.ScopeAgentExec {
 			t.Errorf("runtime token should NOT have %s scope when commandsEnabled is false", config.ScopeAgentExec)
 		}
 	}
 
-	// Should still have manage.
+	// Collector credentials must not manage other agent configurations.
 	hasManage := false
 	for _, s := range found.Scopes {
 		if s == config.ScopeAgentManage {
 			hasManage = true
 		}
 	}
-	if !hasManage {
-		t.Errorf("expected runtime token to have %s scope", config.ScopeAgentManage)
+	if hasManage {
+		t.Errorf("runtime collector token must not have %s scope", config.ScopeAgentManage)
 	}
 }
 

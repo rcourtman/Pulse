@@ -1008,6 +1008,45 @@ revoke_action_runner_credential() {
     return 1
 }
 
+reduce_safe_profile_collector_authority() {
+    local active_token_file="${STATE_DIR%/}/runtime.token"
+    local active_token=""
+    local curl_config=""
+    local payload=""
+    local -a reduce_args
+
+    if [[ ! -s "$active_token_file" || -L "$active_token_file" ]]; then
+        active_token_file=""
+        active_token="$PULSE_TOKEN"
+    else
+        active_token=$(head -1 "$active_token_file" 2>/dev/null || true)
+    fi
+    [[ -n "$active_token" && "$active_token" != *$'\r'* && "$active_token" != *$'\n'* ]] || return 1
+    [[ -n "$AGENT_ID" && ${#AGENT_ID} -le 256 && "$AGENT_ID" =~ ^[A-Za-z0-9._:-]+$ ]] || return 1
+    [[ -n "$HOSTNAME_OVERRIDE" && ${#HOSTNAME_OVERRIDE} -le 253 && "$HOSTNAME_OVERRIDE" =~ ^[A-Za-z0-9._:-]+$ ]] || return 1
+    [[ "$PULSE_URL" =~ ^https?://[^[:space:]]+$ ]] || return 1
+
+    curl_config=$(mktemp)
+    chmod 0600 "$curl_config"
+    printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' \
+        "$active_token" > "$curl_config"
+    active_token=""
+    payload="{\"agentId\":\"${AGENT_ID}\",\"hostname\":\"${HOSTNAME_OVERRIDE}\"}"
+    reduce_args=(--config "$curl_config" -fsS --connect-timeout 5 --max-time 15 -X POST --data-binary "$payload")
+    if [[ "$INSECURE" == "true" ]]; then
+        reduce_args+=(-k)
+    elif [[ -n "$CURL_CA_BUNDLE" ]]; then
+        reduce_args+=(--cacert "$CURL_CA_BUNDLE")
+    fi
+    if curl "${reduce_args[@]}" "${PULSE_URL%/}/api/agents/collector/reduce-authority" >/dev/null 2>&1; then
+        rm -f "$curl_config"
+        log_info "Durably removed execution and cross-host management scopes from the collector credential before migration."
+        return 0
+    fi
+    rm -f "$curl_config"
+    return 1
+}
+
 teardown_action_runner_service() {
     local had_runner_config="false"
     if [[ -f "$ACTION_RUNNER_ENV_FILE" || -f "$ACTION_RUNNER_TOKEN_FILE" ]]; then
@@ -1277,7 +1316,7 @@ RestartSec=5s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
-ProtectSystem=strict
+ProtectSystem=false
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -1647,34 +1686,19 @@ safe_profile_manifest_value() {
 
 safe_profile_snapshot_state_metadata() {
     local metadata_file="${SAFE_PROFILE_TRANSACTION_DIR}/state-metadata.bin"
-    local path=""
-    local relative_path=""
-    local entry_type="file"
     local uid="" gid="" mode=""
 
     [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" ]] ||
         fail "Refusing unsafe safe-profile state directory: ${STATE_DIR}" "$EXIT_GENERAL"
     : > "$metadata_file"
     chmod 0600 "$metadata_file"
-    while IFS= read -r -d '' path; do
-        if [[ "$path" == "$STATE_DIR" ]]; then
-            relative_path="."
-        else
-            relative_path="${path#${STATE_DIR%/}/}"
-        fi
-        entry_type="file"
-        [[ -d "$path" && ! -L "$path" ]] && entry_type="directory"
-        [[ -L "$path" ]] && entry_type="symlink"
-        uid=$(stat -c '%u' "$path") || return 1
-        gid=$(stat -c '%g' "$path") || return 1
-        mode=$(stat -c '%a' "$path") || return 1
-        printf '%s\0%s\0%s\0%s\0%s\0' \
-            "$relative_path" \
-            "$uid" \
-            "$gid" \
-            "$mode" \
-            "$entry_type" >> "$metadata_file"
-    done < <(find "$STATE_DIR" -xdev -print0)
+    # Only the state root is installer-owned metadata. Descendants become
+    # collector-writable during the safe profile and therefore must never be
+    # replayed later as root-owned pathname operations.
+    uid=$(stat -c '%u' "$STATE_DIR") || return 1
+    gid=$(stat -c '%g' "$STATE_DIR") || return 1
+    mode=$(stat -c '%a' "$STATE_DIR") || return 1
+    printf '.\0%s\0%s\0%s\0directory\0' "$uid" "$gid" "$mode" > "$metadata_file"
 }
 
 safe_profile_restore_state_metadata() {
@@ -1689,22 +1713,15 @@ safe_profile_restore_state_metadata() {
           IFS= read -r -d '' gid &&
           IFS= read -r -d '' mode &&
           IFS= read -r -d '' entry_type; do
-        if [[ "$relative_path" == "." ]]; then
-            destination="$snapshot_state_dir"
-        else
-            [[ -n "$relative_path" && "$relative_path" != /* &&
-               "/${relative_path}/" != *"/../"* ]] || return 1
-            destination="${snapshot_state_dir%/}/${relative_path}"
-        fi
-        # Runtime-owned state such as SQLite WAL/SHM files can legitimately
-        # disappear while the collector is stopped. Restore the identity of
-        # every surviving pre-migration entry without turning a vanished
-        # transient file into a rollback failure.
-        [[ -e "$destination" || -L "$destination" ]] || continue
-        chown -h "${uid}:${gid}" "$destination" || return 1
-        if [[ "$entry_type" != "symlink" ]]; then
-            chmod "$mode" "$destination" || return 1
-        fi
+        # Format-v2 snapshots created before the hardened rollback recorded the
+        # complete mutable tree. Ignore those descendant records: replaying
+        # collector-controlled pathnames as root is unsafe. The state root
+        # cannot be replaced by the service account because its parent is root.
+        [[ "$relative_path" == "." ]] || continue
+        destination="$snapshot_state_dir"
+        [[ -d "$destination" && ! -L "$destination" && "$entry_type" == "directory" ]] || return 1
+        chown "${uid}:${gid}" "$destination" || return 1
+        chmod "$mode" "$destination" || return 1
     done < "$metadata_file"
 }
 
@@ -1797,6 +1814,27 @@ safe_profile_restore_entry() {
     fi
 }
 
+safe_profile_remove_collector_command_authority() {
+    local unit_path="$1"
+    local rewritten=""
+
+    [[ -f "$unit_path" && ! -L "$unit_path" ]] || return 1
+    rewritten=$(mktemp)
+    chmod 0600 "$rewritten"
+    if ! sed -E 's/(^|[[:space:]])--enable-commands([[:space:]]|$)/\1\2/g' "$unit_path" > "$rewritten"; then
+        rm -f "$rewritten"
+        return 1
+    fi
+    # Preserve the restored unit's root-controlled inode metadata while making
+    # the irreversible server-side scope reduction explicit in local config.
+    if ! cat "$rewritten" > "$unit_path"; then
+        rm -f "$rewritten"
+        return 1
+    fi
+    rm -f "$rewritten"
+    ! grep -Eq -- '(^|[[:space:]])--enable-commands([[:space:]]|$)' "$unit_path"
+}
+
 safe_profile_restore_transaction() {
     local transaction_dir="$1"
     local reason="${2:-explicit}"
@@ -1824,6 +1862,10 @@ safe_profile_restore_transaction() {
     systemctl stop "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
     safe_profile_restore_entry "$transaction_dir" collector-binary "${INSTALL_DIR}/${BINARY_NAME}" COLLECTOR_BINARY
     safe_profile_restore_entry "$transaction_dir" collector-unit "$SAFE_PROFILE_COLLECTOR_UNIT" COLLECTOR_UNIT
+    # The server-side execution-scope reduction deliberately survives both
+    # explicit and automatic local rollback. Never recreate a command-capable
+    # collector configuration around that monitoring-only credential.
+    safe_profile_remove_collector_command_authority "$SAFE_PROFILE_COLLECTOR_UNIT" || return 1
     safe_profile_restore_entry "$transaction_dir" helper-binary "$PRIVILEGED_HELPER_BINARY_PATH" HELPER_BINARY
     safe_profile_restore_entry "$transaction_dir" helper-service-unit "$PRIVILEGED_HELPER_SERVICE_UNIT" HELPER_SERVICE_UNIT
     safe_profile_restore_entry "$transaction_dir" helper-socket-unit "$PRIVILEGED_HELPER_SOCKET_UNIT" HELPER_SOCKET_UNIT
@@ -4769,6 +4811,8 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     safe_profile_platform_supported ||
         fail "Safe-profile migration is supported only on standard Linux systemd hosts; no broader-privilege fallback was applied" "$EXIT_MISSING_ARGS"
     safe_profile_begin_transaction
+    reduce_safe_profile_collector_authority ||
+        fail "Safe-profile migration could not durably remove command and cross-host management authority from the existing collector credential; no privilege change was retained" "$EXIT_AUTH_REJECTED"
 fi
 
 # Create the dedicated service account for the least-privilege profile and

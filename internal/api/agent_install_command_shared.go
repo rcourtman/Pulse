@@ -106,7 +106,6 @@ func containerRuntimeAgentScopes(enableHost bool) []string {
 		scopes = append(scopes,
 			config.ScopeAgentReport,
 			config.ScopeAgentConfigRead,
-			config.ScopeAgentManage,
 		)
 	}
 	return scopes

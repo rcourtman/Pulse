@@ -56,6 +56,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/agent/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/action-runner/credential", RequireAuth(r.config, actionRunnerCredentialRoute(r.config, r.handleIssueActionRunnerCredential, r.handleSelfRevokeActionRunnerCredential)))
+	r.mux.HandleFunc("/api/agents/collector/reduce-authority", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.handleReduceCollectorAuthority)))
 	r.mux.HandleFunc("/api/agents/host/report", wrapLegacyHostAlias("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport))))
 	r.mux.HandleFunc("/api/agents/agent/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/lookup", wrapLegacyHostAlias("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup))))

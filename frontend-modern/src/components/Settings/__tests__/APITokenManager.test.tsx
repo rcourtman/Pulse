@@ -7,7 +7,6 @@ import type { Resource } from '@/types/resource';
 import {
   AI_EXECUTE_SCOPE,
   AGENT_CONFIG_READ_SCOPE,
-  AGENT_MANAGE_SCOPE,
   AGENT_REPORT_SCOPE,
   AUDIT_READ_SCOPE,
   DOCKER_MANAGE_SCOPE,
@@ -310,11 +309,11 @@ describe('APITokenManager', () => {
     });
   });
 
-  it('creates manually cycled agent tokens with the runtime lifecycle scopes', async () => {
+  it('creates manually cycled agent tokens with bound collector scopes', async () => {
     createTokenMock.mockResolvedValue(
       makeToken({
         name: 'Replacement agent token',
-        scopes: [AGENT_REPORT_SCOPE, AGENT_CONFIG_READ_SCOPE, AGENT_MANAGE_SCOPE],
+        scopes: [AGENT_REPORT_SCOPE, AGENT_CONFIG_READ_SCOPE],
       }),
     );
 
@@ -329,7 +328,6 @@ describe('APITokenManager', () => {
     await waitFor(() => {
       expect(createTokenMock).toHaveBeenCalledWith('Replacement agent token', [
         AGENT_CONFIG_READ_SCOPE,
-        AGENT_MANAGE_SCOPE,
         AGENT_REPORT_SCOPE,
       ]);
     });

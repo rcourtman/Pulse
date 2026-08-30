@@ -42,12 +42,12 @@ func (f *fakePrivilegedUpdate) WriteQuarantinedSignature(_ string, signature str
 	return nil
 }
 
-func (f *fakePrivilegedUpdate) Stage(_ context.Context, artifactID, digest string) (agenthelper.UpdateStageResult, error) {
+func (f *fakePrivilegedUpdate) Stage(_ context.Context, artifactID, digest, _ string) (agenthelper.UpdateStageResult, error) {
 	f.events = append(f.events, "stage")
 	return agenthelper.UpdateStageResult{Action: "staged", ArtifactID: artifactID, SHA256: digest, DurableAt: time.Now()}, nil
 }
 
-func (f *fakePrivilegedUpdate) Activate(_ context.Context, _ string, digest string) (agenthelper.UpdateResult, error) {
+func (f *fakePrivilegedUpdate) Activate(_ context.Context, _ string, digest, _ string) (agenthelper.UpdateResult, error) {
 	f.events = append(f.events, "activate")
 	f.activation = agenthelper.UpdateResult{Action: "pending", ActivationID: "pulse-agent-0123456789abcdef0123456789abcdef:0123456789abcdef", ActiveSHA256: digest, RollbackSHA256: strings.Repeat("a", 64), RollbackDeadline: time.Now().Add(time.Minute)}
 	return f.activation, nil
@@ -96,7 +96,7 @@ func TestPrivilegedUpdateStagesActivatesAndRollsBackRestartFailure(t *testing.T)
 		return nil
 	}
 
-	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update")
+	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update", "1.1.0")
 	if err == nil || !strings.Contains(err.Error(), "update rolled back") {
 		t.Fatalf("performPrivilegedUpdate error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestPrivilegedUpdateFailsClosedBeforeActivation(t *testing.T) {
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
 	u.selfTestFn = func(context.Context, string) error { return nil }
 
-	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), strings.Repeat("0", 64), "signed-update")
+	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), strings.Repeat("0", 64), "signed-update", "1.1.0")
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Fatalf("performPrivilegedUpdate error = %v", err)
 	}

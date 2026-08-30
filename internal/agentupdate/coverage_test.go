@@ -47,7 +47,7 @@ func TestPrivilegedUpdateRollbackFailurePreservesPendingHandoff(t *testing.T) {
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
 	u.selfTestFn = func(context.Context, string) error { return nil }
 
-	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update")
+	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update", "1.1.0")
 	if err == nil || !strings.Contains(err.Error(), "typed helper rollback failed") {
 		t.Fatalf("performPrivilegedUpdate error = %v", err)
 	}

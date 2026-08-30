@@ -1868,11 +1868,11 @@ func (s *pendingUpdateSupervisorStub) WriteQuarantinedSignature(string, string) 
 	return errors.New("not implemented")
 }
 
-func (s *pendingUpdateSupervisorStub) Stage(context.Context, string, string) (agenthelper.UpdateStageResult, error) {
+func (s *pendingUpdateSupervisorStub) Stage(context.Context, string, string, string) (agenthelper.UpdateStageResult, error) {
 	return agenthelper.UpdateStageResult{}, errors.New("not implemented")
 }
 
-func (s *pendingUpdateSupervisorStub) Activate(context.Context, string, string) (agenthelper.UpdateResult, error) {
+func (s *pendingUpdateSupervisorStub) Activate(context.Context, string, string, string) (agenthelper.UpdateResult, error) {
 	return agenthelper.UpdateResult{}, errors.New("not implemented")
 }
 
@@ -2399,10 +2399,12 @@ func TestRun_DockerRetry(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
 
 	errCh := make(chan error)
 	go func() {
-		errCh <- run(ctx, []string{"-token", "T", "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
+		errCh <- run(ctx, []string{"-token", "T", "-url", server.URL, "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
 	}()
 
 	select {
@@ -2472,11 +2474,13 @@ func TestRun_KubeRetry(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
 
 	errCh := make(chan error)
 	go func() {
 		// Only enable kubernetes
-		errCh <- run(ctx, []string{"-token", "T", "-enable-kubernetes=true", "-enable-host=false", "-enable-docker=false"}, func(s string) string { return "" })
+		errCh <- run(ctx, []string{"-token", "T", "-url", server.URL, "-enable-kubernetes=true", "-enable-host=false", "-enable-docker=false"}, func(s string) string { return "" })
 	}()
 
 	select {
