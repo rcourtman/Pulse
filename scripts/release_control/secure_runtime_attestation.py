@@ -73,7 +73,11 @@ SCENARIO_REQUIRED_OBSERVATIONS = {
     "automatic_failure_rollback": {"activation_committed": False, "restored_profile": "root-monitoring"},
     "ordinary_update_non_migration": {"collector_v2_installed": True, "selected_profile": "root-monitoring"},
     "final_safe_profile_apply": {"collector_service_user": "pulse-agent", "continuity_report_observed": True},
-    "separate_action_runner_install": {"runner_service_user": "root", "collector_service_user": "pulse-agent"},
+    "separate_action_runner_install": {
+        "runner_service_user": "root",
+        "collector_service_user": "pulse-agent",
+        "fixture_activation_requests": 1,
+    },
     "typed_action_receipt": {
         "action_receipt_kind": "pulse.host_storage_cleanup_result",
         "mutation_started": True,
@@ -85,6 +89,7 @@ SCENARIO_REQUIRED_OBSERVATIONS = {
         "proof_scope": "in-memory-fixture",
         "superseded_session_invalidated": True,
         "replacement_registered": True,
+        "fixture_activation_requests": 2,
     },
     "action_runner_self_revoke": {"revocation_count": 1, "collector_continuity": True},
 }

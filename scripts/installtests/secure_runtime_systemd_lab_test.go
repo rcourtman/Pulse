@@ -60,6 +60,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionrunner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 )
@@ -155,15 +156,17 @@ type secureRuntimeLabFixture struct {
 	actionServer        *agentexec.Server
 	actionSecret        string
 	actionBindingID     string
+	actionPending       bool
 	actionRevoked       bool
 	actionRevokes       int
+	actionActivations   int
 	authorityReductions int
 }
 
 func newSecureRuntimeLabFixture(collector, helper, runner []byte, version string) *secureRuntimeLabFixture {
 	fixture := &secureRuntimeLabFixture{
 		collector: collector, helper: helper, runner: runner, serverVersion: version,
-		actionSecret: secureRuntimeRunnerSecretV1, actionBindingID: secureRuntimeRunnerBindingV1,
+		actionSecret: secureRuntimeRunnerSecretV1, actionBindingID: secureRuntimeRunnerBindingV1, actionPending: true,
 	}
 	fixture.actionServer = agentexec.NewServerWithAdmissionValidator(fixture.admitActionRunner, fixture.validateActionRunnerSession)
 	return fixture
@@ -189,6 +192,7 @@ func (f *secureRuntimeLabFixture) actionAdmissionLocked() agentexec.AgentAdmissi
 		OrganizationID: secureRuntimeLabOrgID, TokenID: f.actionBindingID,
 		AgentID: secureRuntimeLabAgentID, Hostname: secureRuntimeLabHostname,
 		RuntimeRole: agentexec.RuntimeRoleActionRunner, ActionCapability: agentexec.ActionCapabilityTypedV1,
+		ActivationPending: f.actionPending,
 	}
 }
 
@@ -198,6 +202,7 @@ func (f *secureRuntimeLabFixture) replaceActionCredential(secret, bindingID stri
 	previous := f.actionAdmissionLocked()
 	f.actionSecret = secret
 	f.actionBindingID = bindingID
+	f.actionPending = true
 	f.actionRevoked = false
 	return previous
 }
@@ -206,6 +211,12 @@ func (f *secureRuntimeLabFixture) actionSnapshot() (agentexec.AgentAdmission, bo
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.actionAdmissionLocked(), f.actionRevoked, f.actionRevokes
+}
+
+func (f *secureRuntimeLabFixture) actionActivationCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.actionActivations
 }
 
 func (f *secureRuntimeLabFixture) authorityReductionCount() int {
@@ -254,7 +265,7 @@ func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	case r.URL.Path == "/api/agent/ws":
 		f.actionServer.HandleWebSocket(w, r)
 	case r.URL.Path == "/api/agents/action-runner/credential":
-		f.handleActionRunnerSelfRevoke(w, r)
+		f.handleActionRunnerCredential(w, r)
 	case r.URL.Path == "/api/agents/collector/reduce-authority":
 		f.handleCollectorAuthorityReduction(w, r)
 	case r.URL.Path == "/api/health":
@@ -345,6 +356,58 @@ func (f *secureRuntimeLabFixture) serveArtifact(w http.ResponseWriter, r *http.R
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(artifact)
 	}
+}
+
+func (f *secureRuntimeLabFixture) handleActionRunnerCredential(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPatch:
+		f.handleActionRunnerActivation(w, r)
+	case http.MethodDelete:
+		f.handleActionRunnerSelfRevoke(w, r)
+	default:
+		w.Header().Set("Allow", http.MethodPatch+", "+http.MethodDelete)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (f *secureRuntimeLabFixture) handleActionRunnerActivation(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		AgentID  string `json:"agentId"`
+		Hostname string `json:"hostname"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	bearer := strings.TrimPrefix(strings.TrimSpace(r.Header.Get("Authorization")), "Bearer ")
+	f.mu.Lock()
+	admission := f.actionAdmissionLocked()
+	valid := !f.actionRevoked && bearer == f.actionSecret && strings.TrimSpace(request.AgentID) == admission.AgentID && strings.EqualFold(strings.TrimSpace(request.Hostname), admission.Hostname)
+	f.mu.Unlock()
+	if !valid {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !f.actionServer.HasActionRunnerSession(admission) {
+		http.Error(w, "exact action runner session is not registered", http.StatusConflict)
+		return
+	}
+	if admission.ActivationPending {
+		if !f.actionServer.PromoteActionRunnerSession(admission) {
+			http.Error(w, "action runner session promotion failed", http.StatusConflict)
+			return
+		}
+		f.mu.Lock()
+		if f.actionBindingID != admission.TokenID || f.actionSecret != bearer || f.actionRevoked {
+			f.mu.Unlock()
+			http.Error(w, "action runner credential changed during activation", http.StatusConflict)
+			return
+		}
+		f.actionPending = false
+		f.actionActivations++
+		f.mu.Unlock()
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (f *secureRuntimeLabFixture) handleActionRunnerSelfRevoke(w http.ResponseWriter, r *http.Request) {
@@ -748,6 +811,49 @@ func TestSecureRuntimeSourceManifestCoversTransitiveProviders(t *testing.T) {
 	}
 }
 
+func TestSecureRuntimeFixturePromotesPendingRunner(t *testing.T) {
+	fixture := newSecureRuntimeLabFixture(nil, nil, nil, "fixture")
+	defer fixture.actionServer.Shutdown()
+	server := httptest.NewServer(fixture)
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	healthPath := filepath.Join(stateDir, "health.json")
+	client := actionrunner.NewClient(actionrunner.TransportConfig{
+		PulseURL: server.URL, APIToken: secureRuntimeRunnerSecretV1,
+		StateDir: stateDir, HealthPath: healthPath, InsecureSkipVerify: true,
+		ActivationNonce: strings.Repeat("a", 64),
+	}, secureRuntimeLabAgentID, secureRuntimeLabHostname, "fixture")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		_ = client.Close()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("timed out stopping fixture action runner")
+		}
+	})
+
+	secureRuntimeWaitForActionRunner(t, fixture, true, 10*time.Second)
+	admission, revoked, _ := fixture.actionSnapshot()
+	if revoked || admission.ActivationPending || fixture.actionActivationCount() != 1 {
+		t.Fatalf("fixture activation state = admission:%+v revoked:%t activations:%d", admission, revoked, fixture.actionActivationCount())
+	}
+	var health struct {
+		Registered bool `json:"registered"`
+		Activated  bool `json:"activated"`
+	}
+	if err := json.Unmarshal(secureRuntimeReadFile(t, healthPath), &health); err != nil {
+		t.Fatalf("decode fixture action-runner health: %v", err)
+	}
+	if !health.Registered || !health.Activated {
+		t.Fatalf("fixture action-runner health = %+v", health)
+	}
+}
+
 func TestSecureRuntimeSystemdLab(t *testing.T) {
 	if os.Getenv(secureRuntimeLabOptIn) != "1" {
 		t.Skip("set PULSE_SECURE_RUNTIME_SYSTEMD_LAB=1 only inside a disposable systemd VM")
@@ -950,8 +1056,11 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 		"--least-privilege", "--enable-privileged-helper", "--enable-action-runner")
 	secureRuntimeWaitForActionRunner(t, fixture, true, 30*time.Second)
 	secureRuntimeAssertActionRunnerInstalled(t)
+	if activations := fixture.actionActivationCount(); activations != 1 {
+		t.Fatalf("initial action-runner activation requests = %d, want 1", activations)
+	}
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeRunner)+1, 20*time.Second)
-	pass("separate_action_runner_install", "root action runner registered independently while the collector remained non-root and reporting", map[string]any{"runner_service_user": "root", "collector_service_user": "pulse-agent"})
+	pass("separate_action_runner_install", "root action runner registered and activated independently while the collector remained non-root and reporting", map[string]any{"runner_service_user": "root", "collector_service_user": "pulse-agent", "fixture_activation_requests": 1})
 
 	actionContext, cancelAction := context.WithTimeout(agentexec.WithOrganizationID(context.Background(), secureRuntimeLabOrgID), 30*time.Second)
 	defer cancelAction()
@@ -1017,7 +1126,10 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	if revoked || rotatedAdmission.TokenID != secureRuntimeRunnerBindingV2 {
 		t.Fatalf("rotated action-runner admission = %+v revoked=%t", rotatedAdmission, revoked)
 	}
-	pass("action_runner_credential_rotation", "mismatched invalidation was rejected, exact superseded session closed, replacement credential registered", map[string]any{"proof_scope": "in-memory-fixture", "superseded_session_invalidated": true, "replacement_registered": true})
+	if activations := fixture.actionActivationCount(); activations != 2 {
+		t.Fatalf("action-runner activation requests after rotation = %d, want 2", activations)
+	}
+	pass("action_runner_credential_rotation", "mismatched invalidation was rejected, exact superseded session closed, replacement credential registered and activated", map[string]any{"proof_scope": "in-memory-fixture", "superseded_session_invalidated": true, "replacement_registered": true, "fixture_activation_requests": 2})
 
 	reportsBeforeRemoval, _, _, _ := fixture.snapshot()
 	uninstallOutput := secureRuntimeRunStandaloneInstaller(t, installerPath, "--uninstall-action-runner")
