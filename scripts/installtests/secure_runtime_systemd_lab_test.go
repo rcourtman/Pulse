@@ -91,6 +91,16 @@ var secureRuntimeInstalledPaths = []string{
 	"/var/lib/pulse-agent-profile",
 }
 
+var secureRuntimeForbiddenReceiptKeys = map[string]struct{}{
+	"api_key":       {},
+	"authorization": {},
+	"bearer":        {},
+	"password":      {},
+	"refresh_token": {},
+	"secret":        {},
+	"token":         {},
+}
+
 type secureRuntimeLabReport struct {
 	ReceivedAt      time.Time
 	AgentID         string
@@ -565,6 +575,30 @@ type secureRuntimeLabReceipt struct {
 	FirstReportAt                              string                        `json:"first_report_at"`
 	LastReportAt                               string                        `json:"last_report_at"`
 	Scenarios                                  []secureRuntimeScenarioResult `json:"scenarios"`
+}
+
+func TestSecureRuntimeReceiptCredentialDetection(t *testing.T) {
+	safe, err := json.Marshal(map[string]any{
+		"source_hashes": map[string]string{
+			"internal/api/agenttokens/install.go":      strings.Repeat("a", 64),
+			"internal/api/agent_exec_token_binding.go": strings.Repeat("b", 64),
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal safe receipt fixture: %v", err)
+	}
+	if secureRuntimeReceiptContainsCredential(safe) {
+		t.Fatal("public boundary source paths were misclassified as credential material")
+	}
+
+	for _, unsafe := range [][]byte{
+		[]byte(`{"token":"redacted"}`),
+		[]byte(fmt.Sprintf(`{"detail":%q}`, secureRuntimeRunnerSecretV1)),
+	} {
+		if !secureRuntimeReceiptContainsCredential(unsafe) {
+			t.Fatalf("credential-bearing receipt was accepted: %s", unsafe)
+		}
+	}
 }
 
 func TestSecureRuntimeSystemdLab(t *testing.T) {
@@ -1410,10 +1444,7 @@ func secureRuntimeWriteReceipt(t *testing.T, receipt secureRuntimeLabReceipt) {
 	if err != nil {
 		t.Fatalf("marshal secure-runtime receipt: %v", err)
 	}
-	if bytes.Contains(encoded, []byte(secureRuntimeLabToken)) ||
-		bytes.Contains(encoded, []byte(secureRuntimeRunnerSecretV1)) ||
-		bytes.Contains(encoded, []byte(secureRuntimeRunnerSecretV2)) ||
-		bytes.Contains(bytes.ToLower(encoded), []byte("token")) {
+	if secureRuntimeReceiptContainsCredential(encoded) {
 		t.Fatal("refusing to write a receipt containing credential material or token-labelled fields")
 	}
 	encoded = append(encoded, '\n')
@@ -1427,4 +1458,42 @@ func secureRuntimeWriteReceipt(t *testing.T, receipt secureRuntimeLabReceipt) {
 	if err := os.Rename(temporary, path); err != nil {
 		t.Fatalf("publish receipt: %v", err)
 	}
+}
+
+func secureRuntimeReceiptContainsCredential(encoded []byte) bool {
+	for _, credential := range [][]byte{
+		[]byte(secureRuntimeLabToken),
+		[]byte(secureRuntimeRunnerSecretV1),
+		[]byte(secureRuntimeRunnerSecretV2),
+	} {
+		if bytes.Contains(encoded, credential) {
+			return true
+		}
+	}
+	var value any
+	if err := json.Unmarshal(encoded, &value); err != nil {
+		return true
+	}
+	return secureRuntimeContainsForbiddenReceiptKey(value)
+}
+
+func secureRuntimeContainsForbiddenReceiptKey(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if _, forbidden := secureRuntimeForbiddenReceiptKeys[strings.ToLower(strings.TrimSpace(key))]; forbidden {
+				return true
+			}
+			if secureRuntimeContainsForbiddenReceiptKey(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if secureRuntimeContainsForbiddenReceiptKey(child) {
+				return true
+			}
+		}
+	}
+	return false
 }
