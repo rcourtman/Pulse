@@ -117,16 +117,24 @@ It is historical evidence, not qualification of the current implementation.
 The v3 guarded lab requires a real verified apt-cache mutation, a separate
 stale-fingerprint refusal, durable receipt replay, an observed collector
 authority-reduction request (with persistence covered by API regressions),
-complete boundary-source hashes, and artifact Go build stamps for the exact
+the then-required fixed boundary-source hashes, and artifact Go build stamps for the exact
 clean commit. A fresh Ubuntu 24.04.4/systemd 255 run at committed main
 `b2543c5c6e03bc8f38502098d3a356983d0d41b2` passed all twelve scenarios; its
 separate receipt and attestation are recorded as
 `internal/records/secure-agent-runtime-systemd-receipt-v3-2026-08-30.json` and
 `internal/records/secure-agent-runtime-committed-main-attestation-v3-2026-08-30.json`.
-`scripts/release_control/secure_runtime_attestation.py` rejects older receipts
-and labels accepted evidence as artifact-bound, self-attested systemd evidence
-rather than independently authenticated proof. The repository still needs a
-fresh exact committed release-candidate run,
+That schema-v3 receipt is now historical input only. The post-audit attester
+requires schema v4 and will not reinterpret v3 as proof of the current tree.
+V4 expands a committed source manifest across the production collector,
+helper, runner, host-agent provider, API admission, update, configuration, and
+receipt roots; requires the receipt hashes to match that exact set; validates
+ordered timestamps and scenario-specific causal claims; binds every scenario
+to a retained secret-free JSONL transcript event; validates typed receipt kind
+and report chronology; and requires the intended repository record path to be
+inside the hashed receipt. No schema-v4 live receipt exists yet. Accepted v4
+evidence will remain artifact-bound, self-attested systemd evidence rather than
+an independently authenticated assessment. The repository still needs a fresh
+exact committed release-candidate run,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation

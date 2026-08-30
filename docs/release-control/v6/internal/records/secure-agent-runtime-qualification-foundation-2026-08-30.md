@@ -113,18 +113,36 @@ The secret-free schema-v3 receipt is
 separate `secure-agent-runtime-committed-main-attestation-v3-2026-08-30.json`
 has SHA-256
 `e1339f73704883aec19225d886188dad78338659b16a11e785091b41bbf0f0c1` and
-verifies the receipt, current-main ancestry at attestation time, all required
-boundary-source hashes, all artifact hashes, the expected Go command packages,
+verifies the receipt, current-main ancestry at attestation time, all
+then-required fixed boundary-source hashes, all artifact hashes, the expected Go command packages,
 and clean exact-commit Go VCS identities. The authority-reduction request was
 observed by the systemd fixture; durable production-store reduction and exact
 session invalidation remain established by the focused API regressions rather
 than by this in-process fixture. The receipt remains operator-produced,
 unauthenticated, artifact-bound self-attestation rather than independent proof.
 
+## Post-audit schema-v4 acceptance floor
+
+Schema v3 remains immutable historical evidence, but it is no longer accepted
+by the current attester as qualification of a newer tree. A future run must use
+schema v4. The committed
+`scripts/release_control/secure_runtime_source_manifest_v4.json` expands the
+production collector, helper, runner, host-agent provider, API admission,
+configuration, update, and receipt roots, and the receipt must hash exactly
+that expanded source set. Each scenario must carry ordered UTC start/completion
+times, typed causal claims, and an exact reference to a retained secret-free
+JSONL transcript event. The receipt also binds its intended repository path,
+the transcript path and digest, the typed action receipt kind, report count and
+report chronology. The attestation preserves those bindings alongside the
+artifact build identities. No v4 live receipt or attestation is recorded here;
+this is the acceptance contract for the next exact-commit or exact-RC run, not
+a retroactive upgrade of the v3 evidence.
+
 ## Proof classification and residuals
 
-Focused regressions and the schema-v3 guarded systemd evidence cover the current
-committed-main semantics. They are not a substitute for exact release-candidate
+Focused regressions cover current code-level semantics. The schema-v3 guarded
+systemd evidence covers only its historical qualified commit and the explicitly
+exercised subset above. Neither is a substitute for exact release-candidate
 reproduction, representative provider/appliance qualification, or external
 review. The canonical support and residual matrix is published in
 `docs/AGENT_SECURITY.md`; unqualified rows remain explicit blockers rather than

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "manifest_id": "secure-runtime-linux-v4",
+  "target_os": "linux",
+  "description": "Production source boundary for the secure collector, typed helper, action runner, update path, control-plane admission, and systemd qualification harness.",
+  "exact_paths": [
+    "scripts/install.sh",
+    "scripts/installtests/secure_runtime_systemd_lab_test.go",
+    "scripts/release_control/secure_runtime_attestation.py",
+    "scripts/release_control/secure_runtime_source_manifest_v4.json"
+  ],
+  "recursive_roots": [
+    "cmd/pulse-agent",
+    "cmd/pulse-agent-helper",
+    "cmd/pulse-agent-runner",
+    "internal/actionrunner",
+    "internal/agentexec",
+    "internal/agenthelper",
+    "internal/agentupdate",
+    "internal/api",
+    "internal/config",
+    "internal/hostagent",
+    "internal/operationreceipt"
+  ],
+  "include_suffixes": [
+    ".go",
+    ".tmpl"
+  ],
+  "exclude_suffixes": [
+    "_test.go"
+  ]
+}

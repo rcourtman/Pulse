@@ -209,6 +209,12 @@ The committed-main Linux evidence is recorded in
 `docs/release-control/v6/internal/records/secure-agent-runtime-qualification-foundation-2026-08-30.md`.
 That receipt is artifact-bound operator self-attestation, not an independently
 authenticated external assessment. The safe profile therefore remains opt-in.
+The current attester requires a fresh schema-v4 run: it expands a committed
+production-source manifest, requires exact source membership, binds ordered
+scenario claims to a retained secret-free JSONL transcript, validates typed
+receipt/report chronology, and hashes the intended repository record path
+inside the receipt. The existing v3 record remains historical and is not
+silently promoted to this stronger evidence class.
 
 Monitoring never implies remediation. On the supported Linux systemd profile,
 an operator may separately enroll the typed action runner:
