@@ -89,14 +89,14 @@ You do not need a Pulse agent on every Proxmox-related host just to see basic
 cluster inventory and utilization. Start with the least-privilege path that
 answers your monitoring question:
 
-| Goal | Recommended path | Root agent needed? |
+| Goal | Recommended path | Host privilege needed? |
 |---|---|---|
 | PVE/PBS/PMG inventory, node status, VM/container status, storage usage, and normal Proxmox API metrics | Add the Proxmox connection with a read-only or narrowly scoped API token | No |
 | VM guest disk and memory details through QEMU Guest Agent | Use Proxmox API permissions such as `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` where supported | No host agent for the Proxmox node |
-| All mounted LXC filesystem capacities and usage | Install the Unified Agent on the owning PVE node; it automatically uses bounded `pct list` and `pct df` reads for running LXCs | Yes, on the PVE node |
-| Docker/Podman containers inside a VM or LXC through guest-local reporting | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled, or use another explicit guest access/reporting path | Usually requires root or Docker socket-equivalent access |
+| All mounted LXC filesystem capacities and usage | Install the Unified Agent on the owning PVE node; the safe profile uses the typed helper's bounded fixed-shape `pct` reads | Yes, but the safe profile confines it to the root helper rather than a root collector |
+| Docker/Podman containers inside a VM or LXC through guest-local reporting | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled, or use another explicit guest access/reporting path | Requires runtime-socket access: root-equivalent for a rootful daemon, or a collector-owned rootless socket |
 | Docker containers inside an LXC from a Proxmox host agent | Turn on **Discover Docker in LXC guests** in Settings → System → General (admin only), or start Pulse with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true` to lock it on; optionally limit guests with `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102` | Requires a root/equivalent Pulse agent on the Proxmox node and explicit server opt-in |
-| Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Yes, for the supported full-telemetry profile |
+| Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Varies: the safe typed helper covers SMART; capabilities outside the matrix still require the explicit root/full-telemetry profile |
 | Kubernetes node/pod monitoring from a cluster | Use the Kubernetes agent/DaemonSet profile | Depends on whether host metrics are enabled |
 
 Inside-guest runtime visibility is explicit. Installing the agent inside a VM or
