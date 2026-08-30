@@ -426,6 +426,21 @@ func (f *secureRuntimeLabFixture) authorized(r *http.Request) bool {
 	return valid
 }
 
+func (f *secureRuntimeLabFixture) collectorLifecycleAuthorized(r *http.Request) bool {
+	bearer := strings.TrimSpace(r.Header.Get("Authorization"))
+	legacyHeader := strings.TrimSpace(r.Header.Get("X-API-Token"))
+	valid := bearer == "Bearer "+secureRuntimeLabToken &&
+		(legacyHeader == "" || legacyHeader == secureRuntimeLabToken) &&
+		r.URL.Query().Get("token") == ""
+	if !valid {
+		f.mu.Lock()
+		f.authFailures++
+		f.requestFailures = append(f.requestFailures, r.Method+" "+r.URL.Path+": invalid collector lifecycle credential transport")
+		f.mu.Unlock()
+	}
+	return valid
+}
+
 func (f *secureRuntimeLabFixture) serveArtifact(w http.ResponseWriter, r *http.Request, artifactKind string) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -617,7 +632,7 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 }
 
 func (f *secureRuntimeLabFixture) handleLookup(w http.ResponseWriter, r *http.Request) {
-	if !f.authorized(r) {
+	if !f.collectorLifecycleAuthorized(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -1045,6 +1060,29 @@ func TestSecureRuntimeFixtureAdmitsCollectorAndRunnerCredentialsSeparately(t *te
 	}
 	if _, admitted := fixture.admitCommandSession("wrong-secret", secureRuntimeLabAgentID, secureRuntimeLabHostname); admitted {
 		t.Fatal("fixture admitted an unknown command credential")
+	}
+}
+
+func TestSecureRuntimeFixtureAcceptsBearerOnlyCollectorLifecycleLookup(t *testing.T) {
+	fixture := newSecureRuntimeLabFixture(nil, "", nil, nil, "fixture")
+	defer fixture.actionServer.Shutdown()
+	fixture.mu.Lock()
+	fixture.lastSeen = time.Now().UTC()
+	fixture.mu.Unlock()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?agentId="+secureRuntimeLabAgentID, nil)
+	request.Header.Set("Authorization", "Bearer "+secureRuntimeLabToken)
+	recorder := httptest.NewRecorder()
+	fixture.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("bearer-only lifecycle lookup status = %d, body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?agentId="+secureRuntimeLabAgentID, nil)
+	recorder = httptest.NewRecorder()
+	fixture.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated lifecycle lookup status = %d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
 }
 
