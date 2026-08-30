@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -78,7 +79,8 @@ func (f availabilityFeatureResolverFunc) FeatureService(ctx context.Context) lic
 // Unassigned targets are the community behaviour and must never consult the
 // license path.
 func (h *AvailabilityHandlers) requireProbeAssignment(w http.ResponseWriter, r *http.Request, target config.AvailabilityTarget) bool {
-	if strings.TrimSpace(target.ProbeAgentID) == "" {
+	agentIDs := target.AssignedProbeAgentIDs()
+	if len(agentIDs) == 0 {
 		return true
 	}
 	if h == nil || h.licenseResolver == nil {
@@ -94,10 +96,12 @@ func (h *AvailabilityHandlers) requireProbeAssignment(w http.ResponseWriter, r *
 		WriteLicenseRequired(w, featureExternalProbeValue, err.Error())
 		return false
 	}
-	if !h.probeAgentExists(r.Context(), target.ProbeAgentID) {
-		writeErrorResponse(w, http.StatusBadRequest, "unknown_probe_agent",
-			"Probe agent "+target.ProbeAgentID+" is not a registered host agent", nil)
-		return false
+	for _, agentID := range agentIDs {
+		if !h.probeAgentExists(r.Context(), agentID) {
+			writeErrorResponse(w, http.StatusBadRequest, "unknown_probe_agent",
+				"Observation location agent "+agentID+" is not a registered host agent", nil)
+			return false
+		}
 	}
 	return true
 }
@@ -384,9 +388,30 @@ func decodeAvailabilityTargetRequest(w http.ResponseWriter, r *http.Request, bas
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	defer r.Body.Close()
 	target := cloneAvailabilityTarget(base)
-	if err := json.NewDecoder(r.Body).Decode(&target); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil || json.Unmarshal(body, &target) != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body", nil)
 		return config.AvailabilityTarget{}, false
+	}
+	var compatibility struct {
+		ProbeAgentID           *string   `json:"probeAgentId"`
+		ObservationLocationIDs *[]string `json:"observationLocationIds"`
+	}
+	if json.Unmarshal(body, &compatibility) == nil && compatibility.ObservationLocationIDs == nil && compatibility.ProbeAgentID != nil {
+		agentID := strings.TrimSpace(*compatibility.ProbeAgentID)
+		if agentID == "" {
+			target.ObservationLocationIDs = []string{config.AvailabilityObservationLocationLocal}
+		} else {
+			target.ObservationLocationIDs = []string{config.AvailabilityAgentObservationLocationID(agentID)}
+		}
+	} else if compatibility.ProbeAgentID != nil && compatibility.ObservationLocationIDs != nil {
+		agentID := strings.TrimSpace(*compatibility.ProbeAgentID)
+		if agentID != "" && len(*compatibility.ObservationLocationIDs) == 1 {
+			// Full-object pre-location clients may echo the canonical field added by
+			// the server while editing only probeAgentId. Honor that single-source
+			// edit; multi-location clients send a set the legacy field cannot express.
+			target.ObservationLocationIDs = []string{config.AvailabilityAgentObservationLocationID(agentID)}
+		}
 	}
 	return target, true
 }
@@ -487,6 +512,7 @@ func sameAvailabilityHTTPOrigin(previous, next config.AvailabilityTarget) bool {
 
 func cloneAvailabilityTarget(target config.AvailabilityTarget) config.AvailabilityTarget {
 	clone := target
+	clone.ObservationLocationIDs = append([]string(nil), target.ObservationLocationIDs...)
 	if target.HTTP == nil {
 		return clone
 	}

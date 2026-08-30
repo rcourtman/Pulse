@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -12,12 +13,14 @@ import (
 )
 
 const (
-	DefaultAvailabilityPollIntervalSecs = 60
-	DefaultAvailabilityTimeoutMillis    = 2000
-	DefaultAvailabilityFailureThreshold = 2
-	DefaultCertificateExpiryWarningDays = 30
-	MaxAvailabilityHTTPBodyBytes        = 8192
-	MaxAvailabilityHTTPResponseBytes    = 65536
+	DefaultAvailabilityPollIntervalSecs        = 60
+	DefaultAvailabilityTimeoutMillis           = 2000
+	DefaultAvailabilityFailureThreshold        = 2
+	DefaultCertificateExpiryWarningDays        = 30
+	MaxAvailabilityHTTPBodyBytes               = 8192
+	MaxAvailabilityHTTPResponseBytes           = 65536
+	AvailabilityObservationLocationLocal       = "pulse:local"
+	AvailabilityObservationLocationAgentPrefix = "agent:"
 )
 
 type AvailabilityHTTPMethod string
@@ -125,9 +128,14 @@ type AvailabilityTarget struct {
 	CertificateMonitoringDisabled bool `json:"certificateMonitoringDisabled,omitempty"`
 	CertificateExpiryWarningDays  int  `json:"certificateExpiryWarningDays,omitempty"`
 	// ProbeAgentID assigns execution to a remote host agent. Empty means the
-	// check runs from the local Pulse instance. Agent existence is validated at
-	// the API layer, not here, because config has no view of monitor state.
+	// check runs from the local Pulse instance. It remains a compatibility field
+	// for pre-location clients; ObservationLocationIDs is canonical.
 	ProbeAgentID string `json:"probeAgentId,omitempty"`
+	// ObservationLocationIDs selects every source-owned path that observes this
+	// one logical verification. pulse:local is the Pulse server and agent:<id>
+	// names an eligible connected host agent. Names and network details stay out
+	// of persisted target configuration and are resolved at presentation time.
+	ObservationLocationIDs []string `json:"observationLocationIds,omitempty"`
 	// HTTP is absent for legacy targets. Its request body, credentials, and
 	// header values are encrypted with the rest of availability target storage
 	// and are never returned by the API.
@@ -227,6 +235,7 @@ func (t AvailabilityTarget) EffectiveFailureThreshold() int {
 // executed or where it executes. Display, correlation, alert-threshold, and
 // certificate-presentation edits intentionally stay within the same revision.
 func AvailabilityExecutionConfigChanged(previous, next AvailabilityTarget) bool {
+	legacyProbeAssignmentChanged := strings.TrimSpace(previous.ProbeAgentID) != strings.TrimSpace(next.ProbeAgentID)
 	previous = NormalizeAvailabilityTarget(previous)
 	next = NormalizeAvailabilityTarget(next)
 	return previous.Address != next.Address ||
@@ -239,7 +248,67 @@ func AvailabilityExecutionConfigChanged(previous, next AvailabilityTarget) bool 
 		!reflect.DeepEqual(previous.HTTP, next.HTTP) ||
 		previous.EffectiveTimeoutMillis() != next.EffectiveTimeoutMillis() ||
 		previous.EffectivePollIntervalSecs() != next.EffectivePollIntervalSecs() ||
-		previous.ProbeAgentID != next.ProbeAgentID
+		legacyProbeAssignmentChanged ||
+		!reflect.DeepEqual(previous.EffectiveObservationLocationIDs(), next.EffectiveObservationLocationIDs())
+}
+
+func AvailabilityAgentObservationLocationID(agentID string) string {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return ""
+	}
+	return AvailabilityObservationLocationAgentPrefix + agentID
+}
+
+func AvailabilityObservationLocationAgentID(locationID string) string {
+	locationID = strings.TrimSpace(locationID)
+	if !strings.HasPrefix(locationID, AvailabilityObservationLocationAgentPrefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(locationID, AvailabilityObservationLocationAgentPrefix))
+}
+
+func (t AvailabilityTarget) EffectiveObservationLocationIDs() []string {
+	locations := normalizeAvailabilityObservationLocationIDs(t.ObservationLocationIDs)
+	if len(locations) > 0 {
+		return locations
+	}
+	if agentID := strings.TrimSpace(t.ProbeAgentID); agentID != "" {
+		return []string{AvailabilityAgentObservationLocationID(agentID)}
+	}
+	return []string{AvailabilityObservationLocationLocal}
+}
+
+func (t AvailabilityTarget) IncludesLocalObservation() bool {
+	for _, locationID := range t.EffectiveObservationLocationIDs() {
+		if locationID == AvailabilityObservationLocationLocal {
+			return true
+		}
+	}
+	return false
+}
+
+func (t AvailabilityTarget) AssignedProbeAgentIDs() []string {
+	agents := make([]string, 0, len(t.ObservationLocationIDs))
+	for _, locationID := range t.EffectiveObservationLocationIDs() {
+		if agentID := AvailabilityObservationLocationAgentID(locationID); agentID != "" {
+			agents = append(agents, agentID)
+		}
+	}
+	return agents
+}
+
+func (t AvailabilityTarget) IsAssignedToProbeAgent(agentID string) bool {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return false
+	}
+	for _, assignedID := range t.AssignedProbeAgentIDs() {
+		if assignedID == agentID {
+			return true
+		}
+	}
+	return false
 }
 
 func (t AvailabilityTarget) CertificateMonitoringEnabled() bool {
@@ -331,6 +400,21 @@ func (t AvailabilityTarget) Validate() error {
 	if t.FailureThreshold > 0 && t.FailureThreshold > 10 {
 		return fmt.Errorf("availability failure threshold must be 10 or less")
 	}
+	locations := t.EffectiveObservationLocationIDs()
+	if len(locations) == 0 {
+		return fmt.Errorf("availability target requires at least one observation location")
+	}
+	if len(locations) > 16 {
+		return fmt.Errorf("availability target supports at most 16 observation locations")
+	}
+	for _, locationID := range locations {
+		if locationID == AvailabilityObservationLocationLocal {
+			continue
+		}
+		if AvailabilityObservationLocationAgentID(locationID) == "" {
+			return fmt.Errorf("unsupported availability observation location %q", locationID)
+		}
+	}
 	if protocol == AvailabilityProbeHTTP || protocol == AvailabilityProbeHTTPS {
 		if _, err := t.HTTPURL(); err != nil {
 			return err
@@ -403,6 +487,24 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	}
 	target.LinkedResourceID = strings.TrimSpace(target.LinkedResourceID)
 	target.ProbeAgentID = strings.TrimSpace(target.ProbeAgentID)
+	target.ObservationLocationIDs = normalizeAvailabilityObservationLocationIDs(target.ObservationLocationIDs)
+	if target.ProbeAgentID != "" && len(target.ObservationLocationIDs) == 1 && target.ObservationLocationIDs[0] == AvailabilityObservationLocationLocal {
+		// A pre-location client edits ProbeAgentID on a normalized local target.
+		target.ObservationLocationIDs = []string{AvailabilityAgentObservationLocationID(target.ProbeAgentID)}
+	}
+	if len(target.ObservationLocationIDs) == 0 {
+		if target.ProbeAgentID != "" {
+			target.ObservationLocationIDs = []string{AvailabilityAgentObservationLocationID(target.ProbeAgentID)}
+		} else {
+			target.ObservationLocationIDs = []string{AvailabilityObservationLocationLocal}
+		}
+	}
+	// Keep the legacy field truthful only for the shape it can represent.
+	if len(target.ObservationLocationIDs) == 1 {
+		target.ProbeAgentID = AvailabilityObservationLocationAgentID(target.ObservationLocationIDs[0])
+	} else {
+		target.ProbeAgentID = ""
+	}
 	if target.HTTP != nil {
 		target.HTTP.Method = AvailabilityHTTPMethod(strings.ToUpper(strings.TrimSpace(string(target.HTTP.Method))))
 		target.HTTP.Authentication.Type = AvailabilityHTTPAuthType(strings.ToLower(strings.TrimSpace(string(target.HTTP.Authentication.Type))))
@@ -430,6 +532,41 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	}
 	target.ApplyDefaults()
 	return target
+}
+
+func normalizeAvailabilityObservationLocationIDs(locationIDs []string) []string {
+	if len(locationIDs) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(locationIDs))
+	locations := make([]string, 0, len(locationIDs))
+	for _, raw := range locationIDs {
+		locationID := strings.TrimSpace(raw)
+		if locationID == "local" {
+			locationID = AvailabilityObservationLocationLocal
+		}
+		if agentID := AvailabilityObservationLocationAgentID(locationID); agentID != "" {
+			locationID = AvailabilityAgentObservationLocationID(agentID)
+		}
+		if locationID == "" {
+			continue
+		}
+		if _, ok := seen[locationID]; ok {
+			continue
+		}
+		seen[locationID] = struct{}{}
+		locations = append(locations, locationID)
+	}
+	sort.SliceStable(locations, func(i, j int) bool {
+		if locations[i] == AvailabilityObservationLocationLocal {
+			return true
+		}
+		if locations[j] == AvailabilityObservationLocationLocal {
+			return false
+		}
+		return locations[i] < locations[j]
+	})
+	return locations
 }
 
 func validateAvailabilityHTTPConfig(contract *AvailabilityHTTPConfig) error {

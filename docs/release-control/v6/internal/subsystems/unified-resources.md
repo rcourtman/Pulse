@@ -4670,6 +4670,18 @@ the shared resource drawer by canonical resource ID, while
 already carried by that resource. History absence or failure cannot overwrite
 the unified resource's current status, correlation, source ownership, or
 navigation identity.
+One availability resource may now carry several source-owned observation
+locations without cloning the resource, relationship, or fleet row. Its
+availability facet preserves the aggregate state, disagreement flag,
+expected/reporting coverage, and the current state, latency, freshness, and
+bounded failure reason for each path. Resource status remains active with
+warning evidence when paths disagree, becomes stale/incomplete when coverage
+is unknown, and becomes inactive with an outage incident only when every
+current path is unreachable at the configured threshold. Frontend adapters,
+REST, websocket, and mock projections must preserve this list rather than
+flattening it to the most recent observer. The Availability table may summarize
+the count and reporting coverage; the shared resource detail card owns the
+expanded path comparison.
 For HTTP/S checks with an explicit application response contract, the
 availability facet preserves two source-owned facts: `transportOutcome`
 describes whether the endpoint answered, while `applicationOutcome`,

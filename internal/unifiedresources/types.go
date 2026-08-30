@@ -1753,6 +1753,11 @@ type AvailabilityData struct {
 	ApplicationStatusCode  int                                `json:"applicationStatusCode,omitempty"`
 	ApplicationFailureCode string                             `json:"applicationFailureCode,omitempty"`
 	ProbeAgentID           string                             `json:"probeAgentId,omitempty"`
+	AggregateState         string                             `json:"aggregateState,omitempty"`
+	Disagreement           bool                               `json:"disagreement,omitempty"`
+	ExpectedLocations      int                                `json:"expectedLocations,omitempty"`
+	ReportingLocations     int                                `json:"reportingLocations,omitempty"`
+	Locations              []AvailabilityObservationLocation  `json:"locations,omitempty"`
 	UDPMode                string                             `json:"udpMode,omitempty"`
 	Port                   int                                `json:"port,omitempty"`
 	Path                   string                             `json:"path,omitempty"`
@@ -1775,6 +1780,25 @@ type AvailabilityData struct {
 	CertificateMonitoring        bool                            `json:"certificateMonitoring,omitempty"`
 	CertificateExpiryWarningDays int                             `json:"certificateExpiryWarningDays,omitempty"`
 	Certificate                  *tlsutil.CertificateObservation `json:"certificate,omitempty"`
+}
+
+type AvailabilityObservationLocation struct {
+	LocationID             string     `json:"locationId"`
+	Kind                   string     `json:"kind"`
+	ProbeAgentID           string     `json:"probeAgentId,omitempty"`
+	Outcome                string     `json:"outcome,omitempty"`
+	TransportOutcome       string     `json:"transportOutcome,omitempty"`
+	ApplicationOutcome     string     `json:"applicationOutcome,omitempty"`
+	ApplicationStatusCode  int        `json:"applicationStatusCode,omitempty"`
+	ApplicationFailureCode string     `json:"applicationFailureCode,omitempty"`
+	Available              bool       `json:"available"`
+	LastChecked            *time.Time `json:"lastChecked,omitempty"`
+	LastSuccess            *time.Time `json:"lastSuccess,omitempty"`
+	FreshnessAt            *time.Time `json:"freshnessAt,omitempty"`
+	LatencyMillis          int64      `json:"latencyMillis,omitempty"`
+	ConsecutiveFailures    int        `json:"consecutiveFailures,omitempty"`
+	LastError              string     `json:"lastError,omitempty"`
+	Stale                  bool       `json:"stale,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

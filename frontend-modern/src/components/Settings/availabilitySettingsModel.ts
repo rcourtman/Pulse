@@ -108,6 +108,14 @@ export function getAvailabilityTargetStatusLabel(target: AvailabilityTarget): st
   if (!target.enabled) return 'Paused';
   const status = target.status;
   if (!status) return 'Not checked yet';
+  if (status.aggregateState === 'degraded') return 'Observation paths disagree';
+  if (status.aggregateState === 'unknown') {
+    return `${status.reportingLocations ?? 0}/${status.expectedLocations ?? status.locations?.length ?? 0} locations reporting`;
+  }
+  if (status.aggregateState === 'unavailable') return 'Unavailable from all locations';
+  if (status.aggregateState === 'healthy' && (status.expectedLocations ?? 0) > 1) {
+    return `Available from all ${status.expectedLocations} locations`;
+  }
   // A probe-assigned check whose agent stopped reporting derives to
   // indeterminate at read time. It shares the warning treatment with the UDP
   // open-or-filtered case but needs its own copy.
@@ -124,6 +132,12 @@ export function getAvailabilityTargetStatusLabel(target: AvailabilityTarget): st
 export function getAvailabilityTargetStatusClass(target: AvailabilityTarget): string {
   if (!target.enabled) return 'bg-surface-alt text-muted';
   if (!target.status) return 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
+  if (target.status.aggregateState === 'degraded' || target.status.aggregateState === 'unknown') {
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+  }
+  if (target.status.aggregateState === 'unavailable') {
+    return 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300';
+  }
   if (target.status.outcome === 'indeterminate') {
     return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
   }
@@ -141,6 +155,9 @@ export function getAvailabilityTargetProbeSourceLabel(
   target: AvailabilityTarget,
   probeAgentOptions: readonly ProbeAgentOption[],
 ): string | null {
+  const locationCount =
+    target.status?.locations?.length ?? target.observationLocationIds?.length ?? 0;
+  if (locationCount > 1) return `${locationCount} observation locations`;
   return getProbeSourceChipLabel(probeAgentOptions, target.status?.probeAgentId);
 }
 

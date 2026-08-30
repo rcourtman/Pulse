@@ -1331,6 +1331,14 @@ alerts. Those counts may describe scale and feature adoption, but they must not
 include hostnames, resource IDs, infrastructure identifiers, credentials,
 prompts, chat messages, command text, action output, token values, or personal
 information.
+Multi-location availability evidence stays inside the same privacy floor.
+Saved configuration and authenticated operator surfaces may use source-owned
+location IDs and agent display names to distinguish selected paths, but
+categorical history, evidence envelopes, telemetry, incidents, logs, and
+Patrol context must not retain or export customer network names, addresses,
+agent identity, or location labels. Durable categorical history remains keyed
+only by the logical target and its aggregate conclusion; location identity is
+not a new telemetry, history, or customer-identity dimension.
 That same outbound usage telemetry floor now also permits content-free update
 funnel counters derived from local update history inside the same rotating
 30-day telemetry window: update attempts, successful updates, failed or

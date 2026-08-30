@@ -42,8 +42,8 @@ type ProbeAvailabilityResult struct {
 // assigned target before its first report. AgentID is retained so reassigning
 // the same target to a different probe starts a fresh grace window.
 type availabilityProbeAssignmentTracker struct {
-	AgentID string
-	Since   time.Time
+	LocationID string
+	Since      time.Time
 }
 
 // probeAvailabilityResultsFromReport converts the wire results carried by a
@@ -89,14 +89,45 @@ func probeAvailabilityResultsFromReport(reported []agentshost.AvailabilityProbeR
 // entitlement is absent, so a license lapse resumes local polling instead of
 // stranding the check on an agent that is no longer allowed to run it.
 func (m *Monitor) effectiveProbeAgentID(target config.AvailabilityTarget) string {
-	assigned := strings.TrimSpace(target.ProbeAgentID)
-	if assigned == "" {
+	locations := m.effectiveObservationLocationIDs(target)
+	if len(locations) != 1 {
 		return ""
 	}
-	if !m.hasLicensedFeature(pkglicensing.FeatureExternalProbe) {
-		return ""
+	return config.AvailabilityObservationLocationAgentID(locations[0])
+}
+
+func (m *Monitor) effectiveObservationLocationIDs(target config.AvailabilityTarget) []string {
+	locations := target.EffectiveObservationLocationIDs()
+	if m.hasLicensedFeature(pkglicensing.FeatureExternalProbe) {
+		return locations
 	}
-	return assigned
+	for _, locationID := range locations {
+		if locationID == config.AvailabilityObservationLocationLocal {
+			return []string{config.AvailabilityObservationLocationLocal}
+		}
+	}
+	// Preserve the historical entitlement-lapse behavior: a remote-only check
+	// resumes locally instead of becoming unobserved.
+	return []string{config.AvailabilityObservationLocationLocal}
+}
+
+func (m *Monitor) targetUsesLocalObservation(target config.AvailabilityTarget) bool {
+	for _, locationID := range m.effectiveObservationLocationIDs(target) {
+		if locationID == config.AvailabilityObservationLocationLocal {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Monitor) targetAssignedToProbeAgent(target config.AvailabilityTarget, agentID string) bool {
+	locationID := config.AvailabilityAgentObservationLocationID(agentID)
+	for _, assignedLocationID := range m.effectiveObservationLocationIDs(target) {
+		if assignedLocationID == locationID {
+			return true
+		}
+	}
+	return false
 }
 
 // ApplyProbeAvailabilityResults ingests availability results reported by a host
@@ -137,7 +168,7 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 				Msg("Rejecting probe availability result for unknown target")
 			continue
 		}
-		if m.effectiveProbeAgentID(target) != hostID {
+		if !m.targetAssignedToProbeAgent(target, hostID) {
 			log.Debug().
 				Str("hostID", hostID).
 				Str("targetID", targetID).
@@ -240,18 +271,14 @@ func (m *Monitor) deriveAvailabilityProbeStaleness(
 	status AvailabilityProbeStatus,
 	now time.Time,
 ) AvailabilityProbeStatus {
-	agentID := m.effectiveProbeAgentID(target)
+	agentID := strings.TrimSpace(status.ProbeAgentID)
 	if agentID == "" {
 		return status
-	}
-	reportingAgentID := strings.TrimSpace(status.ProbeAgentID)
-	if reportingAgentID != agentID {
-		status = availabilityStatusFromTarget(target)
 	}
 	status.ProbeAgentID = agentID
 	reference := status.FreshnessTime()
 	if reference.IsZero() {
-		reference = m.availabilityProbeAssignmentReference(target.ID, agentID, now)
+		reference = m.availabilityProbeAssignmentReference(target.ID, config.AvailabilityAgentObservationLocationID(agentID), now)
 	}
 	if !availabilityProbeReportIsStale(target, reference, now) {
 		return status
@@ -263,27 +290,28 @@ func (m *Monitor) deriveAvailabilityProbeStaleness(
 	return status
 }
 
-func (m *Monitor) availabilityProbeAssignmentReference(targetID, agentID string, now time.Time) time.Time {
+func (m *Monitor) availabilityProbeAssignmentReference(targetID, locationID string, now time.Time) time.Time {
 	if m == nil {
 		return now
 	}
 	targetID = strings.TrimSpace(targetID)
-	agentID = strings.TrimSpace(agentID)
-	if targetID == "" || agentID == "" {
+	locationID = strings.TrimSpace(locationID)
+	if targetID == "" || locationID == "" {
 		return now
 	}
+	trackerID := targetID + "\x00" + locationID
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.availabilityProbeTrackers == nil {
 		m.availabilityProbeTrackers = make(map[string]availabilityProbeAssignmentTracker)
 	}
-	if tracker, ok := m.availabilityProbeTrackers[targetID]; ok && tracker.AgentID == agentID && !tracker.Since.IsZero() {
+	if tracker, ok := m.availabilityProbeTrackers[trackerID]; ok && tracker.LocationID == locationID && !tracker.Since.IsZero() {
 		return tracker.Since
 	}
-	m.availabilityProbeTrackers[targetID] = availabilityProbeAssignmentTracker{
-		AgentID: agentID,
-		Since:   now,
+	m.availabilityProbeTrackers[trackerID] = availabilityProbeAssignmentTracker{
+		LocationID: locationID,
+		Since:      now,
 	}
 	return now
 }
@@ -317,7 +345,7 @@ func (m *Monitor) availabilityProbeTargetsForAgent(hostID string) []map[string]i
 	}
 	var assigned []map[string]interface{}
 	for _, target := range m.availabilityTargets() {
-		if m.effectiveProbeAgentID(target) != hostID {
+		if !m.targetAssignedToProbeAgent(target, hostID) {
 			continue
 		}
 		assigned = append(assigned, availabilityProbeAgentTargetPayload(target))

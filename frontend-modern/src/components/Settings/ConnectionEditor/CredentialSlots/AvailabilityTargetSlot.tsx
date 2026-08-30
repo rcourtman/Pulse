@@ -33,13 +33,14 @@ import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity'
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import {
   EXTERNAL_PROBE_FEATURE,
-  LOCAL_PROBE_AGENT_LABEL,
-  buildProbeAgentOptions,
+  AGENT_OBSERVATION_LOCATION_PREFIX,
+  LOCAL_OBSERVATION_LOCATION_ID,
+  agentIdFromObservationLocation,
+  buildObservationLocationOptions,
   getExternalProbeGateBody,
   getExternalProbeGateTitle,
   getExternalProbeLockedHelpText,
   isExternalProbeLicenseError,
-  isProbeAgentMissing,
 } from '@/utils/availabilityProbeAgents';
 import { hasFeature, loadRuntimeCapabilities, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
@@ -58,7 +59,7 @@ interface AvailabilityForm {
   udpRequest: string;
   udpExpectedResponse: string;
   linkedResourceId: string;
-  probeAgentId: string;
+  observationLocationIds: string[];
   enabled: boolean;
   pollIntervalSeconds: string;
   timeoutMillis: string;
@@ -118,7 +119,7 @@ const newAvailabilityForm = (
   udpRequest: '',
   udpExpectedResponse: '',
   linkedResourceId: '',
-  probeAgentId: '',
+  observationLocationIds: [LOCAL_OBSERVATION_LOCATION_ID],
   enabled: true,
   pollIntervalSeconds: '60',
   timeoutMillis: '2000',
@@ -159,7 +160,11 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => {
     udpRequest: target.udpRequest ?? '',
     udpExpectedResponse: target.udpExpectedResponse ?? '',
     linkedResourceId: target.linkedResourceId ?? '',
-    probeAgentId: target.probeAgentId ?? '',
+    observationLocationIds: target.observationLocationIds?.length
+      ? [...target.observationLocationIds]
+      : target.probeAgentId
+        ? [`${AGENT_OBSERVATION_LOCATION_PREFIX}${target.probeAgentId}`]
+        : [LOCAL_OBSERVATION_LOCATION_ID],
     enabled: target.enabled ?? true,
     pollIntervalSeconds: String(target.pollIntervalSeconds ?? 60),
     timeoutMillis: String(target.timeoutMillis ?? 2000),
@@ -247,7 +252,11 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     // Always serialized, never `undefined`: the server decodes updates onto the
     // existing record, so an explicit empty string is what clears a probe
     // assignment and moves the check back to the local Pulse server.
-    probeAgentId: form.probeAgentId.trim(),
+    probeAgentId:
+      form.observationLocationIds.length === 1
+        ? agentIdFromObservationLocation(form.observationLocationIds[0])
+        : '',
+    observationLocationIds: [...form.observationLocationIds],
     enabled: form.enabled,
     pollIntervalSeconds: parsePositiveInt(form.pollIntervalSeconds),
     timeoutMillis: parsePositiveInt(form.timeoutMillis),
@@ -348,10 +357,11 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   // stale cached capability set still lands on the upgrade gate.
   const [probeLicenseRejected, setProbeLicenseRejected] = createSignal(false);
 
-  const probeAgentOptions = createMemo(() => buildProbeAgentOptions(resources()));
-  const probeAgentMissing = createMemo(() =>
-    isProbeAgentMissing(probeAgentOptions(), form().probeAgentId),
-  );
+  const observationLocationOptions = createMemo(() => buildObservationLocationOptions(resources()));
+  const missingObservationLocations = createMemo(() => {
+    const known = new Set(observationLocationOptions().map((option) => option.id));
+    return form().observationLocationIds.filter((locationId) => !known.has(locationId));
+  });
   const externalProbeLicensed = createMemo(
     () =>
       !probeLicenseRejected() && runtimeCapabilitiesLoaded() && hasFeature(EXTERNAL_PROBE_FEATURE),
@@ -376,6 +386,15 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     }
     setError(null);
     setTestResult(null);
+  };
+
+  const toggleObservationLocation = (locationId: string, selected: boolean) => {
+    const current = form().observationLocationIds;
+    const next = selected
+      ? [...new Set([...current, locationId])]
+      : current.filter((candidate) => candidate !== locationId);
+    if (next.length === 0) return;
+    updateForm({ observationLocationIds: next });
   };
 
   const updateHTTPHeader = (index: number, patch: Partial<AvailabilityHTTPHeaderForm>) => {
@@ -490,7 +509,12 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
       }
       props.onSaved();
     } catch (err) {
-      if (payload.probeAgentId && isExternalProbeLicenseError(err)) {
+      if (
+        payload.observationLocationIds?.some((locationId) =>
+          locationId.startsWith(AGENT_OBSERVATION_LOCATION_PREFIX),
+        ) &&
+        isExternalProbeLicenseError(err)
+      ) {
         setProbeLicenseRejected(true);
         setError(getExternalProbeGateBody());
         return;
@@ -610,28 +634,67 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             )}
           </For>
         </FormSelect>
-        <div class="space-y-3 sm:col-span-2">
-          <FormSelect
-            label="Run from"
-            value={form().probeAgentId}
-            disabled={externalProbeLocked()}
-            onChange={(event) => updateForm({ probeAgentId: event.currentTarget.value })}
-            help={
-              externalProbeLocked()
-                ? getExternalProbeLockedHelpText()
-                : 'Run this check from the Pulse server, or hand it to a connected Pulse Agent host so it is probed from that network.'
-            }
-          >
-            <option value="">{LOCAL_PROBE_AGENT_LABEL}</option>
-            <Show when={probeAgentMissing()}>
-              <option value={form().probeAgentId}>
-                {form().probeAgentId} (not currently connected)
-              </option>
-            </Show>
-            <For each={probeAgentOptions()}>
-              {(option) => <option value={option.id}>{option.label}</option>}
+        <fieldset class="space-y-3 sm:col-span-2">
+          <legend class={formLabel}>Observation locations</legend>
+          <p class={formHelpText}>
+            One logical check can be observed from several networks. Pulse keeps each path separate
+            and shows disagreement instead of turning one path failure into a universal outage.
+          </p>
+          <div class="grid gap-2 sm:grid-cols-2" data-observation-location-picker>
+            <For each={observationLocationOptions()}>
+              {(option) => {
+                const selected = () => form().observationLocationIds.includes(option.id);
+                const locked = () => option.kind === 'agent' && externalProbeLocked();
+                return (
+                  <label class="flex items-start gap-3 rounded-md border border-border bg-surface px-3 py-3 text-sm">
+                    <input
+                      class={formCheckbox}
+                      type="checkbox"
+                      checked={selected()}
+                      disabled={
+                        locked() || (selected() && form().observationLocationIds.length === 1)
+                      }
+                      onChange={(event) =>
+                        toggleObservationLocation(option.id, event.currentTarget.checked)
+                      }
+                    />
+                    <span class="min-w-0">
+                      <span class="block font-medium text-foreground">{option.label}</span>
+                      <span class="block text-xs text-muted">
+                        {option.kind === 'pulse'
+                          ? 'Local Pulse path'
+                          : 'Connected Pulse Agent path'}
+                      </span>
+                    </span>
+                  </label>
+                );
+              }}
             </For>
-          </FormSelect>
+            <For each={missingObservationLocations()}>
+              {(locationId) => (
+                <label class="flex items-start gap-3 rounded-md border border-warning/40 bg-warning/5 px-3 py-3 text-sm">
+                  <input
+                    class={formCheckbox}
+                    type="checkbox"
+                    checked
+                    disabled={form().observationLocationIds.length === 1}
+                    onChange={(event) =>
+                      toggleObservationLocation(locationId, event.currentTarget.checked)
+                    }
+                  />
+                  <span class="min-w-0">
+                    <span class="block font-medium text-foreground">
+                      {agentIdFromObservationLocation(locationId) || locationId}
+                    </span>
+                    <span class="block text-xs text-warning">Not currently connected</span>
+                  </span>
+                </label>
+              )}
+            </For>
+          </div>
+          <Show when={externalProbeLocked()}>
+            <p class={formHelpText}>{getExternalProbeLockedHelpText()}</p>
+          </Show>
           <Show when={externalProbeLocked()}>
             <div class="rounded-md border border-border bg-surface-alt p-4">
               <FeatureGateSection
@@ -642,7 +705,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               />
             </div>
           </Show>
-        </div>
+        </fieldset>
         <Show when={form().protocol !== 'icmp'}>
           <label class={formField}>
             <span class={formLabel}>Port</span>

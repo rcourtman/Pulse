@@ -1,7 +1,7 @@
 # Infrastructure-Aware Service Assurance Plan
 
 Last updated: 2026-08-30
-Status: ACCEPTED — SLICES A, B, AND C IMPLEMENTED
+Status: ACCEPTED — SLICES A, B, C, AND D IMPLEMENTED
 Governance surfaces:
 
 - `status.json.coverage_gaps.infrastructure-aware-service-assurance`
@@ -228,7 +228,7 @@ Implementation record (2026-08-30): Slice A is delivered through the
 monitoring-owned categorical history store and rollups, server-authored
 configuration revisions and remote receipt timeline, the bounded
 `/api/availability-history` batch contract, and the URL-owned Availability
-fleet presentation. Its release proofs live in the owner contract. Slices D
+fleet presentation. Its release proofs live in the owner contract. Slices E
 through H remain ordered future work; acceptance of this product lane does not
 imply that deferred breadth is already delivered.
 
@@ -269,7 +269,7 @@ re-entry. Current status and unified-resource facets preserve transport
 reachability separately from typed application correctness while the overall
 result remains the alert and history outcome. Legacy targets without an
 explicit contract retain their previous HEAD-with-bounded-GET-fallback
-semantics. Slices D through H remain ordered future work.
+semantics. Slices E through H remain ordered future work.
 
 ### Slice C: Discovery-Led Assurance Onboarding
 
@@ -304,7 +304,7 @@ standalone endpoints, and creates one explicitly enabled availability target
 with the drawer's canonical resource ID only after the operator chooses the
 activation action. A machine-scoped queue supports bulk review and
 evidence-bound dismiss/restore without bulk activation or guessed resource
-attachment. Slices D through H remain ordered future work.
+attachment. Slices E through H remain ordered future work.
 
 ### Slice D: Multi-Location Delivery Evidence
 
@@ -331,6 +331,23 @@ Exit conditions:
   timeline;
 - location names and customer-identifying network details obey the existing
   privacy and redaction policy.
+
+Implementation record (2026-08-30): Slice D is delivered through a canonical
+set of source-owned observation-location IDs on each saved target. The local
+Pulse runtime and any selected eligible connected agents may observe the same
+logical verification concurrently; monitoring retains their state, latency,
+server-receipt freshness, and coverage separately, then derives one aggregate
+state without duplicating the target resource. A reachable path plus a failed
+or missing path is `degraded`, every current path must be unreachable before
+the target is `unavailable`, and incomplete all-failed evidence remains
+`unknown`. Stale agent paths become indeterminate evidence, retries remain
+idempotent through the existing observation ID and configuration revision,
+and only the assigned agent may author its location. Settings presents the
+location set as a bounded multi-select, while the Availability fleet and
+resource detail surfaces expose reporting coverage and path disagreement.
+Compatibility with the former single `probeAgentId` contract is retained at
+the API boundary without keeping single-agent execution as the canonical
+model. Slices E through H remain ordered future work.
 
 ### Slice E: Infrastructure-Aware Incident Synthesis
 

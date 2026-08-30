@@ -6211,6 +6211,17 @@ remain ingestible through a deterministic server fallback, but they do not
 gain authority to author revision boundaries, target identity, retention, or
 the service-assurance timeline.
 
+The server may assign one target to several agent-backed observation locations,
+but each agent receives and reports only the targets whose canonical
+`agent:<agent-id>` location it owns. Location membership is server-authored
+configuration, not agent enrollment identity: it does not grant control-plane
+authority, create another agent resource, or let one reporter stand in for a
+different site. Reassignment increments the target configuration revision, so
+late results from the previous location set are rejected. Local Pulse execution
+can coexist with assigned agent execution for the same logical target, while
+license lapse removes every remote location from the effective assignment and
+leaves the local path as the fail-safe execution boundary.
+
 Observer configuration is explicit, versioned, and file-backed. It contains no
 raw token values and resolves each token from a separate private absolute-path
 file. Proxmox registration is also destination-scoped: the primary retains its

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -309,6 +310,44 @@ func TestNormalizeAvailabilityTargetTrimsProbeAgentID(t *testing.T) {
 	}
 	if err := local.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v, want probe assignment to stay an API-layer concern", err)
+	}
+}
+
+func TestNormalizeAvailabilityTargetBuildsCanonicalObservationLocationSet(t *testing.T) {
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address:                "service.local",
+		Protocol:               AvailabilityProbeICMP,
+		Enabled:                true,
+		ObservationLocationIDs: []string{" agent:edge-b ", "local", "agent:edge-a", "agent:edge-a"},
+	})
+	want := []string{AvailabilityObservationLocationLocal, "agent:edge-a", "agent:edge-b"}
+	if !reflect.DeepEqual(target.ObservationLocationIDs, want) {
+		t.Fatalf("ObservationLocationIDs = %#v, want %#v", target.ObservationLocationIDs, want)
+	}
+	if target.ProbeAgentID != "" {
+		t.Fatalf("ProbeAgentID = %q, multi-location targets must not claim one owner", target.ProbeAgentID)
+	}
+	if !target.IncludesLocalObservation() || !reflect.DeepEqual(target.AssignedProbeAgentIDs(), []string{"edge-a", "edge-b"}) {
+		t.Fatalf("normalized locations = local %v agents %#v", target.IncludesLocalObservation(), target.AssignedProbeAgentIDs())
+	}
+}
+
+func TestAvailabilityExecutionConfigChangedTracksObservationLocationSet(t *testing.T) {
+	base := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address:                "service.local",
+		Protocol:               AvailabilityProbeICMP,
+		Enabled:                true,
+		ObservationLocationIDs: []string{AvailabilityObservationLocationLocal, "agent:edge-a"},
+	})
+	reordered := base
+	reordered.ObservationLocationIDs = []string{"agent:edge-a", AvailabilityObservationLocationLocal}
+	if AvailabilityExecutionConfigChanged(base, reordered) {
+		t.Fatal("location ordering changed the execution revision")
+	}
+	expanded := base
+	expanded.ObservationLocationIDs = append(expanded.ObservationLocationIDs, "agent:edge-b")
+	if !AvailabilityExecutionConfigChanged(base, expanded) {
+		t.Fatal("adding an observation location did not change the execution revision")
 	}
 }
 

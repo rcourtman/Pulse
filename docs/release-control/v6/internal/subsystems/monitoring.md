@@ -1566,24 +1566,35 @@ the frontend-primitives-owned Standalone surface may read the same
 `network-endpoint` projection to show current reachability, latency, check age,
 and failure state without creating another monitoring provider or top-level
 availability route.
-Availability targets may also be assigned to a remote host agent. Reachability
-outcome and the optional certificate observation travel in the same bounded
-report entry, and the server clones that observation before status and resource
-projection so report buffers cannot alias live state. While the
-`external_probe` entitlement is active, a probe-assigned target is executed
-exclusively by its assigned agent: monitoring must not schedule or run it
-locally, so the check never executes twice. The assignment is effective only for
-as long as the entitlement holds; on lapse the effective assignment collapses to
-local and the normal poll provider resumes the target on its next planning
-cycle, without a restart. Reported results are accepted only from the agent that
-currently owns the target, and results for any other target or from any other
-agent are dropped. Failure accounting, thresholds, and incident projection stay
-server-side. The agent-authored observation time remains visible as the target's
-last check, but staleness uses server receipt time so slow or fast agent clocks
-cannot manufacture or conceal a disconnect. When an assigned agent stops
-reporting, monitoring derives indeterminate with a stale-report explanation at
-read time through the shared probe-status snapshot rather than mutating stored
-state, so every availability consumer sees the same staleness verdict.
+Availability execution is location-owned. Each saved target has a normalized,
+deduplicated set of observation-location IDs: `pulse:local` for this Pulse
+runtime and `agent:<agent-id>` for an eligible connected host agent. The legacy
+single `probeAgentId` field remains an input compatibility boundary only; the
+location set owns scheduling, configuration revision, assignment, status, and
+resource projection. While `external_probe` is entitled, Pulse may schedule
+the local path and every selected agent path for one logical target at the same
+time. On entitlement lapse the effective set collapses to the local path
+without a restart. An agent result is accepted only for its exact selected
+location and current target revision; another agent cannot author that path.
+
+Reachability outcome and the optional certificate observation still travel in
+the same bounded report entry, and the server clones that observation before
+status and resource projection so report buffers cannot alias live state.
+Monitoring retains one current status per target and location, using server
+receipt time for remote freshness while keeping the agent-authored observation
+time as evidence metadata. A stale or disconnected agent path derives as
+indeterminate at read time; slow or fast agent clocks cannot manufacture or
+conceal a disconnect. Aggregation is conservative: all reachable paths are
+healthy, mixed reachable and failed/unknown paths are degraded, all current
+paths unreachable are unavailable, and no reachable path with incomplete or
+indeterminate coverage is unknown. Only aggregate unavailability advances the
+target failure threshold or authors an outage incident. A path-local failure
+therefore cannot claim that the service is universally down. Single-location
+targets preserve their prior status and history semantics. Multi-location
+targets write only their aggregate service conclusion to the logical target's
+deletable categorical history; current per-location evidence remains a status
+and resource projection until a separately governed location-history schema
+can preserve deletion, retention, and bounded-query semantics end to end.
 Mock-mode Discovery context follows the same fixture-graph rule. Demo service
 details such as detected version, config/data/log paths, Docker bind mounts,
 ports, and suggested web URLs may be authored in mock fixtures, but consumers

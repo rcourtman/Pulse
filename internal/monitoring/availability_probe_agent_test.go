@@ -69,14 +69,99 @@ func newProbeAgentTestMonitor(t *testing.T, targets ...config.AvailabilityTarget
 		t.Fatalf("SaveAvailabilityTargets() error = %v", err)
 	}
 	return &Monitor{
-		state:                models.NewState(),
-		configPersist:        persistence,
-		availabilityStatuses: make(map[string]AvailabilityProbeStatus),
-		pollStatusMap:        make(map[string]*pollStatus),
-		failureCounts:        make(map[string]int),
-		lastOutcome:          make(map[string]taskOutcome),
-		circuitBreakers:      make(map[string]*circuitBreaker),
-		taskQueue:            NewTaskQueue(),
+		state:                  models.NewState(),
+		configPersist:          persistence,
+		availabilityStatuses:   make(map[string]AvailabilityProbeStatus),
+		availabilityByLocation: make(map[string]map[string]AvailabilityProbeStatus),
+		pollStatusMap:          make(map[string]*pollStatus),
+		failureCounts:          make(map[string]int),
+		lastOutcome:            make(map[string]taskOutcome),
+		circuitBreakers:        make(map[string]*circuitBreaker),
+		taskQueue:              NewTaskQueue(),
+	}
+}
+
+func TestMultiLocationAvailabilityPreservesDisagreementUntilEveryPathFails(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:                     "service",
+		Name:                   "Customer API",
+		Address:                "api.service.local",
+		Protocol:               config.AvailabilityProbeHTTPS,
+		Enabled:                true,
+		PollIntervalSecs:       60,
+		FailureThreshold:       2,
+		ObservationLocationIDs: []string{config.AvailabilityObservationLocationLocal, config.AvailabilityAgentObservationLocationID("edge-1")},
+	})
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	now := time.Now().UTC()
+
+	monitor.applyAvailabilityObservation(target, "local-ok", now, 8*time.Millisecond, AvailabilityProbeReachable, nil, nil, "", time.Time{})
+	for attempt := 0; attempt < 2; attempt++ {
+		monitor.applyAvailabilityObservation(target, "edge-fail-"+string(rune('a'+attempt)), now.Add(time.Duration(attempt)*time.Second), 30*time.Millisecond, AvailabilityProbeUnreachable, context.DeadlineExceeded, nil, "edge-1", now.Add(time.Duration(attempt)*time.Second))
+	}
+
+	status := monitor.AvailabilityStatusSnapshot()[target.ID]
+	if status.AggregateState != AvailabilityAggregateDegraded || !status.Disagreement || !status.Available {
+		t.Fatalf("aggregate status = %+v, want available disagreement", status)
+	}
+	if status.ExpectedLocations != 2 || status.ReportingLocations != 2 || len(status.Locations) != 2 {
+		t.Fatalf("location coverage = %+v, want 2/2 locations", status)
+	}
+	if want := now.Add(time.Second); !status.FreshnessTime().Equal(want) {
+		t.Fatalf("aggregate freshness = %s, want latest server-authored path freshness %s", status.FreshnessTime(), want)
+	}
+	if status.LatencyMillis != 8 {
+		t.Fatalf("aggregate latency = %dms, want the current reachable path latency", status.LatencyMillis)
+	}
+	resource, _ := availabilityResourceFromTarget(target, status, "", now)
+	if resource.Status != unifiedresources.StatusWarning || len(resource.Incidents) != 0 {
+		t.Fatalf("resource = status %q incidents %+v, one path failure must not author an outage", resource.Status, resource.Incidents)
+	}
+
+	for attempt := 0; attempt < 2; attempt++ {
+		monitor.applyAvailabilityObservation(target, "local-fail-"+string(rune('a'+attempt)), now.Add(time.Duration(attempt+2)*time.Second), 20*time.Millisecond, AvailabilityProbeUnreachable, context.DeadlineExceeded, nil, "", time.Time{})
+	}
+	status = monitor.AvailabilityStatusSnapshot()[target.ID]
+	if status.AggregateState != AvailabilityAggregateUnavailable || status.Available || status.ConsecutiveFailures != 2 {
+		t.Fatalf("aggregate status = %+v, want thresholded all-location outage", status)
+	}
+	if status.LatencyMillis != 0 {
+		t.Fatalf("unavailable aggregate latency = %dms, want no reachable latency", status.LatencyMillis)
+	}
+	resource, _ = availabilityResourceFromTarget(target, status, "", now.Add(4*time.Second))
+	if resource.Status != unifiedresources.StatusOffline || len(resource.Incidents) != 1 {
+		t.Fatalf("resource = status %q incidents %+v, want one universal outage", resource.Status, resource.Incidents)
+	}
+}
+
+func TestMultiLocationAvailabilityTreatsLapsedPathAsUnknownCoverage(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:                     "service",
+		Name:                   "Customer API",
+		Address:                "api.service.local",
+		Protocol:               config.AvailabilityProbeHTTPS,
+		Enabled:                true,
+		PollIntervalSecs:       60,
+		FailureThreshold:       2,
+		ObservationLocationIDs: []string{config.AvailabilityObservationLocationLocal, config.AvailabilityAgentObservationLocationID("edge-1")},
+	})
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	now := time.Now().UTC()
+	old := time.Now().UTC().Add(-time.Hour)
+	monitor.applyAvailabilityObservation(target, "local-ok", now, 8*time.Millisecond, AvailabilityProbeReachable, nil, nil, "", time.Time{})
+	monitor.applyAvailabilityObservation(target, "edge-ok", old, 18*time.Millisecond, AvailabilityProbeReachable, nil, nil, "edge-1", old)
+
+	status := monitor.availabilityStatusSnapshotForTargets([]config.AvailabilityTarget{target}, now)[target.ID]
+	if status.AggregateState != AvailabilityAggregateDegraded || status.Disagreement {
+		t.Fatalf("aggregate status = %+v, want healthy path plus unknown coverage", status)
+	}
+	if status.ReportingLocations != 1 || status.ExpectedLocations != 2 {
+		t.Fatalf("coverage = %d/%d, want the lapsed path excluded", status.ReportingLocations, status.ExpectedLocations)
+	}
+	if !status.Locations[1].Stale || status.Locations[1].Outcome != string(AvailabilityProbeIndeterminate) {
+		t.Fatalf("remote location = %+v, want stale unknown evidence", status.Locations[1])
 	}
 }
 

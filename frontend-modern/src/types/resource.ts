@@ -1532,11 +1532,35 @@ export interface ResourceAvailabilityMeta {
    * on the Pulse server itself.
    */
   probeAgentId?: string;
+  aggregateState?: 'healthy' | 'degraded' | 'unavailable' | 'unknown' | string;
+  disagreement?: boolean;
+  expectedLocations?: number;
+  reportingLocations?: number;
+  locations?: ResourceAvailabilityObservationLocation[];
   correlationState?: 'attached' | 'standalone' | 'ambiguous' | 'unresolved';
   correlationRule?: string;
   correlationReason?: string;
   correlationCandidates?: number;
   evidence?: EvidenceEnvelope;
+}
+
+export interface ResourceAvailabilityObservationLocation {
+  locationId: string;
+  kind: 'pulse' | 'agent' | string;
+  probeAgentId?: string;
+  outcome?: string;
+  transportOutcome?: string;
+  applicationOutcome?: string;
+  applicationStatusCode?: number;
+  applicationFailureCode?: string;
+  available?: boolean;
+  lastChecked?: string;
+  lastSuccess?: string;
+  freshnessAt?: string;
+  latencyMillis?: number;
+  consecutiveFailures?: number;
+  lastError?: string;
+  stale?: boolean;
 }
 
 export type ResourceCertificateTrustStatus =

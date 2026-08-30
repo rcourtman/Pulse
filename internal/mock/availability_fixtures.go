@@ -349,6 +349,35 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		PollIntervalSeconds: target.effectivePollIntervalSecs(),
 		TimeoutMillis:       target.effectiveTimeoutMillis(),
 	}
+	if target.ID == "mock-availability-docker-frontend-service" {
+		data.AggregateState = "degraded"
+		data.Disagreement = true
+		data.ExpectedLocations = 2
+		data.ReportingLocations = 2
+		data.Locations = []unifiedresources.AvailabilityObservationLocation{
+			{
+				LocationID:    "pulse:local",
+				Kind:          "pulse",
+				Outcome:       "reachable",
+				Available:     true,
+				LastChecked:   availabilityFixtureTimePointer(fixture.LastChecked),
+				LastSuccess:   availabilityFixtureTimePointer(fixture.LastSuccess),
+				FreshnessAt:   availabilityFixtureTimePointer(fixture.LastChecked),
+				LatencyMillis: fixture.LatencyMillis,
+			},
+			{
+				LocationID:          "agent:edge-london",
+				Kind:                "agent",
+				ProbeAgentID:        "edge-london",
+				Outcome:             "unreachable",
+				Available:           false,
+				LastChecked:         availabilityFixtureTimePointer(fixture.LastChecked),
+				FreshnessAt:         availabilityFixtureTimePointer(fixture.LastChecked),
+				ConsecutiveFailures: 2,
+				LastError:           "connection timed out",
+			},
+		}
+	}
 	data.Evidence = mockAvailabilityEvidence(target, fixture, lastSeen, now)
 	if target.Protocol == mockAvailabilityProbeHTTPS {
 		data.CertificateMonitoring = true
@@ -376,6 +405,9 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		Sources:      []unifiedresources.DataSource{unifiedresources.SourceAvailability},
 		Tags:         availabilityFixtureTags(target),
 		Availability: data,
+	}
+	if data.AggregateState == "degraded" {
+		resource.Status = unifiedresources.StatusWarning
 	}
 	if incident := availabilityFixtureIncident(target, fixture, lastSeen); incident != nil {
 		resource.Incidents = []unifiedresources.ResourceIncident{*incident}

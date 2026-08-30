@@ -740,7 +740,9 @@ func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 			"LinkedResourceID string                    `json:\"linkedResourceId,omitempty\"`",
 		},
 		filepath.Join("..", "monitoring", "availability_poller.go"): {
-			"TargetKind             string    `json:\"targetKind,omitempty\"`",
+			"TargetKind",
+			"string",
+			"`json:\"targetKind,omitempty\"`",
 			"TargetKind:       string(target.TargetKind),",
 			"TargetKind:             string(target.TargetKind),",
 			"tags = append(tags, string(target.TargetKind))",
@@ -748,7 +750,9 @@ func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 		},
 		"types.go": {
 			"Availability *AvailabilityData `json:\"availability,omitempty\"`",
-			"TargetKind             string                             `json:\"targetKind,omitempty\"`",
+			"TargetKind",
+			"string",
+			"`json:\"targetKind,omitempty\"`",
 			"LinkedResourceID       string                             `json:\"linkedResourceId,omitempty\"`",
 			"LastChecked            *time.Time                         `json:\"lastChecked,omitempty\"`",
 			"LastSuccess            *time.Time                         `json:\"lastSuccess,omitempty\"`",

@@ -274,7 +274,7 @@ func mockAvailabilityTestResponse(targetID string) (availabilityTestResponse, bo
 }
 
 func mockAvailabilityConfigTarget(target mock.AvailabilityTargetFixture) config.AvailabilityTarget {
-	return config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+	configTarget := config.AvailabilityTarget{
 		ID:               target.ID,
 		Name:             target.Name,
 		TargetKind:       config.AvailabilityTargetKind(target.TargetKind),
@@ -286,11 +286,18 @@ func mockAvailabilityConfigTarget(target mock.AvailabilityTargetFixture) config.
 		PollIntervalSecs: target.PollIntervalSecs,
 		TimeoutMillis:    target.TimeoutMillis,
 		FailureThreshold: target.FailureThreshold,
-	})
+	}
+	if target.ID == "mock-availability-docker-frontend-service" {
+		configTarget.ObservationLocationIDs = []string{
+			config.AvailabilityObservationLocationLocal,
+			config.AvailabilityAgentObservationLocationID("edge-london"),
+		}
+	}
+	return config.NormalizeAvailabilityTarget(configTarget)
 }
 
 func mockAvailabilityProbeStatus(fixture mock.AvailabilityFixture, target config.AvailabilityTarget) monitoring.AvailabilityProbeStatus {
-	return monitoring.AvailabilityProbeStatus{
+	status := monitoring.AvailabilityProbeStatus{
 		TargetID:            target.ID,
 		Name:                target.DisplayName(),
 		TargetKind:          string(target.TargetKind),
@@ -305,6 +312,36 @@ func mockAvailabilityProbeStatus(fixture mock.AvailabilityFixture, target config
 		LastError:           fixture.LastError,
 		FailureThreshold:    target.EffectiveFailureThreshold(),
 	}
+	if target.ID == "mock-availability-docker-frontend-service" {
+		status.AggregateState = monitoring.AvailabilityAggregateDegraded
+		status.Disagreement = true
+		status.ExpectedLocations = 2
+		status.ReportingLocations = 2
+		status.Locations = []monitoring.AvailabilityObservationLocationStatus{
+			{
+				LocationID:    config.AvailabilityObservationLocationLocal,
+				Kind:          "pulse",
+				Outcome:       string(monitoring.AvailabilityProbeReachable),
+				Available:     true,
+				LastChecked:   fixture.LastChecked,
+				LastSuccess:   fixture.LastSuccess,
+				FreshnessAt:   fixture.LastChecked,
+				LatencyMillis: fixture.LatencyMillis,
+			},
+			{
+				LocationID:          config.AvailabilityAgentObservationLocationID("edge-london"),
+				Kind:                "agent",
+				ProbeAgentID:        "edge-london",
+				Outcome:             string(monitoring.AvailabilityProbeUnreachable),
+				Available:           false,
+				LastChecked:         fixture.LastChecked,
+				FreshnessAt:         fixture.LastChecked,
+				ConsecutiveFailures: 2,
+				LastError:           "connection timed out",
+			},
+		}
+	}
+	return status
 }
 
 func mockPlatformTimePointer(value time.Time) *time.Time {

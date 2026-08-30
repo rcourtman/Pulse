@@ -1497,6 +1497,12 @@ func deriveAvailabilityConnectionState(target config.AvailabilityTarget, status 
 	if !target.Enabled {
 		return ConnectionStatePaused, "paused by user", lastSeen, lastError
 	}
+	if status.AggregateState == monitoring.AvailabilityAggregateUnknown {
+		return ConnectionStateStale, "observation coverage is incomplete", lastSeen, lastError
+	}
+	if status.AggregateState == monitoring.AvailabilityAggregateDegraded {
+		return ConnectionStateActive, "observation locations disagree", lastSeen, lastError
+	}
 	if status.LastChecked.IsZero() {
 		return ConnectionStatePending, "awaiting first probe", nil, nil
 	}

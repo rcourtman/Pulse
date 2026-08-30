@@ -424,22 +424,25 @@ describe('AvailabilityTargetSlot', () => {
       resourceMocks.resources = [agentHostResource('host-edge-01', 'Edge 01')];
       render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
 
-      const runFrom = screen.getByLabelText('Run from') as HTMLSelectElement;
-      expect(runFrom).not.toBeDisabled();
-      expect(screen.getByRole('option', { name: 'This Pulse server' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Edge 01' })).toBeInTheDocument();
+      const localLocation = screen.getByRole('checkbox', { name: /This Pulse server/ });
+      const edgeLocation = screen.getByRole('checkbox', { name: /Edge 01/ });
+      expect(localLocation).toBeChecked();
+      expect(edgeLocation).not.toBeDisabled();
       expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
 
       fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Remote MQTT' } });
       fireEvent.input(screen.getByPlaceholderText('service.local'), {
         target: { value: 'mqtt.remote.local' },
       });
-      fireEvent.change(runFrom, { target: { value: 'host-edge-01' } });
+      fireEvent.click(edgeLocation);
       fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
 
       await waitFor(() =>
         expect(mockedCreate).toHaveBeenCalledWith(
-          expect.objectContaining({ probeAgentId: 'host-edge-01' }),
+          expect.objectContaining({
+            probeAgentId: '',
+            observationLocationIds: ['pulse:local', 'agent:host-edge-01'],
+          }),
         ),
       );
     });
@@ -450,9 +453,8 @@ describe('AvailabilityTargetSlot', () => {
       render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
 
       // Discoverability is the point of the Pro gate: the control stays visible.
-      const runFrom = screen.getByLabelText('Run from') as HTMLSelectElement;
-      expect(runFrom).toBeDisabled();
-      expect(screen.getByRole('option', { name: 'Edge 01' })).toBeInTheDocument();
+      const edgeLocation = screen.getByRole('checkbox', { name: /Edge 01/ });
+      expect(edgeLocation).toBeDisabled();
       expect(screen.getByRole('heading', { name: 'External Probes' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
         'href',
@@ -471,7 +473,12 @@ describe('AvailabilityTargetSlot', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
 
       await waitFor(() =>
-        expect(mockedCreate).toHaveBeenCalledWith(expect.objectContaining({ probeAgentId: '' })),
+        expect(mockedCreate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            probeAgentId: '',
+            observationLocationIds: ['pulse:local'],
+          }),
+        ),
       );
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
@@ -501,14 +508,16 @@ describe('AvailabilityTargetSlot', () => {
         <AvailabilityTargetSlot editingTargetId="target-1" onCancel={vi.fn()} onSaved={vi.fn()} />
       ));
 
-      await waitFor(() => expect(screen.getByLabelText('Run from')).toHaveValue('host-edge-01'));
+      await waitFor(() => expect(screen.getByRole('checkbox', { name: /Edge 01/ })).toBeChecked());
 
-      fireEvent.change(screen.getByLabelText('Run from'), { target: { value: '' } });
+      fireEvent.click(screen.getByRole('checkbox', { name: /This Pulse server/ }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Edge 01/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
 
       await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
       const [, payload] = mockedUpdate.mock.calls.at(-1)!;
       expect(payload.probeAgentId).toBe('');
+      expect(payload.observationLocationIds).toEqual(['pulse:local']);
       expect(Object.prototype.hasOwnProperty.call(payload, 'probeAgentId')).toBe(true);
     });
 
@@ -529,11 +538,9 @@ describe('AvailabilityTargetSlot', () => {
       ));
 
       await waitFor(() =>
-        expect(
-          screen.getByRole('option', { name: 'host-gone (not currently connected)' }),
-        ).toBeInTheDocument(),
+        expect(screen.getByRole('checkbox', { name: /host-gone/ })).toBeChecked(),
       );
-      expect(screen.getByLabelText('Run from')).toHaveValue('host-gone');
+      expect(screen.getByText('Not currently connected')).toBeInTheDocument();
     });
 
     it('falls back to the upgrade gate when the server answers 402 license_required', async () => {
@@ -551,13 +558,13 @@ describe('AvailabilityTargetSlot', () => {
       fireEvent.input(screen.getByPlaceholderText('service.local'), {
         target: { value: 'mqtt.remote.local' },
       });
-      fireEvent.change(screen.getByLabelText('Run from'), { target: { value: 'host-edge-01' } });
+      fireEvent.click(screen.getByRole('checkbox', { name: /Edge 01/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
 
       await waitFor(() =>
         expect(screen.getByRole('heading', { name: 'External Probes' })).toBeInTheDocument(),
       );
-      expect(screen.getByLabelText('Run from')).toBeDisabled();
+      expect(screen.getByRole('checkbox', { name: /Edge 01/ })).toBeDisabled();
       expect(screen.getByRole('link', { name: 'View plans' })).toBeInTheDocument();
     });
   });

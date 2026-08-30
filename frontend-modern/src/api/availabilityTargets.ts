@@ -67,7 +67,31 @@ export interface AvailabilityProbeStatus {
    * Absent (omitempty) when the local Pulse server ran the check.
    */
   probeAgentId?: string;
+  aggregateState?: 'healthy' | 'degraded' | 'unavailable' | 'unknown' | string;
+  disagreement?: boolean;
+  expectedLocations?: number;
+  reportingLocations?: number;
+  locations?: AvailabilityObservationLocationStatus[];
   certificate?: ResourceCertificateObservation;
+}
+
+export interface AvailabilityObservationLocationStatus {
+  locationId: string;
+  kind: 'pulse' | 'agent' | string;
+  probeAgentId?: string;
+  outcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
+  transportOutcome?: string;
+  applicationOutcome?: string;
+  applicationStatusCode?: number;
+  applicationFailureCode?: string;
+  available: boolean;
+  lastChecked?: string;
+  lastSuccess?: string;
+  freshnessAt?: string;
+  latencyMillis?: number;
+  consecutiveFailures?: number;
+  lastError?: string;
+  stale?: boolean;
 }
 
 export interface AvailabilityTarget {
@@ -96,6 +120,9 @@ export interface AvailabilityTarget {
    * string because the server decodes updates onto the existing record.
    */
   probeAgentId?: string;
+  /** Canonical execution set. `pulse:local` names this Pulse server and
+   * `agent:<id>` names a connected Pulse Agent observation location. */
+  observationLocationIds?: string[];
   http?: AvailabilityHTTPConfig;
   httpSecrets?: AvailabilityHTTPSecretState;
   status?: AvailabilityProbeStatus;

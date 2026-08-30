@@ -673,8 +673,14 @@ func TestAvailabilityProviderStaysOnCanonicalMonitoringPath(t *testing.T) {
 			`InstanceTypeAvailability InstanceType = "availability"`,
 		},
 		"monitor.go": {
-			"availabilityStatuses       map[string]AvailabilityProbeStatus",
-			"availabilityStatuses:       make(map[string]AvailabilityProbeStatus)",
+			"availabilityStatuses",
+			"map[string]AvailabilityProbeStatus",
+			"availabilityByLocation",
+			"map[string]map[string]AvailabilityProbeStatus",
+			"availabilityStatuses:",
+			"make(map[string]AvailabilityProbeStatus)",
+			"availabilityByLocation:",
+			"make(map[string]map[string]AvailabilityProbeStatus)",
 		},
 		"poll_providers.go": {
 			"_ = m.RegisterPollProvider(newAvailabilityPollProvider())",
@@ -713,9 +719,11 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 		"monitor.go": {
 			"type MonitorSupplementalInventoryReadinessProvider interface {",
 			"SupplementalInventoryReadyAt(m *Monitor, orgID string) (time.Time, bool)",
-			"hostContinuityStore        *config.HostContinuityStore",
+			"hostContinuityStore",
+			"*config.HostContinuityStore",
 			"hostContinuityStore := config.NewHostContinuityStore(cfg.DataPath, nil)",
-			"hostContinuityStore:        hostContinuityStore,",
+			"hostContinuityStore:",
+			"hostContinuityStore,",
 			"func (m *Monitor) HostsSnapshot() []models.Host {",
 			"readState = m.readStateWithStandaloneHostContinuity(readState)",
 			"func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifiedStateView) monitorUnifiedStateView {",
@@ -905,7 +913,8 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 			`memorySource = "unavailable"`,
 		},
 		"monitor.go": {
-			"vmAgentMemCache            map[string]agentMemCacheEntry",
+			"vmAgentMemCache",
+			"map[string]agentMemCacheEntry",
 		},
 		"monitor_agents.go": {
 			"for key, entry := range m.vmAgentMemCache {",
@@ -1238,8 +1247,10 @@ func TestProxmoxGuestDockerLXCProbingRequiresExplicitOptIn(t *testing.T) {
 func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"monitor.go": {
-			"pveBackupInventoryReady    map[string]map[string]bool",
-			"pveBackupTemplateSubjects  map[string]map[string]struct{}",
+			"pveBackupInventoryReady",
+			"map[string]map[string]bool",
+			"pveBackupTemplateSubjects",
+			"map[string]map[string]struct{}",
 		},
 		"monitor_backups.go": {
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsForType(instanceName, guestType string, subjects map[string]struct{}) {",

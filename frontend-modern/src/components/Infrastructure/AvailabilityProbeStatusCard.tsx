@@ -46,8 +46,13 @@ export function AvailabilityProbeStatusCards(props: AvailabilityProbeStatusCards
 }
 
 export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardProps) {
-  const isUp = () => props.availability.available === true;
-  const isDown = () => props.availability.available === false;
+  const aggregateState = () => props.availability.aggregateState;
+  const isUp = () =>
+    aggregateState() ? aggregateState() === 'healthy' : props.availability.available === true;
+  const isDegraded = () => aggregateState() === 'degraded';
+  const isUnknown = () => aggregateState() === 'unknown';
+  const isDown = () =>
+    aggregateState() ? aggregateState() === 'unavailable' : props.availability.available === false;
   const latency = () => {
     const ms = props.availability.latencyMillis;
     return typeof ms === 'number' && Number.isFinite(ms) && ms > 0 ? `${Math.round(ms)}ms` : null;
@@ -129,6 +134,19 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
     if (days === 0) return `${date} (today)`;
     return `${date} (${days}d)`;
   };
+  const locationLabel = (location: NonNullable<ResourceAvailabilityMeta['locations']>[number]) =>
+    location.kind === 'pulse'
+      ? 'This Pulse server'
+      : location.probeAgentId || location.locationId.replace(/^agent:/, '') || 'Pulse Agent';
+  const locationResult = (location: NonNullable<ResourceAvailabilityMeta['locations']>[number]) => {
+    if (location.stale) return 'No recent report';
+    if (!location.lastChecked) return 'Awaiting evidence';
+    if (location.outcome === 'reachable') {
+      return location.latencyMillis ? `${Math.round(location.latencyMillis)} ms` : 'Reachable';
+    }
+    if (location.outcome === 'unreachable') return 'Unreachable';
+    return 'Unknown';
+  };
 
   return (
     <InfoCardFrame data-testid="availability-probe-status">
@@ -145,11 +163,22 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
             'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300':
               isFreshUp(),
             'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300': isDown() && !isStale(),
-            'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': isStale(),
-            'bg-base-200 text-muted': !isUp() && !isDown() && !isStale(),
+            'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300':
+              isStale() || isDegraded(),
+            'bg-base-200 text-muted': isUnknown() || (!isUp() && !isDown() && !isStale()),
           }}
         >
-          {isStale() ? 'Stale' : isUp() ? 'Up' : isDown() ? 'Down' : 'Not checked'}
+          {isDegraded()
+            ? 'Paths disagree'
+            : isUnknown()
+              ? 'Coverage incomplete'
+              : isStale()
+                ? 'Stale'
+                : isUp()
+                  ? 'Up'
+                  : isDown()
+                    ? 'Down'
+                    : 'Not checked'}
         </span>
       </div>
       <div class="space-y-1.5 text-[11px]">
@@ -171,6 +200,51 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
             </Show>
           }
         />
+        <Show when={(props.availability.locations?.length ?? 0) > 0}>
+          <div
+            class="mt-2 space-y-1.5 border-t border-border pt-2"
+            data-observation-location-results
+          >
+            <div class="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-muted">
+              <span>Observation paths</span>
+              <span>
+                {props.availability.reportingLocations ?? 0}/
+                {props.availability.expectedLocations ?? props.availability.locations?.length ?? 0}{' '}
+                reporting
+              </span>
+            </div>
+            <For each={props.availability.locations}>
+              {(location) => (
+                <div class="flex items-start justify-between gap-3 rounded bg-base-200/60 px-2 py-1.5">
+                  <div class="min-w-0">
+                    <div
+                      class="truncate font-medium text-base-content"
+                      title={locationLabel(location)}
+                    >
+                      {locationLabel(location)}
+                    </div>
+                    <Show when={formatRelativeTime(location.lastChecked)}>
+                      {(checked) => <div class="text-[10px] text-muted">checked {checked()}</div>}
+                    </Show>
+                  </div>
+                  <span
+                    class="shrink-0 font-medium"
+                    classList={{
+                      'text-emerald-600 dark:text-emerald-300':
+                        location.outcome === 'reachable' && !location.stale,
+                      'text-red-600 dark:text-red-300':
+                        location.outcome === 'unreachable' && !location.stale,
+                      'text-amber-600 dark:text-amber-300': Boolean(location.stale),
+                      'text-muted': !location.outcome || location.outcome === 'indeterminate',
+                    }}
+                  >
+                    {locationResult(location)}
+                  </span>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
         <InfoCardKeyValueRow label="Method" value={method()} valueTitle={targetAddr()} />
         <InfoCardKeyValueRow
           label="Target"

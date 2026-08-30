@@ -8808,6 +8808,18 @@ metadata, but API freshness and `lastSeenAt` projections use the server-authored
 receipt time supplied by monitoring. API consumers must not substitute the
 agent clock for disconnect detection or apply a second, shorter generic
 Connections staleness window.
+Availability target writes now use `observationLocationIds` as the canonical
+bounded set. Values are source-owned IDs (`pulse:local` or
+`agent:<agent-id>`), are normalized and deduplicated by the server, and every
+remote member requires the external-probe entitlement plus an existing agent.
+The compatibility `probeAgentId` field is accepted for older single-agent
+clients and is emitted only as a compatibility hint when the selected set can
+be represented by one remote path. Current status and unified-resource
+transport add aggregate state, disagreement, expected/reporting counts, and a
+per-location list containing only location ID, state, latency, observation and
+receipt times, freshness, and a bounded failure code. Callers must consume that
+server-authored aggregate rather than treating the latest reporting path as the
+whole service result.
 Mock availability fixtures must still behave like saved targets: `/api/connections`
 reports them as availability rows, `/api/availability-targets` lists them with
 probe status, and saved-test calls return the synthetic probe result instead of

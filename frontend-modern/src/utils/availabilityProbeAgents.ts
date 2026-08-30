@@ -23,6 +23,8 @@ export const EXTERNAL_PROBE_FEATURE = 'external_probe';
 
 /** Wire value for "run this check on the Pulse server itself". */
 export const LOCAL_PROBE_AGENT_VALUE = '';
+export const LOCAL_OBSERVATION_LOCATION_ID = 'pulse:local';
+export const AGENT_OBSERVATION_LOCATION_PREFIX = 'agent:';
 
 /** Default option label for the local Pulse server. */
 export const LOCAL_PROBE_AGENT_LABEL = 'This Pulse server';
@@ -39,6 +41,23 @@ export interface ProbeAgentOption {
   /** Human readable host name. */
   label: string;
 }
+
+export interface ObservationLocationOption {
+  id: string;
+  label: string;
+  kind: 'pulse' | 'agent';
+  agentId?: string;
+}
+
+export const observationLocationIdForAgent = (agentId: string): string =>
+  `${AGENT_OBSERVATION_LOCATION_PREFIX}${agentId.trim()}`;
+
+export const agentIdFromObservationLocation = (locationId?: string | null): string => {
+  const normalized = (locationId ?? '').trim();
+  return normalized.startsWith(AGENT_OBSERVATION_LOCATION_PREFIX)
+    ? normalized.slice(AGENT_OBSERVATION_LOCATION_PREFIX.length).trim()
+    : '';
+};
 
 /**
  * Build the selectable probe agent hosts from unified resources.
@@ -60,6 +79,32 @@ export function buildProbeAgentOptions(resources: readonly Resource[]): ProbeAge
   }
 
   return [...byId.values()].sort((left, right) => left.label.localeCompare(right.label));
+}
+
+export function buildObservationLocationOptions(
+  resources: readonly Resource[],
+): ObservationLocationOption[] {
+  return [
+    { id: LOCAL_OBSERVATION_LOCATION_ID, label: LOCAL_PROBE_AGENT_LABEL, kind: 'pulse' },
+    ...buildProbeAgentOptions(resources).map((option) => ({
+      id: observationLocationIdForAgent(option.id),
+      label: option.label,
+      kind: 'agent' as const,
+      agentId: option.id,
+    })),
+  ];
+}
+
+export function getObservationLocationLabel(
+  options: readonly ObservationLocationOption[],
+  locationId?: string | null,
+): string {
+  const normalized = (locationId ?? '').trim();
+  if (!normalized || normalized === LOCAL_OBSERVATION_LOCATION_ID) return LOCAL_PROBE_AGENT_LABEL;
+  return (
+    options.find((option) => option.id === normalized)?.label ??
+    (agentIdFromObservationLocation(normalized) || normalized)
+  );
 }
 
 /**

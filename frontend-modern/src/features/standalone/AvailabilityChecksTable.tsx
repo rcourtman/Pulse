@@ -283,10 +283,12 @@ export const AvailabilityChecksTable: Component<{
                     const result = () => probe()?.resultLabel ?? indicator().label;
                     const target = () => formatTarget(check);
                     const probeSource = () =>
-                      getProbeSourceChipLabel(
-                        props.probeAgentOptions ?? [],
-                        availability()?.probeAgentId,
-                      );
+                      (availability()?.locations?.length ?? 0) > 1
+                        ? `${availability()?.locations?.length} locations · ${availability()?.reportingLocations ?? 0}/${availability()?.expectedLocations ?? availability()?.locations?.length ?? 0} reporting`
+                        : getProbeSourceChipLabel(
+                            props.probeAgentOptions ?? [],
+                            availability()?.probeAgentId,
+                          );
                     const detailRowId = () => drawer.detailRowId(check);
                     const isExpanded = () => drawer.isExpanded(check);
 

@@ -154,6 +154,42 @@ func TestAvailabilityHandlersAcceptProbeAssignmentWithLicense(t *testing.T) {
 	}
 }
 
+func TestAvailabilityHandlersAcceptSeveralObservationLocationsOnOneTarget(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	monitor := monitorWithHostAgent(t, "edge-a")
+	if _, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent:     agentshost.AgentInfo{ID: "edge-b-agent", Version: "6.1.1", IntervalSeconds: 30},
+		Host:      agentshost.HostInfo{ID: "edge-b", MachineID: "edge-b", Hostname: "edge-b", Platform: "linux"},
+		Timestamp: time.Now().UTC(),
+	}, &config.APITokenRecord{ID: "token-edge-b", Name: "edge-b"}); err != nil {
+		t.Fatalf("ApplyHostReport() error = %v", err)
+	}
+	handler := NewAvailabilityHandlers(
+		func(context.Context) *config.ConfigPersistence { return persistence },
+		func(context.Context) *monitoring.Monitor { return monitor },
+		stubFeatureResolver(featureExternalProbeValue),
+	)
+	target := config.AvailabilityTarget{
+		Name:                   "Customer API",
+		Address:                "api.service.local",
+		Protocol:               config.AvailabilityProbeHTTPS,
+		Enabled:                true,
+		ObservationLocationIDs: []string{config.AvailabilityObservationLocationLocal, "agent:edge-a", "agent:edge-b"},
+	}
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets", availabilityRequestBody(t, target)))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("HandleAdd status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	var created config.AvailabilityTarget
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created target: %v", err)
+	}
+	if len(created.ObservationLocationIDs) != 3 || created.ProbeAgentID != "" {
+		t.Fatalf("created target = %+v, want one logical target with three locations", created)
+	}
+}
+
 func TestAvailabilityHandlersRejectUnknownProbeAgent(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	monitor := monitorWithHostAgent(t, "probe-host")
