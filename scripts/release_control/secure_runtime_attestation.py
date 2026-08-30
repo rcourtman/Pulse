@@ -11,12 +11,17 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
 
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+RFC3339_RE = re.compile(
+    r"^(?P<whole>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"
+    r"(?:\.(?P<fraction>\d+))?(?P<offset>Z|[+-]\d{2}:\d{2})$"
+)
 RECEIPT_SCHEMA_VERSION = 4
 ATTESTATION_SCHEMA_VERSION = 4
 SOURCE_MANIFEST_PATH = "scripts/release_control/secure_runtime_source_manifest_v4.json"
@@ -280,16 +285,25 @@ def load_receipt(path: Path) -> tuple[dict[str, Any], bytes]:
     return receipt, raw
 
 
-def parse_utc_timestamp(value: Any, label: str) -> datetime:
+def parse_utc_timestamp(value: Any, label: str) -> Decimal:
     if not isinstance(value, str) or not value:
         raise AttestationError(f"{label} must be an RFC3339 timestamp")
+    match = RFC3339_RE.fullmatch(value)
+    if match is None:
+        raise AttestationError(f"{label} must be an RFC3339 timestamp")
+    offset = "+00:00" if match.group("offset") == "Z" else match.group("offset")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(match.group("whole") + offset)
     except ValueError as exc:
         raise AttestationError(f"{label} must be an RFC3339 timestamp") from exc
     if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
         raise AttestationError(f"{label} must be UTC")
-    return parsed
+    delta = parsed - datetime(1970, 1, 1, tzinfo=timezone.utc)
+    whole_seconds = delta.days * 86400 + delta.seconds
+    fraction = match.group("fraction")
+    if fraction is None:
+        return Decimal(whole_seconds)
+    return Decimal(whole_seconds) + Decimal(f"0.{fraction}")
 
 
 def load_and_verify_transcript(
@@ -312,7 +326,7 @@ def load_and_verify_transcript(
         raise AttestationError("transcript digest mismatch")
 
     events: list[dict[str, Any]] = []
-    previous_time: datetime | None = None
+    previous_time: Decimal | None = None
     event_ids: set[str] = set()
     for line_number, raw_line in enumerate(raw.splitlines(), 1):
         if not raw_line.strip():

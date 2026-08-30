@@ -658,7 +658,7 @@ type secureRuntimeTranscriptEvent struct {
 	Observations map[string]any `json:"observations,omitempty"`
 	Summary      string         `json:"summary,omitempty"`
 	Operation    string         `json:"operation,omitempty"`
-	Output       string         `json:"output,omitempty"`
+	Output       string         `json:"output"`
 	OutputSHA256 string         `json:"output_sha256,omitempty"`
 }
 
@@ -785,6 +785,25 @@ func TestSecureRuntimeReceiptCredentialDetection(t *testing.T) {
 		if !secureRuntimeReceiptContainsCredential(unsafe) {
 			t.Fatalf("credential-bearing receipt was accepted: %s", unsafe)
 		}
+	}
+}
+
+func TestSecureRuntimeTranscriptPreservesEmptyCommandOutput(t *testing.T) {
+	event := secureRuntimeTranscriptEvent{
+		Sequence: 1, EventID: "event-0001", ObservedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		Kind: "command_output", Operation: "systemctl", OutputSHA256: secureRuntimeHash(nil),
+	}
+	encoded, err := json.Marshal(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatal(err)
+	}
+	output, present := payload["output"]
+	if !present || output != "" {
+		t.Fatalf("empty command output was not represented explicitly: %s", encoded)
 	}
 }
 

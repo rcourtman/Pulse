@@ -21,6 +21,7 @@ from secure_runtime_attestation import (
     SOURCE_MANIFEST_PATH,
     SOURCE_MANIFEST_SCHEMA_VERSION,
     create_attestation,
+    parse_utc_timestamp,
     sha256_bytes,
     verify_artifact_build_identity,
 )
@@ -226,6 +227,17 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
         self.assertEqual(result["transcript"]["event_count"], 13)
         self.assertEqual(result["source_manifest"]["manifest_id"], SOURCE_MANIFEST_ID)
         self.assertEqual(len(result["attestation_tool_sha256"]), 64)
+
+    def test_accepts_go_rfc3339nano_without_losing_fractional_order(self) -> None:
+        earlier = parse_utc_timestamp("2026-08-30T17:53:17.73472767Z", "earlier")
+        later = parse_utc_timestamp("2026-08-30T17:53:17.734727671Z", "later")
+        equivalent = parse_utc_timestamp("2026-08-30T17:53:17.734727670+00:00", "equivalent")
+        self.assertLess(earlier, later)
+        self.assertEqual(earlier, equivalent)
+
+    def test_rejects_non_utc_rfc3339nano(self) -> None:
+        with self.assertRaisesRegex(AttestationError, "must be UTC"):
+            parse_utc_timestamp("2026-08-30T18:53:17.73472767+01:00", "offset")
 
     def test_accepts_exact_release_candidate_ref(self) -> None:
         self.git("tag", "v9.0.0-rc.1", self.commit)
