@@ -151,6 +151,7 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	}
 	workflow := string(content)
 	required := []string{
+		`cron: '17 */6 * * *'`,
 		"workflow_run:",
 		"workflows: [Release Convergence]",
 		`github.event_name != 'workflow_run' || !contains(github.event.workflow_run.display_title, '-')`,
@@ -169,6 +170,9 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`./scripts/verify-stable-container-aliases.sh`,
 		`stable_container_aliases: $alias_result`,
 		`CONVERGENCE_RUN_ID: ${{ github.event.workflow_run.id }}`,
+		`TRIGGER_SCHEDULE: ${{ github.event.schedule }}`,
+		`mode=release_lock`,
+		`mode: $mode`,
 		`release_convergence_run: {`,
 		`./scripts/verify-release-helm-chart.sh`,
 		`EXPECTED_HELM_DIGEST: ${{ steps.release.outputs.helm_chart_digest }}`,
@@ -184,8 +188,27 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		t.Fatal("scheduled release continuity check must remain read-only")
 	}
 	for _, jobName := range []string{"container-lifecycle", "govulncheck", "npm-audit"} {
-		if !strings.Contains(workflowJobBlock(t, workflow, jobName), `github.event_name != 'workflow_run'`) {
+		block := workflowJobBlock(t, workflow, jobName)
+		if !strings.Contains(block, `github.event_name != 'workflow_run'`) {
 			t.Fatalf("%s must not run for the post-convergence continuity trigger", jobName)
+		}
+		if !strings.Contains(block, `github.event.schedule != '17 */6 * * *'`) {
+			t.Fatalf("%s must not run for the six-hour release-lock trigger", jobName)
+		}
+	}
+	for _, stepName := range []string{
+		"Set up Go",
+		"Set up Helm",
+		"Set up Docker Buildx",
+		"Verify immutable release and build provenance",
+		"Authenticate every published release asset",
+		"Verify exact-version container identities",
+		"Verify stable container discovery aliases",
+		"Verify exact-version Helm identity",
+	} {
+		step := workflowStepBlock(t, workflowJobBlock(t, workflow, "release-continuity"), stepName)
+		if !strings.Contains(step, `github.event.schedule != '17 */6 * * *'`) {
+			t.Fatalf("%s must not run for the six-hour release-lock trigger", stepName)
 		}
 	}
 }
@@ -3764,4 +3787,21 @@ func workflowJobBlock(t *testing.T, workflow, job string) string {
 		}
 	}
 	return workflow[start : start+len("  "+job+":\n")+end]
+}
+
+func workflowStepBlock(t *testing.T, jobBlock, step string) string {
+	t.Helper()
+
+	startMarker := "\n      - name: " + step + "\n"
+	start := strings.Index(jobBlock, startMarker)
+	if start == -1 {
+		t.Fatalf("workflow job missing step %s", step)
+	}
+	start += 1
+	rest := jobBlock[start+len("      - name: "+step+"\n"):]
+	end := len(rest)
+	if candidate := strings.Index(rest, "\n      - name: "); candidate >= 0 {
+		end = candidate
+	}
+	return jobBlock[start : start+len("      - name: "+step+"\n")+end]
 }

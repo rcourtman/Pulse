@@ -2,12 +2,13 @@ name: Security Scan
 
 # Build and Test audits dependencies on every push, but a quiet week with no
 # pushes means no run — and newly disclosed vulnerabilities or delivery drift
-# land against unchanged code. This schedule is the backstop: it re-scans every
-# Go module and npm lockfile against the current advisory databases, then
-# verifies the latest stable packet from the same public surfaces customers
-# consume. A failed scheduled run emails the repository owner.
+# land against unchanged code. The six-hour schedule cheaply verifies that the
+# advertised stable release remains locked and bound to its activation marker.
+# The weekly schedule re-scans every dependency and performs the full public
+# delivery verification. A failed scheduled run emails the repository owner.
 on:
   schedule:
+    - cron: '17 */6 * * *' # six-hour stable release lock and activation watch
     - cron: '30 5 * * 1' # weekly, Monday 05:30 UTC, before the 06:00 triage run
   workflow_dispatch:
   workflow_run:
@@ -22,7 +23,9 @@ jobs:
     name: Latest stable release continuity
     # Stable convergence gets an immediate independent read-back. Prerelease
     # convergence is excluded because this job intentionally follows the
-    # advertised stable channel; the weekly and manual backstops always run.
+    # advertised stable channel. The six-hour schedule stops after release and
+    # activation identity resolution; weekly, manual, and convergence runs
+    # continue through every artifact and customer-facing delivery surface.
     if: ${{ github.event_name != 'workflow_run' || !contains(github.event.workflow_run.display_title, '-') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -33,16 +36,19 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        if: ${{ github.event.schedule != '17 */6 * * *' }}
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
 
       - name: Set up Helm
+        if: ${{ github.event.schedule != '17 */6 * * *' }}
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
         with:
           version: v3.15.2
 
       - name: Set up Docker Buildx
+        if: ${{ github.event.schedule != '17 */6 * * *' }}
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Resolve the advertised stable release
@@ -100,7 +106,7 @@ jobs:
 
       - name: Verify immutable release and build provenance
         id: packet
-        if: ${{ always() && steps.release.outcome == 'success' }}
+        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -113,7 +119,7 @@ jobs:
 
       - name: Authenticate every published release asset
         id: assets
-        if: ${{ always() && steps.release.outcome == 'success' }}
+        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           REPOSITORY: ${{ github.repository }}
@@ -122,7 +128,7 @@ jobs:
 
       - name: Verify exact-version container identities
         id: containers
-        if: ${{ always() && steps.release.outcome == 'success' }}
+        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -144,7 +150,7 @@ jobs:
 
       - name: Verify stable container discovery aliases
         id: aliases
-        if: ${{ always() && steps.release.outcome == 'success' }}
+        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           TAG: ${{ steps.release.outputs.tag }}
           EXPECTED_SERVER_DIGEST: ${{ steps.release.outputs.server_image_digest }}
@@ -157,7 +163,7 @@ jobs:
 
       - name: Verify exact-version Helm identity
         id: helm
-        if: ${{ always() && steps.release.outcome == 'success' }}
+        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -175,6 +181,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
           TRIGGER_EVENT: ${{ github.event_name }}
+          TRIGGER_SCHEDULE: ${{ github.event.schedule }}
           CONVERGENCE_RUN_ID: ${{ github.event.workflow_run.id }}
           CONVERGENCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           CONVERGENCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
@@ -196,6 +203,10 @@ jobs:
           set -euo pipefail
           mkdir -p release-continuity-evidence
           checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mode=full
+          if [ "${TRIGGER_SCHEDULE}" = '17 */6 * * *' ]; then
+            mode=release_lock
+          fi
           jq -n \
             --arg schema_version "1" \
             --arg checked_at "${checked_at}" \
@@ -203,6 +214,8 @@ jobs:
             --arg run_id "${RUN_ID}" \
             --arg run_attempt "${RUN_ATTEMPT}" \
             --arg trigger_event "${TRIGGER_EVENT}" \
+            --arg trigger_schedule "${TRIGGER_SCHEDULE}" \
+            --arg mode "${mode}" \
             --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
             --arg convergence_run_attempt "${CONVERGENCE_RUN_ATTEMPT}" \
             --arg convergence_conclusion "${CONVERGENCE_CONCLUSION}" \
@@ -227,6 +240,8 @@ jobs:
               workflow_run: {id: $run_id, attempt: $run_attempt},
               trigger: {
                 event: $trigger_event,
+                schedule: $trigger_schedule,
+                mode: $mode,
                 release_convergence_run: {
                   id: $convergence_run_id,
                   attempt: $convergence_run_attempt,
@@ -265,7 +280,7 @@ jobs:
 
   container-lifecycle:
     name: Container trust and support window
-    if: ${{ github.event_name != 'workflow_run' }}
+    if: ${{ github.event_name != 'workflow_run' && github.event.schedule != '17 */6 * * *' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -285,7 +300,7 @@ jobs:
 
   govulncheck:
     name: Go Vulnerability Scan (${{ matrix.directory }})
-    if: ${{ github.event_name != 'workflow_run' }}
+    if: ${{ github.event_name != 'workflow_run' && github.event.schedule != '17 */6 * * *' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -313,7 +328,7 @@ jobs:
 
   npm-audit:
     name: npm Dependency Audit (${{ matrix.name }})
-    if: ${{ github.event_name != 'workflow_run' }}
+    if: ${{ github.event_name != 'workflow_run' && github.event.schedule != '17 */6 * * *' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false

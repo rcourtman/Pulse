@@ -29,9 +29,10 @@ non-confidential.
 
 ## Release Continuity
 
-The weekly `security-scan.yml` backstop and an immediate read-back after every
-stable release convergence verify the latest advertised stable release from
-the public surfaces customers use. They bind the immutable
+The `security-scan.yml` backstop checks the latest stable release lock and
+activation identity every six hours. Its weekly run and an immediate read-back
+after every stable release convergence perform the full verification from the
+public surfaces customers use. They bind the immutable
 GitHub release and activation marker to one source commit, authenticate every
 checksummed release asset and SSH signature, re-verify release and build
 attestations, and require the exact Docker Hub, GHCR, and OCI Helm identities
@@ -39,8 +40,9 @@ to remain equal to the digests committed at activation. Stable Docker Hub and
 GHCR discovery aliases (`latest`, major, and major-minor) must also retain
 those identities. Every run retains a
 machine-readable evidence packet for 90 days, including partial outcomes when
-a check fails. The job is read-only and requires the public
-`PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable.
+a check fails. Six-hour lock-watch evidence explicitly records its narrower
+`release_lock` mode and skipped full-surface checks. The job is read-only and
+requires the public `PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable.
 
 ## Issue Triage Automation
 
