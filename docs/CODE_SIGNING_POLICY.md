@@ -73,6 +73,13 @@ Normal stable publication and stable dry runs select `signpath` directly.
   policy is invalid.
 - Release checksums and detached signatures are published alongside artifacts
   and verified independently after publication.
+- The GitHub-hosted `build-release-candidate.yml` assembly job emits SLSA v1
+  provenance for every candidate file after complete local validation. Its
+  Sigstore bundle is then added to the immutable candidate as
+  `release-build-provenance.sigstore.json`; publication cannot replace that
+  bundle without failing the candidate manifest. This preserves the exact
+  builder evidence for offline verification instead of recreating provenance
+  in the later publication job.
 - The exact-version OCI Helm chart is published only by the hosted
   `publish-helm-chart.yml` workflow. Its SHA-256 manifest digest and GitHub
   build-provenance attestation must bind to the release source commit before
@@ -84,8 +91,11 @@ Normal stable publication and stable dry runs select `signpath` directly.
   literal signer-identity matcher fix. The shared
   `scripts/require-safe-gh-attestation.sh` guard enforces this floor. The
   published checksum manifest must carry build provenance from the exact
-  `create-release.yml` workflow and release source commit; repository-level
-  provenance is not sufficient.
+  `build-release-candidate.yml` workflow and release source commit;
+  repository-level provenance is not sufficient. Immutable releases created
+  before portable candidate bundles remain verified against their original
+  `create-release.yml` publication provenance. Both paths reject provenance
+  emitted from a self-hosted runner.
 - Every new release is assembled and validated as a draft. Its activation
   marker is uploaded and digest-checked before publication; GitHub must then
   report the published release as immutable, protecting its tag and complete

@@ -73,6 +73,11 @@ Normal stable publication and stable dry runs select `signpath` directly.
   policy is invalid.
 - Release checksums and detached signatures are published alongside artifacts
   and verified independently after publication.
+- The GitHub-hosted `build-release-candidate.yml` assembly job emits SLSA v1
+  provenance for every candidate file after complete local validation. Its
+  portable Sigstore bundle is published as
+  `release-build-provenance.sigstore.json` and covered by the immutable
+  candidate manifest. Verification rejects self-hosted provenance.
 - Every new release is assembled and validated as a draft. Its activation
   marker is uploaded and digest-checked before publication; GitHub must then
   report the published release as immutable, protecting its tag and complete

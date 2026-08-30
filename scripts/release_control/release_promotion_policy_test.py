@@ -1377,12 +1377,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertRegex(
             workflow,
             r"(?ms)^  build_release_candidate:\n.*?^    permissions:\n"
-            r"      actions: write\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
+            r"      actions: write\n      attestations: write\n      contents: read\n"
+            r"      id-token: write\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
         )
         self.assertRegex(
             release_workflow,
             r"(?ms)^  build_release_candidate:\n.*?^    permissions:\n"
-            r"      actions: write\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
+            r"      actions: write\n      attestations: write\n      contents: read\n"
+            r"      id-token: write\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
         )
         self.assertIn("Definitive Dry-Run Verdict", workflow)
         self.assertIn('require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success', workflow)
@@ -1731,10 +1733,27 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("tests/integration/release-integration-diagnostics/", content)
         self.assertIn("--target runtime_prebuilt", docker_build)
         self.assertIn("--target agent_runtime_prebuilt", docker_build)
-        self.assertIn("id-token: write", content)
-        self.assertIn("attestations: write", content)
-        self.assertIn("uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4", content)
-        self.assertIn("subject-path: release/*", content)
+        self.assertIn("id-token: write", candidate_workflow)
+        self.assertIn("attestations: write", candidate_workflow)
+        self.assertIn(
+            "uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4",
+            candidate_workflow,
+        )
+        self.assertIn(
+            "subject-checksums: ${{ runner.temp }}/release-candidate-subjects.sha256",
+            candidate_workflow,
+        )
+        self.assertIn("Preserve portable build provenance", candidate_workflow)
+        self.assertIn("release-build-provenance.sigstore.json", candidate_workflow)
+        self.assertLess(
+            candidate_workflow.index("Validate complete candidate locally"),
+            candidate_workflow.index("Attest complete release candidate"),
+        )
+        self.assertLess(
+            candidate_workflow.index("Attest complete release candidate"),
+            candidate_workflow.index("Seal immutable candidate manifest"),
+        )
+        self.assertIn("release-build-provenance.sigstore.json", content)
         build_script = read("scripts/build-release.sh")
         release_asset_helper = read("scripts/release_asset_common.sh")
         backfill_script = read("scripts/backfill-release-assets.sh")

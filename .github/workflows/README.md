@@ -44,6 +44,12 @@ a check fails. Six-hour lock-watch evidence explicitly records its narrower
 `release_lock` mode and skipped full-surface checks. The job is read-only and
 requires the public `PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable.
 
+Future release candidates also carry
+`release-build-provenance.sigstore.json`, produced by the hosted
+`build-release-candidate.yml` job after complete candidate validation. The
+bundle is covered by the immutable candidate manifest and lets consumers
+verify downloaded files offline against the candidate-builder identity.
+
 ## Issue Triage Automation
 
 **Files**:

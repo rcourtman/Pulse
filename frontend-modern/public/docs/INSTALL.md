@@ -26,6 +26,39 @@ See the [Code Signing Policy](CODE_SIGNING_POLICY.md) for build provenance,
 approval roles, signing scope, and reporting requirements. Release downloads
 are published on the [GitHub Releases page](https://github.com/rcourtman/Pulse/releases).
 
+## Verify release build provenance
+
+New release packets include `release-build-provenance.sigstore.json`, the
+Sigstore bundle emitted by the hosted workflow that assembled and validated
+the candidate. Verify a downloaded asset against that exact workflow and the
+release source commit with GitHub CLI 2.97.0 or newer:
+
+```bash
+export PULSE_VERSION=vX.Y.Z
+export PULSE_ASSET=pulse-vX.Y.Z-linux-amd64.tar.gz
+gh release download "${PULSE_VERSION}" --repo rcourtman/Pulse \
+  --pattern "${PULSE_ASSET}" \
+  --pattern release-build-provenance.sigstore.json
+SOURCE_SHA="$(gh api "repos/rcourtman/Pulse/releases/tags/${PULSE_VERSION}" \
+  --jq .target_commitish)"
+printf '%s\n' "${SOURCE_SHA}" > release-source-sha.txt
+gh attestation verify "${PULSE_ASSET}" \
+  --repo rcourtman/Pulse \
+  --bundle release-build-provenance.sigstore.json \
+  --signer-workflow github.com/rcourtman/Pulse/.github/workflows/build-release-candidate.yml \
+  --source-digest "${SOURCE_SHA}" \
+  --deny-self-hosted-runners \
+  --predicate-type https://slsa.dev/provenance/v1
+```
+
+For an offline target, also run `gh attestation trusted-root >
+trusted_root.jsonl` on the connected trusted machine and transfer that file
+with the asset, bundle, and `release-source-sha.txt`. On the offline target,
+restore `SOURCE_SHA="$(cat release-source-sha.txt)"` and add
+`--custom-trusted-root trusted_root.jsonl` to the verification command. Refresh
+the trusted root whenever importing newly signed material; an old copy cannot
+report later key revocation or rotation.
+
 ## 🚀 Quick Start (Recommended)
 
 ### Proxmox VE (LXC installer)

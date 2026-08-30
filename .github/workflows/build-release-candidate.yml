@@ -634,7 +634,9 @@ jobs:
     timeout-minutes: 60
     permissions:
       actions: read
+      attestations: write
       contents: read
+      id-token: write
     outputs:
       artifact_name: ${{ steps.identity.outputs.artifact_name }}
       manifest_artifact_name: ${{ steps.identity.outputs.manifest_artifact_name }}
@@ -817,7 +819,43 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: ./scripts/validate-release.sh "${VERSION}" --skip-docker
 
-      - name: Create immutable candidate manifest
+      - name: Create candidate subject manifest
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release_candidate_manifest.py create \
+            --release-dir release \
+            --version "${VERSION}" \
+            --source-sha "${GITHUB_SHA}" \
+            --output release-candidate-manifest/release-candidate.json
+          jq -r \
+            '.assets[] | "\(.sha256)  release/\(.name)"' \
+            release-candidate-manifest/release-candidate.json \
+            > "$RUNNER_TEMP/release-candidate-subjects.sha256"
+
+      # Generate provenance at the hosted boundary that assembled and validated
+      # the complete candidate, rather than later in the publication job. Keep
+      # the Sigstore bundle with the candidate so customers can verify an exact
+      # downloaded asset without access to GitHub's attestation API.
+      - name: Attest complete release candidate
+        id: attest_release_candidate
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-checksums: ${{ runner.temp }}/release-candidate-subjects.sha256
+
+      - name: Preserve portable build provenance
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.attest_release_candidate.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          test -s "${PROVENANCE_BUNDLE}"
+          jq -e 'type == "object"' "${PROVENANCE_BUNDLE}" >/dev/null
+          install -m 0644 \
+            "${PROVENANCE_BUNDLE}" \
+            release/release-build-provenance.sigstore.json
+
+      - name: Seal immutable candidate manifest
         env:
           VERSION: ${{ inputs.version }}
         run: |

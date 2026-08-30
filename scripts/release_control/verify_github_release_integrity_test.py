@@ -65,6 +65,10 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                           fi
                           printf '%s\\n' '{{"schema_version": 1}}' > "$2/release-activation.json"
                           printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$2/checksums.txt"
+                          if [ "$HAS_PORTABLE_PROVENANCE" = true ]; then
+                            printf '%s\\n' '{{"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"}}' \
+                              > "$2/release-build-provenance.sigstore.json"
+                          fi
                           exit 0
                         fi
                         shift
@@ -95,6 +99,13 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                     "GH_VERSION": gh_version,
                     "PARTIAL_DOWNLOAD_ONCE": str(partial_download_once).lower(),
                     "DOWNLOAD_STATE": str(root / "download-state"),
+                    "HAS_PORTABLE_PROVENANCE": str(
+                        any(
+                            asset.get("name")
+                            == "release-build-provenance.sigstore.json"
+                            for asset in release.get("assets", [])
+                        )
+                    ).lower(),
                 }
             )
             result = subprocess.run(
@@ -109,8 +120,8 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
             return result, call_text
 
     @staticmethod
-    def release(*, immutable: bool = True) -> dict:
-        return {
+    def release(*, immutable: bool = True, portable_provenance: bool = False) -> dict:
+        release = {
             "id": 123,
             "tag_name": "v6.5.0",
             "target_commitish": SOURCE_SHA,
@@ -127,6 +138,16 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                 }
             ],
         }
+        if portable_provenance:
+            release["assets"].append(
+                {
+                    "name": "release-build-provenance.sigstore.json",
+                    "state": "uploaded",
+                    "size": 1200,
+                    "digest": "sha256:" + "c" * 64,
+                }
+            )
+        return release
 
     def test_accepts_immutable_release_with_verified_attestation(self) -> None:
         result, calls = self.run_verifier(self.release())
@@ -143,7 +164,27 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
             calls,
         )
         self.assertIn(f"--source-digest {SOURCE_SHA}", calls)
+        self.assertIn("--deny-self-hosted-runners", calls)
         self.assertIn("--predicate-type https://slsa.dev/provenance/v1", calls)
+
+    def test_prefers_portable_candidate_build_provenance(self) -> None:
+        result, calls = self.run_verifier(self.release(portable_provenance=True))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("portable candidate-build provenance", result.stdout)
+        self.assertIn(
+            "--signer-workflow github.com/rcourtman/Pulse/.github/workflows/build-release-candidate.yml",
+            calls,
+        )
+        self.assertIn("--bundle ", calls)
+        self.assertIn("release-build-provenance.sigstore.json", calls)
+
+    def test_rejects_invalid_portable_provenance_asset(self) -> None:
+        release = self.release(portable_provenance=True)
+        release["assets"][1]["size"] = 0
+        result, calls = self.run_verifier(release)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid portable provenance asset", result.stderr)
+        self.assertNotIn("release verify", calls)
 
     def test_rejects_mutable_release_before_attestation(self) -> None:
         result, calls = self.run_verifier(self.release(immutable=False))

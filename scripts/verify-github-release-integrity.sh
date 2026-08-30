@@ -59,7 +59,9 @@ attestation_json="$(mktemp)"
 activation_dir="$(mktemp -d)"
 activation_asset="${activation_dir}/release-activation.json"
 checksums_asset="${activation_dir}/checksums.txt"
-SIGNER_WORKFLOW="github.com/${REPO}/.github/workflows/create-release.yml"
+provenance_asset="${activation_dir}/release-build-provenance.sigstore.json"
+legacy_signer_workflow="github.com/${REPO}/.github/workflows/create-release.yml"
+candidate_signer_workflow="github.com/${REPO}/.github/workflows/build-release-candidate.yml"
 cleanup() {
     rm -f "$release_json" "$attestation_json"
     rm -rf "$activation_dir"
@@ -97,6 +99,30 @@ if ! jq -e \
     exit 1
 fi
 
+# New release candidates carry the exact Sigstore bundle created by the hosted
+# candidate builder. Existing immutable releases predate that asset and retain
+# their publication-workflow provenance, so continuity checks remain valid
+# until the next stable packet is activated.
+provenance_asset_count="$(
+    jq '[.assets[]? | select(.name == "release-build-provenance.sigstore.json")] | length' \
+        "$release_json"
+)"
+if [ "$provenance_asset_count" -gt 1 ]; then
+    echo "GitHub release ${TAG} contains duplicate portable provenance assets." >&2
+    exit 1
+fi
+if [ "$provenance_asset_count" = 1 ] && ! jq -e \
+    '[.assets[]? | select(
+       .name == "release-build-provenance.sigstore.json" and
+       .state == "uploaded" and
+       (.size | type == "number" and . > 0) and
+       (.digest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+     )] | length == 1' \
+    "$release_json" >/dev/null; then
+    echo "GitHub release ${TAG} has an invalid portable provenance asset." >&2
+    exit 1
+fi
+
 verified=false
 for attempt in $(seq 1 "$ATTESTATION_ATTEMPTS"); do
     if gh release verify "$TAG" --repo "$REPO" --format json > "$attestation_json"; then
@@ -124,17 +150,24 @@ fi
 # release attestation rather than trusting filename and JSON identity alone.
 downloaded=false
 for attempt in $(seq 1 "$ATTESTATION_ATTEMPTS"); do
-    # A previous attempt can leave either asset behind after a partial
-    # download. Clear both because gh release download refuses to overwrite
+    # A previous attempt can leave any asset behind after a partial
+    # download. Clear them because gh release download refuses to overwrite
     # existing files unless explicitly told to do so.
-    rm -f "$activation_asset" "$checksums_asset"
-    if gh release download "$TAG" \
-        --repo "$REPO" \
-        --pattern release-activation.json \
-        --pattern checksums.txt \
-        --dir "$activation_dir" && \
+    rm -f "$activation_asset" "$checksums_asset" "$provenance_asset"
+    download_args=(
+        "$TAG"
+        --repo "$REPO"
+        --pattern release-activation.json
+        --pattern checksums.txt
+        --dir "$activation_dir"
+    )
+    if [ "$provenance_asset_count" = 1 ]; then
+        download_args+=(--pattern release-build-provenance.sigstore.json)
+    fi
+    if gh release download "${download_args[@]}" && \
        [ -s "$activation_asset" ] && \
-       [ -s "$checksums_asset" ]; then
+       [ -s "$checksums_asset" ] && \
+       { [ "$provenance_asset_count" = 0 ] || [ -s "$provenance_asset" ]; }; then
         downloaded=true
         break
     fi
@@ -174,11 +207,29 @@ if ! jq -e 'type == "object" or type == "array"' "$attestation_json" >/dev/null;
     echo "GitHub release checksum manifest verification returned malformed JSON for ${TAG}." >&2
     exit 1
 fi
+signer_workflow="$legacy_signer_workflow"
+bundle_args=()
+if [ "$provenance_asset_count" = 1 ]; then
+    if ! gh release verify-asset "$TAG" "$provenance_asset" \
+        --repo "$REPO" --format json > "$attestation_json"; then
+        echo "GitHub release portable provenance asset verification failed for ${TAG}." >&2
+        exit 1
+    fi
+    if ! jq -e 'type == "object" or type == "array"' "$attestation_json" >/dev/null; then
+        echo "GitHub release portable provenance asset verification returned malformed JSON for ${TAG}." >&2
+        exit 1
+    fi
+    signer_workflow="$candidate_signer_workflow"
+    bundle_args=(--bundle "$provenance_asset")
+fi
+
 if ! gh attestation verify "$checksums_asset" \
     --repo "$REPO" \
-    --signer-workflow "$SIGNER_WORKFLOW" \
+    --signer-workflow "$signer_workflow" \
     --source-digest "$EXPECTED_SOURCE_SHA" \
+    --deny-self-hosted-runners \
     --predicate-type https://slsa.dev/provenance/v1 \
+    "${bundle_args[@]}" \
     >/dev/null; then
     echo "Release checksum manifest build provenance verification failed for ${TAG}." >&2
     exit 1
@@ -187,4 +238,9 @@ fi
 release_id="$(jq -r '.id' "$release_json")"
 source_sha="$(jq -r '.target_commitish' "$release_json")"
 asset_count="$(jq -r '.assets | length' "$release_json")"
-echo "[OK] GitHub release ${TAG} is immutable, release-attested, activation-asset-bound, and build-provenance-bound: release_id=${release_id} source_sha=${source_sha} assets=${asset_count}."
+if [ "$provenance_asset_count" = 1 ]; then
+    provenance_status="portable candidate-build provenance"
+else
+    provenance_status="legacy publication provenance"
+fi
+echo "[OK] GitHub release ${TAG} is immutable, release-attested, activation-asset-bound, and build-provenance-bound (${provenance_status}): release_id=${release_id} source_sha=${source_sha} assets=${asset_count}."

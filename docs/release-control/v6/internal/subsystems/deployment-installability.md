@@ -964,6 +964,13 @@ artifact-selection behaviour.
    unpublished draft until every exact-version customer artifact required by
    the cut has passed its owned proof. It must then be published and publicly
    verified before any mutable customer pointer or live environment advances.
+   After complete local packet validation, the GitHub-hosted candidate assembly
+   job must issue SLSA v1 provenance over every file represented by the
+   pre-provenance candidate manifest. It must preserve the resulting portable
+   Sigstore bundle as `release-build-provenance.sigstore.json` before sealing
+   the final immutable candidate manifest. The publication job may transport
+   only that manifest-bound bundle; it must not replace candidate-build
+   provenance with a later publication-bound attestation.
    Standard post-upload validation
    must compare that manifest with GitHub's server-side asset digests instead
    of downloading the complete release packet again. Historical repair and
@@ -4568,6 +4575,12 @@ activation path.
 Attestation policy decisions require GitHub CLI 2.97.0 or newer so signer
 repository and workflow names are matched literally. The shared verifier must
 also bind the downloaded `checksums.txt` bytes to the immutable release and to
-SLSA v1 provenance from the exact `create-release.yml` workflow and expected
-source SHA. Multi-asset download retries clear both the activation marker and
-checksum manifest first so a partial attempt cannot poison every later retry.
+SLSA v1 provenance from the exact expected source SHA while rejecting
+self-hosted provenance. A manifest-bound
+`release-build-provenance.sigstore.json` must itself pass the immutable release
+asset proof and must verify `checksums.txt` from the exact
+`build-release-candidate.yml` signer using that local bundle. Immutable
+historical releases without a portable candidate bundle retain verification
+against their original `create-release.yml` publication provenance. Multi-asset
+download retries clear the activation marker, checksum manifest, and portable
+bundle first so a partial attempt cannot poison every later retry.
