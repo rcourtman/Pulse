@@ -29,11 +29,14 @@ describe('useNotificationDeliveryLog', () => {
             timestamp: '2026-08-20T12:00:00Z',
           },
         ],
-        windowDays: 7,
+        windowDays: 30,
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
       });
       const state = useNotificationDeliveryLog();
 
       await state.loadDeliveryLog();
+      expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledWith(200);
       expect(state.deliveryLog()?.entries).toHaveLength(1);
       expect(state.deliveryLogUnavailable()).toBe(false);
       dispose();
@@ -55,7 +58,9 @@ describe('useNotificationDeliveryLog', () => {
       vi.mocked(NotificationsAPI.getDeliveryLog).mockRejectedValueOnce(new Error('network down'));
       vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({
         entries: [],
-        windowDays: 7,
+        windowDays: 30,
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
       });
       const state = useNotificationDeliveryLog();
 

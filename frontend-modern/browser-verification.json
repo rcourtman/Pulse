@@ -1,31 +1,27 @@
 {
   "version": 1,
-  "base_sha": "47c1cee895fea1c395871acb307acbf3711cb4d5",
-  "verified_at": "2026-08-30T21:19:54Z",
+  "base_sha": "22fd662fb794f63efb9d3ca2158de73c4e07e1b8",
+  "verified_at": "2026-08-30T23:35:47Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertIncidentSynthesisSummary.tsx",
-    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
-    "frontend-modern/src/features/alerts/incidentSynthesisPresentation.ts",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/types/api.ts"
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertIncidentSynthesisSummary.tsx": "4c407221597fbe5bd39853d0cc4f35f62955e5e5354d5f520328bd61593f2f0a",
-    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "d313bc7c99659a875bf474af48fbfc46e825e69fadca4787adf80c3d1e4d9ccc",
-    "frontend-modern/src/features/alerts/incidentSynthesisPresentation.ts": "db413b54911aadb73a300b6460260a7c6dc2ce245375a0323cb6e0244f96f3e5",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "338aecd07546264d19e0db9a29a9c01ea337a416f316a3a4d24383d4eb9ab22e",
-    "frontend-modern/src/i18n/messages.de.ts": "8240c64256088196a224939438b510aecbf55372639b5db4182af5becde4df59",
-    "frontend-modern/src/i18n/messages.es.ts": "a932a856c2b4d83efe79c50c96e597767ba4a08c2e1252bdfca29a2e89b87875",
-    "frontend-modern/src/i18n/messages.ts": "43a757e00eaa7879c400895c9c59a930e31513dbf03e0ae6d60f7e72a6ad9962",
-    "frontend-modern/src/types/api.ts": "f6f313ff304c6d9eaf72fe3225cc7e1615e9f989c44862080ccdcbe267bb8cec"
+    "frontend-modern/src/api/notifications.ts": "3351869d747f2b915173d4923c61ee020256930c35d545976c1050976d38e587",
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "1f8109a0405636c6e28af4f182fa20c03fe466379962f613960bf9e8eb9aac50",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "b3eb5fb9d465d70d2ce38d36cef287a15df6f79736139fad1f7186b015446760",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "663960cfbc9980fac55593e7bcc20d9a72c7ba1947d6c9a73d7ffc242f9b561d",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "f09fe60111afdc634f5dd6dd631c5f0947f3b6fd7d8b213adb17f5b3c27c0534",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "047fe800ad7c4f8ed875f83214a5a161a4342c31799e5efeca5ca2c54054bed1",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "e46ef2147f70229dc5a78c3167c7ec2021059816799e585b7f3e092fa861fdd3"
   },
-  "routes": [
-    "/alerts/overview"
-  ],
+  "routes": ["/alerts/overview", "/alerts/notifications"],
   "viewports": [
     {
       "width": 1280,
@@ -37,17 +33,17 @@
     }
   ],
   "states": [
-    "settled Alerts overview backed by the local mock runtime and a deterministic supported-cause Alert contract fixture",
-    "supported infrastructure cause summary with runtime classification, affected-resource count, and bounded observation count",
-    "expanded synthesis evidence with resource names, typed failure classes, observation times, and long evidence identifiers",
-    "expanded linked signal cards beneath the declared primary alert",
-    "desktop and narrow layouts with no horizontal overflow or clipped alert actions"
+    "degraded delivery health with one failed and two dead-lettered retained deliveries",
+    "mixed-retention activity with a named webhook, alert identifier, failure class, redacted-safe error text, and absolute timestamp",
+    "refresh in progress with the activity refresh control disabled",
+    "empty delivery activity after a successful refresh",
+    "unavailable delivery activity after a failed refresh",
+    "desktop and narrow layouts with health before activity and no horizontal overflow"
   ],
   "interactions": [
-    "opened the Alerts overview after the local backend and WebSocket stream reported connected",
-    "expanded Review synthesis evidence and inspected both independent detector observations",
-    "expanded the linked signal group and confirmed the supporting alert retained its own actions and lifecycle card",
-    "repeated the expanded evidence and linked-signal checks at 1280x800 and 390x844",
-    "removed the temporary browser-only contract fixture and retained only the production synthesis implementation"
+    "followed Review delivery activity from Alerts Overview to the Notifications route at 1280x800 and 390x844",
+    "confirmed the Notifications activity request used the bounded limit=200 query",
+    "inspected seven-day completed and 30-day dead-letter retention copy plus semantic absolute timestamps at both viewports",
+    "refreshed activity through loading, restored, empty, and unavailable responses and confirmed loading disabled the refresh control"
   ]
 }

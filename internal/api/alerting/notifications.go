@@ -1064,7 +1064,7 @@ func (h *NotificationHandlers) GetDeliveryLog(w http.ResponseWriter, r *http.Req
 	}
 
 	entries, err := manager.GetDeliveryLog(
-		time.Now().Add(-completedQueueRetentionDays*24*time.Hour), limit,
+		time.Now().Add(-deadLetterQueueRetentionDays*24*time.Hour), limit,
 	)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to read notification delivery log")
@@ -1083,7 +1083,8 @@ func (h *NotificationHandlers) GetDeliveryLog(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"entries":                       entries,
-		"window_days":                   completedQueueRetentionDays,
+		"window_days":                   deadLetterQueueRetentionDays,
+		"completed_retention_days":      completedQueueRetentionDays,
 		"dead_letter_retention_days":    deadLetterQueueRetentionDays,
 		"entries_are_retention_bounded": true,
 	})

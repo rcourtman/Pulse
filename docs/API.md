@@ -595,6 +595,12 @@ Common reporting error codes:
 - `no_resources`, `too_many_resources`, `body_too_large`, `invalid_body`
 
 ### Queue and Dead-Letter Tools
+- `GET /api/notifications/delivery-log?limit=200` (admin, `settings:read`)
+  - Returns recent per-attempt delivery evidence with destination identifiers,
+    alert identifiers, outcomes, timestamps, failure classes, and redacted error
+    text. Completed attempts are retained for 7 days; dead-letter attempts are
+    retained for 30 days, so the response reports both windows explicitly.
+  - `limit` defaults to 50 and is capped at 200.
 - `GET /api/notifications/queue/stats` (admin)
   - Returns counts for all rows still retained by the queue. Status counts have
     different retention windows and are not a delivery rate or lifetime total.

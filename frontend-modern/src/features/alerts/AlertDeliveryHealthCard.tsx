@@ -2,13 +2,14 @@ import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 
 import type { NotificationQueueHealth } from '@/api/notifications';
-import { Button } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import {
   getAlertDestinationsDeliveryDismissLabel,
   getAlertDestinationsDeliveryHealthDescription,
   getAlertDestinationsDeliveryHealthTitle,
   getAlertDestinationsDeliveryRefreshLabel,
+  getAlertDestinationsDeliveryReviewLabel,
   getAlertDestinationsDeliveryRetryLabel,
 } from '@/utils/alertDestinationsPresentation';
 
@@ -21,6 +22,7 @@ interface AlertDeliveryHealthCardProps {
   dismissingFailures?: boolean;
   onRetryFailures?: () => void;
   onDismissFailures?: () => void;
+  detailsHref?: string;
 }
 
 export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
@@ -54,6 +56,11 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
           </div>
         </div>
         <div class="flex flex-shrink-0 flex-wrap items-center gap-2">
+          {props.detailsHref ? (
+            <ButtonLink variant="secondary" size="sm" href={props.detailsHref}>
+              {getAlertDestinationsDeliveryReviewLabel()}
+            </ButtonLink>
+          ) : null}
           {props.onRetryFailures ? (
             <Button
               variant="secondary"

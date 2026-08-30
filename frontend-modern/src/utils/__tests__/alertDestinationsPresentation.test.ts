@@ -183,7 +183,7 @@ describe('alertDestinationsPresentation', () => {
         failureClassesAvailable: true,
       }),
     ).toBe(
-      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Pulse removes expired records hourly, so this warning clears after the last retained failure reaches its retention limit if no new terminal failures occur. Most recent terminal failures were classified as authentication (3). Check destination credentials, tokens, and account permissions. Recoverable retry attempts do not trigger this warning.',
+      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Most recent terminal failures were classified as authentication (3). Check destination credentials, tokens, and account permissions. Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them; dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.',
     );
     expect(
       getAlertDestinationsDeliveryHealthDescription({
@@ -224,8 +224,9 @@ describe('alert destinations delivery log copy', () => {
 
   it('names the retention window and the test-send caveat so absence is not read as failure', () => {
     expect(getAlertDestinationsDeliveryLogTitle()).toBe('Recent delivery activity');
-    const description = getAlertDestinationsDeliveryLogDescription(7);
-    expect(description).toContain('last 7 days');
+    const description = getAlertDestinationsDeliveryLogDescription(7, 30);
+    expect(description).toContain('retained for 7 days');
+    expect(description).toContain('remain available for 30 days');
     expect(description).toContain('held notifications');
     expect(description).toContain('Test sends skip the queue');
     expect(getAlertDestinationsDeliveryLogEmpty()).toContain('No alert deliveries were attempted');

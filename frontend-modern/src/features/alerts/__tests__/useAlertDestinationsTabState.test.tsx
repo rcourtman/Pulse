@@ -162,7 +162,9 @@ describe('useAlertDestinationsTabState', () => {
           timestamp: '2026-08-20T12:00:00Z',
         },
       ],
-      windowDays: 7,
+      windowDays: 30,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 30,
     });
     vi.mocked(AlertsAPI.getEvents).mockResolvedValue([
       {
@@ -256,7 +258,12 @@ describe('useAlertDestinationsTabState', () => {
 
     vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
     vi.mocked(NotificationsAPI.getHealth).mockRejectedValue(new Error('offline'));
-    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [], windowDays: 7 });
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({
+      entries: [],
+      windowDays: 30,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 30,
+    });
     // The backend reports the test went out while the activation gate keeps
     // real alerts suppressed; plain success here is the postmortem trap.
     vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({
@@ -327,7 +334,12 @@ describe('useAlertDestinationsTabState', () => {
         terminalFailuresAffectHealth: true,
       },
     });
-    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [], windowDays: 7 });
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({
+      entries: [],
+      windowDays: 30,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 30,
+    });
     vi.mocked(NotificationsAPI.retryTerminalFailures).mockResolvedValue({
       affected: 3,
       success: true,

@@ -4754,6 +4754,11 @@ first — `entries` carrying `notificationId`, `type`, `destinationId`,
 `timestamp` — alongside `window_days` and retention metadata, because the
 counts are retention-bounded and must not read as lifetime history; webhook
 secrets are redacted from error text before the payload leaves the API. The
+read spans the longest retained class (30 days) so dead-letter evidence is not
+silently excluded, while `completed_retention_days: 7` and
+`dead_letter_retention_days: 30` disclose the mixed completeness of that
+window. `limit` defaults to 50 and is capped at 200; the Alerts evidence view
+requests that bounded maximum. The
 frontend transport in `frontend-modern/src/api/notifications.ts` validates
 entry shape and drops malformed rows rather than rendering them. It must route
 `entries` through the shared `arrayOrEmpty` normalization helper instead of

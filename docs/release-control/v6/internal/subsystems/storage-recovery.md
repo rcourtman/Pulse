@@ -5702,6 +5702,10 @@ delivery outcomes and the delivery gate state only; they add no storage,
 backup, snapshot, restore, retention, cleanup, or recovery capability, write
 nothing, and leave storage and recovery state, evidence freshness,
 persistence, and admission contracts unchanged.
+The delivery-log read may span the notifications-owned 30-day dead-letter
+window and name separate seven-day completed-attempt retention. Those values
+describe notification queue cleanup only; they are not backup retention,
+recovery-point age, restore evidence, or authority to inspect or alter storage.
 The alerts-owned per-incident snooze and resume routes share the same boundary:
 they pause and restore notification and escalation policy while monitoring and
 resolution detection continue. A snooze is not a recovery point, backup hold,

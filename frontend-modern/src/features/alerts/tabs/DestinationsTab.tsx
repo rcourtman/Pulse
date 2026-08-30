@@ -92,6 +92,15 @@ export function DestinationsTab(props: DestinationsTabProps) {
           />
         </Show>
 
+        <AlertDeliveryLogCard
+          log={state.deliveryLog()}
+          unavailable={state.deliveryLogUnavailable()}
+          refreshing={state.refreshingDeliveryLog()}
+          onRefresh={() => void state.loadDeliveryLog()}
+          webhooks={state.webhooks()}
+          heldEvents={state.heldEvents()}
+        />
+
         <Show when={state.hasLoadError()}>
           <AlertDestinationsLoadErrorCard
             error={props.configLoadError() || state.webhookLoadError() || ''}
@@ -140,15 +149,6 @@ export function DestinationsTab(props: DestinationsTabProps) {
             props.setPushMinimumSeverity(minimumSeverity);
             props.setHasUnsavedChanges(true);
           }}
-        />
-
-        <AlertDeliveryLogCard
-          log={state.deliveryLog()}
-          unavailable={state.deliveryLogUnavailable()}
-          refreshing={state.refreshingDeliveryLog()}
-          onRefresh={() => void state.loadDeliveryLog()}
-          webhooks={state.webhooks()}
-          heldEvents={state.heldEvents()}
         />
       </Show>
     </div>

@@ -6897,6 +6897,11 @@ enabled gate, and they do not enroll or select an agent, open or alter a
 command session, change fleet policy or update state, or add any
 agent-routed capability. Agent lifecycle obligations over `internal/api/`
 are unchanged by this surface.
+The delivery-log read may span the notifications-owned 30-day dead-letter
+window while naming the shorter seven-day completed-attempt retention in its
+metadata. That wider evidence window and the Alerts navigation into it do not
+inspect removed-host clients, agent enrollment, or agent transport state and
+must not be presented as agent/server lifecycle diagnosis.
 
 ### Least-privilege agent profile
 

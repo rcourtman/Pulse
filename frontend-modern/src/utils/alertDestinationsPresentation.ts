@@ -91,6 +91,7 @@ export const ALERT_DESTINATIONS_DELIVERY_UNAVAILABLE_TITLE =
 export const ALERT_DESTINATIONS_DELIVERY_REFRESH_LABEL = 'Refresh delivery status';
 export const ALERT_DESTINATIONS_DELIVERY_RETRY_LABEL = 'Retry retained deliveries';
 export const ALERT_DESTINATIONS_DELIVERY_DISMISS_LABEL = 'Dismiss retained failures';
+export const ALERT_DESTINATIONS_DELIVERY_REVIEW_LABEL = 'Review delivery activity';
 
 export function getAlertDestinationsConfigLoadError() {
   return ALERT_DESTINATIONS_CONFIG_LOAD_ERROR;
@@ -210,7 +211,7 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
       diagnostic = `Most recent terminal failures were classified as ${dominant[0].replace('_', ' ')} (${dominant[1]}). ${guidanceByClass[dominant[0]] ?? guidanceByClass.unknown}`;
     }
   }
-  return `${summary}. These notifications were not delivered. Pulse removes expired records hourly, so this warning clears after the last retained failure reaches its retention limit if no new terminal failures occur. ${diagnostic} Recoverable retry attempts do not trigger this warning.`;
+  return `${summary}. These notifications were not delivered. ${diagnostic} Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them; dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.`;
 }
 
 export function getAlertDestinationsDeliveryRefreshLabel() {
@@ -223,6 +224,10 @@ export function getAlertDestinationsDeliveryRetryLabel() {
 
 export function getAlertDestinationsDeliveryDismissLabel() {
   return ALERT_DESTINATIONS_DELIVERY_DISMISS_LABEL;
+}
+
+export function getAlertDestinationsDeliveryReviewLabel() {
+  return ALERT_DESTINATIONS_DELIVERY_REVIEW_LABEL;
 }
 
 export function getAlertDestinationsDeliveryRetryConfirmation(count: number) {
@@ -257,8 +262,11 @@ export function getAlertDestinationsDeliveryLogTitle() {
 // The test-send caveat matters: test messages skip the queue entirely, so a
 // user who sends a test and then checks this log would otherwise read its
 // absence as a delivery failure.
-export function getAlertDestinationsDeliveryLogDescription(windowDays: number) {
-  return `Delivery attempts and held notifications for real alerts over the last ${windowDays} days. Test sends skip the queue and are not listed here.`;
+export function getAlertDestinationsDeliveryLogDescription(
+  completedRetentionDays: number,
+  deadLetterRetentionDays: number,
+) {
+  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days; failures that exhausted retries remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
 }
 
 export function getAlertDestinationsDeliveryLogEmpty() {

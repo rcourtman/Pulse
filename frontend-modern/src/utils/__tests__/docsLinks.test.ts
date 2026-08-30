@@ -210,6 +210,24 @@ describe('docsLinks', () => {
     expect(apiReference).toContain('without deleting delivery history');
   });
 
+  it('ships the mixed-retention notification delivery-log contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+    const queueToolsSection = (reference: string) =>
+      reference.split('### Queue and Dead-Letter Tools')[1]?.split('\n### ')[0];
+
+    const canonicalQueueTools = queueToolsSection(apiReference);
+    expect(queueToolsSection(shippedAPIReference)).toBe(canonicalQueueTools);
+    const compactQueueTools = canonicalQueueTools?.replace(/\s+/g, ' ');
+    expect(compactQueueTools).toContain('`GET /api/notifications/delivery-log?limit=200`');
+    expect(compactQueueTools).toContain('Completed attempts are retained for 7 days');
+    expect(compactQueueTools).toContain('dead-letter attempts are retained for 30 days');
+    expect(compactQueueTools).toContain('`limit` defaults to 50 and is capped at 200');
+  });
+
   it('ships the bulk active-alert delivery diagnosis contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

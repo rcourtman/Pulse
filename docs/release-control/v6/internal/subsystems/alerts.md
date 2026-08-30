@@ -2306,8 +2306,15 @@ notifications-owned delivery log (`AlertDeliveryLogCard` fed by
 newest-first record of real alert delivery attempts with plain-language
 outcome labels, destination names resolved from the loaded webhook configs,
 failure classes, and secret-redacted error text. The card names its retention
-window and says that test sends skip the queue, and an unreadable log renders
-as unavailable rather than empty. The same card interleaves alert-owned
+windows separately: completed attempts remain for seven days while
+dead-letter attempts can remain for 30 days. It requests the bounded maximum
+of 200 rows, displays an absolute semantic timestamp for timeline correlation
+with relative time as secondary hover context, and says that test sends skip
+the queue. An unreadable log renders as unavailable rather than empty. The
+card sits directly below delivery health and recovery controls on the
+Notifications route; a degraded Overview warning links to that route so the
+diagnostic evidence and safe retry/dismiss actions are reachable from the
+warning. The same card interleaves alert-owned
 `notification_suppressed` and `notification_deferred` evidence from
 `GET /api/alerts/events` with those attempts, ordered by the recorded event or
 attempt time. Held rows name the affected resource, alert type, and

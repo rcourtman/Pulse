@@ -336,13 +336,17 @@ describe('NotificationsAPI', () => {
           timestamp: '2026-08-20T11:00:00Z',
         },
       ],
-      window_days: 7,
+      window_days: 30,
+      completed_retention_days: 7,
+      dead_letter_retention_days: 30,
     } as any);
 
     const log = await NotificationsAPI.getDeliveryLog(25);
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log?limit=25');
-    expect(log.windowDays).toBe(7);
+    expect(log.windowDays).toBe(30);
+    expect(log.completedRetentionDays).toBe(7);
+    expect(log.deadLetterRetentionDays).toBe(30);
     expect(log.entries).toHaveLength(2);
     expect(log.entries[0]).toEqual(
       expect.objectContaining({
@@ -365,6 +369,8 @@ describe('NotificationsAPI', () => {
     expect(log.entries).toEqual([]);
     // A missing or nonsensical window falls back to the seven-day default.
     expect(log.windowDays).toBe(7);
+    expect(log.completedRetentionDays).toBe(7);
+    expect(log.deadLetterRetentionDays).toBe(7);
   });
 
   it('normalizes a malformed delivery-log collection through the shared API boundary', async () => {
@@ -375,7 +381,12 @@ describe('NotificationsAPI', () => {
 
     const log = await NotificationsAPI.getDeliveryLog();
 
-    expect(log).toEqual({ entries: [], windowDays: 7 });
+    expect(log).toEqual({
+      entries: [],
+      windowDays: 7,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 7,
+    });
   });
 
   it('retries retained terminal deliveries through the operator recovery endpoint', async () => {

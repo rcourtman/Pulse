@@ -45,6 +45,8 @@ const log: NotificationDeliveryLog = {
     },
   ],
   windowDays: 7,
+  completedRetentionDays: 7,
+  deadLetterRetentionDays: 30,
 };
 
 describe('AlertDeliveryLogCard', () => {
@@ -87,7 +89,12 @@ describe('AlertDeliveryLogCard', () => {
   it('renders an honest empty state when no deliveries were attempted', () => {
     render(() => (
       <AlertDeliveryLogCard
-        log={{ entries: [], windowDays: 7 }}
+        log={{
+          entries: [],
+          windowDays: 30,
+          completedRetentionDays: 7,
+          deadLetterRetentionDays: 30,
+        }}
         unavailable={false}
         refreshing={false}
         onRefresh={vi.fn()}
@@ -96,6 +103,26 @@ describe('AlertDeliveryLogCard', () => {
     ));
 
     expect(screen.getByText(/No alert deliveries were attempted/)).toBeInTheDocument();
+  });
+
+  it('shows the mixed retention windows and visible correlation timestamps', () => {
+    const { container } = render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    expect(screen.getByText(/Completed attempts are retained for 7 days/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/failures that exhausted retries remain available for 30 days/),
+    ).toBeInTheDocument();
+    const timestamps = Array.from(container.querySelectorAll('time'));
+    expect(timestamps[0]).toHaveAttribute('datetime', log.entries[0].timestamp);
+    expect(timestamps[0]).not.toHaveTextContent(/ago$/);
   });
 
   it('interleaves held notifications with delivery attempts, newest first', () => {
@@ -147,7 +174,12 @@ describe('AlertDeliveryLogCard', () => {
   it('shows held rows even when no delivery was attempted', () => {
     render(() => (
       <AlertDeliveryLogCard
-        log={{ entries: [], windowDays: 7 }}
+        log={{
+          entries: [],
+          windowDays: 30,
+          completedRetentionDays: 7,
+          deadLetterRetentionDays: 30,
+        }}
         unavailable={false}
         refreshing={false}
         onRefresh={vi.fn()}

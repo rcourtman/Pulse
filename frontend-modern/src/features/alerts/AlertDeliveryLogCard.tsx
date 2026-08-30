@@ -100,8 +100,22 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
   };
 
   const entries = () => props.log?.entries ?? [];
-  const windowDays = () => props.log?.windowDays ?? 7;
+  const completedRetentionDays = () => props.log?.completedRetentionDays ?? 7;
+  const deadLetterRetentionDays = () => props.log?.deadLetterRetentionDays ?? 30;
   const rows = () => mergeDeliveryLogRows(entries(), props.heldEvents ?? []);
+
+  const absoluteTimestamp = (value: string): string => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
 
   const heldResourceLabel = (event: AlertEvent): string => {
     const resource = event.resourceName || event.alertId;
@@ -110,7 +124,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
   };
 
   return (
-    <Card padding="sm" class="sm:p-4">
+    <Card id="notification-delivery-activity" padding="sm" class="scroll-mt-24 sm:p-4">
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
@@ -118,7 +132,10 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
               {getAlertDestinationsDeliveryLogTitle()}
             </h3>
             <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
-              {getAlertDestinationsDeliveryLogDescription(windowDays())}
+              {getAlertDestinationsDeliveryLogDescription(
+                completedRetentionDays(),
+                deadLetterRetentionDays(),
+              )}
             </p>
           </div>
           <button
@@ -168,9 +185,13 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                         >
                           {alertSummary(row.entry)}
                         </span>
-                        <span class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">
-                          {formatRelativeTime(row.entry.timestamp)}
-                        </span>
+                        <time
+                          class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
+                          dateTime={row.entry.timestamp}
+                          title={formatRelativeTime(row.entry.timestamp)}
+                        >
+                          {absoluteTimestamp(row.entry.timestamp)}
+                        </time>
                       </div>
                       <Show
                         when={
@@ -208,9 +229,13 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                         <span class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">
                           {describeAlertEventReason(row.event.reason)}
                         </span>
-                        <span class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">
-                          {formatRelativeTime(row.event.occurredAt)}
-                        </span>
+                        <time
+                          class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
+                          dateTime={row.event.occurredAt}
+                          title={formatRelativeTime(row.event.occurredAt)}
+                        >
+                          {absoluteTimestamp(row.event.occurredAt)}
+                        </time>
                       </div>
                     </li>
                   )

@@ -84,6 +84,7 @@ export function OverviewTab(props: {
           unavailable={deliveryHealthState.deliveryHealthUnavailable()}
           refreshing={deliveryHealthState.refreshingDeliveryHealth()}
           onRefresh={() => void deliveryHealthState.loadDeliveryHealth()}
+          detailsHref="/alerts/notifications"
         />
       </Show>
       <AlertOverviewStatsCards state={overviewState} />

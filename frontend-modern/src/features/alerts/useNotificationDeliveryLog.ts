@@ -8,6 +8,7 @@ import { logger } from '@/utils/logger';
 const HELD_EVENT_TYPES = ['notification_suppressed', 'notification_deferred'];
 const HELD_EVENT_WINDOW_DAYS = 7;
 const HELD_EVENT_LIMIT = 100;
+const DELIVERY_LOG_LIMIT = 200;
 
 // The delivery log is the positive half of delivery evidence: health warns
 // when something is wrong, the log shows what actually fired and where it
@@ -48,7 +49,10 @@ export function useNotificationDeliveryLog() {
     // primary delivery-attempt log.
     void loadHeldEvents();
     try {
-      const log = await NotificationsAPI.getDeliveryLog();
+      // Request the server's bounded maximum. A degraded queue can retain more
+      // than the default page of 50 failures, and the evidence view should not
+      // hide them behind unrelated successful attempts when space is available.
+      const log = await NotificationsAPI.getDeliveryLog(DELIVERY_LOG_LIMIT);
       setDeliveryLog(log);
       setDeliveryLogUnavailable(false);
     } catch (error) {

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationQueueHealth } from '@/api/notifications';
@@ -42,14 +43,22 @@ describe('AlertDeliveryHealthCard', () => {
     const onRetryFailures = vi.fn();
     const onDismissFailures = vi.fn();
     render(() => (
-      <AlertDeliveryHealthCard
-        health={degradedHealth}
-        unavailable={false}
-        refreshing={false}
-        onRefresh={onRefresh}
-        onRetryFailures={onRetryFailures}
-        onDismissFailures={onDismissFailures}
-      />
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <AlertDeliveryHealthCard
+              health={degradedHealth}
+              unavailable={false}
+              refreshing={false}
+              onRefresh={onRefresh}
+              onRetryFailures={onRetryFailures}
+              onDismissFailures={onDismissFailures}
+              detailsHref="/alerts/notifications"
+            />
+          )}
+        />
+      </Router>
     ));
 
     expect(screen.getByRole('alert')).toHaveTextContent('Notification delivery needs attention');
@@ -63,6 +72,13 @@ describe('AlertDeliveryHealthCard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('classified as authentication (2)');
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Check destination credentials, tokens, and account permissions',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'dismiss retained failures to clear this warning without deleting delivery history',
+    );
+    expect(screen.getByRole('link', { name: 'Review delivery activity' })).toHaveAttribute(
+      'href',
+      '/alerts/notifications',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh delivery status' }));

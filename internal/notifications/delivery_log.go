@@ -70,8 +70,11 @@ func deliveryOutcome(status NotificationQueueStatus, success bool, attempts int)
 }
 
 // GetDeliveryLog returns recorded delivery attempts on or after since, newest
-// first. Rows share the queue's retention windows, so a window longer than
-// the completed-row retention must not be presented as complete history.
+// first. Callers can use the longest queue retention window: audit cleanup
+// removes sent, failed, and cancelled rows with their seven-day queue records,
+// while dead-letter rows remain available with their queue records for 30
+// days. The API names both windows so that mixed retention is not presented as
+// uniformly complete history.
 func (nq *NotificationQueue) GetDeliveryLog(since time.Time, limit int) ([]DeliveryLogEntry, error) {
 	if nq == nil {
 		return nil, fmt.Errorf("notification queue not initialized")

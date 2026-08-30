@@ -6848,7 +6848,13 @@ lines use the shared red emphasis tokens in both themes, and entry rows wrap
 without horizontal overflow at mobile widths. The unavailable state is a
 `role="alert"` message distinct from the empty state, because "cannot read
 the log" and "no attempts" mean opposite things to someone deciding whether
-to trust their alerting.
+to trust their alerting. The card renders immediately after the delivery-health
+warning and recovery controls, and the Overview warning uses the shared
+`ButtonLink` primitive to navigate to the Notifications route. Attempt and
+held-event rows use semantic `time` elements with visible absolute local
+timestamps for timeline correlation and retain relative time only as hover
+context. The explanatory copy names the seven-day completed and 30-day
+dead-letter windows separately.
 
 ### Storage rows distinguish retained observations
 

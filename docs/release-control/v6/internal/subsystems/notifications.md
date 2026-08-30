@@ -374,8 +374,13 @@ written before that column existed resolve destination identity from their
 retained operational links. `GET /api/notifications/delivery-log`
 (settings-read scope) serves the log as local operator evidence: webhook
 secrets are redacted from error text at the API boundary, the payload names
-its retention window instead of presenting itself as lifetime history, and an
-unreadable queue is an error, never an empty log. This per-attempt surface is
+its retention windows instead of presenting itself as lifetime history, and an
+unreadable queue is an error, never an empty log. The API queries the longest
+retained class (30 days) and reports `completed_retention_days: 7` plus
+`dead_letter_retention_days: 30`, because completed audit rows are removed with
+their seven-day queue rows while dead-letter audit rows remain with their
+30-day queue rows. Reads default to 50 entries and are capped at 200; the
+operator evidence view requests that bounded maximum. This per-attempt surface is
 deliberately distinct from the content-free telemetry aggregate above, which
 remains identity-free. Test sends bypass the queue and must not appear in the
 delivery log, and the destinations UI says so where the log renders.

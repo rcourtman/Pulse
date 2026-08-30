@@ -160,6 +160,56 @@ func TestGetDeliveryLogHonorsLimitAndCap(t *testing.T) {
 	}
 }
 
+func TestGetDeliveryLogCanReadRetainedDeadLetterWindow(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	now := time.Now().UTC()
+	notif := &QueuedNotification{
+		ID:        "webhook-retained-dlq",
+		Type:      "webhook",
+		Status:    QueueStatusPending,
+		Config:    []byte(`{}`),
+		CreatedAt: now.Add(-20 * 24 * time.Hour),
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	notif.Status = QueueStatusDLQ
+	notif.Attempts = 3
+	if err := nq.RecordAudit(notif, false, "destination unreachable"); err != nil {
+		t.Fatalf("record delivery: %v", err)
+	}
+	if _, err := nq.db.Exec(
+		`UPDATE notification_audit SET timestamp = ? WHERE notification_id = ?`,
+		now.Add(-20*24*time.Hour).Unix(),
+		notif.ID,
+	); err != nil {
+		t.Fatalf("age dead-letter audit row: %v", err)
+	}
+
+	sevenDayEntries, err := nq.GetDeliveryLog(now.Add(-7*24*time.Hour), 0)
+	if err != nil {
+		t.Fatalf("GetDeliveryLog seven-day window: %v", err)
+	}
+	if len(sevenDayEntries) != 0 {
+		t.Fatalf("seven-day entries = %#v, want old dead-letter excluded", sevenDayEntries)
+	}
+
+	thirtyDayEntries, err := nq.GetDeliveryLog(now.Add(-30*24*time.Hour), 0)
+	if err != nil {
+		t.Fatalf("GetDeliveryLog thirty-day window: %v", err)
+	}
+	if len(thirtyDayEntries) != 1 ||
+		thirtyDayEntries[0].NotificationID != notif.ID ||
+		thirtyDayEntries[0].Outcome != DeliveryOutcomeDeadLetter {
+		t.Fatalf("thirty-day entries = %#v, want retained dead-letter evidence", thirtyDayEntries)
+	}
+}
+
 func TestGetDeliveryLogFallsBackToOperationalLinksForLegacyRows(t *testing.T) {
 	nq, err := NewNotificationQueue(t.TempDir())
 	if err != nil {

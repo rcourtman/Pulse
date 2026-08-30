@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/stretchr/testify/mock"
@@ -143,7 +144,10 @@ func TestGetDeliveryLogReturnsEntriesWithRedactedErrors(t *testing.T) {
 	mockMonitor := new(MockNotificationMonitor)
 	mockManager := new(MockNotificationManager)
 	mockMonitor.On("GetNotificationManager").Return(mockManager)
-	mockManager.On("GetDeliveryLog", mock.Anything, 25).Return([]notifications.DeliveryLogEntry{
+	mockManager.On("GetDeliveryLog", mock.MatchedBy(func(since time.Time) bool {
+		age := time.Since(since)
+		return age >= 29*24*time.Hour && age <= 31*24*time.Hour
+	}), 25).Return([]notifications.DeliveryLogEntry{
 		{
 			NotificationID: "webhook-1",
 			Type:           "webhook",
@@ -185,6 +189,7 @@ func TestGetDeliveryLogReturnsEntriesWithRedactedErrors(t *testing.T) {
 			FailureClass   string   `json:"failureClass"`
 		} `json:"entries"`
 		WindowDays                 int  `json:"window_days"`
+		CompletedRetentionDays     int  `json:"completed_retention_days"`
 		DeadLetterRetentionDays    int  `json:"dead_letter_retention_days"`
 		EntriesAreRetentionBounded bool `json:"entries_are_retention_bounded"`
 	}
@@ -205,7 +210,8 @@ func TestGetDeliveryLogReturnsEntriesWithRedactedErrors(t *testing.T) {
 		!strings.Contains(response.Entries[0].ErrorMessage, "token=REDACTED") {
 		t.Fatalf("error message not redacted: %q", response.Entries[0].ErrorMessage)
 	}
-	if response.WindowDays != 7 ||
+	if response.WindowDays != 30 ||
+		response.CompletedRetentionDays != 7 ||
 		response.DeadLetterRetentionDays != 30 ||
 		!response.EntriesAreRetentionBounded {
 		t.Fatalf("retention context = %#v", response)

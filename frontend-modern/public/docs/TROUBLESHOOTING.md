@@ -151,6 +151,10 @@ first step before platform-local cleanup.
 - Open **Alerts → Notifications** first. Pulse shows a delivery warning when
   failed or dead-lettered notifications remain in the persistent queue; a
   missing queue-health read is shown as unavailable rather than healthy.
+- **Recent delivery activity** appears directly below that warning. It names
+  the destination and affected alert, shows an absolute timestamp for timeline
+  correlation, and includes safely redacted provider errors. Completed attempts
+  remain for 7 days and dead-letter attempts remain for 30 days.
 - After correcting the destination, use **Retry retained deliveries**. Use
   **Dismiss retained failures** only when those deliveries should not be sent.
   Both actions preserve delivery history; do not delete `notification_queue.db`

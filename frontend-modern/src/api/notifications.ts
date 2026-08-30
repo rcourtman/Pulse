@@ -162,6 +162,8 @@ export interface NotificationDeliveryLogEntry {
 export interface NotificationDeliveryLog {
   entries: NotificationDeliveryLogEntry[];
   windowDays: number;
+  completedRetentionDays: number;
+  deadLetterRetentionDays: number;
 }
 
 export interface NotificationTestResult {
@@ -361,9 +363,23 @@ export class NotificationsAPI {
       if (entry) entries.push(entry);
     }
     const windowDays = nonNegativeCount(payload.window_days);
+    const normalizedWindowDays = windowDays && windowDays > 0 ? windowDays : 7;
+    const completedRetentionDays = nonNegativeCount(payload.completed_retention_days);
+    const deadLetterRetentionDays = nonNegativeCount(payload.dead_letter_retention_days);
     return {
       entries,
-      windowDays: windowDays && windowDays > 0 ? windowDays : 7,
+      windowDays: normalizedWindowDays,
+      // Older servers exposed only window_days plus the dead-letter window.
+      // Preserve an honest seven-day completed-row fallback while accepting
+      // their explicit 30-day dead-letter retention field.
+      completedRetentionDays:
+        completedRetentionDays && completedRetentionDays > 0
+          ? completedRetentionDays
+          : Math.min(normalizedWindowDays, 7),
+      deadLetterRetentionDays:
+        deadLetterRetentionDays && deadLetterRetentionDays > 0
+          ? deadLetterRetentionDays
+          : normalizedWindowDays,
     };
   }
 
