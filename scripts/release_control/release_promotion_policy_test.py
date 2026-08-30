@@ -347,6 +347,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_release_commit_dispatches_durable_convergence_before_activation(self) -> None:
         workflow = read(".github/workflows/create-release.yml")
         convergence = read(".github/workflows/release-convergence.yml")
+        publication_preflight = workflow_job_block(
+            workflow, "publication_trust_preflight"
+        )
         readiness = workflow_job_block(workflow, "release_readiness")
         dispatch = workflow_job_block(workflow, "dispatch_release_convergence")
         activation = workflow_job_block(workflow, "activate_release")
@@ -354,7 +357,29 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         recovery = read(".github/workflows/recover-release-activation.yml")
         recovery_activation = workflow_job_block(recovery, "recover_activation")
 
+        self.assertIn("runs-on: ubuntu-24.04", publication_preflight)
+        self.assertIn("secrets.WORKFLOW_PAT", publication_preflight)
+        self.assertIn(
+            "check-github-release-immutability.sh", publication_preflight
+        )
+        self.assertIn("github.event.inputs.draft_only != 'true'", publication_preflight)
+        self.assertIn(
+            "historical_asset_backfill_only != 'true'", publication_preflight
+        )
+        for early_job_name in (
+            "build_release_candidate",
+            "frontend_bundle",
+            "frontend_checks",
+            "windows_install_command_smoke",
+            "release_note_visuals",
+            "stage_private_pro_runtime",
+        ):
+            with self.subTest(early_job_name=early_job_name):
+                early_job = workflow_job_block(workflow, early_job_name)
+                self.assertIn("- publication_trust_preflight", early_job)
+
         for dependency in (
+            "publication_trust_preflight",
             "create_release",
             "publish_docker",
             "validate_release_assets",
@@ -377,6 +402,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn("needs: acquire_customer_promotion_lease", mutable)
 
         self.assertIn("- release_readiness", activation)
+        self.assertIn(
+            "needs.publication_trust_preflight.result == 'success'", readiness
+        )
+        self.assertIn("- publication_trust_preflight", commit_verdict)
+        self.assertIn(
+            'require_result "publication trust preflight"', commit_verdict
+        )
         self.assertIn("- dispatch_release_convergence", activation)
         self.assertNotIn("- release_readiness", dispatch)
         self.assertIn("- create_release", dispatch)

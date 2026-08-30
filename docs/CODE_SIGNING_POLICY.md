@@ -89,7 +89,10 @@ Normal stable publication and stable dry runs select `signpath` directly.
 - Every new release is assembled and validated as a draft. Its activation
   marker is uploaded and digest-checked before publication; GitHub must then
   report the published release as immutable, protecting its tag and complete
-  asset set from replacement.
+  asset set from replacement. A GitHub-hosted publication preflight proves the
+  repository setting before compilation, signing, private staging, or draft
+  assembly begins, and activation repeats that setting check immediately before
+  publication to catch later drift.
 - Customer-facing image aliases, Helm indexes, paid-runtime pointers, and demo
   environments are not promoted until `gh release verify <tag> --repo
   rcourtman/Pulse` validates GitHub's signed release attestation and `gh release

@@ -265,9 +265,45 @@ jobs:
 
           echo "[OK] Promotion policy validated for ${TAG}"
 
+  # Repository release immutability is configuration outside this commit. Prove
+  # that prerequisite on a GitHub-hosted runner before starting compilation,
+  # signing, private staging, or draft assembly. Activation repeats the same
+  # check immediately before publication so later setting drift still fails
+  # closed. Inert draft-only and historical-backfill runs do not publish and
+  # therefore do not require this repository setting.
+  publication_trust_preflight:
+    name: Publication Trust Preflight
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout release trust control
+        if: ${{ github.event.inputs.draft_only != 'true' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Require immutable release publication capability
+        if: ${{ github.event.inputs.draft_only != 'true' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::WORKFLOW_PAT with repository Administration (read) is required to prove release immutability."
+            exit 1
+          fi
+          ./scripts/check-github-release-immutability.sh "${GITHUB_REPOSITORY}"
+
+      - name: Confirm inert release mode
+        if: ${{ github.event.inputs.draft_only == 'true' || needs.prepare.outputs.historical_asset_backfill_only == 'true' }}
+        run: echo "Publication trust preflight is not required for an inert draft-only or historical-backfill run."
+
   build_release_candidate:
     name: Build Immutable Release Candidate
-    needs: prepare
+    needs:
+      - prepare
+      - publication_trust_preflight
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     permissions:
       actions: write
@@ -297,7 +333,9 @@ jobs:
   # Build the embed bundle independently so backend and smoke lanes can start
   # without waiting for the full frontend quality suite.
   frontend_bundle:
-    needs: prepare
+    needs:
+      - prepare
+      - publication_trust_preflight
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-build"]') }}
     timeout-minutes: 10
@@ -330,7 +368,9 @@ jobs:
 
   # Frontend checks run independently from the bundle and backend lanes.
   frontend_checks:
-    needs: prepare
+    needs:
+      - prepare
+      - publication_trust_preflight
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -367,7 +407,9 @@ jobs:
 
   windows_install_command_smoke:
     name: Windows PowerShell 5.1 Install Command Smoke
-    needs: prepare
+    needs:
+      - prepare
+      - publication_trust_preflight
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: windows-2025
     timeout-minutes: 15
@@ -702,7 +744,9 @@ jobs:
           retention-days: 14
 
   release_note_visuals:
-    needs: prepare
+    needs:
+      - prepare
+      - publication_trust_preflight
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -1188,6 +1232,7 @@ jobs:
   backfill_release_assets:
     needs:
       - prepare
+      - publication_trust_preflight
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -1348,6 +1393,7 @@ jobs:
   release_readiness:
     needs:
       - prepare
+      - publication_trust_preflight
       - build_release_candidate
       - qualify_release_containers
       - frontend_bundle
@@ -1362,7 +1408,7 @@ jobs:
       - install_sh_smoke
       - publish_helm_chart
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -1376,7 +1422,8 @@ jobs:
   stage_private_pro_runtime:
     needs:
       - prepare
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
+      - publication_trust_preflight
+    if: ${{ always() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     outputs:
@@ -1904,6 +1951,7 @@ jobs:
     name: Release Activation Commit Verdict
     needs:
       - prepare
+      - publication_trust_preflight
       - release_smoke
       - windows_install_command_smoke
       - create_release
@@ -1931,6 +1979,7 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
           EXPECTED_COMMIT: ${{ needs.create_release.outputs.target_commitish }}
           RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
+          PUBLICATION_TRUST_RESULT: ${{ needs.publication_trust_preflight.result }}
           CREATE_RESULT: ${{ needs.create_release.result }}
           SMOKE_RESULT: ${{ needs.release_smoke.result }}
           WINDOWS_INSTALL_COMMAND_RESULT: ${{ needs.windows_install_command_smoke.result }}
@@ -1959,6 +2008,7 @@ jobs:
             fi
           }
 
+          require_result "publication trust preflight" "$PUBLICATION_TRUST_RESULT" success
           require_result "release smoke" "$SMOKE_RESULT" success
           require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success
           require_result "release staging" "$CREATE_RESULT" success

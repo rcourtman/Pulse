@@ -2774,6 +2774,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 	createJob := workflowJobBlock(t, createWorkflow, "create_release")
 	prepareJob := workflowJobBlock(t, createWorkflow, "prepare")
+	publicationPreflightJob := workflowJobBlock(t, createWorkflow, "publication_trust_preflight")
 	frontendBundleJob := workflowJobBlock(t, createWorkflow, "frontend_bundle")
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
@@ -2782,6 +2783,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
 	dispatchJob := workflowJobBlock(t, createWorkflow, "dispatch_release_convergence")
 	activationJob := workflowJobBlock(t, createWorkflow, "activate_release")
+	commitVerdictJob := workflowJobBlock(t, createWorkflow, "release_commit_verdict")
 	leaseJob := workflowJobBlock(t, convergenceWorkflow, "acquire_customer_promotion_lease")
 	privatePromotionJob := workflowJobBlock(t, convergenceWorkflow, "promote_private_pro_runtime")
 	floatingJob := workflowJobBlock(t, convergenceWorkflow, "promote_floating_tags")
@@ -2803,13 +2805,37 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if strings.Contains(prepareJob, "sparse-checkout") {
 		t.Fatal("release preparation must leave a complete worktree for the following compile job")
 	}
+	for _, needle := range []string{
+		`runs-on: ubuntu-24.04`,
+		`GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}`,
+		`./scripts/check-github-release-immutability.sh "${GITHUB_REPOSITORY}"`,
+		`github.event.inputs.draft_only != 'true'`,
+		`historical_asset_backfill_only != 'true'`,
+	} {
+		if !strings.Contains(publicationPreflightJob, needle) {
+			t.Fatalf("publication trust preflight missing early immutable-setting contract: %s", needle)
+		}
+	}
+	for label, job := range map[string]string{
+		"release candidate":    workflowJobBlock(t, createWorkflow, "build_release_candidate"),
+		"frontend bundle":      frontendBundleJob,
+		"frontend checks":      workflowJobBlock(t, createWorkflow, "frontend_checks"),
+		"Windows smoke":        workflowJobBlock(t, createWorkflow, "windows_install_command_smoke"),
+		"release-note visuals": workflowJobBlock(t, createWorkflow, "release_note_visuals"),
+		"private Pro staging":  privateStageJob,
+	} {
+		if !strings.Contains(job, "- publication_trust_preflight") {
+			t.Fatalf("%s must wait for publication trust preflight", label)
+		}
+	}
 
 	for _, needle := range []string{
 		`fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]')`,
 		`GITHUB_WORKFLOW_SHA`,
 		`ref: ${{ inputs.source_sha }}`,
 		`PULSE_RELEASE_BUILD_JOBS: "2"`,
-		`./scripts/build-release-binaries.sh "${{ inputs.version }}"`,
+		`VERSION: ${{ inputs.version }}`,
+		`./scripts/build-release-binaries.sh "${VERSION}" "$RUNNER_TEMP/release-compiled"`,
 		`release-compiled-${{ inputs.source_sha }}-${{ inputs.version }}-${{ inputs.request_id }}`,
 	} {
 		if !strings.Contains(compileJob, needle) {
@@ -2886,8 +2912,9 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 
 	for _, needle := range []string{
-		`./scripts/build-release.sh "${{ inputs.version }}"`,
-		`scripts/validate-release.sh "${{ inputs.version }}" --skip-docker`,
+		`VERSION: ${{ inputs.version }}`,
+		`./scripts/build-release.sh "${VERSION}"`,
+		`scripts/validate-release.sh "${VERSION}" --skip-docker`,
 		`scripts/release_candidate_manifest.py create`,
 		`compression-level: 0`,
 		`retention-days: 1`,
@@ -2956,6 +2983,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		}
 	}
 	for _, dependency := range []string{
+		"- publication_trust_preflight",
 		"- create_release",
 		"- publish_docker",
 		"- validate_release_assets",
@@ -2966,6 +2994,13 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		if !strings.Contains(readinessJob, dependency) {
 			t.Fatalf("immutable release readiness missing dependency: %s", dependency)
 		}
+	}
+	if !strings.Contains(readinessJob, `needs.publication_trust_preflight.result == 'success'`) {
+		t.Fatal("immutable release readiness must require successful publication trust preflight")
+	}
+	if !strings.Contains(commitVerdictJob, "- publication_trust_preflight") ||
+		!strings.Contains(commitVerdictJob, `require_result "publication trust preflight"`) {
+		t.Fatal("release commit verdict must surface publication trust preflight failure")
 	}
 	for _, forbiddenDependency := range []string{
 		"- publish_helm_pages",
