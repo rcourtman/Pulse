@@ -9091,8 +9091,12 @@ CRUD are not claimed as customer-infrastructure mutation enumeration.
 
 Raw command/file write/arbitrary pod exec, the legacy queued Docker
 update/control transports, and enterprise command remediation are retired
-compatibility surfaces. Container image updates re-entered the plane as
-`resource.docker.container-update` and
+compatibility surfaces. Proxmox guest lifecycle uses the paired
+`resource.proxmox.guest-lifecycle` and
+`transport.agent.proxmox-guest-lifecycle` authorities: the typed transport can
+dispatch only after the durable non-transport lifecycle record exists, and its
+result message is non-admitting evidence. Container image updates re-entered
+the plane as `resource.docker.container-update` and
 `transport.agent.docker-container-update`: lifecycle-dispositioned, planned
 against an `update` capability that containers advertise only while an image
 update is detected, and executed solely through `dockerContainerActionExecutor`

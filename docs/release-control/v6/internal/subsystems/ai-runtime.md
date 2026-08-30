@@ -7169,6 +7169,10 @@ typed `docker_container_update` operation with durable receipts and declared
 backup/rollback compensation, while the model-originated
 `assistant.docker.update` route and the legacy queued update transports stay
 `retired_denied`.
+Proxmox guest lifecycle dispatch has the same closed pairing:
+`transport.agent.proxmox-guest-lifecycle` requires prior durable
+`resource.proxmox.guest-lifecycle` authority, while the lifecycle result is
+non-admitting evidence and cannot create dispatch authority.
 
 Enterprise command-remediation records are readable historical imports only.
 Production code contains no command or rollback execution algorithm; exported
