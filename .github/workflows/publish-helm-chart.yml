@@ -26,6 +26,10 @@ on:
         required: false
         type: string
         default: ""
+    outputs:
+      chart_digest:
+        description: "Verified OCI manifest digest for the exact-version chart."
+        value: ${{ jobs.publish.outputs.chart_digest }}
   workflow_dispatch:
     inputs:
       chart_version:
@@ -42,9 +46,13 @@ jobs:
   publish:
     name: Package and Push Helm Chart
     runs-on: ubuntu-24.04
+    outputs:
+      chart_digest: ${{ steps.proof.outputs.chart_digest }}
     permissions:
       contents: write  # Required for gh release upload
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Determine chart version
         id: versions
@@ -112,6 +120,11 @@ jobs:
           RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
         run: |
           set -euo pipefail
+          release_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [ "${release_sha}" != "${GITHUB_SHA}" ]; then
+            echo "::error::Helm provenance source ${GITHUB_SHA} does not match ${RELEASE_TAG} at ${release_sha}. Dispatch manual backfills from the exact tag ref."
+            exit 1
+          fi
           git checkout --detach "refs/tags/${RELEASE_TAG}"
 
       - name: Align chart metadata links
@@ -145,18 +158,47 @@ jobs:
         run: |
           echo "${GHCR_TOKEN}" | helm registry login ghcr.io --username "${GHCR_USERNAME}" --password-stdin
 
-      - name: Push chart to GHCR
+      - name: Push exact-version chart to GHCR
+        id: push
+        env:
+          CHART_PATH: dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz
         run: |
-          helm push dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz \
-            oci://ghcr.io/${{ github.repository_owner }}/pulse-chart
+          set -euo pipefail
+          output="$(
+            helm push "${CHART_PATH}" \
+              oci://ghcr.io/${{ github.repository_owner }}/pulse-chart 2>&1
+          )"
+          printf '%s\n' "${output}"
+          mapfile -t digests < <(
+            sed -nE 's/^Digest:[[:space:]]*(sha256:[0-9a-f]{64})\r?$/\1/p' \
+              <<<"${output}" | sort -u
+          )
+          if [ "${#digests[@]}" -ne 1 ]; then
+            echo "::error::Helm push did not report one exact OCI chart digest."
+            exit 1
+          fi
+          echo "chart_digest=${digests[0]}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify public GHCR chart read
+      - name: Attest exact-version OCI chart
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/pulse-chart/pulse
+          subject-digest: ${{ steps.push.outputs.chart_digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify public GHCR chart identity and provenance
+        id: proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
+          EXPECTED_DIGEST: ${{ steps.push.outputs.chart_digest }}
         run: |
           set -euo pipefail
           helm registry logout ghcr.io || true
-          helm show chart \
-            oci://ghcr.io/${{ github.repository_owner }}/pulse-chart/pulse \
-            --version "${{ steps.versions.outputs.chart_version }}"
+          ./scripts/verify-release-helm-chart.sh \
+            "${RELEASE_TAG}" "${GITHUB_SHA}" \
+            "${GITHUB_REPOSITORY}" "${EXPECTED_DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Attach chart to release
         if: github.event_name == 'release'

@@ -55,6 +55,7 @@ jobs:
       activation_marker_sha256: ${{ steps.marker.outputs.activation_marker_sha256 }}
       server_image_digest: ${{ steps.marker.outputs.server_image_digest }}
       control_plane_image_digest: ${{ steps.marker.outputs.control_plane_image_digest }}
+      helm_chart_digest: ${{ steps.marker.outputs.helm_chart_digest }}
     steps:
       - name: Checkout release integrity control
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -111,7 +112,7 @@ jobs:
                  --arg release_id "${EXPECTED_RELEASE_ID}" \
                  --arg source_run_id "${EXPECTED_SOURCE_RUN_ID}" \
                  --arg r2_prefix "${EXPECTED_R2_PREFIX}" \
-                 '.schema_version == 1 and .tag == $tag and .target_commitish == $commit and .release_id == $release_id and .source_release_run_id == $source_run_id and (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix and (.server_image_digest | test("^sha256:[0-9a-f]{64}$")) and (.control_plane_image_digest | test("^sha256:[0-9a-f]{64}$"))' \
+                 '.schema_version == 1 and .tag == $tag and .target_commitish == $commit and .release_id == $release_id and .source_release_run_id == $source_run_id and (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix and (.server_image_digest | test("^sha256:[0-9a-f]{64}$")) and (.control_plane_image_digest | test("^sha256:[0-9a-f]{64}$")) and (.helm_chart_digest | test("^sha256:[0-9a-f]{64}$"))' \
                  "${marker}" >/dev/null; then
                 rm -f "${marker}"
                 echo "::error::Public activation marker for ${TAG} does not match the expected immutable release identity."
@@ -142,10 +143,12 @@ jobs:
               activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
               server_image_digest="$(jq -r '.server_image_digest' "${marker}")"
               control_plane_image_digest="$(jq -r '.control_plane_image_digest' "${marker}")"
+              helm_chart_digest="$(jq -r '.helm_chart_digest' "${marker}")"
               echo "activation_owner_run_id=${activation_owner_run_id}" >> "$GITHUB_OUTPUT"
               echo "activation_marker_sha256=${activation_marker_sha256}" >> "$GITHUB_OUTPUT"
               echo "server_image_digest=${server_image_digest}" >> "$GITHUB_OUTPUT"
               echo "control_plane_image_digest=${control_plane_image_digest}" >> "$GITHUB_OUTPUT"
+              echo "helm_chart_digest=${helm_chart_digest}" >> "$GITHUB_OUTPUT"
               rm -f "${marker}"
               echo "[OK] ${TAG} crossed the immutable, attested activation commit point."
               exit 0
@@ -208,6 +211,7 @@ jobs:
       owner_asset_sha256: ${{ steps.owner.outputs.owner_asset_sha256 }}
       server_image_digest: ${{ needs.await_activation_commit.outputs.server_image_digest }}
       control_plane_image_digest: ${{ needs.await_activation_commit.outputs.control_plane_image_digest }}
+      helm_chart_digest: ${{ needs.await_activation_commit.outputs.helm_chart_digest }}
     steps:
       - name: Checkout release control
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -357,12 +361,14 @@ jobs:
     permissions:
       actions: read
       contents: write
+      packages: read
     uses: ./.github/workflows/helm-pages.yml
     secrets: inherit
     with:
       chart_version: ${{ inputs.version }}
       source_release_run_id: ${{ inputs.source_release_run_id }}
       target_commitish: ${{ inputs.target_commitish }}
+      chart_digest: ${{ needs.acquire_customer_promotion_lease.outputs.helm_chart_digest }}
 
   promote_private_pro_runtime:
     name: Converge paid-runtime broker

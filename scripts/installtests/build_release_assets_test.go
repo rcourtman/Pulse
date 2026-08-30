@@ -2687,11 +2687,13 @@ func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
 		// Chart-version resolver prefers inputs over release-event tag.
 		`if [ -n "${INPUT_CHART_VERSION}" ]; then`,
 		`RELEASE_TAG="${RELEASE_TAG_NAME}"`,
-		`name: Verify public GHCR chart read`,
+		`name: Verify public GHCR chart identity and provenance`,
 		`helm registry logout ghcr.io || true`,
-		`helm show chart`,
-		`oci://ghcr.io/${{ github.repository_owner }}/pulse-chart/pulse`,
-		`--version "${{ steps.versions.outputs.chart_version }}"`,
+		`uses: actions/attest@`,
+		`subject-digest: ${{ steps.push.outputs.chart_digest }}`,
+		`./scripts/verify-release-helm-chart.sh`,
+		`value: ${{ jobs.publish.outputs.chart_digest }}`,
+		`chart_digest: ${{ steps.proof.outputs.chart_digest }}`,
 	)
 
 	content, err := os.ReadFile(workflowPath)

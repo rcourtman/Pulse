@@ -20,15 +20,25 @@ on:
         description: "Exact activated release source commit."
         required: true
         type: string
+      chart_digest:
+        description: "OCI chart digest committed by release activation."
+        required: true
+        type: string
 
 permissions:
   actions: read
   contents: write
+  packages: read
 
 jobs:
   release:
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout release verification control
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
       - name: Require activated GitHub release and source run
         id: identity
         env:
@@ -36,12 +46,14 @@ jobs:
           VERSION: ${{ inputs.chart_version }}
           SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
           TARGET_COMMITISH: ${{ inputs.target_commitish }}
+          CHART_DIGEST: ${{ inputs.chart_digest }}
         run: |
           set -euo pipefail
           if [[ -z "${VERSION}" ]] || \
              [[ ! "${SOURCE_RELEASE_RUN_ID}" =~ ^[0-9]+$ ]] || \
-             [[ ! "${TARGET_COMMITISH}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Helm Pages requires an exact version, source run ID, and commit SHA."
+             [[ ! "${TARGET_COMMITISH}" =~ ^[0-9a-f]{40}$ ]] || \
+             [[ ! "${CHART_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Helm Pages requires an exact version, source run ID, commit SHA, and chart digest."
             exit 1
           fi
 
@@ -70,7 +82,8 @@ jobs:
             --arg tag "${release_tag}" \
             --arg target_commitish "${TARGET_COMMITISH}" \
             --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
-            '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .source_release_run_id == $source_release_run_id' \
+            --arg helm_chart_digest "${CHART_DIGEST}" \
+            '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .source_release_run_id == $source_release_run_id and .helm_chart_digest == $helm_chart_digest' \
             "${marker}" >/dev/null
           rm -f "${marker}"
 
@@ -111,10 +124,21 @@ jobs:
 
       - name: Verify immutable chart identity
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.identity.outputs.version }}
           CHART_PATH: dist/pulse-${{ steps.identity.outputs.version }}.tgz
+          RELEASE_TAG: ${{ steps.identity.outputs.release_tag }}
+          TARGET_COMMITISH: ${{ inputs.target_commitish }}
+          CHART_DIGEST: ${{ inputs.chart_digest }}
         run: |
           set -euo pipefail
+          proof="$(./scripts/verify-release-helm-chart.sh \
+            "${RELEASE_TAG}" "${TARGET_COMMITISH}" \
+            "${GITHUB_REPOSITORY}" "${CHART_DIGEST}")"
+          if [ "${proof}" != "chart_digest=${CHART_DIGEST}" ]; then
+            echo "::error::Activated Helm OCI provenance did not produce the committed digest."
+            exit 1
+          fi
           python3 - <<'PY'
           import os
           import pathlib

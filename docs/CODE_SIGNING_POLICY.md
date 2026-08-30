@@ -73,6 +73,13 @@ Normal stable publication and stable dry runs select `signpath` directly.
   policy is invalid.
 - Release checksums and detached signatures are published alongside artifacts
   and verified independently after publication.
+- The exact-version OCI Helm chart is published only by the hosted
+  `publish-helm-chart.yml` workflow. Its SHA-256 manifest digest and GitHub
+  build-provenance attestation must bind to the release source commit before
+  the digest enters `release-activation.json`. Activation recovery repeats
+  that verification, and Helm Pages refuses to advertise a chart whose OCI
+  tag, signer workflow, source commit, or digest has drifted from the immutable
+  activation packet.
 - Release activation requires GitHub CLI 2.97.0 or newer, which includes the
   literal signer-identity matcher fix. The shared
   `scripts/require-safe-gh-attestation.sh` guard enforces this floor. The

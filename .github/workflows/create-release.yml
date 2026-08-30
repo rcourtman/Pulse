@@ -1330,6 +1330,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/publish-helm-chart.yml
     secrets: inherit
     with:
@@ -1569,6 +1571,7 @@ jobs:
       - prepare
       - create_release
       - publish_docker
+      - publish_helm_chart
       - release_readiness
       - dispatch_release_convergence
       - stage_private_pro_runtime
@@ -1597,6 +1600,7 @@ jobs:
           R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}
           SERVER_IMAGE_DIGEST: ${{ needs.publish_docker.outputs.server_digest }}
           CONTROL_PLANE_IMAGE_DIGEST: ${{ needs.publish_docker.outputs.control_plane_digest }}
+          HELM_CHART_DIGEST: ${{ needs.publish_helm_chart.outputs.chart_digest }}
         run: |
           set -euo pipefail
           release_json=$(mktemp)
@@ -1623,12 +1627,14 @@ jobs:
               --arg r2_prefix "${R2_PREFIX}" \
               --arg server_image_digest "${SERVER_IMAGE_DIGEST}" \
               --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
+              --arg helm_chart_digest "${HELM_CHART_DIGEST}" \
               '.schema_version == 1 and .tag == $tag and
                .target_commitish == $target_commitish and .release_id == $release_id and
                .source_release_run_id == $source_release_run_id and
                (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix and
                .server_image_digest == $server_image_digest and
-               .control_plane_image_digest == $control_plane_image_digest' \
+               .control_plane_image_digest == $control_plane_image_digest and
+               .helm_chart_digest == $helm_chart_digest' \
               "${verified_marker}" >/dev/null
 
             marker_convergence_run_id="$(jq -r '.convergence_run_id' "${verified_marker}")"
@@ -1775,8 +1781,9 @@ jobs:
           # Close the dispatch-to-commit race before staging the exact marker.
           require_viable_convergence_owner
           if [[ ! "${SERVER_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || \
-             [[ ! "${CONTROL_PLANE_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::Verified public container digests are required before release activation."
+             [[ ! "${CONTROL_PLANE_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || \
+             [[ ! "${HELM_CHART_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Verified public container and Helm chart digests are required before release activation."
             exit 1
           fi
           jq -n \
@@ -1788,6 +1795,7 @@ jobs:
             --arg r2_prefix "${R2_PREFIX}" \
             --arg server_image_digest "${SERVER_IMAGE_DIGEST}" \
             --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
+            --arg helm_chart_digest "${HELM_CHART_DIGEST}" \
             '{
               schema_version: 1,
               tag: $tag,
@@ -1797,7 +1805,8 @@ jobs:
               convergence_run_id: $convergence_run_id,
               r2_prefix: $r2_prefix,
               server_image_digest: $server_image_digest,
-              control_plane_image_digest: $control_plane_image_digest
+              control_plane_image_digest: $control_plane_image_digest,
+              helm_chart_digest: $helm_chart_digest
             }' > "${activation_marker}"
           gh release upload "${TAG}" \
             "${activation_marker}" --clobber \
@@ -1880,7 +1889,8 @@ jobs:
             --arg r2_prefix "${R2_PREFIX}" \
             --arg server_image_digest "${SERVER_IMAGE_DIGEST}" \
             --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
-            '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .release_id == $release_id and .source_release_run_id == $source_release_run_id and .convergence_run_id == $convergence_run_id and .r2_prefix == $r2_prefix and .server_image_digest == $server_image_digest and .control_plane_image_digest == $control_plane_image_digest' \
+            --arg helm_chart_digest "${HELM_CHART_DIGEST}" \
+            '.schema_version == 1 and .tag == $tag and .target_commitish == $target_commitish and .release_id == $release_id and .source_release_run_id == $source_release_run_id and .convergence_run_id == $convergence_run_id and .r2_prefix == $r2_prefix and .server_image_digest == $server_image_digest and .control_plane_image_digest == $control_plane_image_digest and .helm_chart_digest == $helm_chart_digest' \
             "${verified_marker}" >/dev/null
           trap - ERR
           rm -f "$release_json" "$publish_payload" "$quarantine_payload" \
@@ -1934,6 +1944,7 @@ jobs:
           R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}
           SERVER_IMAGE_DIGEST: ${{ needs.publish_docker.outputs.server_digest }}
           CONTROL_PLANE_IMAGE_DIGEST: ${{ needs.publish_docker.outputs.control_plane_digest }}
+          HELM_CHART_DIGEST: ${{ needs.publish_helm_chart.outputs.chart_digest }}
         run: |
           set -euo pipefail
           require_result() {
@@ -1976,12 +1987,14 @@ jobs:
               --arg r2_prefix "${R2_PREFIX}" \
               --arg server_image_digest "${SERVER_IMAGE_DIGEST}" \
               --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
+              --arg helm_chart_digest "${HELM_CHART_DIGEST}" \
               '.schema_version == 1 and .tag == $tag and
                .target_commitish == $target_commitish and .release_id == $release_id and
                .source_release_run_id == $source_release_run_id and
                (.convergence_run_id | test("^[0-9]+$")) and .r2_prefix == $r2_prefix and
                .server_image_digest == $server_image_digest and
-               .control_plane_image_digest == $control_plane_image_digest' \
+               .control_plane_image_digest == $control_plane_image_digest and
+               .helm_chart_digest == $helm_chart_digest' \
               "${marker}" >/dev/null
             marker_convergence_run_id="$(jq -r '.convergence_run_id' "${marker}")"
             recovery_run_id="$(jq -r '.activation_recovery_run_id // ""' "${marker}")"

@@ -397,9 +397,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("r2_prefix: $r2_prefix", activation)
         self.assertIn(".r2_prefix == $r2_prefix", activation)
         self.assertIn(".r2_prefix == $r2_prefix", convergence)
-        for digest_field in ("server_image_digest", "control_plane_image_digest"):
+        for digest_field in (
+            "server_image_digest",
+            "control_plane_image_digest",
+            "helm_chart_digest",
+        ):
             self.assertIn(digest_field, activation)
             self.assertIn(digest_field, convergence)
+            self.assertIn(digest_field, recovery_activation)
+            self.assertIn(digest_field, commit_verdict)
         self.assertIn("committed=true", activation)
         self.assertIn("Immutably committed, attested, and publicly verified ${TAG}", activation)
         self.assertIn("Draft activation marker digest does not match", activation)
@@ -1951,6 +1957,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dry_run_workflow = read(".github/workflows/release-dry-run.yml")
         helm = read(".github/workflows/publish-helm-chart.yml")
         helm_pages = read(".github/workflows/helm-pages.yml")
+        convergence = read(".github/workflows/release-convergence.yml")
         artifact_validator = read("scripts/release_control/validate_artifact_release_line.py")
         chart = read("deploy/helm/pulse/Chart.yaml")
         chart_sync = read("scripts/sync_chart_release_metadata.py")
@@ -2125,11 +2132,23 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("sync_chart_release_metadata.py", helm_pages)
         self.assertIn("--chart deploy/helm/pulse/Chart.yaml", helm)
         self.assertIn('git checkout --detach "refs/tags/${RELEASE_TAG}"', helm)
-        self.assertIn("Verify public GHCR chart read", helm)
+        self.assertIn("Verify public GHCR chart identity and provenance", helm)
         self.assertIn("helm registry logout ghcr.io || true", helm)
-        self.assertIn("helm show chart", helm)
-        self.assertIn("oci://ghcr.io/${{ github.repository_owner }}/pulse-chart/pulse", helm)
-        self.assertIn('--version "${{ steps.versions.outputs.chart_version }}"', helm)
+        self.assertIn("actions/attest@", helm)
+        self.assertIn("verify-release-helm-chart.sh", helm)
+        self.assertIn("subject-digest: ${{ steps.push.outputs.chart_digest }}", helm)
+        self.assertIn("value: ${{ jobs.publish.outputs.chart_digest }}", helm)
+        self.assertIn("chart_digest: ${{ steps.proof.outputs.chart_digest }}", helm)
+        self.assertIn("${GITHUB_SHA} does not match ${RELEASE_TAG}", helm)
+        self.assertIn("verify-release-helm-chart.sh", helm_pages)
+        self.assertRegex(
+            helm_pages,
+            r"(?s)- name: Verify immutable chart identity\n\s+env:\n\s+GH_TOKEN: \$\{\{ github\.token \}\}",
+        )
+        self.assertIn(
+            "chart_digest: ${{ needs.acquire_customer_promotion_lease.outputs.helm_chart_digest }}",
+            convergence,
+        )
         self.assertNotIn("versions/latest/restore", helm)
         self.assertNotIn("-f visibility=public", helm)
         self.assertNotIn("Package visibility configuration attempted", helm)
