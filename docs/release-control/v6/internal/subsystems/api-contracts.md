@@ -4256,6 +4256,24 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Resource-list facets preserve scoped navigation evidence
+
+`GET /api/resources` returns a compact `facets` object beside the paged row
+payload. `facets.byType` and `facets.incidentCount` are computed from the same
+canonical presentation resource set as the list, after every requested filter
+except `type` has been applied. This lets a provider workflow request only the
+row types its active route renders while still proving that adjacent
+evidence-gated routes exist. Source, `excludeSource`, search, status, and other
+non-type filters remain authoritative for the facet scope; facets must not
+become an unscoped estate summary or a second resource projection. The
+existing global `aggregations` payload retains its current whole-estate
+semantics, and pagination continues to affect rows only.
+
+`TestResourceListTypeFacetsRespectNonTypeScope` pins the contract that a
+type-filtered request receives only its selected rows while the facet bundle
+retains other types inside the same source scope and excludes resources outside
+that scope.
+
 ### Unified resource source exclusion is canonical query policy
 
 `GET /api/resources` accepts `excludeSource` as a comma-separated negative

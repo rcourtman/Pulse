@@ -1949,6 +1949,45 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('normalizes source-scoped type and incident facets for route navigation', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [v2Resource],
+        facets: {
+          byType: {
+            agent: 1,
+            vm: 18,
+            storage: 3,
+          },
+          incidentCount: 4,
+        },
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=agent,vm&source=vmware-vsphere',
+        cacheKey: 'vmware-overview-facets',
+      });
+    });
+
+    await waitForValue(() => result!.facets()?.incidentCount, 4);
+    expect(result!.facets()).toEqual({
+      byType: {
+        agent: 1,
+        vm: 18,
+        storage: 3,
+      },
+      incidentCount: 4,
+    });
+
+    dispose();
+  });
+
   it('normalizes legacy k8s discovery targets to pod for frontend consumers', async () => {
     apiFetchMock.mockResolvedValue({
       ok: true,

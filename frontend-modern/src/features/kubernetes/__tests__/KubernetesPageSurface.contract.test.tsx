@@ -219,6 +219,26 @@ describe('KubernetesPageSurface contract', () => {
     expect(screen.queryByTestId('services-table')).toBeNull();
   });
 
+  it('hydrates only the active Kubernetes workflow resource family', () => {
+    mockPathname.mockReturnValue('/kubernetes/events');
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({ id: 'event-1', type: 'k8s-event' }),
+    ]);
+
+    renderSurface();
+
+    const activeCall = mockUseUnifiedResources.mock.calls.find(([options]) =>
+      (options as { enabled: () => boolean }).enabled(),
+    );
+    expect(activeCall?.[0]).toEqual(
+      expect.objectContaining({
+        cacheKey: 'kubernetes-events',
+        query: 'type=agent,k8s-cluster,k8s-event&source=kubernetes',
+      }),
+    );
+  });
+
   it('surfaces stale agent-backed Kubernetes nodes', () => {
     mockVersionInfo.mockReturnValue({
       version: 'v6.0.0-rc.6',

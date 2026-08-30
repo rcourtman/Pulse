@@ -336,6 +336,21 @@ describe('dockerPageModel', () => {
     expect(getDockerPageTabSpecs(swarmModel).map((tab) => tab.id)).toEqual(['overview', 'swarm']);
   });
 
+  it('keeps workflow tabs evidence-gated when the active route loads a partial row model', () => {
+    const activeRouteModel = buildDockerPageModel([
+      makeResource({ id: 'docker-host-1', type: 'agent' }),
+    ]);
+
+    expect(
+      getDockerPageTabSpecs(activeRouteModel, {
+        'docker-image': 3,
+        'docker-volume': 2,
+        'docker-network': 1,
+        'docker-service': 1,
+      }).map((tab) => tab.id),
+    ).toEqual(['overview', 'images', 'storage', 'networks', 'swarm']);
+  });
+
   it('shows the Storage workflow tab when engine disk usage exists without volume rows', () => {
     const model = buildDockerPageModel([
       makeResource({

@@ -3,6 +3,11 @@
 import type { Resource, ResourceCapability, ResourcePolicy } from './resource';
 import type { EvidenceEnvelope, LifecycleTransition, OperationalRecord } from './operationalTrust';
 
+export interface ResourceListFacetsPayload {
+  byType?: Partial<Record<string, number>>;
+  incidentCount?: number;
+}
+
 export interface APITokenRecord {
   id: string;
   name: string;

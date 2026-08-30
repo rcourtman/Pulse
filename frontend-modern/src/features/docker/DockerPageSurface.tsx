@@ -1,9 +1,9 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
-import { Show, createMemo, createSignal } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import { ButtonLink } from '@/components/shared/Button';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
-import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { useUnifiedResources, type UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformErrorState,
@@ -26,6 +26,7 @@ import { DockerSwarmNodesTable } from './DockerSwarmNodesTable';
 import { DockerTasksTable } from './DockerTasksTable';
 import { DockerVolumesTable } from './DockerVolumesTable';
 import {
+  DOCKER_TAB_SPECS,
   buildDockerPageModel,
   filterDockerResources,
   getDockerPageTabSpecs,
@@ -56,8 +57,15 @@ import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import type { Resource } from '@/types/resource';
 import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 
-const DOCKER_RESOURCE_QUERY =
-  'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config&source=docker';
+const DOCKER_RESOURCE_QUERY_BY_TAB: Record<DockerPageTabId, string> = {
+  overview: 'type=agent,docker-host,app-container&source=docker',
+  images: 'type=agent,docker-host,app-container,docker-image&source=docker',
+  storage: 'type=agent,docker-host,docker-volume&source=docker',
+  networks:
+    'type=agent,docker-host,app-container,docker-service,docker-task,docker-network&source=docker',
+  swarm:
+    'type=agent,docker-host,docker-service,docker-task,docker-swarm-node,docker-secret,docker-config&source=docker',
+};
 
 const DockerIcon = getPlatformIcon('docker');
 const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;
@@ -65,20 +73,85 @@ const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;
 export function DockerPageSurface() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { resources, loading, error, refetch } = useUnifiedResources({
-    query: DOCKER_RESOURCE_QUERY,
-    cacheKey: 'docker-workspace',
-    initialHydration: 'prefer-ws-then-rest',
-  });
   const requestedTab = createMemo<DockerPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1];
     return resolveDockerPageTabId(segment);
   });
-  const model = createMemo(() => buildDockerPageModel(resources()));
-  const tabs = createMemo(() => getDockerPageTabSpecs(model()));
+  const [navigationResources, setNavigationResources] = createSignal<Resource[]>([]);
+  const [resourceFacets, setResourceFacets] = createSignal<UnifiedResourceFacets | null>(null);
+  const navigationModel = createMemo(() => buildDockerPageModel(navigationResources()));
+  const tabs = createMemo(() => {
+    const facets = resourceFacets();
+    return facets
+      ? getDockerPageTabSpecs(navigationModel(), facets.byType)
+      : navigationResources().length > 0
+        ? getDockerPageTabSpecs(navigationModel())
+        : DOCKER_TAB_SPECS;
+  });
   const activeTab = createMemo<DockerPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+  const shouldHydrateTab = (tab: DockerPageTabId) => activeTab() === tab;
+  const overviewResources = useUnifiedResources({
+    query: DOCKER_RESOURCE_QUERY_BY_TAB.overview,
+    cacheKey: 'docker-overview',
+    initialHydration: 'prefer-ws-then-rest',
+    enabled: () => shouldHydrateTab('overview'),
+    realtimeEnabled: () => shouldHydrateTab('overview'),
+  });
+  const imageResources = useUnifiedResources({
+    query: DOCKER_RESOURCE_QUERY_BY_TAB.images,
+    cacheKey: 'docker-images',
+    initialHydration: 'prefer-ws-then-rest',
+    enabled: () => shouldHydrateTab('images'),
+    realtimeEnabled: () => shouldHydrateTab('images'),
+  });
+  const storageResources = useUnifiedResources({
+    query: DOCKER_RESOURCE_QUERY_BY_TAB.storage,
+    cacheKey: 'docker-storage',
+    initialHydration: 'prefer-ws-then-rest',
+    enabled: () => shouldHydrateTab('storage'),
+    realtimeEnabled: () => shouldHydrateTab('storage'),
+  });
+  const networkResources = useUnifiedResources({
+    query: DOCKER_RESOURCE_QUERY_BY_TAB.networks,
+    cacheKey: 'docker-networks',
+    initialHydration: 'prefer-ws-then-rest',
+    enabled: () => shouldHydrateTab('networks'),
+    realtimeEnabled: () => shouldHydrateTab('networks'),
+  });
+  const swarmResources = useUnifiedResources({
+    query: DOCKER_RESOURCE_QUERY_BY_TAB.swarm,
+    cacheKey: 'docker-swarm',
+    initialHydration: 'prefer-ws-then-rest',
+    enabled: () => shouldHydrateTab('swarm'),
+    realtimeEnabled: () => shouldHydrateTab('swarm'),
+  });
+  const resourceState = createMemo(() => {
+    switch (activeTab()) {
+      case 'images':
+        return imageResources;
+      case 'storage':
+        return storageResources;
+      case 'networks':
+        return networkResources;
+      case 'swarm':
+        return swarmResources;
+      default:
+        return overviewResources;
+    }
+  });
+  const resources = () => resourceState().resources();
+  const loading = () => resourceState().loading();
+  const error = () => resourceState().error();
+  const refetch = () => resourceState().refetch();
+  createEffect(() => {
+    const state = resourceState();
+    setNavigationResources(state.resources());
+    const nextFacets = state.facets?.();
+    if (nextFacets) setResourceFacets(nextFacets);
+  });
+  const model = createMemo(() => buildDockerPageModel(resources()));
 
   const hostFilter = createMemo(() => {
     const rawHost = searchParams[DOCKER_QUERY_PARAMS.host];

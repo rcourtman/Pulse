@@ -592,29 +592,69 @@ export const resolveKubernetesPageTabId = (segment: string | undefined): Kuberne
 const hasKubernetesTabInventory = (
   model: KubernetesPageModel,
   tab: KubernetesPageTabId,
+  typeCounts?: Partial<Record<ResourceType, number>>,
 ): boolean => {
+  const hasType = (...types: ResourceType[]) => types.some((type) => (typeCounts?.[type] ?? 0) > 0);
   switch (tab) {
     case 'overview':
       return true;
     case 'nodes':
-      return model.nodes.length > 0;
+      return model.nodes.length > 0 || hasType('k8s-node', 'agent');
     case 'workloads':
-      return model.workloads.length > 0 || model.autoscaling.length > 0;
+      return (
+        model.workloads.length > 0 ||
+        model.autoscaling.length > 0 ||
+        hasType(
+          'pod',
+          'k8s-deployment',
+          'k8s-replicaset',
+          'k8s-statefulset',
+          'k8s-daemonset',
+          'k8s-job',
+          'k8s-cronjob',
+          'k8s-horizontal-pod-autoscaler',
+        )
+      );
     case 'services':
-      return model.services.length > 0 || model.serviceNetworking.length > 0;
+      return (
+        model.services.length > 0 ||
+        model.serviceNetworking.length > 0 ||
+        hasType('k8s-service', 'k8s-ingress', 'k8s-endpoint-slice')
+      );
     case 'storage':
-      return model.storage.length > 0;
+      return (
+        model.storage.length > 0 ||
+        hasType('k8s-persistent-volume', 'k8s-persistent-volume-claim', 'k8s-storage-class')
+      );
     case 'configuration':
-      return model.config.length > 0 || model.policy.length > 0;
+      return (
+        model.config.length > 0 ||
+        model.policy.length > 0 ||
+        hasType(
+          'k8s-namespace',
+          'k8s-configmap',
+          'k8s-secret',
+          'k8s-serviceaccount',
+          'k8s-role',
+          'k8s-cluster-role',
+          'k8s-role-binding',
+          'k8s-cluster-role-binding',
+          'k8s-resource-quota',
+          'k8s-limit-range',
+          'k8s-network-policy',
+          'k8s-pod-disruption-budget',
+        )
+      );
     case 'events':
-      return model.events.length > 0;
+      return model.events.length > 0 || hasType('k8s-event');
   }
 };
 
 export const getKubernetesPageTabSpecs = (
   model: KubernetesPageModel,
+  typeCounts?: Partial<Record<ResourceType, number>>,
 ): readonly KubernetesTabSpec[] =>
-  KUBERNETES_TAB_SPECS.filter((tab) => hasKubernetesTabInventory(model, tab.id));
+  KUBERNETES_TAB_SPECS.filter((tab) => hasKubernetesTabInventory(model, tab.id, typeCounts));
 
 const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-cluster',

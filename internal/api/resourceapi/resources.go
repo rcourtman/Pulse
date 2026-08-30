@@ -172,6 +172,13 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 	}
 
 	filters := parseListFilters(r)
+	facetFilters := filters
+	// Type facets drive evidence-gated workflow navigation. They must honor the
+	// rest of the request scope (especially source and excludeSource) while
+	// ignoring the active route's type selection, otherwise a storage-only
+	// query could never prove that an Images or Networks workflow also exists.
+	facetFilters.types = nil
+	facetResources := applyFilters(allResources, facetFilters)
 	resources = applyFilters(resources, filters)
 	applySorting(resources, filters.sortField, filters.sortOrder)
 
@@ -193,6 +200,7 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 	response.Data = paged
 	response.Meta = meta
 	response.Aggregations = stats
+	response.Facets = buildResourceListFacets(facetResources)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response.NormalizeCollections())
@@ -1389,6 +1397,27 @@ type ResourcesResponse struct {
 	Data         []unified.Resource    `json:"data"`
 	Meta         ResourcesMeta         `json:"meta"`
 	Aggregations unified.ResourceStats `json:"aggregations"`
+	Facets       ResourceListFacets    `json:"facets"`
+}
+
+// ResourceListFacets describes the complete resource scope selected by the
+// non-type filters on a list request. The paged rows remain type-filtered;
+// these compact counts let clients evidence-gate adjacent workflow routes
+// without hydrating every row from every resource type.
+type ResourceListFacets struct {
+	ByType        map[unified.ResourceType]int `json:"byType"`
+	IncidentCount int                          `json:"incidentCount"`
+}
+
+func buildResourceListFacets(resources []unified.Resource) ResourceListFacets {
+	facets := ResourceListFacets{
+		ByType: make(map[unified.ResourceType]int, 8),
+	}
+	for _, resource := range resources {
+		facets.ByType[resourceContractType(resource)]++
+		facets.IncidentCount += resource.IncidentCount
+	}
+	return facets
 }
 
 func EmptyResourcesResponse() ResourcesResponse {
@@ -1412,6 +1441,9 @@ func (r ResourcesResponse) NormalizeCollections() ResourcesResponse {
 	}
 	if r.Aggregations.BySource == nil {
 		r.Aggregations.BySource = map[unified.DataSource]int{}
+	}
+	if r.Facets.ByType == nil {
+		r.Facets.ByType = map[unified.ResourceType]int{}
 	}
 	return r
 }

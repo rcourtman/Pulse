@@ -255,6 +255,75 @@ func TestResourceListRejectsLegacyHostTypeFilter(t *testing.T) {
 	}
 }
 
+func TestResourceListTypeFacetsRespectNonTypeScope(t *testing.T) {
+	now := time.Now().UTC()
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewQueryService(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:      "truenas-system",
+				Type:    unified.ResourceTypeAgent,
+				Status:  unified.StatusOnline,
+				Sources: []unified.DataSource{unified.SourceTrueNAS},
+			},
+			{
+				ID:      "truenas-vm",
+				Type:    unified.ResourceTypeVM,
+				Status:  unified.StatusWarning,
+				Sources: []unified.DataSource{unified.SourceTrueNAS},
+				Incidents: []unified.ResourceIncident{
+					{Code: "vmware.alarm"},
+					{Code: "vmware.task"},
+				},
+			},
+			{
+				ID:      "truenas-storage",
+				Type:    unified.ResourceTypeStorage,
+				Status:  unified.StatusOnline,
+				Sources: []unified.DataSource{unified.SourceTrueNAS},
+			},
+			{
+				ID:      "docker-volume",
+				Type:    unified.ResourceTypeDockerVolume,
+				Status:  unified.StatusOnline,
+				Sources: []unified.DataSource{unified.SourceDocker},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/resources?source=truenas&type=agent&page=1&limit=100",
+		nil,
+	)
+	h.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var response ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data) != 1 || response.Data[0].Type != unified.ResourceTypeAgent {
+		t.Fatalf("type-filtered rows = %#v, want the TrueNAS agent only", response.Data)
+	}
+	wantTypes := map[unified.ResourceType]int{
+		unified.ResourceTypeAgent:   1,
+		unified.ResourceTypeVM:      1,
+		unified.ResourceTypeStorage: 1,
+	}
+	if !reflect.DeepEqual(response.Facets.ByType, wantTypes) {
+		t.Fatalf("facets.byType = %#v, want %#v", response.Facets.ByType, wantTypes)
+	}
+	if response.Facets.IncidentCount != 2 {
+		t.Fatalf("facets.incidentCount = %d, want 2", response.Facets.IncidentCount)
+	}
+}
+
 func TestResourceListMergesLinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{

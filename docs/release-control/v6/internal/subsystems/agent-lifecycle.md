@@ -3112,6 +3112,14 @@ lifecycle surfaces must not treat these members as enrollable, updatable, or
 doctorable agents — the Pulse Agent fleet remains exactly the set of
 SourceAgent-backed connections and structured fleet diagnostics.
 
+Provider route scoping does not change that separation. Compact resource-list
+type facets and route-specific Docker, Kubernetes, TrueNAS, or VMware inventory
+queries are read-side presentation evidence only. A provider-owned canonical
+agent row may remain in the active route query so the page can render its
+system or update posture, but neither the row nor its facet count creates
+enrollment, token binding, command, update, removal, or re-enrollment
+authority.
+
 ### Agent Doctor covers exactly the Pulse Agent fleet
 
 The connections ledger no longer fabricates agent-type rows for

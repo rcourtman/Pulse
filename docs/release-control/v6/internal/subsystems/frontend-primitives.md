@@ -3138,6 +3138,18 @@ resolves late` in
 
 ## Current State
 
+### Provider tabs use compact canonical evidence during route hydration
+
+Evidence-gated provider tabs consume the unified-resource owner's
+source-scoped type facets while rendering only the active workflow inventory.
+The shell keeps requested direct routes available during first hydration, then
+uses the settled facet bundle as the navigation truth. A temporarily absent row
+payload is loading state, not proof that the provider or workflow is empty;
+provider empty states may render only after the active route query settles.
+Docker / Podman, Kubernetes, TrueNAS, and VMware continue to reuse the shared
+platform tabs, loading, error, and empty-state primitives rather than adding a
+provider-local skeleton or navigation model.
+
 ### Patrol objectives reuse the shared dialog, button, badge, and resource picker contracts
 
 The Patrol retained-objective surface composes the existing shared `Dialog`,

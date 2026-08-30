@@ -2043,6 +2043,25 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
 
 ## Current State
 
+### Provider workflows hydrate only their active route inventory
+
+Docker / Podman, Kubernetes, TrueNAS, and VMware surfaces declare an explicit
+canonical resource-type query for each workflow route. Only the active route's
+query may hydrate or subscribe to realtime inventory; inactive routes use the
+source-scoped `facets.byType` evidence returned with that active query to keep
+their navigation visibility truthful. A direct route may remain visible while
+its first request is in flight, but a settled facet bundle is authoritative and
+must remove workflows for which the provider has no canonical evidence.
+
+The shared `useUnifiedResources` boundary retains the REST facet bundle in the
+same query cache as the rows. When a canonical WebSocket generation arrives,
+it recomputes those facets from the complete snapshot after applying the
+query's source and exclusion scope but before applying its type selection. A
+realtime update therefore cannot undo REST scoping, hide an adjacent workflow,
+or force every provider type back into the active route payload. Docker,
+Kubernetes, TrueNAS, and VMware surface contract tests pin their route query
+maps, and the shared hook test pins facet normalization.
+
 ### Canonical REST facets preserve realtime workload evidence
 
 The frontend REST projection retains the complete source-authored Proxmox

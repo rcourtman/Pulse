@@ -1,5 +1,5 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
-import { Show, createMemo, type Accessor } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
@@ -8,8 +8,9 @@ import {
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
-import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { useUnifiedResources, type UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import { updateStore } from '@/stores/updates';
+import type { Resource } from '@/types/resource';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -40,8 +41,15 @@ import {
 // client-side. Canonical TrueNAS systems retain `truenas` in their merged
 // source set even when a Pulse agent enriches the same appliance, so the page
 // can stay provider-scoped without hydrating every agent in the estate.
-const TRUENAS_RESOURCE_QUERY =
-  'source=truenas&type=agent,vm,app-container,network-share,storage,physical_disk';
+const TRUENAS_RESOURCE_QUERY_BY_TAB: Record<TrueNASPageTabId, string> = {
+  overview: 'source=truenas&type=agent,vm,app-container,network-share,storage,physical_disk',
+  storage: 'source=truenas&type=agent,storage,physical_disk',
+  services: 'source=truenas&type=agent',
+  apps: 'source=truenas&type=agent,app-container',
+  vms: 'source=truenas&type=agent,vm',
+  shares: 'source=truenas&type=agent,network-share',
+  protection: 'source=truenas&type=agent',
+};
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
@@ -51,14 +59,70 @@ const truenasIcon = () => <TrueNASIcon class="h-6 w-6 text-slate-400" />;
 export function TrueNASPageSurface() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { resources, loading, error, refetch } = useUnifiedResources({
-    query: TRUENAS_RESOURCE_QUERY,
-    cacheKey: 'truenas-workspace',
-    initialHydration: 'prefer-ws-then-rest',
-  });
   const requestedTab = createMemo<TrueNASPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as TrueNASPageTabId | undefined;
     return segment && VALID_TABS.has(segment) ? segment : 'overview';
+  });
+  const [navigationResources, setNavigationResources] = createSignal<Resource[]>([]);
+  const [resourceFacets, setResourceFacets] = createSignal<UnifiedResourceFacets | null>(null);
+  const navigationModel = createMemo(() => buildTrueNASPageModel(navigationResources()));
+  const tabs = createMemo(() => {
+    const facets = resourceFacets();
+    if (!facets) {
+      return navigationResources().length > 0
+        ? getTrueNASPageTabSpecs(navigationModel())
+        : TRUENAS_TAB_SPECS;
+    }
+    return getTrueNASPageTabSpecs(navigationModel(), {
+      typeCounts: facets.byType,
+    });
+  });
+  const activeTab = createMemo<TrueNASPageTabId>(() =>
+    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
+  );
+  const shouldHydrateTab = (tab: TrueNASPageTabId) => activeTab() === tab;
+  const createTabResources = (tab: TrueNASPageTabId) =>
+    useUnifiedResources({
+      query: TRUENAS_RESOURCE_QUERY_BY_TAB[tab],
+      cacheKey: `truenas-${tab}`,
+      initialHydration: 'prefer-ws-then-rest',
+      enabled: () => shouldHydrateTab(tab),
+      realtimeEnabled: () => shouldHydrateTab(tab),
+    });
+  const overviewResources = createTabResources('overview');
+  const storageResources = createTabResources('storage');
+  const serviceResources = createTabResources('services');
+  const appResources = createTabResources('apps');
+  const vmResources = createTabResources('vms');
+  const shareResources = createTabResources('shares');
+  const protectionResources = createTabResources('protection');
+  const resourceState = createMemo(() => {
+    switch (activeTab()) {
+      case 'storage':
+        return storageResources;
+      case 'services':
+        return serviceResources;
+      case 'apps':
+        return appResources;
+      case 'vms':
+        return vmResources;
+      case 'shares':
+        return shareResources;
+      case 'protection':
+        return protectionResources;
+      default:
+        return overviewResources;
+    }
+  });
+  const resources = () => resourceState().resources();
+  const loading = () => resourceState().loading();
+  const error = () => resourceState().error();
+  const refetch = () => resourceState().refetch();
+  createEffect(() => {
+    const state = resourceState();
+    setNavigationResources(state.resources());
+    const nextFacets = state.facets?.();
+    if (nextFacets) setResourceFacets(nextFacets);
   });
   const model = createMemo(() => buildTrueNASPageModel(resources()));
   const protection = useRecoveryPoints(() =>
@@ -69,14 +133,6 @@ export function TrueNASPageSurface() {
           limit: 200,
         }
       : null,
-  );
-  const tabs = createMemo(() =>
-    getTrueNASPageTabSpecs(model(), {
-      hasProtectionInventory: protection.meta().total > 0 || protection.points().length > 0,
-    }),
-  );
-  const activeTab = createMemo<TrueNASPageTabId>(() =>
-    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
   const storageKindFilter = (): TrueNASStorageKindFilter => {
     const value = searchParams.kind;

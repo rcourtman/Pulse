@@ -439,6 +439,28 @@ describe('DockerPageSurface', () => {
     );
   });
 
+  it('hydrates only the active Docker workflow resource family', () => {
+    mocks.pathname = '/docker/storage';
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [makeDockerHost(), makeDockerVolume()],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    const activeCall = mocks.useUnifiedResources.mock.calls.find(([options]) =>
+      (options as { enabled: () => boolean }).enabled(),
+    );
+    expect(activeCall?.[0]).toEqual(
+      expect.objectContaining({
+        cacheKey: 'docker-storage',
+        query: 'type=agent,docker-host,docker-volume&source=docker',
+      }),
+    );
+  });
+
   it('keeps the legacy containers route on the Overview landing surface', () => {
     mocks.pathname = '/docker/containers';
 

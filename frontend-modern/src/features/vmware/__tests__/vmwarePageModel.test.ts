@@ -105,6 +105,20 @@ describe('vmwarePageModel', () => {
     ]);
   });
 
+  it('keeps vSphere workflow tabs visible from scoped facets on partial routes', () => {
+    const activeRouteModel = buildVmwarePageModel([
+      makeResource({ id: 'esxi-host-1', type: 'agent' }),
+    ]);
+
+    expect(
+      getVmwarePageTabSpecs(activeRouteModel, {
+        typeCounts: { storage: 2, network: 3 },
+        incidentCount: 1,
+        hasActivityInventory: true,
+      }).map((tab) => tab.id),
+    ).toEqual(['overview', 'storage', 'networks', 'health', 'activity']);
+  });
+
   it('buckets canonical vSphere hosts, VMs, datastores, and networks', () => {
     const model = buildVmwarePageModel([
       makeResource({ id: 'esxi-host-1', type: 'agent' }),

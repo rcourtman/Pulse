@@ -1,22 +1,38 @@
 {
   "version": 1,
-  "base_sha": "ee6bb64d727572efd7ded3c5812200c371a7cdc3",
-  "verified_at": "2026-08-30T01:13:52Z",
+  "base_sha": "36dd5b9119971620a5cdd3cc791f4d555f71160e",
+  "verified_at": "2026-08-30T08:31:50Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/docker/dockerPageModel.ts",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts",
     "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
-    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
-    "frontend-modern/src/features/truenas/truenasPageModel.ts"
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/types/api.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "087236d017558f9fe0990530cd8153f738e764c0ee3ddd77e558b92592fc6f20",
-    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "16f808fc87d03ceee9466214f1397e5746f468bc8a96c6ddde280a6d7f6044d3",
-    "frontend-modern/src/features/truenas/truenasPageModel.ts": "fb4434ed88e6677449eb4b4b85bd8f3c108be45e3605aff2acb33996f230c932"
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "9e3ae4cf49e50ce5870ddfed517057423ed00d4efdf6a3cbcd669497bda526b6",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "a6f64a80a91e0f75f0f13397c9eb25ee5c993e012c08da3fd43888d3d99ccdc3",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "f464792ae1301cb7db93b904b9a544d046268cc3cabaa179f647aeb3fbf6a8f7",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "3b79fb6f9eddc5d3b593fc78412c94310175bf7a15f41fa44e9c06319608111a",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "db085a6496c5af4dae90bf7cb8583270e528e1de23e399088486706cafce36ff",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "2e7bf5d00bd4570524faeac6bb27a4714364d0796a598801729d2e1a113c5d6f",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "40f325c9e2dc7f67d0db748475a9da0000fb75bfcccbb8cfeb4a16a0935eb7de",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "1b01b0655575d477a60aa030eeb2ec793a9404934959b0234e75f65b568187cc",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "44c4dcaa542bf0775c9c53f18769b28a1ef5ecba0cb5c62174b89cdf5416ab4b",
+    "frontend-modern/src/types/api.ts": "c4c830f7796a4dab8abad12cef96872581f2ac4e5ef5eb72840a3031db57069e"
   },
   "routes": [
-    "/truenas/storage",
-    "/truenas/storage?kind=disks",
-    "/truenas/storage?kind=volumes"
+    "/vmware/overview",
+    "/vmware/storage",
+    "/docker/images",
+    "/kubernetes/configuration",
+    "/truenas/vms"
   ],
   "viewports": [
     {
@@ -24,26 +40,23 @@
       "height": 720
     },
     {
-      "width": 393,
-      "height": 851
-    },
-    {
       "width": 390,
       "height": 844
     }
   ],
   "states": [
-    "populated mixed TrueNAS storage inventory with 21 volume and physical-disk rows",
-    "physical-disk scope with 8 rows and contextual Endurance, Temperature, and Health columns",
-    "physical-disk scope after direct reload from the shareable kind query",
-    "volume scope containing pools and datasets with physical disks excluded",
-    "narrow physical-disk scope with the mobile filter controls expanded and the fixed navigation present"
+    "vSphere Overview settled with 7 ESXi hosts and 18 virtual machines without rendering the false No vSphere VMs state",
+    "vSphere Datastores settled with 8 rows while retaining all evidence-gated VMware workflow tabs",
+    "Docker Images settled with 10 image rows while retaining Overview, Storage, Networks, and Swarm navigation",
+    "Kubernetes Configuration settled with 10 configuration and policy rows while retaining all Kubernetes workflows",
+    "TrueNAS VMs settled with 2 rows and did not preload recovery inventory",
+    "narrow vSphere Overview retained the complete tab strip, responsive host columns, VM table rows, and no false empty state"
   ],
   "interactions": [
-    "expanded mobile Filters and selected the counted Physical disks scope with pointer activation",
-    "confirmed Physical disks sets ?kind=disks, marks the control pressed, and removes pool rows",
-    "reloaded the scoped URL and confirmed the Physical disks selection persists",
-    "selected Volumes and confirmed ?kind=volumes while every physical-disk row is removed",
-    "inspected full-page rendered screenshots at desktop, Pixel 5, and iPhone 12 widths for fit, clipping, selected state, and evidence readability"
+    "loaded each provider workflow as a direct route against the exact isolated frontend and backend build",
+    "traced network requests and confirmed each sampled route issued only its declared resource-type query",
+    "confirmed VMware used a one-row activity evidence request on non-Activity routes instead of preloading the 100-row timeline",
+    "confirmed TrueNAS VMs issued no recovery request outside Protection",
+    "inspected the rendered desktop routes and a 390 by 844 vSphere screenshot for populated state, tab continuity, fit, and clipping"
   ]
 }

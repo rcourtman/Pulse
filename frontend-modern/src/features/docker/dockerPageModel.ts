@@ -775,23 +775,45 @@ export const hasDockerSwarmInventory = (model: DockerPageModel): boolean =>
   model.secrets.length > 0 ||
   model.configs.length > 0;
 
-const hasDockerTabInventory = (model: DockerPageModel, tab: DockerPageTabId): boolean => {
+const hasDockerTypeEvidence = (
+  typeCounts: Partial<Record<ResourceType, number>> | undefined,
+  ...types: ResourceType[]
+): boolean => types.some((type) => (typeCounts?.[type] ?? 0) > 0);
+
+const hasDockerTabInventory = (
+  model: DockerPageModel,
+  tab: DockerPageTabId,
+  typeCounts?: Partial<Record<ResourceType, number>>,
+): boolean => {
   switch (tab) {
     case 'overview':
       return true;
     case 'images':
-      return model.images.length > 0;
+      return model.images.length > 0 || hasDockerTypeEvidence(typeCounts, 'docker-image');
     case 'storage':
-      return hasDockerStorageInventory(model);
+      return hasDockerStorageInventory(model) || hasDockerTypeEvidence(typeCounts, 'docker-volume');
     case 'networks':
-      return model.networks.length > 0;
+      return model.networks.length > 0 || hasDockerTypeEvidence(typeCounts, 'docker-network');
     case 'swarm':
-      return hasDockerSwarmInventory(model);
+      return (
+        hasDockerSwarmInventory(model) ||
+        hasDockerTypeEvidence(
+          typeCounts,
+          'docker-service',
+          'docker-task',
+          'docker-swarm-node',
+          'docker-secret',
+          'docker-config',
+        )
+      );
   }
 };
 
-export const getDockerPageTabSpecs = (model: DockerPageModel): readonly DockerTabSpec[] =>
-  DOCKER_TAB_SPECS.filter((tab) => hasDockerTabInventory(model, tab.id));
+export const getDockerPageTabSpecs = (
+  model: DockerPageModel,
+  typeCounts?: Partial<Record<ResourceType, number>>,
+): readonly DockerTabSpec[] =>
+  DOCKER_TAB_SPECS.filter((tab) => hasDockerTabInventory(model, tab.id, typeCounts));
 
 const RUNTIME_ONLY_SYSTEM_LABELS = new Set(['docker', 'docker / podman', 'podman']);
 

@@ -1,5 +1,5 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
-import { Show, createMemo, type Accessor } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import { ButtonLink } from '@/components/shared/Button';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import type { FilterDef } from '@/components/shared/FilterBar';
@@ -9,7 +9,7 @@ import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
-import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { useUnifiedResources, type UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import { buildKubernetesPath, KUBERNETES_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
 import {
@@ -37,6 +37,7 @@ import { KubernetesPolicyTable } from './KubernetesPolicyTable';
 import { KubernetesServicesTable } from './KubernetesServicesTable';
 import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
+  KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
   buildKubernetesOverviewPosture,
   filterKubernetesResources,
@@ -51,28 +52,88 @@ import {
 // the linked agent host (sources=['agent','kubernetes']) still appear in the
 // Nodes section of the Overview stack; the page model filters them down to
 // those tagged kubernetes.
-const KUBERNETES_RESOURCE_QUERY =
-  'type=k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-namespace,k8s-service,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-ingress,k8s-endpoint-slice,k8s-network-policy,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class,k8s-configmap,k8s-secret,k8s-serviceaccount,k8s-role,k8s-cluster-role,k8s-role-binding,k8s-cluster-role-binding,k8s-resource-quota,k8s-limit-range,k8s-pod-disruption-budget,k8s-horizontal-pod-autoscaler,k8s-event,agent&source=kubernetes';
+const KUBERNETES_RESOURCE_QUERY_BY_TAB: Record<KubernetesPageTabId, string> = {
+  overview:
+    'type=agent,k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-horizontal-pod-autoscaler&source=kubernetes',
+  nodes: 'type=agent,k8s-cluster,k8s-node&source=kubernetes',
+  workloads:
+    'type=agent,k8s-cluster,k8s-node,pod,k8s-deployment,k8s-replicaset,k8s-statefulset,k8s-daemonset,k8s-job,k8s-cronjob,k8s-horizontal-pod-autoscaler&source=kubernetes',
+  services: 'type=agent,k8s-cluster,k8s-service,k8s-ingress,k8s-endpoint-slice&source=kubernetes',
+  storage:
+    'type=agent,k8s-cluster,k8s-persistent-volume,k8s-persistent-volume-claim,k8s-storage-class&source=kubernetes',
+  configuration:
+    'type=agent,k8s-cluster,k8s-namespace,k8s-configmap,k8s-secret,k8s-serviceaccount,k8s-role,k8s-cluster-role,k8s-role-binding,k8s-cluster-role-binding,k8s-resource-quota,k8s-limit-range,k8s-network-policy,k8s-pod-disruption-budget&source=kubernetes',
+  events: 'type=agent,k8s-cluster,k8s-event&source=kubernetes',
+};
 
 const KubernetesIcon = getPlatformIcon('kubernetes');
 const k8sIcon = () => <KubernetesIcon class="h-6 w-6 text-slate-400" />;
 
 export function KubernetesPageSurface() {
   const location = useLocation();
-  const { resources, loading, error, refetch } = useUnifiedResources({
-    query: KUBERNETES_RESOURCE_QUERY,
-    cacheKey: 'kubernetes-workspace',
-    initialHydration: 'prefer-ws-then-rest',
-  });
   const requestedTab = createMemo<KubernetesPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1];
     return resolveKubernetesPageTabId(segment);
   });
-  const model = createMemo(() => buildKubernetesPageModel(resources()));
-  const tabs = createMemo(() => getKubernetesPageTabSpecs(model()));
+  const [navigationResources, setNavigationResources] = createSignal<Resource[]>([]);
+  const [resourceFacets, setResourceFacets] = createSignal<UnifiedResourceFacets | null>(null);
+  const navigationModel = createMemo(() => buildKubernetesPageModel(navigationResources()));
+  const tabs = createMemo(() => {
+    const facets = resourceFacets();
+    return facets
+      ? getKubernetesPageTabSpecs(navigationModel(), facets.byType)
+      : navigationResources().length > 0
+        ? getKubernetesPageTabSpecs(navigationModel())
+        : KUBERNETES_TAB_SPECS;
+  });
   const activeTab = createMemo<KubernetesPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+  const shouldHydrateTab = (tab: KubernetesPageTabId) => activeTab() === tab;
+  const createTabResources = (tab: KubernetesPageTabId) =>
+    useUnifiedResources({
+      query: KUBERNETES_RESOURCE_QUERY_BY_TAB[tab],
+      cacheKey: `kubernetes-${tab}`,
+      initialHydration: 'prefer-ws-then-rest',
+      enabled: () => shouldHydrateTab(tab),
+      realtimeEnabled: () => shouldHydrateTab(tab),
+    });
+  const overviewResources = createTabResources('overview');
+  const nodeResources = createTabResources('nodes');
+  const workloadResources = createTabResources('workloads');
+  const serviceResources = createTabResources('services');
+  const storageResources = createTabResources('storage');
+  const configurationResources = createTabResources('configuration');
+  const eventResources = createTabResources('events');
+  const resourceState = createMemo(() => {
+    switch (activeTab()) {
+      case 'nodes':
+        return nodeResources;
+      case 'workloads':
+        return workloadResources;
+      case 'services':
+        return serviceResources;
+      case 'storage':
+        return storageResources;
+      case 'configuration':
+        return configurationResources;
+      case 'events':
+        return eventResources;
+      default:
+        return overviewResources;
+    }
+  });
+  const resources = () => resourceState().resources();
+  const loading = () => resourceState().loading();
+  const error = () => resourceState().error();
+  const refetch = () => resourceState().refetch();
+  createEffect(() => {
+    const state = resourceState();
+    setNavigationResources(state.resources());
+    const nextFacets = state.facets?.();
+    if (nextFacets) setResourceFacets(nextFacets);
+  });
+  const model = createMemo(() => buildKubernetesPageModel(resources()));
   const controllerResources = createMemo(() => getKubernetesControllerResources(model()));
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,

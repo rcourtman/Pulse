@@ -209,6 +209,30 @@ describe('TrueNASPageSurface contract', () => {
     expect(screen.getByTestId('protection-table')).toBeInTheDocument();
   });
 
+  it('hydrates only the active TrueNAS workflow resource family', () => {
+    mockPathname.mockReturnValue('/truenas/storage');
+    setResources([
+      makeResource({ id: 'truenas-system', type: 'agent' }),
+      makeResource({
+        id: 'pool:tank',
+        type: 'storage',
+        storage: { topology: 'pool', platform: 'truenas' },
+      }),
+    ]);
+
+    render(() => <TrueNASPageSurface />);
+
+    const activeCall = mockUseUnifiedResources.mock.calls.find(([options]) =>
+      (options as { enabled: () => boolean }).enabled(),
+    );
+    expect(activeCall?.[0]).toEqual(
+      expect.objectContaining({
+        cacheKey: 'truenas-storage',
+        query: 'source=truenas&type=agent,storage,physical_disk',
+      }),
+    );
+  });
+
   it('round-trips the storage kind scope through the route query', () => {
     mockPathname.mockReturnValue('/truenas/storage');
     mockSearchParams.value = { kind: 'volumes' };

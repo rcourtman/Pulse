@@ -204,8 +204,8 @@ describe('VmwarePageSurface contract', () => {
 
     expect(mockUseUnifiedResources).toHaveBeenCalledWith(
       expect.objectContaining({
-        query: 'type=agent,vm,storage,network&source=vmware-vsphere',
-        cacheKey: 'vmware-workspace',
+        query: 'type=agent,vm&source=vmware-vsphere',
+        cacheKey: 'vmware-overview',
       }),
     );
     const stateOptions = mockUseWorkloadsState.mock.calls[0]?.[0] as {
@@ -219,6 +219,34 @@ describe('VmwarePageSurface contract', () => {
 
     await stateOptions.resourceSnapshotRefetch();
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('hydrates only the active vSphere workflow resource family', () => {
+    mockPathname.mockReturnValue('/vmware/networks');
+    setResources([
+      makeResource({
+        id: 'esxi-host-1',
+        type: 'agent',
+        vmware: { entityType: 'host', managedObjectId: 'host-1' },
+      }),
+      makeResource({
+        id: 'network-1',
+        type: 'network',
+        vmware: { entityType: 'network', managedObjectId: 'network-1' },
+      }),
+    ]);
+
+    render(() => <VmwarePageSurface />);
+
+    const activeCall = mockUseUnifiedResources.mock.calls.find(([options]) =>
+      (options as { enabled: () => boolean }).enabled(),
+    );
+    expect(activeCall?.[0]).toEqual(
+      expect.objectContaining({
+        cacheKey: 'vmware-networks',
+        query: 'type=agent,network&source=vmware-vsphere',
+      }),
+    );
   });
 
   it('does not treat vSphere ESXi API host resources as Pulse agent update targets', () => {

@@ -49,6 +49,7 @@ export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
 
 export type TrueNASTabInventoryOptions = {
   hasProtectionInventory?: boolean;
+  typeCounts?: Partial<Record<ResourceType, number>>;
 };
 
 const TRUENAS_RESOURCE_TYPES = new Set<ResourceType>([
@@ -183,19 +184,21 @@ const hasTrueNASTabInventory = (
   tab: TrueNASPageTabId,
   options: TrueNASTabInventoryOptions = {},
 ): boolean => {
+  const hasType = (...types: ResourceType[]) =>
+    types.some((type) => (options.typeCounts?.[type] ?? 0) > 0);
   switch (tab) {
     case 'overview':
       return true;
     case 'storage':
-      return hasTrueNASStorageInventory(model);
+      return hasTrueNASStorageInventory(model) || hasType('storage', 'physical_disk');
     case 'services':
       return model.services.length > 0;
     case 'apps':
-      return model.apps.length > 0;
+      return model.apps.length > 0 || hasType('app-container');
     case 'vms':
-      return model.vms.length > 0;
+      return model.vms.length > 0 || hasType('vm');
     case 'shares':
-      return model.shares.length > 0;
+      return model.shares.length > 0 || hasType('network-share');
     case 'protection':
       // Protection is a first-class TrueNAS workflow. Keep the route visible
       // once a system exists so the page can defer the recovery inventory

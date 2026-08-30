@@ -119,6 +119,23 @@ describe('truenasPageModel', () => {
     ).toEqual(['overview', 'storage', 'services', 'apps', 'vms', 'shares', 'protection']);
   });
 
+  it('keeps TrueNAS workflow tabs visible from source-scoped facets on partial routes', () => {
+    const activeRouteModel = buildTrueNASPageModel([
+      makeResource({ id: 'truenas-system', type: 'agent' }),
+    ]);
+
+    expect(
+      getTrueNASPageTabSpecs(activeRouteModel, {
+        typeCounts: {
+          storage: 2,
+          'app-container': 1,
+          vm: 2,
+          'network-share': 3,
+        },
+      }).map((tab) => tab.id),
+    ).toEqual(['overview', 'storage', 'apps', 'vms', 'shares', 'protection']);
+  });
+
   it('buckets systems, workloads, and native storage inventory by TrueNAS API facet', () => {
     const model = buildTrueNASPageModel([
       makeResource({

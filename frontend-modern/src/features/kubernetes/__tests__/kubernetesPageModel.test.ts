@@ -94,6 +94,23 @@ describe('kubernetesPageModel', () => {
     ]);
   });
 
+  it('keeps workflow tabs visible from source-scoped type facets on partial routes', () => {
+    const activeRouteModel = buildKubernetesPageModel([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+    ]);
+
+    expect(
+      getKubernetesPageTabSpecs(activeRouteModel, {
+        'k8s-node': 2,
+        pod: 12,
+        'k8s-service': 3,
+        'k8s-storage-class': 1,
+        'k8s-configmap': 4,
+        'k8s-event': 6,
+      }).map((tab) => tab.id),
+    ).toEqual(['overview', 'nodes', 'workloads', 'services', 'storage', 'configuration', 'events']);
+  });
+
   it('summarizes actionable Kubernetes overview posture from native resource states', () => {
     const model = buildKubernetesPageModel([
       makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),

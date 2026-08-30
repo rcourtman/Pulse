@@ -130,23 +130,36 @@ export function buildVmwarePageModel(
   };
 }
 
-const hasVmwareTabInventory = (model: VmwarePageModel, tab: VmwarePageTabId): boolean => {
+export type VmwareTabInventoryEvidence = {
+  typeCounts?: Partial<Record<ResourceType, number>>;
+  incidentCount?: number;
+  hasActivityInventory?: boolean;
+};
+
+const hasVmwareTabInventory = (
+  model: VmwarePageModel,
+  tab: VmwarePageTabId,
+  evidence: VmwareTabInventoryEvidence = {},
+): boolean => {
   switch (tab) {
     case 'overview':
       return true;
     case 'storage':
-      return model.datastores.length > 0;
+      return model.datastores.length > 0 || (evidence.typeCounts?.storage ?? 0) > 0;
     case 'networks':
-      return model.networks.length > 0;
+      return model.networks.length > 0 || (evidence.typeCounts?.network ?? 0) > 0;
     case 'health':
-      return model.incidents.length > 0;
+      return model.incidents.length > 0 || (evidence.incidentCount ?? 0) > 0;
     case 'activity':
-      return model.activity.length > 0;
+      return model.activity.length > 0 || Boolean(evidence.hasActivityInventory);
   }
 };
 
-export const getVmwarePageTabSpecs = (model: VmwarePageModel): readonly VmwareTabSpec[] =>
-  VMWARE_TAB_SPECS.filter((tab) => hasVmwareTabInventory(model, tab.id));
+export const getVmwarePageTabSpecs = (
+  model: VmwarePageModel,
+  evidence: VmwareTabInventoryEvidence = {},
+): readonly VmwareTabSpec[] =>
+  VMWARE_TAB_SPECS.filter((tab) => hasVmwareTabInventory(model, tab.id, evidence));
 
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';

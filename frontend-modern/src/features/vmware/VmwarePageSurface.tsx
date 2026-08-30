@@ -1,5 +1,13 @@
 import { useLocation } from '@solidjs/router';
-import { For, Show, createMemo, createResource, type Accessor } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  type Accessor,
+} from 'solid-js';
 import AlertTriangle from 'lucide-solid/icons/triangle-alert';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
@@ -13,7 +21,7 @@ import {
   RuntimeInventorySourcesAPI,
   type RuntimeInventorySource,
 } from '@/api/runtimeInventorySources';
-import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { useUnifiedResources, type UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { updateStore } from '@/stores/updates';
 import {
@@ -58,7 +66,13 @@ import { VsphereNetworksTable } from './VsphereNetworksTable';
 // as canonical `vm`, datastores as canonical `storage`, and vCenter networks
 // as canonical `network`; provider-native topology stays in VMware metadata
 // under those shared resources.
-const VMWARE_RESOURCE_QUERY = 'type=agent,vm,storage,network&source=vmware-vsphere';
+const VMWARE_RESOURCE_QUERY_BY_TAB: Record<VmwarePageTabId, string> = {
+  overview: 'type=agent,vm&source=vmware-vsphere',
+  storage: 'type=agent,storage&source=vmware-vsphere',
+  networks: 'type=agent,network&source=vmware-vsphere',
+  health: 'type=agent,vm,storage,network&source=vmware-vsphere',
+  activity: 'type=agent&source=vmware-vsphere',
+};
 const VALID_TABS = new Set<VmwarePageTabId>(VMWARE_TAB_SPECS.map((tab) => tab.id));
 
 const VMWARE_PLATFORM_FILTER = 'vmware-vsphere';
@@ -152,11 +166,6 @@ function VmwareInventoryCompletenessNotice(props: {
 
 export function VmwarePageSurface() {
   const location = useLocation();
-  const { resources, loading, error, refetch } = useUnifiedResources({
-    query: VMWARE_RESOURCE_QUERY,
-    cacheKey: 'vmware-workspace',
-    initialHydration: 'prefer-ws-then-rest',
-  });
   const inventorySources = createNonSuspendingQuery({
     source: () => 'enabled',
     fetcher: () => RuntimeInventorySourcesAPI.list(),
@@ -168,8 +177,75 @@ export function VmwarePageSurface() {
     const segment = location.pathname.split('/').filter(Boolean)[1] as VmwarePageTabId | undefined;
     return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
+  const [navigationResources, setNavigationResources] = createSignal<Resource[]>([]);
+  const [resourceFacets, setResourceFacets] = createSignal<UnifiedResourceFacets | null>(null);
+  const [activityEvidence] = createResource(async () =>
+    ResourceAPI.getGlobalTimeline({
+      limit: 1,
+      kind: 'activity',
+      sourceType: 'platform_event',
+      sourceAdapter: 'vmware_adapter',
+    }),
+  );
+  const navigationModel = createMemo(() => buildVmwarePageModel(navigationResources(), []));
+  const tabs = createMemo(() => {
+    const facets = resourceFacets();
+    if (!facets || activityEvidence.loading || activityEvidence.error) {
+      return navigationResources().length > 0
+        ? getVmwarePageTabSpecs(navigationModel(), {
+            hasActivityInventory: (activityEvidence()?.recentChanges?.length ?? 0) > 0,
+          })
+        : VMWARE_TAB_SPECS;
+    }
+    return getVmwarePageTabSpecs(navigationModel(), {
+      typeCounts: facets.byType,
+      incidentCount: facets.incidentCount,
+      hasActivityInventory: (activityEvidence()?.recentChanges?.length ?? 0) > 0,
+    });
+  });
+  const activeTab = createMemo<VmwarePageTabId>(() =>
+    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
+  );
+  const shouldHydrateTab = (tab: VmwarePageTabId) => activeTab() === tab;
+  const createTabResources = (tab: VmwarePageTabId) =>
+    useUnifiedResources({
+      query: VMWARE_RESOURCE_QUERY_BY_TAB[tab],
+      cacheKey: `vmware-${tab}`,
+      initialHydration: 'prefer-ws-then-rest',
+      enabled: () => shouldHydrateTab(tab),
+      realtimeEnabled: () => shouldHydrateTab(tab),
+    });
+  const overviewResources = createTabResources('overview');
+  const storageResources = createTabResources('storage');
+  const networkResources = createTabResources('networks');
+  const healthResources = createTabResources('health');
+  const activityResources = createTabResources('activity');
+  const resourceState = createMemo(() => {
+    switch (activeTab()) {
+      case 'storage':
+        return storageResources;
+      case 'networks':
+        return networkResources;
+      case 'health':
+        return healthResources;
+      case 'activity':
+        return activityResources;
+      default:
+        return overviewResources;
+    }
+  });
+  const resources = () => resourceState().resources();
+  const loading = () => resourceState().loading();
+  const error = () => resourceState().error();
+  const refetch = () => resourceState().refetch();
+  createEffect(() => {
+    const state = resourceState();
+    setNavigationResources(state.resources());
+    const nextFacets = state.facets?.();
+    if (nextFacets) setResourceFacets(nextFacets);
+  });
   const [activityTimeline, { refetch: refetchActivityTimeline }] = createResource(
-    () => (resources().length > 0 ? 'vmware-activity' : undefined),
+    () => (activeTab() === 'activity' ? 'vmware-activity' : undefined),
     async () => {
       const response = await ResourceAPI.getGlobalTimeline({
         limit: 100,
@@ -181,10 +257,6 @@ export function VmwarePageSurface() {
     },
   );
   const model = createMemo(() => buildVmwarePageModel(resources(), activityTimeline() ?? []));
-  const tabs = createMemo(() => getVmwarePageTabSpecs(model()));
-  const activeTab = createMemo<VmwarePageTabId>(() =>
-    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
-  );
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
   );

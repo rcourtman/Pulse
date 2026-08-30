@@ -2406,15 +2406,20 @@ vdev layout is reported` in
 
 ## Current State
 
-### TrueNAS protection inventory hydrates only on its owning route
+### TrueNAS workflows hydrate only their owning inventory
 
 The TrueNAS Protection tab is a first-class workflow once a TrueNAS system is
 present, so route discovery no longer depends on preloading recovery points.
 `TrueNASPageSurface.tsx` requests the platform-scoped recovery inventory only
 when `/truenas/protection` is active; Overview, Storage, Services, Apps, VMs,
 and Shares do not compete with that independent request during first paint.
-The surface contract pins both the inactive null query and the direct-route
-query parameters.
+The unified-resource query follows the same route ownership: Overview retains
+the complete TrueNAS incident-bearing resource set, while the detail workflows
+hydrate only their system anchor and rendered storage, disk, app, VM, or share
+types. Source-scoped type facets preserve evidence-gated navigation without
+turning inactive rows into recovery state or preloading their inventories. The
+surface contract pins the route query map, the inactive recovery null query,
+and the direct Protection query parameters.
 
 ### Fresh agent command policy preserves the existing recovery authority boundary
 
