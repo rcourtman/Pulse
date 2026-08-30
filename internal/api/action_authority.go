@@ -188,8 +188,26 @@ func authorizeActionCapability(ctx context.Context, authorizer auth.Authorizer, 
 	return nil
 }
 
-func requireActionCapability(authorizer auth.Authorizer, capability string, handler http.HandlerFunc) http.HandlerFunc {
+// requireActionCapability keeps the OSS default authorizer from turning an
+// authenticated organization membership into infrastructure-control
+// authority. A real RBAC authorizer remains authoritative for explicit action
+// grants, while the default authorizer requires the canonical administrator
+// boundary for browser and proxy sessions. Explicitly scoped API tokens keep
+// using the scope and owner checks enforced by the surrounding route and the
+// action lifecycle.
+func requireActionCapability(cfg *config.Config, authorizer auth.Authorizer, capability string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if _, isDefaultAuthorizer := authorizer.(*auth.DefaultAuthorizer); isDefaultAuthorizer && getAPITokenRecordFromRequest(r) == nil {
+			if cfg != nil && strings.TrimSpace(cfg.ProxyAuthSecret) != "" {
+				if valid, _, isAdmin := CheckProxyAuth(cfg, r); valid && !isAdmin {
+					writeJSONError(w, http.StatusForbidden, "action_capability_denied", "Administrator privileges or an explicit action grant are required")
+					return
+				}
+			}
+			if !ensureAdminSession(cfg, w, r) {
+				return
+			}
+		}
 		if err := authorizeActionCapability(r.Context(), authorizer, capability); err != nil {
 			writeJSONError(w, http.StatusForbidden, "action_capability_denied", "You do not have permission to perform this action")
 			return

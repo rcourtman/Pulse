@@ -347,7 +347,7 @@ func TestContract_BasicAuthenticatedAdminReachesActionAuthorizationAsVerifiedPri
 	cfg := &config.Config{AuthUser: "admin", AuthPass: hashedPassword}
 
 	reachedActionHandler := false
-	handler := RequireAuth(cfg, requireActionCapability(
+	handler := RequireAuth(cfg, requireActionCapability(cfg,
 		basicActionContractAuthorizer{wantUser: "admin"},
 		authpkg.ActionApprove,
 		func(w http.ResponseWriter, _ *http.Request) {

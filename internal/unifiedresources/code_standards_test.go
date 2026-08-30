@@ -1052,7 +1052,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join("..", "api", "router_routes_monitoring.go"): {
 			`"POST /api/actions/{id}/execute"`,
-			"requireActionCapability(r.authorizer, auth.ActionExecute",
+			"requireActionCapability(r.config, r.authorizer, auth.ActionExecute",
 			"r.resourceHandlers.HandleExecuteAction",
 		},
 	}
