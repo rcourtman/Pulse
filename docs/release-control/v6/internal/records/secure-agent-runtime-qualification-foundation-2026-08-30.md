@@ -4,9 +4,10 @@
 
 This slice closes implementation defects found while preparing a real Linux
 systemd qualification of the optional collector/helper/action-runner split. It
-also records a managed-development real-systemd qualification of the collector
-and helper migration boundary. It does not flip the installer default and is
-not exact committed release-candidate or representative live-provider proof.
+also records a managed-development real-systemd qualification of the
+collector/helper migration boundary and the separately credentialed action
+runner lifecycle. It does not flip the installer default and is not exact
+committed release-candidate or representative live-provider proof.
 
 ## Landed runtime semantics
 
@@ -42,7 +43,7 @@ The disposable arm64 Colima profile `pulse-agent-qual` ran Ubuntu 24.04.4,
 kernel 6.8.0-117, and systemd 255. The exact working-tree installer and lab
 source are bound by the hashes in
 `secure-agent-runtime-systemd-receipt-2026-08-30.json`; the receipt itself has
-SHA-256 `c20aee566835ac88f6163085d2d559c3fa493274b1a8eae328ed39063af06e5e`.
+SHA-256 `7bf8695c2f8dd185be7552bc9192b59a054f529f8f227773f8cb9b52c495a16b`.
 The guarded lab passed all of these destructive scenarios from a clean VM:
 
 - legacy root/command-capable install with rootful Docker enabled;
@@ -54,10 +55,20 @@ The guarded lab passed all of these destructive scenarios from a clean VM:
   frozen, including stable binary, unit, credential-state, ownership, and mode
   identity;
 - ordinary update without implicit privilege migration, followed by a final
-  committed safe-profile migration.
+  committed safe-profile migration;
+- separate root action-runner installation with a canonical hostname and
+  independently scoped credential while the non-root collector continued
+  reporting;
+- a closed typed storage-cleanup request that refused before mutation, produced
+  a durable terminal receipt, replayed through receipt query, and could not be
+  widened into generic command dispatch;
+- credential replacement that rejected mismatched invalidation, closed exactly
+  the superseded live session, and admitted the replacement binding;
+- authenticated self-revoke followed by runner-only uninstall, with the
+  collector and helper still healthy and reporting.
 
 The receipt is intentionally secret-free and contains source/artifact hashes,
-host facts, resulting privilege posture, report timestamps, and the eight
+host facts, resulting privilege posture, report timestamps, and the twelve
 scenario outcomes. This is managed-development proof because it exercised the
 working tree before its eventual commit identity existed.
 
@@ -69,8 +80,7 @@ substitute for exact committed release-candidate evidence, representative
 provider/appliance qualification, or external review.
 
 The safe profile therefore remains opt-in. The default may not ratchet until
-the exact release candidate reproduces the systemd result and proves runner
-rotation/revocation plus typed action receipts; representative Proxmox, SMART,
-Docker and rootless Podman parity is recorded; supported appliance residuals
-are owned; and the helper, update, action credential, and migration boundaries
-complete external security review.
+the exact release candidate reproduces the complete systemd result;
+representative Proxmox, SMART, Docker and rootless Podman parity is recorded;
+supported appliance residuals are owned; and the helper, update, action
+credential, and migration boundaries complete external security review.

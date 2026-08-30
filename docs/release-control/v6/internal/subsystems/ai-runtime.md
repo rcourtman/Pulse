@@ -7183,6 +7183,10 @@ The agent transport catalogue now classifies wire roles independently from
 mutation identity. `docker_container_lifecycle` is the typed mutation request
 for the existing `resource.docker.container-lifecycle` capability and may be
 sent only after committed action-lifecycle authority.
+`proxmox_guest_lifecycle` is classified by the corresponding
+`transport.agent.proxmox-guest-lifecycle` entry and may carry only the existing
+`resource.proxmox.guest-lifecycle` durable authority; its result message is
+non-admitting.
 `agent_operation_query` is query-only reconciliation;
 `agent_operation_query_result` and `docker_container_lifecycle_result` are
 non-admitting receipt/result messages. Query, result, receipt, and general

@@ -1,14 +1,15 @@
 {
-  "schema_version": 1,
-  "completed_at": "2026-08-30T00:39:22.928744899Z",
+  "schema_version": 2,
+  "completed_at": "2026-08-30T07:49:40.116396211Z",
   "source_hashes": {
     "scripts/install.sh": "0b557c9394f3f0741cbf4287e5ee16a88fe03e189678bddf754606458c4e276e",
-    "scripts/installtests/secure_runtime_systemd_lab_test.go": "cebaeca194bd2ef1a3754230026ab73cd7c8b28427c773dbc62c86f4cd69ba28"
+    "scripts/installtests/secure_runtime_systemd_lab_test.go": "46082cf9247cd626f9b746ec9a3acfcc4f58ca3c1ced762498376d4bfccaf3f1"
   },
   "artifact_hashes": {
-    "collector_v1": "c9c775085178102d7fea5ecc899960a3e27ad7dc41c632a83f01e0f642942379",
-    "collector_v2": "2b52cbf20884d391acd7c072b7c4af011377ef1f19b97725a76ad18a3d1154fa",
-    "helper": "9d865a4adb9fdd5e70f36ee4021acefd2b5bfe1010739ab1dd916c701818032d"
+    "collector_v1": "76844200cec5d2ee4c015d2858d0afb37bce078fdf5cc6e0015997ae97c95400",
+    "collector_v2": "b493b9d7c498b41cd2615d3900ed53f9bbdaeeeebd1da93f7d2657e7bb4d38a2",
+    "helper": "a0932c8ce3bb5b7e94428afb061999750e8e8a4cece7d48df6a35b125eec2f59",
+    "runner": "7429b0b28cc711b59a8f9a6b444f21254ec7a201f145f446dda5dc13d93bbf8b"
   },
   "os_release": "PRETTY_NAME=\"Ubuntu 24.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.4 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo",
   "kernel": "Linux 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Thu May  7 17:26:37 UTC 2026 aarch64 GNU/Linux",
@@ -21,9 +22,14 @@
   "helper_protocol_healthy": true,
   "state_identity_preserved": true,
   "docker_degraded": true,
-  "report_count": 26,
-  "first_report_at": "2026-08-30T00:38:25.603885842Z",
-  "last_report_at": "2026-08-30T00:39:22.777779187Z",
+  "action_runner_qualified": true,
+  "action_receipt_kind": "pulse.host_storage_cleanup_result",
+  "credential_rotated": true,
+  "self_revoke_observed": true,
+  "collector_continuity": true,
+  "report_count": 48,
+  "first_report_at": "2026-08-30T07:47:53.132981202Z",
+  "last_report_at": "2026-08-30T07:49:39.989110328Z",
   "scenarios": [
     {
       "name": "legacy_root_command_capable_install",
@@ -64,6 +70,26 @@
       "name": "final_safe_profile_apply",
       "passed": true,
       "detail": "collector continued reporting after committed migration"
+    },
+    {
+      "name": "separate_action_runner_install",
+      "passed": true,
+      "detail": "root action runner registered independently while the collector remained non-root and reporting"
+    },
+    {
+      "name": "typed_action_receipt",
+      "passed": true,
+      "detail": "closed storage-cleanup request refused before mutation and replayed as a durable terminal receipt; generic command dispatch denied"
+    },
+    {
+      "name": "action_runner_credential_rotation",
+      "passed": true,
+      "detail": "mismatched invalidation was rejected, exact superseded session closed, replacement credential registered"
+    },
+    {
+      "name": "action_runner_self_revoke",
+      "passed": true,
+      "detail": "uninstall revoked the exact host binding and removed only runner state; collector/helper continuity remained healthy"
     }
   ]
 }

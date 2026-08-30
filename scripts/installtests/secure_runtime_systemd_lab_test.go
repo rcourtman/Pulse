@@ -13,6 +13,7 @@ package installtests
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$v1_ldflags" -o .lab-artifacts/pulse-agent-v1 ./cmd/pulse-agent
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$v2_ldflags" -o .lab-artifacts/pulse-agent-v2 ./cmd/pulse-agent
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o .lab-artifacts/pulse-agent-helper ./cmd/pulse-agent-helper
+//   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o .lab-artifacts/pulse-agent-runner ./cmd/pulse-agent-runner
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go test -c -o .lab-artifacts/installtests-linux-arm64.test ./scripts/installtests
 //   colima start pulse-agent-qual --activate=false --mount "$PWD:w"
 //   colima ssh -p pulse-agent-qual -- sudo sh -c \
@@ -23,6 +24,7 @@ package installtests
 //     PULSE_SECURE_RUNTIME_COLLECTOR_V1="$repo/.lab-artifacts/pulse-agent-v1" \
 //     PULSE_SECURE_RUNTIME_COLLECTOR_V2="$repo/.lab-artifacts/pulse-agent-v2" \
 //     PULSE_SECURE_RUNTIME_HELPER="$repo/.lab-artifacts/pulse-agent-helper" \
+//     PULSE_SECURE_RUNTIME_RUNNER="$repo/.lab-artifacts/pulse-agent-runner" \
 //     PULSE_SECURE_RUNTIME_RECEIPT=/tmp/secure-runtime-receipt.json \
 //     sh -c 'cd "$1/scripts/installtests" && exec "$1/.lab-artifacts/installtests-linux-arm64.test" -test.run "^TestSecureRuntimeSystemdLab$" -test.count=1 -test.v' sh "$repo"
 //
@@ -53,26 +55,38 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 )
 
 const (
-	secureRuntimeLabOptIn       = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB"
-	secureRuntimeLabMarkerPath  = "/etc/pulse-secure-runtime-lab"
-	secureRuntimeLabMarkerValue = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1"
-	secureRuntimeLabToken       = "8fa728ed4cbfa7466947e747627b51e2464ed3f69966ed6394e36a82d85d7d31"
-	secureRuntimeLabAgentID     = "secure-runtime-systemd-lab"
-	secureRuntimeLabHostname    = "pulse-secure-runtime-lab"
+	secureRuntimeLabOptIn        = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB"
+	secureRuntimeLabMarkerPath   = "/etc/pulse-secure-runtime-lab"
+	secureRuntimeLabMarkerValue  = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1"
+	secureRuntimeLabToken        = "8fa728ed4cbfa7466947e747627b51e2464ed3f69966ed6394e36a82d85d7d31"
+	secureRuntimeLabAgentID      = "secure-runtime-systemd-lab"
+	secureRuntimeLabHostname     = "pulse-secure-runtime-lab"
+	secureRuntimeLabOrgID        = "secure-runtime-lab-org"
+	secureRuntimeRunnerSecretV1  = "3c896fe99e29384a293def92f23c1709fbf429773e0a20ac5d930f2aab62f839"
+	secureRuntimeRunnerSecretV2  = "d7f6f2550788213e0595f276b62b1df290f7e018ba74c03068c4afbe6efd7601"
+	secureRuntimeRunnerBindingV1 = "secure-runtime-runner-binding-v1"
+	secureRuntimeRunnerBindingV2 = "secure-runtime-runner-binding-v2"
 )
 
 var secureRuntimeInstalledPaths = []string{
 	"/usr/local/bin/pulse-agent",
 	"/usr/local/lib/pulse-agent/pulse-agent-helper",
+	"/usr/local/lib/pulse-agent/pulse-agent-runner",
 	"/etc/systemd/system/pulse-agent.service",
 	"/etc/systemd/system/pulse-agent.service.d",
 	"/etc/systemd/system/pulse-agent-helper.service",
 	"/etc/systemd/system/pulse-agent-helper.socket",
+	"/etc/systemd/system/pulse-agent-runner.service",
+	"/etc/pulse-agent-runner",
 	"/var/lib/pulse-agent",
 	"/var/lib/pulse-agent-helper",
+	"/var/lib/pulse-agent-runner",
 	"/var/lib/pulse-agent-profile",
 }
 
@@ -92,12 +106,66 @@ type secureRuntimeLabFixture struct {
 	mu              sync.Mutex
 	collector       []byte
 	helper          []byte
+	runner          []byte
 	serverVersion   string
 	reports         []secureRuntimeLabReport
 	lastSeen        time.Time
 	freezeLastSeen  bool
 	authFailures    int
 	requestFailures []string
+	actionServer    *agentexec.Server
+	actionSecret    string
+	actionBindingID string
+	actionRevoked   bool
+	actionRevokes   int
+}
+
+func newSecureRuntimeLabFixture(collector, helper, runner []byte, version string) *secureRuntimeLabFixture {
+	fixture := &secureRuntimeLabFixture{
+		collector: collector, helper: helper, runner: runner, serverVersion: version,
+		actionSecret: secureRuntimeRunnerSecretV1, actionBindingID: secureRuntimeRunnerBindingV1,
+	}
+	fixture.actionServer = agentexec.NewServerWithAdmissionValidator(fixture.admitActionRunner, fixture.validateActionRunnerSession)
+	return fixture
+}
+
+func (f *secureRuntimeLabFixture) admitActionRunner(secret, agentID, hostname string) (agentexec.AgentAdmission, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.actionRevoked || secret != f.actionSecret || strings.TrimSpace(agentID) != secureRuntimeLabAgentID || !strings.EqualFold(strings.TrimSpace(hostname), secureRuntimeLabHostname) {
+		return agentexec.AgentAdmission{}, false
+	}
+	return f.actionAdmissionLocked(), true
+}
+
+func (f *secureRuntimeLabFixture) validateActionRunnerSession(admission agentexec.AgentAdmission) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.actionRevoked && admission == f.actionAdmissionLocked()
+}
+
+func (f *secureRuntimeLabFixture) actionAdmissionLocked() agentexec.AgentAdmission {
+	return agentexec.AgentAdmission{
+		OrganizationID: secureRuntimeLabOrgID, TokenID: f.actionBindingID,
+		AgentID: secureRuntimeLabAgentID, Hostname: secureRuntimeLabHostname,
+		RuntimeRole: agentexec.RuntimeRoleActionRunner, ActionCapability: agentexec.ActionCapabilityTypedV1,
+	}
+}
+
+func (f *secureRuntimeLabFixture) replaceActionCredential(secret, bindingID string) agentexec.AgentAdmission {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	previous := f.actionAdmissionLocked()
+	f.actionSecret = secret
+	f.actionBindingID = bindingID
+	f.actionRevoked = false
+	return previous
+}
+
+func (f *secureRuntimeLabFixture) actionSnapshot() (agentexec.AgentAdmission, bool, int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.actionAdmissionLocked(), f.actionRevoked, f.actionRevokes
 }
 
 func (f *secureRuntimeLabFixture) setCollector(artifact []byte) {
@@ -132,9 +200,15 @@ func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		f.mu.Unlock()
 		writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"version": version})
 	case r.URL.Path == "/download/pulse-agent":
-		f.serveArtifact(w, r, false)
+		f.serveArtifact(w, r, "collector")
 	case r.URL.Path == "/download/pulse-agent-helper":
-		f.serveArtifact(w, r, true)
+		f.serveArtifact(w, r, "helper")
+	case r.URL.Path == "/download/pulse-agent-runner":
+		f.serveArtifact(w, r, "runner")
+	case r.URL.Path == "/api/agent/ws":
+		f.actionServer.HandleWebSocket(w, r)
+	case r.URL.Path == "/api/agents/action-runner/credential":
+		f.handleActionRunnerSelfRevoke(w, r)
 	case r.URL.Path == "/api/health":
 		writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	case r.URL.Path == "/api/agents/agent/report":
@@ -176,15 +250,18 @@ func (f *secureRuntimeLabFixture) authorized(r *http.Request) bool {
 	return valid
 }
 
-func (f *secureRuntimeLabFixture) serveArtifact(w http.ResponseWriter, r *http.Request, helper bool) {
+func (f *secureRuntimeLabFixture) serveArtifact(w http.ResponseWriter, r *http.Request, artifactKind string) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	f.mu.Lock()
 	artifact := append([]byte(nil), f.collector...)
-	if helper {
+	switch artifactKind {
+	case "helper":
 		artifact = append([]byte(nil), f.helper...)
+	case "runner":
+		artifact = append([]byte(nil), f.runner...)
 	}
 	f.mu.Unlock()
 	sum := sha256.Sum256(artifact)
@@ -194,6 +271,36 @@ func (f *secureRuntimeLabFixture) serveArtifact(w http.ResponseWriter, r *http.R
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(artifact)
 	}
+}
+
+func (f *secureRuntimeLabFixture) handleActionRunnerSelfRevoke(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var request struct {
+		AgentID  string `json:"agentId"`
+		Hostname string `json:"hostname"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	bearer := strings.TrimPrefix(strings.TrimSpace(r.Header.Get("Authorization")), "Bearer ")
+	f.mu.Lock()
+	admission := f.actionAdmissionLocked()
+	valid := !f.actionRevoked && bearer == f.actionSecret && strings.TrimSpace(request.AgentID) == admission.AgentID && strings.EqualFold(strings.TrimSpace(request.Hostname), admission.Hostname)
+	if valid {
+		f.actionRevoked = true
+		f.actionRevokes++
+	}
+	f.mu.Unlock()
+	if !valid {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	f.actionServer.InvalidateActionRunnerSession(admission)
+	writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
 func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Request) {
@@ -369,6 +476,11 @@ type secureRuntimeLabReceipt struct {
 	HelperProtocolHealthy   bool                          `json:"helper_protocol_healthy"`
 	StateIdentityPreserved  bool                          `json:"state_identity_preserved"`
 	DockerDegraded          bool                          `json:"docker_degraded"`
+	ActionRunnerQualified   bool                          `json:"action_runner_qualified"`
+	ActionReceiptKind       string                        `json:"action_receipt_kind,omitempty"`
+	CredentialRotated       bool                          `json:"credential_rotated"`
+	SelfRevokeObserved      bool                          `json:"self_revoke_observed"`
+	CollectorContinuity     bool                          `json:"collector_continuity"`
 	ReportCount             int                           `json:"report_count"`
 	FirstReportAt           string                        `json:"first_report_at"`
 	LastReportAt            string                        `json:"last_report_at"`
@@ -384,6 +496,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	collectorV1 := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V1")
 	collectorV2 := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V2")
 	helper := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_HELPER")
+	runner := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_RUNNER")
 	collectorV1Version := secureRuntimeArtifactVersion(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V1")
 	collectorV2Version := secureRuntimeArtifactVersion(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V2")
 	if collectorV1Version == collectorV2Version {
@@ -395,17 +508,18 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	}
 	installer := secureRuntimeReadFile(t, installerPath)
 
-	fixture := &secureRuntimeLabFixture{collector: collectorV1, helper: helper, serverVersion: collectorV1Version}
+	fixture := newSecureRuntimeLabFixture(collectorV1, helper, runner, collectorV1Version)
+	defer fixture.actionServer.Shutdown()
 	server := httptest.NewServer(fixture)
 	defer server.Close()
 
 	receipt := secureRuntimeLabReceipt{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		SourceHashes: map[string]string{
 			"scripts/install.sh": secureRuntimeHash(installer),
 			"scripts/installtests/secure_runtime_systemd_lab_test.go": secureRuntimeHash(secureRuntimeReadFile(t, repoFile("scripts", "installtests", "secure_runtime_systemd_lab_test.go"))),
 		},
-		ArtifactHashes: map[string]string{"collector_v1": secureRuntimeHash(collectorV1), "collector_v2": secureRuntimeHash(collectorV2), "helper": secureRuntimeHash(helper)},
+		ArtifactHashes: map[string]string{"collector_v1": secureRuntimeHash(collectorV1), "collector_v2": secureRuntimeHash(collectorV2), "helper": secureRuntimeHash(helper), "runner": secureRuntimeHash(runner)},
 		Architecture:   runtime.GOARCH,
 	}
 	receipt.OSRelease = strings.TrimSpace(string(secureRuntimeReadFile(t, "/etc/os-release")))
@@ -537,6 +651,79 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeContinuity)+1, 20*time.Second)
 	pass("final_safe_profile_apply", "collector continued reporting after committed migration")
 
+	reportsBeforeRunner, _, _, _ := fixture.snapshot()
+	secureRuntimeRunInstallerWithActionCredential(t, installerPath, server.URL, secureRuntimeRunnerSecretV1,
+		"--least-privilege", "--enable-privileged-helper", "--enable-action-runner")
+	secureRuntimeWaitForActionRunner(t, fixture, true, 30*time.Second)
+	secureRuntimeAssertActionRunnerInstalled(t)
+	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeRunner)+1, 20*time.Second)
+	pass("separate_action_runner_install", "root action runner registered independently while the collector remained non-root and reporting")
+
+	actionContext, cancelAction := context.WithTimeout(agentexec.WithOrganizationID(context.Background(), secureRuntimeLabOrgID), 30*time.Second)
+	defer cancelAction()
+	cleanupRequest := agentexec.HostStorageCleanupPayload{
+		RequestID: "secure-runtime.receipt.1", ActionID: "secure-runtime-receipt",
+		Operation:           agentexec.HostStorageCleanupOperationPackageCache,
+		ExpectedFingerprint: "sha256:" + strings.Repeat("f", 64), Timeout: 15,
+	}
+	if err := agentexec.BindHostStorageCleanupPayload(&cleanupRequest); err != nil {
+		t.Fatalf("bind typed receipt qualification request: %v", err)
+	}
+	cleanupResult, err := fixture.actionServer.ExecuteHostStorageCleanup(actionContext, secureRuntimeLabAgentID, cleanupRequest)
+	if err != nil {
+		t.Fatalf("execute typed receipt qualification request: %v", err)
+	}
+	if cleanupResult == nil || cleanupResult.MutationStarted {
+		t.Fatalf("typed receipt qualification unexpectedly mutated the host: %+v", cleanupResult)
+	}
+	receiptIdentity := agentexec.HostStorageCleanupOperationIdentity(secureRuntimeLabAgentID, cleanupRequest)
+	query, err := fixture.actionServer.QueryAgentOperation(actionContext, secureRuntimeLabAgentID, receiptIdentity)
+	if err != nil || query.Status != operationreceipt.QueryFoundTerminal || query.Record == nil || query.Record.ResultKind != agentexec.HostStorageCleanupReceiptKind {
+		t.Fatalf("durable typed receipt query = %+v, err=%v", query, err)
+	}
+	if _, err := fixture.actionServer.ExecuteCommand(actionContext, secureRuntimeLabAgentID, agentexec.ExecuteCommandPayload{
+		RequestID: "secure-runtime-shell-denial", Command: "true", TargetType: "agent", Trusted: true,
+	}); err == nil || !strings.Contains(err.Error(), "typed action-runner") {
+		t.Fatalf("action runner did not reject generic command dispatch: %v", err)
+	}
+	pass("typed_action_receipt", "closed storage-cleanup request refused before mutation and replayed as a durable terminal receipt; generic command dispatch denied")
+
+	currentAdmission, _, _ := fixture.actionSnapshot()
+	wrongAdmission := currentAdmission
+	wrongAdmission.TokenID = secureRuntimeRunnerBindingV2
+	if fixture.actionServer.InvalidateActionRunnerSession(wrongAdmission) {
+		t.Fatal("mismatched replacement binding evicted the current action-runner session")
+	}
+	previousAdmission := fixture.replaceActionCredential(secureRuntimeRunnerSecretV2, secureRuntimeRunnerBindingV2)
+	if previousAdmission != currentAdmission || !fixture.actionServer.InvalidateActionRunnerSession(previousAdmission) {
+		t.Fatal("credential rotation did not invalidate the exact superseded action-runner session")
+	}
+	secureRuntimeWaitForActionRunner(t, fixture, false, 10*time.Second)
+	secureRuntimeRunInstallerWithActionCredential(t, installerPath, server.URL, secureRuntimeRunnerSecretV2,
+		"--least-privilege", "--enable-privileged-helper", "--enable-action-runner")
+	secureRuntimeWaitForActionRunner(t, fixture, true, 30*time.Second)
+	rotatedAdmission, revoked, _ := fixture.actionSnapshot()
+	if revoked || rotatedAdmission.TokenID != secureRuntimeRunnerBindingV2 {
+		t.Fatalf("rotated action-runner admission = %+v revoked=%t", rotatedAdmission, revoked)
+	}
+	pass("action_runner_credential_rotation", "mismatched invalidation was rejected, exact superseded session closed, replacement credential registered")
+
+	reportsBeforeRemoval, _, _, _ := fixture.snapshot()
+	uninstallOutput := secureRuntimeRunStandaloneInstaller(t, installerPath, "--uninstall-action-runner")
+	if !strings.Contains(uninstallOutput, "Revoked the action-runner credential") {
+		t.Fatalf("runner uninstall did not confirm self-revocation:\n%s", uninstallOutput)
+	}
+	secureRuntimeWaitForActionRunner(t, fixture, false, 10*time.Second)
+	secureRuntimeAssertActionRunnerRemoved(t)
+	_, revoked, revokeCount := fixture.actionSnapshot()
+	if !revoked || revokeCount != 1 {
+		t.Fatalf("runner self-revoke state: revoked=%t count=%d", revoked, revokeCount)
+	}
+	secureRuntimeAssertSafeProfile(t)
+	secureRuntimeAssertHelperProtocol(t)
+	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeRemoval)+1, 20*time.Second)
+	pass("action_runner_self_revoke", "uninstall revoked the exact host binding and removed only runner state; collector/helper continuity remained healthy")
+
 	reports, _, _, _ := fixture.snapshot()
 	if len(reports) == 0 {
 		t.Fatal("no reports recorded")
@@ -562,6 +749,11 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	receipt.HelperProtocolHealthy = true
 	receipt.StateIdentityPreserved = true
 	receipt.DockerDegraded = dockerDegraded
+	receipt.ActionRunnerQualified = true
+	receipt.ActionReceiptKind = agentexec.HostStorageCleanupReceiptKind
+	receipt.CredentialRotated = true
+	receipt.SelfRevokeObserved = true
+	receipt.CollectorContinuity = true
 	receipt.ReportCount = len(reports)
 	receipt.FirstReportAt = reports[0].ReceivedAt.Format(time.RFC3339Nano)
 	receipt.LastReportAt = reports[len(reports)-1].ReceivedAt.Format(time.RFC3339Nano)
@@ -646,7 +838,16 @@ func secureRuntimeHash(data []byte) string {
 
 func secureRuntimeRunInstaller(t *testing.T, installerPath, fixtureURL string, scenarioArgs ...string) string {
 	t.Helper()
-	out, err := secureRuntimeRunInstallerError(t, installerPath, fixtureURL, scenarioArgs...)
+	out, err := secureRuntimeRunInstallerErrorWithActionCredential(t, installerPath, fixtureURL, "", scenarioArgs...)
+	if err != nil {
+		t.Fatalf("installer %s failed: %v\n%s", strings.Join(scenarioArgs, " "), err, out)
+	}
+	return out
+}
+
+func secureRuntimeRunInstallerWithActionCredential(t *testing.T, installerPath, fixtureURL, actionCredential string, scenarioArgs ...string) string {
+	t.Helper()
+	out, err := secureRuntimeRunInstallerErrorWithActionCredential(t, installerPath, fixtureURL, actionCredential, scenarioArgs...)
 	if err != nil {
 		t.Fatalf("installer %s failed: %v\n%s", strings.Join(scenarioArgs, " "), err, out)
 	}
@@ -654,6 +855,11 @@ func secureRuntimeRunInstaller(t *testing.T, installerPath, fixtureURL string, s
 }
 
 func secureRuntimeRunInstallerError(t *testing.T, installerPath, fixtureURL string, scenarioArgs ...string) (string, error) {
+	t.Helper()
+	return secureRuntimeRunInstallerErrorWithActionCredential(t, installerPath, fixtureURL, "", scenarioArgs...)
+}
+
+func secureRuntimeRunInstallerErrorWithActionCredential(t *testing.T, installerPath, fixtureURL, actionCredential string, scenarioArgs ...string) (string, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -678,6 +884,13 @@ func secureRuntimeRunInstallerError(t *testing.T, installerPath, fixtureURL stri
 			"--insecure",
 			"--non-interactive",
 		)
+		if actionCredential != "" {
+			actionCredentialFile := filepath.Join(t.TempDir(), "action-credential")
+			if err := os.WriteFile(actionCredentialFile, []byte(actionCredential+"\n"), 0o600); err != nil {
+				t.Fatalf("write private action-runner credential: %v", err)
+			}
+			args = append(args, "--action-token-file", actionCredentialFile)
+		}
 		args = append(args, scenarioArgs...)
 	}
 	cmd := exec.CommandContext(ctx, "bash", args...)
@@ -686,10 +899,34 @@ func secureRuntimeRunInstallerError(t *testing.T, installerPath, fixtureURL stri
 	if ctx.Err() != nil {
 		return string(out), fmt.Errorf("installer timed out: %w", ctx.Err())
 	}
-	if bytes.Contains(out, []byte(secureRuntimeLabToken)) {
-		t.Fatal("installer output exposed the monitoring credential")
-	}
+	secureRuntimeAssertNoCredentialExposure(t, out)
 	return string(out), err
+}
+
+func secureRuntimeRunStandaloneInstaller(t *testing.T, installerPath string, scenarioArgs ...string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", append([]string{installerPath}, scenarioArgs...)...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("standalone installer timed out: %v\n%s", ctx.Err(), out)
+	}
+	secureRuntimeAssertNoCredentialExposure(t, out)
+	if err != nil {
+		t.Fatalf("standalone installer %s failed: %v\n%s", strings.Join(scenarioArgs, " "), err, out)
+	}
+	return string(out)
+}
+
+func secureRuntimeAssertNoCredentialExposure(t *testing.T, output []byte) {
+	t.Helper()
+	for _, credential := range []string{secureRuntimeLabToken, secureRuntimeRunnerSecretV1, secureRuntimeRunnerSecretV2} {
+		if bytes.Contains(output, []byte(credential)) {
+			t.Fatal("installer output exposed a runtime credential")
+		}
+	}
 }
 
 func secureRuntimeWaitForReports(t *testing.T, fixture *secureRuntimeLabFixture, count int, timeout time.Duration) {
@@ -706,6 +943,18 @@ func secureRuntimeWaitForReports(t *testing.T, fixture *secureRuntimeLabFixture,
 	t.Fatalf("timed out waiting for %d reports; got %d (fixture failures: %v)", count, len(reports), failures)
 }
 
+func secureRuntimeWaitForActionRunner(t *testing.T, fixture *secureRuntimeLabFixture, connected bool, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if fixture.actionServer.IsAgentConnectedForOrganization(secureRuntimeLabOrgID, secureRuntimeLabAgentID) == connected {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for action-runner connected=%t", connected)
+}
+
 func secureRuntimeCommand(t *testing.T, timeout time.Duration, name string, args ...string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -720,6 +969,53 @@ func secureRuntimeCommand(t *testing.T, timeout time.Duration, name string, args
 func secureRuntimeSystemdProperty(t *testing.T, property string) string {
 	t.Helper()
 	return secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", "pulse-agent.service", "--property="+property, "--value")
+}
+
+func secureRuntimeActionRunnerSystemdProperty(t *testing.T, property string) string {
+	t.Helper()
+	return secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", "pulse-agent-runner.service", "--property="+property, "--value")
+}
+
+func secureRuntimeAssertActionRunnerInstalled(t *testing.T) {
+	t.Helper()
+	secureRuntimeCommand(t, 10*time.Second, "systemctl", "is-active", "pulse-agent-runner.service")
+	if user := secureRuntimeActionRunnerSystemdProperty(t, "User"); user != "root" {
+		t.Fatalf("action-runner systemd User = %q, want root", user)
+	}
+	if ambient := strings.TrimSpace(secureRuntimeActionRunnerSystemdProperty(t, "AmbientCapabilities")); ambient != "" {
+		t.Fatalf("action-runner AmbientCapabilities = %q, want none", ambient)
+	}
+	for path, mode := range map[string]os.FileMode{
+		"/usr/local/lib/pulse-agent/pulse-agent-runner": 0o755,
+		"/etc/pulse-agent-runner/runner.env":            0o600,
+		"/etc/pulse-agent-runner/token":                 0o600,
+		"/var/lib/pulse-agent-runner/health.json":       0o600,
+	} {
+		identity := secureRuntimeStableFileIdentity(t, path)
+		if identity.UID != 0 || identity.GID != 0 || identity.Mode != mode {
+			t.Fatalf("%s identity = uid:%d gid:%d mode:%#o, want root:root %#o", path, identity.UID, identity.GID, identity.Mode, mode)
+		}
+	}
+	secureRuntimeAssertSafeProfile(t)
+}
+
+func secureRuntimeAssertActionRunnerRemoved(t *testing.T) {
+	t.Helper()
+	for _, path := range []string{
+		"/usr/local/lib/pulse-agent/pulse-agent-runner",
+		"/etc/systemd/system/pulse-agent-runner.service",
+		"/etc/pulse-agent-runner",
+		"/var/lib/pulse-agent-runner",
+	} {
+		if _, err := os.Lstat(path); err == nil {
+			t.Fatalf("runner-only uninstall left %s", path)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("inspect removed action-runner path %s: %v", path, err)
+		}
+	}
+	if loadState := secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", "pulse-agent-runner.service", "--property=LoadState", "--value"); loadState != "not-found" {
+		t.Fatalf("removed action-runner unit LoadState = %q, want not-found", loadState)
+	}
 }
 
 func secureRuntimeCollectorHasArgument(argument string) bool {
@@ -962,7 +1258,10 @@ func secureRuntimeWriteReceipt(t *testing.T, receipt secureRuntimeLabReceipt) {
 	if err != nil {
 		t.Fatalf("marshal secure-runtime receipt: %v", err)
 	}
-	if bytes.Contains(encoded, []byte(secureRuntimeLabToken)) || bytes.Contains(bytes.ToLower(encoded), []byte("token")) {
+	if bytes.Contains(encoded, []byte(secureRuntimeLabToken)) ||
+		bytes.Contains(encoded, []byte(secureRuntimeRunnerSecretV1)) ||
+		bytes.Contains(encoded, []byte(secureRuntimeRunnerSecretV2)) ||
+		bytes.Contains(bytes.ToLower(encoded), []byte("token")) {
 		t.Fatal("refusing to write a receipt containing credential material or token-labelled fields")
 	}
 	encoded = append(encoded, '\n')
