@@ -1,0 +1,87 @@
+{
+  "schema_version": 3,
+  "attestation_tool": "scripts/release_control/secure_runtime_attestation.py",
+  "attestation_tool_sha256": "5bc6dcdf18da9e62fb5302fe7ed896d307d26656582c09867550458bc2ed2b78",
+  "proof_classification": "committed-main-artifact-bound-self-attested-systemd",
+  "qualified_commit": "b2543c5c6e03bc8f38502098d3a356983d0d41b2",
+  "qualified_ref_at_run": "b2543c5c6e03bc8f38502098d3a356983d0d41b2",
+  "main_ref_verified": "origin/main",
+  "main_ref_commit_at_attestation": "b2543c5c6e03bc8f38502098d3a356983d0d41b2",
+  "qualified_commit_reachable_from_main": true,
+  "build_checkout": "detached-worktree",
+  "build_checkout_clean_except_lab_artifacts": true,
+  "disposable_vm_guard_receipt_claim_validated": true,
+  "execution_receipt_authentication": "none-secret-free-self-attestation",
+  "receipt_path": "docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v3-2026-08-30.json",
+  "receipt_sha256": "be463420af43e3183376498687756768eff2de7313e276937ce17c2a5bda9ffe",
+  "source_hashes_match_commit": true,
+  "source_hashes": {
+    "cmd/pulse-agent-helper/main.go": "3da1978e6e70d29cc22f070c5ada1f6a5f516f6a6643a3b27f23a4adf9ade866",
+    "cmd/pulse-agent-runner/main.go": "bae603eb267c945fe96cf88397474d2d75916d2b27265e691f91aa4932944eca",
+    "cmd/pulse-agent/main.go": "73527ea1c0513804fcbf64fa1b924fa7f29dc5441cd98ed2c0e2f53ddd621ca8",
+    "internal/actionrunner/runner.go": "d32a2e6810267a12096d0865f4af4326db9caf4ccb56aba02955a97bbef6ca66",
+    "internal/actionrunner/transport.go": "6e39ea82bc0b31300e9bdbcc3fed5c1fa2348166bbaf6ce0e95ce5adb44ee5d0",
+    "internal/actionrunner/types.go": "fe4244e20fbda21b1c174ed9556fc68c8c028edd0db93597066aacc1ed32997d",
+    "internal/agentexec/server.go": "2dbd41698990b314c776c91324469f2bcfbb40216ebc466ff962d08aa3f6edc0",
+    "internal/agentexec/types.go": "428a06918af94c803c720d282d5123149e70c5bf2dbdfd06613495d54d8f9b0d",
+    "internal/agentexec/verifier_postconditions.go": "27f68d4f05e45803f65a1dd3c7e38d41ca39ab88d9f1a574dc4739911b8391cc",
+    "internal/agenthelper/server.go": "70ef4f2299cf5d3347520906e62e8d7307d67624f60232c9bcbafbc6035e3ebe",
+    "internal/agenthelper/update_activation.go": "cdaae1da9459d5cbbd9f84dce6e6e3234bc03ed4739e78292161d2faa98d2445",
+    "internal/agentupdate/privileged_update.go": "1e27b3d94087e85139dfbfeb86b78e6444ee9b80bd97bdbf698d0d2dadd6c624",
+    "internal/agentupdate/update.go": "ad885a99ce679fc30c5155147961f1e970fec031e25f5b69ea9814795d2f335d",
+    "internal/api/action_runner_credentials.go": "5ec0dca0aadca4b061161bfb68b78a5ca4cd29cf752349ab88f539c388b54a4c",
+    "internal/api/agent_exec_token_binding.go": "20b1dd4657d332677a7cfb64c12f4f8ce688a69be54906f4517981448cfaec21",
+    "internal/api/agenttokens/install.go": "75849cbefc683da6368718190153149b869534c518ba16ed627180da86d688aa",
+    "internal/api/collector_authority.go": "3533b2bf6e6cc3d766f10537325dd72f7b0b708385c1ff3f9228c79d535c6f14",
+    "internal/hostagent/storage_cleanup.go": "6bf8a9457ae63fb4cdf375660cb85a15302aa29fdc303e1ed9a2cfc71abf3c0f",
+    "internal/operationreceipt/store.go": "6f40b4422fde09e81fc989b9b5f35066ebb3276e20bb0903a554414b69e6f6fe",
+    "internal/operationreceipt/types.go": "08b86678dfe55b5ec29c94ef96de15e9e3f416a9db656481f8ae833b38538dfa",
+    "scripts/install.sh": "e90189cf2dde51a36aea56281d77250d97a16c6cc759d95122a1d713b25f4ac0",
+    "scripts/installtests/secure_runtime_systemd_lab_test.go": "77f259bfd821a1a20099003bd8a2458bc5a6b11d49ab48e3940674d7b6a67c33",
+    "scripts/release_control/secure_runtime_attestation.py": "5bc6dcdf18da9e62fb5302fe7ed896d307d26656582c09867550458bc2ed2b78"
+  },
+  "artifact_hashes_match_receipt": true,
+  "artifact_hashes": {
+    "collector_v1": "fe8c0fc7d965054e08eb9ba1c7d21cc4180e1533293bba1f4a1b7448666763ee",
+    "collector_v2": "fa9a1294ef7690ca55352672ab5f5a0b345f3e44daf0261d56174f09943cc51b",
+    "helper": "57d91f91a6db8c3f9a7e6bef0f00adb3bb12397e81eb2e1c904aecb406d4082f",
+    "runner": "cb25375db2c1770e3203f8401008f6e11eeac08b9aee7c7485ab3b95c63099a3"
+  },
+  "artifact_build_identity": {
+    "collector_v1": {
+      "package": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
+      "vcs_revision": "b2543c5c6e03bc8f38502098d3a356983d0d41b2",
+      "vcs_modified": "false"
+    },
+    "collector_v2": {
+      "package": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
+      "vcs_revision": "b2543c5c6e03bc8f38502098d3a356983d0d41b2",
+      "vcs_modified": "false"
+    },
+    "helper": {
+      "package": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent-helper",
+      "vcs_revision": "b2543c5c6e03bc8f38502098d3a356983d0d41b2",
+      "vcs_modified": "false"
+    },
+    "runner": {
+      "package": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent-runner",
+      "vcs_revision": "b2543c5c6e03bc8f38502098d3a356983d0d41b2",
+      "vcs_modified": "false"
+    }
+  },
+  "host": {
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "Linux 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Thu May  7 17:26:37 UTC 2026 aarch64 GNU/Linux",
+    "systemd": "systemd 255 (255.4-1ubuntu8.15)",
+    "architecture": "arm64"
+  },
+  "scenario_count": 12,
+  "all_scenarios_passed": true,
+  "test_elapsed_seconds": 114.26,
+  "default_changed": false,
+  "residual_proof": [
+    "exact-release-candidate",
+    "representative-provider-and-appliance",
+    "external-security-review"
+  ]
+}

@@ -95,13 +95,38 @@ scenario outcomes. It proves neither a successful action-runner host mutation
 nor the post-audit credential, rollback, update-artifact, and runner-unit
 hardening. It is retained as historical, hash-bound self-attested evidence.
 
+## Current schema-v3 committed-main evidence
+
+A newly created disposable arm64 Colima profile ran Ubuntu 24.04.4, kernel
+6.8.0-117, and systemd 255 from a detached clean checkout at committed main
+`b2543c5c6e03bc8f38502098d3a356983d0d41b2`. All four exercised commands carry
+that exact clean Go VCS revision, and the two collector commands report distinct
+qualification versions. The guarded lab passed all twelve scenarios in 114.26
+seconds, including the verified apt-cache mutation, stale-fingerprint refusal,
+durable terminal receipt replay, irreversible collector authority-reduction
+request, rollback without command-authority resurrection, exact runner
+credential rotation, self-revocation, and collector/helper continuity.
+
+The secret-free schema-v3 receipt is
+`secure-agent-runtime-systemd-receipt-v3-2026-08-30.json` with SHA-256
+`be463420af43e3183376498687756768eff2de7313e276937ce17c2a5bda9ffe`. The
+separate `secure-agent-runtime-committed-main-attestation-v3-2026-08-30.json`
+has SHA-256
+`e1339f73704883aec19225d886188dad78338659b16a11e785091b41bbf0f0c1` and
+verifies the receipt, current-main ancestry at attestation time, all required
+boundary-source hashes, all artifact hashes, the expected Go command packages,
+and clean exact-commit Go VCS identities. The authority-reduction request was
+observed by the systemd fixture; durable production-store reduction and exact
+session invalidation remain established by the focused API regressions rather
+than by this in-process fixture. The receipt remains operator-produced,
+unauthenticated, artifact-bound self-attestation rather than independent proof.
+
 ## Proof classification and residuals
 
-Focused regressions cover the current semantics. A fresh schema-v3 guarded
-systemd receipt is still required and must demonstrate the real apt-cache
-mutation plus stale-fingerprint refusal. Even that self-attested receipt is not
-a substitute for exact release-candidate evidence, representative
-provider/appliance qualification, or external review.
+Focused regressions and the schema-v3 guarded systemd evidence cover the current
+committed-main semantics. They are not a substitute for exact release-candidate
+reproduction, representative provider/appliance qualification, or external
+review.
 
 The safe profile therefore remains opt-in. The default may not ratchet until
 the exact release candidate reproduces the complete systemd result;

@@ -114,14 +114,19 @@ host mutation; its rollback claim predates irreversible credential reduction;
 and its secret-free receipt is hash-bound but not independently authenticated.
 It is historical evidence, not qualification of the current implementation.
 
-The v3 guarded lab now requires a real verified apt-cache mutation, a separate
+The v3 guarded lab requires a real verified apt-cache mutation, a separate
 stale-fingerprint refusal, durable receipt replay, an observed collector
 authority-reduction request (with persistence covered by API regressions),
-complete boundary-source hashes, and artifact Go build stamps for
-the exact clean commit. `scripts/release_control/secure_runtime_attestation.py`
-rejects older receipts and labels accepted evidence as artifact-bound,
-self-attested systemd evidence rather than independently authenticated proof.
-The repository still needs a fresh exact committed release-candidate run,
+complete boundary-source hashes, and artifact Go build stamps for the exact
+clean commit. A fresh Ubuntu 24.04.4/systemd 255 run at committed main
+`b2543c5c6e03bc8f38502098d3a356983d0d41b2` passed all twelve scenarios; its
+separate receipt and attestation are recorded as
+`internal/records/secure-agent-runtime-systemd-receipt-v3-2026-08-30.json` and
+`internal/records/secure-agent-runtime-committed-main-attestation-v3-2026-08-30.json`.
+`scripts/release_control/secure_runtime_attestation.py` rejects older receipts
+and labels accepted evidence as artifact-bound, self-attested systemd evidence
+rather than independently authenticated proof. The repository still needs a
+fresh exact committed release-candidate run,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation
