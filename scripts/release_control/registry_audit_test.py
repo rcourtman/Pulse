@@ -43,6 +43,10 @@ class RegistryAuditTest(unittest.TestCase):
         self.assertTrue(args.check)
         self.assertTrue(args.staged)
 
+    def test_parse_args_accepts_explicit_repository_scope(self) -> None:
+        args = parse_args(["--check", "--repo-scope", "pulse"])
+        self.assertEqual(args.repo_scope, ["pulse"])
+
     def test_trust_gate_regression_proofs_are_registered_to_exact_policies(self) -> None:
         registry = registry_audit.load_registry_payload()
         rules = {rule["id"]: rule for rule in registry["subsystems"]}
@@ -618,6 +622,59 @@ class RegistryAuditTest(unittest.TestCase):
 
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["subsystems"][0]["owned_runtime_file_count"], 1)
+
+    def test_public_scope_defers_unavailable_cross_repo_paths(self) -> None:
+        payload = {
+            "version": 13,
+            "shared_ownerships": [],
+            "subsystems": [
+                {
+                    "id": "relay-runtime",
+                    "lane": "L7",
+                    "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+                    "owned_prefixes": ["pulse-mobile:src/relay/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": True,
+                        "test_prefixes": [],
+                        "exact_files": ["pulse-mobile:src/relay/__tests__/client.test.ts"],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "mobile-relay-runtime",
+                                "label": "mobile relay runtime proof",
+                                "match_prefixes": ["pulse-mobile:src/relay/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["pulse-mobile:src/relay/__tests__/client.test.ts"],
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        tracked_files = {"docs/release-control/v6/internal/subsystems/relay-runtime.md"}
+
+        report = audit_registry_payload(
+            payload,
+            tracked_files=tracked_files,
+            status_lane_ids={"L7"},
+            audited_repo_ids={"pulse"},
+            known_repo_ids={"pulse", "pulse-mobile"},
+        )
+
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["subsystems"][0]["owned_runtime_file_count"], 0)
+
+        missing_public_contract = audit_registry_payload(
+            payload,
+            tracked_files=set(),
+            status_lane_ids={"L7"},
+            audited_repo_ids={"pulse"},
+            known_repo_ids={"pulse", "pulse-mobile"},
+        )
+        self.assertIn("relay-runtime.md", "\n".join(missing_public_contract["errors"]))
 
     def test_audit_registry_payload_flags_unknown_lane_and_missing_contract(self) -> None:
         payload = {

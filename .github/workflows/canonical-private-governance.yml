@@ -106,6 +106,9 @@ jobs:
           PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
         run: python3 scripts/release_control/control_plane_audit.py --check
 
+      - name: Run complete cross-repository registry audit
+        run: python3 scripts/release_control/registry_audit.py --check
+
       - name: Run repo governance guardrail tests
         env:
           PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse

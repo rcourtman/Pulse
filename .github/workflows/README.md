@@ -21,11 +21,11 @@ interpolated into the generated shell program.
 Workflows triggered by `pull_request` cannot reference confidential repository
 secrets. Canonical governance therefore keeps its pull-request checks local to
 the public checkout. `canonical-private-governance.yml` performs cross-repo
-status, control-plane, mobile compatibility, and repo-governance checks only
-after a push to `main`, so unmerged pull-request code cannot replace the
-instructions that receive `WORKFLOW_PAT`. `PULSE_LICENSE_PUBLIC_KEY` is the sole
-explicit PR exception because that legacy secret value is intentionally
-non-confidential.
+status, control-plane, subsystem-registry, mobile compatibility, and
+repo-governance checks only after a push to `main`, so unmerged pull-request
+code cannot replace the instructions that receive `WORKFLOW_PAT`.
+`PULSE_LICENSE_PUBLIC_KEY` is the sole explicit PR exception because that
+legacy secret value is intentionally non-confidential.
 
 ## Release Continuity
 

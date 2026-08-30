@@ -60,6 +60,35 @@ def sorted_casefold(values: list[str]) -> list[str]:
     return sorted(values, key=lambda value: value.casefold())
 
 
+def path_repository(
+    path: str,
+    *,
+    known_repo_ids: set[str],
+    local_repo: str,
+) -> str:
+    """Return the canonical repository that owns a registry path."""
+    qualifier, separator, _ = path.partition(":")
+    if separator and qualifier in known_repo_ids:
+        return qualifier
+    return local_repo
+
+
+def path_is_in_scope(
+    path: str,
+    *,
+    audited_repo_ids: set[str] | None,
+    known_repo_ids: set[str],
+    local_repo: str,
+) -> bool:
+    if audited_repo_ids is None:
+        return True
+    return path_repository(
+        path,
+        known_repo_ids=known_repo_ids,
+        local_repo=local_repo,
+    ) in audited_repo_ids
+
+
 def tracked_repo_files() -> set[str]:
     local_repo = canonical_repo_id(REPO_ROOT)
     return tracked_workspace_files(active_repos=[local_repo], local_repo=local_repo)
@@ -108,10 +137,20 @@ def validate_path_reference(
     errors: list[str],
     tracked_files: set[str],
     require_file: bool = True,
+    audited_repo_ids: set[str] | None = None,
+    known_repo_ids: set[str] | None = None,
+    local_repo: str = "pulse",
 ) -> None:
     normalized = clean_relative_path(path)
     if normalized != path or path.startswith("../") or "/../" in path or Path(path).is_absolute():
         errors.append(f"{context} must be a clean repo-relative path: {path!r}")
+        return
+    if not path_is_in_scope(
+        path,
+        audited_repo_ids=audited_repo_ids,
+        known_repo_ids=known_repo_ids or {local_repo},
+        local_repo=local_repo,
+    ):
         return
     if require_file and path not in tracked_files:
         errors.append(f"{context} missing tracked file {path!r}")
@@ -123,11 +162,21 @@ def validate_prefix(
     context: str,
     errors: list[str],
     tracked_files: set[str],
+    audited_repo_ids: set[str] | None = None,
+    known_repo_ids: set[str] | None = None,
+    local_repo: str = "pulse",
 ) -> None:
     normalized = clean_relative_path(prefix.rstrip("/"))
     raw = prefix.rstrip("/")
     if normalized != raw or raw.startswith("../") or "/../" in raw or Path(raw).is_absolute():
         errors.append(f"{context} must be a clean repo-relative prefix: {prefix!r}")
+        return
+    if not path_is_in_scope(
+        prefix,
+        audited_repo_ids=audited_repo_ids,
+        known_repo_ids=known_repo_ids or {local_repo},
+        local_repo=local_repo,
+    ):
         return
     if not any(path.startswith(prefix) for path in tracked_files):
         errors.append(f"{context} does not match any tracked files: {prefix!r}")
@@ -149,6 +198,9 @@ def audit_registry_payload(
     tracked_files: set[str],
     status_lane_ids: set[str],
     schema_contract: dict[str, Any] | None = None,
+    audited_repo_ids: set[str] | None = None,
+    known_repo_ids: set[str] | None = None,
+    local_repo: str = "pulse",
 ) -> dict[str, Any]:
     contract = schema_contract or DEFAULT_REGISTRY_SCHEMA_CONTRACT
     schema = contract["schema"]
@@ -159,6 +211,21 @@ def audit_registry_payload(
     required_shared_ownership_fields = set(contract["required_shared_ownership_fields"])
     errors: list[str] = []
     warnings: list[str] = []
+    known_repos = known_repo_ids or {local_repo}
+
+    def in_scope(path: str) -> bool:
+        return path_is_in_scope(
+            path,
+            audited_repo_ids=audited_repo_ids,
+            known_repo_ids=known_repos,
+            local_repo=local_repo,
+        )
+
+    path_validation_scope = {
+        "audited_repo_ids": audited_repo_ids,
+        "known_repo_ids": known_repos,
+        "local_repo": local_repo,
+    }
 
     for field in sorted(required_top_level_fields):
         if field not in payload:
@@ -217,6 +284,7 @@ def audit_registry_payload(
                 context=f"{context}.contract",
                 errors=errors,
                 tracked_files=tracked_files,
+                **path_validation_scope,
             )
             if contract in seen_contracts:
                 errors.append(f"{context} duplicates contract path {contract!r}")
@@ -240,6 +308,7 @@ def audit_registry_payload(
                 context=f"{context}.owned_prefixes[{prefix_index}]",
                 errors=errors,
                 tracked_files=tracked_files,
+                **path_validation_scope,
             )
 
         owned_files = raw_subsystem.get("owned_files")
@@ -260,6 +329,7 @@ def audit_registry_payload(
                 context=f"{context}.owned_files[{file_index}]",
                 errors=errors,
                 tracked_files=tracked_files,
+                **path_validation_scope,
             )
 
         verification = raw_subsystem.get("verification")
@@ -295,6 +365,7 @@ def audit_registry_payload(
                 context=f"{context}.verification.test_prefixes[{prefix_index}]",
                 errors=errors,
                 tracked_files=tracked_files,
+                **path_validation_scope,
             )
 
         exact_files = verification.get("exact_files")
@@ -315,6 +386,7 @@ def audit_registry_payload(
                 context=f"{context}.verification.exact_files[{file_index}]",
                 errors=errors,
                 tracked_files=tracked_files,
+                **path_validation_scope,
             )
 
         path_policies = verification.get("path_policies")
@@ -376,6 +448,7 @@ def audit_registry_payload(
                     context=f"{policy_context}.match_prefixes[{prefix_index}]",
                     errors=errors,
                     tracked_files=tracked_files,
+                    **path_validation_scope,
                 )
 
             for file_index, path in enumerate(match_files):
@@ -387,6 +460,7 @@ def audit_registry_payload(
                     context=f"{policy_context}.match_files[{file_index}]",
                     errors=errors,
                     tracked_files=tracked_files,
+                    **path_validation_scope,
                 )
 
             if not isinstance(raw_policy.get("allow_same_subsystem_tests"), bool):
@@ -410,6 +484,7 @@ def audit_registry_payload(
                     context=f"{policy_context}.test_prefixes[{prefix_index}]",
                     errors=errors,
                     tracked_files=tracked_files,
+                    **path_validation_scope,
                 )
 
             policy_exact_files = raw_policy.get("exact_files")
@@ -430,6 +505,7 @@ def audit_registry_payload(
                     context=f"{policy_context}.exact_files[{file_index}]",
                     errors=errors,
                     tracked_files=tracked_files,
+                    **path_validation_scope,
                 )
 
             valid_policies.append((policy_context, raw_policy))
@@ -437,12 +513,21 @@ def audit_registry_payload(
         owned_runtime = owned_runtime_files(raw_subsystem, tracked_files)
         previous_policies: list[dict[str, Any]] = []
         for policy_context, policy in valid_policies:
+            policy_match_paths = list(policy.get("match_prefixes", [])) + list(
+                policy.get("match_files", [])
+            )
+            if audited_repo_ids is not None and not any(in_scope(path) for path in policy_match_paths):
+                continue
+            policy_fully_in_scope = audited_repo_ids is None or all(
+                in_scope(path) for path in policy_match_paths
+            )
             matched_owned_runtime = [path for path in owned_runtime if path_policy_matches(policy, path)]
             if not matched_owned_runtime:
-                errors.append(f"{policy_context} does not match any owned runtime files")
+                if policy_fully_in_scope:
+                    errors.append(f"{policy_context} does not match any owned runtime files")
                 previous_policies.append(policy)
                 continue
-            if previous_policies and all(
+            if policy_fully_in_scope and previous_policies and all(
                 any(path_policy_matches(previous_policy, path) for previous_policy in previous_policies)
                 for path in matched_owned_runtime
             ):
@@ -493,6 +578,7 @@ def audit_registry_payload(
 
     seen_shared_paths: set[str] = set()
     declared_shared_paths: list[str] = []
+    scoped_declared_shared_paths: list[str] = []
     for index, raw_shared in enumerate(raw_shared_ownerships):
         context = f"shared_ownerships[{index}]"
         if not isinstance(raw_shared, dict):
@@ -507,11 +593,14 @@ def audit_registry_payload(
             errors.append(f"{context}.path must be a non-empty string")
             continue
         declared_shared_paths.append(path)
+        if in_scope(path):
+            scoped_declared_shared_paths.append(path)
         validate_path_reference(
             path,
             context=f"{context}.path",
             errors=errors,
             tracked_files=tracked_files,
+            **path_validation_scope,
         )
         if path in seen_shared_paths:
             errors.append(f"{context}.path duplicates shared ownership entry for {path!r}")
@@ -539,6 +628,9 @@ def audit_registry_payload(
         if normalized_subsystems != sorted_casefold(normalized_subsystems):
             errors.append(f"{context}.subsystems must be sorted lexicographically")
 
+        if not in_scope(path):
+            continue
+
         actual = actual_shared_ownership.get(path)
         if actual is None:
             errors.append(f"{context}.path = {path!r} is not an actual shared-owned runtime file")
@@ -548,7 +640,7 @@ def audit_registry_payload(
     if declared_shared_paths != sorted_casefold(declared_shared_paths):
         errors.append("registry.json shared_ownerships must be sorted by path")
 
-    declared_shared_ownership = set(declared_shared_paths)
+    declared_shared_ownership = set(scoped_declared_shared_paths)
     for path in sorted(set(actual_shared_ownership) - declared_shared_ownership, key=str.casefold):
         errors.append(
             f"registry.json missing shared ownership entry for {path!r} owned by {actual_shared_ownership[path]!r}"
@@ -591,6 +683,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Read registry control files from the git index instead of the working tree.",
     )
+    parser.add_argument(
+        "--repo-scope",
+        action="append",
+        default=[],
+        metavar="REPO_ID",
+        help=(
+            "Audit paths for one available repository. Repeat to audit multiple "
+            "repositories; the default audits the complete active profile."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -632,6 +734,34 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(repo_id, str) and repo_id.strip()
     ] or [canonical_repo_id(REPO_ROOT)]
     local_repo = canonical_repo_id(REPO_ROOT)
+    requested_repos = args.repo_scope or active_repos
+    scope_errors: list[str] = []
+    if len(requested_repos) != len(set(requested_repos)):
+        scope_errors.append("--repo-scope must not contain duplicate repository ids")
+    unknown_repos = sorted(set(requested_repos) - set(active_repos), key=str.casefold)
+    if unknown_repos:
+        scope_errors.append(
+            "--repo-scope contains repositories outside the active profile: "
+            + ", ".join(unknown_repos)
+        )
+    if local_repo not in requested_repos:
+        scope_errors.append(f"--repo-scope must include the local control-plane repository {local_repo!r}")
+
+    context = repo_root_context(REPO_ROOT)
+    missing_repos = [
+        repo_id
+        for repo_id in requested_repos
+        if not (
+            context.execution_root
+            if repo_id == local_repo
+            else context.workspace_repos_root / repo_id
+        ).is_dir()
+    ]
+    if missing_repos:
+        scope_errors.append(
+            "registry audit requires unavailable repository checkout(s): "
+            + ", ".join(missing_repos)
+        )
     lane_ids = {
         lane.get("id")
         for lane in status_payload.get("lanes", [])
@@ -639,10 +769,14 @@ def main(argv: list[str] | None = None) -> int:
     }
     report = audit_registry_payload(
         load_registry_payload(staged=args.staged),
-        tracked_files=tracked_workspace_files(active_repos=active_repos, local_repo=local_repo),
+        tracked_files=tracked_workspace_files(active_repos=requested_repos, local_repo=local_repo),
         status_lane_ids=lane_ids,
         schema_contract=registry_schema_contract(staged=args.staged),
+        audited_repo_ids=set(requested_repos) if args.repo_scope else None,
+        known_repo_ids=set(active_repos),
+        local_repo=local_repo,
     )
+    report["errors"] = scope_errors + report["errors"]
     output = render_pretty(report) if args.pretty else json.dumps(report, indent=2, sort_keys=True)
     print(output)
     if args.check and report["errors"]:
