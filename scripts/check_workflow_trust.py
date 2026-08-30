@@ -14,6 +14,14 @@ ACTION_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CONTAINER_DIGEST_RE = re.compile(r"^docker://.+@sha256:[0-9a-f]{64}$")
 HOSTED_LATEST_RE = re.compile(r"\b(?:ubuntu|windows|macos)-latest\b")
 USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
+RUN_RE = re.compile(r"^(\s*)(?:-\s*)?run:\s*(.*)$")
+EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
+# Workflow-call and dispatch inputs are data, not shell source. Secrets include
+# github.token because Actions makes that credential available independently of
+# an explicit secrets.GITHUB_TOKEN reference.
+SHELL_DATA_CONTEXT_RE = re.compile(
+    r"(?<![\w.])(?:inputs|secrets)\.|(?<![\w.])github\.token\b"
+)
 CHECKOUT_PREFIX = "actions/checkout@"
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
 
@@ -48,9 +56,53 @@ def _checkout_block(lines: list[str], uses_index: int) -> list[tuple[int, str]]:
     return block
 
 
+def _run_script_lines(lines: list[str], run_index: int) -> list[tuple[int, str]]:
+    """Return the source lines GitHub will materialize as a run script."""
+    match = RUN_RE.match(lines[run_index])
+    if not match:
+        return []
+    run_indent = len(match.group(1))
+    value = match.group(2).strip()
+    if value not in {"|", "|-", "|+", ">", ">-", ">+"}:
+        return [(run_index, match.group(2))]
+
+    script: list[tuple[int, str]] = []
+    for index in range(run_index + 1, len(lines)):
+        line = lines[index]
+        if line.strip() and _indent(line) <= run_indent:
+            break
+        script.append((index, line))
+    return script
+
+
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
     findings: list[Finding] = []
+
+    permission_declarations = [
+        index
+        for index, line in enumerate(lines)
+        if re.match(r"^permissions\s*:", line)
+    ]
+    if len(permission_declarations) != 1:
+        findings.append(
+            Finding(
+                path,
+                1,
+                "workflow must declare top-level permissions explicitly exactly once",
+            )
+        )
+    elif lines[permission_declarations[0]].split("#", 1)[0].strip() not in {
+        "permissions:",
+        "permissions: {}",
+    }:
+        findings.append(
+            Finding(
+                path,
+                permission_declarations[0] + 1,
+                "workflow permissions must use a scope mapping or explicit empty mapping",
+            )
+        )
 
     for index, line in enumerate(lines):
         line_number = index + 1
@@ -63,6 +115,18 @@ def audit_workflow(path: Path) -> list[Finding]:
                     "mutable hosted runner label; use an explicit dated image",
                 )
             )
+
+        if RUN_RE.match(code):
+            for script_index, script_line in _run_script_lines(lines, index):
+                for expression in EXPRESSION_RE.findall(script_line):
+                    if SHELL_DATA_CONTEXT_RE.search(expression):
+                        findings.append(
+                            Finding(
+                                path,
+                                script_index + 1,
+                                "workflow inputs and secrets must enter run scripts through env",
+                            )
+                        )
 
         match = USES_RE.search(code)
         if not match:

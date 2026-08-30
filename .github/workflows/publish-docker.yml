@@ -62,8 +62,10 @@ jobs:
 
       - name: Extract version from release tag
         id: version
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          TAG="${{ inputs.tag }}"
+          TAG="${INPUT_TAG}"
           VERSION="${TAG#v}"
 
           # Detect if this is a prerelease (RC, alpha, beta)
@@ -105,12 +107,15 @@ jobs:
           path: ${{ runner.temp }}/release-container-payload
 
       - name: Verify exact-candidate container payload
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           python3 scripts/release_candidate_manifest.py verify-local \
             --release-dir "$RUNNER_TEMP/release-container-payload/payload" \
             --manifest "$RUNNER_TEMP/release-container-payload/release-container-payload.json" \
-            --version "${{ steps.version.outputs.version }}" \
-            --source-sha "${{ inputs.source_sha }}"
+            --version "${VERSION}" \
+            --source-sha "${EXPECTED_SOURCE_SHA}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
@@ -263,8 +268,11 @@ jobs:
         id: proof
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           ./scripts/verify-release-container-images.sh \
-            "${{ inputs.tag }}" "${{ inputs.source_sha }}" \
-            "${{ github.repository }}" >> "$GITHUB_OUTPUT"
+            "${TAG}" "${SOURCE_SHA}" \
+            "${REPOSITORY}" >> "$GITHUB_OUTPUT"

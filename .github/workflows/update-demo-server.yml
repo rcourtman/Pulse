@@ -184,11 +184,13 @@ jobs:
 
     steps:
       - name: Check release type
+        env:
+          VERIFY_ONLY: ${{ inputs.verify_only }}
         run: |
           echo "Tag: ${{ needs.resolve.outputs.tag }}"
           echo "Target: ${{ needs.resolve.outputs.target }}"
           echo "Environment: ${{ needs.resolve.outputs.environment_name }}"
-          echo "Verification only: ${{ inputs.verify_only }}"
+          echo "Verification only: ${VERIFY_ONLY}"
 
       - name: Validate demo environment configuration
         env:

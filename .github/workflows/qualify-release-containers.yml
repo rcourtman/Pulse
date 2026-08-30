@@ -23,6 +23,8 @@ jobs:
     # expose and repair runner capacity without blocking a stable patch.
     runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-build"]') }}
     timeout-minutes: 15
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -49,7 +51,7 @@ jobs:
           python3 scripts/release_candidate_manifest.py verify-local \
             --release-dir "$RUNNER_TEMP/release-container-payload/payload" \
             --manifest "$RUNNER_TEMP/release-container-payload/release-container-payload.json" \
-            --version "${{ inputs.version }}" \
+            --version "${VERSION}" \
             --source-sha "${{ github.sha }}"
 
       - name: Assemble exact-candidate runtime and agent images
@@ -60,14 +62,14 @@ jobs:
             --platform linux/amd64 \
             --build-context "release_payload=${RUNNER_TEMP}/release-container-payload/payload/release" \
             --load \
-            --tag "pulse-helm-smoke:${{ inputs.version }}" \
+            --tag "pulse-helm-smoke:${VERSION}" \
             .
           docker buildx build \
             --target agent_runtime_prebuilt \
             --platform linux/amd64 \
             --build-context "release_payload=${RUNNER_TEMP}/release-container-payload/payload/release" \
             --load \
-            --tag "pulse-agent-candidate:${{ inputs.version }}" \
+            --tag "pulse-agent-candidate:${VERSION}" \
             .
           docker buildx build \
             --file deploy/provider-msp/Dockerfile.control-plane \
@@ -75,24 +77,24 @@ jobs:
             --platform linux/amd64 \
             --build-context "compiled_payload=${RUNNER_TEMP}/release-container-payload/payload/compiled" \
             --load \
-            --tag "pulse-control-plane-candidate:${{ inputs.version }}" \
+            --tag "pulse-control-plane-candidate:${VERSION}" \
             .
 
       - name: Verify container binaries match immutable candidate
         run: |
           set -euo pipefail
           expected_server="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse" | awk '{print $1}')"
-          actual_server="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c 'sha256sum /app/pulse' | awk '{print $1}')"
+          actual_server="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${VERSION}" -c 'sha256sum /app/pulse' | awk '{print $1}')"
           expected_agent="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/release/amd64/bin/pulse-agent-linux-amd64" | awk '{print $1}')"
-          actual_embedded_agent="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
-          actual_agent="$(docker run --rm --entrypoint /bin/sh "pulse-agent-candidate:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
+          actual_embedded_agent="$(docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${VERSION}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
+          actual_agent="$(docker run --rm --entrypoint /bin/sh "pulse-agent-candidate:${VERSION}" -c 'sha256sum /usr/local/bin/pulse-agent' | awk '{print $1}')"
           expected_control_plane="$(sha256sum "$RUNNER_TEMP/release-container-payload/payload/compiled/binaries/pulse-control-plane-linux-amd64" | awk '{print $1}')"
-          actual_control_plane="$(docker run --rm --entrypoint /bin/sh "pulse-control-plane-candidate:${{ inputs.version }}" -c 'sha256sum /usr/local/bin/pulse-control-plane' | awk '{print $1}')"
+          actual_control_plane="$(docker run --rm --entrypoint /bin/sh "pulse-control-plane-candidate:${VERSION}" -c 'sha256sum /usr/local/bin/pulse-control-plane' | awk '{print $1}')"
           test "${actual_server}" = "${expected_server}"
           test "${actual_embedded_agent}" = "${expected_agent}"
           test "${actual_agent}" = "${expected_agent}"
           test "${actual_control_plane}" = "${expected_control_plane}"
-          docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${{ inputs.version }}" -c '
+          docker run --rm --entrypoint /bin/sh "pulse-helm-smoke:${VERSION}" -c '
             set -euo pipefail
             test "$(readlink /usr/local/bin/pulse-agent)" = "/opt/pulse/bin/pulse-agent-linux-amd64"
             test -x /usr/local/bin/pulse-agent

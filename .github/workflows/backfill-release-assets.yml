@@ -55,9 +55,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
         run: |
-          ./scripts/backfill-release-assets.sh --tag "${{ inputs.tag }}" --repo "${{ github.repository }}"
+          ./scripts/backfill-release-assets.sh --tag "${TAG}" --repo "${REPOSITORY}"
 
       - name: Validate published release packet
+        env:
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
         run: |
-          ./scripts/validate-published-release.sh "${{ inputs.tag }}" "${{ github.repository }}"
+          ./scripts/validate-published-release.sh "${TAG}" "${REPOSITORY}"

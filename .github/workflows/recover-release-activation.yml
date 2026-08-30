@@ -198,10 +198,11 @@ jobs:
         id: container_proof
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           ./scripts/verify-release-container-images.sh \
-            "${{ inputs.tag }}" "${{ steps.qualify.outputs.source_sha }}" \
+            "${TAG}" "${{ steps.qualify.outputs.source_sha }}" \
             "${{ github.repository }}" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch a fresh durable convergence owner

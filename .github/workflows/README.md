@@ -12,6 +12,11 @@ Use `false` unless a later command in the same job performs an authenticated
 Git write. The small number of write-path exceptions use `true` with the
 machine-checked `# required: authenticated git writes` rationale.
 
+Each workflow declares its default `GITHUB_TOKEN` permissions explicitly and
+enumerates scopes instead of using `read-all` or `write-all`. Workflow inputs,
+secrets, and `github.token` are passed to `run` steps through `env`; they are
+data and must never be interpolated into the generated shell program.
+
 ## Issue Triage Automation
 
 **Files**:

@@ -139,8 +139,11 @@ jobs:
           path: dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz
 
       - name: Authenticate with GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
         run: |
-          echo "${{ github.token }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          echo "${GHCR_TOKEN}" | helm registry login ghcr.io --username "${GHCR_USERNAME}" --password-stdin
 
       - name: Push chart to GHCR
         run: |

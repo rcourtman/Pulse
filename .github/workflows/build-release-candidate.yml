@@ -274,6 +274,7 @@ jobs:
           APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
           APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           for name in \
@@ -305,7 +306,7 @@ jobs:
           security list-keychains -d user -s "$keychain"
 
           ldflags="$(./scripts/release_ldflags.sh agent \
-            --version "v${{ inputs.version }}" \
+            --version "v${VERSION}" \
             --update-public-keys "$PULSE_UPDATE_SIGNING_PUBLIC_KEY")"
           for arch in amd64 arm64; do
             output="native-agent-binaries/pulse-agent-darwin-${arch}"
@@ -371,6 +372,7 @@ jobs:
         shell: pwsh
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          VERSION: ${{ inputs.version }}
         run: |
           $ErrorActionPreference = 'Stop'
           foreach ($name in @('PULSE_UPDATE_SIGNING_PUBLIC_KEY')) {
@@ -380,7 +382,7 @@ jobs:
           }
 
           New-Item -ItemType Directory -Path unsigned-native-agent-binaries -Force | Out-Null
-          $ldflags = & bash ./scripts/release_ldflags.sh agent --version "v${{ inputs.version }}" --update-public-keys $env:PULSE_UPDATE_SIGNING_PUBLIC_KEY
+          $ldflags = & bash ./scripts/release_ldflags.sh agent --version "v$env:VERSION" --update-public-keys $env:PULSE_UPDATE_SIGNING_PUBLIC_KEY
           foreach ($arch in @('amd64', 'arm64', '386')) {
             $env:GOOS = 'windows'
             $env:GOARCH = $arch
@@ -569,6 +571,7 @@ jobs:
           SIGNPATH_SIGNING_REQUEST_URL: ${{ steps.signpath.outputs.signing_request_url }}
           SIGNPATH_INPUT_ARTIFACT_ID: ${{ steps.signpath.outputs.github_input_artifact_id }}
           SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT: ${{ vars.SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT }}
+          VERSION: ${{ inputs.version }}
         run: |
           $ErrorActionPreference = 'Stop'
           $sourceDir = if ($env:WINDOWS_SIGNING_BACKEND -eq 'signpath') { 'signed-native-agent-binaries' } else { 'unsigned-native-agent-binaries' }
@@ -595,7 +598,7 @@ jobs:
           $evidence = [ordered]@{
             schemaVersion = 1
             backend = $env:WINDOWS_SIGNING_BACKEND
-            version = '${{ inputs.version }}'
+            version = $env:VERSION
             sourceSha = $env:GITHUB_SHA
             workflowRunUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
             signPathSigningRequestId = $env:SIGNPATH_SIGNING_REQUEST_ID
@@ -639,11 +642,13 @@ jobs:
     steps:
       - name: Resolve candidate identity
         id: identity
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          echo "artifact_name=release-candidate-${GITHUB_SHA}-${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          echo "manifest_artifact_name=release-candidate-manifest-${GITHUB_SHA}-${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          echo "container_artifact_name=release-container-payload-${GITHUB_SHA}-${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=release-candidate-${GITHUB_SHA}-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "manifest_artifact_name=release-candidate-manifest-${GITHUB_SHA}-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "container_artifact_name=release-container-payload-${GITHUB_SHA}-${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -652,9 +657,11 @@ jobs:
           fetch-depth: 0
 
       - name: Validate candidate identity
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          test "$(tr -d '\n' < VERSION)" = "${{ inputs.version }}"
+          test "$(tr -d '\n' < VERSION)" = "${VERSION}"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
 
       - name: Set up Go
@@ -701,6 +708,7 @@ jobs:
           EXPECTED_ARTIFACT_DIGEST: ${{ needs.obtain-release-payload.outputs.artifact_digest }}
           EXPECTED_ARTIFACT_NAME: ${{ needs.obtain-release-payload.outputs.artifact_name }}
           EXPECTED_COMPILER_RUN_ID: ${{ needs.obtain-release-payload.outputs.compiler_run_id }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           [[ "${EXPECTED_ARTIFACT_ID}" =~ ^[0-9]+$ ]]
@@ -732,7 +740,7 @@ jobs:
           python3 scripts/release_candidate_manifest.py verify-local \
             --release-dir release-compiled/payload \
             --manifest release-compiled/manifest/release-compiled.json \
-            --version "${{ inputs.version }}" \
+            --version "${VERSION}" \
             --source-sha "${GITHUB_SHA}"
           mkdir -p release-candidate-manifest
           payload_manifest_sha256="$(sha256sum release-compiled/manifest/release-compiled.json | awk '{print $1}')"
@@ -743,7 +751,7 @@ jobs:
             --arg payload_manifest_sha256 "${payload_manifest_sha256}" \
             --argjson compiler_workflow_run_id "${EXPECTED_COMPILER_RUN_ID}" \
             --argjson release_workflow_run_id "${GITHUB_RUN_ID}" \
-            --arg version "${{ inputs.version }}" \
+            --arg version "${VERSION}" \
             --arg source_sha "${GITHUB_SHA}" \
             '{schema_version: 2, trust_boundary: "separate-trusted-self-hosted-compiler-workflow", verified_on: "github-hosted", artifact_id: $artifact_id, artifact_name: $artifact_name, artifact_sha256: $artifact_sha256, payload_manifest_sha256: $payload_manifest_sha256, compiler_workflow_run_id: $compiler_workflow_run_id, release_workflow_run_id: $release_workflow_run_id, version: $version, source_sha: $source_sha}' \
             > release-candidate-manifest/compiled-payload-verification.json
@@ -770,7 +778,7 @@ jobs:
           path: release-candidate-manifest
 
       - name: Build release candidate
-        run: ./scripts/build-release.sh "${{ inputs.version }}"
+        run: ./scripts/build-release.sh "${VERSION}"
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
@@ -779,6 +787,7 @@ jobs:
           PULSE_REQUIRE_WINDOWS_SIGNING: ${{ inputs.require_windows_signing }}
           PULSE_AGENT_NATIVE_BINARIES_DIR: ${{ (inputs.require_macos_signing || inputs.require_windows_signing) && format('{0}/native-agent-binaries', github.workspace) || '' }}
           PULSE_RELEASE_COMPILED_PAYLOAD_DIR: ${{ github.workspace }}/release-compiled/payload
+          VERSION: ${{ inputs.version }}
 
       - name: Validate installer signing key pins
         env:
@@ -798,23 +807,29 @@ jobs:
           done
 
       - name: Validate complete candidate locally
-        run: ./scripts/validate-release.sh "${{ inputs.version }}" --skip-docker
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/validate-release.sh "${VERSION}" --skip-docker
 
       - name: Create immutable candidate manifest
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           python3 scripts/release_candidate_manifest.py create \
             --release-dir release \
-            --version "${{ inputs.version }}" \
+            --version "${VERSION}" \
             --source-sha "${GITHUB_SHA}" \
             --output release-candidate-manifest/release-candidate.json
 
       - name: Create exact-candidate container payload
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           payload_root="$RUNNER_TEMP/release-container-payload"
           ./scripts/prepare-release-container-context.sh \
             release \
-            "${{ inputs.version }}" \
+            "${VERSION}" \
             "${payload_root}/payload/release"
           mkdir -p "${payload_root}/payload/compiled/binaries"
           for arch in amd64 arm64; do
@@ -824,7 +839,7 @@ jobs:
           done
           python3 scripts/release_candidate_manifest.py create \
             --release-dir "${payload_root}/payload" \
-            --version "${{ inputs.version }}" \
+            --version "${VERSION}" \
             --source-sha "${GITHUB_SHA}" \
             --output "${payload_root}/release-container-payload.json"
 
