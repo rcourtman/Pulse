@@ -1322,6 +1322,13 @@ body,
   animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up {
+    animation: none;
+  }
+}
+
 .delay-100 {
   animation-delay: 100ms;
 }

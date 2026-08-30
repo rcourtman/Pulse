@@ -263,10 +263,9 @@ export function Alerts() {
       />
 
       <Card padding="none" class="relative lg:flex overflow-hidden">
-        <div
+        <nav
           class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200`}
           aria-label={t('alerts.nav.ariaLabel')}
-          aria-expanded={!sidebarCollapsed()}
         >
           <div
             class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
@@ -279,6 +278,8 @@ export function Alerts() {
                   onClick={() => setSidebarCollapsed(true)}
                   class="p-1 rounded-md hover:bg-surface-hover transition-colors"
                   aria-label={t('alerts.nav.collapseSidebar')}
+                  aria-controls="alerts-sidebar-menu"
+                  aria-expanded="true"
                 >
                   <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -297,6 +298,8 @@ export function Alerts() {
                 onClick={() => setSidebarCollapsed(false)}
                 class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
                 aria-label={t('alerts.nav.expandSidebar')}
+                aria-controls="alerts-sidebar-menu"
+                aria-expanded="false"
               >
                 <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -348,7 +351,7 @@ export function Alerts() {
               </For>
             </div>
           </div>
-        </div>
+        </nav>
 
         <div class="flex-1 overflow-hidden">
           <Show when={flatTabs().length > 0}>

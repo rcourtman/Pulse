@@ -97,11 +97,10 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
         border={false}
         class="relative flex min-w-0 max-w-full overflow-visible border-y border-border max-sm:rounded-none sm:border lg:min-h-[600px] lg:flex-row lg:overflow-hidden"
       >
-        <div
+        <nav
           data-settings-navigation
           class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-8rem)] flex-shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
           aria-label={shellCopy().navigationAriaLabel}
-          aria-expanded={!props.sidebarCollapsed()}
         >
           <div
             class={`${props.sidebarCollapsed() ? 'px-2' : 'px-3 lg:px-4'} space-y-4 py-3 transition-all duration-200 lg:sticky lg:top-0 lg:space-y-5 lg:py-5`}
@@ -136,6 +135,8 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                   onClick={() => props.setSidebarCollapsed(true)}
                   class="hidden rounded-md p-1 transition-colors hover:bg-surface-hover lg:inline-flex"
                   aria-label={shellCopy().collapseSidebarLabel}
+                  aria-controls="settings-sidebar-menu"
+                  aria-expanded="true"
                 >
                   <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -154,6 +155,8 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 onClick={() => props.setSidebarCollapsed(false)}
                 class="hidden w-full rounded-md p-2 transition-colors hover:bg-surface-hover lg:block"
                 aria-label={shellCopy().expandSidebarLabel}
+                aria-controls="settings-sidebar-menu"
+                aria-expanded="false"
               >
                 <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -253,7 +256,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
               </For>
             </div>
           </div>
-        </div>
+        </nav>
 
         <div
           data-settings-content

@@ -51,7 +51,17 @@ describe('SettingsPageShell mobile navigation', () => {
     const navigation = document.querySelector('[data-settings-navigation]');
     const contentBody = document.querySelector('[data-settings-content-body]');
     expect(shell).toHaveClass('space-y-0', 'lg:space-y-6');
+    expect(navigation?.tagName).toBe('NAV');
+    expect(navigation).not.toHaveAttribute('aria-expanded');
     expect(navigation).toHaveClass('max-h-[calc(100dvh-8rem)]');
+    expect(screen.getByRole('button', { name: 'Collapse settings navigation' })).toHaveAttribute(
+      'aria-controls',
+      'settings-sidebar-menu',
+    );
+    expect(screen.getByRole('button', { name: 'Collapse settings navigation' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(contentBody).toHaveClass('min-w-0', 'p-0', 'sm:p-4', 'lg:p-5');
 
     setActiveTab('api');
@@ -135,6 +145,14 @@ describe('SettingsPageShell mobile navigation', () => {
     ));
 
     expect(sidebarCollapsed()).toBe(true);
+    expect(screen.getByRole('button', { name: 'Expand settings navigation' })).toHaveAttribute(
+      'aria-controls',
+      'settings-sidebar-menu',
+    );
+    expect(screen.getByRole('button', { name: 'Expand settings navigation' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     await screen.getByRole('button', { name: 'Settings' }).click();
 
     await waitFor(() => {

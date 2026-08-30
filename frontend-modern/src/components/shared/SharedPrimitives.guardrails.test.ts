@@ -8153,6 +8153,12 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('font-variant-numeric: tabular-nums');
   });
 
+  it('disables login entrance animations when reduced motion is requested', () => {
+    expect(frontendIndexCssSource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.animate-fade-in,[\s\S]*?\.animate-slide-up \{[\s\S]*?animation: none;/,
+    );
+  });
+
   it('keeps search field on shell, runtime, and model owners', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{

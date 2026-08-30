@@ -29,6 +29,7 @@
   "author": "rcourtman",
   "license": "MIT",
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "1.56.1",
     "@types/node": "^20.10.0",
     "typescript": "^5.3.0"
