@@ -686,7 +686,7 @@ describe('PatrolAttentionWorkbench', () => {
     ).toBeInTheDocument();
   });
 
-  it('points lifecycle users at the durable threshold and finding controls', async () => {
+  it('keeps durable Patrol finding outcomes visible beside alert lifecycle controls', async () => {
     const active = item();
     apiMocks.getList.mockResolvedValue(
       listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
@@ -708,16 +708,23 @@ describe('PatrolAttentionWorkbench', () => {
       }),
     );
 
-    expect(
-      await screen.findByText(/Mark reviewed removes this occurrence from the decision inbox/i),
-    ).toHaveTextContent(/until it resolves or you return it to open/i);
-    expect(screen.queryByText(/today's decision inbox/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/Need a lasting Patrol finding outcome/i)).toHaveTextContent(
+      /remember expected behavior/i,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open finding options' }));
+    expect(onOpenFindings).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByText('More ways to manage this issue'));
+    expect(screen.getByText(/Mark reviewed removes this occurrence/i)).toHaveTextContent(
+      /until it resolves or you return it to open/i,
+    );
     expect(screen.getByRole('link', { name: 'adjust alert thresholds' })).toHaveAttribute(
       'href',
       '/alerts/thresholds',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'review Patrol findings' }));
-    expect(onOpenFindings).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('button', { name: 'review Patrol findings' }),
+    ).not.toBeInTheDocument();
   });
 
   it('omits the findings pointer when no findings surface is wired', async () => {

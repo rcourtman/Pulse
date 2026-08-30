@@ -329,7 +329,7 @@ describe('FindingsPanel resource links', () => {
     expect(
       screen.getByRole('complementary', { name: 'Review Provider connection issue' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Manage')).toBeInTheDocument();
+    expect(screen.getByText('Resolve or dismiss')).toBeInTheDocument();
     const assistantHandoff = screen.getByRole('button', { name: 'Open in Assistant' });
     expect(assistantHandoff.closest('details')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeInTheDocument();
@@ -563,6 +563,31 @@ describe('FindingsPanel resource links', () => {
 
     expect(mockState.loadFindings).not.toHaveBeenCalled();
     expectCollapsedFinding('Provider connection issue');
+  });
+
+  it('opens durable finding outcomes directly from an active Patrol row', async () => {
+    render(() => <FindingsPanel findingsSource="patrol" />);
+
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+
+    const options = screen.getByRole('button', {
+      name: 'Open resolve and dismiss options for Provider connection issue',
+    });
+    expect(options).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(options);
+
+    expect(options).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Resolve or dismiss')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss: Not an issue' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remember as expected' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss: Later' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create rule from this' })).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close review panel for Provider connection issue' }),
+    );
+    expect(options).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('renders Patrol findings while the unified findings request is still loading', async () => {

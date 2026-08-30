@@ -223,7 +223,7 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toMatch(/>\s*Copy summary\s*</);
   });
 
-  it('keeps expanded finding actions behind a canonical primary action and compact Manage menu', () => {
+  it('keeps expanded finding actions behind a canonical primary action and explicit outcome menu', () => {
     expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation(finding)');
     expect(findingsPanelSource).toContain('getPrimaryAssistantFindingAction');
     expect(findingsPanelSource).toContain('const shouldShowAssistantPrimaryAction =');
@@ -235,7 +235,7 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain(
       'fallback={\n              <button\n                type="button"\n                onClick={(e) => {\n                  e.stopPropagation();\n                  void openFindingInAssistant(finding);',
     );
-    expect(findingsPanelSource).toContain('Manage');
+    expect(findingsPanelSource).toContain('Resolve or dismiss');
     expect(findingsPanelSource).toContain('min-w-48');
     expect(findingsPanelSource).not.toContain('min-w-40');
   });
@@ -243,7 +243,7 @@ describe('FindingsPanel assistant handoff', () => {
   it('keeps primary-action Patrol runtime findings out of secondary action clutter', () => {
     // Runtime/setup findings already have one canonical recovery path:
     // provider settings. The expanded card must not add the Assistant
-    // secondary button or generic Manage menu beside that primary action.
+    // secondary button or generic outcome menu beside that primary action.
     expect(findingsPanelSource).toContain('const shouldShowExpandedManageMenu =');
     expect(findingsPanelSource).toContain('!primaryAction ||');
     expect(findingsPanelSource).toContain('<Show when={shouldShowExpandedManageMenu}>');

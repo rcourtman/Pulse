@@ -1343,6 +1343,22 @@ function AttentionLifecycleControls(props: {
             </Button>
           </Show>
         </div>
+        <Show when={props.onOpenFindings}>
+          <div class="mt-3 flex flex-col gap-3 rounded-md border border-border-subtle bg-surface px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-xs leading-5 text-muted">
+              Need a lasting Patrol finding outcome? Resolve it, dismiss it as not an issue,
+              remember expected behavior, or create a suppression rule.
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              class="min-h-11 shrink-0 sm:min-h-0"
+              onClick={() => props.onOpenFindings?.()}
+            >
+              Open finding options
+            </Button>
+          </div>
+        </Show>
         <Show when={showSuppression()}>
           <form
             class="mt-3 space-y-3 border-t border-border-subtle pt-3"
@@ -1421,18 +1437,7 @@ function AttentionLifecycleControls(props: {
               >
                 adjust alert thresholds
               </A>{' '}
-              to change or turn off this alert for the affected resource
-              <Show when={props.onOpenFindings} fallback=".">
-                , or{' '}
-                <button
-                  type="button"
-                  class="font-medium text-blue-700 hover:underline dark:text-blue-300"
-                  onClick={() => props.onOpenFindings?.()}
-                >
-                  review Patrol findings
-                </button>{' '}
-                to mark a finding as expected so Patrol stops raising it.
-              </Show>
+              to change or turn off this alert for the affected resource.
             </p>
           </div>
         </details>

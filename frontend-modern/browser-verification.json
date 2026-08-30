@@ -1,28 +1,19 @@
 {
   "version": 1,
-  "base_sha": "87fda2a235a34bf62071458795237856ac16650d",
-  "verified_at": "2026-08-30T08:55:33Z",
+  "base_sha": "1e805afc4b54c25ed253497e4818037476cbce23",
+  "verified_at": "2026-08-30T10:22:47Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/resources.ts",
-    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
-    "frontend-modern/src/components/Settings/ResourcePicker.tsx",
-    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
-    "frontend-modern/src/hooks/useResourceStats.ts",
-    "frontend-modern/src/hooks/useResources.ts"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/resources.ts": "08a29f4efc054188e378f5eecb94c2cad4884c8a20fc31f97c3242a72099cdde",
-    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx": "ce04993e9a017890a7098cf15ee518701d3ecbbbd6eac91520c0c7674a86c98c",
-    "frontend-modern/src/components/Settings/ResourcePicker.tsx": "2e33b23cfd257222996a2adb9102b80f36ed26d0039c449c3111162ed7da13b7",
-    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts": "f9fca9e1b66f7d2f020a52a0e873da7371f649c4f37c8a7df08e627b2a1e77f2",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "744ffef0c69a2113d12192698258e4296fd8a03fdf9a227bc9c0ab0ed250b5d7",
-    "frontend-modern/src/hooks/useResourceStats.ts": "b3d4e3777096dd1933a2e2c53af822052ddddb4563a9ccd1bc4c16677d191ec6",
-    "frontend-modern/src/hooks/useResources.ts": "142ee968fdfdeb1281feb6b04beee23c1556db42a118e47e8063b6f151d1c24a"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "bddd32ceb519ad2d4deeb464c47e96789b12e512ab127617c6d7f01d3e32bbd8",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "34540499fb66c378bba88acae22eaf48f0444e6bd0dd5c4c00a05ae93271d48a",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "36711b7bc41597a240109c37e50174011c3b3fb5b77aa65179e1bc6cf7165524"
   },
   "routes": [
-    "/settings/security-data-handling",
     "/patrol"
   ],
   "viewports": [
@@ -36,16 +27,15 @@
     }
   ],
   "states": [
-    "Resource Privacy cold direct load settled with 1,855 governed resources and rendered the aggregate posture without a false empty state",
-    "Resource Privacy desktop and narrow layouts retained the complete policy summary, posture cards, scrolling, and viewport fit without horizontal overflow",
-    "Patrol Protection objective dialog opened the resource scope picker with 1,503 populated resources instead of an empty placeholder",
-    "resource picker desktop and narrow layouts retained search, type filters, bounded list scrolling, selection state, dialog controls, and viewport fit"
+    "Patrol Inbox selected-decision lifecycle showed the lasting finding outcome explanation and visible Open finding options handoff",
+    "Patrol Activity explained the finding outcome workflow and rendered a visible Finding options control on each active finding",
+    "expanded active finding showed Resolve or dismiss with Dismiss: Not an issue, Remember as expected, Dismiss: Later, and Create rule from this",
+    "desktop and narrow layouts retained readable controls, scrolling, and exact viewport fit without horizontal overflow"
   ],
   "interactions": [
-    "loaded Resource Privacy as a cold direct route against the exact isolated frontend and backend build",
-    "traced the cold Resource Privacy request set and confirmed only the compact /api/resources/stats read plus one type=agent settings-status page, with no unfiltered paginated resource hydration",
-    "opened Patrol Protection, opened Add objective, expanded Limit to specific resources, searched for esxi-07.lab.local, and selected the matching resource",
-    "dismissed the objective dialog and confirmed focus returned to Add objective",
-    "inspected Resource Privacy and the expanded resource picker at 1440 by 900 and 390 by 844 for populated state, responsive fit, clipping, scrolling, and control availability"
+    "opened the first mock-backed Patrol Inbox decision and followed Open finding options into Activity",
+    "opened an active finding's outcome controls by pointer at desktop width and by keyboard Enter at narrow width",
+    "closed Resolve or dismiss and confirmed the Finding options trigger returned to aria-expanded false",
+    "inspected the Inbox handoff, Activity rows, expanded finding details, management disclosure, control placement, clipping, and scrolling at 1440 by 900 and 390 by 844"
   ]
 }

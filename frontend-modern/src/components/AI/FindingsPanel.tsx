@@ -189,6 +189,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const [filter, setFilter] = createSignal<FindingsPanelFilter>(props.filterOverride ?? 'active');
   const [sortBy, setSortBy] = createSignal<'severity' | 'time'>('severity');
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
+  const [manageOpenId, setManageOpenId] = createSignal<string | null>(null);
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
   const [editingNoteId, setEditingNoteId] = createSignal<string | null>(null);
@@ -501,6 +502,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   createEffect(() => {
     if (isPatrolFindingsSource() && expandedId() && !selectedPatrolFinding()) {
       setExpandedId(null);
+      setManageOpenId(null);
     }
   });
   const filterOptions = createMemo(() => buildFindingFilterOptions(filterCounts()));
@@ -979,9 +981,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const toggleExpanded = () => {
       if (expandedId() === finding.id) {
         setExpandedId(null);
+        setManageOpenId(null);
       } else {
         setExpandedId(finding.id);
+        setManageOpenId(null);
       }
+      props.onFindingClick?.(finding);
+    };
+
+    const openFindingOptions = (event: MouseEvent) => {
+      event.stopPropagation();
+      setExpandedId(finding.id);
+      setManageOpenId(finding.id);
       props.onFindingClick?.(finding);
     };
 
@@ -1240,7 +1251,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
           </div>
           {/* Actions */}
-          <div class="flex items-center gap-1 shrink-0">
+          <div class="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center">
             <Show
               when={
                 !isPatrolFindingsSource() && expandedId() !== finding.id
@@ -1325,6 +1336,26 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   </svg>
                 </button>
               </Show>
+            </Show>
+            <Show
+              when={
+                isPatrolFindingsSource() &&
+                props.showControls !== false &&
+                finding.status === 'active' &&
+                manualControls.dismiss
+              }
+            >
+              <button
+                type="button"
+                aria-label={`Open resolve and dismiss options for ${title.label}`}
+                aria-expanded={manageOpenId() === finding.id}
+                aria-controls={`finding-${finding.id}-manage`}
+                onClick={openFindingOptions}
+                class="inline-flex min-h-11 items-center rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0"
+                title="Resolve, dismiss, remember as expected, or create a rule"
+              >
+                Finding options
+              </button>
             </Show>
             <button
               type="button"
@@ -1693,9 +1724,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </Show>
 
           <Show when={shouldShowExpandedManageMenu}>
-            <details onClick={(e) => e.stopPropagation()}>
-              <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover">
-                Manage
+            <details
+              id={`finding-${finding.id}-manage`}
+              open={manageOpenId() === finding.id}
+              onClick={(e) => e.stopPropagation()}
+              onToggle={(event) => setManageOpenId(event.currentTarget.open ? finding.id : null)}
+            >
+              <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                Resolve or dismiss
               </summary>
               <div class="mt-1 flex min-w-48 flex-col gap-1 rounded border border-border bg-surface p-1 shadow-sm">
                 <Show when={shouldShowAssistantManageAction}>
@@ -2199,7 +2235,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       aria-label={`Close review panel for ${title().label}`}
-                      onClick={() => setExpandedId(null)}
+                      onClick={() => {
+                        setExpandedId(null);
+                        setManageOpenId(null);
+                      }}
                       class="rounded p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       <XIcon class="h-4 w-4" />

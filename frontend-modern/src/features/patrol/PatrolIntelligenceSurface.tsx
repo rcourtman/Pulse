@@ -126,7 +126,7 @@ export function PatrolIntelligenceSurface() {
                 Review and history
               </h2>
               <p class="mt-1 max-w-3xl text-sm leading-5 text-muted">
-                Audit governed operations or inspect Patrol's underlying records.
+                Audit governed operations, manage finding outcomes, or inspect Patrol history.
               </p>
             </div>
             <div class="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
@@ -177,9 +177,12 @@ export function PatrolIntelligenceSurface() {
                     <HistoryIcon class="h-5 w-5" aria-hidden="true" />
                   </span>
                   <span class="min-w-0">
-                    <span class="text-sm font-semibold text-base-content">Patrol records</span>
+                    <span class="text-sm font-semibold text-base-content">
+                      Finding options and history
+                    </span>
                     <span class="mt-1 block text-xs font-normal leading-5 text-muted">
-                      Inspect findings and check history when you need the forensic trail.
+                      Resolve or dismiss findings, remember expected behavior, create rules, and
+                      inspect check history.
                     </span>
                   </span>
                 </span>
@@ -199,13 +202,14 @@ export function PatrolIntelligenceSurface() {
             open={findingsOpen()}
             onToggle={(event) => setFindingsOpen(event.currentTarget.open)}
           >
-            <summary class="sr-only">Patrol records</summary>
+            <summary class="sr-only">Finding options and history</summary>
             <div
               class={`space-y-4 border-t border-border p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <p class="text-xs leading-5 text-muted">
-                Patrol records keep raw check findings and run history. The Inbox separately lists
-                items that currently need a decision.
+                Choose Finding options on an active finding to resolve it, dismiss it, remember it
+                as expected, or create a suppression rule. Check history remains available here for
+                the forensic trail.
               </p>
               <PatrolIntelligenceWorkspace state={state} />
             </div>
