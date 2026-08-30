@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "manifest_id": "secure-runtime-linux-v5",
+  "target_os": "linux",
+  "description": "Production source boundary for the secure collector, typed helper, action runner, signed update trust and build inputs, control-plane admission, and systemd qualification harness.",
+  "exact_paths": [
+    "internal/models/converters.go",
+    "internal/models/models.go",
+    "internal/models/models_frontend.go",
+    "internal/monitoring/monitor.go",
+    "internal/monitoring/monitor_agents.go",
+    "internal/unifiedresources/adapters.go",
+    "internal/unifiedresources/types.go",
+    "internal/unifiedresources/views.go",
+    "pkg/agents/docker/report.go",
+    "scripts/install.sh",
+    "scripts/installtests/secure_runtime_systemd_lab_test.go",
+    "scripts/release_control/secure_runtime_attestation.py",
+    "scripts/release_control/secure_runtime_source_manifest_v5.json",
+    "scripts/release_ldflags.sh",
+    "scripts/release_update_key.go"
+  ],
+  "recursive_roots": [
+    "cmd/pulse-agent",
+    "cmd/pulse-agent-helper",
+    "cmd/pulse-agent-runner",
+    "internal/actionrunner",
+    "internal/agentexec",
+    "internal/agenthelper",
+    "internal/agenttls",
+    "internal/agentupdate",
+    "internal/api",
+    "internal/config",
+    "internal/dockeragent",
+    "internal/hostagent",
+    "internal/operationreceipt",
+    "internal/securityutil",
+    "internal/updatesignature",
+    "pkg/auth",
+    "pkg/securityutil"
+  ],
+  "include_suffixes": [
+    ".go",
+    ".tmpl"
+  ],
+  "exclude_suffixes": [
+    "_test.go"
+  ]
+}

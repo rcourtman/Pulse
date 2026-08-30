@@ -583,6 +583,13 @@ the `white_label` branding entitlement.
    pinned-fingerprint TLS clients keep one fail-closed security floor.
 9. Change operator-facing Resource Privacy/Data Handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, redaction copy, and the route-backed/hidden-sidebar presentation stay governed as a trust surface. The panel must consume the compact backend-owned policy posture through `frontend-modern/src/hooks/useResourceStats.ts` and `ResourceAPI.getStats()`; it must not hydrate and adapt every unified-resource row merely to display aggregate privacy counts.
 10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC may come from a guest-local `pulse-agent` module or explicitly reported guest data; LXC Docker inventory may also be collected by a Proxmox host agent only through explicit server opt-in, with optional VMID allowlisting and a minimal summary command set that avoids `docker inspect`, environment, mount, file, command, and process collection. Local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration, and self-test/update preflight that needs the live runtime token must pass it through a short-lived token file rather than argv. The `--enable-docker` help line is part of that operator privacy control, so it must remain "Enable Docker / Podman Agent module" instead of exposing internal collection-module wording. The `--enable-commands` help line and installer disclosure must identify Pulse command execution as disabled by default and required for Patrol actions or the explicit Proxmox LXC Docker inventory path, not as implicit guest access.
+    Helper-backed update recovery is part of the same local executable trust
+    boundary. On startup, a pending update handoff must be compared with the
+    SHA-256 identity of `/proc/self/exe`: the candidate identity may proceed
+    toward accepted-report commit, the rollback identity may only acknowledge
+    the helper's idempotent rolled-back state and clear the stale handoff, and
+    an unrelated executable identity must leave the handoff intact and fail
+    closed without mutation.
     Node-local LXC filesystem capacity is a distinct automatic host telemetry
     boundary, not inside-guest command authority. A PVE Unified Agent may use
     bounded `pct list` plus `pct df` only for guests reported running and may

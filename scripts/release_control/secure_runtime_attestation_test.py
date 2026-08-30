@@ -46,8 +46,10 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
                 "scripts/installtests/secure_runtime_systemd_lab_test.go",
                 "scripts/release_control/secure_runtime_attestation.py",
                 SOURCE_MANIFEST_PATH,
+                "scripts/release_ldflags.sh",
+                "scripts/release_update_key.go",
             ],
-            "recursive_roots": ["boundary"],
+            "recursive_roots": ["boundary", "internal/updatesignature"],
             "include_suffixes": [".go"],
             "exclude_suffixes": ["_test.go"],
         }
@@ -57,7 +59,10 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
             "scripts/installtests/secure_runtime_systemd_lab_test.go": b"fixture harness\n",
             "scripts/release_control/secure_runtime_attestation.py": Path(__file__).with_name("secure_runtime_attestation.py").read_bytes(),
             SOURCE_MANIFEST_PATH: manifest_raw,
+            "scripts/release_ldflags.sh": b"#!/bin/sh\n",
+            "scripts/release_update_key.go": b"package main\n",
             "boundary/runtime.go": b"package boundary\n",
+            "internal/updatesignature/signature.go": b"package updatesignature\n",
         }
         self.source_hashes = {}
         for relative, value in sorted(source_values.items()):
@@ -102,6 +107,29 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
             event_id = f"event-{event_sequence:04d}"
             claims = sorted(SCENARIO_REQUIRED_CLAIMS[name])
             observations = dict(SCENARIO_REQUIRED_OBSERVATIONS[name])
+            if name == "helper_update_authoritative_commit":
+                observations.update(
+                    {
+                        "candidate_sha256": artifact_hashes["collector_v3"],
+                        "prior_sha256": artifact_hashes["collector_v2"],
+                        "target_sha256": artifact_hashes["collector_v3"],
+                        "last_known_good_sha256": artifact_hashes["collector_v2"],
+                        "activator_pid": 4321,
+                        "committer_pid": 4321,
+                    }
+                )
+            elif name in (
+                "helper_update_watchdog_rollback",
+                "helper_update_interrupted_recovery",
+            ):
+                observations.update(
+                    {
+                        "candidate_sha256": artifact_hashes["collector_v4"],
+                        "prior_sha256": artifact_hashes["collector_v3"],
+                        "target_sha256": artifact_hashes["collector_v3"],
+                        "last_known_good_sha256": artifact_hashes["collector_v4"],
+                    }
+                )
             scenarios.append(
                 {
                     "sequence": index,
@@ -139,10 +167,10 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
         self.receipt.write_text(
             json.dumps(
                 {
-                    "schema_version": 4,
-                    "record_path": "records/receipt.json",
+                    "schema_version": 5,
+                    "record_path": "records/secure-runtime-receipt-v5.json",
                     "started_at": started_at,
-                    "completed_at": "2026-08-30T10:00:13+00:00",
+                    "completed_at": "2026-08-30T10:00:16+00:00",
                     "source_manifest": {
                         "schema_version": SOURCE_MANIFEST_SCHEMA_VERSION,
                         "manifest_id": SOURCE_MANIFEST_ID,
@@ -153,7 +181,12 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
                     },
                     "source_hashes": self.source_hashes,
                     "artifact_hashes": artifact_hashes,
-                    "artifact_versions": {"collector_v1": "1.0.0", "collector_v2": "1.1.0"},
+                    "artifact_versions": {
+                        "collector_v1": "1.0.0",
+                        "collector_v2": "1.1.0",
+                        "collector_v3": "1.2.0",
+                        "collector_v4": "1.3.0",
+                    },
                     "disposable_vm_guard_sha256": DISPOSABLE_VM_GUARD_SHA256,
                     "os_release": 'PRETTY_NAME="Fixture Linux"',
                     "kernel": "Linux fixture",
@@ -161,7 +194,7 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
                     "architecture": "arm64",
                     "transcript": {
                         "format": "jsonl-v1",
-                        "record_path": "records/transcript.jsonl",
+                        "record_path": "records/secure-runtime-transcript-v5.jsonl",
                         "sha256": sha256_bytes(transcript_raw),
                         "event_count": len(transcript_events),
                     },
@@ -171,7 +204,7 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
                     "action_receipt_kind": "pulse.host_storage_cleanup_result",
                     "report_count": 3,
                     "first_report_at": "2026-08-30T10:00:01+00:00",
-                    "last_report_at": "2026-08-30T10:00:12+00:00",
+                    "last_report_at": "2026-08-30T10:00:15+00:00",
                     "scenarios": scenarios,
                 },
                 indent=2,
@@ -208,7 +241,7 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
             "commit": self.commit,
             "main_ref": "origin/main",
             "receipt_path": self.receipt,
-            "receipt_record_path": "records/receipt.json",
+            "receipt_record_path": "records/secure-runtime-receipt-v5.json",
             "transcript_path": self.transcript,
             "artifacts": self.artifacts,
             "elapsed_seconds": 113.43,
@@ -222,9 +255,10 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
         self.assertEqual(result["qualified_commit"], self.commit)
         self.assertTrue(result["source_hashes_match_commit"])
         self.assertTrue(result["artifact_hashes_match_receipt"])
-        self.assertEqual(result["scenario_count"], 12)
+        self.assertEqual(result["schema_version"], 5)
+        self.assertEqual(result["scenario_count"], 15)
         self.assertTrue(result["receipt"]["path_bound_inside_receipt"])
-        self.assertEqual(result["transcript"]["event_count"], 13)
+        self.assertEqual(result["transcript"]["event_count"], 16)
         self.assertEqual(result["source_manifest"]["manifest_id"], SOURCE_MANIFEST_ID)
         self.assertEqual(len(result["attestation_tool_sha256"]), 64)
 
@@ -270,6 +304,13 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
     def test_rejects_source_set_that_omits_manifest_expansion(self) -> None:
         receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
         del receipt["source_hashes"]["boundary/runtime.go"]
+        self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        with self.assertRaisesRegex(AttestationError, "exactly match the governed boundary manifest"):
+            self.attest()
+
+    def test_rejects_source_set_that_omits_update_signature_boundary(self) -> None:
+        receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
+        del receipt["source_hashes"]["internal/updatesignature/signature.go"]
         self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
         with self.assertRaisesRegex(AttestationError, "exactly match the governed boundary manifest"):
             self.attest()
@@ -338,18 +379,73 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
         with self.assertRaisesRegex(AttestationError, "required typed observations"):
             self.attest()
 
+    def test_rejects_helper_update_without_accepted_report(self) -> None:
+        receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
+        scenario = next(
+            item
+            for item in receipt["scenarios"]
+            if item["name"] == "helper_update_authoritative_commit"
+        )
+        scenario["evidence"]["observations"]["accepted_primary_report"] = False
+        self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        with self.assertRaisesRegex(AttestationError, "required typed observations"):
+            self.attest()
+
+    def test_rejects_malformed_helper_update_digest(self) -> None:
+        self.rewrite_scenario_observations(
+            "helper_update_authoritative_commit",
+            lambda observations: observations.__setitem__("candidate_sha256", "not-a-digest"),
+        )
+        with self.assertRaisesRegex(AttestationError, "not a SHA-256 digest"):
+            self.attest()
+
+    def test_rejects_helper_update_commit_from_different_pid(self) -> None:
+        self.rewrite_scenario_observations(
+            "helper_update_authoritative_commit",
+            lambda observations: observations.__setitem__("committer_pid", 4322),
+        )
+        with self.assertRaisesRegex(AttestationError, "activated collector PID"):
+            self.attest()
+
+    def test_rejects_helper_update_commit_with_wrong_target_identity(self) -> None:
+        self.rewrite_scenario_observations(
+            "helper_update_authoritative_commit",
+            lambda observations: observations.__setitem__("target_sha256", "2" * 64),
+        )
+        with self.assertRaisesRegex(AttestationError, "target/LKG identities are inconsistent"):
+            self.attest()
+
+    def test_rejects_helper_update_identity_not_bound_to_artifact(self) -> None:
+        self.rewrite_scenario_observations(
+            "helper_update_authoritative_commit",
+            lambda observations: (
+                observations.__setitem__("prior_sha256", "f" * 64),
+                observations.__setitem__("last_known_good_sha256", "f" * 64),
+            ),
+        )
+        with self.assertRaisesRegex(AttestationError, "not bound to the attested artifacts"):
+            self.attest()
+
+    def test_rejects_watchdog_rollback_with_wrong_lkg_identity(self) -> None:
+        self.rewrite_scenario_observations(
+            "helper_update_watchdog_rollback",
+            lambda observations: observations.__setitem__("last_known_good_sha256", "2" * 64),
+        )
+        with self.assertRaisesRegex(AttestationError, "restoration of the committed collector"):
+            self.attest()
+
     def test_rejects_legacy_receipt_schema(self) -> None:
         receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
-        receipt["schema_version"] = 3
+        receipt["schema_version"] = 4
         self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
-        with self.assertRaisesRegex(AttestationError, "schema_version 4"):
+        with self.assertRaisesRegex(AttestationError, "schema_version 5"):
             self.attest()
 
     def test_rejects_missing_scenario(self) -> None:
         receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
         receipt["scenarios"].pop()
         self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
-        with self.assertRaisesRegex(AttestationError, "canonical 12-scenario"):
+        with self.assertRaisesRegex(AttestationError, "canonical 15-scenario"):
             self.attest()
 
     def test_rejects_mismatched_release_candidate_ref(self) -> None:
@@ -394,6 +490,32 @@ class SecureRuntimeAttestationTest(unittest.TestCase):
 
     def receipt_dict(self):
         return json.loads(self.receipt.read_text(encoding="utf-8"))
+
+    def rewrite_scenario_observations(self, scenario_name, mutate) -> None:
+        receipt = self.receipt_dict()
+        scenario = next(
+            item for item in receipt["scenarios"] if item["name"] == scenario_name
+        )
+        observations = scenario["evidence"]["observations"]
+        mutate(observations)
+        events = [
+            json.loads(line)
+            for line in self.transcript.read_text(encoding="utf-8").splitlines()
+        ]
+        event = next(
+            item
+            for item in events
+            if item.get("kind") == "scenario_result"
+            and item.get("scenario") == scenario_name
+        )
+        event["observations"] = observations
+        transcript_raw = b"".join(
+            (json.dumps(item, separators=(",", ":")) + "\n").encode()
+            for item in events
+        )
+        self.transcript.write_bytes(transcript_raw)
+        receipt["transcript"]["sha256"] = sha256_bytes(transcript_raw)
+        self.receipt.write_text(json.dumps(receipt), encoding="utf-8")
 
 
 if __name__ == "__main__":

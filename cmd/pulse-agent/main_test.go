@@ -1922,7 +1922,7 @@ func TestPendingPrivilegedUpdateCommitsOnlyAfterReadinessAndAcceptedReport(t *te
 	var ready atomic.Bool
 	result := make(chan error, 1)
 	go func() {
-		result <- supervisePendingPrivilegedUpdate(context.Background(), stub, pending, stateDir, ready.Load, reportAccepted, time.Millisecond, nil)
+		result <- supervisePendingPrivilegedUpdate(context.Background(), stub, pending, stateDir, pending.Activation.ActiveSHA256, ready.Load, reportAccepted, time.Millisecond, nil)
 	}()
 	select {
 	case <-stub.commitCalls:
@@ -1951,6 +1951,76 @@ func TestPendingPrivilegedUpdateCommitsOnlyAfterReadinessAndAcceptedReport(t *te
 	}
 }
 
+func TestPendingPrivilegedUpdateRecognizesDurableHelperRollbackAndClearsHandoff(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := internalSecurityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pending := testPendingUpdate(t, stateDir)
+	stub := &pendingUpdateSupervisorStub{
+		rollbackResult: agenthelper.UpdateResult{
+			Action:         "rolled_back",
+			ActivationID:   pending.Activation.ActivationID,
+			ActiveSHA256:   pending.Activation.RollbackSHA256,
+			RollbackSHA256: pending.Activation.ActiveSHA256,
+		},
+		commitCalls:   make(chan agenthelper.UpdateResult, 1),
+		rollbackCalls: make(chan agenthelper.UpdateResult, 1),
+	}
+	err := supervisePendingPrivilegedUpdate(
+		context.Background(), stub, pending, stateDir, pending.Activation.RollbackSHA256,
+		func() bool { return false }, make(chan struct{}), time.Millisecond, nil,
+	)
+	if err != nil {
+		t.Fatalf("recovered rollback supervisor error = %v", err)
+	}
+	select {
+	case activation := <-stub.rollbackCalls:
+		if activation != pending.Activation {
+			t.Fatalf("rollback activation = %#v", activation)
+		}
+	default:
+		t.Fatal("recovered rollback was not acknowledged through the helper")
+	}
+	select {
+	case <-stub.commitCalls:
+		t.Fatal("recovered rollback attempted to commit the superseded candidate")
+	default:
+	}
+	if loaded, loadErr := agentupdate.LoadPendingPrivilegedUpdate(stateDir); loadErr != nil || loaded != nil {
+		t.Fatalf("recovered rollback handoff = %#v, %v", loaded, loadErr)
+	}
+}
+
+func TestPendingPrivilegedUpdateRejectsUnrelatedRunningExecutable(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := internalSecurityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pending := testPendingUpdate(t, stateDir)
+	stub := &pendingUpdateSupervisorStub{
+		commitCalls:   make(chan agenthelper.UpdateResult, 1),
+		rollbackCalls: make(chan agenthelper.UpdateResult, 1),
+	}
+	err := supervisePendingPrivilegedUpdate(
+		context.Background(), stub, pending, stateDir, strings.Repeat("c", 64),
+		func() bool { return true }, make(chan struct{}), time.Millisecond, nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "does not match the pending update or its rollback identity") {
+		t.Fatalf("unrelated executable supervisor error = %v", err)
+	}
+	select {
+	case <-stub.commitCalls:
+		t.Fatal("unrelated executable attempted a commit")
+	case <-stub.rollbackCalls:
+		t.Fatal("unrelated executable attempted a rollback")
+	default:
+	}
+	if loaded, loadErr := agentupdate.LoadPendingPrivilegedUpdate(stateDir); loadErr != nil || loaded == nil || loaded.Activation != pending.Activation {
+		t.Fatalf("unrelated executable handoff = %#v, %v", loaded, loadErr)
+	}
+}
+
 func TestPendingPrivilegedUpdateCancellationRollsBackAndClearsHandoff(t *testing.T) {
 	stateDir := t.TempDir()
 	if err := internalSecurityutil.HardenPrivatePath(stateDir, 0o700); err != nil {
@@ -1969,7 +2039,7 @@ func TestPendingPrivilegedUpdateCancellationRollsBackAndClearsHandoff(t *testing
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := supervisePendingPrivilegedUpdate(ctx, stub, pending, stateDir, func() bool { return false }, make(chan struct{}), time.Millisecond, nil)
+	err := supervisePendingPrivilegedUpdate(ctx, stub, pending, stateDir, pending.Activation.ActiveSHA256, func() bool { return false }, make(chan struct{}), time.Millisecond, nil)
 	if err == nil || !strings.Contains(err.Error(), "pending update rolled back") {
 		t.Fatalf("supervisor error = %v", err)
 	}
@@ -1999,7 +2069,7 @@ func TestPendingPrivilegedUpdateRollbackFailurePreservesHandoff(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := supervisePendingPrivilegedUpdate(ctx, stub, pending, stateDir, func() bool { return false }, make(chan struct{}), time.Millisecond, nil)
+	err := supervisePendingPrivilegedUpdate(ctx, stub, pending, stateDir, pending.Activation.ActiveSHA256, func() bool { return false }, make(chan struct{}), time.Millisecond, nil)
 	if err == nil || !strings.Contains(err.Error(), "typed helper rollback failed") {
 		t.Fatalf("supervisor error = %v", err)
 	}

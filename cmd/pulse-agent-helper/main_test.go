@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +18,122 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 )
+
+type committerValidationProvider struct {
+	digest     string
+	validation chan error
+}
+
+func (p *committerValidationProvider) Stage(context.Context, agenthelper.UpdateStageRequest) (agenthelper.UpdateStageResult, error) {
+	return agenthelper.UpdateStageResult{}, errors.New("unexpected stage operation")
+}
+
+func (p *committerValidationProvider) Activate(context.Context, agenthelper.UpdateActivateRequest) (agenthelper.UpdateResult, error) {
+	return agenthelper.UpdateResult{}, errors.New("unexpected activate operation")
+}
+
+func (p *committerValidationProvider) Commit(ctx context.Context, request agenthelper.UpdateCommitRequest) (agenthelper.UpdateResult, error) {
+	err := validatePulseAgentCommitter(ctx, p.digest)
+	p.validation <- err
+	if err != nil {
+		return agenthelper.UpdateResult{}, &agenthelper.ProviderError{
+			Code:    agenthelper.ErrorStateConflict,
+			Message: err.Error(),
+		}
+	}
+	return agenthelper.UpdateResult{
+		Action:       "committed",
+		ActivationID: request.ActivationID,
+		ActiveSHA256: request.CurrentSHA256,
+	}, nil
+}
+
+func (p *committerValidationProvider) Rollback(context.Context, agenthelper.UpdateRollbackRequest) (agenthelper.UpdateResult, error) {
+	return agenthelper.UpdateResult{}, errors.New("unexpected rollback operation")
+}
+
+func exerciseCommitterValidation(t *testing.T, digest string) (error, error) {
+	t.Helper()
+
+	socketPath := filepath.Join(t.TempDir(), "helper.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen on helper socket: %v", err)
+	}
+	provider := &committerValidationProvider{
+		digest:     digest,
+		validation: make(chan error, 1),
+	}
+	server, err := agenthelper.NewServer(agenthelper.ServerConfig{
+		AllowedUID:          uint32(os.Getuid()),
+		PeerResolver:        agenthelper.PlatformPeerResolver{},
+		Registry:            agenthelper.NewRegistryWithProviders(nil, nil, agenthelper.Providers{Updates: provider}),
+		MaxOperationTimeout: 30 * time.Second,
+	})
+	if err != nil {
+		_ = listener.Close()
+		t.Fatalf("configure helper server: %v", err)
+	}
+	serverCtx, cancelServer := context.WithCancel(context.Background())
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- server.Serve(serverCtx, listener)
+	}()
+
+	client, err := agenthelper.NewClient(agenthelper.ClientConfig{
+		SocketPath:   socketPath,
+		MaxDeadline:  30 * time.Second,
+		NewRequestID: func() (string, error) { return "committer-validation", nil },
+	})
+	if err != nil {
+		cancelServer()
+		_ = listener.Close()
+		<-serverDone
+		t.Fatalf("configure helper client: %v", err)
+	}
+	var result agenthelper.UpdateResult
+	_, callErr := client.Call(t.Context(), agenthelper.OperationAgentUpdateCommit, agenthelper.OperationVersion1, 30*time.Second, agenthelper.UpdateCommitRequest{
+		ActivationID:  "committer-validation:0123456789abcdef",
+		CurrentSHA256: digest,
+	}, &result)
+	validationErr := <-provider.validation
+
+	cancelServer()
+	_ = listener.Close()
+	if err := <-serverDone; err != nil {
+		t.Fatalf("serve helper protocol: %v", err)
+	}
+	return callErr, validationErr
+}
+
+func TestValidatePulseAgentCommitterAcceptsCurrentExecutableDigest(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("/proc executable identity is Linux-specific")
+	}
+	data, err := os.ReadFile("/proc/self/exe")
+	if err != nil {
+		t.Fatalf("read current executable: %v", err)
+	}
+	digest := sha256.Sum256(data)
+	callErr, validationErr := exerciseCommitterValidation(t, fmt.Sprintf("%x", digest))
+	if validationErr != nil || callErr != nil {
+		t.Fatalf("current executable was rejected: validation=%v call=%v", validationErr, callErr)
+	}
+}
+
+func TestValidatePulseAgentCommitterRejectsIncorrectExecutableDigest(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("/proc executable identity is Linux-specific")
+	}
+	callErr, validationErr := exerciseCommitterValidation(t, strings.Repeat("0", sha256.Size*2))
+	if validationErr == nil || !strings.Contains(validationErr.Error(), "not executing the pending agent binary") {
+		t.Fatalf("incorrect executable digest validation error = %v", validationErr)
+	}
+	var remoteErr *agenthelper.RemoteError
+	if !errors.As(callErr, &remoteErr) || remoteErr.Code != agenthelper.ErrorStateConflict {
+		t.Fatalf("incorrect executable digest helper error = %v", callErr)
+	}
+}
 
 func TestInspectPulseAgentVersionRejectsWrongGoCommand(t *testing.T) {
 	executable, err := os.Executable()

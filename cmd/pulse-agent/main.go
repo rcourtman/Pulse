@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"math"
 	"net/http"
@@ -126,11 +129,30 @@ func pendingUpdatePreviousVersion(pending *agentupdate.PendingPrivilegedUpdate) 
 	return pending.PreviousVersion
 }
 
+func currentCollectorExecutableSHA256() (string, error) {
+	file, err := os.Open("/proc/self/exe")
+	if err != nil {
+		return "", fmt.Errorf("open current collector executable: %w", err)
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	const maximumCollectorBytes = 100 * 1024 * 1024
+	written, err := io.Copy(hasher, io.LimitReader(file, maximumCollectorBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("hash current collector executable: %w", err)
+	}
+	if written > maximumCollectorBytes {
+		return "", errors.New("current collector executable exceeds the bounded agent size")
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
 func supervisePendingPrivilegedUpdate(
 	ctx context.Context,
 	update agentupdate.PrivilegedUpdate,
 	pending *agentupdate.PendingPrivilegedUpdate,
 	stateDir string,
+	runningSHA256 string,
 	locallyReady func() bool,
 	reportAccepted <-chan struct{},
 	pollInterval time.Duration,
@@ -157,6 +179,28 @@ func supervisePendingPrivilegedUpdate(
 			return errors.Join(fmt.Errorf("%w; pending update rolled back", reason), fmt.Errorf("clear pending update handoff: %w", clearErr))
 		}
 		return fmt.Errorf("%w; pending update rolled back", reason)
+	}
+	runningSHA256 = strings.TrimSpace(runningSHA256)
+	switch {
+	case strings.EqualFold(runningSHA256, activation.RollbackSHA256):
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		result, err := update.Rollback(rollbackCtx, activation)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("confirm recovered helper update rollback: %w", err)
+		}
+		if result.Action != "rolled_back" || !strings.EqualFold(result.ActiveSHA256, activation.RollbackSHA256) {
+			return errors.New("typed helper returned an invalid recovered rollback result")
+		}
+		if err := agentupdate.ClearPendingPrivilegedUpdate(stateDir); err != nil {
+			return fmt.Errorf("clear recovered helper update handoff: %w", err)
+		}
+		if logger != nil {
+			logger.Info().Str("activation_id", activation.ActivationID).Msg("Cleared helper update handoff after durable rollback recovery")
+		}
+		return nil
+	case !strings.EqualFold(runningSHA256, activation.ActiveSHA256):
+		return errors.New("running collector executable does not match the pending update or its rollback identity")
 	}
 
 	deadlineDelay := time.Until(activation.RollbackDeadline)
@@ -500,6 +544,13 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	if pendingUpdate != nil && privilegedUpdate == nil {
 		return errors.New("pending helper update cannot be verified without the typed privilege helper")
 	}
+	pendingExecutableSHA256 := ""
+	if pendingUpdate != nil {
+		pendingExecutableSHA256, err = currentCollectorExecutableSHA256()
+		if err != nil {
+			return fmt.Errorf("bind pending helper update to the running collector: %w", err)
+		}
+	}
 	pendingReportAccepted := make(chan struct{})
 	var pendingReportOnce sync.Once
 
@@ -713,6 +764,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				privilegedUpdate,
 				pendingUpdate,
 				cfg.StateDir,
+				pendingExecutableSHA256,
 				ready.Load,
 				pendingReportAccepted,
 				250*time.Millisecond,

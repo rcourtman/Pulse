@@ -22,11 +22,11 @@ RFC3339_RE = re.compile(
     r"^(?P<whole>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"
     r"(?:\.(?P<fraction>\d+))?(?P<offset>Z|[+-]\d{2}:\d{2})$"
 )
-RECEIPT_SCHEMA_VERSION = 4
-ATTESTATION_SCHEMA_VERSION = 4
-SOURCE_MANIFEST_PATH = "scripts/release_control/secure_runtime_source_manifest_v4.json"
+RECEIPT_SCHEMA_VERSION = 5
+ATTESTATION_SCHEMA_VERSION = 5
+SOURCE_MANIFEST_PATH = "scripts/release_control/secure_runtime_source_manifest_v5.json"
 SOURCE_MANIFEST_SCHEMA_VERSION = 1
-SOURCE_MANIFEST_ID = "secure-runtime-linux-v4"
+SOURCE_MANIFEST_ID = "secure-runtime-linux-v5"
 REQUIRED_SCENARIOS = (
     "legacy_root_command_capable_install",
     "read_only_inspect",
@@ -36,6 +36,9 @@ REQUIRED_SCENARIOS = (
     "automatic_failure_rollback",
     "ordinary_update_non_migration",
     "final_safe_profile_apply",
+    "helper_update_authoritative_commit",
+    "helper_update_watchdog_rollback",
+    "helper_update_interrupted_recovery",
     "separate_action_runner_install",
     "typed_action_receipt",
     "action_runner_credential_rotation",
@@ -55,6 +58,22 @@ SCENARIO_REQUIRED_CLAIMS = {
     "automatic_failure_rollback": {"failed_activation_restored_prior_runtime"},
     "ordinary_update_non_migration": {"ordinary_update_preserved_selected_profile"},
     "final_safe_profile_apply": {"collector_reporting_continued_after_migration"},
+    "helper_update_authoritative_commit": {
+        "signed_helper_activation_observed",
+        "activated_process_digest_bound",
+        "accepted_primary_report_gated_commit",
+        "update_handoff_cleared_after_commit",
+    },
+    "helper_update_watchdog_rollback": {
+        "helper_watchdog_rollback_observed",
+        "prior_active_binary_restored_from_rollback_slot",
+        "collector_reporting_resumed_after_watchdog_rollback",
+    },
+    "helper_update_interrupted_recovery": {
+        "helper_restart_recovered_pending_activation",
+        "prior_active_binary_restored_from_rollback_slot",
+        "collector_reporting_resumed_after_helper_recovery",
+    },
     "separate_action_runner_install": {"action_runner_registered_separately"},
     "typed_action_receipt": {
         "typed_mutation_verified",
@@ -78,6 +97,23 @@ SCENARIO_REQUIRED_OBSERVATIONS = {
     "automatic_failure_rollback": {"activation_committed": False, "restored_profile": "root-monitoring"},
     "ordinary_update_non_migration": {"collector_v2_installed": True, "selected_profile": "root-monitoring"},
     "final_safe_profile_apply": {"collector_service_user": "pulse-agent", "continuity_report_observed": True},
+    "helper_update_authoritative_commit": {
+        "signature_verified": True,
+        "accepted_primary_report": True,
+        "update_action": "committed",
+        "handoff_cleared": True,
+        "reporting_continuity": True,
+    },
+    "helper_update_watchdog_rollback": {
+        "update_action": "rolled_back",
+        "rollback_trigger": "watchdog",
+        "reporting_continuity": True,
+    },
+    "helper_update_interrupted_recovery": {
+        "update_action": "rolled_back",
+        "rollback_trigger": "helper-restart",
+        "reporting_continuity": True,
+    },
     "separate_action_runner_install": {
         "runner_service_user": "root",
         "collector_service_user": "pulse-agent",
@@ -98,15 +134,30 @@ SCENARIO_REQUIRED_OBSERVATIONS = {
     },
     "action_runner_self_revoke": {"revocation_count": 1, "collector_continuity": True},
 }
+HELPER_UPDATE_SCENARIOS = (
+    "helper_update_authoritative_commit",
+    "helper_update_watchdog_rollback",
+    "helper_update_interrupted_recovery",
+)
+HELPER_UPDATE_DIGEST_OBSERVATIONS = (
+    "candidate_sha256",
+    "prior_sha256",
+    "target_sha256",
+    "last_known_good_sha256",
+)
 ARTIFACT_ARGUMENTS = {
     "collector_v1": "collector_v1",
     "collector_v2": "collector_v2",
+    "collector_v3": "collector_v3",
+    "collector_v4": "collector_v4",
     "helper": "helper",
     "runner": "runner",
 }
 EXPECTED_ARTIFACT_PACKAGES = {
     "collector_v1": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
     "collector_v2": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
+    "collector_v3": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
+    "collector_v4": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent",
     "helper": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent-helper",
     "runner": "github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent-runner",
 }
@@ -440,7 +491,74 @@ def verify_scenarios(receipt: dict[str, Any], transcript_events: list[dict[str, 
             raise AttestationError(f"scenario {scenario['name']} completion is not bound to its transcript time")
         names.append(scenario["name"])
     if tuple(names) != REQUIRED_SCENARIOS:
-        raise AttestationError("receipt scenario set or order does not match the canonical 12-scenario qualification")
+        raise AttestationError(
+            f"receipt scenario set or order does not match the canonical {len(REQUIRED_SCENARIOS)}-scenario qualification"
+        )
+    verify_helper_update_observations(receipt, scenarios)
+
+
+def verify_helper_update_observations(receipt: dict[str, Any], scenarios: list[dict[str, Any]]) -> None:
+    by_name = {scenario["name"]: scenario for scenario in scenarios}
+    observations: dict[str, dict[str, Any]] = {}
+    for scenario_name in HELPER_UPDATE_SCENARIOS:
+        scenario_observations = by_name[scenario_name]["evidence"]["observations"]
+        for key in HELPER_UPDATE_DIGEST_OBSERVATIONS:
+            value = scenario_observations.get(key)
+            if not isinstance(value, str) or not SHA256_RE.fullmatch(value):
+                raise AttestationError(
+                    f"scenario {scenario_name} observation {key} is not a SHA-256 digest"
+                )
+        if scenario_observations["candidate_sha256"] == scenario_observations["prior_sha256"]:
+            raise AttestationError(f"scenario {scenario_name} does not prove a changed executable identity")
+        observations[scenario_name] = scenario_observations
+
+    committed = observations["helper_update_authoritative_commit"]
+    for key in ("activator_pid", "committer_pid"):
+        value = committed.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise AttestationError(
+                f"scenario helper_update_authoritative_commit observation {key} is not a positive PID"
+            )
+    if committed["activator_pid"] != committed["committer_pid"]:
+        raise AttestationError("helper update commit was not issued by the activated collector PID")
+    if (
+        committed["target_sha256"] != committed["candidate_sha256"]
+        or committed["last_known_good_sha256"] != committed["prior_sha256"]
+    ):
+        raise AttestationError("authoritative helper update target/LKG identities are inconsistent")
+
+    committed_target = committed["target_sha256"]
+    for scenario_name in (
+        "helper_update_watchdog_rollback",
+        "helper_update_interrupted_recovery",
+    ):
+        rolled_back = observations[scenario_name]
+        if (
+            rolled_back["prior_sha256"] != committed_target
+            or rolled_back["target_sha256"] != rolled_back["prior_sha256"]
+            or rolled_back["last_known_good_sha256"] != rolled_back["candidate_sha256"]
+        ):
+            raise AttestationError(
+                f"scenario {scenario_name} target/LKG identities do not prove restoration of the committed collector"
+            )
+
+    artifact_hashes = receipt.get("artifact_hashes")
+    if not isinstance(artifact_hashes, dict):
+        raise AttestationError("receipt artifact_hashes are unavailable for helper update binding")
+    expected_transitions = {
+        "helper_update_authoritative_commit": ("collector_v2", "collector_v3"),
+        "helper_update_watchdog_rollback": ("collector_v3", "collector_v4"),
+        "helper_update_interrupted_recovery": ("collector_v3", "collector_v4"),
+    }
+    for scenario_name, (prior_artifact, candidate_artifact) in expected_transitions.items():
+        scenario_observations = observations[scenario_name]
+        if (
+            scenario_observations["prior_sha256"] != artifact_hashes.get(prior_artifact)
+            or scenario_observations["candidate_sha256"] != artifact_hashes.get(candidate_artifact)
+        ):
+            raise AttestationError(
+                f"scenario {scenario_name} executable identities are not bound to the attested artifacts"
+            )
 
 
 def verify_runtime_claims(receipt: dict[str, Any]) -> None:
@@ -521,7 +639,7 @@ def verify_source_hashes(
 def verify_artifacts(receipt: dict[str, Any], artifacts: dict[str, Path]) -> dict[str, str]:
     receipt_hashes = receipt.get("artifact_hashes")
     if not isinstance(receipt_hashes, dict) or set(receipt_hashes) != set(ARTIFACT_ARGUMENTS):
-        raise AttestationError("receipt artifact_hashes must contain the canonical four artifacts")
+        raise AttestationError("receipt artifact_hashes must contain the canonical six artifacts")
     verified: dict[str, str] = {}
     for name in ARTIFACT_ARGUMENTS:
         expected = receipt_hashes[name]
@@ -538,11 +656,12 @@ def verify_artifact_build_identity(
     receipt: dict[str, Any], artifacts: dict[str, Path], qualified_commit: str
 ) -> dict[str, dict[str, str]]:
     versions = receipt.get("artifact_versions")
-    if not isinstance(versions, dict) or set(versions) != {"collector_v1", "collector_v2"}:
-        raise AttestationError("receipt artifact_versions must identify both collector artifacts")
+    collector_names = {"collector_v1", "collector_v2", "collector_v3", "collector_v4"}
+    if not isinstance(versions, dict) or set(versions) != collector_names:
+        raise AttestationError("receipt artifact_versions must identify all four collector artifacts")
     if any(not isinstance(value, str) or not value.strip() for value in versions.values()):
         raise AttestationError("receipt collector artifact version is invalid")
-    if versions["collector_v1"] == versions["collector_v2"]:
+    if len(set(versions.values())) != len(collector_names):
         raise AttestationError("collector qualification artifacts must have distinct versions")
 
     verified: dict[str, dict[str, str]] = {}
@@ -698,6 +817,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--transcript", type=Path, required=True)
     parser.add_argument("--collector-v1", type=Path, required=True)
     parser.add_argument("--collector-v2", type=Path, required=True)
+    parser.add_argument("--collector-v3", type=Path, required=True)
+    parser.add_argument("--collector-v4", type=Path, required=True)
     parser.add_argument("--helper", type=Path, required=True)
     parser.add_argument("--runner", type=Path, required=True)
     parser.add_argument("--elapsed-seconds", type=float, required=True)

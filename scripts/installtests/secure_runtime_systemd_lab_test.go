@@ -8,12 +8,23 @@ package installtests
 // dedicated Colima profile before opting in:
 //
 //   mkdir -p .lab-artifacts
-//   v1_ldflags="$(./scripts/release_ldflags.sh agent --version 6.2.0-lab.1)"
-//   v2_ldflags="$(./scripts/release_ldflags.sh agent --version 6.2.0-lab.2)"
+//   update_seed="$(openssl rand -base64 32)"
+//   update_public_key="$(go run ./scripts/release_update_key.go public-key --private-key "$update_seed")"
+//   v1_ldflags="$(./scripts/release_ldflags.sh agent --version 6.2.0-lab.1 --update-public-keys "$update_public_key")"
+//   v2_ldflags="$(./scripts/release_ldflags.sh agent --version 6.2.0-lab.2 --update-public-keys "$update_public_key")"
+//   v3_ldflags="$(./scripts/release_ldflags.sh agent --version 6.2.0-lab.3 --update-public-keys "$update_public_key")"
+//   v4_ldflags="$(./scripts/release_ldflags.sh agent --version 6.2.0-lab.4 --update-public-keys "$update_public_key")"
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$v1_ldflags" -o .lab-artifacts/pulse-agent-v1 ./cmd/pulse-agent
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$v2_ldflags" -o .lab-artifacts/pulse-agent-v2 ./cmd/pulse-agent
-//   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o .lab-artifacts/pulse-agent-helper ./cmd/pulse-agent-helper
+//   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$v3_ldflags" -o .lab-artifacts/pulse-agent-v3 ./cmd/pulse-agent
+//   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$v4_ldflags" -o .lab-artifacts/pulse-agent-v4 ./cmd/pulse-agent
+//   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$v4_ldflags" -o .lab-artifacts/pulse-agent-helper ./cmd/pulse-agent-helper
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o .lab-artifacts/pulse-agent-runner ./cmd/pulse-agent-runner
+//   go run ./scripts/release_update_key.go sign --private-key "$update_seed" --file .lab-artifacts/pulse-agent-v1 > .lab-artifacts/pulse-agent-v1.sig
+//   go run ./scripts/release_update_key.go sign --private-key "$update_seed" --file .lab-artifacts/pulse-agent-v2 > .lab-artifacts/pulse-agent-v2.sig
+//   go run ./scripts/release_update_key.go sign --private-key "$update_seed" --file .lab-artifacts/pulse-agent-v3 > .lab-artifacts/pulse-agent-v3.sig
+//   go run ./scripts/release_update_key.go sign --private-key "$update_seed" --file .lab-artifacts/pulse-agent-v4 > .lab-artifacts/pulse-agent-v4.sig
+//   unset update_seed
 //   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go test -c -o .lab-artifacts/installtests-linux-arm64.test ./scripts/installtests
 //   colima start pulse-agent-qual --activate=false --mount "$PWD:w"
 //   colima ssh -p pulse-agent-qual -- sudo sh -c \
@@ -22,13 +33,19 @@ package installtests
 //   colima ssh -p pulse-agent-qual -- sudo env \
 //     PULSE_SECURE_RUNTIME_SYSTEMD_LAB=1 \
 //     PULSE_SECURE_RUNTIME_COLLECTOR_V1="$repo/.lab-artifacts/pulse-agent-v1" \
+//     PULSE_SECURE_RUNTIME_COLLECTOR_V1_SIGNATURE="$repo/.lab-artifacts/pulse-agent-v1.sig" \
 //     PULSE_SECURE_RUNTIME_COLLECTOR_V2="$repo/.lab-artifacts/pulse-agent-v2" \
+//     PULSE_SECURE_RUNTIME_COLLECTOR_V2_SIGNATURE="$repo/.lab-artifacts/pulse-agent-v2.sig" \
+//     PULSE_SECURE_RUNTIME_COLLECTOR_V3="$repo/.lab-artifacts/pulse-agent-v3" \
+//     PULSE_SECURE_RUNTIME_COLLECTOR_V3_SIGNATURE="$repo/.lab-artifacts/pulse-agent-v3.sig" \
+//     PULSE_SECURE_RUNTIME_COLLECTOR_V4="$repo/.lab-artifacts/pulse-agent-v4" \
+//     PULSE_SECURE_RUNTIME_COLLECTOR_V4_SIGNATURE="$repo/.lab-artifacts/pulse-agent-v4.sig" \
 //     PULSE_SECURE_RUNTIME_HELPER="$repo/.lab-artifacts/pulse-agent-helper" \
 //     PULSE_SECURE_RUNTIME_RUNNER="$repo/.lab-artifacts/pulse-agent-runner" \
 //     PULSE_SECURE_RUNTIME_RECEIPT=/tmp/secure-runtime-receipt.json \
-//     PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4.json \
+//     PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v5.json \
 //     PULSE_SECURE_RUNTIME_TRANSCRIPT=/tmp/secure-runtime-transcript.jsonl \
-//     PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v4.jsonl \
+//     PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v5.jsonl \
 //     sh -c 'cd "$1/scripts/installtests" && exec "$1/.lab-artifacts/installtests-linux-arm64.test" -test.run "^TestSecureRuntimeSystemdLab$" -test.count=1 -test.v' sh "$repo"
 //
 // Use the VM's GOARCH in place of arm64 when qualifying another architecture.
@@ -77,6 +94,9 @@ const (
 	secureRuntimeRunnerSecretV2  = "d7f6f2550788213e0595f276b62b1df290f7e018ba74c03068c4afbe6efd7601"
 	secureRuntimeRunnerBindingV1 = "secure-runtime-runner-binding-v1"
 	secureRuntimeRunnerBindingV2 = "secure-runtime-runner-binding-v2"
+	secureRuntimeUpdateStatePath = "/var/lib/pulse-agent-helper/update-activation.json"
+	secureRuntimeUpdateHandoff   = "/var/lib/pulse-agent/.pulse-agent-update-pending.json"
+	secureRuntimeUpdateLKGPath   = "/usr/local/bin/pulse-agent.last-known-good"
 )
 
 var secureRuntimeInstalledPaths = []string{
@@ -119,6 +139,22 @@ var secureRuntimeScenarioClaims = map[string][]string{
 	"automatic_failure_rollback":     {"failed_activation_restored_prior_runtime"},
 	"ordinary_update_non_migration":  {"ordinary_update_preserved_selected_profile"},
 	"final_safe_profile_apply":       {"collector_reporting_continued_after_migration"},
+	"helper_update_authoritative_commit": {
+		"signed_helper_activation_observed",
+		"activated_process_digest_bound",
+		"accepted_primary_report_gated_commit",
+		"update_handoff_cleared_after_commit",
+	},
+	"helper_update_watchdog_rollback": {
+		"helper_watchdog_rollback_observed",
+		"prior_active_binary_restored_from_rollback_slot",
+		"collector_reporting_resumed_after_watchdog_rollback",
+	},
+	"helper_update_interrupted_recovery": {
+		"helper_restart_recovered_pending_activation",
+		"prior_active_binary_restored_from_rollback_slot",
+		"collector_reporting_resumed_after_helper_recovery",
+	},
 	"separate_action_runner_install": {"action_runner_registered_separately"},
 	"typed_action_receipt": {
 		"typed_mutation_verified",
@@ -134,6 +170,7 @@ type secureRuntimeLabReport struct {
 	ReceivedAt      time.Time
 	AgentID         string
 	AgentVersion    string
+	UpdatedFrom     string
 	Hostname        string
 	RunningAsRoot   bool
 	ServiceUser     string
@@ -145,10 +182,13 @@ type secureRuntimeLabReport struct {
 type secureRuntimeLabFixture struct {
 	mu                  sync.Mutex
 	collector           []byte
+	collectorSignature  string
 	helper              []byte
 	runner              []byte
 	serverVersion       string
 	reports             []secureRuntimeLabReport
+	reportAttempts      []secureRuntimeLabReport
+	rejectedVersions    map[string]bool
 	lastSeen            time.Time
 	freezeLastSeen      bool
 	authFailures        int
@@ -163,10 +203,11 @@ type secureRuntimeLabFixture struct {
 	authorityReductions int
 }
 
-func newSecureRuntimeLabFixture(collector, helper, runner []byte, version string) *secureRuntimeLabFixture {
+func newSecureRuntimeLabFixture(collector []byte, collectorSignature string, helper, runner []byte, version string) *secureRuntimeLabFixture {
 	fixture := &secureRuntimeLabFixture{
-		collector: collector, helper: helper, runner: runner, serverVersion: version,
-		actionSecret: secureRuntimeRunnerSecretV1, actionBindingID: secureRuntimeRunnerBindingV1, actionPending: true,
+		collector: collector, collectorSignature: collectorSignature, helper: helper, runner: runner, serverVersion: version,
+		rejectedVersions: make(map[string]bool),
+		actionSecret:     secureRuntimeRunnerSecretV1, actionBindingID: secureRuntimeRunnerBindingV1, actionPending: true,
 	}
 	fixture.actionServer = agentexec.NewServerWithAdmissionValidator(fixture.admitActionRunner, fixture.validateActionRunnerSession)
 	return fixture
@@ -225,10 +266,11 @@ func (f *secureRuntimeLabFixture) authorityReductionCount() int {
 	return f.authorityReductions
 }
 
-func (f *secureRuntimeLabFixture) setCollector(artifact []byte) {
+func (f *secureRuntimeLabFixture) setCollector(artifact []byte, signature string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.collector = append([]byte(nil), artifact...)
+	f.collectorSignature = strings.TrimSpace(signature)
 }
 
 func (f *secureRuntimeLabFixture) setServerVersion(version string) {
@@ -243,15 +285,27 @@ func (f *secureRuntimeLabFixture) setFrozen(frozen bool) {
 	f.freezeLastSeen = frozen
 }
 
+func (f *secureRuntimeLabFixture) setVersionReportsAccepted(version string, accepted bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rejectedVersions[strings.TrimSpace(version)] = !accepted
+}
+
 func (f *secureRuntimeLabFixture) snapshot() ([]secureRuntimeLabReport, time.Time, int, []string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]secureRuntimeLabReport(nil), f.reports...), f.lastSeen, f.authFailures, append([]string(nil), f.requestFailures...)
 }
 
+func (f *secureRuntimeLabFixture) attemptSnapshot() []secureRuntimeLabReport {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]secureRuntimeLabReport(nil), f.reportAttempts...)
+}
+
 func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case r.URL.Path == "/api/version":
+	case r.URL.Path == "/api/version" || r.URL.Path == "/api/agent/version":
 		f.mu.Lock()
 		version := f.serverVersion
 		f.mu.Unlock()
@@ -342,16 +396,22 @@ func (f *secureRuntimeLabFixture) serveArtifact(w http.ResponseWriter, r *http.R
 	}
 	f.mu.Lock()
 	artifact := append([]byte(nil), f.collector...)
+	signature := f.collectorSignature
 	switch artifactKind {
 	case "helper":
 		artifact = append([]byte(nil), f.helper...)
+		signature = ""
 	case "runner":
 		artifact = append([]byte(nil), f.runner...)
+		signature = ""
 	}
 	f.mu.Unlock()
 	sum := sha256.Sum256(artifact)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Checksum-Sha256", hex.EncodeToString(sum[:]))
+	if signature != "" {
+		w.Header().Set("X-Signature-Ed25519", signature)
+	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(artifact)))
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(artifact)
@@ -463,6 +523,7 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 		Agent struct {
 			ID              string `json:"id"`
 			Version         string `json:"version"`
+			UpdatedFrom     string `json:"updatedFrom"`
 			Hostname        string `json:"hostname"`
 			CommandsEnabled bool   `json:"commandsEnabled"`
 			Privilege       *struct {
@@ -484,6 +545,7 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 		ReceivedAt:      time.Now().UTC(),
 		AgentID:         strings.TrimSpace(payload.Agent.ID),
 		AgentVersion:    strings.TrimSpace(payload.Agent.Version),
+		UpdatedFrom:     strings.TrimSpace(payload.Agent.UpdatedFrom),
 		Hostname:        strings.TrimSpace(payload.Agent.Hostname),
 		CommandsEnabled: payload.Agent.CommandsEnabled,
 	}
@@ -497,11 +559,18 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 		report.TypedHelper = payload.Agent.Privilege.TypedHelper
 	}
 	f.mu.Lock()
+	f.reportAttempts = append(f.reportAttempts, report)
+	rejected := f.rejectedVersions[report.AgentVersion]
+	serverVersion := f.serverVersion
+	if rejected {
+		f.mu.Unlock()
+		http.Error(w, "report version temporarily rejected by qualification gate", http.StatusServiceUnavailable)
+		return
+	}
 	f.reports = append(f.reports, report)
 	if !f.freezeLastSeen {
 		f.lastSeen = report.ReceivedAt
 	}
-	serverVersion := f.serverVersion
 	f.mu.Unlock()
 	writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{
 		"success":       true,
@@ -842,12 +911,16 @@ func TestSecureRuntimeSourceManifestCoversTransitiveProviders(t *testing.T) {
 	for _, required := range []string{
 		"internal/agenthelper/providers.go",
 		"internal/agenthelper/container_inventory.go",
+		"internal/agenttls/config.go",
 		"internal/hostagent/action_runner_client.go",
 		"internal/hostagent/action_runner_health_persistence_unix.go",
 		"internal/hostagent/package_updates.go",
 		"internal/api/action_runner_credentials.go",
 		"internal/api/router_routes_registration.go",
 		"internal/agentexec/server.go",
+		"internal/securityutil/secure_storage_dir.go",
+		"pkg/auth/scopes.go",
+		"pkg/securityutil/httpurl.go",
 	} {
 		if _, ok := hashes[required]; !ok {
 			t.Fatalf("secure-runtime source manifest omitted transitive boundary source %s", required)
@@ -861,7 +934,7 @@ func TestSecureRuntimeSourceManifestCoversTransitiveProviders(t *testing.T) {
 }
 
 func TestSecureRuntimeFixturePromotesPendingRunner(t *testing.T) {
-	fixture := newSecureRuntimeLabFixture(nil, nil, nil, "fixture")
+	fixture := newSecureRuntimeLabFixture(nil, "", nil, nil, "fixture")
 	defer fixture.actionServer.Shutdown()
 	server := httptest.NewServer(fixture)
 	defer server.Close()
@@ -910,11 +983,19 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	secureRuntimeRequireDisposableHost(t)
 
 	collectorV1 := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V1")
+	collectorV1Signature := secureRuntimeReadSignature(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V1_SIGNATURE")
 	collectorV2 := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V2")
+	collectorV2Signature := secureRuntimeReadSignature(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V2_SIGNATURE")
+	collectorV3 := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V3")
+	collectorV3Signature := secureRuntimeReadSignature(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V3_SIGNATURE")
+	collectorV4 := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V4")
+	collectorV4Signature := secureRuntimeReadSignature(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V4_SIGNATURE")
 	helper := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_HELPER")
 	runner := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_RUNNER")
 	collectorV1Version := secureRuntimeArtifactVersion(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V1")
 	collectorV2Version := secureRuntimeArtifactVersion(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V2")
+	collectorV3Version := secureRuntimeArtifactVersion(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V3")
+	collectorV4Version := secureRuntimeArtifactVersion(t, "PULSE_SECURE_RUNTIME_COLLECTOR_V4")
 	if collectorV1Version == collectorV2Version {
 		t.Fatalf("collector V1 and V2 must have distinct --version output, both reported %q", collectorV1Version)
 	}
@@ -923,7 +1004,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 		t.Fatalf("resolve installer path: %v", err)
 	}
 
-	fixture := newSecureRuntimeLabFixture(collectorV1, helper, runner, collectorV1Version)
+	fixture := newSecureRuntimeLabFixture(collectorV1, collectorV1Signature, helper, runner, collectorV1Version)
 	defer fixture.actionServer.Shutdown()
 	server := httptest.NewServer(fixture)
 	defer server.Close()
@@ -935,13 +1016,13 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	startedAt := time.Now().UTC()
 	sourceManifest, sourceHashes := secureRuntimeLoadSourceBoundary(t, runtime.GOARCH)
 	receipt := secureRuntimeLabReceipt{
-		SchemaVersion:         4,
+		SchemaVersion:         5,
 		RecordPath:            recordPath,
 		StartedAt:             startedAt.Format(time.RFC3339Nano),
 		SourceManifest:        sourceManifest,
 		SourceHashes:          sourceHashes,
-		ArtifactHashes:        map[string]string{"collector_v1": secureRuntimeHash(collectorV1), "collector_v2": secureRuntimeHash(collectorV2), "helper": secureRuntimeHash(helper), "runner": secureRuntimeHash(runner)},
-		ArtifactVersions:      map[string]string{"collector_v1": collectorV1Version, "collector_v2": collectorV2Version},
+		ArtifactHashes:        map[string]string{"collector_v1": secureRuntimeHash(collectorV1), "collector_v2": secureRuntimeHash(collectorV2), "collector_v3": secureRuntimeHash(collectorV3), "collector_v4": secureRuntimeHash(collectorV4), "helper": secureRuntimeHash(helper), "runner": secureRuntimeHash(runner)},
+		ArtifactVersions:      map[string]string{"collector_v1": collectorV1Version, "collector_v2": collectorV2Version, "collector_v3": collectorV3Version, "collector_v4": collectorV4Version},
 		DisposableVMGuardHash: secureRuntimeHash([]byte(secureRuntimeLabMarkerValue + "\n")),
 		Architecture:          runtime.GOARCH,
 	}
@@ -1035,7 +1116,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 
 	legacyBaseline := secureRuntimeStableSnapshot(t)
 	reportsBeforeApply, preApplyLastSeen, _, _ := fixture.snapshot()
-	fixture.setCollector(collectorV2)
+	fixture.setCollector(collectorV2, collectorV2Signature)
 	applyOutput := secureRuntimeRunInstaller(t, installerPath, server.URL, "--safe-profile-apply")
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeApply)+1, 45*time.Second)
 	_, postApplyLastSeen, _, _ := fixture.snapshot()
@@ -1073,7 +1154,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	secureRuntimeAssertRootMonitoringProfile(t)
 	pass("automatic_failure_rollback", "frozen lastSeen prevented commit and restored binary/state identity without command authority", map[string]any{"activation_committed": false, "restored_profile": "root-monitoring"})
 
-	fixture.setCollector(collectorV2)
+	fixture.setCollector(collectorV2, collectorV2Signature)
 	reportsBeforeUpdate, _, _, _ := fixture.snapshot()
 	secureRuntimeRunInstaller(t, installerPath, server.URL, "--update")
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeUpdate)+1, 45*time.Second)
@@ -1100,6 +1181,107 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeContinuity)+1, 20*time.Second)
 	pass("final_safe_profile_apply", "collector continued reporting after committed migration", map[string]any{"collector_service_user": "pulse-agent", "continuity_report_observed": true})
 
+	collectorV2SHA256 := secureRuntimeHash(collectorV2)
+	collectorV3SHA256 := secureRuntimeHash(collectorV3)
+	collectorV4SHA256 := secureRuntimeHash(collectorV4)
+	preUpdatePID := secureRuntimeCollectorMainPID(t)
+	fixture.setVersionReportsAccepted(collectorV3Version, false)
+	fixture.setCollector(collectorV3, collectorV3Signature)
+	fixture.setServerVersion(collectorV3Version)
+	pendingV3 := secureRuntimeWaitForUpdateState(t, "pending", collectorV3SHA256, collectorV2SHA256, 45*time.Second)
+	secureRuntimeWaitForReportAttempt(t, fixture, collectorV3Version, collectorV2Version, 45*time.Second)
+	if pendingV3.ActivatorPID != preUpdatePID {
+		t.Fatalf("V3 activation peer PID = %d, want pre-exec collector PID %d", pendingV3.ActivatorPID, preUpdatePID)
+	}
+	postExecPID := secureRuntimeCollectorMainPID(t)
+	if postExecPID != preUpdatePID {
+		t.Fatalf("helper-backed exec changed systemd MainPID from %d to %d", preUpdatePID, postExecPID)
+	}
+	if got := secureRuntimeProcessExecutableHash(t, postExecPID); got != collectorV3SHA256 {
+		t.Fatalf("/proc/%d/exe digest = %s, want V3 %s", postExecPID, got, collectorV3SHA256)
+	}
+	secureRuntimeAssertUpdateBinaryIdentities(t, collectorV3SHA256, collectorV2SHA256)
+	if _, err := os.Stat(secureRuntimeUpdateHandoff); err != nil {
+		t.Fatalf("pending helper update handoff unavailable: %v", err)
+	}
+	fixture.setVersionReportsAccepted(collectorV3Version, true)
+	secureRuntimeWaitForAcceptedVersion(t, fixture, collectorV3Version, 1, 30*time.Second)
+	committedV3 := secureRuntimeWaitForUpdateState(t, "committed", collectorV3SHA256, collectorV2SHA256, 30*time.Second)
+	secureRuntimeWaitForFileAbsent(t, secureRuntimeUpdateHandoff, 15*time.Second)
+	if committedV3.ActivatorPID != postExecPID {
+		t.Fatalf("committed V3 activator PID = %d, want current collector PID %d", committedV3.ActivatorPID, postExecPID)
+	}
+	secureRuntimeAssertUpdateBinaryIdentities(t, collectorV3SHA256, collectorV2SHA256)
+	secureRuntimeAssertSafeProfile(t)
+	pass("helper_update_authoritative_commit", "signed helper activation retained the systemd process identity and committed only after a freshly accepted primary report", map[string]any{
+		"signature_verified":      true,
+		"candidate_sha256":        collectorV3SHA256,
+		"prior_sha256":            collectorV2SHA256,
+		"target_sha256":           collectorV3SHA256,
+		"last_known_good_sha256":  collectorV2SHA256,
+		"activator_pid":           pendingV3.ActivatorPID,
+		"committer_pid":           committedV3.ActivatorPID,
+		"accepted_primary_report": true,
+		"update_action":           "committed",
+		"handoff_cleared":         true,
+		"reporting_continuity":    true,
+	})
+
+	fixture.setVersionReportsAccepted(collectorV4Version, false)
+	fixture.setCollector(collectorV4, collectorV4Signature)
+	fixture.setServerVersion(collectorV4Version)
+	pendingV4Watchdog := secureRuntimeWaitForUpdateState(t, "pending", collectorV4SHA256, collectorV3SHA256, 45*time.Second)
+	secureRuntimeWaitForReportAttempt(t, fixture, collectorV4Version, collectorV3Version, 45*time.Second)
+	watchdogPID := secureRuntimeCollectorMainPID(t)
+	if pendingV4Watchdog.ActivatorPID != watchdogPID || secureRuntimeProcessExecutableHash(t, watchdogPID) != collectorV4SHA256 {
+		t.Fatalf("watchdog candidate identity mismatch: state=%+v pid=%d", pendingV4Watchdog, watchdogPID)
+	}
+	acceptedV3BeforeWatchdog := len(secureRuntimeWaitForAcceptedVersion(t, fixture, collectorV3Version, 1, 5*time.Second))
+	fixture.setServerVersion(collectorV3Version)
+	secureRuntimeCommand(t, 10*time.Second, "systemctl", "kill", "--kill-who=main", "--signal=STOP", "pulse-agent.service")
+	secureRuntimeWaitForUpdateState(t, "rolled_back", collectorV3SHA256, collectorV4SHA256, 150*time.Second)
+	secureRuntimeAssertUpdateBinaryIdentities(t, collectorV3SHA256, collectorV4SHA256)
+	secureRuntimeCommand(t, 10*time.Second, "systemctl", "kill", "--kill-who=main", "--signal=KILL", "pulse-agent.service")
+	secureRuntimeWaitForAcceptedVersion(t, fixture, collectorV3Version, acceptedV3BeforeWatchdog+1, 45*time.Second)
+	secureRuntimeWaitForFileAbsent(t, secureRuntimeUpdateHandoff, 30*time.Second)
+	secureRuntimeAssertSafeProfile(t)
+	pass("helper_update_watchdog_rollback", "the independent helper watchdog restored V3 after the unresponsive V4 collector missed its production rollback deadline", map[string]any{
+		"candidate_sha256":       collectorV4SHA256,
+		"prior_sha256":           collectorV3SHA256,
+		"target_sha256":          collectorV3SHA256,
+		"last_known_good_sha256": collectorV4SHA256,
+		"update_action":          "rolled_back",
+		"rollback_trigger":       "watchdog",
+		"reporting_continuity":   true,
+	})
+
+	fixture.setServerVersion(collectorV4Version)
+	pendingV4Recovery := secureRuntimeWaitForUpdateState(t, "pending", collectorV4SHA256, collectorV3SHA256, 45*time.Second)
+	recoveryPID := secureRuntimeCollectorMainPID(t)
+	if pendingV4Recovery.ActivatorPID != recoveryPID || secureRuntimeProcessExecutableHash(t, recoveryPID) != collectorV4SHA256 {
+		t.Fatalf("interrupted-recovery candidate identity mismatch: state=%+v pid=%d", pendingV4Recovery, recoveryPID)
+	}
+	fixture.setServerVersion(collectorV3Version)
+	secureRuntimeCommand(t, 10*time.Second, "systemctl", "kill", "--kill-who=main", "--signal=STOP", "pulse-agent.service")
+	acceptedV3BeforeRecovery := len(secureRuntimeWaitForAcceptedVersion(t, fixture, collectorV3Version, acceptedV3BeforeWatchdog+1, 5*time.Second))
+	secureRuntimeCommand(t, 20*time.Second, "systemctl", "restart", "pulse-agent-helper.service")
+	secureRuntimeWaitForUpdateState(t, "rolled_back", collectorV3SHA256, collectorV4SHA256, 20*time.Second)
+	secureRuntimeAssertUpdateBinaryIdentities(t, collectorV3SHA256, collectorV4SHA256)
+	secureRuntimeCommand(t, 10*time.Second, "systemctl", "kill", "--kill-who=main", "--signal=KILL", "pulse-agent.service")
+	secureRuntimeWaitForAcceptedVersion(t, fixture, collectorV3Version, acceptedV3BeforeRecovery+1, 45*time.Second)
+	secureRuntimeWaitForFileAbsent(t, secureRuntimeUpdateHandoff, 30*time.Second)
+	secureRuntimeAssertSafeProfile(t)
+	pass("helper_update_interrupted_recovery", "restarting only the helper recovered the durable pending activation before the stopped collector could participate", map[string]any{
+		"candidate_sha256":       collectorV4SHA256,
+		"prior_sha256":           collectorV3SHA256,
+		"target_sha256":          collectorV3SHA256,
+		"last_known_good_sha256": collectorV4SHA256,
+		"update_action":          "rolled_back",
+		"rollback_trigger":       "helper-restart",
+		"reporting_continuity":   true,
+	})
+
+	fixture.setCollector(collectorV3, collectorV3Signature)
 	reportsBeforeRunner, _, _, _ := fixture.snapshot()
 	secureRuntimeRunInstallerWithActionCredential(t, installerPath, server.URL, secureRuntimeRunnerSecretV1,
 		"--least-privilege", "--enable-privileged-helper", "--enable-action-runner")
@@ -1233,6 +1415,134 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	secureRuntimeWriteEvidence(t, &receipt, secureRuntimeFinalizeTranscript(&receipt))
 }
 
+type secureRuntimeUpdateState struct {
+	Action           string    `json:"action"`
+	ActivationID     string    `json:"activationId"`
+	ActiveSHA256     string    `json:"activeSha256"`
+	RollbackSHA256   string    `json:"rollbackSha256"`
+	RollbackDeadline time.Time `json:"rollbackDeadline"`
+	ActivatorPID     int       `json:"activatorPid"`
+}
+
+func secureRuntimeWaitForUpdateState(t *testing.T, action, activeSHA256, rollbackSHA256 string, timeout time.Duration) secureRuntimeUpdateState {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var (
+		state   secureRuntimeUpdateState
+		lastErr error
+	)
+	for time.Now().Before(deadline) {
+		raw, err := os.ReadFile(secureRuntimeUpdateStatePath)
+		if err == nil {
+			err = json.Unmarshal(raw, &state)
+		}
+		lastErr = err
+		if err == nil && state.Action == action && strings.EqualFold(state.ActiveSHA256, activeSHA256) && strings.EqualFold(state.RollbackSHA256, rollbackSHA256) {
+			return state
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for helper update state action=%s active=%s rollback=%s; got=%+v err=%v", action, activeSHA256, rollbackSHA256, state, lastErr)
+	return secureRuntimeUpdateState{}
+}
+
+func secureRuntimeWaitForFileAbsent(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if _, err := os.Lstat(path); err == nil {
+		t.Fatalf("timed out waiting for %s to be removed", path)
+	} else {
+		t.Fatalf("inspect %s while waiting for removal: %v", path, err)
+	}
+}
+
+func secureRuntimeWaitForReportAttempt(t *testing.T, fixture *secureRuntimeLabFixture, version, updatedFrom string, timeout time.Duration) secureRuntimeLabReport {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		for _, report := range fixture.attemptSnapshot() {
+			if report.AgentVersion == version && report.UpdatedFrom == updatedFrom {
+				return report
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for report attempt version=%q updatedFrom=%q", version, updatedFrom)
+	return secureRuntimeLabReport{}
+}
+
+func secureRuntimeWaitForAcceptedVersion(t *testing.T, fixture *secureRuntimeLabFixture, version string, minimumCount int, timeout time.Duration) []secureRuntimeLabReport {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var matched []secureRuntimeLabReport
+	for time.Now().Before(deadline) {
+		reports, _, _, _ := fixture.snapshot()
+		matched = matched[:0]
+		for _, report := range reports {
+			if report.AgentVersion == version {
+				matched = append(matched, report)
+			}
+		}
+		if len(matched) >= minimumCount {
+			return append([]secureRuntimeLabReport(nil), matched...)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d accepted reports from version %q; got %d", minimumCount, version, len(matched))
+	return nil
+}
+
+func secureRuntimeCollectorMainPID(t *testing.T) int {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	stablePID := 0
+	stableSince := time.Time{}
+	lastPIDText := ""
+	for time.Now().Before(deadline) {
+		out, err := exec.Command("systemctl", "show", "pulse-agent.service", "--property=MainPID", "--value").Output()
+		lastPIDText = strings.TrimSpace(string(out))
+		pid, parseErr := strconv.Atoi(lastPIDText)
+		if err == nil && parseErr == nil && pid > 1 {
+			if _, statErr := os.Stat(fmt.Sprintf("/proc/%d/status", pid)); statErr == nil {
+				if pid != stablePID {
+					stablePID = pid
+					stableSince = time.Now()
+				} else if time.Since(stableSince) >= time.Second {
+					return pid
+				}
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+		}
+		stablePID = 0
+		stableSince = time.Time{}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("pulse-agent MainPID did not remain positive and stable: last=%q", lastPIDText)
+	return 0
+}
+
+func secureRuntimeProcessExecutableHash(t *testing.T, pid int) string {
+	t.Helper()
+	return secureRuntimeHash(secureRuntimeReadFile(t, fmt.Sprintf("/proc/%d/exe", pid)))
+}
+
+func secureRuntimeAssertUpdateBinaryIdentities(t *testing.T, targetSHA256, lastKnownGoodSHA256 string) {
+	t.Helper()
+	if got := secureRuntimeHash(secureRuntimeReadFile(t, "/usr/local/bin/pulse-agent")); !strings.EqualFold(got, targetSHA256) {
+		t.Fatalf("installed collector hash = %s, want %s", got, targetSHA256)
+	}
+	if got := secureRuntimeHash(secureRuntimeReadFile(t, secureRuntimeUpdateLKGPath)); !strings.EqualFold(got, lastKnownGoodSHA256) {
+		t.Fatalf("last-known-good collector hash = %s, want %s", got, lastKnownGoodSHA256)
+	}
+}
+
 func secureRuntimeRequireDisposableHost(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS != "linux" {
@@ -1295,6 +1605,26 @@ func secureRuntimeArtifactVersion(t *testing.T, envName string) string {
 	return version
 }
 
+func secureRuntimeReadSignature(t *testing.T, envName string) string {
+	t.Helper()
+	path := strings.TrimSpace(os.Getenv(envName))
+	if path == "" || !filepath.IsAbs(path) {
+		t.Fatalf("%s must name an absolute caller-built signature path", envName)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatalf("inspect %s: %v", envName, err)
+	}
+	if !info.Mode().IsRegular() {
+		t.Fatalf("%s must be a regular signature file: %s (%s)", envName, path, info.Mode())
+	}
+	signature := strings.TrimSpace(string(secureRuntimeReadFile(t, path)))
+	if signature == "" || len(signature) > 4096 || strings.ContainsAny(signature, "\x00\r\n") {
+		t.Fatalf("%s contains an invalid detached signature", envName)
+	}
+	return signature
+}
+
 func secureRuntimeReadFile(t *testing.T, path string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -1315,13 +1645,13 @@ func secureRuntimeLoadSourceBoundary(t *testing.T, targetArch string) (secureRun
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
 	}
-	manifestRelative := "scripts/release_control/secure_runtime_source_manifest_v4.json"
+	manifestRelative := "scripts/release_control/secure_runtime_source_manifest_v5.json"
 	manifestRaw := secureRuntimeReadFile(t, filepath.Join(repoRoot, filepath.FromSlash(manifestRelative)))
 	var manifest secureRuntimeSourceManifest
 	if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
 		t.Fatalf("decode secure-runtime source manifest: %v", err)
 	}
-	if manifest.SchemaVersion != 1 || manifest.ManifestID != "secure-runtime-linux-v4" || manifest.TargetOS != "linux" {
+	if manifest.SchemaVersion != 1 || manifest.ManifestID != "secure-runtime-linux-v5" || manifest.TargetOS != "linux" {
 		t.Fatalf("unsupported secure-runtime source manifest: %+v", manifest)
 	}
 	sourceHashes := make(map[string]string)
@@ -1585,11 +1915,7 @@ func secureRuntimeCollectorHasArgument(argument string) bool {
 
 func secureRuntimeCollectorProcessUID(t *testing.T) int {
 	t.Helper()
-	pidText := secureRuntimeSystemdProperty(t, "MainPID")
-	pid, err := strconv.Atoi(strings.TrimSpace(pidText))
-	if err != nil || pid <= 1 {
-		t.Fatalf("invalid pulse-agent MainPID %q", pidText)
-	}
+	pid := secureRuntimeCollectorMainPID(t)
 	status := string(secureRuntimeReadFile(t, fmt.Sprintf("/proc/%d/status", pid)))
 	for _, line := range strings.Split(status, "\n") {
 		fields := strings.Fields(line)
