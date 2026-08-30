@@ -38,3 +38,24 @@ export const HOST_METRICS_HISTORY_GROUPS = [
     series: [{ metric: 'temperature', label: 'CPU', unit: 'C', color: '#ef4444' }],
   },
 ];
+
+// GPU groups are conditional because many hosts do not report a GPU. Keep the
+// vocabulary beside the base host catalog so every host presentation appends
+// the same persisted metric series when typed GPU telemetry is available.
+export const GPU_METRICS_HISTORY_GROUPS = [
+  {
+    id: 'gpu-utilization',
+    label: 'GPU Utilization',
+    unit: '%',
+    series: [
+      { metric: 'gpu', label: 'Core', unit: '%', color: '#06b6d4' },
+      { metric: 'gpu_memory', label: 'VRAM', unit: '%', color: '#6366f1' },
+    ],
+  },
+  {
+    id: 'gpu-thermal',
+    label: 'GPU Thermal',
+    unit: 'C',
+    series: [{ metric: 'gpu_temperature', label: 'GPU', unit: 'C', color: '#ef4444' }],
+  },
+];

@@ -7,7 +7,7 @@ import {
   type DetailRow,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
-import type { Alert, Disk, Node, Temperature } from '@/types/api';
+import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { formatBytes, normalizeDiskArray } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
@@ -78,6 +78,7 @@ const pushTemperature = (
 const getThermalRows = (
   temperature: Temperature | undefined,
   thresholds: MetricDisplayThresholds | null | undefined,
+  typedGPUAvailable = false,
 ): NodeOverviewRow[] => {
   if (!temperature?.available) return [];
 
@@ -98,7 +99,7 @@ const getThermalRows = (
     });
   }
 
-  if (temperature.gpu?.length) {
+  if (!typedGPUAvailable && temperature.gpu?.length) {
     const gpuLabels = temperature.gpu
       .map((gpu) => {
         const value = [gpu.edge, gpu.junction, gpu.mem].find(hasPositiveNumber);
@@ -117,6 +118,48 @@ const getThermalRows = (
 
   return rows;
 };
+
+const formatGPUValue = (gpu: HostGPUSensor): string => {
+  const parts: string[] = [];
+  const name = cleanText(gpu.name);
+  if (name) parts.push(name);
+  if (
+    typeof gpu.temperatureCelsius === 'number' &&
+    Number.isFinite(gpu.temperatureCelsius) &&
+    gpu.temperatureCelsius > 0
+  ) {
+    parts.push(formatTemperature(gpu.temperatureCelsius));
+  }
+  if (
+    typeof gpu.utilizationPercent === 'number' &&
+    Number.isFinite(gpu.utilizationPercent) &&
+    gpu.utilizationPercent >= 0
+  ) {
+    parts.push(`${Math.round(Math.min(100, gpu.utilizationPercent))}%`);
+  }
+  if (
+    typeof gpu.memoryTotalBytes === 'number' &&
+    Number.isFinite(gpu.memoryTotalBytes) &&
+    gpu.memoryTotalBytes > 0
+  ) {
+    const used =
+      typeof gpu.memoryUsedBytes === 'number' &&
+      Number.isFinite(gpu.memoryUsedBytes) &&
+      gpu.memoryUsedBytes >= 0
+        ? gpu.memoryUsedBytes
+        : 0;
+    parts.push(`${formatBytes(used)} / ${formatBytes(gpu.memoryTotalBytes)}`);
+  }
+  return parts.join(' · ');
+};
+
+const getGPUTelemetryRows = (node: Node): NodeOverviewRow[] =>
+  (node.sensors?.gpu ?? []).flatMap((gpu, index) => {
+    const value = formatGPUValue(gpu);
+    if (!value) return [];
+    const id = cleanText(gpu.id);
+    return [{ label: id ? `GPU ${id}` : `GPU ${index + 1}`, value, title: value }];
+  });
 
 const getDetailTone = (valueClass: string | undefined): DetailValueTone => {
   if (valueClass?.includes('red') || valueClass?.includes('rose')) return 'danger';
@@ -276,9 +319,16 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
             : toDetailRows(storageRows()),
       },
       { label: 'Telemetry', rows: toDetailRows(telemetryRows()) },
+      { label: 'GPU', rows: toDetailRows(getGPUTelemetryRows(props.node)) },
       {
         label: 'Thermals',
-        rows: toDetailRows(getThermalRows(props.node.temperature, props.temperatureThresholds)),
+        rows: toDetailRows(
+          getThermalRows(
+            props.node.temperature,
+            props.temperatureThresholds,
+            (props.node.sensors?.gpu?.length ?? 0) > 0,
+          ),
+        ),
       },
     ]);
 

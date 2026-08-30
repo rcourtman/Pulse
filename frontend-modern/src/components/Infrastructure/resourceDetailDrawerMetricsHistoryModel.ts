@@ -1,5 +1,8 @@
 import type { ResourceType as MetricsHistoryResourceType } from '@/api/charts';
-import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
+import {
+  GPU_METRICS_HISTORY_GROUPS,
+  HOST_METRICS_HISTORY_GROUPS,
+} from '@/components/shared/hostMetricsHistoryModel';
 import type { GuestDrawerHistoryTarget } from '@/components/Workloads/guestDrawerModel';
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
@@ -49,24 +52,6 @@ export const getResourceGPUTemperatureCelsius = (resource: Resource): number | u
       ? temperature
       : undefined;
   });
-
-const GPU_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] = [
-  {
-    id: 'gpu-utilization',
-    label: 'GPU Utilization',
-    unit: '%',
-    series: [
-      { metric: 'gpu', label: 'Core', unit: '%', color: '#06b6d4' },
-      { metric: 'gpu_memory', label: 'VRAM', unit: '%', color: '#6366f1' },
-    ],
-  },
-  {
-    id: 'gpu-thermal',
-    label: 'GPU Thermal',
-    unit: 'C',
-    series: [{ metric: 'gpu_temperature', label: 'GPU', unit: 'C', color: '#ef4444' }],
-  },
-];
 
 const NODE_METRICS_HISTORY_GROUPS = HOST_METRICS_HISTORY_GROUPS.filter(
   (group) => group.id !== 'disk-io',
@@ -133,7 +118,7 @@ export const getResourceMetricsHistoryGroups = (
     target?.resourceType === 'docker-host' ||
     target?.resourceType === 'node';
   return supportsGPUHistory && (resource.agent?.sensors?.gpu?.length ?? 0) > 0
-    ? [...baseGroups, ...GPU_HISTORY_GROUPS]
+    ? [...baseGroups, ...GPU_METRICS_HISTORY_GROUPS]
     : baseGroups;
 };
 

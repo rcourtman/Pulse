@@ -209,6 +209,24 @@ describe('resourceStateAdapters nodeFromResource', () => {
     ]);
   });
 
+  it('preserves linked-agent GPU telemetry for the Proxmox node drawer', () => {
+    const gpu = {
+      id: '0',
+      name: 'NVIDIA RTX A6000',
+      temperatureCelsius: 63,
+      utilizationPercent: 42,
+      memoryUsedBytes: 8 * 1024 * 1024 * 1024,
+      memoryTotalBytes: 48 * 1024 * 1024 * 1024,
+    };
+    const node = nodeFromResource({
+      ...createNodeResource({}),
+      proxmox: { nodeName: 'pve-node-2' },
+      agent: { agentId: 'pve-agent', sensors: { gpu: [gpu] } },
+    } as Resource);
+
+    expect(node?.sensors?.gpu).toEqual([gpu]);
+  });
+
   it('maps PBS display and host identity through shared resource helpers', () => {
     const instance = pbsInstanceFromResource(
       createServiceResource('pbs', {

@@ -49,7 +49,10 @@ import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.t
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
-import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
+import {
+  GPU_METRICS_HISTORY_GROUPS,
+  HOST_METRICS_HISTORY_GROUPS,
+} from '@/components/shared/hostMetricsHistoryModel';
 import horizontalRailVisibilityModelSource from '@/components/shared/horizontalRailVisibilityModel.ts?raw';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
@@ -353,6 +356,10 @@ describe('shared primitive guardrails', () => {
       unit: 'C',
       series: [{ metric: 'temperature', label: 'CPU', unit: 'C' }],
     });
+    expect(GPU_METRICS_HISTORY_GROUPS.map((group) => group.id)).toEqual([
+      'gpu-utilization',
+      'gpu-thermal',
+    ]);
   });
 
   it('limits raw Table composition inside shared primitives to the canonical allowlist', () => {

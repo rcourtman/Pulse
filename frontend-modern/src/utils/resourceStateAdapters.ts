@@ -1332,6 +1332,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
       sockets: asNumber(cpuInfo?.sockets) ?? 0,
       mhz: asString(cpuInfo?.mhz) || '0',
     },
+    sensors: agentFacet?.sensors,
     temperature: buildTemperature(resource, proxmox),
     temperatureMonitoringEnabled:
       asBoolean(platform?.temperatureMonitoringEnabled) ??

@@ -183,6 +183,23 @@ describe('nodeDrawerModel (branch coverage 2)', () => {
       const groups = getNodeDrawerHistoryGroups(makeNode({ linkedAgentId: '' }));
       expect(groups.map((group) => group.id)).toStrictEqual(['utilization', 'network', 'thermals']);
     });
+
+    it('adds GPU history only when the linked agent reports typed GPU telemetry', () => {
+      const groups = getNodeDrawerHistoryGroups(
+        makeNode({
+          linkedAgentId: 'host-1',
+          sensors: { gpu: [{ id: '0', utilizationPercent: 42 }] },
+        }),
+      );
+      expect(groups.map((group) => group.id)).toStrictEqual([
+        'utilization',
+        'network',
+        'disk-io',
+        'thermals',
+        'gpu-utilization',
+        'gpu-thermal',
+      ]);
+    });
   });
 
   describe('getNodeDrawerCurrentMetrics', () => {
@@ -290,6 +307,36 @@ describe('nodeDrawerModel (branch coverage 2)', () => {
       });
       expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
         temperature: 55,
+      });
+    });
+
+    it('projects bounded aggregate GPU values into current history metrics', () => {
+      const node = makeNode({
+        sensors: {
+          gpu: [
+            {
+              id: '0',
+              utilizationPercent: 42,
+              memoryUsedBytes: 8 * 1024,
+              memoryTotalBytes: 32 * 1024,
+              temperatureCelsius: 63,
+            },
+            {
+              id: '1',
+              utilizationPercent: 75,
+              memoryUsedBytes: 24 * 1024,
+              memoryTotalBytes: 32 * 1024,
+              temperatureCelsius: 70,
+            },
+          ],
+        },
+      });
+
+      expect(getNodeDrawerCurrentMetrics(node)).toStrictEqual({
+        temperature: 65,
+        gpu: 75,
+        gpu_memory: 75,
+        gpu_temperature: 70,
       });
     });
   });

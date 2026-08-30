@@ -205,6 +205,36 @@ describe('NodeDrawer', () => {
     );
   });
 
+  it('shows typed NVIDIA telemetry reported by the linked PVE agent', () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          linkedAgentId: 'pve-agent',
+          sensors: {
+            temperatureCelsius: { gpu_nvidia_0: 63 },
+            gpu: [
+              {
+                id: '0',
+                name: 'NVIDIA RTX A6000',
+                temperatureCelsius: 63,
+                utilizationPercent: 42,
+                memoryUsedBytes: 8 * 1024 * 1024 * 1024,
+                memoryTotalBytes: 48 * 1024 * 1024 * 1024,
+              },
+            ],
+          },
+        })}
+      />
+    ));
+
+    const technical = openTechnicalDetails();
+    expect(technical.getByText('GPU')).toBeInTheDocument();
+    expect(technical.getByText('GPU 0')).toBeInTheDocument();
+    expect(
+      technical.getByText('NVIDIA RTX A6000 · 63°C · 42% · 8.00 GB / 48.0 GB'),
+    ).toBeInTheDocument();
+  });
+
   it('puts the active alert problem before context and visible inventory', () => {
     render(() => (
       <NodeDrawer

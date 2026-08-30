@@ -168,6 +168,8 @@ export interface Node {
   kernelVersion: string;
   pveVersion: string;
   cpuInfo: CPUInfo;
+  /** Typed telemetry from a linked Unified Agent, when this PVE node is hybrid. */
+  sensors?: HostSensorSummary;
   temperature?: Temperature; // CPU/NVMe temperatures
   temperatureMonitoringEnabled?: boolean | null; // Per-node temperature monitoring override
   pendingUpdates?: number; // Number of pending apt updates
