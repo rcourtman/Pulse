@@ -770,6 +770,76 @@ func TestFixtureGraphMetricCohortsBoundPVEChurnAndCoverTheEstate(t *testing.T) {
 	}
 }
 
+func TestSupplementalRefreshCadenceTracksFreshnessBudget(t *testing.T) {
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	cases := []struct {
+		name         string
+		interval     time.Duration
+		cohortCount  int
+		everyTick    bool
+		wantInterval time.Duration
+	}{
+		{"default rotation stays within budget", 2 * time.Second, mockMetricCohortCount, false, 20 * time.Second},
+		{"rotation at the budget keeps the cohort cadence", 12 * time.Second, mockMetricCohortCount, false, 120 * time.Second},
+		{"rotation past the budget refreshes per tick", 13 * time.Second, mockMetricCohortCount, true, 13 * time.Second},
+		{"public demo interval refreshes per tick", 60 * time.Second, mockMetricCohortCount, true, 60 * time.Second},
+		{"degenerate cohort count refreshes per tick", 2 * time.Second, 1, true, 2 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := supplementalRefreshEveryTick(tc.interval, tc.cohortCount); got != tc.everyTick {
+				t.Fatalf("supplementalRefreshEveryTick(%s, %d) = %v, want %v", tc.interval, tc.cohortCount, got, tc.everyTick)
+			}
+			if tc.cohortCount == mockMetricCohortCount {
+				setMockUpdateInterval(tc.interval)
+				if got := SupplementalRefreshInterval(); got != tc.wantInterval {
+					t.Fatalf("SupplementalRefreshInterval() = %s at %s ticks, want %s", got, tc.interval, tc.wantInterval)
+				}
+			}
+		})
+	}
+}
+
+func TestFixtureGraphSlowTicksKeepSupplementalFixturesFresh(t *testing.T) {
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	cfg := DefaultConfig
+	cfg.NodeCount = 4
+	cfg.VMsPerNode = 1
+	cfg.LXCsPerNode = 1
+	cfg.DockerHostCount = 0
+	cfg.GenericHostCount = 0
+	cfg.K8sClusterCount = 0
+
+	base := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+
+	// Fast ticks: a non-zero cohort must keep the once-per-rotation cadence.
+	graph := buildFixtureGraph(cfg, base)
+	collectedAt := trueNASCollectedAt(graph.PlatformFixtures.TrueNAS)
+	graph.UpdateMetricCohort(cfg, base.Add(cfg.UpdateInterval), 3, mockMetricCohortCount)
+	if got := trueNASCollectedAt(graph.PlatformFixtures.TrueNAS); !got.Equal(collectedAt) {
+		t.Fatalf("fast ticks rebased supplemental fixtures on a non-zero cohort: %s -> %s", collectedAt, got)
+	}
+
+	// Slow ticks (the public demo's PULSE_MOCK_UPDATE_INTERVAL shape): the
+	// rotation outlives the registry's freshness budget, so every cohort must
+	// rebase provider-backed fixtures or their rows read as stale sources.
+	cfg.UpdateInterval = 60 * time.Second
+	graph = buildFixtureGraph(cfg, base)
+	tick := base.Add(cfg.UpdateInterval)
+	graph.UpdateMetricCohort(cfg, tick, 3, mockMetricCohortCount)
+	if got := trueNASCollectedAt(graph.PlatformFixtures.TrueNAS); !got.Equal(tick) {
+		t.Fatalf("slow ticks left TrueNAS fixtures at %s, want rebase to %s", got, tick)
+	}
+	if got := graph.PlatformFixtures.VMware.CollectedAt; !got.Equal(tick) {
+		t.Fatalf("slow ticks left VMware fixtures at %s, want rebase to %s", got, tick)
+	}
+	if got := availabilityFixturesFreshness(graph.AvailabilityFixtures); !got.Equal(tick) {
+		t.Fatalf("slow ticks left availability fixtures at %s, want rebase to %s", got, tick)
+	}
+}
+
 func TestFixtureGraphMetricCohortProducesSparseUnifiedResourceChanges(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 50

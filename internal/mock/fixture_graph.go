@@ -105,16 +105,26 @@ func (g *FixtureGraph) UpdateMetricCohort(
 		selectedNodes[g.State.Nodes[index].Name] = struct{}{}
 	}
 
-	includeSupplemental := cohortIndex == 0
+	// Provider-backed demo fixtures are much smaller than the PVE estate and
+	// normally refresh once per full cohort rotation, keeping their timestamps
+	// live without forcing every provider resource through every socket delta.
+	// When a slow tick interval stretches the rotation past the registry's
+	// freshness budget, they refresh every tick instead — otherwise every
+	// TrueNAS/VMware/availability row spends most of each rotation flagged as
+	// a stale source (all-Attention badge noise on the public demo).
+	supplementalEveryTick := supplementalRefreshEveryTick(currentMockUpdateInterval(), cohortCount)
+	includeSupplemental := cohortIndex == 0 || supplementalEveryTick
+	supplementalTicks := int64(cohortCount)
+	if supplementalEveryTick {
+		supplementalTicks = 1
+	}
 	updateFixtureStateMetricsSelectedAt(&g.State, cfg, now, fixtureMetricSelection{
-		proxmoxNodeNames:    selectedNodes,
-		includeSupplemental: includeSupplemental,
-		uptimeStep:          currentMockUpdateStepInt64() * int64(cohortCount),
+		proxmoxNodeNames:       selectedNodes,
+		includeSupplemental:    includeSupplemental,
+		uptimeStep:             currentMockUpdateStepInt64() * int64(cohortCount),
+		supplementalUptimeStep: currentMockUpdateStepInt64() * supplementalTicks,
 	})
 	if includeSupplemental {
-		// Provider-backed demo fixtures are much smaller than the PVE estate and
-		// refresh once per full cohort rotation. Their timestamps stay live
-		// without forcing every provider resource through every socket delta.
 		g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 		g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
 		g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)

@@ -88,6 +88,39 @@ func currentMockUpdateStepInt64() int64 {
 	return step
 }
 
+// supplementalFreshnessBudget mirrors the unified registry's default platform
+// stale threshold. Provider-backed fixture timestamps (TrueNAS, VMware,
+// availability) that age past it read as stale sources, which flips every row
+// those sources own to a degraded status. The cohort rotation must therefore
+// never let supplemental fixtures age beyond this budget between rebases.
+const supplementalFreshnessBudget = 120 * time.Second
+
+// supplementalRefreshEveryTick reports whether the update loop must rebase
+// provider-backed fixtures on every tick. At fast tick rates one rebase per
+// cohort rotation keeps them comfortably fresh while bounding per-tick socket
+// deltas; once the rotation would outlive the freshness budget (e.g. the
+// public demo's 60s PULSE_MOCK_UPDATE_INTERVAL makes a 600s rotation), the
+// per-tick rebase is both required for freshness and cheaper per wall-clock
+// second than the default configuration's cadence.
+func supplementalRefreshEveryTick(interval time.Duration, cohortCount int) bool {
+	if cohortCount <= 1 {
+		return true
+	}
+	return interval*time.Duration(cohortCount) > supplementalFreshnessBudget
+}
+
+// SupplementalRefreshInterval returns the wall-clock cadence at which the mock
+// update loop rebases provider-backed (TrueNAS, VMware, availability) fixture
+// timestamps. Stale-threshold derivation uses it the same way real providers
+// use their polling intervals.
+func SupplementalRefreshInterval() time.Duration {
+	interval := currentMockUpdateInterval()
+	if supplementalRefreshEveryTick(interval, mockMetricCohortCount) {
+		return interval
+	}
+	return interval * mockMetricCohortCount
+}
+
 // IsMockEnabled returns whether mock mode is enabled.
 func IsMockEnabled() bool {
 	return enabled.Load()

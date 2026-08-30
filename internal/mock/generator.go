@@ -6101,6 +6101,10 @@ type fixtureMetricSelection struct {
 	proxmoxNodeNames    map[string]struct{}
 	includeSupplemental bool
 	uptimeStep          int64
+	// supplementalUptimeStep covers supplemental (non-PVE) uptime counters,
+	// whose refresh cadence can differ from the node cohort's rotation. Zero
+	// falls back to uptimeStep.
+	supplementalUptimeStep int64
 }
 
 func (selection fixtureMetricSelection) includesProxmoxNode(nodeName string) bool {
@@ -6123,6 +6127,9 @@ func updateFixtureStateMetricsSelectedAt(
 	if selection.uptimeStep <= 0 {
 		selection.uptimeStep = currentMockUpdateStepInt64()
 	}
+	if selection.supplementalUptimeStep <= 0 {
+		selection.supplementalUptimeStep = selection.uptimeStep
+	}
 
 	if selection.includeSupplemental {
 		updateDockerHosts(data, config, refreshNow)
@@ -6139,7 +6146,7 @@ func updateFixtureStateMetricsSelectedAt(
 			inst.Status = "online"
 			inst.ConnectionHealth = "healthy"
 			inst.LastSeen = refreshNow.Add(-time.Duration(randIntnSafe(12)) * time.Second)
-			inst.Uptime += step
+			inst.Uptime += selection.supplementalUptimeStep
 
 			if data.ConnectionHealth != nil {
 				data.ConnectionHealth[fmt.Sprintf("pbs-%s", inst.Name)] = true
