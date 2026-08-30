@@ -4974,3 +4974,14 @@ uses the explicit state for details, while the compact node-row badge requires
 current evidence. `proxmox_update_evidence_test.go`, `views_test.go`, and the
 frontend evidence presentation tests pin transport, merge, and consumer
 behavior.
+
+### Docker collection completeness survives canonical projection
+
+The Docker host facet carries the optional `collectionMode` value through
+adapters, cloning, typed views, API/frontend resource types, detail mappers,
+and Workloads projection. `typed-helper-summary` remains attached to the host
+whose bounded container summaries it qualifies; consumers must not infer full
+runtime inventory or action capability from the presence of container rows.
+The Docker drawer uses this canonical marker to warn and suppress update
+controls, while absent or unknown values retain compatibility without changing
+resource identity.

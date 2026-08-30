@@ -1389,6 +1389,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		Runtime:               host.Runtime,
 		RuntimeVersion:        host.RuntimeVersion,
 		DockerVersion:         host.DockerVersion,
+		CollectionMode:        host.CollectionMode,
 		OS:                    host.OS,
 		KernelVersion:         host.KernelVersion,
 		Architecture:          host.Architecture,
@@ -2369,6 +2370,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		Runtime:            runtime,
 		RuntimeVersion:     host.RuntimeVersion,
 		DockerVersion:      host.DockerVersion,
+		CollectionMode:     host.CollectionMode,
 		Security:           cloneDockerHostSecurity(host.Security),
 	}
 	if !ct.CreatedAt.IsZero() {

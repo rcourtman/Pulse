@@ -160,6 +160,7 @@ type DockerHostFrontend struct {
 	Runtime           string                      `json:"runtime"`
 	RuntimeVersion    string                      `json:"runtimeVersion,omitempty"`
 	DockerVersion     string                      `json:"dockerVersion,omitempty"`
+	CollectionMode    string                      `json:"collectionMode,omitempty"`
 	CPUs              int                         `json:"cpus"`
 	TotalMemoryBytes  int64                       `json:"totalMemoryBytes"`
 	UptimeSeconds     int64                       `json:"uptimeSeconds"`

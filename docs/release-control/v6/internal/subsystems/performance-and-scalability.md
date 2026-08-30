@@ -3000,3 +3000,12 @@ poll loop, websocket channel, history series, or per-render scan: collection
 retains the existing 30-minute cache and frontend projection/presentation is
 constant work per rendered node. Failed refreshes reuse the single cached
 successful observation rather than accumulating attempts or provider errors.
+
+### Container collection mode adds no Workloads hot-path work
+
+The optional Docker `collectionMode` value is copied through the existing host
+resource and Workloads projections in constant work per resource. It adds no
+poll, query, websocket subscription, history series, cache, per-row scan, or
+responsive signal. The Docker drawer evaluates the one bounded string only for
+the selected host, and summary-only helper collection omits the existing
+stats-dependent and secondary-inventory work at the agent.

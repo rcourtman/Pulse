@@ -1006,6 +1006,7 @@ func TestDockerHostToFrontend(t *testing.T) {
 		Runtime:           "docker",
 		RuntimeVersion:    "24.0.0",
 		DockerVersion:     "24.0.0",
+		CollectionMode:    "typed-helper-summary",
 		CPUs:              8,
 		TotalMemoryBytes:  16000000000,
 		UptimeSeconds:     86400,
@@ -1043,6 +1044,9 @@ func TestDockerHostToFrontend(t *testing.T) {
 	}
 	if frontend.DisplayName != host.DisplayName {
 		t.Errorf("DisplayName = %q, want %q", frontend.DisplayName, host.DisplayName)
+	}
+	if frontend.CollectionMode != host.CollectionMode {
+		t.Errorf("CollectionMode = %q, want %q", frontend.CollectionMode, host.CollectionMode)
 	}
 	if frontend.CPUUsagePercent != host.CPUUsage {
 		t.Errorf("CPUUsagePercent = %f, want %f", frontend.CPUUsagePercent, host.CPUUsage)

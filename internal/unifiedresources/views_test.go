@@ -1026,6 +1026,7 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 			DockerVersion:     "25.0.0",
 			Runtime:           "docker",
 			RuntimeVersion:    "1.7.0",
+			CollectionMode:    "typed-helper-summary",
 			OS:                "Ubuntu",
 			KernelVersion:     "6.8.0",
 			Architecture:      "amd64",
@@ -1069,6 +1070,9 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	}
 	if v.Hostname() != "docker-host-1" || v.DockerVersion() != "25.0.0" || v.RuntimeVersion() != "1.7.0" || v.OS() != "Ubuntu" {
 		t.Fatalf("expected docker accessors to match, got hostname=%q docker=%q runtime=%q os=%q", v.Hostname(), v.DockerVersion(), v.RuntimeVersion(), v.OS())
+	}
+	if v.CollectionMode() != "typed-helper-summary" {
+		t.Fatalf("expected collection mode accessor to match, got %q", v.CollectionMode())
 	}
 	if v.HostSourceID() != "docker-source-1" || v.DisplayName() != "Docker Host One" || v.CustomDisplayName() != "Custom Docker Host" || v.MachineID() != "machine-docker-1" || v.Runtime() != "docker" {
 		t.Fatalf("expected docker identity/runtime accessors to match, got source=%q display=%q custom=%q machine=%q runtime=%q", v.HostSourceID(), v.DisplayName(), v.CustomDisplayName(), v.MachineID(), v.Runtime())

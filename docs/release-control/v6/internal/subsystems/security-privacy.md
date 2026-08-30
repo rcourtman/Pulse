@@ -2630,3 +2630,18 @@ grouping, and they never infer identity from hostnames, message text,
 timestamps, or resource-path truncation. `internal/alerts/correlation_test.go`
 and the alerts overview state tests pin these disclosure and fail-open
 boundaries.
+
+### Typed-helper container inventory never delegates daemon authority
+
+Under the typed-helper profile, the collector admits a direct container
+runtime only when the endpoint is a real Unix socket below
+`/run/user/<collector-uid>`, owned by that UID, and not a symlink. Admission
+occurs before the first daemon API request and is repeated on reconnect.
+Rootful, remote, missing, malformed, and replaced candidates are closed and the
+collector falls back to the helper's fixed-endpoint summary operation.
+
+The helper request contains no daemon URL, HTTP method, query, container
+selector, or mutation argument. Summary mode does not bind lifecycle or update
+bridges, and its report labels the reduced authority as
+`typed-helper-summary`; helper loss cannot trigger sudo, root execution, or a
+broader direct socket fallback.

@@ -16,6 +16,7 @@ import (
 
 var (
 	connectRuntimeFn                  = connectRuntime
+	connectCollectorRuntimeFn         = connectCollectorOwnedRootlessRuntime
 	hostmetricsCollect                = hostmetrics.Collect
 	hostmetricsCollectWithDiskFilters = func(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
 		if len(include) == 0 {

@@ -48,7 +48,8 @@ func TestContainerInventoryUsesOnlyFixedBoundedGET(t *testing.T) {
 }
 
 func TestContainerInventoryBoundsDaemonOutput(t *testing.T) {
-	provider, err := NewLocalContainerProvider([]ContainerEndpoint{{Runtime: "podman", SocketPath: "/fixed/podman.sock", APIPath: "/v4/libpod/containers/json?all=true"}})
+	const podmanDockerCompatPath = "/v1.40/containers/json?all=1"
+	provider, err := NewLocalContainerProvider([]ContainerEndpoint{{Runtime: "podman", SocketPath: "/fixed/podman.sock", APIPath: podmanDockerCompatPath}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +57,13 @@ func TestContainerInventoryBoundsDaemonOutput(t *testing.T) {
 		server, client := net.Pipe()
 		go func() {
 			defer server.Close()
-			_, _ = http.ReadRequest(bufio.NewReader(server))
+			request, readErr := http.ReadRequest(bufio.NewReader(server))
+			if readErr != nil {
+				return
+			}
+			if request.Method != http.MethodGet || request.URL.RequestURI() != podmanDockerCompatPath {
+				t.Errorf("Podman compatibility request = %s %s", request.Method, request.URL.RequestURI())
+			}
 			_, _ = fmt.Fprint(server, "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n[\""+strings.Repeat("x", maxContainerDaemonBytes)+"\"]")
 		}()
 		return client, nil

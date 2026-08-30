@@ -2958,9 +2958,13 @@ safe_profile_apply_docker_degradation() {
         log_info "Safe-profile migration preserved container monitoring through the collector-owned ${ROOTLESS_RUNTIME_KIND} socket: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
         return 0
     fi
+    if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+        log_warn "Safe-profile migration preserved rootful container inventory through the typed helper in summary-only mode. Container stats, images, storage, Swarm, update checks, and lifecycle actions remain unavailable without a collector-owned rootless socket."
+        return 0
+    fi
     ENABLE_DOCKER="false"
     DOCKER_EXPLICIT="true"
-    log_warn "Safe-profile migration disabled rootful Docker monitoring: the collector has no usable collector-owned rootless runtime. Container monitoring is an explicit migration degradation, not helper parity."
+    log_warn "Safe-profile migration disabled rootful Docker monitoring: neither a usable collector-owned rootless runtime nor typed helper inventory is available."
 }
 
 detect_kubernetes() {

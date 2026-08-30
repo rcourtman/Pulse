@@ -38,6 +38,27 @@ func TestAlertLastSeenWireContract(t *testing.T) {
 	}
 }
 
+func TestDockerHostCollectionModeWireContract(t *testing.T) {
+	payload, err := json.Marshal(DockerHost{
+		ID:             "docker-host-1",
+		CollectionMode: "typed-helper-summary",
+	})
+	if err != nil {
+		t.Fatalf("marshal Docker host collection mode: %v", err)
+	}
+	if !strings.Contains(string(payload), `"collectionMode":"typed-helper-summary"`) {
+		t.Fatalf("payload = %s, want explicit summary collection mode", payload)
+	}
+
+	withoutMode, err := json.Marshal(DockerHost{ID: "docker-host-1"})
+	if err != nil {
+		t.Fatalf("marshal Docker host without collection mode: %v", err)
+	}
+	if strings.Contains(string(withoutMode), "collectionMode") {
+		t.Fatalf("payload = %s, absent collection mode must be omitted", withoutMode)
+	}
+}
+
 func TestNodeNetworkInterfacesNormalizeCollections(t *testing.T) {
 	node := Node{NetworkInterfaces: []HostNetworkInterface{{Name: "vmbr0"}}}.NormalizeCollections()
 	if node.NetworkInterfaces == nil || node.NetworkInterfaces[0].Addresses == nil {

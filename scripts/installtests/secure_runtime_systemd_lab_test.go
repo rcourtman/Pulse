@@ -1049,8 +1049,8 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	}
 	dockerDegraded := dockerInitiallyEnabled && !secureRuntimeCollectorHasArgument("--enable-docker")
 	if dockerInitiallyEnabled && !secureRuntimeCollectorOwnedRootlessAvailable(t) {
-		if !dockerDegraded || !strings.Contains(applyOutput, "disabled rootful Docker monitoring") {
-			t.Fatalf("safe migration did not make rootful Docker degradation explicit:\n%s", applyOutput)
+		if dockerDegraded || !strings.Contains(applyOutput, "typed helper in summary-only mode") {
+			t.Fatalf("safe migration did not preserve explicitly reduced helper inventory:\n%s", applyOutput)
 		}
 	}
 	pass("safe_profile_apply", "fresh server lastSeen, least-privilege identity, typed helper health", map[string]any{"collector_service_user": "pulse-agent", "collector_authority": "monitoring-only", "helper_status": "ok"})

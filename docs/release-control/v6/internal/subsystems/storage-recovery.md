@@ -5853,3 +5853,13 @@ a recovery point, retention evidence, restore authority, or permission to
 install packages. Canonical merging may replace an older count with a checked
 zero or clear inherited check metadata for unavailable evidence, but it must
 not mutate storage or initiate remediation.
+
+### Container summary mode is not storage or recovery evidence
+
+The Docker host `collectionMode: typed-helper-summary` marker describes the
+authority and completeness of the current inventory observation only. Its
+absence of image, volume, network, layer, mount, and storage detail must not be
+interpreted as authoritative emptiness, deletion, backup completion, recovery
+state, or permission to clean up storage. Propagating the marker through the
+shared resource projection creates no snapshot, restore, retention, or
+container-action authority.

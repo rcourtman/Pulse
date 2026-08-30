@@ -229,6 +229,7 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		Runtime:           d.Runtime,
 		RuntimeVersion:    d.RuntimeVersion,
 		DockerVersion:     d.DockerVersion,
+		CollectionMode:    d.CollectionMode,
 		CPUs:              d.CPUs,
 		TotalMemoryBytes:  d.TotalMemoryBytes,
 		UptimeSeconds:     d.UptimeSeconds,

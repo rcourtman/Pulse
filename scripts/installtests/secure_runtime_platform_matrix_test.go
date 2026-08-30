@@ -32,8 +32,8 @@ func TestSecureRuntimePlatformMatrixRemainsExplicitAndShipped(t *testing.T) {
 		"Separate runner Proxmox guest and container lifecycle/update actions",
 		"Appliance, non-systemd, Windows, and macOS host-agent profiles",
 		"Implemented, unqualified",
-		"**Unavailable in the safe profile.**",
-		"The safe profile therefore remains opt-in.",
+		"collectionMode: typed-helper-summary",
+		"currently explicit rather than the installer default.",
 		"Residual owner and removal condition",
 	}
 	for _, marker := range required {

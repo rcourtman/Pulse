@@ -6932,3 +6932,13 @@ current positive observation. Provider errors are never rendered. Component
 and browser evidence covers both 1440px and 390px layouts in
 `NodeDrawerOverview.updateEvidence.test.tsx`, `ProxmoxNodesTable.test.tsx`, and
 `frontend-modern/browser-verification.json`.
+
+### Docker drawers expose reduced helper coverage without actions
+
+The Docker host drawer consumes the canonical optional `collectionMode` field.
+For `typed-helper-summary` it adds one bounded warning to the shared attention
+section and omits the container update management card; it does not fabricate
+zero update state or offer an action that the reporting collector cannot
+execute. Unknown or absent values preserve the direct-runtime presentation.
+Component and browser proofs cover the warning, action omission, mode
+transition, and desktop/narrow containment.

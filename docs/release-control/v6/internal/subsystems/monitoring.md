@@ -3559,3 +3559,13 @@ until their normal refresh boundary, and a failed refresh is retried without
 discarding the cache. `node_pending_updates_evidence_test.go` and the cluster
 client pending-update tests pin zero, permission, reachability, stale-cache,
 and offline behavior.
+
+### Summary-only container collection remains explicit through ingestion
+
+Monitoring copies the Docker report's optional `collectionMode` into the
+stored host model and frontend projection without upgrading its authority.
+`typed-helper-summary` reports may carry the bounded container summaries and
+ordinary host metrics, but missing stats, storage, images, networks, volumes,
+Swarm, and update evidence remain absent rather than being reconstructed from
+older or adjacent observations. Model, monitor, and unified-resource tests pin
+the additive field through the ingestion path.

@@ -1087,6 +1087,7 @@ type DockerData struct {
 	Runtime           string           `json:"runtime,omitempty"`
 	RuntimeVersion    string           `json:"runtimeVersion,omitempty"`
 	DockerVersion     string           `json:"dockerVersion,omitempty"`
+	CollectionMode    string           `json:"collectionMode,omitempty"`
 	OS                string           `json:"os,omitempty"`
 	KernelVersion     string           `json:"kernelVersion,omitempty"`
 	Architecture      string           `json:"architecture,omitempty"`

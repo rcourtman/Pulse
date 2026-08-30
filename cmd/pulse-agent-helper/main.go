@@ -75,7 +75,9 @@ func run(args []string) error {
 
 	containers, err := agenthelper.NewLocalContainerProvider([]agenthelper.ContainerEndpoint{
 		{Runtime: "docker", SocketPath: "/var/run/docker.sock", APIPath: "/v1.41/containers/json?all=1"},
-		{Runtime: "podman", SocketPath: "/run/podman/podman.sock", APIPath: "/v4.0.0/libpod/containers/json?all=true"},
+		// Podman's documented Docker-compatibility API preserves the bounded
+		// Docker list-summary schema decoded by LocalContainerProvider.
+		{Runtime: "podman", SocketPath: "/run/podman/podman.sock", APIPath: "/v1.40/containers/json?all=1"},
 	})
 	if err != nil {
 		return fmt.Errorf("configure container inventory: %w", err)

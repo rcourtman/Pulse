@@ -165,8 +165,9 @@ collector-writable direct-replacement fallback.
 Exceptional telemetry crosses `/run/pulse-agent/helper.sock` to a separate
 root process. The socket admits only the `pulse-agent` UID, and the helper has
 no Pulse URL, API token, or network namespace. Its protocol exposes bounded,
-versioned SMART and Proxmox LXC filesystem snapshots, not a shell, executable
-path, device path, VMID, environment, or caller-selected arguments. The helper
+versioned SMART, Proxmox LXC filesystem, and fixed-endpoint container summary
+snapshots, not a shell, executable path, device path, VMID, daemon endpoint,
+environment, or caller-selected arguments. The helper
 service keeps `PrivateNetwork=true`, `RestrictAddressFamilies=AF_UNIX`,
 `NoNewPrivileges=true`, `ProtectSystem=strict`, and `ProtectHome=true`.
 `PrivateDevices` is intentionally not enabled because SMART needs the host
@@ -175,9 +176,13 @@ only the affected telemetry disappears; the collector does not fall back to
 sudo, root, or a broader local command path.
 
 The typed-helper profile cannot be combined with `--grant-smart` or
-`--grant-pct`. Rootful Docker-socket monitoring is also unavailable because
-membership in the Docker group is root-equivalent; API monitoring or a
-separately scoped rootless runtime socket is required instead. The profile is
+`--grant-pct`. The collector never joins the rootful Docker group. When no
+collector-owned rootless socket is available, the helper preserves only
+container ID/name/image/state/status/creation summaries; reports identify this
+as `collectionMode: typed-helper-summary`. Stats, images, volumes, networks,
+storage, Swarm, registry update checks, and lifecycle actions remain unavailable.
+A separately scoped rootless runtime socket is required for full collection.
+The profile is
 currently explicit rather than the installer default. Its inspect, apply, and
 rollback transaction is implemented for Linux systemd, but representative
 live-host migration and helper update staging/activation/rollback exercises,
@@ -199,7 +204,7 @@ or generic command path.
 | Standard Linux systemd host telemetry and collector update | Unprivileged `pulse-agent` plus the root-owned typed helper | Core `/proc`, filesystem, network, RAID, and hwmon telemetry stays in the collector; helper-backed signed update activation is implemented but its live activation/recovery transaction is not qualified | **Qualified on disposable Ubuntu 24.04.4 arm64 at committed main `defc24af837b91428fbee939d09cd31e9559fb4f`** for install, migration, explicit/automatic profile rollback, helper health, reporting continuity, and process/credential separation. The schema-v4 receipt's ordinary update ran under the downgraded root monitoring profile and does not prove `agent_update.activate.v1`, executable-digest commit, watchdog rollback, interrupted recovery, or last-known-good restoration. Remains opt-in pending those live scenarios, exact-RC reproduction, and external review | `deployment-installability` and `security-privacy`: qualify helper activation/failure/recovery from the designated release candidate and accept the external boundary review |
 | Linux SMART telemetry | `smart.snapshot` through the no-network helper; no caller-selected device or arguments | Implemented, unqualified on representative physical disks. Helper failure omits/degrades SMART only; the collector does not retry as root | Does not yet justify SMART parity or a default change | `agent-lifecycle`: record live SATA, SAS/controller, USB bridge, and NVMe evidence, including standby, permission failure, timeout, and partial-data cases |
 | Proxmox node-local LXC filesystem telemetry | `proxmox.lxc_filesystems` through the no-network helper using fixed bounded `pct` operations | Implemented, unqualified on a representative PVE node. Helper failure omits/degrades this snapshot only | Does not yet justify Proxmox host-agent parity or a default change | `agent-lifecycle`: record live running/stopped LXC, mount, timeout, output-bound, and helper-loss behavior on supported PVE versions |
-| Rootful Docker or Podman inventory | No direct collector access to a root-equivalent daemon socket | **Unavailable in the safe profile.** Migration disables the provider visibly. A closed helper `container.inventory` operation exists, but collector integration and live parity are not qualified | Rootful container parity is an explicit default blocker; the legacy/root profile is not safe-profile evidence | `agent-lifecycle`: either integrate and qualify bounded helper inventory or retain the explicit degradation permanently |
+| Rootful Docker or Podman inventory | No direct collector access to a root-equivalent daemon socket | Implemented as a typed-helper summary-only fallback. Migration preserves container ID/name/image/state/status/creation inventory and marks the report `typed-helper-summary`; stats, secondary inventories, update checks, and actions remain unavailable | Unit and installer regressions cover the boundary, but no representative live Docker/Podman qualification exists. Full rootful parity remains an explicit default blocker; the legacy/root profile is not safe-profile evidence | `agent-lifecycle`: record fresh install, migration, restart, helper loss/recovery, bounds, and summary parity on representative rootful Docker and Podman; decide explicitly whether reduced telemetry is sufficient |
 | Collector-owned rootless Docker or Podman | Direct access only to one usable runtime socket owned by the `pulse-agent` UID | Implemented, unqualified live. Ambiguous, root-owned, unreadable, unwritable, or unavailable sockets disable container monitoring | Does not yet justify container-runtime parity or a default change | `deployment-installability`: record fresh install, migration, restart, socket-loss, ambiguity, and telemetry parity on both rootless Docker and rootless Podman |
 | Separate runner package update and package-cache cleanup | Root-owned `pulse-agent-runner`, host-bound action credential, typed request, postcondition, and durable receipt | The schema-v4 committed-main systemd receipt records a real verified apt-cache mutation, stale-fingerprint refusal, replay, nonce-bound readiness, exact credential rotation, and self-revocation. A separate production Router regression exercises HTTPS issuance, WSS admission, encrypted token persistence, failed-rotation rollback, exact socket invalidation, two server restarts, old-secret rejection, and durable self-revoke | Qualified for the exercised systemd fixture paths and focused production Router lifecycle. Neither proof covers local runner activation failure after credential preparation, every runner operation, or an exact release candidate | `agent-lifecycle` and `api-contracts`: reproduce the combined systemd and production Router path from the RC, including failed local activation/rollback and representative package-update success/failure/cancellation evidence |
 | Separate runner Proxmox guest and container lifecycle/update actions | Root-owned runner with closed typed protocols; never the monitoring collector | Implemented, unqualified on representative PVE and container-runtime targets | No live-provider action-parity claim and no default change | `agent-lifecycle`: record target-bound success, stale-state refusal, cancellation, reconnect/replay, and independent postconditions on disposable real targets |

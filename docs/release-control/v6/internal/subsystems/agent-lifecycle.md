@@ -6876,7 +6876,13 @@ The first collection operations are `smart.snapshot.v1`,
 `proxmox.lxc_filesystems.v1`, and the bounded fixed-endpoint
 `container.inventory.v1`; callers cannot supply a binary path, arbitrary
 filesystem path, daemon endpoint, environment, or command arguments. The
-`agent_update.activate.v1` and `agent_update.rollback.v1` families accept only
+collector uses this operation only as a summary-only reporting fallback when
+direct runtime admission fails; it does not expose update or lifecycle methods,
+and reports preserve that reduction as `collectionMode: typed-helper-summary`.
+Under the helper profile, direct runtime candidates are admitted by endpoint
+type, collector UID ownership, and rootless runtime path before the first daemon
+API request; rejected candidates are closed without probing daemon information.
+The `agent_update.activate.v1` and `agent_update.rollback.v1` families accept only
 fixed-root, regular, owned, digest-bound update artifacts and produce durable
 activation identity around an atomic swap. Their collector staging,
 restart/health, and live rollback integration remains qualification work, so

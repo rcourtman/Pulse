@@ -4,6 +4,15 @@
   "target_os": "linux",
   "description": "Production source boundary for the secure collector, typed helper, action runner, update path, control-plane admission, and systemd qualification harness.",
   "exact_paths": [
+    "internal/models/converters.go",
+    "internal/models/models.go",
+    "internal/models/models_frontend.go",
+    "internal/monitoring/monitor.go",
+    "internal/monitoring/monitor_agents.go",
+    "internal/unifiedresources/adapters.go",
+    "internal/unifiedresources/types.go",
+    "internal/unifiedresources/views.go",
+    "pkg/agents/docker/report.go",
     "scripts/install.sh",
     "scripts/installtests/secure_runtime_systemd_lab_test.go",
     "scripts/release_control/secure_runtime_attestation.py",
@@ -19,6 +28,7 @@
     "internal/agentupdate",
     "internal/api",
     "internal/config",
+    "internal/dockeragent",
     "internal/hostagent",
     "internal/operationreceipt"
   ],

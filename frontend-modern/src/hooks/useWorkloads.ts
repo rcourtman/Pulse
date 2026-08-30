@@ -145,6 +145,7 @@ type APIResource = {
     runtime?: string;
     runtimeVersion?: string;
     dockerVersion?: string;
+    collectionMode?: string;
     hostSourceId?: string;
     updateStatus?: WorkloadGuest['updateStatus'];
   };

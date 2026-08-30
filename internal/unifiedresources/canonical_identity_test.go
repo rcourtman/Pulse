@@ -77,6 +77,34 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 	}
 }
 
+func TestDockerCollectionModeDoesNotChangeCanonicalIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "docker-host-1",
+		Type: ResourceTypeAgent,
+		Name: "docker-one",
+		Docker: &DockerData{
+			HostSourceID:   "docker-source-1",
+			Hostname:       "docker-one.local",
+			CollectionMode: "typed-helper-summary",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+	if resource.Canonical == nil {
+		t.Fatal("canonical identity is nil")
+	}
+	want := *resource.Canonical
+
+	resource.Docker.CollectionMode = ""
+	RefreshCanonicalIdentity(&resource)
+	if resource.Canonical == nil ||
+		resource.Canonical.PrimaryID != want.PrimaryID ||
+		resource.Canonical.Hostname != want.Hostname ||
+		!reflect.DeepEqual(resource.Canonical.Aliases, want.Aliases) {
+		t.Fatalf("collection completeness changed canonical identity: got %+v, want %+v", resource.Canonical, want)
+	}
+}
+
 func TestRefreshCanonicalIdentityKeepsProxmoxPresentationSeparateFromNativeAliases(t *testing.T) {
 	resource := Resource{
 		ID:   "production-pve1",

@@ -10369,3 +10369,13 @@ that predate explicit status. Model, resource, and presentation contracts are
 pinned by `internal/monitoring/node_pending_updates_evidence_test.go`,
 `internal/unifiedresources/proxmox_update_evidence_test.go`, and
 `frontend-modern/src/utils/__tests__/proxmoxUpdateEvidence.test.ts`.
+
+### Docker collection mode is additive capability evidence
+
+Docker host reports and their canonical resource projections may add the
+optional string `collectionMode`. The current bounded value
+`typed-helper-summary` means the collector received only helper-provided
+container ID, name, image, state, status, and creation summaries. Absence
+retains the existing direct-runtime contract. Clients must treat unknown future
+values defensively and must not infer stats, secondary inventories, update
+checks, or lifecycle authority from a summary-mode report.

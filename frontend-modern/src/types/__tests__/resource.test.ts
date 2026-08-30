@@ -44,6 +44,19 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('Resource Type Guards', () => {
+  it('retains Docker helper collection completeness on the host facet', () => {
+    const resource = createResource({
+      type: 'docker-host',
+      docker: {
+        hostSourceId: 'docker-host-1',
+        collectionMode: 'typed-helper-summary',
+      },
+    });
+
+    expect(resource.docker?.collectionMode).toBe('typed-helper-summary');
+    expect(resource.docker?.hostSourceId).toBe('docker-host-1');
+  });
+
   it('preserves storage alias IDs as compatibility metadata', () => {
     const resource = createResource({
       type: 'storage',

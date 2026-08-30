@@ -12,6 +12,35 @@ import (
 )
 
 func TestTryRuntimeCandidate(t *testing.T) {
+	t.Run("endpoint admission precedes daemon info", func(t *testing.T) {
+		closed := false
+		infoCalls := 0
+		fake := &fakeDockerClient{
+			daemonHost: "unix:///var/run/docker.sock",
+			infoFunc: func(_ context.Context) (systemtypes.Info, error) {
+				infoCalls++
+				return systemtypes.Info{}, nil
+			},
+			closeFn: func() error {
+				closed = true
+				return nil
+			},
+		}
+		swap(t, &newDockerClientFn, func(_ ...client.Opt) (dockerClient, error) {
+			return fake, nil
+		})
+
+		if _, _, err := tryRuntimeCandidateWithEndpointAdmission(nil, func(string) bool { return false }); err == nil {
+			t.Fatal("expected rejected endpoint error")
+		}
+		if infoCalls != 0 {
+			t.Fatalf("daemon Info called %d times before endpoint admission", infoCalls)
+		}
+		if !closed {
+			t.Fatal("rejected client was not closed")
+		}
+	})
+
 	t.Run("new client error", func(t *testing.T) {
 		swap(t, &newDockerClientFn, func(_ ...client.Opt) (dockerClient, error) {
 			return nil, errors.New("dial failed")

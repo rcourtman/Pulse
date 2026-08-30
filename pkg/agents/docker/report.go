@@ -43,6 +43,7 @@ type HostInfo struct {
 	OS               string             `json:"os,omitempty"`
 	Runtime          string             `json:"runtime,omitempty"`
 	RuntimeVersion   string             `json:"runtimeVersion,omitempty"`
+	CollectionMode   string             `json:"collectionMode,omitempty"`
 	KernelVersion    string             `json:"kernelVersion,omitempty"`
 	Architecture     string             `json:"architecture,omitempty"`
 	DockerVersion    string             `json:"dockerVersion,omitempty"`
@@ -57,6 +58,8 @@ type HostInfo struct {
 	Network          []NetworkInterface `json:"network,omitempty"`
 	Security         *HostSecurityInfo  `json:"security,omitempty"`
 }
+
+const CollectionModeTypedHelperSummary = "typed-helper-summary"
 
 // HostSecurityInfo captures container-runtime security posture data reported by the agent.
 type HostSecurityInfo struct {

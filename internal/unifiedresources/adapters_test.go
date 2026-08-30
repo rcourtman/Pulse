@@ -703,6 +703,7 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 		Hostname:       "docker-1",
 		Runtime:        "podman",
 		RuntimeVersion: "5.2.0",
+		CollectionMode: "typed-helper-summary",
 	}
 	resource, _ := resourceFromDockerContainer(container, host)
 	if resource.Docker == nil {
@@ -719,6 +720,9 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	}
 	if got, want := resource.Docker.RuntimeVersion, host.RuntimeVersion; got != want {
 		t.Fatalf("runtimeVersion = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.CollectionMode, host.CollectionMode; got != want {
+		t.Fatalf("collectionMode = %q, want %q", got, want)
 	}
 	if got, want := resource.Docker.ImageID, container.ImageDigest; got != want {
 		t.Fatalf("imageId = %q, want %q", got, want)

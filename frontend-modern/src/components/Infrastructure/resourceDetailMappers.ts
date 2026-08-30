@@ -160,6 +160,7 @@ export type DockerPlatformData = {
   runtime?: string;
   runtimeVersion?: string;
   dockerVersion?: string;
+  collectionMode?: string;
   os?: string;
   kernelVersion?: string;
   architecture?: string;

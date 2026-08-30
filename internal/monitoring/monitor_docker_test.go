@@ -1272,6 +1272,7 @@ func TestApplyDockerReportPodmanRuntimeMetadata(t *testing.T) {
 			Runtime:        "podman",
 			RuntimeVersion: "4.9.3",
 			DockerVersion:  "",
+			CollectionMode: agentsdocker.CollectionModeTypedHelperSummary,
 		},
 		Timestamp: time.Now().UTC(),
 	}
@@ -1289,6 +1290,9 @@ func TestApplyDockerReportPodmanRuntimeMetadata(t *testing.T) {
 	}
 	if host.DockerVersion != "4.9.3" {
 		t.Fatalf("expected docker version fallback to runtime version, got %q", host.DockerVersion)
+	}
+	if host.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary {
+		t.Fatalf("expected collection mode to survive report ingestion, got %q", host.CollectionMode)
 	}
 }
 

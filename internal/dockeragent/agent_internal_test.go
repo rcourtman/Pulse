@@ -1679,6 +1679,33 @@ func TestIssue1647ReconnectAfterPersistentDaemonGone(t *testing.T) {
 	}
 }
 
+func TestTypedHelperProfileRejectsRootfulReconnect(t *testing.T) {
+	closed := false
+	rootful := &fakeDockerClient{
+		daemonHost: "unix:///var/run/docker.sock",
+		closeFn:    func() error { closed = true; return nil },
+	}
+	swap(t, &connectCollectorRuntimeFn, func(RuntimeKind, *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+		return rootful, systemtypes.Info{}, RuntimeDocker, nil
+	})
+
+	agent := &Agent{
+		cfg:               Config{HelperInventory: &helperInventoryStub{}},
+		logger:            zerolog.Nop(),
+		runtimePref:       RuntimeAuto,
+		runtimeGoneStreak: runtimeReconnectFailureThreshold - 1,
+	}
+	if agent.maybeReconnectRuntime(errors.New("cannot connect to the Docker daemon")) {
+		t.Fatal("typed-helper profile adopted a rootful reconnect endpoint")
+	}
+	if !closed {
+		t.Fatal("rejected rootful reconnect client was not closed")
+	}
+	if agent.docker != nil {
+		t.Fatal("rejected rootful reconnect was installed")
+	}
+}
+
 func TestBuildReportForwardsExplicitDiskIncludesAndExcludes(t *testing.T) {
 	var gotExclude, gotInclude []string
 	swap(t, &hostmetricsCollectWithDiskFilters, func(_ context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {

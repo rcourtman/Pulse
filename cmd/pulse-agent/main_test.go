@@ -2639,6 +2639,17 @@ type stubTypedContainerUpdater struct {
 	lifecycleMutations int
 }
 
+type capabilityDockerAgent struct {
+	stubTypedContainerUpdater
+	actions bool
+}
+
+func (*capabilityDockerAgent) Run(context.Context) error { return nil }
+func (*capabilityDockerAgent) Close() error              { return nil }
+func (a *capabilityDockerAgent) ContainerActionsAvailable() bool {
+	return a.actions
+}
+
 func (s *stubTypedContainerUpdater) TypedContainerUpdatePreflight(context.Context, string, string, string) error {
 	s.preflightCalls++
 	return nil
@@ -2703,6 +2714,21 @@ func TestLateBoundDockerUpdaterBridgesModuleWhenItComesUp(t *testing.T) {
 	}
 	if stub.lifecycleInspects != 1 || stub.lifecycleMutations != 1 {
 		t.Fatalf("lifecycle calls = inspect %d mutate %d", stub.lifecycleInspects, stub.lifecycleMutations)
+	}
+}
+
+func TestBindDockerActionBridgeRejectsSummaryOnlyModule(t *testing.T) {
+	bridge := &lateBoundDockerUpdater{}
+	summaryOnly := &capabilityDockerAgent{actions: false}
+	bindDockerActionBridge(bridge, summaryOnly)
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err == nil {
+		t.Fatal("summary-only module was granted container update authority")
+	}
+
+	direct := &capabilityDockerAgent{actions: true}
+	bindDockerActionBridge(bridge, direct)
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err != nil {
+		t.Fatalf("direct runtime module was not bridged: %v", err)
 	}
 }
 

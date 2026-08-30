@@ -1570,6 +1570,13 @@ func (v DockerHostView) DockerVersion() string {
 	return v.r.Docker.DockerVersion
 }
 
+func (v DockerHostView) CollectionMode() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.CollectionMode
+}
+
 func (v DockerHostView) Runtime() string {
 	if v.r == nil || v.r.Docker == nil {
 		return ""

@@ -162,12 +162,26 @@ func (a *Agent) maybeReconnectRuntime(err error) bool {
 		return false
 	}
 
-	cli, info, runtimeKind, connErr := connectRuntimeFn(a.runtimePref, &a.logger)
+	connect := connectRuntimeFn
+	if a.cfg.HelperInventory != nil {
+		connect = connectCollectorRuntimeFn
+	}
+	cli, info, runtimeKind, connErr := connect(a.runtimePref, &a.logger)
 	if connErr != nil {
 		a.logger.Warn().
 			Err(connErr).
 			Int("consecutive_failures", a.runtimeGoneStreak).
 			Msg("Container runtime endpoint unavailable; reconnect attempt failed")
+		return false
+	}
+	if a.cfg.HelperInventory != nil && !collectorOwnsRootlessEndpoint(cli.DaemonHost()) {
+		endpoint := cli.DaemonHost()
+		if closeErr := cli.Close(); closeErr != nil {
+			a.logger.Debug().Err(closeErr).Msg("Failed to close rejected runtime reconnect client")
+		}
+		a.logger.Warn().
+			Str("daemon_host", endpoint).
+			Msg("Rejected runtime reconnect outside the collector-owned rootless boundary")
 		return false
 	}
 

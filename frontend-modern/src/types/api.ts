@@ -282,6 +282,7 @@ export interface DockerRuntime {
   runtime?: string;
   runtimeVersion?: string;
   dockerVersion?: string;
+  collectionMode?: string;
   cpus: number;
   totalMemoryBytes: number;
   uptimeSeconds: number;

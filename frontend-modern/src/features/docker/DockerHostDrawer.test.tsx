@@ -78,3 +78,20 @@ describe('DockerHostDrawer Discovery availability', () => {
     expect(screen.getByTestId('docker-host-discovery')).toBeInTheDocument();
   });
 });
+
+describe('DockerHostDrawer typed-helper summary mode', () => {
+  it('warns about reduced coverage and hides container update controls', async () => {
+    const summaryHost = host();
+    if (summaryHost.docker) {
+      summaryHost.docker.collectionMode = 'typed-helper-summary';
+    }
+
+    render(() => <DockerHostDrawer host={summaryHost} />);
+
+    expect(screen.getByText('Reduced container coverage')).toBeInTheDocument();
+    expect(screen.getByText(/typed helper reports container summaries only/i)).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    expect(screen.queryByTestId('docker-host-management-actions')).toBeNull();
+  });
+});

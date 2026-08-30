@@ -2149,6 +2149,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Runtime:           runtime,
 		RuntimeVersion:    runtimeVersion,
 		DockerVersion:     dockerVersion,
+		CollectionMode:    strings.TrimSpace(report.Host.CollectionMode),
 		CPUs:              report.Host.TotalCPU,
 		TotalMemoryBytes:  report.Host.TotalMemoryBytes,
 		UptimeSeconds:     report.Host.UptimeSeconds,

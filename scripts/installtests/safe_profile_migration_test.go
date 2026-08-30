@@ -401,32 +401,40 @@ exit 23
 
 func TestSafeProfileDockerDegradationRequiresCollectorOwnedRootlessRuntime(t *testing.T) {
 	function := extractInstallShellFunction(t, "safe_profile_apply_docker_degradation")
-	for _, usable := range []bool{true, false} {
-		script := `
+	for _, tc := range []struct {
+		name          string
+		usable        bool
+		helperEnabled bool
+		want          string
+	}{
+		{name: "rootless", usable: true, helperEnabled: true, want: "enabled=true explicit=false"},
+		{name: "typed helper summary", helperEnabled: true, want: "enabled=true explicit=false"},
+		{name: "no safe source", want: "enabled=false explicit=true"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			script := `
 set -euo pipefail
 SAFE_PROFILE_ACTION=apply
 ENABLE_DOCKER=true
 DOCKER_EXPLICIT=false
+PRIVILEGED_HELPER_ENABLED=` + map[bool]string{true: "true", false: "false"}[tc.helperEnabled] + `
 ROOTLESS_RUNTIME_KIND=docker
 ROOTLESS_RUNTIME_SOCKET_PATH=/run/user/991/docker.sock
 log_info() { :; }
 log_warn() { printf '%s\n' "$*"; }
-safe_profile_selected_rootless_runtime_usable() { return ` + map[bool]string{true: "0", false: "1"}[usable] + `; }
+safe_profile_selected_rootless_runtime_usable() { return ` + map[bool]string{true: "0", false: "1"}[tc.usable] + `; }
 ` + function + `
 safe_profile_apply_docker_degradation
 printf 'enabled=%s explicit=%s\n' "$ENABLE_DOCKER" "$DOCKER_EXPLICIT"
 `
-		out, err := exec.Command("bash", "-c", script).CombinedOutput()
-		if err != nil {
-			t.Fatalf("docker degradation: %v\n%s", err, out)
-		}
-		want := "enabled=false explicit=true"
-		if usable {
-			want = "enabled=true explicit=false"
-		}
-		if !strings.Contains(string(out), want) {
-			t.Fatalf("usable=%v output missing %q:\n%s", usable, want, out)
-		}
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("docker degradation: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), tc.want) {
+				t.Fatalf("output missing %q:\n%s", tc.want, out)
+			}
+		})
 	}
 }
 

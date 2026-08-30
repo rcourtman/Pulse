@@ -1,16 +1,24 @@
 {
   "version": 1,
-  "base_sha": "b0de28c7c406468310dfbef95b00bd71400d8abb",
-  "verified_at": "2026-08-30T19:10:01Z",
+  "base_sha": "d9e9bf3679ab579be9f8c7350932008c287ad5ad",
+  "verified_at": "2026-08-30T20:24:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx"
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx": "0e3c4c5c2bb63ac5c8cd2549cb1fccea3b17d86a8bffa4dd7d0bf0aca7f45000"
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "8b1913ff24e6f5dbf074091f2bbaff1a8c3298126515ea288b055a02c0153997",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "621af65f92c9d58312f019790ecf2eb6986fb260724e9ef53213972fd9b55579",
+    "frontend-modern/src/hooks/useWorkloads.ts": "85719e8c93f503843cd09c1be41c66f9995288d1280ca2eedf7d47c3443bd9a1",
+    "frontend-modern/src/types/api.ts": "be1b1889588085791880dbd6716955710cd66e3dc69339998f8b9ad30c0ac378",
+    "frontend-modern/src/types/resource.ts": "74b26ae53a507f5608a3c191f7c386cffab636e0a95aeffa02028bd8199297b0"
   },
   "routes": [
-    "/browser-assurance-harness.html (temporary current-build Vite harness for the /docker/overview discovery proposal card)"
+    "/browser-helper-summary-harness.html (temporary current-build Vite harness for the Docker host drawer)"
   ],
   "viewports": [
     {
@@ -23,18 +31,14 @@
     }
   ],
   "states": [
-    "existing-check inventory loading, failure, retry recovery, empty inventory, and post-create duplicate detection",
-    "proposal test transport success, application failure, and request failure with scoped status or alert feedback",
-    "created active-check confirmation alongside duplicate protection",
-    "machine-review loading, populated, and load-failure states without false empty-state overlap",
-    "settled desktop and narrow card/dialog pixels from the final current-source Vite render; managed full-app startup was blocked by unrelated pulse-pro go.mod drift"
+    "typed-helper summary mode with reduced-coverage warning and no container update management card",
+    "direct-runtime mode without the reduced-coverage warning and with container update management controls",
+    "return to typed-helper summary mode after direct-runtime mode"
   ],
   "interactions": [
-    "confirmed Create active check stays disabled until existing-check inventory succeeds and retry restores it",
-    "ran successful and failed Test proposal actions and confirmed focus returns after the native loading-button blur",
-    "created an active check and confirmed status plus duplicate feedback",
-    "opened machine review, checked loading and populated states, closed with Escape, and confirmed focus return",
-    "reopened machine review on failure and confirmed proposal errors stay outside the dialog and no false empty state appears",
-    "inspected desktop and 390x844 settled pixels, topmost dialog hit testing, bounds, clipping, scrolling, and horizontal overflow"
+    "loaded summary mode and confirmed warning visibility, update-control omission, and no desktop horizontal overflow",
+    "switched to direct-runtime mode and confirmed the warning disappeared and update controls appeared",
+    "switched back to summary mode and confirmed the warning returned and update controls were removed",
+    "inspected the final summary state at 390x844 and confirmed no horizontal overflow or clipped warning copy"
   ]
 }

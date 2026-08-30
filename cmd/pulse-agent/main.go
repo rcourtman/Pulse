@@ -465,10 +465,15 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 7. Start Auto-Updater
 	var privilegedUpdate agentupdate.PrivilegedUpdate
 	helperSocket := strings.TrimSpace(os.Getenv("PULSE_AGENT_HELPER_SOCKET"))
+	var helperContainerInventory dockeragent.ContainerInventory
 	if helperSocket != "" {
 		privilegedUpdate, err = newPrivilegeHelperUpdate(helperSocket)
 		if err != nil {
 			return fmt.Errorf("configure typed privilege-helper updates: %w", err)
+		}
+		helperContainerInventory, err = dockeragent.NewPrivilegeHelperContainerInventory(helperSocket)
+		if err != nil {
+			return fmt.Errorf("configure typed privilege-helper container inventory: %w", err)
 		}
 	}
 	updater := newUpdater(agentupdate.Config{
@@ -607,11 +612,12 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			DiskExclude:                cfg.DiskExclude,
 			DiskInclude:                cfg.DiskInclude,
 			Targets:                    dockerReportTargets(cfg),
+			HelperInventory:            helperContainerInventory,
 		}
 
 		dockerAgent, err = newDockerAgent(dockerCfg)
 		if err == nil {
-			dockerUpdaterBridge.set(dockerAgent)
+			bindDockerActionBridge(dockerUpdaterBridge, dockerAgent)
 		}
 		if err != nil {
 			runtimeStatus.setState("docker", moduleStateRetrying, err)
@@ -626,7 +632,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				agent := initDockerWithRetry(ctx, dockerCfg, &logger)
 				if agent != nil {
 					dockerAgent = agent
-					dockerUpdaterBridge.set(agent)
+					bindDockerActionBridge(dockerUpdaterBridge, agent)
 					runtimeStatus.setState("docker", moduleStateRunning, nil)
 					logger.Info().Msg("Docker / Podman module started (after retry)")
 					return agent.Run(ctx)
@@ -729,6 +735,20 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 	logger.Info().Msg("Pulse Unified Agent stopped")
 	return nil
+}
+
+type containerActionCapability interface {
+	ContainerActionsAvailable() bool
+}
+
+func bindDockerActionBridge(bridge *lateBoundDockerUpdater, agent RunnableCloser) {
+	if bridge == nil || agent == nil {
+		return
+	}
+	if capability, ok := agent.(containerActionCapability); ok && !capability.ContainerActionsAvailable() {
+		return
+	}
+	bridge.set(agent)
 }
 
 func configureAgentLogger(cfg Config) (zerolog.Logger, func(), error) {

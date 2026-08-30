@@ -73,6 +73,9 @@ const toDetailRows = (rows: DockerOverviewRow[]): DetailRow[] =>
 export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps) {
   const docker = () => props.host.docker;
   const hostSourceId = createMemo(() => cleanText(docker()?.hostSourceId) || null);
+  const summaryOnly = createMemo(
+    () => cleanText(docker()?.collectionMode) === 'typed-helper-summary',
+  );
   const updatesAvailable = createMemo(() => docker()?.updatesAvailableCount ?? 0);
   const hostCommand = createMemo(() => docker()?.command as DockerHostCommandMeta | undefined);
   const hostCommandActive = createMemo(() =>
@@ -93,7 +96,7 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
   });
 
   return (
-    <Show when={hostSourceId()}>
+    <Show when={hostSourceId() && !summaryOnly()}>
       <InfoCardFrame data-testid="docker-host-management-actions" class="max-w-md">
         <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
           Container updates
@@ -164,6 +167,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
   const docker = () => props.host.docker;
   const agent = () => props.host.agent;
   const linkedAgentId = () => cleanText(agent()?.agentId);
+  const summaryOnly = () => cleanText(docker()?.collectionMode) === 'typed-helper-summary';
   const temperatureThresholds = createMemo(() =>
     alertsActivation.getMetricThresholds(
       'node',
@@ -341,11 +345,24 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
   return (
     <div class="space-y-3">
       <DrawerAttentionSection
-        items={(props.host.alerts ?? []).map((alert) => ({
-          id: alert.id,
-          message: alert.message,
-          severity: alert.level,
-        }))}
+        items={[
+          ...(summaryOnly()
+            ? [
+                {
+                  id: `${props.host.id}:typed-helper-summary`,
+                  subject: 'Reduced container coverage',
+                  message:
+                    'The typed helper reports container summaries only. Stats, secondary inventory, update checks, and lifecycle actions are unavailable.',
+                  severity: 'warning',
+                },
+              ]
+            : []),
+          ...(props.host.alerts ?? []).map((alert) => ({
+            id: alert.id,
+            message: alert.message,
+            severity: alert.level,
+          })),
+        ]}
       />
       <Show when={props.host.availability || props.host.availabilityChecks?.length}>
         <div class="max-w-sm">

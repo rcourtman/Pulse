@@ -193,11 +193,12 @@ host-bound authority-reduction API and fails closed unless `agent:exec` and
 installer-owned state-root metadata plus the Proxmox registration markers the
 apply path can mutate; it never replays collector-controlled descendant paths,
 and every rollback strips the legacy command flag rather than reversing the
-server-side reduction. Rootful Docker is an explicit migration degradation: it
-is disabled unless a
-collector-owned, readable and writable rootless runtime socket is available;
-the safe profile never restores Docker by adding the collector to a
-root-equivalent group.
+server-side reduction. Rootful Docker remains an explicit migration
+degradation: without a collector-owned, readable and writable rootless runtime
+socket, the typed helper supplies summary-only container inventory and the
+report carries `collectionMode: typed-helper-summary`. Stats, secondary
+inventory, update checks, and actions remain unavailable; the safe profile
+never restores Docker by adding the collector to a root-equivalent group.
 
 Release builds and archives carry both helper and runner binaries for the five
 Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,

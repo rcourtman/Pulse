@@ -65,6 +65,9 @@ type Config struct {
 	DiskInclude                []string // Devices or mount points to opt into monitoring despite automatic filtering
 	LogLevel                   zerolog.Level
 	Logger                     *zerolog.Logger
+	// HelperInventory is the optional closed, summary-only fallback used when
+	// this process cannot access a container runtime socket directly.
+	HelperInventory ContainerInventory
 }
 
 var allowedContainerStates = map[string]string{
@@ -114,6 +117,7 @@ func setAgentHeaders(req *http.Request, token string) {
 type Agent struct {
 	cfg                 Config
 	docker              dockerClient
+	helperInventory     ContainerInventory
 	daemonHost          string
 	daemonID            string // Cached at init; Podman can return unstable IDs across calls
 	runtime             RuntimeKind
@@ -272,9 +276,47 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("dockeragent.New: normalize runtime: %w", err)
 	}
 
-	dockerClient, info, runtimeKind, err := connectRuntimeFn(runtimePref, logger)
-	if err != nil {
-		return nil, fmt.Errorf("dockeragent.New: connect runtime: %w", err)
+	connect := connectRuntimeFn
+	if cfg.HelperInventory != nil {
+		// The helper profile must reject rootful, remote, and otherwise
+		// untrusted endpoints before even the read-only daemon probe runs.
+		connect = connectCollectorRuntimeFn
+	}
+	runtimeDockerClient, info, runtimeKind, connectErr := connect(runtimePref, logger)
+	if connectErr == nil && cfg.HelperInventory != nil && !collectorOwnsRootlessEndpoint(runtimeDockerClient.DaemonHost()) {
+		endpoint := runtimeDockerClient.DaemonHost()
+		closeErr := runtimeDockerClient.Close()
+		runtimeDockerClient = nil
+		connectErr = fmt.Errorf("direct runtime endpoint %q is not a collector-owned rootless Unix socket", endpoint)
+		if closeErr != nil {
+			connectErr = errors.Join(connectErr, fmt.Errorf("close rejected direct runtime client: %w", closeErr))
+		}
+	}
+	if connectErr != nil && cfg.HelperInventory == nil {
+		return nil, fmt.Errorf("dockeragent.New: connect runtime: %w", connectErr)
+	}
+	if connectErr != nil {
+		probeCtx, cancelProbe := context.WithTimeout(context.Background(), helperInventoryOperationDeadline)
+		result, helperErr := cfg.HelperInventory.Inventory(probeCtx)
+		cancelProbe()
+		if helperErr != nil {
+			return nil, errors.Join(
+				fmt.Errorf("dockeragent.New: connect runtime: %w", connectErr),
+				fmt.Errorf("dockeragent.New: connect typed helper inventory: %w", helperErr),
+			)
+		}
+		snapshot, helperErr := selectHelperRuntime(result, runtimePref)
+		if helperErr != nil {
+			return nil, errors.Join(fmt.Errorf("dockeragent.New: connect runtime: %w", connectErr), helperErr)
+		}
+		runtimeKind = RuntimeKind(snapshot.Runtime)
+		cfg.DisableUpdateChecks = true
+		cfg.IncludeServices = false
+		cfg.IncludeTasks = false
+		logger.Info().
+			Str("runtime", string(runtimeKind)).
+			Str("collection_mode", agentsdocker.CollectionModeTypedHelperSummary).
+			Msg("Connected to container runtime through typed summary-only helper")
 	}
 	cfg.Runtime = string(runtimeKind)
 
@@ -289,11 +331,13 @@ func New(cfg Config) (*Agent, error) {
 		cfg.IncludeTasks = false
 	}
 
-	logger.Info().
-		Str("runtime", string(runtimeKind)).
-		Str("daemon_host", dockerClient.DaemonHost()).
-		Str("version", info.ServerVersion).
-		Msg("Connected to container runtime")
+	if runtimeDockerClient != nil {
+		logger.Info().
+			Str("runtime", string(runtimeKind)).
+			Str("daemon_host", runtimeDockerClient.DaemonHost()).
+			Str("version", info.ServerVersion).
+			Msg("Connected to container runtime")
+	}
 
 	hasSecure := false
 	hasInsecure := false
@@ -363,10 +407,20 @@ func New(cfg Config) (*Agent, error) {
 		}
 	}
 
+	var runtimeClient dockerClient
+	var helperInventory ContainerInventory
+	daemonHost := ""
+	if runtimeDockerClient != nil {
+		runtimeClient = newSwappableDockerClient(runtimeDockerClient)
+		daemonHost = runtimeDockerClient.DaemonHost()
+	} else {
+		helperInventory = cfg.HelperInventory
+	}
 	agent := &Agent{
 		cfg:                cfg,
-		docker:             newSwappableDockerClient(dockerClient),
-		daemonHost:         dockerClient.DaemonHost(),
+		docker:             runtimeClient,
+		helperInventory:    helperInventory,
+		daemonHost:         daemonHost,
 		daemonID:           info.ID, // Cache at init for stable agent ID
 		runtime:            runtimeKind,
 		runtimePref:        runtimePref,
@@ -550,6 +604,20 @@ type runtimeCandidate struct {
 }
 
 func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+	return connectRuntimeWithProbe(preference, logger, tryRuntimeCandidateFn)
+}
+
+func connectCollectorOwnedRootlessRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+	return connectRuntimeWithProbe(preference, logger, func(opts []client.Opt) (dockerClient, systemtypes.Info, error) {
+		return tryRuntimeCandidateWithEndpointAdmission(opts, collectorOwnsRootlessEndpoint)
+	})
+}
+
+func connectRuntimeWithProbe(
+	preference RuntimeKind,
+	logger *zerolog.Logger,
+	probe func([]client.Opt) (dockerClient, systemtypes.Info, error),
+) (dockerClient, systemtypes.Info, RuntimeKind, error) {
 	candidates := buildRuntimeCandidatesFn(preference)
 	var attempts []string
 
@@ -562,7 +630,7 @@ func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClien
 			opts = append(opts, client.WithHost(candidate.host))
 		}
 
-		cli, info, err := tryRuntimeCandidateFn(opts)
+		cli, info, err := probe(opts)
 		if err != nil {
 			attempts = append(attempts, fmt.Sprintf("%s: %v", candidate.label, err))
 			continue
@@ -608,6 +676,29 @@ func tryRuntimeCandidate(opts []client.Opt) (dockerClient, systemtypes.Info, err
 	if err != nil {
 		return nil, systemtypes.Info{}, err
 	}
+	return probeRuntimeClient(cli)
+}
+
+func tryRuntimeCandidateWithEndpointAdmission(
+	opts []client.Opt,
+	admit func(string) bool,
+) (dockerClient, systemtypes.Info, error) {
+	cli, err := newDockerClientFn(opts...)
+	if err != nil {
+		return nil, systemtypes.Info{}, err
+	}
+	endpoint := cli.DaemonHost()
+	if admit == nil || !admit(endpoint) {
+		err := fmt.Errorf("runtime endpoint %q is outside the collector-owned rootless boundary", endpoint)
+		if closeErr := cli.Close(); closeErr != nil {
+			return nil, systemtypes.Info{}, errors.Join(err, fmt.Errorf("close rejected runtime client: %w", closeErr))
+		}
+		return nil, systemtypes.Info{}, err
+	}
+	return probeRuntimeClient(cli)
+}
+
+func probeRuntimeClient(cli dockerClient) (dockerClient, systemtypes.Info, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -781,6 +872,9 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	ticker := newTickerFn(interval)
 	defer ticker.Stop()
+	if a.helperInventory != nil {
+		return a.runHelperInventoryLoop(ctx, ticker)
+	}
 
 	const (
 		updateInterval        = 24 * time.Hour
@@ -837,6 +931,25 @@ func (a *Agent) Run(ctx context.Context) error {
 			updateTimer.Reset(nextDelay)
 		case <-cleanupTicker.C:
 			go a.cleanupOrphanedBackups(ctx)
+		}
+	}
+}
+
+func (a *Agent) runHelperInventoryLoop(ctx context.Context, ticker *time.Ticker) error {
+	collect := func(phase string) {
+		if err := a.collectOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			a.logger.Error().Err(err).Str("phase", phase).
+				Str("collection_mode", agentsdocker.CollectionModeTypedHelperSummary).
+				Msg("Failed to send typed helper container summary")
+		}
+	}
+	collect("startup")
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			collect("periodic")
 		}
 	}
 }
@@ -906,8 +1019,14 @@ func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report,
 	a.collectMu.Lock()
 	defer a.collectMu.Unlock()
 
-	report, err := a.buildReport(ctx)
-	if err != nil && a.maybeReconnectRuntime(err) {
+	var report agentsdocker.Report
+	var err error
+	if a.helperInventory != nil {
+		report, err = a.buildHelperInventoryReport(ctx)
+	} else {
+		report, err = a.buildReport(ctx)
+	}
+	if err != nil && a.helperInventory == nil && a.maybeReconnectRuntime(err) {
 		report, err = a.buildReport(ctx)
 	}
 	if err != nil {
@@ -919,6 +1038,13 @@ func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report,
 		return report, err
 	}
 	return report, nil
+}
+
+// ContainerActionsAvailable reports whether this module owns a direct runtime
+// client. Summary-only helper inventory never grants lifecycle or update
+// authority to the collector.
+func (a *Agent) ContainerActionsAvailable() bool {
+	return a != nil && a.helperInventory == nil && a.docker != nil
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {

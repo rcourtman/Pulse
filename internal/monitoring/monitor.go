@@ -4042,6 +4042,7 @@ func dockerHostFromReadStateView(view *unifiedresources.DockerHostView) models.D
 		Runtime:           view.Runtime(),
 		RuntimeVersion:    view.RuntimeVersion(),
 		DockerVersion:     view.DockerVersion(),
+		CollectionMode:    view.CollectionMode(),
 		CPUs:              view.CPUs(),
 		TotalMemoryBytes:  totalMemory,
 		UptimeSeconds:     view.UptimeSeconds(),

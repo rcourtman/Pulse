@@ -792,6 +792,7 @@ export interface ResourceDockerMeta {
   runtime?: string;
   runtimeVersion?: string;
   dockerVersion?: string;
+  collectionMode?: string;
   memory?: Partial<Memory>;
   os?: string;
   kernelVersion?: string;
