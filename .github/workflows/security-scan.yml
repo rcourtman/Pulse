@@ -1,10 +1,11 @@
 name: Security Scan
 
 # Build and Test audits dependencies on every push, but a quiet week with no
-# pushes means no run — and newly disclosed vulnerabilities land against
-# unchanged code. This schedule is the backstop: it re-scans every Go module
-# and npm lockfile against the current advisory databases. A failed scheduled
-# run emails the repository owner.
+# pushes means no run — and newly disclosed vulnerabilities or delivery drift
+# land against unchanged code. This schedule is the backstop: it re-scans every
+# Go module and npm lockfile against the current advisory databases, then
+# verifies the latest stable packet from the same public surfaces customers
+# consume. A failed scheduled run emails the repository owner.
 on:
   schedule:
     - cron: '30 5 * * 1' # weekly, Monday 05:30 UTC, before the 06:00 triage run
@@ -14,6 +15,212 @@ permissions:
   contents: read
 
 jobs:
+  release-continuity:
+    name: Latest stable release continuity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout release verification controls
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.15.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Resolve the advertised stable release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-continuity-evidence
+          release_json=release-continuity-evidence/release.json
+          marker=release-continuity-evidence/release-activation.json
+
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${REPOSITORY}/releases/latest" > "${release_json}"
+          jq -e '
+            (.id | type == "number") and
+            (.tag_name | type == "string" and test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) and
+            (.target_commitish | type == "string" and test("^[0-9a-f]{40}$")) and
+            .draft == false and .prerelease == false and .immutable == true and
+            (.published_at | type == "string" and length > 0)
+          ' "${release_json}" >/dev/null
+
+          tag="$(jq -r '.tag_name' "${release_json}")"
+          release_id="$(jq -r '.id' "${release_json}")"
+          source_sha="$(jq -r '.target_commitish' "${release_json}")"
+          gh release download "${tag}" \
+            --repo "${REPOSITORY}" \
+            --pattern release-activation.json \
+            --dir release-continuity-evidence
+
+          jq -e \
+            --arg tag "${tag}" \
+            --arg release_id "${release_id}" \
+            --arg source_sha "${source_sha}" \
+            '.schema_version == 1 and .tag == $tag and
+             .release_id == $release_id and .target_commitish == $source_sha and
+             (.source_release_run_id | test("^[0-9]+$")) and
+             (.convergence_run_id | test("^[0-9]+$")) and
+             (.r2_prefix | type == "string" and length > 0) and
+             (.server_image_digest | test("^sha256:[0-9a-f]{64}$")) and
+             (.control_plane_image_digest | test("^sha256:[0-9a-f]{64}$")) and
+             (.helm_chart_digest | test("^sha256:[0-9a-f]{64}$"))' \
+            "${marker}" >/dev/null
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
+          echo "source_sha=${source_sha}" >> "${GITHUB_OUTPUT}"
+          echo "activation_sha256=$(sha256sum "${marker}" | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
+          echo "server_image_digest=$(jq -r '.server_image_digest' "${marker}")" >> "${GITHUB_OUTPUT}"
+          echo "control_plane_image_digest=$(jq -r '.control_plane_image_digest' "${marker}")" >> "${GITHUB_OUTPUT}"
+          echo "helm_chart_digest=$(jq -r '.helm_chart_digest' "${marker}")" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify immutable release and build provenance
+        id: packet
+        if: ${{ always() && steps.release.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
+        run: >-
+          ./scripts/verify-github-release-integrity.sh
+          "${TAG}" "${REPOSITORY}" "${RELEASE_ID}" "${SOURCE_SHA}"
+
+      - name: Authenticate every published release asset
+        id: assets
+        if: ${{ always() && steps.release.outcome == 'success' }}
+        env:
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: ./scripts/validate-published-release.sh "${TAG}" "${REPOSITORY}"
+
+      - name: Verify exact-version container identities
+        id: containers
+        if: ${{ always() && steps.release.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
+          EXPECTED_SERVER_DIGEST: ${{ steps.release.outputs.server_image_digest }}
+          EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}
+        run: |
+          set -euo pipefail
+          proof="$(./scripts/verify-release-container-images.sh "${TAG}" "${SOURCE_SHA}" "${REPOSITORY}")"
+          printf '%s\n' "${proof}"
+          server_digest="$(awk -F= '$1 == "server_digest" {print $2}' <<<"${proof}")"
+          control_plane_digest="$(awk -F= '$1 == "control_plane_digest" {print $2}' <<<"${proof}")"
+          if [ "${server_digest}" != "${EXPECTED_SERVER_DIGEST}" ] || \
+             [ "${control_plane_digest}" != "${EXPECTED_CONTROL_PLANE_DIGEST}" ]; then
+            echo "::error::Exact-version container identities moved from the committed activation marker."
+            exit 1
+          fi
+
+      - name: Verify exact-version Helm identity
+        id: helm
+        if: ${{ always() && steps.release.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
+          EXPECTED_HELM_DIGEST: ${{ steps.release.outputs.helm_chart_digest }}
+        run: >-
+          ./scripts/verify-release-helm-chart.sh
+          "${TAG}" "${SOURCE_SHA}" "${REPOSITORY}" "${EXPECTED_HELM_DIGEST}"
+
+      - name: Record continuity evidence
+        if: ${{ always() }}
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
+          ACTIVATION_SHA256: ${{ steps.release.outputs.activation_sha256 }}
+          SERVER_IMAGE_DIGEST: ${{ steps.release.outputs.server_image_digest }}
+          CONTROL_PLANE_IMAGE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}
+          HELM_CHART_DIGEST: ${{ steps.release.outputs.helm_chart_digest }}
+          RELEASE_RESULT: ${{ steps.release.outcome }}
+          PACKET_RESULT: ${{ steps.packet.outcome }}
+          ASSET_RESULT: ${{ steps.assets.outcome }}
+          CONTAINER_RESULT: ${{ steps.containers.outcome }}
+          HELM_RESULT: ${{ steps.helm.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-continuity-evidence
+          checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n \
+            --arg schema_version "1" \
+            --arg checked_at "${checked_at}" \
+            --arg repository "${REPOSITORY}" \
+            --arg run_id "${RUN_ID}" \
+            --arg run_attempt "${RUN_ATTEMPT}" \
+            --arg tag "${TAG}" \
+            --arg release_id "${RELEASE_ID}" \
+            --arg source_sha "${SOURCE_SHA}" \
+            --arg activation_sha256 "${ACTIVATION_SHA256}" \
+            --arg server_image_digest "${SERVER_IMAGE_DIGEST}" \
+            --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
+            --arg helm_chart_digest "${HELM_CHART_DIGEST}" \
+            --arg release_result "${RELEASE_RESULT}" \
+            --arg packet_result "${PACKET_RESULT}" \
+            --arg asset_result "${ASSET_RESULT}" \
+            --arg container_result "${CONTAINER_RESULT}" \
+            --arg helm_result "${HELM_RESULT}" \
+            '{
+              schema_version: ($schema_version | tonumber),
+              checked_at: $checked_at,
+              repository: $repository,
+              workflow_run: {id: $run_id, attempt: $run_attempt},
+              release: {
+                tag: $tag,
+                id: $release_id,
+                source_sha: $source_sha,
+                activation_sha256: $activation_sha256,
+                server_image_digest: $server_image_digest,
+                control_plane_image_digest: $control_plane_image_digest,
+                helm_chart_digest: $helm_chart_digest
+              },
+              checks: {
+                release_resolution: $release_result,
+                immutable_packet_and_provenance: $packet_result,
+                authenticated_assets: $asset_result,
+                container_identities: $container_result,
+                helm_identity: $helm_result
+              }
+            }' > release-continuity-evidence/continuity-evidence.json
+          cat release-continuity-evidence/continuity-evidence.json >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Retain continuity evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-continuity-${{ steps.release.outputs.tag || 'unresolved' }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-continuity-evidence
+          if-no-files-found: error
+          retention-days: 90
+
   container-lifecycle:
     name: Container trust and support window
     runs-on: ubuntu-24.04

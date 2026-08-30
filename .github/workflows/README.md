@@ -17,6 +17,18 @@ enumerates scopes instead of using `read-all` or `write-all`. Workflow inputs,
 secrets, and `github.token` are passed to `run` steps through `env`; they are
 data and must never be interpolated into the generated shell program.
 
+## Release Continuity
+
+The weekly `security-scan.yml` backstop also verifies the latest advertised
+stable release from the public surfaces customers use. It binds the immutable
+GitHub release and activation marker to one source commit, authenticates every
+checksummed release asset and SSH signature, re-verifies release and build
+attestations, and requires the exact Docker Hub, GHCR, and OCI Helm identities
+to remain equal to the digests committed at activation. Every run retains a
+machine-readable evidence packet for 90 days, including partial outcomes when
+a check fails. The job is read-only and requires the public
+`PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable.
+
 ## Issue Triage Automation
 
 **Files**:

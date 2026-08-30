@@ -144,6 +144,40 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "security-scan.yml"))
+	if err != nil {
+		t.Fatalf("read security scan workflow: %v", err)
+	}
+	workflow := string(content)
+	required := []string{
+		"release-continuity:",
+		"Latest stable release continuity",
+		"docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5",
+		`"repos/${REPOSITORY}/releases/latest"`,
+		`.draft == false and .prerelease == false and .immutable == true`,
+		`.release_id == $release_id and .target_commitish == $source_sha`,
+		`./scripts/verify-github-release-integrity.sh`,
+		`./scripts/validate-published-release.sh`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
+		`./scripts/verify-release-container-images.sh`,
+		`EXPECTED_SERVER_DIGEST: ${{ steps.release.outputs.server_image_digest }}`,
+		`EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}`,
+		`./scripts/verify-release-helm-chart.sh`,
+		`EXPECTED_HELM_DIGEST: ${{ steps.release.outputs.helm_chart_digest }}`,
+		"continuity-evidence.json",
+		"retention-days: 90",
+	}
+	for _, needle := range required {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("scheduled release continuity check missing contract: %s", needle)
+		}
+	}
+	if strings.Contains(workflowJobBlock(t, workflow, "release-continuity"), "contents: write") {
+		t.Fatal("scheduled release continuity check must remain read-only")
+	}
+}
+
 func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
 	if err != nil {
