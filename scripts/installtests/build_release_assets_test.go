@@ -2512,12 +2512,52 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	for _, needle := range []string{
 		`detect_platform()`,
 		`choose_install_dir()`,
-		`PULSE_MCP_NO_VERIFY`,
+		`PINNED_RELEASE_SSH_PUBLIC_KEY`,
 		`checksums.txt`,
+		`checksums.txt.sshsig`,
+		`ssh-keygen -Y verify`,
 		`sha256 mismatch`,
 	} {
 		if !strings.Contains(string(mcpScript), needle) {
 			t.Fatalf("install-mcp.sh missing required helper or guard: %s", needle)
+		}
+	}
+
+	// Unix installers consume bare binaries, not the versioned archives. Keep
+	// those exact assets in the signed manifest; the broad pulse-*.tar.gz and
+	// pulse-*.exe patterns otherwise leave only Unix bare MCP binaries out.
+	commonContent, err := os.ReadFile(repoFile("scripts", "release_asset_common.sh"))
+	if err != nil {
+		t.Fatalf("read release_asset_common.sh: %v", err)
+	}
+	for _, needle := range []string{
+		`checksum_files+=( pulse-mcp-linux-* )`,
+		`checksum_files+=( pulse-mcp-darwin-* )`,
+		`checksum_files+=( pulse-mcp-freebsd-* )`,
+	} {
+		if !strings.Contains(string(commonContent), needle) {
+			t.Fatalf("release checksum collection missing bare MCP assets: %s", needle)
+		}
+	}
+
+	releaseDir := t.TempDir()
+	for _, asset := range []string{
+		"pulse-mcp-linux-amd64",
+		"pulse-mcp-darwin-arm64",
+		"pulse-mcp-freebsd-amd64",
+	} {
+		if err := os.WriteFile(filepath.Join(releaseDir, asset), []byte(asset), 0o755); err != nil {
+			t.Fatalf("write MCP checksum fixture: %v", err)
+		}
+	}
+	checksumCmd := exec.Command("bash", "-c", `source "$1"; pulse_release_collect_checksum_files "$2"`, "pulse-mcp-checksum-test", repoFile("scripts", "release_asset_common.sh"), releaseDir)
+	checksumOutput, err := checksumCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("collect MCP release checksum files: %v\n%s", err, checksumOutput)
+	}
+	for _, asset := range []string{"pulse-mcp-linux-amd64", "pulse-mcp-darwin-arm64", "pulse-mcp-freebsd-amd64"} {
+		if !strings.Contains(string(checksumOutput), asset) {
+			t.Fatalf("bare MCP release asset %s missing from checksum/signature input:\n%s", asset, checksumOutput)
 		}
 	}
 
@@ -2527,8 +2567,10 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	}
 	for _, needle := range []string{
 		`function Resolve-Architecture`,
-		`PULSE_MCP_NO_VERIFY`,
+		`$PinnedReleaseSshPublicKey`,
 		`checksums.txt`,
+		`checksums.txt.sshsig`,
+		`Assert-ChecksumManifestSignature`,
 		`Get-FileHash -Path $tmp -Algorithm SHA256`,
 		`sha256 mismatch`,
 	} {

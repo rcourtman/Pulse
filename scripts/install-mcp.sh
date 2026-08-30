@@ -4,8 +4,8 @@
 #
 # Detects the local platform/architecture, downloads the matching
 # pulse-mcp binary from the latest GitHub Release, verifies the
-# SHA256 checksum against the published checksums file, and places
-# the binary on PATH.
+# signed checksum manifest against Pulse's pinned release key, verifies the
+# binary's SHA256 digest, and places the binary on PATH.
 #
 # Usage:
 #   curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh | bash
@@ -16,7 +16,6 @@
 #   PULSE_MCP_BIN_DIR   Where to install the binary.
 #                       Default: $HOME/.local/bin if writable, else /usr/local/bin.
 #   PULSE_MCP_REPO      GitHub repo to download from. Default: rcourtman/Pulse.
-#   PULSE_MCP_NO_VERIFY If "1", skip SHA256 verification (not recommended).
 #
 # After install, configure your MCP client per `cmd/pulse-mcp/README.md` in the
 # Pulse repository (or `docs/AGENT_SUBSTRATE.md` in your installed Pulse server).
@@ -28,7 +27,13 @@ set -euo pipefail
 
 REPO="${PULSE_MCP_REPO:-rcourtman/Pulse}"
 VERSION="${PULSE_MCP_VERSION:-latest}"
-NO_VERIFY="${PULSE_MCP_NO_VERIFY:-}"
+SIGNATURE_IDENTITY="pulse-installer"
+SIGNATURE_NAMESPACE="pulse-install"
+PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
+tmp=""
+checksums_tmp=""
+signature_tmp=""
+allowed_signers=""
 
 log() {
     printf '[install-mcp] %s\n' "$*"
@@ -115,8 +120,10 @@ main() {
     require_cmd curl
     require_cmd uname
     require_cmd install
+    require_cmd ssh-keygen
 
-    local platform install_dir base bin_name url tmp checksums_url checksums_tmp
+    local platform install_dir base bin_name url checksums_url
+    local signature_url expected actual matches
     platform="$(detect_platform)"
     install_dir="$(choose_install_dir)"
     base="$(resolve_release_base)"
@@ -136,35 +143,50 @@ If a release exists for this version, the binary may not yet be published for ${
 Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mcp@latest"
     fi
 
-    if [ "${NO_VERIFY}" != "1" ]; then
-        local sha_cmd
-        if command -v sha256sum >/dev/null 2>&1; then
-            sha_cmd="sha256sum"
-        elif command -v shasum >/dev/null 2>&1; then
-            sha_cmd="shasum -a 256"
-        else
-            err "no sha256 tool found (sha256sum or shasum). Set PULSE_MCP_NO_VERIFY=1 to skip verification."
-        fi
-
-        checksums_url="${base}/checksums.txt"
-        checksums_tmp="$(mktemp -t pulse-mcp-sums.XXXXXX)"
-        trap 'rm -f "${tmp}" "${checksums_tmp}"' EXIT
-        if ! curl -fsSL --retry 3 "${checksums_url}" -o "${checksums_tmp}"; then
-            log "warning: could not fetch checksums.txt; skipping verification"
-        else
-            local expected actual
-            expected="$(awk -v name="${bin_name}" '$2 == name {print $1; exit}' "${checksums_tmp}" || true)"
-            if [ -z "${expected}" ]; then
-                log "warning: ${bin_name} not listed in checksums.txt; skipping verification"
-            else
-                actual="$(${sha_cmd} "${tmp}" | awk '{print $1}')"
-                if [ "${expected}" != "${actual}" ]; then
-                    err "sha256 mismatch for ${bin_name}: expected ${expected}, got ${actual}"
-                fi
-                log "sha256 verified"
-            fi
-        fi
+    local sha_cmd
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha_cmd="sha256sum"
+    elif command -v shasum >/dev/null 2>&1; then
+        sha_cmd="shasum -a 256"
+    else
+        err "no sha256 tool found (sha256sum or shasum); refusing unverified install"
     fi
+
+    checksums_url="${base}/checksums.txt"
+    signature_url="${checksums_url}.sshsig"
+    checksums_tmp="$(mktemp -t pulse-mcp-sums.XXXXXX)"
+    signature_tmp="$(mktemp -t pulse-mcp-signature.XXXXXX)"
+    allowed_signers="$(mktemp -t pulse-mcp-signers.XXXXXX)"
+    trap 'rm -f "${tmp}" "${checksums_tmp}" "${signature_tmp}" "${allowed_signers}"' EXIT
+
+    if ! curl -fsSL --retry 3 "${checksums_url}" -o "${checksums_tmp}"; then
+        err "could not fetch checksums.txt; refusing unverified install"
+    fi
+    if ! curl -fsSL --retry 3 "${signature_url}" -o "${signature_tmp}"; then
+        err "could not fetch checksums.txt.sshsig; refusing unverified install"
+    fi
+
+    printf '%s %s\n' "${SIGNATURE_IDENTITY}" "${PINNED_RELEASE_SSH_PUBLIC_KEY}" > "${allowed_signers}"
+    if ! ssh-keygen -Y verify \
+        -f "${allowed_signers}" \
+        -I "${SIGNATURE_IDENTITY}" \
+        -n "${SIGNATURE_NAMESPACE}" \
+        -s "${signature_tmp}" < "${checksums_tmp}" >/dev/null 2>&1; then
+        err "cryptographic signature verification failed for checksums.txt"
+    fi
+    log "release signature verified"
+
+    matches="$(awk -v name="${bin_name}" '$2 == name && NF == 2 {count++; checksum=$1} END {if (count == 1) print checksum; else exit 1}' "${checksums_tmp}" || true)"
+    expected="$(printf '%s' "${matches}" | tr '[:upper:]' '[:lower:]')"
+    if ! printf '%s' "${expected}" | grep -Eq '^[0-9a-f]{64}$'; then
+        err "checksums.txt must contain exactly one valid SHA256 entry for ${bin_name}"
+    fi
+
+    actual="$(${sha_cmd} "${tmp}" | awk '{print tolower($1)}')"
+    if [ "${expected}" != "${actual}" ]; then
+        err "sha256 mismatch for ${bin_name}: expected ${expected}, got ${actual}"
+    fi
+    log "sha256 verified"
 
     install -m 0755 "${tmp}" "${install_dir}/pulse-mcp"
     log "installed: ${install_dir}/pulse-mcp"

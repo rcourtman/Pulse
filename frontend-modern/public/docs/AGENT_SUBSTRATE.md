@@ -71,8 +71,10 @@ outcome without polling the audit endpoint.
   notifications on the stdio channel, which lets an autonomous MCP-bound agent
   react to push events without holding a separate HTTP connection. The
   one-line installers `install-mcp.sh` and `install-mcp.ps1` fetch the
-  matching binary from the latest Pulse release and verify its checksum.
-  Building from source stays available.
+  matching binary from the latest Pulse release, verify the checksum manifest
+  against Pulse's pinned release key, and then verify the binary's checksum.
+  They refuse installation when any integrity evidence is unavailable or
+  invalid. Building from source stays available.
 
 - **`cmd/agent-probe`** is a small Go binary that walks the discovery,
   triage, depth, and push flow against a running instance. Use it as a smoke

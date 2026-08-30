@@ -3301,7 +3301,9 @@ used by Pulse Assistant to OpenCode, Claude Desktop, Claude Code, or
 other MCP-speaking clients. The installers fetch a published
 `pulse-mcp-<os>-<arch>` binary from the latest GitHub Release,
 verify SHA256 against the same `checksums.txt` the rest of the
-release uses, and place the binary at `~/.local/bin/pulse-mcp`
+release uses, first verifying `checksums.txt.sshsig` against the pinned
+Pulse release key and failing closed if either integrity artifact is missing,
+invalid, or ambiguous, and place the binary at `~/.local/bin/pulse-mcp`
 (Unix) or `$LOCALAPPDATA\pulse-mcp\pulse-mcp.exe` (Windows). The
 binary takes no version ldflags because it reads the manifest
 from the Pulse instance it points at. `scripts/build-release.sh`
@@ -3316,7 +3318,7 @@ and `.../install-mcp.sh` are stable redirect targets the
 installers consume. macOS notarization is intentionally skipped
 for v1: the README documents the Gatekeeper bypass and the
 install-script flow downloads the same unsigned binary, with the
-audit trail of SHA256 verification preserved.
+audit trail of signed-manifest and SHA256 verification preserved.
 The adapter's complete request/response tool-list projection, manifest
 projection, capability and governance metadata formatting, request/response
 tool filtering, typed input-schema projection, and API route/body call

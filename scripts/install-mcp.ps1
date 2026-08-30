@@ -1,8 +1,8 @@
 # Pulse MCP Server Adapter Installer (Windows)
 #
 # Detects the local architecture, downloads the matching pulse-mcp.exe
-# from the latest GitHub Release, verifies SHA256 against the published
-# checksums file, and places the binary on PATH.
+# from the latest GitHub Release, verifies the signed checksum manifest against
+# Pulse's pinned release key, verifies SHA256, and places the binary on PATH.
 #
 # Usage:
 #   irm https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.ps1 | iex
@@ -11,7 +11,6 @@
 #   PULSE_MCP_VERSION   Override the version to install. Default: latest.
 #   PULSE_MCP_BIN_DIR   Where to install. Default: $env:LOCALAPPDATA\pulse-mcp.
 #   PULSE_MCP_REPO      GitHub repo. Default: rcourtman/Pulse.
-#   PULSE_MCP_NO_VERIFY If "1", skip SHA256 verification (not recommended).
 #
 # After install, configure your MCP client per `cmd/pulse-mcp/README.md`
 # in the Pulse repository (or your installed Pulse server's `docs/AGENT_SUBSTRATE.md`).
@@ -19,8 +18,7 @@
 param (
     [string]$Version = $env:PULSE_MCP_VERSION,
     [string]$BinDir = $env:PULSE_MCP_BIN_DIR,
-    [string]$Repo = $env:PULSE_MCP_REPO,
-    [switch]$NoVerify
+    [string]$Repo = $env:PULSE_MCP_REPO
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,7 +26,9 @@ $ErrorActionPreference = 'Stop'
 if (-not $Version) { $Version = 'latest' }
 if (-not $Repo) { $Repo = 'rcourtman/Pulse' }
 if (-not $BinDir) { $BinDir = Join-Path $env:LOCALAPPDATA 'pulse-mcp' }
-if ($env:PULSE_MCP_NO_VERIFY -eq '1') { $NoVerify = $true }
+$SignatureIdentity = 'pulse-installer'
+$SignatureNamespace = 'pulse-install'
+$PinnedReleaseSshPublicKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer'
 
 function Write-Log($message) {
     Write-Host "[install-mcp] $message"
@@ -53,22 +53,73 @@ function Resolve-ReleaseBase {
     return "https://github.com/$Repo/releases/download/$Version"
 }
 
-function Get-RemoteChecksum($base, $binaryName) {
-    $checksumsUrl = "$base/checksums.txt"
+function Get-SshKeygenPath {
+    $command = Get-Command ssh-keygen.exe -ErrorAction SilentlyContinue
+    if ($null -eq $command) {
+        $command = Get-Command ssh-keygen -ErrorAction SilentlyContinue
+    }
+    if ($null -eq $command) {
+        throw 'ssh-keygen is required to verify signed Pulse downloads; refusing unverified install'
+    }
+    return $command.Source
+}
+
+function Assert-ChecksumManifestSignature($manifestPath, $signaturePath) {
+    $allowedSignersPath = [System.IO.Path]::GetTempFileName()
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
     try {
-        $response = Invoke-WebRequest -Uri $checksumsUrl -UseBasicParsing -ErrorAction Stop
-    } catch {
-        Write-Log "warning: could not fetch checksums.txt; skipping verification"
-        return $null
-    }
-    foreach ($line in $response.Content -split "`n") {
-        $parts = $line.Trim() -split '\s+', 2
-        if ($parts.Length -eq 2 -and $parts[1] -eq $binaryName) {
-            return $parts[0]
+        [System.IO.File]::WriteAllText($allowedSignersPath, "$SignatureIdentity $PinnedReleaseSshPublicKey`n")
+        $sshKeygen = Get-SshKeygenPath
+        $commandLine = "`"$sshKeygen`" -Y verify -f `"$allowedSignersPath`" -I `"$SignatureIdentity`" -n `"$SignatureNamespace`" -s `"$signaturePath`" < `"$manifestPath`""
+        $process = Start-Process -FilePath 'cmd.exe' `
+                                 -ArgumentList '/d', '/s', '/c', $commandLine `
+                                 -NoNewWindow `
+                                 -Wait `
+                                 -PassThru `
+                                 -RedirectStandardOutput $stdoutPath `
+                                 -RedirectStandardError $stderrPath
+        if ($process.ExitCode -ne 0) {
+            throw 'cryptographic signature verification failed for checksums.txt'
         }
+    } finally {
+        Remove-Item -Force $allowedSignersPath, $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
     }
-    Write-Log "warning: $binaryName not listed in checksums.txt; skipping verification"
-    return $null
+}
+
+function Get-VerifiedRemoteChecksum($base, $binaryName) {
+    $checksumsUrl = "$base/checksums.txt"
+    $signatureUrl = "$checksumsUrl.sshsig"
+    $manifestPath = [System.IO.Path]::GetTempFileName()
+    $signaturePath = [System.IO.Path]::GetTempFileName()
+    try {
+        try {
+            Invoke-WebRequest -Uri $checksumsUrl -UseBasicParsing -OutFile $manifestPath -ErrorAction Stop
+        } catch {
+            throw 'could not fetch checksums.txt; refusing unverified install'
+        }
+        try {
+            Invoke-WebRequest -Uri $signatureUrl -UseBasicParsing -OutFile $signaturePath -ErrorAction Stop
+        } catch {
+            throw 'could not fetch checksums.txt.sshsig; refusing unverified install'
+        }
+        Assert-ChecksumManifestSignature $manifestPath $signaturePath
+        Write-Log 'release signature verified'
+
+        $matches = @()
+        foreach ($line in [System.IO.File]::ReadAllLines($manifestPath)) {
+            $parts = $line.Trim() -split '\s+', 2
+            if ($parts.Length -eq 2 -and $parts[1] -ceq $binaryName) {
+                $matches += $parts[0]
+            }
+        }
+        if ($matches.Count -ne 1 -or $matches[0] -notmatch '^[0-9a-fA-F]{64}$') {
+            throw "checksums.txt must contain exactly one valid SHA256 entry for $binaryName"
+        }
+        return $matches[0].ToLowerInvariant()
+    } finally {
+        Remove-Item -Force $manifestPath, $signaturePath -ErrorAction SilentlyContinue
+    }
 }
 
 function Main {
@@ -94,16 +145,12 @@ function Main {
             throw "download failed: $url`nIf a release exists for this version, the binary may not yet be published for $platform.`nBuild from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mcp@latest"
         }
 
-        if (-not $NoVerify) {
-            $expected = Get-RemoteChecksum $base $binaryName
-            if ($expected) {
-                $actual = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToLower()
-                if ($actual -ne $expected.ToLower()) {
-                    throw "sha256 mismatch for ${binaryName}: expected $expected, got $actual"
-                }
-                Write-Log 'sha256 verified'
-            }
+        $expected = Get-VerifiedRemoteChecksum $base $binaryName
+        $actual = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -ne $expected) {
+            throw "sha256 mismatch for ${binaryName}: expected $expected, got $actual"
         }
+        Write-Log 'sha256 verified'
 
         $dest = Join-Path $BinDir 'pulse-mcp.exe'
         Move-Item -Path $tmp -Destination $dest -Force

@@ -257,6 +257,15 @@ pulse_release_collect_checksum_files() {
         if compgen -G "pulse-agent-freebsd-*" > /dev/null; then
             checksum_files+=( pulse-agent-freebsd-* )
         fi
+        if compgen -G "pulse-mcp-linux-*" > /dev/null; then
+            checksum_files+=( pulse-mcp-linux-* )
+        fi
+        if compgen -G "pulse-mcp-darwin-*" > /dev/null; then
+            checksum_files+=( pulse-mcp-darwin-* )
+        fi
+        if compgen -G "pulse-mcp-freebsd-*" > /dev/null; then
+            checksum_files+=( pulse-mcp-freebsd-* )
+        fi
         if compgen -G "pulse-*.exe" > /dev/null; then
             checksum_files+=( pulse-*.exe )
         fi
