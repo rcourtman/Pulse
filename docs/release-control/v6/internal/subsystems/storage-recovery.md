@@ -1730,6 +1730,10 @@ recovery scope, or a storage/recovery-owned secret source.
     alerts context. They do not prove storage encryption, backup integrity,
     repository authenticity, protection coverage, or restore readiness.
 31. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/chartapi/service.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+    Expiry sweeps, oldest-payload eviction, and byte/cardinality limits in that
+    shared chart cache are transport memory controls only. Storage and recovery
+    must not reinterpret cache residency or an oversized uncached response as
+    storage-history retention, recovery-point expiry, or backup coverage.
     The same router may wire the adjacent server-owned agent command
     authorization verifier, but storage/recovery must not treat an approval id,
     signed command grant, or command result as restore authorization or

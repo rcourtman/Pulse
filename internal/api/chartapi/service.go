@@ -25,15 +25,17 @@ import (
 const workloadChartsCacheTTL = 3 * time.Second
 const summaryChartsCacheTTL = 5 * time.Second
 
-type cachedWorkloadChartsEntry struct {
-	body     []byte
-	cachedAt time.Time
-}
+const (
+	// All three chart routes share one retention budget. This stays modest for
+	// low-memory container deployments while still holding several ordinary
+	// large-estate responses.
+	chartPayloadCacheMaxEntries = 64
+	chartPayloadCacheMaxBytes   = 16 << 20
 
-type summaryChartsCacheEntry struct {
-	payload   []byte
-	expiresAt time.Time
-}
+	infrastructureChartsCachePrefix = "infrastructure|"
+	workloadsSummaryCachePrefix     = "workloads-summary|"
+	workloadChartsCachePrefix       = "workload-charts|"
+)
 
 // MonitorResolver supplies the authenticated tenant monitor selected by the
 // router context. Chart computation remains entirely owned by Service.
@@ -46,17 +48,18 @@ type MonitorResolver interface {
 type Service struct {
 	resolver MonitorResolver
 
-	infrastructureChartsMu     sync.Mutex
-	infrastructureCharts       map[string]summaryChartsCacheEntry
-	workloadsSummaryChartsMu   sync.Mutex
-	workloadsSummaryCharts     map[string]summaryChartsCacheEntry
+	chartPayloads              boundedChartPayloadCache
 	workloadChartsComputeGroup singleflight.Group
-	workloadChartsCacheMu      sync.RWMutex
-	workloadChartsCache        map[string]cachedWorkloadChartsEntry
 }
 
 func NewService(resolver MonitorResolver) *Service {
-	return &Service{resolver: resolver}
+	return &Service{
+		resolver: resolver,
+		chartPayloads: newBoundedChartPayloadCache(
+			chartPayloadCacheMaxEntries,
+			chartPayloadCacheMaxBytes,
+		),
+	}
 }
 
 func (r *Service) getTenantMonitor(ctx context.Context) *monitoring.Monitor {
@@ -787,33 +790,19 @@ func (r *Service) cachedInfrastructureChartsPayload(key string, now time.Time) (
 	if r == nil || key == "" {
 		return nil, false
 	}
-	r.infrastructureChartsMu.Lock()
-	defer r.infrastructureChartsMu.Unlock()
-
-	entry, ok := r.infrastructureCharts[key]
-	if !ok {
-		return nil, false
-	}
-	if !now.Before(entry.expiresAt) {
-		delete(r.infrastructureCharts, key)
-		return nil, false
-	}
-	return entry.payload, true
+	return r.chartPayloads.get(infrastructureChartsCachePrefix+key, now)
 }
 
 func (r *Service) cacheInfrastructureChartsPayload(key string, payload []byte, now time.Time) {
 	if r == nil || key == "" || len(payload) == 0 {
 		return
 	}
-	r.infrastructureChartsMu.Lock()
-	defer r.infrastructureChartsMu.Unlock()
-	if r.infrastructureCharts == nil {
-		r.infrastructureCharts = make(map[string]summaryChartsCacheEntry, 8)
-	}
-	r.infrastructureCharts[key] = summaryChartsCacheEntry{
-		payload:   payload,
-		expiresAt: now.Add(summaryChartsCacheTTL),
-	}
+	r.chartPayloads.put(
+		infrastructureChartsCachePrefix+key,
+		payload,
+		now.Add(summaryChartsCacheTTL),
+		now,
+	)
 }
 
 func targetWorkloadsSummarySeriesPoints(duration time.Duration) int {
@@ -836,33 +825,19 @@ func (r *Service) cachedWorkloadsSummaryChartsPayload(key string, now time.Time)
 	if r == nil || key == "" {
 		return nil, false
 	}
-	r.workloadsSummaryChartsMu.Lock()
-	defer r.workloadsSummaryChartsMu.Unlock()
-
-	entry, ok := r.workloadsSummaryCharts[key]
-	if !ok {
-		return nil, false
-	}
-	if !now.Before(entry.expiresAt) {
-		delete(r.workloadsSummaryCharts, key)
-		return nil, false
-	}
-	return entry.payload, true
+	return r.chartPayloads.get(workloadsSummaryCachePrefix+key, now)
 }
 
 func (r *Service) cacheWorkloadsSummaryChartsPayload(key string, payload []byte, now time.Time) {
 	if r == nil || key == "" || len(payload) == 0 {
 		return
 	}
-	r.workloadsSummaryChartsMu.Lock()
-	defer r.workloadsSummaryChartsMu.Unlock()
-	if r.workloadsSummaryCharts == nil {
-		r.workloadsSummaryCharts = make(map[string]summaryChartsCacheEntry, 8)
-	}
-	r.workloadsSummaryCharts[key] = summaryChartsCacheEntry{
-		payload:   payload,
-		expiresAt: now.Add(summaryChartsCacheTTL),
-	}
+	r.chartPayloads.put(
+		workloadsSummaryCachePrefix+key,
+		payload,
+		now.Add(summaryChartsCacheTTL),
+		now,
+	)
 }
 
 func aggregateInfrastructureSummaryBucketValue(
@@ -1439,38 +1414,29 @@ func (r *Service) HandleWorkloadCharts(w http.ResponseWriter, req *http.Request)
 	}
 	cacheKey := orgID + "|" + timeRange + "|" + selectedNodeID + "|" + maxPointsRaw
 
-	r.workloadChartsCacheMu.RLock()
-	if entry, ok := r.workloadChartsCache[cacheKey]; ok && time.Since(entry.cachedAt) <= workloadChartsCacheTTL {
-		body := entry.body
-		r.workloadChartsCacheMu.RUnlock()
+	cacheKey = workloadChartsCachePrefix + cacheKey
+	now := time.Now()
+	if body, ok := r.chartPayloads.get(cacheKey, now); ok {
 		w.Header().Set("Content-Type", "application/json")
 		if _, err := w.Write(body); err != nil {
 			log.Error().Err(err).Msg("Failed to write cached workload chart data response")
 		}
 		return
 	}
-	r.workloadChartsCacheMu.RUnlock()
 
 	v, err, _ := r.workloadChartsComputeGroup.Do(cacheKey, func() (any, error) {
 		// Re-check cache inside the singleflight barrier in case an earlier
 		// caller already populated it while we were queued.
-		r.workloadChartsCacheMu.RLock()
-		if entry, ok := r.workloadChartsCache[cacheKey]; ok && time.Since(entry.cachedAt) <= workloadChartsCacheTTL {
-			r.workloadChartsCacheMu.RUnlock()
-			return entry.body, nil
+		if body, ok := r.chartPayloads.get(cacheKey, time.Now()); ok {
+			return body, nil
 		}
-		r.workloadChartsCacheMu.RUnlock()
 
 		body, err := r.buildWorkloadChartsResponse(req.Context(), monitor, timeRange, selectedNodeID, maxPoints, duration, inMemoryChartThreshold)
 		if err != nil {
 			return nil, err
 		}
-		r.workloadChartsCacheMu.Lock()
-		if r.workloadChartsCache == nil {
-			r.workloadChartsCache = map[string]cachedWorkloadChartsEntry{}
-		}
-		r.workloadChartsCache[cacheKey] = cachedWorkloadChartsEntry{body: body, cachedAt: time.Now()}
-		r.workloadChartsCacheMu.Unlock()
+		cachedAt := time.Now()
+		r.chartPayloads.put(cacheKey, body, cachedAt.Add(workloadChartsCacheTTL), cachedAt)
 		return body, nil
 	})
 	if err != nil {

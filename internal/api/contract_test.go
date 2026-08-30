@@ -3464,6 +3464,9 @@ func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.
 		`workloadsSummaryChartsCacheKey`,
 		`cachedWorkloadsSummaryChartsPayload`,
 		`cacheWorkloadsSummaryChartsPayload`,
+		`chartPayloadCacheMaxEntries = 64`,
+		`chartPayloadCacheMaxBytes   = 16 << 20`,
+		`chartPayloads              boundedChartPayloadCache`,
 		`type workloadSummaryMetricBucket struct`,
 	}
 	for _, snippet := range requiredSnippets {

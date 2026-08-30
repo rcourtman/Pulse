@@ -926,6 +926,12 @@ organization, range, metric set, and workload scope, but that cache is
 transport-only. It may amortize polling and remount cost, but it must not
 change normalized response shape, bypass monitor or read-state availability
 checks, merge tenants, or become the source of truth for telemetry freshness.
+Infrastructure-summary, workloads-summary, and per-workload chart payloads
+must share one bounded retention budget across query variants: no more than 64
+entries or 16 MiB of encoded payloads. Inserts must purge expired variants and
+evict the oldest retained payloads as either bound is reached; a response larger
+than the byte budget may still use in-flight singleflight deduplication but must
+not be retained after the request completes.
 Router-owned unified-resource adapter construction is also transport wiring,
 not an API-local health model. When `internal/api/router.go` creates default or
 tenant monitor adapters, it must pass the effective monitor configuration into

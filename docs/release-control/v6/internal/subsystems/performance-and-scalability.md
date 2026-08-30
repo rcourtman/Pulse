@@ -2509,6 +2509,12 @@ remounts. The cached payloads must still be built from the canonical
 store-backed/read-state sources, must remain isolated by organization and
 explicit chart scope, and must not become telemetry freshness, lifecycle,
 recovery, or persistence authority.
+Those summary caches and the per-workload chart cache share one process-local
+retention budget of 64 payloads and 16 MiB. Every insert sweeps expired query
+variants and evicts oldest payloads at either bound, so raw range, node,
+metric-order, or point-count variants cannot turn a short TTL into unbounded
+steady-state memory. Responses larger than the byte budget remain uncached
+after singleflight completion rather than displacing the whole cache.
 Those budgets also assume Kubernetes pod history lookups hit one canonical
 series key. Pod chart and history consumers must normalize bare pod IDs onto
 `k8s:<cluster>:pod:<uid>` before lookup; otherwise demo and mock workloads pay
