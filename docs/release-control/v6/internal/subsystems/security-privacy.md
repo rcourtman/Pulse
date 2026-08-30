@@ -93,7 +93,10 @@ Action-runner issuance and rotation are a two-phase durable host-bound
 transition per organization and canonical agent ID. Re-issuance prepares a
 ten-minute replacement credential while retaining the prior active record,
 returns the new plaintext secret only after persistence succeeds, and removes
-older unactivated replacements. The pending credential may authenticate one
+older unactivated replacements. Issuance, root-owned runtime configuration,
+session admission, typed payloads, and receipts share one bounded
+action-identity vocabulary, so an unsafe or unrepresentable host identity is
+rejected before any action credential is minted. The pending credential may authenticate one
 exact runner transport but cannot become dispatch authority. After the runner
 durably records its current activation nonce, its authenticated activation
 request atomically promotes the replacement and revokes the server-recorded

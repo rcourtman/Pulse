@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,6 +72,19 @@ func TestIssueActionRunnerAndPersistRejectsIncompleteBinding(t *testing.T) {
 		if raw, record, err := IssueActionRunnerAndPersist(&config.Config{}, nil, tc); !errors.Is(err, ErrRecord) || raw != "" || record != nil {
 			t.Fatalf("incomplete binding %#v = (%q, %#v, %v), want ErrRecord", tc, raw, record, err)
 		}
+	}
+}
+
+func TestIssueActionRunnerAndPersistRejectsAgentIDOutsideRunnerVocabulary(t *testing.T) {
+	for _, agentID := range []string{"bad agent", "-agent", strings.Repeat("a", 129)} {
+		t.Run(agentID, func(t *testing.T) {
+			raw, record, err := IssueActionRunnerAndPersist(&config.Config{}, nil, ActionRunnerIssueOptions{
+				OrgID: "org-a", AgentID: agentID, Hostname: "node.example",
+			})
+			if !errors.Is(err, ErrRecord) || raw != "" || record != nil {
+				t.Fatalf("IssueActionRunnerAndPersist = (%q, %#v, %v), want ErrRecord", raw, record, err)
+			}
+		})
 	}
 }
 

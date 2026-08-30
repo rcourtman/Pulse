@@ -28,6 +28,12 @@ const (
 
 var boundedID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
+// IsValidBoundedID defines the closed identity vocabulary shared by action
+// credential issuance, runner configuration, session admission, and receipts.
+func IsValidBoundedID(value string) bool {
+	return boundedID.MatchString(strings.TrimSpace(value))
+}
+
 var (
 	ErrUnauthorized     = errors.New("action runner session is not authorized")
 	ErrUnsupported      = errors.New("action runner operation is unsupported")
@@ -73,7 +79,7 @@ type Registration struct {
 func (session Session) Registration() (Registration, error) {
 	organizationID := strings.TrimSpace(session.OrganizationID)
 	hostID := strings.TrimSpace(session.HostID)
-	if !boundedID.MatchString(organizationID) || !boundedID.MatchString(hostID) || !boundedID.MatchString(strings.TrimSpace(session.TokenID)) || !session.Capabilities[ActionCapability] {
+	if !IsValidBoundedID(organizationID) || !IsValidBoundedID(hostID) || !IsValidBoundedID(session.TokenID) || !session.Capabilities[ActionCapability] {
 		return Registration{}, ErrUnauthorized
 	}
 	return Registration{RuntimeRole: RuntimeRole, OrganizationID: organizationID, HostID: hostID}, nil
@@ -139,7 +145,7 @@ func ValidateRequest(request *Request, now time.Time) error {
 		return fmt.Errorf("unsupported action protocol version %d", request.ProtocolVersion)
 	}
 	for label, value := range map[string]string{"organization_id": request.OrganizationID, "host_id": request.HostID, "attempt_id": request.AttemptID, "action_id": request.ActionID, "target.kind": request.Target.Kind, "target.id": request.Target.ID} {
-		if !boundedID.MatchString(value) {
+		if !IsValidBoundedID(value) {
 			return fmt.Errorf("invalid %s", label)
 		}
 	}
@@ -220,7 +226,7 @@ func ValidateTerminal(identity operationreceipt.Identity, data json.RawMessage) 
 	if result.ProtocolVersion != ProtocolVersion || result.AttemptID != identity.AttemptID || result.ActionID != identity.ActionID || result.Operation != identity.OperationKind || result.OperationVersion != identity.OperationVersion || result.RequestDigest != identity.RequestDigest {
 		return operationreceipt.ErrBindingConflict
 	}
-	if !boundedID.MatchString(result.Target.Kind) || !boundedID.MatchString(result.Target.ID) {
+	if !IsValidBoundedID(result.Target.Kind) || !IsValidBoundedID(result.Target.ID) {
 		return fmt.Errorf("invalid action result target")
 	}
 	switch result.Status {

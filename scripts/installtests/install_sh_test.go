@@ -5952,6 +5952,7 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 		`The action runner must use a separate credential from the collector token`,
 		`Preserving existing separately enabled action-runner profile`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"`,
+		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" "$AGENT_ID"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_ACTIVATION_NONCE" "$ACTION_RUNNER_ACTIVATION_NONCE"`,
@@ -5976,6 +5977,66 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 	teardown := extractInstallShellFunction(t, "teardown_action_runner_service")
 	if strings.Contains(teardown, "teardown_systemd_agent_service") || strings.Contains(teardown, `rm -f "${INSTALL_DIR}/${BINARY_NAME}"`) {
 		t.Fatalf("runner teardown must not remove the monitoring collector:\n%s", teardown)
+	}
+}
+
+func TestInstallSHActionRunnerConfigBindsKnownAgentIDImmediately(t *testing.T) {
+	root := t.TempDir()
+	envFile := filepath.Join(root, "runner.env")
+	script := `
+set -euo pipefail
+ACTION_RUNNER_CONFIG_DIR="` + filepath.Join(root, "config") + `"
+ACTION_RUNNER_STATE_DIR="` + filepath.Join(root, "runner-state") + `"
+ACTION_RUNNER_TOKEN_FILE="` + filepath.Join(root, "config", "token") + `"
+ACTION_RUNNER_ENV_FILE="` + envFile + `"
+ACTION_RUNNER_HEALTH_FILE="` + filepath.Join(root, "runner-state", "health.json") + `"
+ACTION_RUNNER_ACTIVATION_NONCE="` + strings.Repeat("a", 64) + `"
+STATE_DIR="` + filepath.Join(root, "collector-state") + `"
+HOSTNAME_OVERRIDE="secure-runtime.lab"
+AGENT_ID="agent-bound-before-collector-report"
+ACTION_TOKEN="runner-secret"
+PULSE_URL="https://pulse.example"
+SERVER_FINGERPRINT=""
+CURL_CA_BUNDLE=""
+INSECURE="false"
+EXIT_GENERAL=1
+EXIT_MISSING_ARGS=2
+fail() { printf '%s\n' "$1" >&2; exit "$2"; }
+install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
+chown() { return 0; }
+` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "write_action_runner_config") + `
+write_action_runner_config
+`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("write action-runner config: %v\n%s", err, out)
+	}
+	content, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `PULSE_AGENT_RUNNER_AGENT_ID="agent-bound-before-collector-report"`
+	if !strings.Contains(string(content), want) {
+		t.Fatalf("action-runner environment missing immediate identity binding %q:\n%s", want, content)
+	}
+}
+
+func TestInstallSHActionRunnerDirectIdentityOverridesStaleCollectorFile(t *testing.T) {
+	stateDir := t.TempDir()
+	mustWrite(t, filepath.Join(stateDir, "agent-id"), "stale-agent-id\n")
+	script := `
+set -euo pipefail
+STATE_DIR="` + stateDir + `"
+AGENT_ID="current-agent-id"
+` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
+resolve_action_runner_agent_id
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("resolve action-runner identity: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "current-agent-id" {
+		t.Fatalf("resolved action-runner identity = %q, want direct binding", got)
 	}
 }
 
@@ -6055,16 +6116,15 @@ func TestInstallSHActionRunnerSelfRevokeUsesPrivateCredential(t *testing.T) {
 	root := t.TempDir()
 	envFile := filepath.Join(root, "runner.env")
 	tokenFile := filepath.Join(root, "token")
-	agentIDFile := filepath.Join(root, "agent-id")
 	mustWrite(t, tokenFile, token+"\n")
-	mustWrite(t, agentIDFile, "agent-secure-runtime\n")
 	if err := os.Chmod(tokenFile, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	mustWrite(t, envFile, strings.Join([]string{
 		`PULSE_URL="` + server.URL + `"`,
 		`PULSE_AGENT_RUNNER_HOSTNAME="secure-runtime.lab"`,
-		`PULSE_AGENT_RUNNER_AGENT_ID_FILE="` + agentIDFile + `"`,
+		`PULSE_AGENT_RUNNER_AGENT_ID="agent-secure-runtime"`,
+		`PULSE_AGENT_RUNNER_AGENT_ID_FILE="` + filepath.Join(root, "missing-agent-id") + `"`,
 		`PULSE_AGENT_RUNNER_TOKEN_FILE="` + tokenFile + `"`,
 	}, "\n")+"\n")
 

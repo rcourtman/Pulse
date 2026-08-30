@@ -37,7 +37,11 @@ falls back to a collector or helper asset. `POST
 monitored `agentId` / `hostname` pair and returns a new, separately persisted
 `agent:exec` credential bound to organization, agent ID, normalized hostname,
 runtime role `action-runner`, binding version 1, and capability
-`typed_actions.v1`. The route re-resolves the pair against exactly one live,
+`typed_actions.v1`. The canonical agent ID must satisfy the same bounded
+action-identity vocabulary used by runner configuration, registration,
+session admission, typed requests, and receipts; issuance fails before secret
+generation when that identity cannot be represented safely at every boundary.
+The route re-resolves the pair against exactly one live,
 non-conflicted, non-integration host in the request tenant. Issuing again
 atomically prepares a ten-minute replacement beside the current active record;
 older unactivated replacements are removed, while persistence failure restores

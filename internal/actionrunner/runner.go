@@ -166,7 +166,7 @@ func (r *Runner) Query(session Session, identity operationreceipt.Identity) (ope
 }
 
 func authorize(session Session, request Request) error {
-	if !boundedID.MatchString(strings.TrimSpace(session.OrganizationID)) || !boundedID.MatchString(strings.TrimSpace(session.HostID)) || !boundedID.MatchString(strings.TrimSpace(session.TokenID)) || !session.Capabilities[ActionCapability] {
+	if !IsValidBoundedID(session.OrganizationID) || !IsValidBoundedID(session.HostID) || !IsValidBoundedID(session.TokenID) || !session.Capabilities[ActionCapability] {
 		return ErrUnauthorized
 	}
 	if session.OrganizationID != request.OrganizationID || session.HostID != request.HostID {

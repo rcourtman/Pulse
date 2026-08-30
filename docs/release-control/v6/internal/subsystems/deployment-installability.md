@@ -155,7 +155,14 @@ timestamps, never restores a prior marker, and restores the previous runner-only
 files if the current nonce never reaches activated state. Disable and uninstall
 remove only remediation and leave monitoring running. The action
 credential is never placed in argv or reused as the collector token. The
-installer persists the canonical enrollment hostname for runner admission and
+installer persists the canonical enrollment hostname for runner admission. If
+the canonical agent ID is already known, it also writes that non-secret ID to
+the root-owned runner environment so the separate runner can register before
+the collector's first report populates its identity file; the private identity
+file remains the fallback for later-generated IDs. The direct binding takes
+precedence consistently during runner startup, activation health, and
+self-revocation, and issuance rejects identities outside the runner's bounded
+action-identity vocabulary. The installer
 uses a private curl configuration for best-effort exact self-revocation before
 local teardown, so the bearer secret does not enter argv. Server unreachability
 is warned explicitly but does not make local removal depend on the remote

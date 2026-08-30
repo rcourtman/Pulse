@@ -105,7 +105,15 @@ hardened. Qualification must prove an allowed mutation completes as well as
 proving generic command denial.
 The runner service persists the same normalized canonical hostname used when
 its credential was issued; it must not substitute the machine's incidental OS
-hostname when the collector was enrolled under an override. Credential
+hostname when the collector was enrolled under an override. When enrollment
+already supplied the canonical agent ID, the installer also persists that
+non-secret ID directly in the root-owned runner environment so runner
+registration does not wait for the collector's first-report identity file;
+the private identity file remains the compatibility fallback for installs
+whose ID is generated later. That direct binding is authoritative for runner
+startup, activation health, and self-revocation even if a stale collector
+identity file is present. Issuance and every runner boundary use the same
+bounded action-identity vocabulary. Credential
 rotation is a prepare/commit transaction. Issuance stores a ten-minute pending
 replacement beside the active predecessor; the pending transport may register
 but is not dispatchable. The runner first durably replaces a private health

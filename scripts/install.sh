@@ -963,6 +963,7 @@ read_action_runner_env_value() {
 revoke_action_runner_credential() {
     local runner_url=""
     local runner_hostname=""
+    local runner_agent_id_direct=""
     local runner_agent_id_file=""
     local runner_agent_id=""
     local runner_token_file=""
@@ -975,17 +976,22 @@ revoke_action_runner_credential() {
 
     runner_url=$(read_action_runner_env_value "PULSE_URL" || true)
     runner_hostname=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" || true)
+    runner_agent_id_direct=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" || true)
     runner_agent_id_file=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" || true)
     runner_token_file=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" || true)
     [[ "$runner_url" =~ ^https?://[^[:space:]]+$ && -n "$runner_hostname" ]] || return 1
-    [[ "$runner_agent_id_file" == /* && "$runner_agent_id_file" != *'/../'* &&
-       -f "$runner_agent_id_file" && ! -L "$runner_agent_id_file" ]] || return 1
     [[ "$runner_token_file" == /* && "$runner_token_file" != *'/../'* &&
        -f "$runner_token_file" && ! -L "$runner_token_file" ]] || return 1
-    runner_agent_id=$(head -1 "$runner_agent_id_file" 2>/dev/null || true)
-    (( ${#runner_agent_id} >= 1 && ${#runner_agent_id} <= 256 &&
+    if [[ -n "$runner_agent_id_direct" ]]; then
+        runner_agent_id="$runner_agent_id_direct"
+    else
+        [[ "$runner_agent_id_file" == /* && "$runner_agent_id_file" != *'/../'* &&
+           -f "$runner_agent_id_file" && ! -L "$runner_agent_id_file" ]] || return 1
+        runner_agent_id=$(head -1 "$runner_agent_id_file" 2>/dev/null || true)
+    fi
+    (( ${#runner_agent_id} >= 1 && ${#runner_agent_id} <= 128 &&
        ${#runner_hostname} >= 1 && ${#runner_hostname} <= 253 )) || return 1
-    [[ "$runner_agent_id" =~ ^[A-Za-z0-9._:-]+$ &&
+    [[ "$runner_agent_id" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ &&
        "$runner_hostname" =~ ^[A-Za-z0-9._:-]+$ ]] || return 1
     token_mode=$(stat -c '%a' "$runner_token_file" 2>/dev/null || true)
     token_size=$(wc -c < "$runner_token_file" 2>/dev/null | tr -d ' ' || true)
@@ -1368,6 +1374,11 @@ write_action_runner_config() {
     write_action_runner_env_value "PULSE_AGENT_RUNNER_STATE_DIR" "$ACTION_RUNNER_STATE_DIR"
 	write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"
 	write_action_runner_env_value "PULSE_AGENT_RUNNER_ACTIVATION_NONCE" "$ACTION_RUNNER_ACTIVATION_NONCE"
+    if [[ -n "$AGENT_ID" ]]; then
+        [[ ${#AGENT_ID} -le 128 && "$AGENT_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] ||
+            fail "Action runner requires a valid canonical agent identity" "$EXIT_MISSING_ARGS"
+        write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID" "$AGENT_ID"
+    fi
     write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" "$runner_hostname"
     if [[ -n "$SERVER_FINGERPRINT" ]]; then
@@ -1418,6 +1429,15 @@ write_action_runner_env_value() {
     value="${value//\\/\\\\}"
     value="${value//\"/\\\"}"
     printf '%s="%s"\n' "$key" "$value" >> "$ACTION_RUNNER_ENV_FILE"
+}
+
+resolve_action_runner_agent_id() {
+    local agent_id="${AGENT_ID:-}"
+    if [[ -z "$agent_id" && -s "${STATE_DIR%/}/agent-id" && ! -L "${STATE_DIR%/}/agent-id" ]]; then
+        agent_id=$(head -1 "${STATE_DIR%/}/agent-id" 2>/dev/null || true)
+    fi
+    [[ ${#agent_id} -ge 1 && ${#agent_id} -le 128 && "$agent_id" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] || return 1
+    printf '%s\n' "$agent_id"
 }
 
 provision_action_runner() {
@@ -1473,10 +1493,8 @@ provision_action_runner() {
     if [[ "$apply_succeeded" == "true" ]]; then
         local attempt=0
 		while [[ "$attempt" -lt 30 ]]; do
-			local expected_agent_id="${AGENT_ID}"
-			if [[ -s "${STATE_DIR%/}/agent-id" ]]; then
-				expected_agent_id=$(head -1 "${STATE_DIR%/}/agent-id" 2>/dev/null || true)
-			fi
+			local expected_agent_id=""
+			expected_agent_id=$(resolve_action_runner_agent_id || true)
 			if systemctl is-active --quiet "${ACTION_RUNNER_NAME}.service" &&
 			   action_runner_health_matches_activation "$expected_agent_id" "$activation_nonce"; then
                 runner_active="true"

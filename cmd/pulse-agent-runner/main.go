@@ -26,6 +26,7 @@ type runtimeConfig struct {
 	StateDir          string
 	HealthFile        string
 	ActivationNonce   string
+	AgentID           string
 	AgentIDFile       string
 	Hostname          string
 	ServerFingerprint string
@@ -40,14 +41,18 @@ func loadConfig() (runtimeConfig, error) {
 		StateDir:          strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_STATE_DIR")),
 		HealthFile:        strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_HEALTH_FILE")),
 		ActivationNonce:   strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE")),
+		AgentID:           strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_AGENT_ID")),
 		AgentIDFile:       strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE")),
 		Hostname:          strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_HOSTNAME")),
 		ServerFingerprint: strings.TrimSpace(os.Getenv("PULSE_SERVER_FINGERPRINT")),
 		CAFile:            strings.TrimSpace(os.Getenv("SSL_CERT_FILE")),
 		Insecure:          strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_INSECURE")), "true"),
 	}
-	if config.PulseURL == "" || config.TokenFile == "" || config.StateDir == "" || config.HealthFile == "" || config.AgentIDFile == "" || len(config.ActivationNonce) < 32 || len(config.ActivationNonce) > 128 {
+	if config.PulseURL == "" || config.TokenFile == "" || config.StateDir == "" || config.HealthFile == "" || (config.AgentID == "" && config.AgentIDFile == "") || len(config.ActivationNonce) < 32 || len(config.ActivationNonce) > 128 {
 		return runtimeConfig{}, errors.New("PULSE_URL and the action-runner token, state, health, agent identity, and activation nonce settings are required")
+	}
+	if config.AgentID != "" && !actionrunner.IsValidBoundedID(config.AgentID) {
+		return runtimeConfig{}, errors.New("PULSE_AGENT_RUNNER_AGENT_ID must be a valid agent identity")
 	}
 	if config.Hostname != "" {
 		hostname, err := normalizeRunnerHostname(config.Hostname)
@@ -91,7 +96,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	agentID, err := readPrivateValue(config.AgentIDFile, "runner agent identity")
+	agentID, err := resolveRunnerAgentID(config)
 	if err != nil {
 		return err
 	}
@@ -127,6 +132,20 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+func resolveRunnerAgentID(config runtimeConfig) (string, error) {
+	if config.AgentID != "" {
+		return config.AgentID, nil
+	}
+	agentID, err := readPrivateValue(config.AgentIDFile, "runner agent identity")
+	if err != nil {
+		return "", err
+	}
+	if !actionrunner.IsValidBoundedID(agentID) {
+		return "", errors.New("runner agent identity file must contain a valid agent identity")
+	}
+	return agentID, nil
 }
 
 func normalizeRunnerHostname(value string) (string, error) {

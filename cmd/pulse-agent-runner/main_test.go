@@ -34,6 +34,77 @@ func TestLoadConfigUsesDedicatedEnvironmentAndPrivateTokenFile(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAcceptsDirectAgentIDWithoutIdentityFile(t *testing.T) {
+	dir := t.TempDir()
+	token := filepath.Join(dir, "runner.token")
+	if err := os.WriteFile(token, []byte("secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PULSE_URL", "https://pulse.example")
+	t.Setenv("PULSE_AGENT_RUNNER_TOKEN_FILE", token)
+	t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
+	t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
+	t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID", "agent-direct-1")
+	t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE", "")
+	t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("d", 32))
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := resolveRunnerAgentID(config); err != nil || got != "agent-direct-1" {
+		t.Fatalf("resolveRunnerAgentID = %q, %v", got, err)
+	}
+}
+
+func TestResolveRunnerAgentIDPrefersDirectBoundIdentity(t *testing.T) {
+	config := runtimeConfig{AgentID: "agent-direct", AgentIDFile: filepath.Join(t.TempDir(), "missing")}
+	if got, err := resolveRunnerAgentID(config); err != nil || got != "agent-direct" {
+		t.Fatalf("resolveRunnerAgentID = %q, %v", got, err)
+	}
+}
+
+func TestResolveRunnerAgentIDFallsBackToPrivateIdentityFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-id")
+	if err := os.WriteFile(path, []byte("agent-file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := resolveRunnerAgentID(runtimeConfig{AgentIDFile: path}); err != nil || got != "agent-file" {
+		t.Fatalf("resolveRunnerAgentID = %q, %v", got, err)
+	}
+}
+
+func TestResolveRunnerAgentIDRejectsInvalidFileIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-id")
+	if err := os.WriteFile(path, []byte("bad agent\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveRunnerAgentID(runtimeConfig{AgentIDFile: path}); err == nil || !strings.Contains(err.Error(), "valid agent identity") {
+		t.Fatalf("resolveRunnerAgentID error = %v", err)
+	}
+}
+
+func TestLoadConfigRejectsInvalidDirectAgentID(t *testing.T) {
+	dir := t.TempDir()
+	token := filepath.Join(dir, "runner.token")
+	if err := os.WriteFile(token, []byte("secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PULSE_URL", "https://pulse.example")
+	t.Setenv("PULSE_AGENT_RUNNER_TOKEN_FILE", token)
+	t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", filepath.Join(dir, "state"))
+	t.Setenv("PULSE_AGENT_RUNNER_HEALTH_FILE", filepath.Join(dir, "state", "health.json"))
+	t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE", "")
+	t.Setenv("PULSE_AGENT_RUNNER_ACTIVATION_NONCE", strings.Repeat("e", 32))
+	for _, agentID := range []string{"bad agent", "-agent", strings.Repeat("a", 129)} {
+		t.Run(agentID, func(t *testing.T) {
+			t.Setenv("PULSE_AGENT_RUNNER_AGENT_ID", agentID)
+			if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "valid agent identity") {
+				t.Fatalf("loadConfig error = %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadConfigRejectsInvalidCanonicalHostnameOverride(t *testing.T) {
 	dir := t.TempDir()
 	token := filepath.Join(dir, "runner.token")

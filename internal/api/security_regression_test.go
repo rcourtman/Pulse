@@ -687,6 +687,19 @@ func TestActionRunnerCredentialAdmissionBindsTenantHostRoleAndCapability(t *test
 	}
 }
 
+func TestActionRunnerCredentialIssuanceRejectsIdentityOutsideSessionVocabulary(t *testing.T) {
+	for _, agentID := range []string{"bad agent", "-machine", strings.Repeat("a", 129)} {
+		t.Run(agentID, func(t *testing.T) {
+			rawToken, record, err := agenttokens.IssueActionRunnerAndPersist(&config.Config{}, nil, agenttokens.ActionRunnerIssueOptions{
+				OrgID: "org-a", AgentID: agentID, Hostname: "node.example",
+			})
+			if !errors.Is(err, agenttokens.ErrRecord) || rawToken != "" || record != nil {
+				t.Fatalf("action-runner issuance = (%q, %#v, %v), want closed identity rejection", rawToken, record, err)
+			}
+		})
+	}
+}
+
 func TestActionRunnerCredentialAdmissionRejectsWrongIdentityAndUnboundOrganization(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

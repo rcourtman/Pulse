@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionrunner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -225,13 +226,13 @@ func IssueActionRunnerAndPersistDetailed(cfg *config.Config, persistence *config
 	if organizationID == "" {
 		return ActionRunnerIssueResult{}, fmt.Errorf("%w: organization id is required", ErrRecord)
 	}
-	if agentID == "" {
-		return ActionRunnerIssueResult{}, fmt.Errorf("%w: canonical agent id is required", ErrRecord)
+	if !actionrunner.IsValidBoundedID(agentID) {
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: canonical agent id is invalid", ErrRecord)
 	}
 	if hostname == "" {
 		return ActionRunnerIssueResult{}, fmt.Errorf("%w: canonical hostname is required", ErrRecord)
 	}
-	if len(agentID) > 128 || len(hostname) > 253 {
+	if len(hostname) > 253 {
 		return ActionRunnerIssueResult{}, fmt.Errorf("%w: action runner identity exceeds maximum length", ErrRecord)
 	}
 

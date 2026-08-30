@@ -34,6 +34,10 @@ preserves collector identity and installation files only; it must not rewrite
 storage/recovery evidence or reinterpret a restored legacy collector profile as
 recovery success. Typed `host.storage_cleanup` remains governed remediation,
 not storage-recovery authority inferred from the credential itself.
+The shared bounded action-identity validator may reject credential issuance
+before secret generation when a host ID cannot be represented consistently by
+the runner and session protocol. That fail-closed identity result cannot select,
+delete, restore, or reclassify storage/recovery state.
 Runner credential rotation follows the shared two-phase token-inventory commit
 boundary: issuance durably prepares a bounded, non-dispatchable replacement
 without removing the active predecessor; activation after durable runner health
