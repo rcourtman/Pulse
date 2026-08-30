@@ -2080,6 +2080,12 @@ the raw `vmware` source, rather than degrading a source-scoped page to periodic
 REST refreshes. VMware Overview passes that same source-scoped snapshot into
 the embedded Workloads state, so hosts and VMs share one inventory generation
 and one explicit refresh path.
+Its page-owned workload toolbar consumes the complete shared
+`getWorkloadsMetricFilterProps` binding, so vSphere VMs expose the same Bars,
+Trends, Details, History, range, and first-use discovery contract as every
+other `WorkloadsSurface` consumer. The page must not select only display and
+range props while silently dropping row-hover state from that shared resource
+projection.
 Docker and Kubernetes page owners use the same source-aware projection for
 their complete provider type families. Their linked agent rows remain visible
 because canonical merge preserves the provider source beside the agent source;

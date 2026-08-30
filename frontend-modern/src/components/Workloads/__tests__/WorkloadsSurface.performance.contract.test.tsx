@@ -436,12 +436,10 @@ describe('Workloads platform-page embed contract', () => {
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE');
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE');
     expect(proxmoxSource).toContain('metricDisplayMode={metricDisplayMode}');
-    expect(proxmoxSource).toContain(
-      'setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}',
-    );
+    expect(proxmoxSource).toContain('{...getWorkloadsMetricFilterProps(workloadsState)}');
     expect(proxmoxSource).toContain('onMetricDisplayModeChange: props.setMetricDisplayMode,');
     expect(proxmoxSource).toContain('metricHistoryRange={metricHistoryRange}');
-    expect(proxmoxSource).toContain(
+    expect(proxmoxSource).not.toContain(
       'setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}',
     );
     expect(proxmoxSource).toContain('onMetricHistoryRangeChange: props.setMetricHistoryRange,');
@@ -546,6 +544,13 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Baseline structural contracts', () => {
+    it('binds every workload toolbar to the complete canonical metric-control contract', () => {
+      expect(workloadsFilterModelSource).toContain('getWorkloadsMetricFilterProps');
+      expect(workloadsFilterModelSource).toContain('metricHistoryHintVisible');
+      expect(workloadsSource).toContain('{...getWorkloadsMetricFilterProps(state)}');
+      expect(workloadsSource).not.toContain('metricDisplayMode={state.workloadMetricDisplayMode}');
+    });
+
     it('keeps the workloads route visible when websocket connectivity degrades but REST workload data is healthy', async () => {
       mockLocationSearch = '?type=all';
       wsConnected = false;

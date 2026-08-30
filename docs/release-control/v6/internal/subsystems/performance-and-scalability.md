@@ -1477,6 +1477,12 @@ the workloads-table reader so both readers dedupe their fetches and
 the canonical Workloads hot-path budget is preserved. Standalone
 WorkloadsSurface callers (no override props) keep the original
 persistent-signal-backed behavior.
+Every toolbar that controls a `WorkloadsSurface` consumes
+`getWorkloadsMetricFilterProps` as one atomic binding. This keeps the display
+mode, row-hover mode, history range, and first-use hint on the same state owner
+for the generic surface and the Proxmox and vSphere platform compositions;
+provider pages must not recreate a partial metric prop list that can enable
+prefetching without exposing the matching control or discovery state.
 
 The alert-bridge patrol-trigger callback wired in `internal/api/router.go` now
 short-circuits before queuing a scoped patrol when a firing alert does not meet

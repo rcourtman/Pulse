@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { VmwarePageSurface } from '../VmwarePageSurface';
+import vmwarePageSurfaceSource from '../VmwarePageSurface.tsx?raw';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/vmware/overview'));
@@ -139,6 +140,13 @@ describe('VmwarePageSurface contract', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('uses the complete canonical workload metric-control binding', () => {
+    expect(vmwarePageSurfaceSource).toContain('{...getWorkloadsMetricFilterProps(workloadsState)}');
+    expect(vmwarePageSurfaceSource).not.toContain(
+      'metricDisplayMode={workloadsState.workloadMetricDisplayMode}',
+    );
   });
 
   it('surfaces stale in-guest agents on correlated vSphere VMs', () => {

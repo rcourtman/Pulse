@@ -174,10 +174,14 @@ or assuming identical value scales.
 Workload tables expose their inline history lens through one shared filter
 contract. Its first-use hint is visible only while bar or history metrics are
 available, disappears after a populated guest preview succeeds, and is passed
-through provider-owned compositions such as `ProxmoxPageSurface` rather than
-reimplemented by each surface. Hover and range interactions remain session
-deduplicated so the presentation layer cannot create per-row or per-frame
-telemetry traffic.
+through `getWorkloadsMetricFilterProps`. The generic `WorkloadsSurface` and
+provider-owned compositions such as `ProxmoxPageSurface` and
+`VmwarePageSurface` must consume that binding atomically rather than selecting
+display, hover, range, or hint accessors independently. Hover and range
+interactions remain session deduplicated so the presentation layer cannot
+create per-row or per-frame telemetry traffic. Provider-native inventories
+that do not render `WorkloadsFilter` are outside this guest-row contract and
+must not imitate only part of it under a second page-local View vocabulary.
 Object-detail navigation follows that same canonical split across platform and
 feature owners. `Overview` is the stable landing tab for current operational
 facts, while stored metric charts appear only after selecting an evidence-gated

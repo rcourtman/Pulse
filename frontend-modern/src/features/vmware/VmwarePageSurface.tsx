@@ -38,6 +38,7 @@ import {
 } from '@/components/Workloads/useWorkloadsState';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+  getWorkloadsMetricFilterProps,
   type WorkloadsStatusOption,
   type WorkloadsMetricDisplayMode,
 } from '@/components/Workloads/workloadsFilterModel';
@@ -495,10 +496,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             namespaceFilter={undefined}
             clusterFilter={workloadsState.clusterFilterConfig()}
             platformFilter={undefined}
-            metricDisplayMode={workloadsState.workloadMetricDisplayMode}
-            setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
-            metricHistoryRange={workloadsState.workloadMetricHistoryRange}
-            setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+            {...getWorkloadsMetricFilterProps(workloadsState)}
             forcedPlatform={VMWARE_PLATFORM_FILTER}
             pinnedSelectionActive={() =>
               Boolean(

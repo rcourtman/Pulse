@@ -10,7 +10,11 @@ import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import { getWorkloadsNoInventoryState } from '@/utils/workloadEmptyStatePresentation';
 import { WorkloadsFilter } from './WorkloadsFilter';
-import { DEFAULT_WORKLOADS_VIEW_MODE, hasActiveWorkloadsFilters } from './workloadsFilterModel';
+import {
+  DEFAULT_WORKLOADS_VIEW_MODE,
+  getWorkloadsMetricFilterProps,
+  hasActiveWorkloadsFilters,
+} from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
 import type { WorkloadInventorySourceIssue } from './workloadInventorySourceIssues';
 import {
@@ -160,13 +164,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               namespaceFilter={state.namespaceFilterConfig()}
               platformFilter={state.platformFilterConfig()}
               suppressTypeFilter={props.forcedViewMode !== undefined}
-              metricDisplayMode={state.workloadMetricDisplayMode}
-              setMetricDisplayMode={state.setWorkloadMetricDisplayMode}
-              metricHoverMode={state.workloadMetricHoverMode}
-              setMetricHoverMode={state.setWorkloadMetricHoverMode}
-              metricHistoryRange={state.workloadMetricHistoryRange}
-              setMetricHistoryRange={state.setWorkloadMetricHistoryRange}
-              metricHistoryHintVisible={state.workloadMetricHistoryHintVisible}
+              {...getWorkloadsMetricFilterProps(state)}
               memoryDisplayBasis={
                 props.memoryDisplayBasis ? state.workloadMemoryDisplayBasis : undefined
               }

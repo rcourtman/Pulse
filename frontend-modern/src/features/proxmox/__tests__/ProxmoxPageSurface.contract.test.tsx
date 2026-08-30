@@ -462,7 +462,10 @@ describe('ProxmoxPageSurface contract', () => {
     expect(workloadsSurfaceIndex).toBeGreaterThan(workloadFilterIndex);
     expect(proxmoxPageSurfaceSource).not.toContain('<ProxmoxBackupServersTable');
     expect(proxmoxPageSurfaceSource).toContain(
-      'metricHistoryHintVisible={workloadsState.workloadMetricHistoryHintVisible}',
+      '{...getWorkloadsMetricFilterProps(workloadsState)}',
+    );
+    expect(proxmoxPageSurfaceSource).not.toContain(
+      'metricHoverMode={workloadsState.workloadMetricHoverMode}',
     );
   });
 

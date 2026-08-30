@@ -13,6 +13,7 @@ import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+  getWorkloadsMetricFilterProps,
   type WorkloadsStatusOption,
   type WorkloadsMemoryDisplayBasis,
   type WorkloadsMetricDisplayMode,
@@ -514,13 +515,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
               hostFilter={workloadsState.hostFilterConfig()}
               namespaceFilter={undefined}
               platformFilter={undefined}
-              metricDisplayMode={workloadsState.workloadMetricDisplayMode}
-              setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
-              metricHoverMode={workloadsState.workloadMetricHoverMode}
-              setMetricHoverMode={workloadsState.setWorkloadMetricHoverMode}
-              metricHistoryRange={workloadsState.workloadMetricHistoryRange}
-              setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
-              metricHistoryHintVisible={workloadsState.workloadMetricHistoryHintVisible}
+              {...getWorkloadsMetricFilterProps(workloadsState)}
               memoryDisplayBasis={workloadsState.workloadMemoryDisplayBasis}
               setMemoryDisplayBasis={props.setMemoryDisplayBasis}
               forcedPlatform={PROXMOX_PLATFORM_FILTER}

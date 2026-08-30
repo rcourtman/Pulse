@@ -5,6 +5,7 @@ import {
   countActiveWorkloadsFilters,
   DEFAULT_WORKLOADS_STATUS_MODE,
   DEFAULT_WORKLOADS_VIEW_MODE,
+  getWorkloadsMetricFilterProps,
   hasActiveWorkloadsFilters,
 } from '../workloadsFilterModel';
 
@@ -21,6 +22,30 @@ const inactiveOptions = (): CountActiveWorkloadsFiltersOptions => ({
   search: '',
   viewMode: DEFAULT_WORKLOADS_VIEW_MODE,
   statusMode: DEFAULT_WORKLOADS_STATUS_MODE,
+});
+
+describe('getWorkloadsMetricFilterProps', () => {
+  it('binds display, hover, range, and discovery controls as one atomic contract', () => {
+    const state = {
+      workloadMetricDisplayMode: () => 'bars' as const,
+      setWorkloadMetricDisplayMode: () => undefined,
+      workloadMetricHoverMode: () => 'history' as const,
+      setWorkloadMetricHoverMode: () => undefined,
+      workloadMetricHistoryRange: () => '24h' as const,
+      setWorkloadMetricHistoryRange: () => undefined,
+      workloadMetricHistoryHintVisible: () => true,
+    };
+
+    expect(getWorkloadsMetricFilterProps(state)).toEqual({
+      metricDisplayMode: state.workloadMetricDisplayMode,
+      setMetricDisplayMode: state.setWorkloadMetricDisplayMode,
+      metricHoverMode: state.workloadMetricHoverMode,
+      setMetricHoverMode: state.setWorkloadMetricHoverMode,
+      metricHistoryRange: state.workloadMetricHistoryRange,
+      setMetricHistoryRange: state.setWorkloadMetricHistoryRange,
+      metricHistoryHintVisible: state.workloadMetricHistoryHintVisible,
+    });
+  });
 });
 
 describe('countActiveWorkloadsFilters — all-default baseline (every if false)', () => {

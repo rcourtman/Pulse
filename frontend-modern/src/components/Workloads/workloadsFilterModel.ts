@@ -95,6 +95,47 @@ export interface WorkloadsFilterProps {
   suppressTypeFilter?: boolean;
 }
 
+export type WorkloadsMetricFilterProps = Pick<
+  WorkloadsFilterProps,
+  | 'metricDisplayMode'
+  | 'setMetricDisplayMode'
+  | 'metricHoverMode'
+  | 'setMetricHoverMode'
+  | 'metricHistoryRange'
+  | 'setMetricHistoryRange'
+  | 'metricHistoryHintVisible'
+>;
+
+export interface WorkloadsMetricFilterState {
+  workloadMetricDisplayMode: NonNullable<WorkloadsFilterProps['metricDisplayMode']>;
+  setWorkloadMetricDisplayMode: NonNullable<WorkloadsFilterProps['setMetricDisplayMode']>;
+  workloadMetricHoverMode: NonNullable<WorkloadsFilterProps['metricHoverMode']>;
+  setWorkloadMetricHoverMode: NonNullable<WorkloadsFilterProps['setMetricHoverMode']>;
+  workloadMetricHistoryRange: NonNullable<WorkloadsFilterProps['metricHistoryRange']>;
+  setWorkloadMetricHistoryRange: NonNullable<WorkloadsFilterProps['setMetricHistoryRange']>;
+  workloadMetricHistoryHintVisible: NonNullable<WorkloadsFilterProps['metricHistoryHintVisible']>;
+}
+
+/**
+ * Canonical metric controls for every WorkloadsFilter composition.
+ *
+ * Provider pages may own the surrounding toolbar, but they must not select a
+ * subset of display, hover, range, and discovery state independently. Keeping
+ * this binding atomic prevents a bespoke platform toolbar from silently
+ * dropping History hover while the shared workload table still supports it.
+ */
+export const getWorkloadsMetricFilterProps = (
+  state: WorkloadsMetricFilterState,
+): WorkloadsMetricFilterProps => ({
+  metricDisplayMode: state.workloadMetricDisplayMode,
+  setMetricDisplayMode: state.setWorkloadMetricDisplayMode,
+  metricHoverMode: state.workloadMetricHoverMode,
+  setMetricHoverMode: state.setWorkloadMetricHoverMode,
+  metricHistoryRange: state.workloadMetricHistoryRange,
+  setMetricHistoryRange: state.setWorkloadMetricHistoryRange,
+  metricHistoryHintVisible: state.workloadMetricHistoryHintVisible,
+});
+
 export interface CountActiveWorkloadsFiltersOptions {
   search: string;
   viewMode: ViewMode;
