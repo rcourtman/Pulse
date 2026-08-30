@@ -3,7 +3,10 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -43,6 +46,70 @@ func actionAuthorityContext(record *config.APITokenRecord) context.Context {
 
 func testActionAuthority() actionAuthority {
 	return actionAuthority{authorizer: allowActionAuthorityAuthorizer{}, orgChecker: NewAuthorizationChecker(nil)}
+}
+
+func TestDefaultActionAuthorityRejectsNonAdminBrowserSession(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	const sessionToken = "viewer-action-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "viewer")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/act-test/execute", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req = req.WithContext(auth.WithUser(req.Context(), "viewer"))
+	rec := httptest.NewRecorder()
+	called := false
+	requireActionCapability(
+		&config.Config{AuthUser: "admin"},
+		&auth.DefaultAuthorizer{},
+		auth.ActionExecute,
+		func(http.ResponseWriter, *http.Request) { called = true },
+	)(rec, req)
+
+	if called {
+		t.Fatal("default authorizer admitted a non-admin browser session")
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestDefaultActionAuthorityAllowsConfiguredAdminBrowserSession(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	const sessionToken = "admin-action-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "admin")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/act-test/execute", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req = req.WithContext(auth.WithUser(req.Context(), "admin"))
+	rec := httptest.NewRecorder()
+	called := false
+	requireActionCapability(
+		&config.Config{AuthUser: "admin"},
+		&auth.DefaultAuthorizer{},
+		auth.ActionExecute,
+		func(http.ResponseWriter, *http.Request) { called = true },
+	)(rec, req)
+
+	if !called {
+		t.Fatalf("configured administrator was denied: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestExplicitActionAuthorizerCanGrantNonAdminBrowserSession(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/act-test/execute", nil)
+	req = req.WithContext(auth.WithUser(req.Context(), "operator"))
+	rec := httptest.NewRecorder()
+	called := false
+	requireActionCapability(
+		&config.Config{AuthUser: "admin"},
+		allowActionAuthorityAuthorizer{},
+		auth.ActionExecute,
+		func(http.ResponseWriter, *http.Request) { called = true },
+	)(rec, req)
+
+	if !called {
+		t.Fatalf("explicit action grant was denied: status=%d body=%q", rec.Code, rec.Body.String())
+	}
 }
 
 func TestActionAuthorityAllowsOwnerBoundTokenWithCanonicalApproveAndExecuteScopes(t *testing.T) {

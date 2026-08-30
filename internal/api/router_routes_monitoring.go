@@ -138,30 +138,30 @@ func (r *Router) registerMonitoringResourceRoutes(
 			r.agentEventBroadcaster.HandleAgentEvents,
 		))))
 	}
-	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireAnyScope([]string{config.ScopeActionsPlan, config.ScopeAIExecute}, requireActionCapability(r.authorizer, auth.ActionPlan, r.withExternalAgentCapabilityActivity(
+	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireAnyScope([]string{config.ScopeActionsPlan, config.ScopeAIExecute}, requireActionCapability(r.config, r.authorizer, auth.ActionPlan, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.PlanActionCapabilityName,
 		r.resourceHandlers.HandlePlanAction,
 	)))))
 	r.mux.HandleFunc("GET /api/actions/pending", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRoutePendingActions,
-		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleListPendingActions),
+		requireActionCapability(r.config, r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleListPendingActions),
 	)))
 	r.mux.HandleFunc("GET /api/actions", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionsList,
-		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleListActions),
+		requireActionCapability(r.config, r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleListActions),
 	)))
 	r.mux.HandleFunc("GET /api/actions/{id}", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionDetail,
-		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleGetAction),
+		requireActionCapability(r.config, r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleGetAction),
 	)))
 	r.mux.HandleFunc("POST /api/actions/{id}/refresh", RequireAuth(r.config, RequireAnyScope([]string{config.ScopeActionsPlan, config.ScopeAIExecute}, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.PlanActionCapabilityName,
-		requireActionCapability(r.authorizer, auth.ActionPlan, r.resourceHandlers.HandleRefreshAction),
+		requireActionCapability(r.config, r.authorizer, auth.ActionPlan, r.resourceHandlers.HandleRefreshAction),
 	))))
 	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionDecision, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.DecideActionCapabilityName,
-		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleDecideAction),
+		requireActionCapability(r.config, r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleDecideAction),
 	))))
 	r.mux.HandleFunc("POST /api/actions/{id}/execute", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionExecute, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ExecuteActionCapabilityName,
-		requireActionCapability(r.authorizer, auth.ActionExecute, r.resourceHandlers.HandleExecuteAction),
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.resourceHandlers.HandleExecuteAction),
 	))))
 	// Operator override for an action wedged in executing without agent
 	// completion evidence. It is deliberately not an agent capability and not
@@ -169,7 +169,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// execute (admin plus settings:write on top of the execute capability)
 	// because it writes terminal audit truth Pulse could not observe.
 	r.mux.HandleFunc("POST /api/actions/{id}/force-fail", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite,
-		requireActionCapability(r.authorizer, auth.ActionExecute, r.resourceHandlers.HandleForceFailAction),
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.resourceHandlers.HandleForceFailAction),
 	)))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
