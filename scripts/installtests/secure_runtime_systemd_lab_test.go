@@ -764,6 +764,12 @@ func secureRuntimeTranscriptSnapshot() []secureRuntimeTranscriptEvent {
 	return append([]secureRuntimeTranscriptEvent(nil), secureRuntimeTranscriptRecorder.events...)
 }
 
+func secureRuntimeFinalizeTranscript(receipt *secureRuntimeLabReceipt) []secureRuntimeTranscriptEvent {
+	events := secureRuntimeTranscriptSnapshot()
+	receipt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	return events
+}
+
 func TestSecureRuntimeReceiptCredentialDetection(t *testing.T) {
 	safe, err := json.Marshal(map[string]any{
 		"source_hashes": map[string]string{
@@ -804,6 +810,30 @@ func TestSecureRuntimeTranscriptPreservesEmptyCommandOutput(t *testing.T) {
 	output, present := payload["output"]
 	if !present || output != "" {
 		t.Fatalf("empty command output was not represented explicitly: %s", encoded)
+	}
+}
+
+func TestSecureRuntimeReceiptCompletionEnclosesFinalTranscriptEvent(t *testing.T) {
+	secureRuntimeResetTranscript(true)
+	t.Cleanup(func() { secureRuntimeResetTranscript(false) })
+	event := secureRuntimeRecordTranscriptEvent(secureRuntimeTranscriptEvent{
+		Kind: "command_output", Operation: "systemctl", OutputSHA256: secureRuntimeHash(nil),
+	})
+	receipt := secureRuntimeLabReceipt{}
+	events := secureRuntimeFinalizeTranscript(&receipt)
+	if len(events) != 1 || events[0].EventID != event.EventID {
+		t.Fatalf("final transcript snapshot = %+v", events)
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, event.ObservedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completedAt, err := time.Parse(time.RFC3339Nano, receipt.CompletedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observedAt.After(completedAt) {
+		t.Fatalf("final event %s falls after receipt completion %s", event.ObservedAt, receipt.CompletedAt)
 	}
 }
 
@@ -1183,7 +1213,6 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 		t.Fatalf("final report privilege posture = %+v", latest)
 	}
 
-	receipt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	receipt.CollectorServiceUser = secureRuntimeSystemdProperty(t, "User")
 	receipt.CollectorProcessUID = secureRuntimeCollectorProcessUID(t)
 	receipt.CollectorAuthority = latest.Authority
@@ -1201,7 +1230,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	receipt.ReportCount = len(reports)
 	receipt.FirstReportAt = reports[0].ReceivedAt.Format(time.RFC3339Nano)
 	receipt.LastReportAt = reports[len(reports)-1].ReceivedAt.Format(time.RFC3339Nano)
-	secureRuntimeWriteEvidence(t, &receipt, secureRuntimeTranscriptSnapshot())
+	secureRuntimeWriteEvidence(t, &receipt, secureRuntimeFinalizeTranscript(&receipt))
 }
 
 func secureRuntimeRequireDisposableHost(t *testing.T) {
