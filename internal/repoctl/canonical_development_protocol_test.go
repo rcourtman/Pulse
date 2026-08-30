@@ -1826,6 +1826,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"Contract Metadata",
 		"audit_contract_payload",
 		"contract metadata",
+		"--repo-scope",
 		"--check",
 	})
 
@@ -1868,7 +1869,7 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin",
 		"python3 scripts/release_control/browser_verification_guard.py",
 		"python3 scripts/release_control/registry_audit.py --check --repo-scope pulse",
-		"python3 scripts/release_control/contract_audit.py --check",
+		"python3 scripts/release_control/contract_audit.py --check --repo-scope pulse",
 		"python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type automated",
 		"python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type hybrid",
 		"go test ./internal/repoctl -count=1",
@@ -1907,6 +1908,7 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"python3 scripts/release_control/status_audit.py --check",
 		"python3 scripts/release_control/control_plane_audit.py --check",
 		"python3 scripts/release_control/registry_audit.py --check",
+		"python3 scripts/release_control/contract_audit.py --check",
 		"go test ./internal/repoctl -count=1",
 	})
 	if strings.Contains(privateWorkflow, "pull_request:") || strings.Contains(privateWorkflow, "workflow_dispatch:") {

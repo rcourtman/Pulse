@@ -170,10 +170,14 @@ def validate_repo_path_token(
     errors: list[str],
     repo_roots: dict[str, Path],
     default_repo_id: str,
+    audited_repo_ids: set[str] | None = None,
 ) -> None:
     resolved = resolve_repo_path_token(token, repo_roots=repo_roots, default_repo_id=default_repo_id)
     if resolved is None:
         errors.append(f"{rel} {heading} contains non-clean repo-relative path {token!r}")
+        return
+    repo_id = token.split(":", 1)[0] if ":" in token else default_repo_id
+    if audited_repo_ids is not None and repo_id not in audited_repo_ids:
         return
     if not resolved.exists():
         errors.append(f"{rel} {heading} references missing path {token!r}")
@@ -214,6 +218,7 @@ def audit_contract_text(
     *,
     repo_roots: dict[str, Path],
     default_repo_id: str,
+    audited_repo_ids: set[str] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     path_references: list[dict[str, str]] = []
@@ -270,6 +275,7 @@ def audit_contract_text(
                             errors=errors,
                             repo_roots=repo_roots,
                             default_repo_id=default_repo_id,
+                            audited_repo_ids=audited_repo_ids,
                         )
                         path_references.append({"heading": heading, "path": token})
             if heading == "## Extension Points":
@@ -283,6 +289,7 @@ def audit_contract_text(
                                 errors=errors,
                                 repo_roots=repo_roots,
                                 default_repo_id=default_repo_id,
+                                audited_repo_ids=audited_repo_ids,
                             )
                             path_references.append({"heading": heading, "path": token})
 
@@ -339,6 +346,7 @@ def audit_contract_payload(
     status_payload: dict[str, Any],
     contract_texts: dict[str, str],
     repo_root: Path | None = None,
+    audited_repo_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -388,6 +396,7 @@ def audit_contract_payload(
             contract_texts[rel],
             repo_roots=repo_roots,
             default_repo_id=default_repo_id,
+            audited_repo_ids=audited_repo_ids,
         )
         errors.extend(parse_errors)
         metadata = parsed.get("metadata")
@@ -513,6 +522,7 @@ def audit_contract_payload(
                     errors=errors,
                     repo_roots=repo_roots,
                     default_repo_id=default_repo_id,
+                    audited_repo_ids=audited_repo_ids,
                 )
                 actual_shared_paths.append(shared_path)
                 if shared_path in seen_shared_paths:
@@ -590,6 +600,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Read subsystem contracts from the git index instead of the working tree.",
     )
+    parser.add_argument(
+        "--repo-scope",
+        action="append",
+        default=[],
+        metavar="REPO_ID",
+        help=(
+            "Audit paths for one available repository. Repeat to audit multiple "
+            "repositories; the default audits the complete active profile."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -615,11 +635,33 @@ def render_pretty(report: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or []))
+    status_payload = load_status_payload(staged=args.staged)
+    active_repos = [
+        repo_id
+        for repo_id in status_payload.get("scope", {}).get("active_repos", [])
+        if isinstance(repo_id, str) and repo_id.strip()
+    ] or [canonical_repo_id(REPO_ROOT)]
+    local_repo = canonical_repo_id(REPO_ROOT)
+    requested_repos = args.repo_scope or active_repos
+    scope_errors: list[str] = []
+    if len(requested_repos) != len(set(requested_repos)):
+        scope_errors.append("--repo-scope must not contain duplicate repository ids")
+    unknown_repos = sorted(set(requested_repos) - set(active_repos), key=str.casefold)
+    if unknown_repos:
+        scope_errors.append(
+            "--repo-scope contains repositories outside the active profile: "
+            + ", ".join(unknown_repos)
+        )
+    if local_repo not in requested_repos:
+        scope_errors.append(f"--repo-scope must include the local control-plane repository {local_repo!r}")
+
     report = audit_contract_payload(
         registry_payload=load_registry_payload(staged=args.staged),
-        status_payload=load_status_payload(staged=args.staged),
+        status_payload=status_payload,
         contract_texts=tracked_contract_files(staged=args.staged),
+        audited_repo_ids=set(requested_repos) if args.repo_scope else None,
     )
+    report["errors"] = scope_errors + report["errors"]
     output = render_pretty(report) if args.pretty else json.dumps(report, indent=2, sort_keys=True)
     print(output)
     if args.check and report["errors"]:

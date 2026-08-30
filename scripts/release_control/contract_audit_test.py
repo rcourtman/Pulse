@@ -20,10 +20,75 @@ class ContractAuditTest(unittest.TestCase):
             env=env,
         )
 
+    def cross_repo_contract_fixture(
+        self,
+        private_path: str = "pulse-mobile:src/relay/client.ts",
+    ) -> tuple[dict, dict, dict[str, str]]:
+        registry_payload = {
+            "subsystems": [
+                {
+                    "id": "relay-runtime",
+                    "lane": "L7",
+                    "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+                }
+            ]
+        }
+        status_payload = {
+            "scope": {"active_repos": ["pulse", "pulse-mobile"]},
+            "lanes": [{"id": "L7"}],
+        }
+        contract_texts = {
+            "docs/release-control/v6/internal/subsystems/relay-runtime.md": f"""# Relay Runtime Contract
+
+## Contract Metadata
+
+```json
+{{
+  "subsystem_id": "relay-runtime",
+  "lane": "L7",
+  "contract_file": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+  "status_file": "docs/release-control/v6/internal/status.json",
+  "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}}
+```
+
+## Purpose
+
+Own relay runtime truth.
+
+## Canonical Files
+
+1. `{private_path}`
+
+## Shared Boundaries
+
+1. None.
+
+## Extension Points
+
+1. Add mobile relay reconnect behavior through `pulse-mobile:src/relay/`
+
+## Forbidden Paths
+
+1. Ad hoc mobile relay reconnect state.
+
+## Completion Obligations
+
+1. Keep mobile relay runtime changes tied to tests.
+
+## Current State
+
+Cross-repo relay ownership is explicit.
+""",
+        }
+        return registry_payload, status_payload, contract_texts
+
     def test_parse_args_accepts_staged_flag(self) -> None:
-        args = parse_args(["--check", "--staged"])
+        args = parse_args(["--check", "--staged", "--repo-scope", "pulse"])
         self.assertTrue(args.check)
         self.assertTrue(args.staged)
+        self.assertEqual(args.repo_scope, ["pulse"])
 
     def test_audit_contract_payload_accepts_valid_contracts(self) -> None:
         registry_payload = {
@@ -314,66 +379,7 @@ Canonical alert identity is live runtime truth.
         )
 
     def test_audit_contract_payload_accepts_cross_repo_contract_paths(self) -> None:
-        registry_payload = {
-            "subsystems": [
-                {
-                    "id": "relay-runtime",
-                    "lane": "L7",
-                    "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
-                }
-            ]
-        }
-        status_payload = {
-            "scope": {
-                "active_repos": ["pulse", "pulse-mobile"],
-            },
-            "lanes": [{"id": "L7"}],
-        }
-        contract_texts = {
-            "docs/release-control/v6/internal/subsystems/relay-runtime.md": """# Relay Runtime Contract
-
-## Contract Metadata
-
-```json
-{
-  "subsystem_id": "relay-runtime",
-  "lane": "L7",
-  "contract_file": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
-  "status_file": "docs/release-control/v6/internal/status.json",
-  "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
-}
-```
-
-## Purpose
-
-Own relay runtime truth.
-
-## Canonical Files
-
-1. `pulse-mobile:src/relay/client.ts`
-
-## Shared Boundaries
-
-1. None.
-
-## Extension Points
-
-1. Add mobile relay reconnect behavior through `pulse-mobile:src/relay/`
-
-## Forbidden Paths
-
-1. Ad hoc mobile relay reconnect state.
-
-## Completion Obligations
-
-1. Keep mobile relay runtime changes tied to tests.
-
-## Current State
-
-Cross-repo relay ownership is explicit.
-""",
-        }
+        registry_payload, status_payload, contract_texts = self.cross_repo_contract_fixture()
 
         report = audit_contract_payload(
             registry_payload=registry_payload,
@@ -382,6 +388,38 @@ Cross-repo relay ownership is explicit.
         )
 
         self.assertEqual(report["errors"], [])
+
+    def test_scoped_audit_defers_missing_private_paths_to_private_governance(self) -> None:
+        missing_path = "pulse-mobile:src/relay/definitely-missing.ts"
+        registry_payload, status_payload, contract_texts = self.cross_repo_contract_fixture(missing_path)
+
+        full_report = audit_contract_payload(
+            registry_payload=registry_payload,
+            status_payload=status_payload,
+            contract_texts=contract_texts,
+        )
+        scoped_report = audit_contract_payload(
+            registry_payload=registry_payload,
+            status_payload=status_payload,
+            contract_texts=contract_texts,
+            audited_repo_ids={"pulse"},
+        )
+
+        self.assertIn(f"references missing path '{missing_path}'", "\n".join(full_report["errors"]))
+        self.assertEqual(scoped_report["errors"], [])
+
+    def test_scoped_audit_still_rejects_unclean_private_path_tokens(self) -> None:
+        unclean_path = "pulse-mobile:../client.ts"
+        registry_payload, status_payload, contract_texts = self.cross_repo_contract_fixture(unclean_path)
+
+        report = audit_contract_payload(
+            registry_payload=registry_payload,
+            status_payload=status_payload,
+            contract_texts=contract_texts,
+            audited_repo_ids={"pulse"},
+        )
+
+        self.assertIn(f"contains non-clean repo-relative path '{unclean_path}'", "\n".join(report["errors"]))
 
     def test_audit_contract_payload_isolates_local_paths_and_resolves_siblings_from_linked_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

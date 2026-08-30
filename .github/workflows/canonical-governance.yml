@@ -136,7 +136,9 @@ jobs:
         run: go test ./internal/mutationregistry ./internal/ai/tools -run 'Test(EveryRegisteredMutationHasDisposition|InfrastructureAPIRoutesResolveToRegistry|TransportCommandCatalogsResolveToRegistry|PatrolJobRegistrationResolvesToRegistry|RuntimeCandidateAuditNegativeFixtures|ActionRouteMethodAuthorityIsExactAndLookalikesFailClosed|NonAdmittingTransportMessagesCannotCarryDispatchAuthority|UnknownTransportLookalikeFailsClosed|RegisteredModelMutationSchemasResolveToClosedRegistry|RetiredMutationAliasesCannotShadowExtensions)' -count=1
 
       - name: Run contract audit
-        run: python3 scripts/release_control/contract_audit.py --check
+        # Cross-repository path existence is checked with the credential-isolated
+        # sibling checkouts after merge. Keep PR validation scoped to public truth.
+        run: python3 scripts/release_control/contract_audit.py --check --repo-scope pulse
 
       - name: Run canonical completion guard unit tests
         run: python3 scripts/release_control/canonical_completion_guard_test.py

@@ -22,9 +22,11 @@ the generated shell program.
 Workflows triggered by `pull_request` cannot reference confidential repository
 secrets. Canonical governance therefore keeps its pull-request checks local to
 the public checkout. `canonical-private-governance.yml` performs cross-repo
-status, control-plane, subsystem-registry, mobile compatibility, and
-repo-governance checks only after a push to `main`, so unmerged pull-request
-code cannot replace the instructions that receive `WORKFLOW_PAT`.
+status, control-plane, subsystem-registry, subsystem-contract, mobile
+compatibility, and repo-governance checks only after a push to `main`, so
+unmerged pull-request code cannot replace the instructions that receive
+`WORKFLOW_PAT`. The public job still audits contract structure and every public
+path; only private path existence is deferred to that credential-isolated job.
 `PULSE_LICENSE_PUBLIC_KEY` is the sole explicit PR exception because that
 legacy secret value is intentionally non-confidential.
 
@@ -39,9 +41,10 @@ checksummed release asset and SSH signature, re-verify release and build
 attestations, and require the exact Docker Hub, GHCR, and OCI Helm identities
 to remain equal to the digests committed at activation. Stable Docker Hub and
 GHCR discovery aliases (`latest`, major, and major-minor) must also retain
-those identities. Every run retains a
-machine-readable evidence packet for 90 days, including partial outcomes when
-a check fails. Six-hour lock-watch evidence explicitly records its narrower
+those identities. Every run requests 90-day retention for a machine-readable
+evidence packet, including partial outcomes when a check fails; GitHub applies
+the repository's configured retention maximum and reports any clamp in the
+workflow warning. Six-hour lock-watch evidence explicitly records its narrower
 `release_lock` mode and skipped full-surface checks. The job is read-only and
 requires the public `PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable.
 
