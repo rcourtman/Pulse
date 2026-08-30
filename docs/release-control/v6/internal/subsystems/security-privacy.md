@@ -173,29 +173,31 @@ invisible to operators reviewing exactly what Pulse sends.
 27. `internal/config/watcher.go`
 28. `internal/telemetry/telemetry.go`
 29. `internal/telemetry/service_health.go`
-30. `pkg/server/service_health.go`
-31. `pkg/server/telemetry_pulse_intelligence.go`
-32. `internal/api/router_routes_auth_security.go`
-33. `internal/crypto/crypto.go`
-34. `internal/securityutil/secure_storage_dir.go`
-35. `internal/cloudcp/auth/magiclink.go`
-36. `internal/cloudcp/auth/magiclink_store.go`
-37. `pkg/tlsutil/fingerprint.go`
-38. `pkg/audit/audit.go`
-39. `pkg/audit/async_logger.go`
-40. `pkg/audit/sqlite_logger.go`
-41. `pkg/audit/signer.go`
-42. `pkg/audit/sqlite_factory.go`
-43. `pkg/extensions/audit_admin.go`
-44. `scripts/telemetry_adoption_report.py`
-45. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-46. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-47. `internal/api/agent_exec_token_binding.go`
-48. `internal/logging/logging.go`
-49. `pkg/auth/rbac.go`
-50. `pkg/auth/rbac_manager.go`
-51. `pkg/auth/sqlite_manager.go`
-52. `pkg/server/server.go`
+30. `internal/config/workload_history_activity_tally.go`
+31. `internal/api/telemetry_workload_history.go`
+32. `pkg/server/service_health.go`
+33. `pkg/server/telemetry_pulse_intelligence.go`
+34. `internal/api/router_routes_auth_security.go`
+35. `internal/crypto/crypto.go`
+36. `internal/securityutil/secure_storage_dir.go`
+37. `internal/cloudcp/auth/magiclink.go`
+38. `internal/cloudcp/auth/magiclink_store.go`
+39. `pkg/tlsutil/fingerprint.go`
+40. `pkg/audit/audit.go`
+41. `pkg/audit/async_logger.go`
+42. `pkg/audit/sqlite_logger.go`
+43. `pkg/audit/signer.go`
+44. `pkg/audit/sqlite_factory.go`
+45. `pkg/extensions/audit_admin.go`
+46. `scripts/telemetry_adoption_report.py`
+47. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+48. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+49. `internal/api/agent_exec_token_binding.go`
+50. `internal/logging/logging.go`
+51. `pkg/auth/rbac.go`
+52. `pkg/auth/rbac_manager.go`
+53. `pkg/auth/sqlite_manager.go`
+54. `pkg/server/server.go`
 
 ## Shared Boundaries
 
@@ -342,6 +344,15 @@ creation, unauthenticated delivery, raw SMTP secret exposure, or bypasses for
 the `white_label` branding entitlement.
 
 1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md`, `frontend-modern/public/docs/PRIVACY.md`, `internal/telemetry/telemetry.go`, and `pkg/server/telemetry_pulse_intelligence.go` together.
+   Workload-history adoption telemetry may cross the browser boundary only as
+   one of four closed milestones: populated preview, cursor scrub, range
+   change, or Details-mode selection. The browser must deduplicate each value
+   once per session before calling the authenticated local intake. The intake
+   rejects unknown fields and values, and persistence retains only bounded
+   UTC-day counts. Guest/user identity, route, selected range, cursor/value,
+   timing, browser identity, and raw event streams are forbidden at every
+   layer; only rolling 30-day aggregate counts enter the existing opt-out
+   startup/daily heartbeat.
    Mock/demo fixture mode is a hard suppression boundary for outbound usage
    telemetry: while `internal/mock.IsMockEnabled()` reports true,
    `internal/telemetry` must not send startup or heartbeat pings — the check
@@ -2289,7 +2300,7 @@ actor, and every audit row read stay on the install.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v10. Schema v8 added content-free
+The active outbound contract is schema v16. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -2302,6 +2313,12 @@ blocked runtime state, so an install whose Patrol can never run is
 distinguishable from one that runs and finds nothing. Blocked-reason text,
 provider endpoints, model names, and configuration stay on the install, and an
 untyped blocked reason exports nothing rather than free text.
+Schema v16 adds four workload-history adoption counts. Each closed activity is
+deduplicated once per browser session before the authenticated local intake,
+stored only as a bounded UTC-day count, and exported only as a rolling 30-day
+total. The contract forbids raw browser events, event-level clickstream data,
+guest/user identity, routes, selected ranges, cursor coordinates or values,
+interaction timing, and browser identity.
 The earlier draft schema-v8 `business_estate` field was reverted and must not
 remain in the license server's accepted ping struct merely because a private receiver build
 and database migration briefly carried it. Existing deployed databases need no

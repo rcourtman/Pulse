@@ -1,11 +1,29 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MetricDisplayModeSegmentedControl } from '../MetricDisplayModeSegmentedControl';
+import {
+  MetricDisplayModeSegmentedControl,
+  MetricHoverModeSegmentedControl,
+} from '../MetricDisplayModeSegmentedControl';
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe('MetricHoverModeSegmentedControl', () => {
+  it('switches between detailed bar tooltips and synchronized row history', async () => {
+    const onChange = vi.fn();
+    render(() => <MetricHoverModeSegmentedControl value="history" onChange={onChange} />);
+
+    const group = screen.getByRole('group', { name: 'Row hover behavior' });
+    expect(screen.getByRole('button', { name: 'History' })).toHaveAttribute('aria-pressed', 'true');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+
+    expect(onChange).toHaveBeenCalledWith('details');
+    expect(group).toBeInTheDocument();
+  });
 });
 
 describe('MetricDisplayModeSegmentedControl', () => {

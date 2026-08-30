@@ -9,11 +9,8 @@ import type {
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
 import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
 import { getWorkloadsGuestBackupStatusPresentation } from '@/utils/workloadGuestPresentation';
-import {
-  getCanonicalWorkloadId,
-  getWorkloadCPUPercent,
-  resolveWorkloadType,
-} from '@/utils/workloads';
+import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
+import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
@@ -284,28 +281,7 @@ export const getGuestDrawerHistoryRangeBounds = (
 };
 
 export const getGuestDrawerHistoryTarget = (guest: Guest): GuestDrawerHistoryTarget | null => {
-  const explicitResourceType = guest.metricsTarget?.resourceType;
-  const explicitResourceId = guest.metricsTarget?.resourceId?.trim();
-  if (explicitResourceType && explicitResourceId) {
-    return { resourceType: explicitResourceType, resourceId: explicitResourceId };
-  }
-
-  const resourceId = getCanonicalWorkloadId(guest).trim();
-  if (!resourceId) return null;
-
-  const workloadType = resolveWorkloadType(guest);
-  switch (workloadType) {
-    case 'vm':
-      return { resourceType: 'vm', resourceId };
-    case 'system-container':
-      return { resourceType: 'system-container', resourceId };
-    case 'app-container':
-      return { resourceType: 'app-container', resourceId };
-    case 'pod':
-      return { resourceType: 'pod', resourceId };
-    default:
-      return null;
-  }
+  return getWorkloadMetricHistoryTarget(guest);
 };
 
 export const hasGuestDrawerOsInfo = (guest: Guest): boolean =>

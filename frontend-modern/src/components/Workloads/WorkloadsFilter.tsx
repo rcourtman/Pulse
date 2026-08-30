@@ -32,6 +32,7 @@ import type { ViewMode } from '@/types/workloads';
 import {
   MetricDisplayModeSegmentedControl,
   MetricHistoryRangeSegmentedControl,
+  MetricHoverModeSegmentedControl,
 } from './MetricDisplayModeSegmentedControl';
 import type {
   WorkloadsFilterProps,
@@ -346,6 +347,25 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             </div>
           </Show>
 
+          <Show
+            when={
+              !isMobile() &&
+              props.metricDisplayMode?.() === 'bars' &&
+              props.metricHoverMode &&
+              props.setMetricHoverMode
+            }
+          >
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Row hover
+              </div>
+              <MetricHoverModeSegmentedControl
+                value={props.metricHoverMode!()}
+                onChange={props.setMetricHoverMode!}
+              />
+            </div>
+          </Show>
+
           <Show when={props.memoryDisplayBasis && props.setMemoryDisplayBasis}>
             <div>
               <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
@@ -429,16 +449,27 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       trailingControls={
         <Show
           when={
-            props.metricDisplayMode?.() === 'sparklines' &&
             props.metricHistoryRange &&
-            props.setMetricHistoryRange
+            props.setMetricHistoryRange &&
+            (props.metricDisplayMode?.() !== 'bars' ||
+              (!isMobile() && (props.metricHoverMode?.() ?? 'history') === 'history'))
           }
         >
-          <MetricHistoryRangeSegmentedControl
-            label="Trend range"
-            range={props.metricHistoryRange!()}
-            onRangeChange={props.setMetricHistoryRange!}
-          />
+          <div class="flex items-center gap-2">
+            <Show when={props.metricHistoryHintVisible?.()}>
+              <span
+                class="hidden whitespace-nowrap text-[11px] text-muted/80 lg:inline"
+                data-testid="workload-history-hover-hint"
+              >
+                Hover a guest to preview history
+              </span>
+            </Show>
+            <MetricHistoryRangeSegmentedControl
+              label="History"
+              range={props.metricHistoryRange!()}
+              onRangeChange={props.setMetricHistoryRange!}
+            />
+          </div>
         </Show>
       }
       onClearAll={handleClearAll}

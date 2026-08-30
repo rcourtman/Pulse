@@ -46,9 +46,10 @@ Platform-owned workload controls extend the shared `WorkloadsFilter` view
 options rather than creating page-local toolbar shells. Persistent presentation
 choices compose the shared `ViewOptionsDisclosure` instead of occupying the
 primary filter rail: layout, metric style, chart visibility, memory basis, and
-columns remain discoverable behind one `View` trigger, while the trend range
-may stay inline only when trends are active because it is the frequent
-analytical control. That inline range must carry a visible contextual label.
+columns remain discoverable behind one `View` trigger. The history range stays
+inline in both metric modes because bars now expose an intent-driven row
+history lens and Trends keeps the same charts persistent. That inline range
+must carry a visible contextual label.
 Controls inside the View disclosure must expand in place rather than opening
 nested absolute panels that can clip or create competing overlay stacks. The
 Proxmox page owns and persists the `Guest` / `Host` memory basis;
@@ -61,6 +62,25 @@ visibility defaults: feature state owns the width reset callback and active
 flag, while the shared picker owns the discoverable menu placement and button
 presentation. Tables without manual sizing omit both properties and retain the
 existing picker unchanged.
+
+The default Workloads metric presentation keeps compact progress bars at rest.
+A fine-pointer preview or keyboard focus on one guest row replaces CPU, memory,
+and disk together with the existing `MetricMiniSparkline` presentation without
+changing row height; touch pointer entry does not trigger this transient lens,
+and the persistent Trends View choice remains the touch-accessible fallback.
+The active chart owns its local tooltip while its normalized cursor position is
+shared across sibling charts in that guest row, so every guide represents the
+same relative point in the selected history range. Leaving the row clears the
+cursor and restores all three bars together. The lens mounts with a short
+reduced-motion-safe fade and must not leave both bar and chart semantics in the
+accessibility tree simultaneously.
+Bar mode resolves history only for that active guest through its canonical
+metrics target and the selected compact range; it must not start an
+estate-wide chart request merely because the range changes. The active request
+key is stable across equivalent live guest snapshots, and leaving the row or
+selecting another range aborts superseded browser work. Persistent Trends may
+retain the shared estate reader, but range changes must clear prior-range data
+unless an exact-key cache entry exists.
 
 Feature-owned scope controls that use the shared filter rail must keep their
 state in the owning route and use stable, domain-authored option identities.
@@ -151,6 +171,13 @@ group. The group owns one absolute hovered timestamp, while each chart maps
 that timestamp through its own plot geometry and nearest stored sample so
 crosshairs and tooltips remain time-aligned without coupling unrelated ranges
 or assuming identical value scales.
+Workload tables expose their inline history lens through one shared filter
+contract. Its first-use hint is visible only while bar or history metrics are
+available, disappears after a populated guest preview succeeds, and is passed
+through provider-owned compositions such as `ProxmoxPageSurface` rather than
+reimplemented by each surface. Hover and range interactions remain session
+deduplicated so the presentation layer cannot create per-row or per-frame
+telemetry traffic.
 Object-detail navigation follows that same canonical split across platform and
 feature owners. `Overview` is the stable landing tab for current operational
 facts, while stored metric charts appear only after selecting an evidence-gated
@@ -3574,6 +3601,17 @@ it keeps at most 20 recent node/range summaries and aborts in-flight requests
 when organization ownership changes. Drawer navigation, chart range churn,
 background tabs, reconnects, and server restarts must not turn either cache
 into an append-only browser history.
+Consumers whose visible meaning changes with the source key may set
+`retainPreviousValueOnSourceChange` to `false`. When the new key has no retained
+entry, the helper must clear to the consumer's initial value in the same
+reactive turn before starting the replacement request; a failed or slow history
+range request must never leave data from the previous range labeled as the
+newly selected range. Cached data for the exact new key may still render
+immediately and refresh in the background.
+Each query run receives an `AbortSignal`; changing the source, resetting the
+query, or unmounting its owner must abort the superseded browser request before
+starting replacement work. Consumers must forward that signal through their
+API/cache layer when the transport supports cancellation.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,

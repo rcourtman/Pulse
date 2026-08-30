@@ -45,6 +45,8 @@
 //     plus event-history and active-state persistence health
 //   - Aggregate notification attempt/delivery/failure counts over seven days
 //   - Coarse update funnel counters and last failure category over the current install-ID rotation window
+//   - Workload-history preview, scrub, range-change, and Details-selection
+//     session counts over the current install-ID rotation window
 //   - Patrol, Assistant, and external-agent usage counters over the current install-ID rotation window:
 //     configured/active/governed-action/approved-execution/resolved-loop state,
 //     Patrol control completed-loop and resolved-loop proof reported through
@@ -65,6 +67,8 @@
 //   - No action targets, resource IDs, finding IDs, approval actors, or approval reasons
 //   - No names, email addresses, account identifiers, or other intentionally identifying personal content
 //   - No listener addresses, self-check URLs, response bodies, asset names, or raw startup/self-check errors
+//   - No raw browser events, clickstream, guest/user identity, routes, selected
+//     ranges, cursor values, interaction timing, or browser identity
 //
 // # How to disable
 //
@@ -189,7 +193,10 @@ const (
 	// and reports only aggregate lifecycle, adoption, and persistence health.
 	// Schema v15 separates destination HTTP 5xx server failures from rejected
 	// HTTP 4xx responses. Both remain aggregate terminal-failure counters.
-	TelemetrySchemaVersion = 15
+	// Schema v16 adds four content-free workload-history adoption counters.
+	// Each browser reports each closed milestone at most once per session to a
+	// bounded local daily tally; no event stream or browser identity is sent.
+	TelemetrySchemaVersion = 16
 )
 
 type installIDRecord struct {
@@ -337,6 +344,15 @@ type Ping struct {
 	// install. Successes are attempts minus failures.
 	NodeTestAttempts30d int `json:"node_test_attempts_30d"`
 	NodeTestFailures30d int `json:"node_test_failures_30d"`
+
+	// Workload history adoption over the install-ID rotation window. The local
+	// browser intake is session-deduplicated and contains only the closed
+	// milestone; guest/user identity, routes, coordinates, and timings never
+	// enter the tally or payload.
+	WorkloadHistoryPreviewSessions30d          int `json:"workload_history_preview_sessions_30d"`
+	WorkloadHistoryScrubSessions30d            int `json:"workload_history_scrub_sessions_30d"`
+	WorkloadHistoryRangeChangeSessions30d      int `json:"workload_history_range_change_sessions_30d"`
+	WorkloadHistoryDetailsSelectionSessions30d int `json:"workload_history_details_selection_sessions_30d"`
 
 	// Core product outcomes. Alert history is retained locally for 30 days;
 	// notification delivery rows are locally retention-bounded to seven days.
@@ -527,6 +543,10 @@ type Snapshot struct {
 	UpdateLastFailureCategory                                      string
 	NodeTestAttempts30d                                            int
 	NodeTestFailures30d                                            int
+	WorkloadHistoryPreviewSessions30d                              int
+	WorkloadHistoryScrubSessions30d                                int
+	WorkloadHistoryRangeChangeSessions30d                          int
+	WorkloadHistoryDetailsSelectionSessions30d                     int
 	AuthConfigured                                                 bool
 	ConfiguredConnections                                          int
 	AlertsFired30d                                                 int
@@ -997,7 +1017,7 @@ func Start(ctx context.Context, cfg Config) {
 
 	log.Info().
 		Str("platform", platformName(cfg.IsDocker)).
-		Msg("Outbound usage telemetry enabled: sends a rotating pseudonymous install ID, version identity, coarse lifecycle and local service-health buckets, aggregate resource/outcome counts, feature flags, and content-free Patrol, Assistant, and capability-API usage counters")
+		Msg("Outbound usage telemetry enabled: sends a rotating pseudonymous install ID, version identity, coarse lifecycle and local service-health buckets, aggregate resource/outcome counts, feature flags, content-free Patrol, Assistant, capability-API, and session-deduplicated workload-history adoption counters")
 
 	r.wg.Add(1)
 	go func() {
@@ -1194,6 +1214,10 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.UpdateLastFailureCategory = s.UpdateLastFailureCategory
 	ping.NodeTestAttempts30d = s.NodeTestAttempts30d
 	ping.NodeTestFailures30d = s.NodeTestFailures30d
+	ping.WorkloadHistoryPreviewSessions30d = s.WorkloadHistoryPreviewSessions30d
+	ping.WorkloadHistoryScrubSessions30d = s.WorkloadHistoryScrubSessions30d
+	ping.WorkloadHistoryRangeChangeSessions30d = s.WorkloadHistoryRangeChangeSessions30d
+	ping.WorkloadHistoryDetailsSelectionSessions30d = s.WorkloadHistoryDetailsSelectionSessions30d
 	ping.AuthConfigured = s.AuthConfigured
 	ping.ConfiguredConnections = s.ConfiguredConnections
 	ping.AlertsFired30d = s.AlertsFired30d

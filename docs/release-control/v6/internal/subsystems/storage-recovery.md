@@ -955,6 +955,11 @@ recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   The authenticated workload-history usage intake and its bounded daily tally
+   are adjacent privacy/API telemetry only. They record four content-free
+   aggregate milestones and do not represent workload history data, backup
+   history, recovery points, retention policy, restore evidence, or storage
+   provider state; storage/recovery surfaces must not consume them as such.
    Commercial migration startup behavior in
    `internal/api/licensing_handlers.go` and `internal/api/licensing_bridge.go`
    remains adjacent cloud-paid/API state. Synthetic mock-license suppression

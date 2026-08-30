@@ -4,6 +4,7 @@ import {
   RuntimeInventorySourcesAPI,
   type RuntimeInventorySourcesResponse,
 } from '@/api/runtimeInventorySources';
+import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
 import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import type { VM, Container, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -25,6 +26,7 @@ import {
 } from '@/utils/workloadEmptyStatePresentation';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
@@ -36,6 +38,7 @@ import {
   type WorkloadsGroupingMode,
   type WorkloadsMemoryDisplayBasis,
   type WorkloadsMetricDisplayMode,
+  type WorkloadsMetricHoverMode,
   type WorkloadsStatusOption,
   type WorkloadsSortKey,
 } from './workloadsFilterModel';
@@ -115,6 +118,8 @@ export interface WorkloadsSurfaceProps {
   // surface falls back to its own persistent signals.
   metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;
   onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;
+  metricHoverMode?: Accessor<WorkloadsMetricHoverMode>;
+  onMetricHoverModeChange?: (value: WorkloadsMetricHoverMode) => void;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
   onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
   // Proxmox can compare guest memory use with either the allocation assigned
@@ -324,8 +329,10 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     clearWorkloadColumnWidth,
     resetWorkloadColumnWidths,
     workloadMetricDisplayMode,
+    workloadMetricHoverMode,
     workloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
+    setWorkloadMetricHoverMode,
     setWorkloadMetricHistoryRange,
   } = useWorkloadsControlsState({
     defaultSortKey: props.defaultSortKey,
@@ -333,6 +340,8 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     statusModeStorageScope: props.statusModeStorageScope,
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.onMetricDisplayModeChange,
+    metricHoverMode: props.metricHoverMode,
+    onMetricHoverModeChange: props.onMetricHoverModeChange,
     metricHistoryRange: props.metricHistoryRange,
     onMetricHistoryRangeChange: props.onMetricHistoryRangeChange,
     columnVisibilityStorageScope: props.columnVisibilityStorageScope,
@@ -384,11 +393,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const workloadInventoryIssues = createMemo(() =>
     buildWorkloadInventorySourceIssues(inventorySourcesSnapshot.value().sources ?? []),
   );
-  const workloadMetricHistory = useWorkloadTableMetricHistory({
-    enabled: () => workloadMetricDisplayMode() === 'sparklines',
-    range: workloadMetricHistoryRange,
-    selectedNode,
-  });
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
   const hasInfrastructureSources = createMemo(() =>
     workloadsEnabled()
@@ -492,6 +496,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     focusedSummaryWorkloadGroupScope,
     focusedSummaryWorkloadGroupId,
     hoveredSummaryWorkloadGroupScope,
+    hoveredWorkloadId,
     revealedGuestId,
     selectedGuestId,
     setClearSurfaceRootRef,
@@ -513,6 +518,20 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     routeStateEnabled: props.routeStateEnabled,
   });
 
+  const activeHistoryGuest = createMemo(() => {
+    const activeId = hoveredWorkloadId();
+    if (!activeId) return null;
+    return allGuests().find((guest) => getCanonicalWorkloadId(guest) === activeId) ?? null;
+  });
+  createEffect(() => {
+    if (
+      workloadMetricDisplayMode() === 'bars' &&
+      workloadMetricHoverMode() === 'details' &&
+      hoveredWorkloadId() !== null
+    ) {
+      setHoveredWorkloadId(null);
+    }
+  });
   const {
     bottomSpacerHeight,
     getGroupLabel,
@@ -540,6 +559,41 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     selectedGuestId,
     tableBodyRef,
     groupLabelBadges,
+  });
+
+  const metricHistoryPrefetchGuests = createMemo(() =>
+    visibleGroupKeys().flatMap((groupKey) => windowedGroupedGuests()[groupKey] ?? []),
+  );
+  const workloadMetricHistory = useWorkloadTableMetricHistory({
+    activeGuest: activeHistoryGuest,
+    // Persistent Trends owns the estate-wide batch reader. Bars mode warms a
+    // small visible/adjacent window so sequential row hover remains immediate.
+    enabled: () => workloadMetricDisplayMode() === 'sparklines',
+    onDemand: () =>
+      workloadMetricDisplayMode() === 'bars' && workloadMetricHoverMode() === 'history',
+    prefetchGuests: metricHistoryPrefetchGuests,
+    range: workloadMetricHistoryRange,
+    selectedNode,
+  });
+  const [workloadHistoryHintSeen, setWorkloadHistoryHintSeen] = usePersistentSignal<boolean>(
+    STORAGE_KEYS.WORKLOADS_HISTORY_HINT_SEEN,
+    false,
+    { deserialize: (raw) => raw === 'true' },
+  );
+  const workloadMetricHistoryHintVisible = createMemo(
+    () =>
+      !workloadHistoryHintSeen() &&
+      workloadMetricDisplayMode() === 'bars' &&
+      workloadMetricHoverMode() === 'history' &&
+      filteredGuests().length > 0,
+  );
+  createEffect(() => {
+    const active = activeHistoryGuest();
+    if (!active || !workloadMetricHistory.hasGuestHistory?.(active)) return;
+    recordWorkloadHistoryActivity('preview');
+    if (!workloadHistoryHintSeen()) {
+      setWorkloadHistoryHintSeen(true);
+    }
   });
 
   return {
@@ -627,6 +681,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setTableWrapperRef,
     setViewMode: setEffectiveViewMode,
     setWorkloadMetricDisplayMode,
+    setWorkloadMetricHoverMode,
     setWorkloadMetricHistoryRange,
     sortDirection,
     sortKey,
@@ -642,7 +697,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     windowedGroupedGuests,
     workloadIOEmphasis,
     workloadMetricHistoryRange,
+    workloadMetricHistoryHintVisible,
     workloadMetricDisplayMode,
+    workloadMetricHoverMode,
     workloadMemoryDisplayBasis,
     workloadMetricHistory,
     workloadTableVisibleColumnIds,

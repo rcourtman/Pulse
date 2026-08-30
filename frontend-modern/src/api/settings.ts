@@ -85,6 +85,10 @@ export interface TelemetryPingPreview {
   service_health_previous_healthy: boolean;
   node_test_attempts_30d: number;
   node_test_failures_30d: number;
+  workload_history_preview_sessions_30d: number;
+  workload_history_scrub_sessions_30d: number;
+  workload_history_range_change_sessions_30d: number;
+  workload_history_details_selection_sessions_30d: number;
   alerts_fired_30d: number;
   alerts_acknowledged_30d: number;
   alerts_resolved_30d: number;

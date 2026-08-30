@@ -107,6 +107,7 @@ export interface InfrastructureSummaryCacheHit {
 export interface InfrastructureSummaryFetchOptions {
   caller?: string;
   metrics?: readonly InfrastructureSummaryMetric[] | null;
+  signal?: AbortSignal;
 }
 
 export interface InfrastructureSummaryFetchResult {
@@ -331,7 +332,7 @@ export function fetchInfrastructureSummaryAndCache(
   const normalizedMetrics = normalizeInfrastructureSummaryMetrics(options?.metrics);
   const inFlightKey = inFlightKeyFor(range, orgScope, normalizedMetrics);
 
-  const existing = inFlightFetches.get(inFlightKey);
+  const existing = options?.signal ? undefined : inFlightFetches.get(inFlightKey);
   if (existing) {
     infraSummaryPerfLog('fetch deduped', { caller, range, orgScope });
     return existing;
@@ -341,7 +342,7 @@ export function fetchInfrastructureSummaryAndCache(
   const startedAt = infraSummaryPerfNow();
   infraSummaryPerfLog('fetch start', { caller, range, orgScope, requestId });
 
-  const request = ChartsAPI.getInfrastructureSummaryCharts(range, undefined, {
+  const request = ChartsAPI.getInfrastructureSummaryCharts(range, options?.signal, {
     metrics: [...normalizedMetrics],
   })
     .then((response) => {
@@ -389,10 +390,14 @@ export function fetchInfrastructureSummaryAndCache(
       throw error;
     })
     .finally(() => {
-      inFlightFetches.delete(inFlightKey);
+      if (!options?.signal) {
+        inFlightFetches.delete(inFlightKey);
+      }
     });
 
-  inFlightFetches.set(inFlightKey, request);
+  if (!options?.signal) {
+    inFlightFetches.set(inFlightKey, request);
+  }
   return request;
 }
 

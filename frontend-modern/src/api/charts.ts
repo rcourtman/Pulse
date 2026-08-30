@@ -172,6 +172,7 @@ export interface MetricsHistoryParams {
   metric?: string; // Optional: 'cpu', 'memory', 'disk', etc. Omit for all metrics
   range?: HistoryTimeRange; // Default: '24h'
   maxPoints?: number; // Optional cap on returned points (backend may downsample)
+  signal?: AbortSignal;
 }
 
 export function toMetricsHistoryAPIResourceType(
@@ -413,7 +414,7 @@ export class ChartsAPI {
       searchParams.set('maxPoints', Math.round(params.maxPoints).toString());
     }
     const url = `${this.baseUrl}/metrics-store/history?${searchParams.toString()}`;
-    return apiFetchJSON(url);
+    return params.signal ? apiFetchJSON(url, { signal: params.signal }) : apiFetchJSON(url);
   }
 
   /**

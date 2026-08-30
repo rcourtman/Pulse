@@ -1,4 +1,4 @@
-import { createMemo, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -15,6 +15,7 @@ import {
 } from './GuestRowCells';
 
 import { StatusDot } from '@/components/shared/StatusDot';
+import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
 import { TagBadges } from '@/components/shared/TagBadges';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
@@ -103,6 +104,35 @@ export function GuestRow(props: GuestRowProps) {
   const cpuPercent = createMemo(() => getWorkloadCPUPercent(props.guest.cpu) ?? 0);
   const metricDisplayMode = createMemo(() => props.metricDisplayMode ?? 'bars');
   const isSparklineMode = createMemo(() => metricDisplayMode() === 'sparklines');
+  const rowHistoryPreviewEnabled = createMemo(
+    () => isSparklineMode() || (props.metricHoverMode ?? 'history') === 'history',
+  );
+  const [historyCursorRatio, setHistoryCursorRatio] = createSignal<number | null>(null);
+  const setTrackedHistoryCursorRatio = (ratio: number | null): void => {
+    setHistoryCursorRatio(ratio);
+    if (ratio !== null) {
+      recordWorkloadHistoryActivity('scrub');
+    }
+  };
+  const [historyLensActive, setHistoryLensActive] = createSignal(false);
+  const historyLensHasData = createMemo(() => {
+    if (!historyLensActive() || !props.metricHistory) return false;
+    if (props.metricHistory.hasGuestHistory) {
+      return props.metricHistory.hasGuestHistory(props.guest);
+    }
+    return (['cpu', 'memory', 'disk', 'netIo', 'diskIo'] as const).some((metric) =>
+      props
+        .metricHistory!.getGuestMetricSeries(props.guest, metric)
+        .some((series) => series.points.length > 0),
+    );
+  });
+  const historyLensVisible = createMemo(
+    () =>
+      !isSparklineMode() &&
+      rowHistoryPreviewEnabled() &&
+      historyLensActive() &&
+      historyLensHasData(),
+  );
   const usesCompactTableLayout = createMemo(
     () =>
       props.workloadTableLayoutMode === 'narrow' ||
@@ -168,6 +198,9 @@ export function GuestRow(props: GuestRowProps) {
       title={title}
       unit={unit}
       formatValue={formatValue}
+      cursorRatio={historyCursorRatio()}
+      onCursorRatioChange={setTrackedHistoryCursorRatio}
+      showTooltip={true}
     />
   );
 
@@ -177,19 +210,29 @@ export function GuestRow(props: GuestRowProps) {
     const vm = props.guest as VM;
     return getWorkloadGuestDiskStatusMessage(vm.diskStatusReason);
   };
-  const interactiveRowHandlers =
-    props.onClick || props.onHoverChange
-      ? createSummaryInteractiveRowPreviewHandlers({
-          onPreview: () => props.onHoverChange?.(guestId()),
-          onPreviewClear: () => props.onHoverChange?.(null),
-        })
-      : {};
+  const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
+    onPreview: () => {
+      if (!rowHistoryPreviewEnabled()) return;
+      setHistoryLensActive(true);
+      props.onHoverChange?.(guestId());
+    },
+    onPreviewClear: () => {
+      setHistoryLensActive(false);
+      setHistoryCursorRatio(null);
+      if (!rowHistoryPreviewEnabled()) return;
+      props.onHoverChange?.(null);
+    },
+  });
 
   return (
     <>
       <tr
         class={`${rowClass()} workload-row ${props.onClick ? 'cursor-pointer group' : ''}`.trim()}
         data-guest-id={guestId()}
+        data-history-lens-active={historyLensActive() ? 'true' : undefined}
+        data-history-lens-pending={
+          historyLensActive() && !historyLensVisible() ? 'true' : undefined
+        }
         data-workload-alert-accent={alertAccentTone()}
         data-summary-series-id={guestId()}
         data-summary-group-member-active={
@@ -372,13 +415,29 @@ export function GuestRow(props: GuestRowProps) {
                 when={isSparklineMode()}
                 fallback={
                   <div class="h-4">
-                    <EnhancedCPUBar
-                      usage={cpuPercent()}
-                      cores={isMobile() ? undefined : props.guest.cpus || undefined}
-                      resourceId={metricsKey()}
-                      anomaly={cpuAnomaly()}
-                      thresholds={cpuThresholds()}
-                    />
+                    <Show
+                      when={historyLensVisible()}
+                      fallback={
+                        <EnhancedCPUBar
+                          usage={cpuPercent()}
+                          cores={isMobile() ? undefined : props.guest.cpus || undefined}
+                          resourceId={metricsKey()}
+                          anomaly={cpuAnomaly()}
+                          thresholds={cpuThresholds()}
+                        />
+                      }
+                    >
+                      <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                        {renderMetricSparkline(
+                          'cpu',
+                          formatMetricPercent(cpuPercent()),
+                          `${props.guest.name} CPU history`,
+                          '%',
+                          'inline',
+                          formatMetricPercent,
+                        )}
+                      </div>
+                    </Show>
                   </div>
                 }
               >
@@ -401,36 +460,68 @@ export function GuestRow(props: GuestRowProps) {
             <Show
               when={isSparklineMode()}
               fallback={
-                <div title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}>
-                  <StackedMemoryBar
-                    used={props.guest.memory?.used || 0}
-                    total={memoryDisplayTotal()}
-                    unavailable={memoryDisplayUnavailable()}
-                    percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
-                    cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
-                    cacheInclusiveLabel={isHostMemoryBasis() ? undefined : 'Shown in Proxmox'}
-                    balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
-                    swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
-                    swapTotal={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)}
-                    resourceId={metricsKey()}
-                    anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
-                    thresholds={memoryThresholds()}
-                    severityPercent={
-                      isHostMemoryBasis()
-                        ? usagePercent(
-                            props.guest.memory?.used,
-                            props.guest.memory?.total,
-                            props.guest.memory?.usage,
-                          )
-                        : undefined
+                <div class="h-4">
+                  <Show
+                    when={historyLensVisible()}
+                    fallback={
+                      <div title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}>
+                        <StackedMemoryBar
+                          used={props.guest.memory?.used || 0}
+                          total={memoryDisplayTotal()}
+                          unavailable={memoryDisplayUnavailable()}
+                          percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
+                          cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
+                          cacheInclusiveLabel={isHostMemoryBasis() ? undefined : 'Shown in Proxmox'}
+                          balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
+                          swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
+                          swapTotal={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)}
+                          resourceId={metricsKey()}
+                          anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
+                          thresholds={memoryThresholds()}
+                          severityPercent={
+                            isHostMemoryBasis()
+                              ? usagePercent(
+                                  props.guest.memory?.used,
+                                  props.guest.memory?.total,
+                                  props.guest.memory?.usage,
+                                )
+                              : undefined
+                          }
+                          comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
+                          tooltipTitle={
+                            isHostMemoryBasis()
+                              ? `${props.parentNodeName?.trim() || 'Host'} memory share`
+                              : undefined
+                          }
+                        />
+                      </div>
                     }
-                    comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
-                    tooltipTitle={
-                      isHostMemoryBasis()
-                        ? `${props.parentNodeName?.trim() || 'Host'} memory share`
-                        : undefined
-                    }
-                  />
+                  >
+                    <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                      {renderMetricSparkline(
+                        'memory',
+                        memoryDisplayUnavailable()
+                          ? 'N/A'
+                          : formatMetricPercent(
+                              usagePercent(
+                                props.guest.memory?.used,
+                                memoryDisplayTotal(),
+                                isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
+                              ),
+                            ),
+                        isHostMemoryBasis()
+                          ? `${props.guest.name} host memory share history`
+                          : `${props.guest.name} memory history`,
+                        '%',
+                        'inline',
+                        formatMetricPercent,
+                        {
+                          memoryDisplayBasis: props.memoryDisplayBasis,
+                          parentMemoryTotal: props.parentMemoryTotal,
+                        },
+                      )}
+                    </div>
+                  </Show>
                 </div>
               }
             >
@@ -484,13 +575,31 @@ export function GuestRow(props: GuestRowProps) {
                   </div>
                 }
               >
-                <StackedDiskBar
-                  mode={usesCompactTableLayout() ? 'aggregate' : undefined}
-                  disks={props.guest.disks}
-                  aggregateDisk={props.guest.disk}
-                  anomaly={diskAnomaly()}
-                  thresholds={diskThresholds()}
-                />
+                <div class="h-4">
+                  <Show
+                    when={historyLensVisible()}
+                    fallback={
+                      <StackedDiskBar
+                        mode={usesCompactTableLayout() ? 'aggregate' : undefined}
+                        disks={props.guest.disks}
+                        aggregateDisk={props.guest.disk}
+                        anomaly={diskAnomaly()}
+                        thresholds={diskThresholds()}
+                      />
+                    }
+                  >
+                    <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                      {renderMetricSparkline(
+                        'disk',
+                        formatMetricPercent(props.guest.disk?.usage),
+                        `${props.guest.name} disk usage history`,
+                        '%',
+                        'inline',
+                        formatMetricPercent,
+                      )}
+                    </div>
+                  </Show>
+                </div>
               </Show>
             </Show>
           </td>

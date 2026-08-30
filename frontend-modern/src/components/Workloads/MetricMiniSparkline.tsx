@@ -22,6 +22,9 @@ interface MetricMiniSparklineProps {
   unit?: string;
   emptyLabel?: string;
   formatValue?: (value: number) => string;
+  cursorRatio?: number | null;
+  onCursorRatioChange?: (ratio: number | null) => void;
+  showTooltip?: boolean;
 }
 
 type MetricMiniSparklineTooltipState = MetricMiniSparklineHoverState & {
@@ -70,6 +73,12 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
   const [hoveredState, setHoveredState] = createSignal<MetricMiniSparklineTooltipState | null>(
     null,
   );
+  const synchronizedState = createMemo(() => {
+    const ratio = props.cursorRatio;
+    if (ratio === null || ratio === undefined) return null;
+    return computeMetricMiniSparklineHoverState(props.series, ratio, 1);
+  });
+  const activeHoverState = createMemo(() => synchronizedState() ?? hoveredState());
   const rootColumns = createMemo(() =>
     showInlineValue() ? 'grid-cols-[minmax(2.5rem,1fr)_auto]' : 'grid-cols-[minmax(2.5rem,1fr)]',
   );
@@ -81,13 +90,14 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
   const formatHoverValue = (value: number) =>
     props.formatValue?.(value) ?? formatDefaultHoverValue(value, props.unit);
   const cursorX = createMemo(() =>
-    hoveredState()
-      ? SPARKLINE_PLOT_X_PADDING + hoveredState()!.cursorRatio * SPARKLINE_PLOT_WIDTH
+    activeHoverState()
+      ? SPARKLINE_PLOT_X_PADDING + activeHoverState()!.cursorRatio * SPARKLINE_PLOT_WIDTH
       : 0,
   );
   const handleMouseMove: JSX.EventHandler<SVGSVGElement, MouseEvent> = (event) => {
     if (!hasLine()) {
       setHoveredState(null);
+      props.onCursorRatioChange?.(null);
       return;
     }
 
@@ -106,8 +116,13 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
           }
         : null,
     );
+    props.onCursorRatioChange?.(next?.cursorRatio ?? null);
   };
-  const handleMouseLeave = () => setHoveredState(null);
+  const handleMouseLeave = () => {
+    setHoveredState(null);
+    props.onCursorRatioChange?.(null);
+  };
+  const showTooltip = createMemo(() => (props.showTooltip ?? true) && hoveredState());
 
   return (
     <div
@@ -141,14 +156,15 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
               />
             )}
           </For>
-          <Show when={hoveredState()}>
+          <Show when={activeHoverState()}>
             <line
+              data-metric-history-cursor="true"
               x1={cursorX()}
               y1="2"
               x2={cursorX()}
               y2="16"
               stroke="currentColor"
-              stroke-opacity="0.36"
+              stroke-opacity="0.46"
               stroke-width="1"
               vector-effect="non-scaling-stroke"
             />
@@ -160,7 +176,7 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
           {displayLabel()}
         </span>
       </Show>
-      <Show when={hoveredState()}>
+      <Show when={showTooltip()}>
         {(hover) => (
           <TooltipPortal
             when={true}

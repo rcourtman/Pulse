@@ -7,6 +7,7 @@ import type { WorkloadTableMetricHistoryRange } from './workloadMetricHistoryMod
 export type WorkloadsStatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 export type WorkloadsGroupingMode = 'grouped' | 'flat';
 export type WorkloadsMetricDisplayMode = 'bars' | 'sparklines';
+export type WorkloadsMetricHoverMode = 'details' | 'history';
 export type WorkloadsMemoryDisplayBasis = 'guest' | 'host';
 export type WorkloadsSortKey = keyof WorkloadGuest | 'diskIo' | 'info' | 'netIo';
 
@@ -78,8 +79,11 @@ export interface WorkloadsFilterProps {
   onChartsToggle?: () => void;
   metricDisplayMode?: () => WorkloadsMetricDisplayMode;
   setMetricDisplayMode?: (value: WorkloadsMetricDisplayMode) => void;
+  metricHoverMode?: () => WorkloadsMetricHoverMode;
+  setMetricHoverMode?: (value: WorkloadsMetricHoverMode) => void;
   metricHistoryRange?: () => WorkloadTableMetricHistoryRange;
   setMetricHistoryRange?: (value: WorkloadTableMetricHistoryRange) => void;
+  metricHistoryHintVisible?: () => boolean;
   memoryDisplayBasis?: () => WorkloadsMemoryDisplayBasis;
   setMemoryDisplayBasis?: (value: WorkloadsMemoryDisplayBasis) => void;
   pinnedSelectionActive?: () => boolean;
@@ -109,6 +113,7 @@ export const DEFAULT_WORKLOADS_SORT_DIRECTION = 'asc';
 export const DEFAULT_WORKLOADS_VIEW_MODE: ViewMode = 'all';
 export const DEFAULT_WORKLOADS_STATUS_MODE: WorkloadsStatusMode = 'all';
 export const DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE: WorkloadsMetricDisplayMode = 'bars';
+export const DEFAULT_WORKLOADS_METRIC_HOVER_MODE: WorkloadsMetricHoverMode = 'history';
 
 export const countActiveWorkloadsFilters = (
   options: CountActiveWorkloadsFiltersOptions,

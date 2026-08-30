@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk } from '@/types/api';
 
@@ -424,6 +425,118 @@ describe('GuestRow', () => {
       expect(screen.queryByTestId('disk-bar')).toBeNull();
     });
 
+    it('keeps bars at rest and synchronizes the row history lens cursor', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'layered-vm' }),
+        visibleColumnIds: ['name', 'cpu', 'memory', 'disk'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      expect(screen.getByTestId('cpu-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('memory-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+      expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+
+      const row = screen.getByText('layered-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+
+      expect(row).toHaveAttribute('data-history-lens-active', 'true');
+      expect(screen.queryByTestId('cpu-bar')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('memory-bar')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('disk-bar')).not.toBeInTheDocument();
+
+      const lensCharts = screen.getAllByTestId('metric-mini-sparkline');
+      expect(lensCharts).toHaveLength(3);
+      expect(lensCharts[0].parentElement).toHaveClass('motion-reduce:animate-none');
+
+      const firstSvg = lensCharts[0].querySelector('svg') as SVGSVGElement;
+      firstSvg.getBoundingClientRect = () =>
+        ({
+          bottom: 18,
+          height: 18,
+          left: 0,
+          right: 96,
+          top: 0,
+          width: 96,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+
+      fireEvent.mouseMove(firstSvg, { clientX: 48, clientY: 8 });
+      expect(lensCharts.every((chart) => chart.querySelector('[data-metric-history-cursor]'))).toBe(
+        true,
+      );
+
+      fireEvent.mouseLeave(firstSvg);
+      expect(
+        lensCharts.every((chart) => chart.querySelector('[data-metric-history-cursor]') === null),
+      ).toBe(true);
+
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+      expect(row).not.toHaveAttribute('data-history-lens-active');
+      expect(screen.getByTestId('cpu-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('memory-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+      expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+    });
+
+    it('keeps the live bars visible until warmed history is ready', () => {
+      const [historyReady, setHistoryReady] = createSignal(false);
+      renderGuestRow({
+        guest: makeGuest({ name: 'warming-vm' }),
+        visibleColumnIds: ['name', 'cpu', 'memory', 'disk'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          hasGuestHistory: historyReady,
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      const row = screen.getByText('warming-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+
+      expect(row).toHaveAttribute('data-history-lens-active', 'true');
+      expect(row).toHaveAttribute('data-history-lens-pending', 'true');
+      expect(screen.getByTestId('cpu-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('memory-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+      expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+
+      setHistoryReady(true);
+
+      expect(row).not.toHaveAttribute('data-history-lens-pending');
+      expect(screen.getAllByTestId('metric-mini-sparkline')).toHaveLength(3);
+      expect(screen.queryByTestId('cpu-bar')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('memory-bar')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('disk-bar')).not.toBeInTheDocument();
+    });
+
     it('keeps Net I/O and Disk I/O live labels out of sparkline table cells', () => {
       renderGuestRow({
         guest: makeGuest({ name: 'spark-io-vm', networkIn: 1024, networkOut: 2048 }),
@@ -707,6 +820,50 @@ describe('GuestRow', () => {
       const tr = container.querySelector('tr')!;
       fireEvent.pointerLeave(tr, { pointerType: 'mouse' });
       expect(onHoverChange).toHaveBeenCalledWith(null);
+    });
+
+    it('activates and clears the history lens through keyboard focus', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+      });
+      const tr = container.querySelector('tr')!;
+
+      fireEvent.focusIn(tr);
+      expect(tr).toHaveAttribute('data-history-lens-active', 'true');
+
+      fireEvent.focusOut(tr, { relatedTarget: document.body });
+      expect(tr).not.toHaveAttribute('data-history-lens-active');
+    });
+
+    it('does not activate the history lens for touch pointer entry', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+      });
+      const tr = container.querySelector('tr')!;
+
+      const touchPointerEnter = new MouseEvent('pointerover', { bubbles: true });
+      Object.defineProperty(touchPointerEnter, 'pointerType', { value: 'touch' });
+      fireEvent(tr, touchPointerEnter);
+      expect(tr).not.toHaveAttribute('data-history-lens-active');
+    });
+
+    it('keeps the original bars and hover callbacks inactive in details mode', () => {
+      const onHoverChange = vi.fn();
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        metricHoverMode: 'details',
+        onHoverChange,
+      });
+      const tr = container.querySelector('tr')!;
+
+      fireEvent.pointerEnter(tr, { pointerType: 'mouse' });
+
+      expect(tr).not.toHaveAttribute('data-history-lens-active');
+      expect(screen.getByTestId('cpu-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('memory-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+      expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+      expect(onHoverChange).not.toHaveBeenCalled();
     });
 
     it('toggles the row from the shared disclosure button keyboard path', () => {

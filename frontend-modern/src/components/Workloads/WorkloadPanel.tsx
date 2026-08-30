@@ -73,6 +73,7 @@ type WorkloadPanelProps = Pick<
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
   | 'workloadMetricDisplayMode'
+  | 'workloadMetricHoverMode'
   | 'workloadMemoryDisplayBasis'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
@@ -600,6 +601,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         })}
                         ioEmphasis={props.workloadIOEmphasis()}
                         metricDisplayMode={props.workloadMetricDisplayMode()}
+                        metricHoverMode={props.workloadMetricHoverMode()}
                         memoryDisplayBasis={props.workloadMemoryDisplayBasis()}
                         metricHistory={props.workloadMetricHistory}
                         nestedWorkloadContext={nestedWorkloadContext()}

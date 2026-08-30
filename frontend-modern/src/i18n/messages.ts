@@ -359,12 +359,12 @@ export const EN_MESSAGES = {
   'settings.general.temperature.title': 'Temperature unit',
   'settings.general.telemetry.copyJson': 'Copy JSON',
   'settings.general.telemetry.description':
-    'Help improve Pulse by sharing outbound usage data: a rotating pseudonymous install ID, normalized release identity, runtime platform, coarse deployment and lifecycle buckets, aggregate resource and outcome counts, coarse feature flags, and content-free Patrol, Assistant, and capability-API usage counters. The payload does not include hostnames, credentials, infrastructure identifiers, URLs, paths, locale, browser events, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
+    'Help improve Pulse by sharing outbound usage data: a rotating pseudonymous install ID, normalized release identity, runtime platform, coarse deployment and lifecycle buckets, aggregate resource and outcome counts, coarse feature flags, content-free Patrol, Assistant, and capability-API usage counters, and four session-deduplicated workload-history adoption counts. The payload does not include hostnames, credentials, infrastructure identifiers, URLs, paths, locale, raw browser events, an event-level clickstream, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
   'settings.general.telemetry.disabledPreview':
     'Telemetry is currently disabled. This preview shows the payload Pulse would send if you enable it.',
   'settings.general.telemetry.fullDetails': 'Full details',
   'settings.general.telemetry.notice.description':
-    'Pulse now adds coarse deployment, lifecycle, estate-size, and aggregate alert and notification outcome signals when outbound usage telemetry is enabled. It still excludes personal details, infrastructure IDs, content, browser events, and clickstream data.',
+    'Pulse now adds four content-free, session-deduplicated workload-history adoption counts when outbound usage telemetry is enabled. It still excludes personal details, infrastructure IDs, content, raw browser events, and event-level clickstream data.',
   'settings.general.telemetry.notice.disable': 'Disable telemetry',
   'settings.general.telemetry.notice.dismissLabel': 'Dismiss telemetry payload update',
   'settings.general.telemetry.notice.dismissTitle': 'Dismiss permanently',

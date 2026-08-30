@@ -268,24 +268,87 @@ describe('WorkloadsFilter', () => {
       expect(setMemoryDisplayBasis).toHaveBeenCalledWith('host');
     });
 
-    it('keeps metric presentation in View and hides the range for bars', () => {
+    it('keeps layered metric presentation in View while history range stays directly available', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
             metricDisplayMode: () => 'bars',
             setMetricDisplayMode: vi.fn(),
+            metricHoverMode: () => 'history',
+            setMetricHoverMode: vi.fn(),
             metricHistoryRange: () => '1h',
             setMetricHistoryRange: vi.fn(),
           })}
         />
       ));
 
+      expect(screen.getByRole('group', { name: 'Sparkline range' })).toBeInTheDocument();
+      expect(screen.getByText('History')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Bars' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('group', { name: 'Sparkline range' })).not.toBeInTheDocument();
       expect(within(openViewPreferences()).getByRole('button', { name: 'Bars' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
+      expect(screen.getByText('Row hover')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'History' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    it('shows the one-time history discovery hint only when requested', () => {
+      const { unmount } = render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            metricDisplayMode: () => 'bars',
+            setMetricDisplayMode: vi.fn(),
+            metricHoverMode: () => 'history',
+            setMetricHoverMode: vi.fn(),
+            metricHistoryRange: () => '1h',
+            setMetricHistoryRange: vi.fn(),
+            metricHistoryHintVisible: () => true,
+          })}
+        />
+      ));
+
+      expect(screen.getByTestId('workload-history-hover-hint')).toHaveTextContent(
+        'Hover a guest to preview history',
+      );
+      unmount();
+
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            metricDisplayMode: () => 'bars',
+            metricHoverMode: () => 'history',
+            metricHistoryRange: () => '1h',
+            setMetricHistoryRange: vi.fn(),
+            metricHistoryHintVisible: () => false,
+          })}
+        />
+      ));
+      expect(screen.queryByTestId('workload-history-hover-hint')).not.toBeInTheDocument();
+    });
+
+    it('restores detailed bar hover and hides the inactive history range', () => {
+      const setMetricHoverMode = vi.fn();
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            metricDisplayMode: () => 'bars',
+            setMetricDisplayMode: vi.fn(),
+            metricHoverMode: () => 'details',
+            setMetricHoverMode,
+            metricHistoryRange: () => '1h',
+            setMetricHistoryRange: vi.fn(),
+          })}
+        />
+      ));
+
+      expect(screen.queryByRole('group', { name: 'Sparkline range' })).not.toBeInTheDocument();
+      const preferences = openViewPreferences();
+      fireEvent.click(within(preferences).getByRole('button', { name: 'History' }));
+      expect(setMetricHoverMode).toHaveBeenCalledWith('history');
     });
 
     it('keeps the frequently changed range inline while Trends is active', () => {
@@ -301,12 +364,34 @@ describe('WorkloadsFilter', () => {
       ));
 
       expect(screen.getByRole('group', { name: 'Sparkline range' })).toBeInTheDocument();
-      expect(screen.getByText('Trend range')).toBeInTheDocument();
+      expect(screen.getByText('History')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Trends' })).not.toBeInTheDocument();
       expect(within(openViewPreferences()).getByRole('button', { name: 'Trends' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
+      expect(screen.queryByText('Row hover')).not.toBeInTheDocument();
+    });
+
+    it('omits pointer-only history controls from Bars on mobile', () => {
+      isMobileMock.mockReturnValue(true);
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            metricDisplayMode: () => 'bars',
+            setMetricDisplayMode: vi.fn(),
+            metricHoverMode: () => 'history',
+            setMetricHoverMode: vi.fn(),
+            metricHistoryRange: () => '1h',
+            setMetricHistoryRange: vi.fn(),
+          })}
+        />
+      ));
+
+      expect(screen.queryByRole('group', { name: 'Sparkline range' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+      openViewPreferences();
+      expect(screen.queryByText('Row hover')).not.toBeInTheDocument();
     });
 
     it('does not reserve an empty leading-action slot in the default mobile filter rail', () => {

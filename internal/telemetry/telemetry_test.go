@@ -727,7 +727,7 @@ func TestTelemetryPrivacyDocsDisclosePseudonymousIdentityAndIPHandling(t *testin
 			"outbound usage telemetry",
 			"enabled by default",
 			"rotating pseudonymous install ID",
-			"Pulse does not send browser events or an event-level clickstream",
+			"Pulse does not send raw browser events or an event-level clickstream",
 			"Lifecycle and outcome signals are deliberately limited to closed buckets, booleans, and aggregate counts",
 			"PULSE_TELEMETRY=false",
 			"The license server uses request IP addresses transiently for abuse/rate limiting",

@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onMount, type Accessor } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 
+import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
@@ -21,9 +22,11 @@ import {
   DEFAULT_WORKLOADS_SORT_DIRECTION,
   DEFAULT_WORKLOADS_SORT_KEY,
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
+  DEFAULT_WORKLOADS_METRIC_HOVER_MODE,
   DEFAULT_WORKLOADS_STATUS_MODE,
   type WorkloadsGroupingMode,
   type WorkloadsMetricDisplayMode,
+  type WorkloadsMetricHoverMode,
   type WorkloadsSortKey,
   type WorkloadsStatusMode,
 } from './workloadsFilterModel';
@@ -69,6 +72,8 @@ interface WorkloadsControlsStateOptions {
   // page-level state instead of forking a local persistent signal.
   metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;
   onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;
+  metricHoverMode?: Accessor<WorkloadsMetricHoverMode>;
+  onMetricHoverModeChange?: (value: WorkloadsMetricHoverMode) => void;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
   onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
   columnVisibilityStorageScope?: string;
@@ -213,6 +218,28 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     setInternalMetricDisplayMode(value);
   };
 
+  const [internalMetricHoverMode, setInternalMetricHoverMode] =
+    usePersistentSignal<WorkloadsMetricHoverMode>(
+      STORAGE_KEYS.WORKLOADS_METRIC_HOVER_MODE,
+      DEFAULT_WORKLOADS_METRIC_HOVER_MODE,
+      {
+        deserialize: (raw) =>
+          raw === 'details' || raw === 'history' ? raw : DEFAULT_WORKLOADS_METRIC_HOVER_MODE,
+      },
+    );
+  const workloadMetricHoverMode: Accessor<WorkloadsMetricHoverMode> =
+    options.metricHoverMode ?? internalMetricHoverMode;
+  const setWorkloadMetricHoverMode = (value: WorkloadsMetricHoverMode): void => {
+    if (value === 'details' && value !== workloadMetricHoverMode()) {
+      recordWorkloadHistoryActivity('details_selected');
+    }
+    if (options.onMetricHoverModeChange) {
+      options.onMetricHoverModeChange(value);
+      return;
+    }
+    setInternalMetricHoverMode(value);
+  };
+
   const [internalMetricHistoryRange, setInternalMetricHistoryRange] =
     usePersistentSignal<WorkloadTableMetricHistoryRange>(
       STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE,
@@ -225,6 +252,9 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   const workloadMetricHistoryRange: Accessor<WorkloadTableMetricHistoryRange> =
     options.metricHistoryRange ?? internalMetricHistoryRange;
   const setWorkloadMetricHistoryRange = (value: WorkloadTableMetricHistoryRange): void => {
+    if (value !== workloadMetricHistoryRange()) {
+      recordWorkloadHistoryActivity('range_change');
+    }
     if (options.onMetricHistoryRangeChange) {
       options.onMetricHistoryRangeChange(value);
       return;
@@ -558,6 +588,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     visibleColumns,
     workloadMetricHistoryRange,
     workloadMetricDisplayMode,
+    workloadMetricHoverMode,
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
@@ -573,5 +604,6 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     resetWorkloadColumnWidths,
     setWorkloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
+    setWorkloadMetricHoverMode,
   } as const;
 }

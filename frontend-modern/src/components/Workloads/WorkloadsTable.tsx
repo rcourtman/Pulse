@@ -56,6 +56,7 @@ type WorkloadsTableProps = Pick<
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
   | 'workloadMetricDisplayMode'
+  | 'workloadMetricHoverMode'
   | 'workloadMemoryDisplayBasis'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
@@ -164,6 +165,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             windowedGroupedGuests={props.windowedGroupedGuests}
             workloadIOEmphasis={props.workloadIOEmphasis}
             workloadMetricDisplayMode={props.workloadMetricDisplayMode}
+            workloadMetricHoverMode={props.workloadMetricHoverMode}
             workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}
             workloadMetricHistory={props.workloadMetricHistory}
             workloadTableLayoutMode={props.workloadTableLayoutMode}

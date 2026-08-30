@@ -4,7 +4,7 @@ import BarChartIcon from 'lucide-solid/icons/bar-chart';
 
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 
-import type { WorkloadsMetricDisplayMode } from './workloadsFilterModel';
+import type { WorkloadsMetricDisplayMode, WorkloadsMetricHoverMode } from './workloadsFilterModel';
 import {
   WORKLOAD_TABLE_HISTORY_RANGE_LABELS,
   WORKLOAD_TABLE_HISTORY_RANGES,
@@ -26,6 +26,33 @@ interface MetricHistoryRangeSegmentedControlProps {
   onRangeChange: (range: WorkloadTableMetricHistoryRange) => void;
   label?: JSX.Element;
 }
+
+interface MetricHoverModeSegmentedControlProps {
+  value: WorkloadsMetricHoverMode;
+  onChange: (value: WorkloadsMetricHoverMode) => void;
+}
+
+export const MetricHoverModeSegmentedControl: Component<MetricHoverModeSegmentedControlProps> = (
+  props,
+) => (
+  <FilterSegmentedControl
+    aria-label="Row hover behavior"
+    value={props.value}
+    onChange={(value) => props.onChange(value as WorkloadsMetricHoverMode)}
+    options={[
+      {
+        value: 'details',
+        title: 'Keep current-value bars and show their detailed tooltips',
+        label: 'Details',
+      },
+      {
+        value: 'history',
+        title: 'Preview synchronized CPU, memory, and disk history across the row',
+        label: 'History',
+      },
+    ]}
+  />
+);
 
 export const MetricHistoryRangeSegmentedControl: Component<
   MetricHistoryRangeSegmentedControlProps
@@ -60,7 +87,7 @@ export const MetricDisplayModeSegmentedControl: Component<
         options={[
           {
             value: 'bars',
-            title: 'Show current values as progress bars',
+            title: 'Show current-value bars and preview row history on hover',
             label: (
               <>
                 <BarChartIcon class="h-3 w-3" />

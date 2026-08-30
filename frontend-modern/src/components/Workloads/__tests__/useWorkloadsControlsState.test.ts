@@ -46,6 +46,31 @@ describe('useWorkloadsControlsState', () => {
     setWideViewport();
   });
 
+  it('defaults row hover to history and persists a details preference', async () => {
+    const dispose = createRoot((dispose) => {
+      const [showFilters, setShowFilters] = createSignal(false);
+      const state = useWorkloadsControlsState({
+        viewMode: () => 'all' as ViewMode,
+        showFilters,
+        setShowFilters,
+      });
+
+      expect(state.workloadMetricHoverMode()).toBe('history');
+
+      state.setWorkloadMetricHoverMode('details');
+
+      expect(state.workloadMetricHoverMode()).toBe('details');
+      return dispose;
+    });
+
+    try {
+      await Promise.resolve();
+      expect(localStorage.getItem('workloadsMetricHoverMode')).toBe('details');
+    } finally {
+      dispose();
+    }
+  });
+
   it('only offers columns the compact table can present without horizontal scrolling', () => {
     setCompactViewport();
     createRoot((dispose) => {

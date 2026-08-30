@@ -3,10 +3,11 @@ import { eventBus } from '@/stores/events';
 
 interface CreateNonSuspendingQueryOptions<T, K> {
   source: Accessor<K | null>;
-  fetcher: (key: K) => Promise<T>;
+  fetcher: (key: K, signal: AbortSignal) => Promise<T>;
   initialValue: T;
   cacheKey?: (key: K) => string | null;
   pollMs?: number;
+  retainPreviousValueOnSourceChange?: boolean;
 }
 
 interface QueryRunOptions {
@@ -176,8 +177,15 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
   const [resolvedOnce, setResolvedOnce] = createSignal(initialCached?.resolvedOnce ?? false);
 
   let latestRequestId = 0;
+  let activeAbortController: AbortController | null = null;
+
+  const cancelActiveRequest = () => {
+    activeAbortController?.abort();
+    activeAbortController = null;
+  };
 
   const reset = () => {
+    cancelActiveRequest();
     latestRequestId += 1;
     setValue(() => options.initialValue);
     setLoading(false);
@@ -201,6 +209,9 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
   onCleanup(unsubscribeLiveQueryOrgSwitch);
 
   const run = async (key: K, runOptions: QueryRunOptions = {}): Promise<T> => {
+    cancelActiveRequest();
+    const abortController = new AbortController();
+    activeAbortController = abortController;
     const requestId = ++latestRequestId;
     const retainedCacheKey = getRetainedCacheKey(key);
     const cacheGeneration = retainedQueryCacheGeneration;
@@ -209,7 +220,7 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
     }
 
     try {
-      const nextValue = await options.fetcher(key);
+      const nextValue = await options.fetcher(key, abortController.signal);
       if (requestId !== latestRequestId) {
         return value();
       }
@@ -223,6 +234,7 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
       return value();
     } finally {
       if (requestId === latestRequestId) {
+        activeAbortController = null;
         setResolvedOnce(true);
         if (retainedCacheKey && cacheGeneration === retainedQueryCacheGeneration) {
           writeRetainedQueryCacheEntry(retainedCacheKey, {
@@ -247,8 +259,20 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
     const cached = readRetainedValue(key);
     if (cached) {
       applyRetainedValue(cached);
+    } else if (options.retainPreviousValueOnSourceChange === false) {
+      // A retained value is only honest when it belongs to the active source.
+      // Range-sensitive history consumers opt out of showing the prior range
+      // while its replacement is loading or has failed.
+      setValue(() => options.initialValue);
+      setError(null);
+      setResolvedOnce(false);
     }
     void run(key, { background: Boolean(cached) });
+  });
+
+  onCleanup(() => {
+    cancelActiveRequest();
+    latestRequestId += 1;
   });
 
   const refetch = async (runOptions: QueryRunOptions = {}): Promise<T> => {

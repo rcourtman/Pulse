@@ -270,10 +270,12 @@ the current command-enabled boolean.
 31. `frontend-modern/src/api/nodes.ts`
 32. `frontend-modern/src/api/license.ts`
     23a. `frontend-modern/src/api/settings.ts`
+    23b. `frontend-modern/src/api/workloadHistoryActivity.ts`
 33. `frontend-modern/src/api/monitoredSystemLedger.ts`
 34. `frontend-modern/src/api/resources.ts`
 35. `frontend-modern/src/api/monitoring.ts`
 36. `internal/api/monitored_system_ledger.go`
+    36a. `internal/api/telemetry_workload_history.go`
 37. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
 38. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
 39. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
@@ -9804,6 +9806,18 @@ IP address, asset path, response content, raw error, or account/customer
 identity. The schema parity checker remains the executable cross-repository
 proof that the browser preview and private allowlisted receiver cannot drift
 from the public runtime payload.
+
+### Workload history telemetry is a closed aggregate contract at schema v16
+
+Schema v16 adds four numeric 30-day counters for workload-history preview,
+scrub, range-change, and Details-mode-selection sessions. The frontend local
+intake request is exactly `{ "activity": <closed enum> }`; it is authenticated
+with `monitoring:read`, rejects unknown fields and trailing JSON, and returns
+204. Each activity is deduplicated once per browser session before the request.
+The Go sender, Settings preview interface, and Pulse Pro receiver keep the same
+field names and integer types. The receiver clamps them like every other count.
+No guest, user, route, selected range, cursor coordinate/value, timing, or
+browser identifier is part of either API or heartbeat contract.
 
 ### Per-tenant resource stores are released on offboarding and shutdown
 

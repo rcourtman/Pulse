@@ -98,7 +98,7 @@ describe('systemSettings store', () => {
     expect(telemetryDescription).toContain(
       'content-free Patrol, Assistant, and capability-API usage counters',
     );
-    expect(telemetryDescription).toContain('URLs, paths, locale, browser events');
+    expect(telemetryDescription).toContain('URLs, paths, locale, raw browser events');
     expect(telemetryDescription).not.toContain('Pulse Intelligence loop adoption');
     expect(telemetryDescription).not.toContain('activation loop');
     expect(telemetryDescription).not.toContain('operations loop');

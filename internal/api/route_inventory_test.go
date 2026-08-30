@@ -699,6 +699,7 @@ var allRouteAllowlist = []string{
 	"/api/discovery/",
 	"/api/agent/ws",
 	"POST /api/agent/workflow-prompt-activity",
+	"POST /api/usage/workload-history",
 	"/api/agents/agent/enroll",
 	"/api/agents/host/enroll",
 	"/api/clusters/",

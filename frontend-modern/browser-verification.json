@@ -1,21 +1,59 @@
 {
   "version": 1,
-  "base_sha": "1e805afc4b54c25ed253497e4818037476cbce23",
-  "verified_at": "2026-08-30T10:22:47Z",
+  "base_sha": "8724f6b9e5e3a6ce3add2727c5befe19eb5c1f99",
+  "verified_at": "2026-08-30T12:44:02Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/FindingsPanel.tsx",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
+    "frontend-modern/src/api/charts.ts",
+    "frontend-modern/src/api/settings.ts",
+    "frontend-modern/src/api/workloadHistoryActivity.ts",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/MetricDisplayModeSegmentedControl.tsx",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/utils/infrastructureSummaryCache.ts",
+    "frontend-modern/src/utils/localStorage.ts",
+    "frontend-modern/src/utils/workloadMetricHistoryTarget.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/FindingsPanel.tsx": "bddd32ceb519ad2d4deeb464c47e96789b12e512ab127617c6d7f01d3e32bbd8",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "34540499fb66c378bba88acae22eaf48f0444e6bd0dd5c4c00a05ae93271d48a",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "36711b7bc41597a240109c37e50174011c3b3fb5b77aa65179e1bc6cf7165524"
+    "frontend-modern/src/api/charts.ts": "fe59a29661bd0a2a37019f4c67ae87180214ff094edf73e293a42a8e59d4e0be",
+    "frontend-modern/src/api/settings.ts": "23bd85aeca12c0185de9671b9014cd4daedf598828a1e158d8670d142d1b04c8",
+    "frontend-modern/src/api/workloadHistoryActivity.ts": "de262d71f8924752e910fbf4be48641acc8f4fe2bb6ed35687f40b52ffe08d36",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "26dd654fd05e907f6efb74fff1c7a8367331e7fe670e9dd3ab5ecc29e86128d7",
+    "frontend-modern/src/components/Workloads/MetricDisplayModeSegmentedControl.tsx": "415c29b1f9068c222b22710669ae813b95f0cfde5a6506ebe3c01fae3e214882",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx": "67f8fa8304ffbff0518e4101996049912a040ce2de46f1ba9e5c61b7f67638d6",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "a43e353c09eef85983405eb7e34ac2f2bfd5cb8e25181cf0bb9c015274d707bc",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "9a0cec9744bb0d7b3a3227113a46b40b754d42c357547e2903c3ecf19c8fc2ed",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "0d247a614072ad784611dea838051c490848a22fd304ff19e39b5737b547d53f",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "4a410a7903b1dc1cc3e17ede6425d9ee3e81e050378ba15bba51a8672f6e2b35",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "34abdd17def1f8ebe71700e5a9526f31e212b4a8affb747df3b7dcd597bc0975",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "1a8ad94dbd9bf452b1d55c5ad430a2f97911d7d3745217594125c849184665b2",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts": "1d71636384f35387e11cc9fceb3ebf85f27189d8e3281f0e79448f4c4fb0cae8",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "ad4db49e66a5223707356bd7dc5d106f81fbb88ea5f1fde51b75af3a667a7e67",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "8609603dcecc2ce5f19b8eb9895a1459f7aee8677742d359c184b871366d1b05",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts": "096a286cd25e846e0824fccc7393a7e4a1ca4f97ea8f4ba7a7deefdbb5c240ec",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "1756509ad891c7d4836a9a447fe606e2d00b2d81ff5d6ad59f5a90e68618ef76",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "50bdcb1712720c4aa01a1e8ba27360ea03026db7f96b9a8c6b375ffcd824c492",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "7bd85f4258c76756d232df8469708ce06f615cc748b85988dbedb2d829e6e19f",
+    "frontend-modern/src/i18n/messages.ts": "02de846b6744586a0e4c892dcac18ba51cd2f8f1acddd7dfbd59d3a38be03b5e",
+    "frontend-modern/src/utils/infrastructureSummaryCache.ts": "22bc5b3cee862c6bcf50ff56814668ea58eb6f5be49de4eaf697d2147062009d",
+    "frontend-modern/src/utils/localStorage.ts": "9f6c40fd2f9e7848dded912c32f2314ed392bcb141f0e29b8227613318ac0f71",
+    "frontend-modern/src/utils/workloadMetricHistoryTarget.ts": "84ac8139861dfb0f0dfcfe429d5c4ad0c2c112949f3f15b0c4199da9dabaed8f"
   },
-  "routes": [
-    "/patrol"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
     {
       "width": 1440,
@@ -27,15 +65,20 @@
     }
   ],
   "states": [
-    "Patrol Inbox selected-decision lifecycle showed the lasting finding outcome explanation and visible Open finding options handoff",
-    "Patrol Activity explained the finding outcome workflow and rendered a visible Finding options control on each active finding",
-    "expanded active finding showed Resolve or dismiss with Dismiss: Not an issue, Remember as expected, Dismiss: Later, and Create rule from this",
-    "desktop and narrow layouts retained readable controls, scrolling, and exact viewport fit without horizontal overflow"
+    "Bars mode with compact guest rows at rest and the one-time history hint visible on a fresh browser origin",
+    "Populated CPU, memory, and disk history lens for the active guest while the original row density remained stable",
+    "Synchronized time cursor across every metric chart in the active row",
+    "Details hover preference selected with the richer legacy tooltip and no history lens",
+    "Reloaded desktop state after a successful preview with the first-use hint remaining dismissed",
+    "Narrow mobile Bars layout with pointer-only history controls and the first-use hint omitted"
   ],
   "interactions": [
-    "opened the first mock-backed Patrol Inbox decision and followed Open finding options into Activity",
-    "opened an active finding's outcome controls by pointer at desktop width and by keyboard Enter at narrow width",
-    "closed Resolve or dismiss and confirmed the Finding options trigger returned to aria-expanded false",
-    "inspected the Inbox handoff, Activity rows, expanded finding details, management disclosure, control placement, clipping, and scrolling at 1440 by 900 and 390 by 844"
+    "hovered a guest row and verified that only the active row replaced its bars with populated history charts",
+    "scrubbed one chart and verified the cursor stayed time-aligned across CPU, memory, and disk",
+    "swept the pointer down warmed guest rows and observed immediate chart replacement without stale pending rows",
+    "changed the history range and verified the active lens refreshed while hover priority remained responsive",
+    "switched between History and Details preferences and verified each mode retained its own hover behavior",
+    "reloaded after the successful preview and verified the first-use hint stayed dismissed",
+    "inspected the responsive controls at 390x844 and restored the desktop viewport"
   ]
 }

@@ -1532,6 +1532,12 @@ may consume those details only after the caller reaches the authenticated or
 privileged security-status tier; it must not infer lifecycle readiness from
 the intentionally sparse public response.
 
+The authenticated `POST /api/usage/workload-history` intake is adjacent
+product-adoption telemetry only. It accepts a closed content-free activity and
+updates a bounded aggregate tally; it does not identify, register, authorize,
+configure, update, or report a Pulse agent and must not consume agent tokens,
+agent inventory, registration state, or command-channel readiness.
+
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
    Canonical `/api/auto-register` auth is split by intent: when the setup-token
    bootstrap path succeeds, lifecycle clients must complete registration with

@@ -516,8 +516,11 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
               platformFilter={undefined}
               metricDisplayMode={workloadsState.workloadMetricDisplayMode}
               setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
+              metricHoverMode={workloadsState.workloadMetricHoverMode}
+              setMetricHoverMode={workloadsState.setWorkloadMetricHoverMode}
               metricHistoryRange={workloadsState.workloadMetricHistoryRange}
               setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+              metricHistoryHintVisible={workloadsState.workloadMetricHistoryHintVisible}
               memoryDisplayBasis={workloadsState.workloadMemoryDisplayBasis}
               setMemoryDisplayBasis={props.setMemoryDisplayBasis}
               forcedPlatform={PROXMOX_PLATFORM_FILTER}

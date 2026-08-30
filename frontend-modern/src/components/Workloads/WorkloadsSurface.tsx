@@ -162,8 +162,11 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               suppressTypeFilter={props.forcedViewMode !== undefined}
               metricDisplayMode={state.workloadMetricDisplayMode}
               setMetricDisplayMode={state.setWorkloadMetricDisplayMode}
+              metricHoverMode={state.workloadMetricHoverMode}
+              setMetricHoverMode={state.setWorkloadMetricHoverMode}
               metricHistoryRange={state.workloadMetricHistoryRange}
               setMetricHistoryRange={state.setWorkloadMetricHistoryRange}
+              metricHistoryHintVisible={state.workloadMetricHistoryHintVisible}
               memoryDisplayBasis={
                 props.memoryDisplayBasis ? state.workloadMemoryDisplayBasis : undefined
               }
@@ -226,6 +229,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             windowedGroupedGuests={state.windowedGroupedGuests}
             workloadIOEmphasis={state.workloadIOEmphasis}
             workloadMetricDisplayMode={state.workloadMetricDisplayMode}
+            workloadMetricHoverMode={state.workloadMetricHoverMode}
             workloadMemoryDisplayBasis={state.workloadMemoryDisplayBasis}
             workloadMetricHistory={state.workloadMetricHistory}
             workloadTableLayoutMode={state.workloadTableLayoutMode}

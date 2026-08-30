@@ -461,6 +461,9 @@ describe('ProxmoxPageSurface contract', () => {
     expect(workloadFilterIndex).toBeGreaterThan(nodesTableIndex);
     expect(workloadsSurfaceIndex).toBeGreaterThan(workloadFilterIndex);
     expect(proxmoxPageSurfaceSource).not.toContain('<ProxmoxBackupServersTable');
+    expect(proxmoxPageSurfaceSource).toContain(
+      'metricHistoryHintVisible={workloadsState.workloadMetricHistoryHintVisible}',
+    );
   });
 
   it('keeps the bounded node preview before guests at every viewport', () => {

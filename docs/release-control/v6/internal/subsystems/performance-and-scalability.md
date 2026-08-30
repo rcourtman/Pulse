@@ -734,6 +734,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     Docker, Podman, and future container runtimes keep the same identity tones
     across Workloads, Docker, and infrastructure surfaces without adding
     per-row styling branches to the hot path.
+    Workload history adoption signals may be emitted from this surface only
+    through the session-deduplicated, closed activity boundary in
+    `frontend-modern/src/api/workloadHistoryActivity.ts`. Pointer movement may
+    update the shared in-memory cursor on every frame, but it must never create
+    a per-frame, per-point, or per-row request stream; the scrub milestone is
+    recorded at most once per browser session and contains no guest, cursor,
+    value, route, timing, or browser identity.
     App-container image cells must use the shared compact image formatter to
     show the image leaf plus tag/version while preserving the full registry and
     namespace reference in tooltip/detail metadata, and the image column must
@@ -1449,7 +1456,7 @@ request-local. Deriving the bounded host-plus-Docker or Docker-only token
 scope and matching install flag must remain constant work with no resource
 inventory scan, telemetry fan-out, or extra persistence pass.
 
-The bars / sparklines toggle and its sparkline-range picker on the
+The bars / sparklines toggle, row-history lens, and history-range picker on the
 WorkloadsSurface support page-level ownership through four optional
 overrides exposed by
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`:
@@ -1462,7 +1469,9 @@ top hosts table today), the page owns the persistent signals against
 + change handlers into both surfaces. `useWorkloadsControlsState` then
 short-circuits to the supplied accessor / handler instead of its
 internal persistent signal so the toggle and the hosts-table render
-stay in lockstep. Embedded sibling tables that opt into sparklines
+stay in lockstep. The history range remains inline in both display modes because
+the default bars mode uses it for the intent-driven guest-row history lens.
+Embedded sibling tables that opt into sparklines
 re-instantiate `useWorkloadTableMetricHistory`; the cache key matches
 the workloads-table reader so both readers dedupe their fetches and
 the canonical Workloads hot-path budget is preserved. Standalone
@@ -1510,7 +1519,7 @@ AI actions belongs on intentful guest/action surfaces, such as the guest
 drawer, where the operator is inspecting a specific workload and can decide
 whether that guest should be agent-managed.
 
-Trend-mode cells own their vertical scale through
+Trend-mode and row-history-lens cells own their vertical scale through
 `getMetricMiniSparklineScale` in
 `frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
 Percent series are zero-floored and scaled to their own observed peak with a
@@ -1521,17 +1530,26 @@ memory or an idle guest's CPU on top of the axis rule, where a flat line is
 indistinguishable from missing history. Absolute level stays readable through
 the per-cell current-value label, the hover tooltip, and bar mode, so scale
 work must not remove those. The scale is derived from the points already
-fetched for that cell and must not add history reads, cross-row coordination,
-or a second pass over the Workloads hot path.
+fetched for that cell and must not add history reads or a second pass over the
+Workloads hot path. Pointer scrubbing may synchronize one normalized cursor
+position across the active guest row, but it must remain row-local and operate
+only on the already-fetched series.
 
 The Workloads table metric display mode is part of the protected Workloads
-hot path. The default bar mode must keep the existing zero-extra-history cost;
-the sparkline mode may hydrate a short shared history window only when selected
-and must reuse `fetchWorkloadsSummaryAndCache` /
-`fetchInfrastructureSummaryAndCache` instead of adding row-local polling. Its
-range control is part of the same hot-path state owner: bar mode must not start
-history fetches, and sparkline ranges must stay bounded to the governed compact
-table windows. Expanded history belongs in the existing guest drawer chart
+hot path. Default bar mode keeps compact current-value bars at rest and swaps
+only the active fine-pointer or keyboard-focused guest row to the original
+sparklines; persistent Trends mode keeps sparklines visible for every rendered
+row. Bar mode does not hydrate estate history at rest: the selected range is
+local state until a row is active, then one centralized query reads only that
+guest's canonical metrics target from `/api/metrics-store/history`, capped at
+36 points. Equivalent live guest snapshots must not restart that request, and
+leaving the row disables it; per-row query owners, fan-out, and polling remain
+forbidden. Persistent Trends retains the shared, cache-keyed
+`fetchWorkloadsSummaryAndCache` / `fetchInfrastructureSummaryAndCache` reader
+for all rendered rows. Range-sensitive readers clear prior-range data when no
+exact cache entry exists and forward cancellation so superseded range work
+does not continue occupying browser connections. Sparkline ranges must stay
+bounded to the governed compact table windows. Expanded history belongs in the existing guest drawer chart
 surface, where longer-range reads stay demand-driven and scoped to the selected
 workload. Its range control belongs in the drawer chrome rather than a dedicated
 chart row. The drawer history view must preserve visual density by grouping

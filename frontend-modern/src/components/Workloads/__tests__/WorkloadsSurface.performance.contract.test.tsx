@@ -191,6 +191,13 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   },
 }));
 
+vi.mock('../useWorkloadTableMetricHistory', () => ({
+  useWorkloadTableMetricHistory: () => ({
+    getGuestMetricSeries: () => [],
+    getNodeMetricSeries: () => [],
+  }),
+}));
+
 vi.mock('@/api/connections', () => ({
   ConnectionsAPI: {
     list: connectionsApiMocks.list,
@@ -1388,10 +1395,12 @@ describe('Workloads performance contract', () => {
         'workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}',
       );
       expect(workloadsFilterSource).toContain('MetricDisplayModeSegmentedControl');
+      expect(workloadsFilterSource).toContain('MetricHoverModeSegmentedControl');
+      expect(workloadsFilterSource).toContain('Row hover');
       expect(workloadsFilterSource).toContain('viewOptions={');
       expect(workloadsFilterSource).not.toContain('ViewOptionsMenu');
       expect(workloadsFilterSource).toContain('MetricHistoryRangeSegmentedControl');
-      expect(workloadsFilterSource).toContain('label="Trend range"');
+      expect(workloadsFilterSource).toContain('label="History"');
       expect(workloadsFilterSource).toContain('<ColumnPicker');
       expect(workloadsFilterSource).toContain('inline');
       expect(workloadsFilterSource).toContain('showAddFilterLabel={false}');
@@ -1401,6 +1410,7 @@ describe('Workloads performance contract', () => {
         'WORKLOAD_TABLE_HISTORY_RANGES.map',
       );
       expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Sparkline range"');
+      expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Row hover behavior"');
       expect(metricDisplayModeSegmentedControlSource).toContain('justify-start');
       expect(workloadTableHeaderSource).toContain('getWorkloadColumnHeaderLabel');
       expect(workloadTableHeaderSource).toContain('`${defaultLabel} · Host`');
@@ -1426,6 +1436,18 @@ describe('Workloads performance contract', () => {
       );
       expect(workloadTableMetricHistoryStateSource).toContain(
         'fetchInfrastructureSummaryAndCache(parsed.range',
+      );
+      expect(
+        workloadTableMetricHistoryStateSource.match(/retainPreviousValueOnSourceChange: false/g),
+      ).toHaveLength(2);
+      expect(workloadTableMetricHistoryStateSource).toContain('ChartsAPI.getMetricsHistory');
+      expect(workloadTableMetricHistoryStateSource).toContain('options.activeGuest?.()');
+      expect(workloadTableMetricHistoryStateSource).toContain('options.onDemand?.()');
+      expect(workloadTableMetricHistoryStateSource).toContain('ROW_HISTORY_PREFETCH_CONCURRENCY');
+      expect(workloadTableMetricHistoryStateSource).toContain('ROW_HISTORY_CACHE_MAX_ENTRIES');
+      expect(workloadTableMetricHistoryStateSource).toContain('pendingRowHistory.unshift');
+      expect(workloadTableMetricHistoryStateSource).toContain(
+        'maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS',
       );
       expect(workloadsStateSource).toContain('filterWorkloads(params)');
       expect(workloadsStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');

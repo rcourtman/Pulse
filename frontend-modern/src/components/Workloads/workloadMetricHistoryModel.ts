@@ -19,6 +19,7 @@ export interface WorkloadGuestMetricSeriesOptions {
 }
 
 export interface WorkloadMetricHistoryReader {
+  hasGuestHistory?: (guest: WorkloadGuest) => boolean;
   getGuestMetricSeries: (
     guest: WorkloadGuest,
     metric: WorkloadTableMetric,
@@ -74,7 +75,10 @@ export const WORKLOAD_TABLE_HISTORY_RANGE_LABELS: Record<WorkloadTableMetricHist
     '7d': '7d',
   };
 export const WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE: WorkloadTableMetricHistoryRange = '1h';
-export const WORKLOAD_TABLE_HISTORY_MAX_POINTS = 72;
+// A 120px table sparkline cannot resolve more than roughly one sample every
+// three pixels. Keeping this compact also bounds all-workload history payloads
+// when an operator changes range on a large estate.
+export const WORKLOAD_TABLE_HISTORY_MAX_POINTS = 36;
 export const MIN_PERCENT_SCALE_CEILING = 5;
 export const WORKLOAD_TABLE_HISTORY_POLL_MS = 30_000;
 

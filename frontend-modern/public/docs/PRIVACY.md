@@ -16,7 +16,7 @@ third-party analytics, support diagnostics, or ordinary Settings surfaces.
 
 Pulse includes outbound usage telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours with a rotating pseudonymous install ID to help me understand how many active installations exist, which releases are actually deployed, which features are in use, and whether Patrol control and governed Pulse Intelligence operations are being adopted.
 
-The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, URLs, paths, locale, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. Lifecycle and outcome signals are deliberately limited to closed buckets, booleans, and aggregate counts. Local service-health signals are likewise limited to closed buckets, booleans, and normalized release versions. Pulse does not send browser events or an event-level clickstream. The local service-health probe requests only Pulse's own bound listener and never transmits the listener address, request URL, response content, or raw failure text. See the full field list below.
+The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, URLs, paths, locale, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. Lifecycle and outcome signals are deliberately limited to closed buckets, booleans, and aggregate counts. Local service-health signals are likewise limited to closed buckets, booleans, and normalized release versions. Four browser-derived workload-history milestones are counted locally at most once per browser session and sent only as rolling aggregate counts; Pulse does not send raw browser events or an event-level clickstream. The local service-health probe requests only Pulse's own bound listener and never transmits the listener address, request URL, response content, or raw failure text. See the full field list below.
 
 While mock/demo fixture mode is enabled, Pulse suppresses outbound telemetry entirely: a mock-mode instance reports a synthetic fixture fleet rather than a real installation, so it never pings.
 
@@ -37,7 +37,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `15` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `16` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -236,6 +236,10 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence approved action refusals: other 30d | `1` | Count pre-dispatch refusals not covered by the fixed categories without sending raw error or action content |
 | Pulse Intelligence verified finding resolutions 30d | `1` | Count approved Patrol-origin actions whose execution succeeded and whose linked finding postcondition was independently confirmed, without sending finding IDs, action IDs, evidence, resources, or fix details |
 | Pulse Intelligence approved action last failure reason 30d | `plan_drift` | See one fixed machine reason code for the most recent approved-action failure in the current 30-day telemetry window without sending error text, action output, command text, resource IDs, or actors |
+| Workload history preview sessions 30d | `18` | Count browser sessions that successfully displayed a populated workload history preview, deduplicated locally once per session without sending a guest, user, route, timing, or browser identifier |
+| Workload history scrub sessions 30d | `9` | Count browser sessions that inspected a point on a workload history graph, deduplicated locally once per session without sending coordinates, values, guests, or browser identity |
+| Workload history range change sessions 30d | `6` | Count browser sessions that changed the workload history range, deduplicated locally once per session without sending the selected range or browser identity |
+| Workload history details selection sessions 30d | `4` | Count browser sessions that chose the legacy Details hover mode, deduplicated locally once per session without sending subsequent interactions or browser identity |
 
 Telemetry schema v3 corrects the meaning of `notification_failures_7d`: v2
 counted every unsuccessful queue attempt, including attempts that later
@@ -255,7 +259,7 @@ configuration, destination rejection, and unknown failures. Classification is
 performed locally; raw error text and destination/provider identity are never
 included in the payload.
 
-The current telemetry contract is schema version 15. Schema v15 adds an eighth
+Schema v15 adds an eighth
 fixed notification terminal-failure counter for destination HTTP 5xx server
 errors. From v15 onward,
 new terminal failures enter `notification_failures_rejected_7d` only for HTTP
@@ -283,6 +287,14 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
+The current telemetry contract is schema version 16. Schema v16 adds four
+workload-history adoption counts. The browser
+sends only one closed milestone name to the local Pulse server and deduplicates
+each milestone once per browser session. Pulse stores bounded UTC-day counts
+locally and includes only their rolling 30-day totals in the existing heartbeat;
+there is no browser identifier, raw event stream, guest identity, selected
+range, cursor coordinate, value, route, or interaction timing.
+
 #### Server-side handling and retention
 
 - Telemetry pings are stored on the Pulse license server only for aggregate install/use analysis.
@@ -301,7 +313,7 @@ dropped under pressure. Configuration adoption is reported instead.
 
 - No IP addresses are included in the telemetry payload or stored in telemetry rows
 - No hostnames, node names, VM names, or any infrastructure identifiers
-- No URLs, filesystem paths, locale, browser events, or event-level clickstream
+- No URLs, filesystem paths, locale, raw browser events, or event-level clickstream
 - No Proxmox credentials, API tokens, or passwords
 - No alert content, AI prompts, chat messages, tool names, tool inputs, tool outputs, command text, action output, or token values
 - No names, email addresses, account identifiers, or other intentionally identifying personal content

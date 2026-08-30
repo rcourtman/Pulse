@@ -128,6 +128,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// startup to learn what's available.
 	r.mux.HandleFunc("/api/agent/capabilities", HandleAgentCapabilitiesManifest)
 	r.mux.HandleFunc("POST /api/agent/workflow-prompt-activity", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.HandleAgentWorkflowPromptActivity)))
+	r.mux.HandleFunc("POST /api/usage/workload-history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.HandleWorkloadHistoryActivity)))
 	// Agent SSE event stream — agents subscribe once and receive
 	// real-time notifications instead of polling. Auth at
 	// monitoring:read because the stream surfaces the same

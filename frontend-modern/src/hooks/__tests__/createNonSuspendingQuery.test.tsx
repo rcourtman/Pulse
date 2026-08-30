@@ -16,14 +16,16 @@ afterEach(() => {
 
 function QueryProbe(props: {
   cacheNamespace: string;
-  fetcher: (key: string) => Promise<string>;
+  fetcher: (key: string, signal?: AbortSignal) => Promise<string>;
   queryKey?: () => string;
+  retainPreviousValueOnSourceChange?: boolean;
 }) {
   const state = createNonSuspendingQuery<string, string>({
     source: () => props.queryKey?.() ?? 'stable-key',
     cacheKey: (key) => `${props.cacheNamespace}:${key}`,
     fetcher: props.fetcher,
     initialValue: 'initial',
+    retainPreviousValueOnSourceChange: props.retainPreviousValueOnSourceChange,
   });
 
   return (
@@ -51,13 +53,95 @@ describe('createNonSuspendingQuery', () => {
     render(() => <QueryProbe cacheNamespace={cacheNamespace} fetcher={secondFetcher} />);
 
     await waitFor(() => {
-      expect(secondFetcher).toHaveBeenCalledWith('stable-key');
+      expect(secondFetcher).toHaveBeenCalledWith('stable-key', expect.any(AbortSignal));
     });
 
     expect(screen.getByTestId('query-probe').textContent).toContain('loaded');
     expect(screen.getByTestId('query-probe').textContent).toContain('resolved:true');
     expect(screen.getByTestId('query-probe').textContent).toContain('loading:false');
     expect(screen.getByTestId('query-probe').textContent).not.toContain('initial');
+  });
+
+  it('retains the previous source value by default while the replacement loads', async () => {
+    const [queryKey, setQueryKey] = createSignal('1h');
+    const fetcher = vi.fn((key: string) =>
+      key === '1h' ? Promise.resolve('loaded:1h') : new Promise<string>(() => {}),
+    );
+
+    render(() => (
+      <QueryProbe
+        cacheNamespace={`retained-source-${Date.now()}`}
+        fetcher={fetcher}
+        queryKey={queryKey}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('query-probe').textContent).toContain('loaded:1h');
+    });
+
+    setQueryKey('24h');
+    await waitFor(() => {
+      expect(fetcher).toHaveBeenCalledWith('24h', expect.any(AbortSignal));
+    });
+
+    expect(screen.getByTestId('query-probe').textContent).toContain('loaded:1h');
+    expect(screen.getByTestId('query-probe').textContent).toContain('loading:true');
+  });
+
+  it('clears a prior source immediately when retained data would mislabel the active range', async () => {
+    const [queryKey, setQueryKey] = createSignal('1h');
+    const fetcher = vi.fn((key: string) =>
+      key === '1h' ? Promise.resolve('loaded:1h') : new Promise<string>(() => {}),
+    );
+
+    render(() => (
+      <QueryProbe
+        cacheNamespace={`source-honest-${Date.now()}`}
+        fetcher={fetcher}
+        queryKey={queryKey}
+        retainPreviousValueOnSourceChange={false}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('query-probe').textContent).toContain('loaded:1h');
+    });
+
+    setQueryKey('24h');
+    await waitFor(() => {
+      expect(fetcher).toHaveBeenCalledWith('24h', expect.any(AbortSignal));
+    });
+
+    expect(screen.getByTestId('query-probe').textContent).toContain('initial');
+    expect(screen.getByTestId('query-probe').textContent).toContain('resolved:false');
+    expect(screen.getByTestId('query-probe').textContent).toContain('loading:true');
+    expect(screen.getByTestId('query-probe').textContent).not.toContain('loaded:1h');
+  });
+
+  it('aborts superseded source requests', async () => {
+    const [queryKey, setQueryKey] = createSignal('1h');
+    const signals: AbortSignal[] = [];
+    const fetcher = vi.fn((_key: string, signal?: AbortSignal) => {
+      signals.push(signal!);
+      return new Promise<string>(() => {});
+    });
+
+    render(() => (
+      <QueryProbe
+        cacheNamespace={`abort-superseded-${Date.now()}`}
+        fetcher={fetcher}
+        queryKey={queryKey}
+      />
+    ));
+
+    await waitFor(() => expect(signals).toHaveLength(1));
+    expect(signals[0].aborted).toBe(false);
+
+    setQueryKey('7d');
+    await waitFor(() => expect(signals).toHaveLength(2));
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
   });
 
   it('evicts least-recently-used resource and range entries at the cache limit', async () => {

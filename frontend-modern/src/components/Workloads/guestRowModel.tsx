@@ -17,7 +17,7 @@ import type {
 } from './workloadMetricHistoryModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadColumnWidths } from './workloadColumnWidths';
-import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
+import type { WorkloadsMemoryDisplayBasis, WorkloadsMetricHoverMode } from './workloadsFilterModel';
 
 export type WorkloadTableLayoutMode = 'narrow' | 'phone' | 'mobile' | 'tablet' | 'compact' | 'wide';
 
@@ -121,6 +121,7 @@ export interface GuestRowProps {
   summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   ioEmphasis?: WorkloadIOEmphasis;
   metricDisplayMode?: 'bars' | 'sparklines';
+  metricHoverMode?: WorkloadsMetricHoverMode;
   memoryDisplayBasis?: WorkloadsMemoryDisplayBasis;
   metricHistory?: WorkloadMetricHistoryReader;
   nestedWorkloadContext?: Pick<NestedWorkloadContext, 'count' | 'label'>;
