@@ -58,9 +58,15 @@ func applyRuntimeMemoryLimit() {
 }
 
 func readCgroupMemoryLimit() (int64, bool) {
-	if limit, ok := readCgroupV2MemoryLimit(cgroupV2Root, "/proc/self/cgroup"); ok {
+	const procSelfCgroup = "/proc/self/cgroup"
+	if limit, ok := readCgroupV2MemoryLimit(cgroupV2Root, procSelfCgroup); ok {
 		return limit, true
 	}
+	if limit, ok := readCgroupV1HierarchyMemoryLimit("/sys/fs/cgroup/memory", procSelfCgroup); ok {
+		return limit, true
+	}
+	// Preserve the original best-effort fallback for unusual v1 mounts that
+	// expose the controller limit but not a readable /proc/self/cgroup.
 	return readCgroupV1MemoryLimit("/sys/fs/cgroup/memory/memory.limit_in_bytes")
 }
 
@@ -114,6 +120,72 @@ func cgroupV2PathFrom(content string) string {
 			continue
 		}
 		path := strings.TrimSpace(strings.TrimPrefix(line, "0::"))
+		if path == "/" {
+			return "."
+		}
+		return strings.TrimPrefix(path, "/")
+	}
+	return ""
+}
+
+// readCgroupV1HierarchyMemoryLimit resolves the process's memory-controller
+// path and walks its ancestors just as the v2 reader does. Reading only the
+// controller root misses a tighter systemd MemoryLimit/MemoryMax applied to a
+// service cgroup on v1 hosts.
+func readCgroupV1HierarchyMemoryLimit(root, procSelfCgroup string) (int64, bool) {
+	data, err := os.ReadFile(procSelfCgroup)
+	if err != nil {
+		return 0, false
+	}
+	rel := cgroupV1MemoryPathFrom(string(data))
+	if rel == "" {
+		return 0, false
+	}
+
+	lowest := int64(math.MaxInt64)
+	dir := filepath.Join(root, rel)
+	for {
+		if raw, err := os.ReadFile(filepath.Join(dir, "memory.limit_in_bytes")); err == nil {
+			if v, ok := parseCgroupMemoryValue(string(raw)); ok && v < cgroupV1NoLimit && v < lowest {
+				lowest = v
+			}
+		}
+		if dir == root {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	if lowest == math.MaxInt64 {
+		return 0, false
+	}
+	return lowest, true
+}
+
+// cgroupV1MemoryPathFrom extracts the path for the v1 memory controller from
+// /proc/self/cgroup. Controllers may be mounted together, so "memory" can be
+// one item in a comma-separated controller field.
+func cgroupV1MemoryPathFrom(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		fields := strings.SplitN(line, ":", 3)
+		if len(fields) != 3 {
+			continue
+		}
+		hasMemory := false
+		for _, controller := range strings.Split(fields[1], ",") {
+			if strings.TrimSpace(controller) == "memory" {
+				hasMemory = true
+				break
+			}
+		}
+		if !hasMemory {
+			continue
+		}
+		path := strings.TrimSpace(fields[2])
 		if path == "/" {
 			return "."
 		}

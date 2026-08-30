@@ -118,6 +118,81 @@ func TestReadCgroupV2MemoryLimitNoLimitAnywhere(t *testing.T) {
 	}
 }
 
+func TestCgroupV1MemoryPathFrom(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"memory controller", "5:memory:/system.slice/pulse.service\n", "system.slice/pulse.service"},
+		{"combined controllers", "7:cpu,cpuacct,memory:/docker/abc\n", "docker/abc"},
+		{"namespaced root", "5:memory:/\n", "."},
+		{"colon in path", "5:memory:/system.slice/pulse:worker.service\n", "system.slice/pulse:worker.service"},
+		{"other controllers only", "2:cpu,cpuacct:/system.slice/pulse.service\n", ""},
+		{"v2 only", "0::/system.slice/pulse.service\n", ""},
+		{"malformed", "memory:/system.slice/pulse.service\n", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cgroupV1MemoryPathFrom(tc.content); got != tc.want {
+				t.Fatalf("cgroupV1MemoryPathFrom(%q) = %q, want %q", tc.content, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadCgroupV1HierarchyMemoryLimitAtNamespacedRoot(t *testing.T) {
+	root := t.TempDir()
+	proc := filepath.Join(root, "proc-self-cgroup")
+	writeCgroupFixture(t, proc, "5:memory:/\n")
+	writeCgroupFixture(t, filepath.Join(root, "memory.limit_in_bytes"), "536870912\n")
+
+	got, ok := readCgroupV1HierarchyMemoryLimit(root, proc)
+	if !ok || got != 536870912 {
+		t.Fatalf("got (%d, %v), want (536870912, true)", got, ok)
+	}
+}
+
+func TestReadCgroupV1HierarchyMemoryLimitWalksAncestors(t *testing.T) {
+	root := t.TempDir()
+	proc := filepath.Join(root, "proc-self-cgroup")
+	writeCgroupFixture(t, proc, "5:memory:/system.slice/pulse.service\n")
+
+	// The service limit must win over the unlimited controller root. This is
+	// the layout used by systemd MemoryLimit/MemoryMax on cgroup v1.
+	writeCgroupFixture(t, filepath.Join(root, "system.slice/pulse.service/memory.limit_in_bytes"), "536870912\n")
+	writeCgroupFixture(t, filepath.Join(root, "system.slice/memory.limit_in_bytes"), "1073741824\n")
+	writeCgroupFixture(t, filepath.Join(root, "memory.limit_in_bytes"), strconv.FormatInt(cgroupV1NoLimit, 10)+"\n")
+
+	got, ok := readCgroupV1HierarchyMemoryLimit(root, proc)
+	if !ok || got != 536870912 {
+		t.Fatalf("got (%d, %v), want (536870912, true)", got, ok)
+	}
+}
+
+func TestReadCgroupV1HierarchyMemoryLimitTakesTightestAncestor(t *testing.T) {
+	root := t.TempDir()
+	proc := filepath.Join(root, "proc-self-cgroup")
+	writeCgroupFixture(t, proc, "8:cpu,memory:/parent/child\n")
+	writeCgroupFixture(t, filepath.Join(root, "parent/child/memory.limit_in_bytes"), "2147483648\n")
+	writeCgroupFixture(t, filepath.Join(root, "parent/memory.limit_in_bytes"), "805306368\n")
+
+	got, ok := readCgroupV1HierarchyMemoryLimit(root, proc)
+	if !ok || got != 805306368 {
+		t.Fatalf("got (%d, %v), want (805306368, true)", got, ok)
+	}
+}
+
+func TestReadCgroupV1HierarchyMemoryLimitNoMemoryController(t *testing.T) {
+	root := t.TempDir()
+	proc := filepath.Join(root, "proc-self-cgroup")
+	writeCgroupFixture(t, proc, "2:cpu,cpuacct:/system.slice/pulse.service\n")
+
+	if got, ok := readCgroupV1HierarchyMemoryLimit(root, proc); ok {
+		t.Fatalf("expected no memory limit, got %d", got)
+	}
+}
+
 func TestReadCgroupV1MemoryLimit(t *testing.T) {
 	dir := t.TempDir()
 	limitFile := filepath.Join(dir, "memory.limit_in_bytes")
