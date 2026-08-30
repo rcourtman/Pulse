@@ -1011,8 +1011,12 @@ named tabs, keyboard focus, dialog focus containment, and phone-width overflow
 checks; journey 83 is the desktop/browser accessibility proof and is not
 mobile-device proof.
 The shared `Dialog` runtime in `useDialogState.ts` owns focus containment,
-body-scroll locking, and focus restoration for every modal and drawer. Closing
-an overlay must restore its previous trigger with `preventScroll`; a plain
+body-scroll locking, background isolation, and focus restoration for every
+modal and drawer. While a dialog is open, every body-level surface outside the
+topmost dialog portal is inert, including surfaces added after opening; nested
+dialogs make their underlying dialog inert. The final close restores each
+surface's pre-existing inert state. Closing an overlay must restore its
+previous trigger with `preventScroll`; a plain
 `focus()` may make the app scroll shell jump to a virtualized or previously
 off-screen trigger just as the operator dismisses the overlay. Escape belongs
 to the top dialog and must stop the same keydown from reaching later global or

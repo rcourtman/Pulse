@@ -1,27 +1,18 @@
 {
   "version": 1,
-  "base_sha": "a7f1a5e25ffd636c98ee51065c2fe0f0dc7086a6",
-  "verified_at": "2026-08-30T14:28:38Z",
+  "base_sha": "712f1a3bfeff8f78de242b97fc66526d8f7c5761",
+  "verified_at": "2026-08-30T15:06:15Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/availabilityHistory.ts",
-    "frontend-modern/src/api/availabilityTargets.ts",
-    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
-    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
-    "frontend-modern/src/routing/resourceLinks.ts"
+    "frontend-modern/src/components/shared/Dialog.tsx",
+    "frontend-modern/src/components/shared/useDialogState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/availabilityHistory.ts": "1fea7ef0612b872c387213e590b47fe42ecdb87ca2678b7b01b546273da65b0d",
-    "frontend-modern/src/api/availabilityTargets.ts": "549826b1af427820b9d29d53cc68d895ae19a3e1a9426485fc34903972c55109",
-    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "eef59dc4eea1e7c4029cf3e89c29c7a7ed26484a67bdea213bfdc019ed3bb10e",
-    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "e6a21fcd193c51b3e0d164ca549821c6d2bf34c92c45fe884b019b56f3c87127",
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "20d3a5c2107c5510d579e2456bd1aba741137f05acff8acca6805dc8fd387563",
-    "frontend-modern/src/routing/resourceLinks.ts": "dee9a426de785e23390ba49c9067f55c8f923cecfce1247ff18f9b1004e0cc90"
+    "frontend-modern/src/components/shared/Dialog.tsx": "58b41841c2ac21939a9e1493754c314e77a1650d1d024de152ebbb39ba3d67a0",
+    "frontend-modern/src/components/shared/useDialogState.ts": "290cab00130c6de5731499a008cc432eb588c97c62e24d0b21940946d37e6e9c"
   },
   "routes": [
-    "/standalone/availability?view=fleet",
-    "/standalone/availability"
+    "/settings/infrastructure"
   ],
   "viewports": [
     {
@@ -34,17 +25,15 @@
     }
   ],
   "states": [
-    "Fleet view rendered all seven mock availability targets with current status, method, source, last check, categorical state history, reachable-only latency history, coverage text, and revision boundaries",
-    "The textual Reachable, Unreachable, Indeterminate, and Unknown legend remained visible without relying on color alone",
-    "The resource detail drawer opened from an availability tile and preserved the existing canonical resource detail presentation",
-    "The solar search state reduced the fleet to one matching target and persisted q=solar in the URL",
-    "Table view restored all seven availability rows with the fleet parameter removed, and switching back restored view=fleet",
-    "The 390 by 844 layout kept the fleet controls usable and stacked availability tiles into a readable single column"
+    "The Add infrastructure dialog remained visible and horizontally contained with its close control focused at desktop and narrow viewports",
+    "The active dialog portal stayed interactive while the app root and every other body-level surface were inert",
+    "A body-level surface added after opening became inert before inspection",
+    "Closing restored ordinary surfaces while preserving a surface that was already inert before opening"
   ],
   "interactions": [
-    "opened an availability tile and dismissed the canonical resource detail drawer",
-    "entered and cleared the solar search filter while checking the URL-owned query state",
-    "switched from Fleet to Table and back through the shared View control while checking URL and row or tile counts",
-    "repeated the fleet inspection at desktop and narrow viewports and checked scrolling, clipping, history labels, and control placement"
+    "opened Add infrastructure from its real settings trigger at desktop and narrow viewports",
+    "verified a late-added background action could not be activated while the modal was open",
+    "closed with Escape and verified focus returned to the Add infrastructure trigger",
+    "activated the late-added action after close to verify restored operability"
   ]
 }

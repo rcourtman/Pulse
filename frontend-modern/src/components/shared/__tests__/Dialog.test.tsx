@@ -7,9 +7,20 @@ import dialogSource from '@/components/shared/Dialog.tsx?raw';
 import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import dialogStateSource from '@/components/shared/useDialogState.ts?raw';
 
+function getBodyChild(element: HTMLElement): HTMLElement {
+  let bodyChild = element;
+  while (bodyChild.parentElement && bodyChild.parentElement !== document.body) {
+    bodyChild = bodyChild.parentElement;
+  }
+  return bodyChild;
+}
+
 describe('Dialog', () => {
   afterEach(() => {
     cleanup();
+    document
+      .querySelectorAll('[data-dialog-test-background]')
+      .forEach((element) => element.remove());
     document.body.style.overflow = '';
   });
 
@@ -31,6 +42,8 @@ describe('Dialog', () => {
     expect(dialogStateSource).toContain('openDialogCount');
     expect(dialogStateSource).toContain('dialogStackHasBlockingDialog');
     expect(dialogStateSource).toContain('getDialogFocusableElements');
+    expect(dialogStateSource).toContain('syncBackgroundInertness');
+    expect(dialogStateSource).toContain('MutationObserver');
 
     expect(dialogModelSource).toContain('export function getDialogLayout');
     expect(dialogModelSource).toContain('export function getDialogFocusableElements');
@@ -91,6 +104,91 @@ describe('Dialog', () => {
     expect(dialogStackHasBlockingDialog()).toBe(true);
     unmount();
     expect(dialogStackHasBlockingDialog()).toBe(false);
+  });
+
+  it('makes every body-level background surface inert while open and restores it on close', () => {
+    const background = document.createElement('main');
+    background.dataset.dialogTestBackground = 'true';
+    document.body.appendChild(background);
+
+    const { unmount } = render(() => (
+      <Dialog isOpen={true} onClose={() => undefined}>
+        <button type="button">Dialog action</button>
+      </Dialog>
+    ));
+
+    const dialogBodyChild = getBodyChild(screen.getByRole('dialog'));
+
+    expect(background).toHaveAttribute('inert');
+    expect(dialogBodyChild).not.toHaveAttribute('inert');
+
+    unmount();
+    expect(background).not.toHaveAttribute('inert');
+  });
+
+  it('preserves a pre-existing inert state after the final dialog closes', () => {
+    const background = document.createElement('main');
+    background.dataset.dialogTestBackground = 'true';
+    background.setAttribute('inert', '');
+    document.body.appendChild(background);
+
+    const { unmount } = render(() => (
+      <Dialog isOpen={true} onClose={() => undefined}>
+        <button type="button">Dialog action</button>
+      </Dialog>
+    ));
+
+    expect(background).toHaveAttribute('inert');
+    unmount();
+    expect(background).toHaveAttribute('inert');
+  });
+
+  it('keeps only the topmost dialog layer interactive', async () => {
+    const [innerOpen, setInnerOpen] = createSignal(false);
+    render(() => (
+      <>
+        <Dialog isOpen={true} onClose={() => undefined} ariaLabel="Outer dialog">
+          <button type="button" onClick={() => setInnerOpen(true)}>
+            Open inner dialog
+          </button>
+        </Dialog>
+        <Dialog isOpen={innerOpen()} onClose={() => setInnerOpen(false)} ariaLabel="Inner dialog">
+          <button type="button">Inner action</button>
+        </Dialog>
+      </>
+    ));
+
+    const outerDialog = screen.getByRole('dialog', { name: 'Outer dialog' });
+    const outerLayer = outerDialog.closest<HTMLElement>('[data-dialog-layer]');
+    expect(outerLayer).not.toBeNull();
+    expect(outerLayer).not.toHaveAttribute('inert');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open inner dialog' }));
+    await Promise.resolve();
+
+    const innerDialog = screen.getByRole('dialog', { name: 'Inner dialog' });
+    const innerLayer = innerDialog.closest<HTMLElement>('[data-dialog-layer]');
+    expect(innerLayer).not.toBeNull();
+    expect(getBodyChild(outerDialog)).toHaveAttribute('inert');
+    expect(getBodyChild(innerDialog)).not.toHaveAttribute('inert');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(getBodyChild(outerDialog)).not.toHaveAttribute('inert');
+  });
+
+  it('makes body-level surfaces added while a dialog is open inert', async () => {
+    render(() => (
+      <Dialog isOpen={true} onClose={() => undefined}>
+        <button type="button">Dialog action</button>
+      </Dialog>
+    ));
+
+    const lateSurface = document.createElement('aside');
+    lateSurface.dataset.dialogTestBackground = 'true';
+    document.body.appendChild(lateSurface);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(lateSurface).toHaveAttribute('inert');
   });
 
   it('keeps keyboard focus trapped in the dialog', async () => {
