@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Resource, ResourceStatus } from '@/types/resource';
+import useResourcesSource from '../useResources.ts?raw';
 
 // Helper to create mock resources for testing conversion logic
 function createMockResource(overrides: Partial<Resource> = {}): Resource {
@@ -27,6 +28,10 @@ function createMockResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('useResources - Resource Filtering Logic', () => {
+  it('races the websocket snapshot with canonical REST hydration for all-resource consumers', () => {
+    expect(useResourcesSource).toContain("initialHydration: 'prefer-ws-then-rest'");
+  });
+
   describe('byType filtering', () => {
     const resources: Resource[] = [
       createMockResource({ id: '1', type: 'vm' }),

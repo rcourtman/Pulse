@@ -2,9 +2,10 @@ import { Accessor, Setter, createEffect, createMemo, createSignal, on } from 'so
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { NodesAPI } from '@/api/nodes';
-import { useResources } from '@/hooks/useResources';
+import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { getPreferredConfiguredNodeLabel } from '@/utils/resourceIdentity';
 import type { Temperature } from '@/types/api';
+import type { ResourceType } from '@/types/resource';
 import type {
   ClusterEndpointOverridePayload,
   ClusterNodeDisplayNameOverridePayload,
@@ -23,17 +24,31 @@ import {
 } from '@/utils/infrastructureSettingsPresentation';
 
 interface UseInfrastructureConfiguredNodesStateParams {
+  canReadInfrastructure: Accessor<boolean>;
   temperatureMonitoringEnabled: Accessor<boolean>;
   savingTemperatureSetting: Accessor<boolean>;
   setSavingTemperatureSetting: Setter<boolean>;
 }
 
 export const useInfrastructureConfiguredNodesState = ({
+  canReadInfrastructure,
   temperatureMonitoringEnabled,
   savingTemperatureSetting,
   setSavingTemperatureSetting,
 }: UseInfrastructureConfiguredNodesStateParams) => {
-  const { byType } = useResources();
+  // Settings.tsx retains this state owner across every settings route. Keep
+  // its background inventory bounded to the agent rows needed for configured
+  // node status; the response's global aggregation supplies license counts
+  // without hydrating every guest, container, storage object, and network.
+  const configuredNodeResources = useUnifiedResources({
+    query: 'type=agent',
+    cacheKey: 'settings-configured-nodes',
+    initialHydration: 'prefer-ws-then-rest',
+    enabled: canReadInfrastructure,
+  });
+  const agentResources = createMemo(() => configuredNodeResources.resources());
+  const typeCount = (type: ResourceType) =>
+    configuredNodeResources.aggregations()?.byType[type] ?? 0;
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
   const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
@@ -52,14 +67,14 @@ export const useInfrastructureConfiguredNodesState = ({
 
   const orgNodeUsage = createMemo(
     () =>
-      byType('agent').length +
-      byType('docker-host').length +
-      byType('k8s-cluster').length +
-      byType('pbs').length +
-      byType('pmg').length,
+      typeCount('agent') +
+      typeCount('docker-host') +
+      typeCount('k8s-cluster') +
+      typeCount('pbs') +
+      typeCount('pmg'),
   );
   const orgGuestUsage = createMemo(
-    () => byType('vm').length + byType('system-container').length + byType('oci-container').length,
+    () => typeCount('vm') + typeCount('system-container') + typeCount('oci-container'),
   );
 
   let pendingLoadNodesRetry: ReturnType<typeof setTimeout> | undefined;
@@ -75,7 +90,7 @@ export const useInfrastructureConfiguredNodesState = ({
     try {
       clearLoadNodesRetry();
       const nodesList = await NodesAPI.getNodes();
-      const nodeResources = byType('agent');
+      const nodeResources = agentResources();
       const nodesWithStatus = nodesList.map((node) => {
         const stateNode = matchConfiguredNodeToResource(node, nodeResources);
         const tempValue = stateNode?.temperature;
@@ -343,34 +358,31 @@ export const useInfrastructureConfiguredNodesState = ({
   };
 
   createEffect(
-    on(
-      () => byType('agent'),
-      (nodeResources) => {
-        const currentNodes = nodes();
-        if (!nodeResources || nodeResources.length === 0 || currentNodes.length === 0) {
-          return;
-        }
+    on(agentResources, (nodeResources) => {
+      const currentNodes = nodes();
+      if (!nodeResources || nodeResources.length === 0 || currentNodes.length === 0) {
+        return;
+      }
 
-        setNodes(
-          currentNodes.map((node) => {
-            const stateNode = matchConfiguredNodeToResource(node, nodeResources);
-            const tempValue = stateNode?.temperature;
-            if (typeof tempValue !== 'number' || tempValue <= 0) {
-              return node;
-            }
+      setNodes(
+        currentNodes.map((node) => {
+          const stateNode = matchConfiguredNodeToResource(node, nodeResources);
+          const tempValue = stateNode?.temperature;
+          if (typeof tempValue !== 'number' || tempValue <= 0) {
+            return node;
+          }
 
-            const temperature: Temperature = {
-              cpuPackage: tempValue,
-              cpuMax: tempValue,
-              available: true,
-              hasCPU: true,
-              lastUpdate: new Date(stateNode!.lastSeen).toISOString(),
-            };
-            return { ...node, temperature };
-          }),
-        );
-      },
-    ),
+          const temperature: Temperature = {
+            cpuPackage: tempValue,
+            cpuMax: tempValue,
+            available: true,
+            hasCPU: true,
+            lastUpdate: new Date(stateNode!.lastSeen).toISOString(),
+          };
+          return { ...node, temperature };
+        }),
+      );
+    }),
   );
 
   return {

@@ -7,7 +7,16 @@ import type {
   ResourceChangeSourceType,
   ResourceFacetCounts,
   ResourceRelationship,
+  ResourcePolicyPostureSummary,
 } from '@/types/resource';
+
+export interface ResourceStatsResponse {
+  total: number;
+  byType: Record<string, number>;
+  byStatus: Record<string, number>;
+  bySource: Record<string, number>;
+  policyPosture: ResourcePolicyPostureSummary;
+}
 
 export interface ResourceTimelineQueryOptions {
   since?: string | number | Date;
@@ -65,6 +74,10 @@ const fetchFacet = async <T>(url: string): Promise<T> =>
   });
 
 export class ResourceAPI {
+  static async getStats(): Promise<ResourceStatsResponse> {
+    return fetchFacet<ResourceStatsResponse>('/api/resources/stats');
+  }
+
   static async getGlobalTimeline(
     options?: ResourceTimelineQueryOptions,
   ): Promise<ResourceTimelineResponse> {

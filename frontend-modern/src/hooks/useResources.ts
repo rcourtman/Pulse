@@ -83,6 +83,12 @@ export interface UseResourcesReturn {
 
   /** Whether resources are available */
   hasResources: Accessor<boolean>;
+
+  /** Whether the initial canonical resource snapshot is still loading */
+  loading: Accessor<boolean>;
+
+  /** Latest canonical resource fetch error */
+  error: Accessor<unknown>;
 }
 
 /**
@@ -96,7 +102,11 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
   // The `query: ''` fetches ALL resource types (no type filter).
   const unifiedHook = storeOverride
     ? null
-    : useUnifiedResources({ query: '', cacheKey: 'all-resources' });
+    : useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws-then-rest',
+      });
 
   // All resources from the unified source.
   const resources = createMemo<Resource[]>(() => {
@@ -256,6 +266,8 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
     topByCpu,
     topByMemory,
     hasResources,
+    loading: unifiedHook?.loading ?? (() => false),
+    error: unifiedHook?.error ?? (() => undefined),
   };
 }
 

@@ -39,7 +39,7 @@ interface ResourcePickerProps {
 }
 
 export function ResourcePicker(props: ResourcePickerProps) {
-  const { resources } = useResources();
+  const { resources, loading } = useResources();
   const [search, setSearch] = createSignal('');
   const [typeFilter, setTypeFilter] = createSignal<TypeFilter>('all');
   const [tagFilter, setTagFilter] = createSignal('');
@@ -181,91 +181,125 @@ export function ResourcePicker(props: ResourcePickerProps) {
       {/* Resource list */}
       <div class="border border-border rounded-md overflow-hidden">
         <Show
-          when={reportableResources().length > 0}
+          when={!loading() || reportableResources().length > 0}
           fallback={
-            <div class="p-8 text-center text-slate-400">
-              <p class="text-sm">{getResourcePickerEmptyState(false).title}</p>
-              <p class="text-xs mt-1 text-muted">
-                {getResourcePickerEmptyState(false).description}
-              </p>
+            <div class="p-8 text-center text-sm text-muted" role="status">
+              Loading resources…
             </div>
           }
         >
           <Show
-            when={filteredResources().length > 0}
+            when={reportableResources().length > 0}
             fallback={
-              <div class="p-6 text-center text-slate-400 text-sm">
-                {getResourcePickerEmptyState(true).title}
+              <div class="p-8 text-center text-slate-400">
+                <p class="text-sm">{getResourcePickerEmptyState(false).title}</p>
+                <p class="text-xs mt-1 text-muted">
+                  {getResourcePickerEmptyState(false).description}
+                </p>
               </div>
             }
           >
-            <div class="max-h-[300px] overflow-y-auto">
-              <PlatformWindowedList
-                items={filteredResources}
-                estimatedItemHeight={56}
-                enableThreshold={16}
-                windowSize={20}
-              >
-                {(resource) => {
-                  const badge = getResourceTypePresentation(resource.type) || {
-                    label: resource.type,
-                    badgeClasses: 'bg-slate-500 text-slate-400',
-                  };
-                  return (
-                    <button
-                      class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left transition-colors border-b border-border last:border-b-0 ${
-                        isSelected(resource.id) ? 'bg-blue-600' : 'hover:bg-slate-800'
-                      }`}
-                      onClick={() => toggleResource(resource)}
-                    >
-                      {/* Checkbox */}
-                      <div
-                        class={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center ${
-                          isSelected(resource.id)
-                            ? 'bg-blue-600 border-blue-600'
-                            : 'border-slate-600'
+            <Show
+              when={filteredResources().length > 0}
+              fallback={
+                <div class="p-6 text-center text-slate-400 text-sm">
+                  {getResourcePickerEmptyState(true).title}
+                </div>
+              }
+            >
+              <div class="max-h-[300px] overflow-y-auto">
+                <PlatformWindowedList
+                  items={filteredResources}
+                  estimatedItemHeight={56}
+                  enableThreshold={16}
+                  windowSize={20}
+                >
+                  {(resource) => {
+                    const badge = getResourceTypePresentation(resource.type) || {
+                      label: resource.type,
+                      badgeClasses: 'bg-slate-500 text-slate-400',
+                    };
+                    return (
+                      <button
+                        class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left transition-colors border-b border-border last:border-b-0 ${
+                          isSelected(resource.id) ? 'bg-blue-600' : 'hover:bg-slate-800'
                         }`}
+                        onClick={() => toggleResource(resource)}
                       >
-                        <Show when={isSelected(resource.id)}>
-                          <svg
-                            class="w-3 h-3 text-white"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="3"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        </Show>
-                      </div>
-
-                      {/* Status dot */}
-                      <StatusDot
-                        variant={getSimpleStatusIndicator(resource.status).variant}
-                        size="sm"
-                        ariaHidden
-                      />
-
-                      {/* Name and ID */}
-                      <div class="flex-1 min-w-0">
+                        {/* Checkbox */}
                         <div
-                          class="text-sm text-white sm:truncate break-words"
-                          title={getPreferredInfrastructureDisplayName(resource)}
+                          class={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center ${
+                            isSelected(resource.id)
+                              ? 'bg-blue-600 border-blue-600'
+                              : 'border-slate-600'
+                          }`}
                         >
-                          {getPreferredInfrastructureDisplayName(resource)}
+                          <Show when={isSelected(resource.id)}>
+                            <svg
+                              class="w-3 h-3 text-white"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              stroke-width="3"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          </Show>
                         </div>
-                        <div class="text-xs text-muted sm:truncate break-all" title={resource.id}>
-                          {resource.id}
+
+                        {/* Status dot */}
+                        <StatusDot
+                          variant={getSimpleStatusIndicator(resource.status).variant}
+                          size="sm"
+                          ariaHidden
+                        />
+
+                        {/* Name and ID */}
+                        <div class="flex-1 min-w-0">
+                          <div
+                            class="text-sm text-white sm:truncate break-words"
+                            title={getPreferredInfrastructureDisplayName(resource)}
+                          >
+                            {getPreferredInfrastructureDisplayName(resource)}
+                          </div>
+                          <div class="text-xs text-muted sm:truncate break-all" title={resource.id}>
+                            {resource.id}
+                          </div>
+                          <div class="mt-1 flex flex-wrap items-center gap-1 sm:hidden">
+                            <span class={`text-xs px-2 py-0.5 rounded-full ${badge.badgeClasses}`}>
+                              {badge.label}
+                            </span>
+                            <Show when={resource.tags && resource.tags.length > 0}>
+                              <For each={resource.tags?.slice(0, 2)}>
+                                {(tag) => (
+                                  <span class="text-xs px-1.5 py-0.5 rounded bg-surface-hover text-slate-300">
+                                    {tag}
+                                  </span>
+                                )}
+                              </For>
+                              <Show when={(resource.tags?.length ?? 0) > 2}>
+                                <span class="text-xs text-muted">
+                                  +{(resource.tags?.length ?? 0) - 2}
+                                </span>
+                              </Show>
+                            </Show>
+                          </div>
                         </div>
-                        <div class="mt-1 flex flex-wrap items-center gap-1 sm:hidden">
-                          <span class={`text-xs px-2 py-0.5 rounded-full ${badge.badgeClasses}`}>
-                            {badge.label}
-                          </span>
-                          <Show when={resource.tags && resource.tags.length > 0}>
+
+                        {/* Type badge */}
+                        <span
+                          class={`hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badge.badgeClasses}`}
+                        >
+                          {badge.label}
+                        </span>
+
+                        {/* Tags */}
+                        <Show when={resource.tags && resource.tags.length > 0}>
+                          <div class="hidden sm:flex gap-1 flex-shrink-0">
                             <For each={resource.tags?.slice(0, 2)}>
                               {(tag) => (
                                 <span class="text-xs px-1.5 py-0.5 rounded bg-surface-hover text-slate-300">
@@ -278,39 +312,14 @@ export function ResourcePicker(props: ResourcePickerProps) {
                                 +{(resource.tags?.length ?? 0) - 2}
                               </span>
                             </Show>
-                          </Show>
-                        </div>
-                      </div>
-
-                      {/* Type badge */}
-                      <span
-                        class={`hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badge.badgeClasses}`}
-                      >
-                        {badge.label}
-                      </span>
-
-                      {/* Tags */}
-                      <Show when={resource.tags && resource.tags.length > 0}>
-                        <div class="hidden sm:flex gap-1 flex-shrink-0">
-                          <For each={resource.tags?.slice(0, 2)}>
-                            {(tag) => (
-                              <span class="text-xs px-1.5 py-0.5 rounded bg-surface-hover text-slate-300">
-                                {tag}
-                              </span>
-                            )}
-                          </For>
-                          <Show when={(resource.tags?.length ?? 0) > 2}>
-                            <span class="text-xs text-muted">
-                              +{(resource.tags?.length ?? 0) - 2}
-                            </span>
-                          </Show>
-                        </div>
-                      </Show>
-                    </button>
-                  );
-                }}
-              </PlatformWindowedList>
-            </div>
+                          </div>
+                        </Show>
+                      </button>
+                    );
+                  }}
+                </PlatformWindowedList>
+              </div>
+            </Show>
           </Show>
         </Show>
       </div>

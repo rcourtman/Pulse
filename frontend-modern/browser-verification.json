@@ -1,43 +1,34 @@
 {
   "version": 1,
-  "base_sha": "36dd5b9119971620a5cdd3cc791f4d555f71160e",
-  "verified_at": "2026-08-30T08:31:50Z",
+  "base_sha": "87fda2a235a34bf62071458795237856ac16650d",
+  "verified_at": "2026-08-30T08:55:33Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
-    "frontend-modern/src/features/docker/dockerPageModel.ts",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
-    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts",
-    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
-    "frontend-modern/src/features/truenas/truenasPageModel.ts",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
-    "frontend-modern/src/features/vmware/vmwarePageModel.ts",
-    "frontend-modern/src/hooks/useUnifiedResources.ts",
-    "frontend-modern/src/types/api.ts"
+    "frontend-modern/src/api/resources.ts",
+    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+    "frontend-modern/src/components/Settings/ResourcePicker.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
+    "frontend-modern/src/hooks/useResourceStats.ts",
+    "frontend-modern/src/hooks/useResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "9e3ae4cf49e50ce5870ddfed517057423ed00d4efdf6a3cbcd669497bda526b6",
-    "frontend-modern/src/features/docker/dockerPageModel.ts": "a6f64a80a91e0f75f0f13397c9eb25ee5c993e012c08da3fd43888d3d99ccdc3",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "f464792ae1301cb7db93b904b9a544d046268cc3cabaa179f647aeb3fbf6a8f7",
-    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "3b79fb6f9eddc5d3b593fc78412c94310175bf7a15f41fa44e9c06319608111a",
-    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "db085a6496c5af4dae90bf7cb8583270e528e1de23e399088486706cafce36ff",
-    "frontend-modern/src/features/truenas/truenasPageModel.ts": "2e7bf5d00bd4570524faeac6bb27a4714364d0796a598801729d2e1a113c5d6f",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "40f325c9e2dc7f67d0db748475a9da0000fb75bfcccbb8cfeb4a16a0935eb7de",
-    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "1b01b0655575d477a60aa030eeb2ec793a9404934959b0234e75f65b568187cc",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "44c4dcaa542bf0775c9c53f18769b28a1ef5ecba0cb5c62174b89cdf5416ab4b",
-    "frontend-modern/src/types/api.ts": "c4c830f7796a4dab8abad12cef96872581f2ac4e5ef5eb72840a3031db57069e"
+    "frontend-modern/src/api/resources.ts": "08a29f4efc054188e378f5eecb94c2cad4884c8a20fc31f97c3242a72099cdde",
+    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx": "ce04993e9a017890a7098cf15ee518701d3ecbbbd6eac91520c0c7674a86c98c",
+    "frontend-modern/src/components/Settings/ResourcePicker.tsx": "2e33b23cfd257222996a2adb9102b80f36ed26d0039c449c3111162ed7da13b7",
+    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts": "f9fca9e1b66f7d2f020a52a0e873da7371f649c4f37c8a7df08e627b2a1e77f2",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "744ffef0c69a2113d12192698258e4296fd8a03fdf9a227bc9c0ab0ed250b5d7",
+    "frontend-modern/src/hooks/useResourceStats.ts": "b3d4e3777096dd1933a2e2c53af822052ddddb4563a9ccd1bc4c16677d191ec6",
+    "frontend-modern/src/hooks/useResources.ts": "142ee968fdfdeb1281feb6b04beee23c1556db42a118e47e8063b6f151d1c24a"
   },
   "routes": [
-    "/vmware/overview",
-    "/vmware/storage",
-    "/docker/images",
-    "/kubernetes/configuration",
-    "/truenas/vms"
+    "/settings/security-data-handling",
+    "/patrol"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
@@ -45,18 +36,16 @@
     }
   ],
   "states": [
-    "vSphere Overview settled with 7 ESXi hosts and 18 virtual machines without rendering the false No vSphere VMs state",
-    "vSphere Datastores settled with 8 rows while retaining all evidence-gated VMware workflow tabs",
-    "Docker Images settled with 10 image rows while retaining Overview, Storage, Networks, and Swarm navigation",
-    "Kubernetes Configuration settled with 10 configuration and policy rows while retaining all Kubernetes workflows",
-    "TrueNAS VMs settled with 2 rows and did not preload recovery inventory",
-    "narrow vSphere Overview retained the complete tab strip, responsive host columns, VM table rows, and no false empty state"
+    "Resource Privacy cold direct load settled with 1,855 governed resources and rendered the aggregate posture without a false empty state",
+    "Resource Privacy desktop and narrow layouts retained the complete policy summary, posture cards, scrolling, and viewport fit without horizontal overflow",
+    "Patrol Protection objective dialog opened the resource scope picker with 1,503 populated resources instead of an empty placeholder",
+    "resource picker desktop and narrow layouts retained search, type filters, bounded list scrolling, selection state, dialog controls, and viewport fit"
   ],
   "interactions": [
-    "loaded each provider workflow as a direct route against the exact isolated frontend and backend build",
-    "traced network requests and confirmed each sampled route issued only its declared resource-type query",
-    "confirmed VMware used a one-row activity evidence request on non-Activity routes instead of preloading the 100-row timeline",
-    "confirmed TrueNAS VMs issued no recovery request outside Protection",
-    "inspected the rendered desktop routes and a 390 by 844 vSphere screenshot for populated state, tab continuity, fit, and clipping"
+    "loaded Resource Privacy as a cold direct route against the exact isolated frontend and backend build",
+    "traced the cold Resource Privacy request set and confirmed only the compact /api/resources/stats read plus one type=agent settings-status page, with no unfiltered paginated resource hydration",
+    "opened Patrol Protection, opened Add objective, expanded Limit to specific resources, searched for esxi-07.lab.local, and selected the matching resource",
+    "dismissed the objective dialog and confirmed focus returned to Add objective",
+    "inspected Resource Privacy and the expanded resource picker at 1440 by 900 and 390 by 844 for populated state, responsive fit, clipping, scrolling, and control availability"
   ]
 }

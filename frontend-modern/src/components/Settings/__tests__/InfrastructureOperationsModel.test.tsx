@@ -372,6 +372,15 @@ describe('infrastructure operations model', () => {
     expect(useInfrastructureConfiguredNodesStateSource).not.toContain('...nodeData,');
   });
 
+  it('keeps the retained settings state off the full-estate resource list', () => {
+    expect(useInfrastructureConfiguredNodesStateSource).toContain("query: 'type=agent'");
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      "cacheKey: 'settings-configured-nodes'",
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).toContain('aggregations()?.byType[type]');
+    expect(useInfrastructureConfiguredNodesStateSource).not.toContain('useResources');
+  });
+
   it('delegates install-token scopes to the server mint endpoint', () => {
     // The server decides scopes from the command-execution choice at mint
     // time (#1586); the frontend must not compose install-token scope lists.

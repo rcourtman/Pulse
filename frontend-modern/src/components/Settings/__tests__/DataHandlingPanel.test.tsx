@@ -3,19 +3,19 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { DataHandlingPanel } from '../DataHandlingPanel';
 
-const unifiedResourcesState = vi.hoisted(() => ({
+const resourceStatsState = vi.hoisted(() => ({
   error: null as unknown,
   loading: false,
   policyPosture: null as unknown,
   refetch: vi.fn(),
 }));
 
-vi.mock('@/hooks/useUnifiedResources', () => ({
-  useUnifiedResources: () => ({
-    error: () => unifiedResourcesState.error,
-    loading: () => unifiedResourcesState.loading,
-    policyPosture: () => unifiedResourcesState.policyPosture,
-    refetch: unifiedResourcesState.refetch,
+vi.mock('@/hooks/useResourceStats', () => ({
+  useResourceStats: () => ({
+    error: () => resourceStatsState.error,
+    loading: () => resourceStatsState.loading,
+    policyPosture: () => resourceStatsState.policyPosture,
+    refetch: resourceStatsState.refetch,
   }),
 }));
 
@@ -28,15 +28,15 @@ const renderPanel = () =>
 
 describe('DataHandlingPanel', () => {
   beforeEach(() => {
-    unifiedResourcesState.error = null;
-    unifiedResourcesState.loading = false;
-    unifiedResourcesState.policyPosture = {
+    resourceStatsState.error = null;
+    resourceStatsState.loading = false;
+    resourceStatsState.policyPosture = {
       totalResources: 0,
       sensitivityCounts: {},
       routingCounts: {},
       redactionCounts: {},
     };
-    unifiedResourcesState.refetch.mockReset();
+    resourceStatsState.refetch.mockReset();
   });
 
   afterEach(() => {
@@ -60,7 +60,7 @@ describe('DataHandlingPanel', () => {
   });
 
   it('shows policy posture metrics once resources exist', () => {
-    unifiedResourcesState.policyPosture = {
+    resourceStatsState.policyPosture = {
       totalResources: 4,
       sensitivityCounts: {
         internal: 1,

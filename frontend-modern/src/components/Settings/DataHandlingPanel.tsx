@@ -6,7 +6,7 @@ import Info from 'lucide-solid/icons/info';
 import Lock from 'lucide-solid/icons/lock';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
-import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { useResourceStats } from '@/hooks/useResourceStats';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
@@ -143,7 +143,7 @@ const PostureMeter: Component<{ item: DataHandlingPostureItem }> = (props) => (
 );
 
 export const DataHandlingPanel: Component = () => {
-  const resources = useUnifiedResources({ query: '', cacheKey: 'all-resources' });
+  const resources = useResourceStats();
   const model = createMemo(() => buildDataHandlingPanelModel(resources.policyPosture()));
   const errorMessage = createMemo(() => {
     const error = resources.error();

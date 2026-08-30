@@ -70,6 +70,7 @@ export function useInfrastructureSettingsState({
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
 
   const configuredNodes = useInfrastructureConfiguredNodesState({
+    canReadInfrastructure,
     temperatureMonitoringEnabled,
     savingTemperatureSetting,
     setSavingTemperatureSetting,

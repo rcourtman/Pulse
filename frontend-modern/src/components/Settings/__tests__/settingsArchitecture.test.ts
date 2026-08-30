@@ -98,6 +98,7 @@ import reportingStateSource from '../useReportingPanelState.ts?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
+import useInfrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import useInfrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
@@ -473,6 +474,24 @@ describe('settings architecture guardrails', () => {
     expect(dataHandlingPanelSource).toContain('Read-only resource privacy posture');
     expect(dataHandlingPanelSource).toContain('<PolicyScopeSummary />');
     expect(dataHandlingPanelSource).toContain('<EmptyPolicyPostureState />');
+    expect(dataHandlingPanelSource).toContain('useResourceStats()');
+    expect(dataHandlingPanelSource).not.toContain('useUnifiedResources');
+  });
+
+  it('keeps retained settings inventory scoped to configured agent nodes', () => {
+    expect(useInfrastructureSettingsStateSource).toContain('canReadInfrastructure,');
+    expect(useInfrastructureConfiguredNodesStateSource).toContain("query: 'type=agent'");
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      "cacheKey: 'settings-configured-nodes'",
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      "initialHydration: 'prefer-ws-then-rest'",
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).toContain('enabled: canReadInfrastructure');
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      'configuredNodeResources.aggregations()?.byType[type]',
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).not.toContain('useResources()');
   });
 
   it('keeps default self-hosted commercial copy opt-in from shared settings primitives', () => {

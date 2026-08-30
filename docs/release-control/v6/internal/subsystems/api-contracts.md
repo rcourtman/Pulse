@@ -1476,6 +1476,10 @@ payload shape change when the portal presents compact client rows.
 25. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `agent-lifecycle`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 26. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
 27. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `agent-lifecycle`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
+    Its retained settings-shell read uses an authority-gated `type=agent`
+    unified-resource query for node status and the canonical response
+    aggregations for estate counts. It must not restore an unfiltered
+    all-resource read on unrelated Settings routes.
 28. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `agent-lifecycle`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
     That same shared boundary also owns settings-route polling scope for discovery payloads: the `/api/discover` refresh loop and websocket-backed discovery status hydration may run only while the operator is on the canonical Infrastructure settings workspace at `/settings/infrastructure`, not on retired infrastructure sub-routes.
     Discovery refreshes and scan results are route-scoped state updates. If the
@@ -2618,6 +2622,11 @@ a new API state machine, queue contract, or verification-accounting field.
    verification adapters, but they must remain read-only views of the canonical
    action audit and lifecycle trail rather than a second audit store.
 6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resourceapi/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
+   Compact aggregate consumers must read `GET /api/resources/stats` through
+   `ResourceAPI.getStats()` rather than paging `/api/resources` and discarding
+   every row. The stats client preserves the backend-owned total, type, status,
+   source, and policy-posture contract while keeping aggregate-only settings
+   surfaces independent from estate size.
    `/api/resources/{id}/timeline` and `/api/resources/{id}/facets` must keep
    resource timelines relationship-aware by opting into the canonical
    `ResourceChangeFilters.IncludeRelated` store path, so a resource timeline

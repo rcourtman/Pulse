@@ -11,6 +11,27 @@ describe('ResourceAPI', () => {
     vi.clearAllMocks();
   });
 
+  it('fetches compact resource stats without hydrating list pages', async () => {
+    const stats = {
+      total: 1200,
+      byType: { vm: 900, agent: 300 },
+      byStatus: { running: 850, online: 300, stopped: 50 },
+      bySource: { proxmox: 1200 },
+      policyPosture: {
+        totalResources: 1200,
+        sensitivityCounts: { internal: 1200 },
+        routingCounts: { 'cloud-summary': 1200 },
+        redactionCounts: {},
+      },
+    };
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce(stats);
+
+    await expect(ResourceAPI.getStats()).resolves.toEqual(stats);
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/resources/stats', {
+      cache: 'no-store',
+    });
+  });
+
   it('fetches the resource history bundle from the facet endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       resourceId: 'vm:42',

@@ -6,11 +6,13 @@ import resourcePickerSource from '../ResourcePicker.tsx?raw';
 import { ResourcePicker, type SelectedResource } from '../ResourcePicker';
 
 let mockResources: Resource[] = [];
+let mockLoading = false;
 const showWarningMock = vi.fn();
 
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     resources: () => mockResources,
+    loading: () => mockLoading,
   }),
 }));
 
@@ -68,6 +70,7 @@ const renderPickerWithOptions = (
 beforeEach(() => {
   showWarningMock.mockReset();
   mockResources = [];
+  mockLoading = false;
 });
 
 afterEach(() => {
@@ -78,6 +81,15 @@ describe('ResourcePicker', () => {
   it('keeps large resource inventories on the shared bounded list renderer', () => {
     expect(resourcePickerSource).toContain('PlatformWindowedList');
     expect(resourcePickerSource).toContain('estimatedItemHeight={56}');
+  });
+
+  it('keeps the initial hydration state distinct from a genuinely empty estate', () => {
+    mockLoading = true;
+
+    renderPicker();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading resources…');
+    expect(screen.queryByText('No resources available')).not.toBeInTheDocument();
   });
 
   it('renders reportable resources from useResources()', async () => {

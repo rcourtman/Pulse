@@ -1228,6 +1228,12 @@ not a replacement status card, CTA band, or page-local nested card.
    Settings selection helpers such as `ResourcePicker` must use the same
    `Button` primitive for select-all, clear, and chip remove actions instead of
    restoring footer-local action shells.
+   The picker must also keep initial all-resource hydration distinct from a
+   genuinely empty estate: while the shared resource source is loading it
+   presents a status placeholder, and only renders its empty-state copy after
+   hydration completes. Intentional all-resource consumers use the shared
+   websocket-first/canonical-REST race rather than waiting for every REST page
+   before their first usable snapshot.
    Reporting surfaces must use the same primitive for retry, generate, and
    export actions rather than restoring large local CTA button shells.
    Self-hosted commercial plan, retry, activation, and clear-key actions follow
