@@ -4,6 +4,44 @@
 frontend-modern/browser-verification.json:generic-api-key:11
 frontend-modern/browser-verification.json:generic-api-key:12
 
+# Schema-v4 secure-runtime evidence stores SHA-256 source digests beside source
+# paths whose names contain auth/token terminology. Suppress only those exact
+# generated path/rule/line fingerprints; the transcript remains fully scanned.
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:80
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:81
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:82
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:83
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:84
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:87
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:97
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:119
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:128
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:129
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:130
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:135
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:144
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:242
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:262
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:277
+docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json:generic-api-key:304
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:56
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:57
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:58
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:59
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:60
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:63
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:73
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:95
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:104
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:105
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:106
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:111
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:120
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:218
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:238
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:253
+docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json:generic-api-key:280
+
 # Historical findings proven to be deterministic examples, placeholders, or
 # public-key/path false positives. Keep these commit-, path-, rule-, and
 # line-specific so provider credentials and expired tokens remain visible.

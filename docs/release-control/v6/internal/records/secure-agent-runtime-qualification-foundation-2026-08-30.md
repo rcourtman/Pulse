@@ -95,7 +95,7 @@ scenario outcomes. It proves neither a successful action-runner host mutation
 nor the post-audit credential, rollback, update-artifact, and runner-unit
 hardening. It is retained as historical, hash-bound self-attested evidence.
 
-## Current schema-v3 committed-main evidence
+## Historical schema-v3 committed-main evidence
 
 A newly created disposable arm64 Colima profile ran Ubuntu 24.04.4, kernel
 6.8.0-117, and systemd 255 from a detached clean checkout at committed main
@@ -121,11 +121,10 @@ session invalidation remain established by the focused API regressions rather
 than by this in-process fixture. The receipt remains operator-produced,
 unauthenticated, artifact-bound self-attestation rather than independent proof.
 
-## Post-audit schema-v4 acceptance floor
+## Current schema-v4 committed-main evidence
 
 Schema v3 remains immutable historical evidence, but it is no longer accepted
-by the current attester as qualification of a newer tree. A future run must use
-schema v4. The committed
+by the current attester as qualification of a newer tree. The committed
 `scripts/release_control/secure_runtime_source_manifest_v4.json` expands the
 production collector, helper, runner, host-agent provider, API admission,
 configuration, update, and receipt roots, and the receipt must hash exactly
@@ -134,17 +133,40 @@ times, typed causal claims, and an exact reference to a retained secret-free
 JSONL transcript event. The receipt also binds its intended repository path,
 the transcript path and digest, the typed action receipt kind, report count and
 report chronology. The attestation preserves those bindings alongside the
-artifact build identities. No v4 live receipt or attestation is recorded here;
-this is the acceptance contract for the next exact-commit or exact-RC run, not
-a retroactive upgrade of the v3 evidence.
+artifact build identities.
+
+A newly created disposable arm64 Colima profile ran Ubuntu 24.04.4, kernel
+6.8.0-117, and systemd 255 from a detached clean checkout at committed main
+`defc24af837b91428fbee939d09cd31e9559fb4f`. All four exercised commands carry
+that exact clean Go VCS revision. The guarded lab passed all twelve scenarios
+in 107 seconds. Its 345-source manifest matched the qualified commit, and its
+retained JSONL transcript contains 81 ordered events: twelve scenario events
+and 69 raw command-output events.
+
+The secret-free schema-v4 receipt is
+`secure-agent-runtime-systemd-receipt-v4-2026-08-30.json` with SHA-256
+`58da80f7d75d414c12cf6632bd895b821ce759625e7d00ae00c16d56204b1e76`. Its
+bound transcript is
+`secure-agent-runtime-systemd-transcript-v4-2026-08-30.jsonl` with SHA-256
+`616681aee38202ed922880288b730cd85f746e081f8f9d45bb2d570e48b49f8c`. The
+separate `secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json`
+has SHA-256
+`a48e855fdd2dcbc0cf91717dfaed22f942320c9661dd9b9e8f8f8e97f45d654b` and
+verifies current-main identity and ancestry, exact source-manifest membership
+and hashes, all artifact hashes and clean Go build identities, ordered typed
+scenario claims, receipt/report chronology, and the receipt's intended record
+path. This is new evidence for the exact qualified commit; it does not
+retroactively upgrade schema v3.
 
 ## Proof classification and residuals
 
-Focused regressions cover current code-level semantics. The schema-v3 guarded
-systemd evidence covers only its historical qualified commit and the explicitly
-exercised subset above. Neither is a substitute for exact release-candidate
-reproduction, representative provider/appliance qualification, or external
-review. The canonical support and residual matrix is published in
+Focused regressions cover current code-level semantics. The schema-v4 guarded
+systemd evidence covers only its exact qualified commit and explicitly
+exercised fixture paths. It does not prove helper-backed update activation,
+watchdog or interrupted-recovery behavior, nor the production Router over TLS
+with durable credential persistence. It is not a substitute for exact
+release-candidate reproduction, representative provider/appliance
+qualification, or external review. The canonical support and residual matrix is published in
 `docs/AGENT_SECURITY.md`; unqualified rows remain explicit blockers rather than
 being inferred from the generic Linux result.
 

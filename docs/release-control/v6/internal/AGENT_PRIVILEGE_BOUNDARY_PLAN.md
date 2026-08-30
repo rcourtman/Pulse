@@ -131,10 +131,22 @@ receipt roots; requires the receipt hashes to match that exact set; validates
 ordered timestamps and scenario-specific causal claims; binds every scenario
 to a retained secret-free JSONL transcript event; validates typed receipt kind
 and report chronology; and requires the intended repository record path to be
-inside the hashed receipt. No schema-v4 live receipt exists yet. Accepted v4
-evidence will remain artifact-bound, self-attested systemd evidence rather than
-an independently authenticated assessment. The repository still needs a fresh
-exact committed release-candidate run,
+inside the hashed receipt.
+
+A fresh Ubuntu 24.04.4/systemd 255 arm64 run at committed main
+`defc24af837b91428fbee939d09cd31e9559fb4f` passed all twelve schema-v4
+scenarios in 107 seconds. The 345-source manifest matched the commit, all four
+artifacts carried its clean Go VCS identity, and the receipt bound 81 retained
+transcript events, including 69 raw command-output events. The receipt,
+transcript, and attestation are recorded as
+`internal/records/secure-agent-runtime-systemd-receipt-v4-2026-08-30.json`,
+`internal/records/secure-agent-runtime-systemd-transcript-v4-2026-08-30.jsonl`,
+and
+`internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json`.
+This remains artifact-bound, secret-free, self-attested systemd fixture
+evidence rather than an independently authenticated assessment or proof of the
+production Router/TLS/durable-store credential lifecycle. The repository still
+needs a fresh exact committed release-candidate run,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation
