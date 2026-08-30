@@ -43,6 +43,9 @@ func TestAvailabilityHandlersCRUDPersistsTargets(t *testing.T) {
 	if created.ID == "" {
 		t.Fatal("created ID is empty")
 	}
+	if created.ConfigRevision != 1 {
+		t.Fatalf("created config revision = %d, want 1", created.ConfigRevision)
+	}
 
 	updated := created
 	updated.Enabled = false
@@ -60,6 +63,27 @@ func TestAvailabilityHandlersCRUDPersistsTargets(t *testing.T) {
 	}
 	if len(loaded) != 1 || loaded[0].Enabled {
 		t.Fatalf("loaded targets = %+v, want one paused target", loaded)
+	}
+	if loaded[0].ConfigRevision != 1 {
+		t.Fatalf("non-execution edit revision = %d, want 1", loaded[0].ConfigRevision)
+	}
+
+	executionEdit := loaded[0]
+	executionEdit.Address = "gateway-2.local"
+	executionEdit.ConfigRevision = 99
+	updateBody = availabilityRequestBody(t, executionEdit)
+	updateReq = httptest.NewRequest(http.MethodPut, "/api/availability-targets/"+created.ID, updateBody)
+	updateRec = httptest.NewRecorder()
+	handler.HandleUpdate(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("execution HandleUpdate status = %d, body=%s", updateRec.Code, updateRec.Body.String())
+	}
+	loaded, err = persistence.LoadAvailabilityTargets()
+	if err != nil {
+		t.Fatalf("LoadAvailabilityTargets() after execution edit error = %v", err)
+	}
+	if loaded[0].ConfigRevision != 2 {
+		t.Fatalf("server-authored execution edit revision = %d, want 2", loaded[0].ConfigRevision)
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/availability-targets", nil)

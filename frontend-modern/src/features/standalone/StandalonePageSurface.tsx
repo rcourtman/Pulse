@@ -33,7 +33,7 @@ import {
 import { updateStore } from '@/stores/updates';
 import { formatRelativeTime } from '@/utils/format';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
-import { AvailabilityChecksTable } from './AvailabilityChecksTable';
+import { AvailabilityChecksTable, type AvailabilityChecksView } from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
 import { collectHostIdentityConflictHosts } from './hostIdentityConflict';
 import { HostIdentityConflictNotice } from './HostIdentityConflictNotice';
@@ -169,6 +169,15 @@ export function StandalonePageSurface() {
       { replace: true },
     );
   };
+  const availabilityView = createMemo<AvailabilityChecksView>(() =>
+    searchParams[STANDALONE_QUERY_PARAMS.view] === 'fleet' ? 'fleet' : 'table',
+  );
+  const setAvailabilityView = (view: AvailabilityChecksView) => {
+    setSearchParams(
+      { [STANDALONE_QUERY_PARAMS.view]: view === 'table' ? null : view },
+      { replace: true },
+    );
+  };
   const availabilityPosture = createMemo(() =>
     buildStandalonePostureSummary(model().availabilityChecks),
   );
@@ -265,6 +274,13 @@ export function StandalonePageSurface() {
               <AvailabilityChecksTable
                 resources={model().availabilityChecks}
                 probeAgentOptions={buildProbeAgentOptions(model().machines)}
+                view={availabilityView()}
+                onViewChange={setAvailabilityView}
+                externalSearch={machineSearchFilter}
+                onExternalSearchChange={setMachineSearchFilter}
+                externalStatus={machineStatusFilter}
+                onExternalStatusChange={setMachineStatusFilter}
+                onResetFilters={resetMachineFilters}
                 emptyIcon={availabilityIcon()}
                 emptyTitle="No availability checks"
                 emptyDescription="Add ping, TCP, MQTT, ESPHome, or HTTP checks for devices and services that cannot run Pulse Agent."

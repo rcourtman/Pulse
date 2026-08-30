@@ -51,6 +51,7 @@ const (
 // lightweight availability probe.
 type AvailabilityTarget struct {
 	ID               string                    `json:"id"`
+	ConfigRevision   int64                     `json:"configRevision"`
 	Name             string                    `json:"name"`
 	TargetKind       AvailabilityTargetKind    `json:"targetKind,omitempty"`
 	Address          string                    `json:"address"`
@@ -80,6 +81,7 @@ type AvailabilityTarget struct {
 func NewAvailabilityTarget() AvailabilityTarget {
 	return AvailabilityTarget{
 		ID:               uuid.NewString(),
+		ConfigRevision:   1,
 		TargetKind:       AvailabilityTargetService,
 		Protocol:         AvailabilityProbeICMP,
 		Enabled:          true,
@@ -95,6 +97,9 @@ func (t *AvailabilityTarget) ApplyDefaults() {
 	}
 	if strings.TrimSpace(t.ID) == "" {
 		t.ID = uuid.NewString()
+	}
+	if t.ConfigRevision <= 0 {
+		t.ConfigRevision = 1
 	}
 	if strings.TrimSpace(string(t.Protocol)) == "" {
 		t.Protocol = AvailabilityProbeICMP
@@ -140,6 +145,24 @@ func (t AvailabilityTarget) EffectiveFailureThreshold() int {
 		return t.FailureThreshold
 	}
 	return DefaultAvailabilityFailureThreshold
+}
+
+// AvailabilityExecutionConfigChanged reports whether an edit changes what is
+// executed or where it executes. Display, correlation, alert-threshold, and
+// certificate-presentation edits intentionally stay within the same revision.
+func AvailabilityExecutionConfigChanged(previous, next AvailabilityTarget) bool {
+	previous = NormalizeAvailabilityTarget(previous)
+	next = NormalizeAvailabilityTarget(next)
+	return previous.Address != next.Address ||
+		previous.Protocol != next.Protocol ||
+		previous.Port != next.Port ||
+		previous.Path != next.Path ||
+		previous.UDPMode != next.UDPMode ||
+		previous.UDPRequest != next.UDPRequest ||
+		previous.UDPExpected != next.UDPExpected ||
+		previous.EffectiveTimeoutMillis() != next.EffectiveTimeoutMillis() ||
+		previous.EffectivePollIntervalSecs() != next.EffectivePollIntervalSecs() ||
+		previous.ProbeAgentID != next.ProbeAgentID
 }
 
 func (t AvailabilityTarget) CertificateMonitoringEnabled() bool {

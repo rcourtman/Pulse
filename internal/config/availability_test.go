@@ -29,6 +29,40 @@ func TestNormalizeAvailabilityTargetPreservesHTTPAddress(t *testing.T) {
 	}
 }
 
+func TestAvailabilityExecutionConfigChangedTracksOnlyExecutionDefiningFields(t *testing.T) {
+	base := NormalizeAvailabilityTarget(AvailabilityTarget{
+		ID: "target-1", Name: "Gateway", Address: "gateway.local",
+		Protocol: AvailabilityProbeTCP, Port: 443, Enabled: true,
+		PollIntervalSecs: 60, TimeoutMillis: 1500, ProbeAgentID: "agent-1",
+	})
+
+	presentationOnly := base
+	presentationOnly.Name = "Primary gateway"
+	presentationOnly.LinkedResourceID = "node-1"
+	presentationOnly.FailureThreshold = 5
+	if AvailabilityExecutionConfigChanged(base, presentationOnly) {
+		t.Fatal("presentation and alert-only edits changed the execution revision")
+	}
+
+	for name, mutate := range map[string]func(*AvailabilityTarget){
+		"address":       func(target *AvailabilityTarget) { target.Address = "gateway-2.local" },
+		"protocol":      func(target *AvailabilityTarget) { target.Protocol = AvailabilityProbeICMP },
+		"port":          func(target *AvailabilityTarget) { target.Port = 8443 },
+		"path":          func(target *AvailabilityTarget) { target.Path = "/health" },
+		"timeout":       func(target *AvailabilityTarget) { target.TimeoutMillis = 2500 },
+		"poll interval": func(target *AvailabilityTarget) { target.PollIntervalSecs = 120 },
+		"probe agent":   func(target *AvailabilityTarget) { target.ProbeAgentID = "agent-2" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			next := base
+			mutate(&next)
+			if !AvailabilityExecutionConfigChanged(base, next) {
+				t.Fatalf("%s edit did not change the execution revision", name)
+			}
+		})
+	}
+}
+
 func TestNormalizeAvailabilityTargetReducesICMPAddressToHost(t *testing.T) {
 	target := NormalizeAvailabilityTarget(AvailabilityTarget{
 		Address:  " https://device.local:8443/status ",

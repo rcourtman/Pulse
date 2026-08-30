@@ -2642,6 +2642,14 @@ store-backed disk history path as longer-term disk charts, with the backend
 doing range selection and fallback. Feature-local polling loops or browser-side
 disk ring buffers are forbidden because they duplicate live sampling work and
 drift out of sync with the governed history timeline.
+Categorical availability history shares that metrics-store lifecycle without
+being encoded as numeric metric samples. Raw observations enter through the
+single writer queue, compact into exact-duration minute/hour/day buckets, and
+prune on the existing entitlement-aware retention worker. A fleet read accepts
+at most 200 target IDs and 120 output buckets and completes with three bounded
+queries for rollups, live tails, and revision boundaries, never one query per
+tile. Target/timeline, tier/retention, and revision/time indexes are part of
+the hot-path contract and are pinned by the metrics-store query-plan proof.
 That same hot-path ownership now also requires lazy-load-safe websocket
 consumption. `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 may read connection and alert state only through

@@ -1,7 +1,9 @@
 package monitoring
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,12 +26,14 @@ const availabilityProbeStaleError = "no recent report from probe agent"
 // ProbeAvailabilityResult is one availability observation reported by a remote
 // host agent that owns the target's execution.
 type ProbeAvailabilityResult struct {
-	TargetID      string
-	Outcome       availabilityprobe.Outcome
-	LatencyMillis int64
-	CheckedAt     time.Time
-	Error         string
-	Certificate   *tlsutil.CertificateObservation
+	ObservationID  string
+	TargetID       string
+	ConfigRevision int64
+	Outcome        availabilityprobe.Outcome
+	LatencyMillis  int64
+	CheckedAt      time.Time
+	Error          string
+	Certificate    *tlsutil.CertificateObservation
 }
 
 // availabilityProbeAssignmentTracker provides a grace reference for a newly
@@ -57,12 +61,14 @@ func probeAvailabilityResultsFromReport(reported []agentshost.AvailabilityProbeR
 			outcome = availabilityprobe.OutcomeIndeterminate
 		}
 		results = append(results, ProbeAvailabilityResult{
-			TargetID:      strings.TrimSpace(entry.TargetID),
-			Outcome:       outcome,
-			LatencyMillis: entry.LatencyMillis,
-			CheckedAt:     entry.CheckedAt,
-			Error:         strings.TrimSpace(entry.Error),
-			Certificate:   entry.Certificate.Clone(),
+			ObservationID:  strings.TrimSpace(entry.ObservationID),
+			TargetID:       strings.TrimSpace(entry.TargetID),
+			ConfigRevision: entry.ConfigRevision,
+			Outcome:        outcome,
+			LatencyMillis:  entry.LatencyMillis,
+			CheckedAt:      entry.CheckedAt,
+			Error:          strings.TrimSpace(entry.Error),
+			Certificate:    entry.Certificate.Clone(),
 		})
 	}
 	return results
@@ -128,6 +134,15 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 				Msg("Rejecting probe availability result from an agent that does not own the target")
 			continue
 		}
+		if result.ConfigRevision > 0 && result.ConfigRevision != target.ConfigRevision {
+			log.Debug().
+				Str("hostID", hostID).
+				Str("targetID", targetID).
+				Int64("reportedRevision", result.ConfigRevision).
+				Int64("currentRevision", target.ConfigRevision).
+				Msg("Rejecting probe availability result for an obsolete configuration revision")
+			continue
+		}
 
 		checkedAt := result.CheckedAt
 		if checkedAt.IsZero() {
@@ -138,7 +153,11 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 			latency = 0
 		}
 		outcome, probeErr := probeResultOutcome(result)
-		m.applyAvailabilityObservation(target, checkedAt.UTC(), latency, outcome, probeErr, result.Certificate, hostID, receivedAt)
+		observationID := strings.TrimSpace(result.ObservationID)
+		if observationID == "" {
+			observationID = legacyProbeAvailabilityObservationID(hostID, result)
+		}
+		m.applyAvailabilityObservation(target, observationID, checkedAt.UTC(), latency, outcome, probeErr, result.Certificate, hostID, receivedAt)
 		applied++
 	}
 
@@ -146,6 +165,14 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 		return
 	}
 	m.updateResourceStore(m.GetState())
+}
+
+func legacyProbeAvailabilityObservationID(hostID string, result ProbeAvailabilityResult) string {
+	material := fmt.Sprintf("%s\x00%s\x00%d\x00%s\x00%d\x00%s",
+		strings.TrimSpace(hostID), strings.TrimSpace(result.TargetID), result.CheckedAt.UTC().UnixNano(),
+		strings.TrimSpace(string(result.Outcome)), result.LatencyMillis, strings.TrimSpace(result.Error))
+	sum := sha256.Sum256([]byte(material))
+	return fmt.Sprintf("legacy-agent-%x", sum[:])
 }
 
 // probeResultOutcome normalizes a reported outcome and derives the failure
@@ -273,6 +300,7 @@ func (m *Monitor) availabilityProbeTargetsForAgent(hostID string) []map[string]i
 func availabilityProbeAgentTargetPayload(target config.AvailabilityTarget) map[string]interface{} {
 	payload := map[string]interface{}{
 		"id":                  target.ID,
+		"configRevision":      target.ConfigRevision,
 		"name":                target.DisplayName(),
 		"targetKind":          string(target.TargetKind),
 		"address":             target.Address,

@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	pkgmetrics "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
@@ -233,6 +234,7 @@ func TestGetHostAgentConfigPayloadCarriesProbeParameters(t *testing.T) {
 	}
 	want := map[string]interface{}{
 		"id":                  "udp-check",
+		"configRevision":      int64(1),
 		"name":                "UDP check",
 		"targetKind":          string(config.AvailabilityTargetDevice),
 		"address":             "sensor.local",
@@ -349,6 +351,56 @@ func TestApplyProbeAvailabilityResultsAccountsFailuresAndAttribution(t *testing.
 	}
 	if !status.LastSuccess.Equal(recovered) {
 		t.Fatalf("last success = %v, want %v", status.LastSuccess, recovered)
+	}
+}
+
+func TestAvailabilityHistoryUsesServerReceiptForRemoteResultsAndDeduplicatesRetries(t *testing.T) {
+	remoteTarget := probeAgentTarget("remote", "agent-1")
+	remoteTarget.ConfigRevision = 3
+	monitor := newProbeAgentTestMonitor(t, remoteTarget)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	store, err := pkgmetrics.NewStore(pkgmetrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	monitor.metricsStore = store
+
+	receivedAt := time.Now().UTC().Truncate(time.Minute).Add(-10 * time.Minute)
+	result := ProbeAvailabilityResult{
+		ObservationID: "agent-observation-1", TargetID: "remote", ConfigRevision: 3,
+		Outcome: AvailabilityProbeUnreachable, CheckedAt: receivedAt.Add(-24 * time.Hour),
+	}
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{result}, receivedAt)
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{result}, receivedAt.Add(time.Second))
+
+	rows, _, _, err := store.AvailabilityHistoryRowCounts("remote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("remote observation rows = %d, want one idempotent row", rows)
+	}
+	history, err := store.QueryAvailabilityHistory(
+		[]string{"remote"}, receivedAt.Add(-time.Minute), receivedAt.Add(6*time.Minute), 120,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := history["remote"].Summary.UnreachableSeconds; got != 300 {
+		t.Fatalf("remote unreachable duration = %v, want 300 seconds on the server receipt timeline", got)
+	}
+
+	stale := result
+	stale.ObservationID = "obsolete-revision"
+	stale.ConfigRevision = 2
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{stale}, receivedAt.Add(2*time.Second))
+	rows, _, _, err = store.AvailabilityHistoryRowCounts("remote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("obsolete revision created a history row; rows = %d", rows)
 	}
 }
 

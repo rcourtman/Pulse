@@ -8758,6 +8758,17 @@ Mock availability fixtures must still behave like saved targets: `/api/connectio
 reports them as availability rows, `/api/availability-targets` lists them with
 probe status, and saved-test calls return the synthetic probe result instead of
 attempting live network I/O against demo-only addresses.
+Availability history is an additive bounded read contract at
+`POST /api/availability-history`, protected by `monitoring:read`. Callers send
+one allowlisted range and at most 200 unique saved-target IDs; the server
+returns at most 120 presentation buckets per target plus categorical duration
+coverage, reachable-only latency, and server-authored configuration-revision
+boundaries. The store performs one batch read rather than a query per target,
+and per-target absence remains an explicit `not_found` result instead of
+fabricated unknown history. Responses never include target addresses, raw
+errors, agent identity, certificate detail, or customer identity. Mock mode
+preserves the same response shape so the browser exercises the real transport
+contract without making network probes.
 Unified-resource transport adds typed availability trust fields without
 changing the saved-target CRUD owner. `availability` remains the singular
 compatibility summary; `availabilityChecks` is the complete attached set; each

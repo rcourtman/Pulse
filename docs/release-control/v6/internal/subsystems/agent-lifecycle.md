@@ -6166,6 +6166,17 @@ or discarding observations that the primary never received. The scheduler and
 concurrent-enqueue coverage in `internal/hostagent/availability_test.go` pins
 the ordering and acknowledgement contract.
 
+Every assigned availability result also carries the server-issued target
+configuration revision and a stable observation ID. The agent allocates that
+ID once when the scheduled execution completes and preserves it across report
+buffering or retry, so an acknowledged report retry cannot create a second
+history observation. The server rejects results for an obsolete revision,
+uses receipt time as the coverage timeline, and retains the agent-authored
+check time only as evidence metadata. Legacy agents that omit the additive ID
+remain ingestible through a deterministic server fallback, but they do not
+gain authority to author revision boundaries, target identity, retention, or
+the service-assurance timeline.
+
 Observer configuration is explicit, versioned, and file-backed. It contains no
 raw token values and resolves each token from a separate private absolute-path
 file. Proxmox registration is also destination-scoped: the primary retains its

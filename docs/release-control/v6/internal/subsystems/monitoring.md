@@ -1443,6 +1443,21 @@ load from the config persistence boundary, schedule through
 the default low-overhead check, while TCP and HTTP are canonical fallbacks for
 devices or runtimes where ICMP is unavailable or the useful signal is a port or
 web interface.
+Completed scheduled availability probes also write source-owned categorical
+history through the metrics-store writer lifecycle without encoding outcomes
+as ordinary numeric metrics. The durable vocabulary is `reachable`,
+`unreachable`, and `indeterminate`; uncovered time is derived as `unknown`
+from the bounded validity window rather than backfilled from current status,
+alerts, or stale-state synthesis. Local checks use the server-authored check
+time. Accepted assigned-agent results use server receipt time for coverage,
+retain the agent time only as evidence metadata, and carry a stable observation
+ID so retries are idempotent. Execution-defining target edits increment a
+server-authored configuration revision and history exposes the revision
+boundary. Raw and minute/hour/day rollups share the existing entitlement and
+retention lifecycle, are deleted with the target, and retain no target address,
+agent identity, raw error, certificate detail, or customer identity. The
+monitoring-read batch path is bounded to 200 targets and 120 presentation
+buckets without a query per target.
 HTTPS checks also author one canonical certificate observation from the same
 probe execution. `internal/availabilityprobe` captures the presented leaf and
 `pkg/tlsutil/certificate.go` derives subject, issuer, SANs, SHA-256 fingerprint,

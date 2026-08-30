@@ -3230,6 +3230,7 @@ func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 		"/api/charts/storage-summary",
 		"/api/metrics-store/stats",
 		"/api/metrics-store/history",
+		"/api/availability-history",
 		"/api/guests/metadata",
 		"/api/guests/metadata/guest-1",
 		"/api/docker/metadata",

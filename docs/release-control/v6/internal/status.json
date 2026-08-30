@@ -9891,7 +9891,7 @@
       "id": "infrastructure-aware-service-assurance",
       "name": "Infrastructure-Aware Service Assurance",
       "summary": "Extend Pulse from infrastructure-state monitoring into service-delivery assurance by attaching active application verification to canonical resources, preserving coverage-aware history, using discovered services and remote agents for setup and observation, correlating failures through infrastructure relationships, and presenting the resulting evidence through fleet, incident, timeline, and Patrol workflows instead of a standalone monitor clone.",
-      "status": "proposed",
+      "status": "accepted",
       "recorded_at": "2026-08-30",
       "target_id": "v6-product-lane-expansion",
       "current_lane_ids": [

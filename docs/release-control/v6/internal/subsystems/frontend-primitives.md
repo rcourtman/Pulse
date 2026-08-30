@@ -6375,6 +6375,18 @@ frontend-primitives-owned Machines surface as a focused Availability checks tab
 rather than a new primary nav item. The page may show availability checks beside
 standalone Pulse Agent machines, but Settings remains the add/edit owner and
 the app shell must not add a separate top-level Availability destination.
+That Availability checks tab owns a URL-addressable `view=fleet` presentation
+alongside the existing table; table remains the default and `q` plus `status`
+filters are shared between both modes. Fleet tiles combine the canonical
+current-health projection with the bounded history batch: categorical state
+coverage is labelled in text as reachable, unreachable, indeterminate, or
+unknown, and latency is drawn only for reachable evidence so gaps cannot be
+misread as zero latency. A tile opens the existing `ResourceDetailDrawer`
+rather than a service-monitor-specific detail model. History failure must stay
+inside the fleet surface with explicit copy while current status and resource
+navigation remain usable. Desktop and phone layouts must keep every tile
+keyboard-operable, preserve the textual legend, and avoid horizontal clipping
+at fleet scale.
 The Machines page must not pretend its machine list is a generic overview:
 the default tab is `Machines`, the Machines table is only for Pulse Agent-backed
 resources with host telemetry, and the full availability-check row list belongs

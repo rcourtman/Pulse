@@ -145,6 +145,7 @@ func (h *AvailabilityHandlers) HandleAdd(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	target = config.NormalizeAvailabilityTarget(target)
+	target.ConfigRevision = 1
 	if err := target.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
@@ -209,12 +210,17 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	target, ok := decodeAvailabilityTargetRequest(w, r, targets[index])
+	previous := config.NormalizeAvailabilityTarget(targets[index])
+	target, ok := decodeAvailabilityTargetRequest(w, r, previous)
 	if !ok {
 		return
 	}
 	target.ID = targetID
 	target = config.NormalizeAvailabilityTarget(target)
+	target.ConfigRevision = previous.ConfigRevision
+	if config.AvailabilityExecutionConfigChanged(previous, target) {
+		target.ConfigRevision++
+	}
 	if err := target.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
@@ -266,6 +272,11 @@ func (h *AvailabilityHandlers) HandleDelete(w http.ResponseWriter, r *http.Reque
 	if err := persistence.SaveAvailabilityTargets(targets); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "availability_save_failed", "Failed to save availability targets", map[string]string{"error": err.Error()})
 		return
+	}
+	if monitor := h.monitorForRequest(r.Context()); monitor != nil {
+		if store := monitor.GetMetricsStore(); store != nil {
+			store.DeleteAvailabilityTargetHistory(targetID)
+		}
 	}
 	h.refreshMonitor(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "id": targetID})

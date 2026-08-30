@@ -21,6 +21,7 @@ export const STANDALONE_DEFAULT_TAB = 'machines';
 export const STANDALONE_QUERY_PARAMS = {
   query: 'q',
   status: 'status',
+  view: 'view',
 } as const;
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';

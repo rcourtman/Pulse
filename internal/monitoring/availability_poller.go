@@ -9,12 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/availabilityprobe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	pkgmetrics "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
+	"github.com/rs/zerolog/log"
 )
 
 type tlsCert = tlsutil.CertificateObservation
@@ -329,7 +332,7 @@ func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.Avai
 	result, err := ProbeAvailabilityTargetDetailedResult(ctx, target)
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
-	m.applyAvailabilityObservation(target, checkedAt, latency, result.Outcome, err, result.Certificate, "", time.Time{})
+	m.applyAvailabilityObservation(target, uuid.NewString(), checkedAt, latency, result.Outcome, err, result.Certificate, "", time.Time{})
 	m.updateResourceStore(m.GetState())
 }
 
@@ -338,6 +341,7 @@ func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.Avai
 // accounting, connection health, and task bookkeeping.
 func (m *Monitor) applyAvailabilityObservation(
 	target config.AvailabilityTarget,
+	observationID string,
 	checkedAt time.Time,
 	latency time.Duration,
 	outcome AvailabilityProbeOutcome,
@@ -347,6 +351,7 @@ func (m *Monitor) applyAvailabilityObservation(
 	probeReportReceivedAt time.Time,
 ) {
 	m.setAvailabilityStatusWithCertificate(target, checkedAt, latency, outcome, probeErr, certificate, probeAgentID, probeReportReceivedAt)
+	m.recordAvailabilityHistory(target, observationID, checkedAt, latency, outcome, probeErr, probeAgentID, probeReportReceivedAt)
 
 	if probeErr == nil {
 		if m.stalenessTracker != nil {
@@ -360,6 +365,53 @@ func (m *Monitor) applyAvailabilityObservation(
 		m.setProviderConnectionHealth(InstanceTypeAvailability, target.ID, false)
 	}
 	m.recordTaskResult(InstanceTypeAvailability, target.ID, nil)
+}
+
+func (m *Monitor) recordAvailabilityHistory(
+	target config.AvailabilityTarget,
+	observationID string,
+	checkedAt time.Time,
+	latency time.Duration,
+	outcome AvailabilityProbeOutcome,
+	probeErr error,
+	probeAgentID string,
+	probeReportReceivedAt time.Time,
+) {
+	if m == nil || m.metricsStore == nil {
+		return
+	}
+	ingestedAt := time.Now().UTC()
+	timelineAt := checkedAt.UTC()
+	source := pkgmetrics.AvailabilitySourceLocal
+	if strings.TrimSpace(probeAgentID) != "" {
+		source = pkgmetrics.AvailabilitySourceAssignedAgent
+		if !probeReportReceivedAt.IsZero() {
+			timelineAt = probeReportReceivedAt.UTC()
+			ingestedAt = timelineAt
+		}
+	}
+	var latencyMillis *int64
+	if probeErr == nil && outcome == AvailabilityProbeReachable {
+		value := latency.Milliseconds()
+		if value == 0 {
+			value = 1
+		}
+		latencyMillis = &value
+	}
+	if err := m.metricsStore.WriteAvailabilityObservationBounded(pkgmetrics.AvailabilityObservation{
+		ObservationID:   observationID,
+		TargetID:        target.ID,
+		ConfigRevision:  target.ConfigRevision,
+		Outcome:         pkgmetrics.AvailabilityOutcome(outcome),
+		ObservedAt:      checkedAt.UTC(),
+		TimelineAt:      timelineAt,
+		IngestedAt:      ingestedAt,
+		ValidFor:        availabilityProbeStaleWindow(target),
+		ExecutionSource: source,
+		LatencyMillis:   latencyMillis,
+	}); err != nil {
+		log.Warn().Err(err).Str("target_id", target.ID).Msg("Dropping invalid availability history observation")
+	}
 }
 
 func (m *Monitor) setAvailabilityStatus(

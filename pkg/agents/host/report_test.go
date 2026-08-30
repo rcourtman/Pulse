@@ -634,7 +634,8 @@ func TestReportAvailabilityResultsJSONRoundTrip(t *testing.T) {
 		Host:  HostInfo{Hostname: "probe-agent.local"},
 		AvailabilityResults: []AvailabilityProbeResult{
 			{
-				TargetID: "target-1", Outcome: "reachable", LatencyMillis: 12, CheckedAt: checkedAt,
+				ObservationID: "observation-1", TargetID: "target-1", ConfigRevision: 7,
+				Outcome: "reachable", LatencyMillis: 12, CheckedAt: checkedAt,
 				Certificate: &tlsutil.CertificateObservation{
 					Subject: "pulse.example.test", TrustStatus: tlsutil.CertificateTrustTrusted,
 					ObservedAt: checkedAt, DNSNames: []string{"pulse.example.test"},
@@ -664,7 +665,8 @@ func TestReportAvailabilityResultsJSONRoundTrip(t *testing.T) {
 		t.Fatalf("availability results = %+v, want 2", decoded.AvailabilityResults)
 	}
 	first := decoded.AvailabilityResults[0]
-	if first.TargetID != "target-1" || first.Outcome != "reachable" || first.LatencyMillis != 12 {
+	if first.ObservationID != "observation-1" || first.TargetID != "target-1" ||
+		first.ConfigRevision != 7 || first.Outcome != "reachable" || first.LatencyMillis != 12 {
 		t.Fatalf("first result = %+v", first)
 	}
 	if !first.CheckedAt.Equal(checkedAt) {

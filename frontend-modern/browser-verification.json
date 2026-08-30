@@ -1,23 +1,27 @@
 {
   "version": 1,
-  "base_sha": "7e92ac8118a7661c52469cb29a5a0b9ffb2e27d4",
-  "verified_at": "2026-08-30T13:30:20Z",
+  "base_sha": "a7f1a5e25ffd636c98ee51065c2fe0f0dc7086a6",
+  "verified_at": "2026-08-30T14:28:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+    "frontend-modern/src/api/availabilityHistory.ts",
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "dfd5e844f1261193811d05529a6cf796f20b0d403feffaa322bc16a0126ec247",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "c177b60a48e679e8bede6d14b20cbdbd8a13e743a0e8c058c0060e232091a977",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "516b1a43169d7f3191f3d101dbf9140fe36c1c0099db45ef76222dac6e0210c9",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "524832fce536f4d708246f9b2a7d2ea35e1fb059aa624bc05ce53a54366f6f67"
+    "frontend-modern/src/api/availabilityHistory.ts": "1fea7ef0612b872c387213e590b47fe42ecdb87ca2678b7b01b546273da65b0d",
+    "frontend-modern/src/api/availabilityTargets.ts": "549826b1af427820b9d29d53cc68d895ae19a3e1a9426485fc34903972c55109",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "eef59dc4eea1e7c4029cf3e89c29c7a7ed26484a67bdea213bfdc019ed3bb10e",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "e6a21fcd193c51b3e0d164ca549821c6d2bf34c92c45fe884b019b56f3c87127",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "20d3a5c2107c5510d579e2456bd1aba741137f05acff8acca6805dc8fd387563",
+    "frontend-modern/src/routing/resourceLinks.ts": "dee9a426de785e23390ba49c9067f55c8f923cecfce1247ff18f9b1004e0cc90"
   },
   "routes": [
-    "/proxmox/overview",
-    "/vmware/overview"
+    "/standalone/availability?view=fleet",
+    "/standalone/availability"
   ],
   "viewports": [
     {
@@ -30,15 +34,17 @@
     }
   ],
   "states": [
-    "Existing Proxmox Bars and History states retained the previously verified shared workload presentation after moving the identical accessors behind the canonical binding",
-    "vSphere workload composition supplied display, hover, range, and discovery state through the same atomic binding in the rendered platform contract",
-    "The generic WorkloadsSurface supplied the complete binding without a page-local partial metric prop list",
-    "The shared filter retained its desktop and mobile Details and History preference behavior"
+    "Fleet view rendered all seven mock availability targets with current status, method, source, last check, categorical state history, reachable-only latency history, coverage text, and revision boundaries",
+    "The textual Reachable, Unreachable, Indeterminate, and Unknown legend remained visible without relying on color alone",
+    "The resource detail drawer opened from an availability tile and preserved the existing canonical resource detail presentation",
+    "The solar search state reduced the fleet to one matching target and persisted q=solar in the URL",
+    "Table view restored all seven availability rows with the fleet parameter removed, and switching back restored view=fleet",
+    "The 390 by 844 layout kept the fleet controls usable and stacked availability tiles into a readable single column"
   ],
   "interactions": [
-    "rechecked the shared workload history interaction already exercised on Proxmox against the unchanged WorkloadsFilter and guest-row implementation",
-    "rendered the vSphere platform contract and verified its workload toolbar now receives the complete canonical binding",
-    "ran the shared WorkloadsFilter interaction suite for Bars, Trends, Details, History, range selection, and responsive controls",
-    "ran structural contracts that reject partial metric-control wiring in Proxmox, vSphere, and the generic WorkloadsSurface"
+    "opened an availability tile and dismissed the canonical resource detail drawer",
+    "entered and cleared the solar search filter while checking the URL-owned query state",
+    "switched from Fleet to Table and back through the shared View control while checking URL and row or tile counts",
+    "repeated the fleet inspection at desktop and narrow viewports and checked scrolling, clipping, history labels, and control placement"
   ]
 }

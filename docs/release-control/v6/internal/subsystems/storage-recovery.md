@@ -5622,6 +5622,14 @@ automated remediation through the shared action lifecycle, while recovery
 evidence remains available for operator review and for restoration to active
 monitoring.
 
+Availability history stored beside metrics is monitoring evidence, not backup
+inventory, a recovery point, restore evidence, or storage-action authority.
+Its raw and minute/hour/day tiers follow the metrics store's
+entitlement-aware retention lifecycle, and deleting a saved availability
+target removes its observations, rollups, and revision boundaries as one owned
+target lifecycle operation. Those rules must not delete unified-resource
+change history, provider snapshots, backups, or any recovery evidence.
+
 ### Configuration archive recovery is authorized before persistence
 
 Encrypted configuration export/import is a storage-recovery boundary only

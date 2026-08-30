@@ -252,6 +252,62 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 	}
 }
 
+func TestAvailabilityHistoryQueryPlansUseIndexes(t *testing.T) {
+	db := newPlanTestDB(t)
+
+	tests := []struct {
+		name      string
+		query     string
+		args      []any
+		wantIndex string
+	}{
+		{
+			name: "fleet rollup batch",
+			query: `SELECT target_id, bucket_start, reachable_millis, unreachable_millis,
+				indeterminate_millis, latency_count, latency_sum,
+				COALESCE(latency_min, 0), COALESCE(latency_max, 0)
+				FROM availability_history_buckets
+				WHERE target_id IN (?, ?, ?) AND tier = ? AND bucket_start >= ? AND bucket_start < ?
+				ORDER BY target_id, bucket_start`,
+			args:      []any{"target-1", "target-2", "target-3", "minute", int64(0), int64(9999999999)},
+			wantIndex: "sqlite_autoindex_availability_history_buckets_1",
+		},
+		{
+			name: "latest live tail batch",
+			query: `SELECT target_id, timeline_at_ns, valid_until_ns
+				FROM availability_observations
+				WHERE target_id IN (?, ?, ?)
+				ORDER BY target_id, timeline_at_ns DESC, id DESC`,
+			args:      []any{"target-1", "target-2", "target-3"},
+			wantIndex: "idx_availability_observations_target_timeline",
+		},
+		{
+			name: "revision boundary batch",
+			query: `SELECT target_id, revision, started_at_ns
+				FROM availability_revision_boundaries
+				WHERE target_id IN (?, ?, ?) AND started_at_ns >= ? AND started_at_ns < ?
+				ORDER BY target_id, started_at_ns`,
+			args:      []any{"target-1", "target-2", "target-3", int64(0), int64(9999999999)},
+			wantIndex: "idx_availability_boundaries_target_time",
+		},
+		{
+			name:      "raw retention",
+			query:     `DELETE FROM availability_observations WHERE timeline_at_ns < ?`,
+			args:      []any{int64(9999999999)},
+			wantIndex: "idx_availability_observations_retention",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plan := explainQueryPlan(t, db, tt.query, tt.args)
+			if !strings.Contains(plan, "SEARCH") || !strings.Contains(plan, tt.wantIndex) {
+				t.Fatalf("expected indexed availability-history search using %s\nPlan:\n%s", tt.wantIndex, plan)
+			}
+		})
+	}
+}
+
 // lineRefersToMetrics returns true if a plan line references the "metrics"
 // table (not metrics_meta). SQLite may emit "SEARCH metrics USING ...",
 // "SEARCH TABLE metrics ...", "SCAN metrics ...", or "SCAN TABLE metrics ...".
@@ -383,6 +439,52 @@ func newPlanTestDB(t *testing.T) *sql.DB {
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS availability_observations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			observation_id TEXT NOT NULL UNIQUE,
+			target_id TEXT NOT NULL,
+			config_revision INTEGER NOT NULL,
+			outcome TEXT NOT NULL,
+			observed_at_ns INTEGER NOT NULL,
+			timeline_at_ns INTEGER NOT NULL,
+			ingested_at_ns INTEGER NOT NULL,
+			valid_until_ns INTEGER NOT NULL,
+			execution_source TEXT NOT NULL,
+			latency_millis INTEGER
+		);
+		CREATE INDEX IF NOT EXISTS idx_availability_observations_target_timeline
+			ON availability_observations(target_id, timeline_at_ns, id);
+		CREATE INDEX IF NOT EXISTS idx_availability_observations_retention
+			ON availability_observations(timeline_at_ns);
+
+		CREATE TABLE IF NOT EXISTS availability_history_buckets (
+			target_id TEXT NOT NULL,
+			tier TEXT NOT NULL,
+			bucket_start INTEGER NOT NULL,
+			reachable_millis INTEGER NOT NULL DEFAULT 0,
+			unreachable_millis INTEGER NOT NULL DEFAULT 0,
+			indeterminate_millis INTEGER NOT NULL DEFAULT 0,
+			reachable_count INTEGER NOT NULL DEFAULT 0,
+			unreachable_count INTEGER NOT NULL DEFAULT 0,
+			indeterminate_count INTEGER NOT NULL DEFAULT 0,
+			latency_count INTEGER NOT NULL DEFAULT 0,
+			latency_sum INTEGER NOT NULL DEFAULT 0,
+			latency_min INTEGER,
+			latency_max INTEGER,
+			PRIMARY KEY(target_id, tier, bucket_start)
+		);
+		CREATE INDEX IF NOT EXISTS idx_availability_buckets_retention
+			ON availability_history_buckets(tier, bucket_start);
+
+		CREATE TABLE IF NOT EXISTS availability_revision_boundaries (
+			target_id TEXT NOT NULL,
+			revision INTEGER NOT NULL,
+			started_at_ns INTEGER NOT NULL,
+			PRIMARY KEY(target_id, revision)
+		);
+		CREATE INDEX IF NOT EXISTS idx_availability_boundaries_target_time
+			ON availability_revision_boundaries(target_id, started_at_ns);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("create schema: %v", err)
@@ -397,6 +499,28 @@ func newPlanTestDB(t *testing.T) *sql.DB {
 		)
 		if err != nil {
 			t.Fatalf("seed data: %v", err)
+		}
+
+		targetID := fmt.Sprintf("target-%d", i%10)
+		_, err = db.Exec(`INSERT INTO availability_observations
+			(observation_id, target_id, config_revision, outcome, observed_at_ns, timeline_at_ns,
+			 ingested_at_ns, valid_until_ns, execution_source, latency_millis)
+			VALUES (?, ?, 1, 'reachable', ?, ?, ?, ?, 'local', 12)`,
+			fmt.Sprintf("observation-%d", i), targetID, int64(1000000+i*5), int64(1000000+i*5),
+			int64(1000000+i*5), int64(1000060+i*5))
+		if err != nil {
+			t.Fatalf("seed availability observations: %v", err)
+		}
+		_, err = db.Exec(`INSERT OR IGNORE INTO availability_history_buckets
+			(target_id, tier, bucket_start, reachable_millis, latency_count, latency_sum, latency_min, latency_max)
+			VALUES (?, 'minute', ?, 60000, 1, 12, 12, 12)`, targetID, int64(1000000+i*60))
+		if err != nil {
+			t.Fatalf("seed availability buckets: %v", err)
+		}
+		_, err = db.Exec(`INSERT OR IGNORE INTO availability_revision_boundaries
+			(target_id, revision, started_at_ns) VALUES (?, 1, ?)`, targetID, int64(1000000+i*5))
+		if err != nil {
+			t.Fatalf("seed availability boundaries: %v", err)
 		}
 	}
 

@@ -138,8 +138,10 @@ type bufferedMetric struct {
 }
 
 type writeRequest struct {
-	metrics []bufferedMetric
-	done    chan struct{}
+	metrics             []bufferedMetric
+	availability        []AvailabilityObservation
+	availabilityDeletes []string
+	done                chan struct{}
 }
 
 type metricBatchKey struct {
@@ -369,6 +371,9 @@ func (s *Store) initSchema() error {
 	}
 
 	if err := s.ensureMetricsIdentityIndex(); err != nil {
+		return err
+	}
+	if err := s.initAvailabilityHistorySchema(); err != nil {
 		return err
 	}
 
@@ -892,6 +897,7 @@ func (s *Store) runStartupMaintenance() {
 	// cleanup trims stale rows and redundant-index pages before SQLite
 	// potentially rewrites the file.
 	s.runRetention()
+	s.runAvailabilityRetention()
 	s.migrateAutoVacuum()
 
 	log.Info().Dur("duration", time.Since(start)).Msg("Deferred metrics startup maintenance completed")
@@ -918,7 +924,7 @@ func (s *Store) flushLocked() {
 }
 
 func (s *Store) enqueueWrite(req writeRequest) {
-	if len(req.metrics) == 0 && req.done == nil {
+	if len(req.metrics) == 0 && len(req.availability) == 0 && len(req.availabilityDeletes) == 0 && req.done == nil {
 		return
 	}
 
@@ -928,7 +934,7 @@ func (s *Store) enqueueWrite(req writeRequest) {
 		log.Warn().
 			Str("component", "metrics_store").
 			Str("action", "drop_write_batch").
-			Int("batch_size", len(req.metrics)).
+			Int("batch_size", len(req.metrics)+len(req.availability)+len(req.availabilityDeletes)).
 			Int("write_queue_depth", len(s.writeCh)).
 			Int("write_queue_capacity", cap(s.writeCh)).
 			Msg("Metrics write channel full, dropping batch")
@@ -989,7 +995,7 @@ func (s *Store) boundedEnqueueAndWait(req writeRequest) {
 		log.Warn().
 			Str("component", "metrics_store").
 			Str("action", "drop_sync_write_batch").
-			Int("batch_size", len(req.metrics)).
+			Int("batch_size", len(req.metrics)+len(req.availability)+len(req.availabilityDeletes)).
 			Int("write_queue_depth", len(s.writeCh)).
 			Int("write_queue_capacity", cap(s.writeCh)).
 			Msg("Metrics write queue saturated, dropping bounded batch to keep monitoring live")
@@ -1000,7 +1006,7 @@ func (s *Store) boundedEnqueueAndWait(req writeRequest) {
 	case <-req.done:
 	case <-s.stopCh:
 	case <-timer.C:
-		s.warnSyncWriteBacklog(len(req.metrics))
+		s.warnSyncWriteBacklog(len(req.metrics) + len(req.availability) + len(req.availabilityDeletes))
 	}
 }
 
@@ -1049,6 +1055,14 @@ func (s *Store) processWriteRequests(requests []writeRequest) {
 
 	if len(combined) > 0 {
 		s.writeBatch(combined)
+	}
+	for _, req := range requests {
+		if len(req.availability) > 0 {
+			s.writeAvailabilityBatch(req.availability)
+		}
+		if len(req.availabilityDeletes) > 0 {
+			s.deleteAvailabilityTargets(req.availabilityDeletes)
+		}
 	}
 	for _, done := range doneChans {
 		close(done)
@@ -1171,7 +1185,7 @@ func coalesceMetricBatch(metrics []bufferedMetric) []bufferedMetric {
 // can commit pending metrics in a single SQLite transaction while preserving
 // Flush completion barriers.
 func (s *Store) coalesceQueuedRequests(initial writeRequest) []writeRequest {
-	if len(initial.metrics) == 0 && initial.done == nil {
+	if len(initial.metrics) == 0 && len(initial.availability) == 0 && len(initial.availabilityDeletes) == 0 && initial.done == nil {
 		return nil
 	}
 
@@ -1182,7 +1196,7 @@ func (s *Store) coalesceQueuedRequests(initial writeRequest) []writeRequest {
 			if !ok {
 				return combined
 			}
-			if len(next.metrics) == 0 && next.done == nil {
+			if len(next.metrics) == 0 && len(next.availability) == 0 && len(next.availabilityDeletes) == 0 && next.done == nil {
 				continue
 			}
 			combined = append(combined, next)
@@ -1843,6 +1857,7 @@ func (s *Store) maintenanceWorker() {
 
 		case <-retentionTicker.C:
 			s.runRetention()
+			s.runAvailabilityRetention()
 		}
 	}
 }

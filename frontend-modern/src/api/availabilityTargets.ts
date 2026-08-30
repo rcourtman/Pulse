@@ -32,6 +32,7 @@ export interface AvailabilityProbeStatus {
 
 export interface AvailabilityTarget {
   id: string;
+  configRevision?: number;
   name: string;
   targetKind?: AvailabilityTargetKind;
   address: string;

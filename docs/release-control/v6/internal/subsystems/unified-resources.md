@@ -4644,6 +4644,15 @@ extend those owners rather than
 recreating
 `frontend-modern/src/features/infrastructure/`, a `/infrastructure` route, or
 a separate top-level availability route.
+The Availability checks table and fleet view are two presentations of the same
+source-owned `network-endpoint` resources. `view=fleet`, `q`, and `status` are
+URL presentation state only: they must not mint another resource kind, clone
+saved targets, or infer relationships from history buckets. Fleet tiles open
+the shared resource drawer by canonical resource ID, while
+`/api/availability-history` keys evidence by the saved availability target ID
+already carried by that resource. History absence or failure cannot overwrite
+the unified resource's current status, correlation, source ownership, or
+navigation identity.
 Shared unified-resource consumers now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant resource fetch state, so the canonical resource hooks do not

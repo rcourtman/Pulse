@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/availabilityprobe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -242,11 +243,13 @@ func (m *availabilityProbeModule) check(ctx context.Context, target config.Avail
 	}
 
 	result := agentshost.AvailabilityProbeResult{
-		TargetID:      target.ID,
-		Outcome:       string(probeResult.Outcome),
-		LatencyMillis: latency.Milliseconds(),
-		CheckedAt:     m.now().UTC(),
-		Certificate:   probeResult.Certificate.Clone(),
+		ObservationID:  uuid.NewString(),
+		TargetID:       target.ID,
+		ConfigRevision: target.ConfigRevision,
+		Outcome:        string(probeResult.Outcome),
+		LatencyMillis:  latency.Milliseconds(),
+		CheckedAt:      m.now().UTC(),
+		Certificate:    probeResult.Certificate.Clone(),
 	}
 	if err != nil {
 		message := strings.TrimSpace(err.Error())

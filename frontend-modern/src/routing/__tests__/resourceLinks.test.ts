@@ -187,7 +187,7 @@ describe('resource link routing contract', () => {
   it('builds canonical Machines, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
     expect(STANDALONE_PATH).toBe('/standalone');
     expect(STANDALONE_DEFAULT_TAB).toBe('machines');
-    expect(STANDALONE_QUERY_PARAMS).toEqual({ query: 'q', status: 'status' });
+    expect(STANDALONE_QUERY_PARAMS).toEqual({ query: 'q', status: 'status', view: 'view' });
     expect(buildStandalonePath()).toBe('/standalone/machines');
     expect(buildStandalonePath('')).toBe('/standalone');
 

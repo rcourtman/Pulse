@@ -1,7 +1,7 @@
 # Infrastructure-Aware Service Assurance Plan
 
 Last updated: 2026-08-30
-Status: PROPOSED
+Status: ACCEPTED — SLICE A IMPLEMENTED
 Governance surfaces:
 
 - `status.json.coverage_gaps.infrastructure-aware-service-assurance`
@@ -223,6 +223,14 @@ Exit conditions:
 - the fleet surface remains usable at 50 targets on laptop and phone widths;
 - the UI never presents missing observations as healthy time or labels the
   result as an SLA.
+
+Implementation record (2026-08-30): Slice A is delivered through the
+monitoring-owned categorical history store and rollups, server-authored
+configuration revisions and remote receipt timeline, the bounded
+`/api/availability-history` batch contract, and the URL-owned Availability
+fleet presentation. Its release proofs live in the owner contract. Slices B
+through H remain ordered future work; acceptance of this product lane does not
+imply that deferred breadth is already delivered.
 
 ### Slice B: Application Response Contracts
 

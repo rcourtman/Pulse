@@ -1,6 +1,6 @@
 # Availability History and Fleet View Contract
 
-Status: Build-ready
+Status: Implemented (Slice A)
 Date: 2026-08-30
 Scope: `pulse` only
 Demand owner: `pulse-pro/FEATURE_REQUESTS.md`, "Fleet-scale machine
@@ -251,3 +251,25 @@ The fleet slice additionally requires a rendered-browser contract at 50
 targets, keyboard access to every tile, non-color state labels, and proof that
 an API failure renders "history unavailable" without changing current target
 health.
+
+## Implementation record
+
+Slice A was implemented on 2026-08-30 through the source-owned
+`availability_observations`, `availability_history_buckets`, and
+`availability_revision_boundaries` tables in the shared metrics-store
+lifecycle; the monitoring-owned local and assigned-agent ingest paths; the
+bounded `POST /api/availability-history` read contract; and the URL-owned
+table/fleet presentation under **Machines -> Availability**.
+
+The executable proof surface is:
+
+- `pkg/metrics/availability_history_test.go` for categorical duration,
+  coverage, privacy, idempotency, restart, revision, retention, deletion, and
+  200-target bounds;
+- `internal/monitoring/availability_probe_agent_test.go` for assigned-agent
+  receipt-time authority, duplicate retry, and stale-revision rejection;
+- `internal/api/availability_history_handlers_test.go` and the API route/scope
+  contracts for bounded reads and authorization;
+- `frontend-modern/src/features/standalone/__tests__/AvailabilityFleetView.test.tsx`
+  for a rendered 50-target fleet, keyboard-operable detail entry, non-color
+  labels, and the history-failure boundary.

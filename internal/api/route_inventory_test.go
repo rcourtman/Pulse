@@ -408,6 +408,7 @@ var allRouteAllowlist = []string{
 	"/api/charts/workloads-summary",
 	"/api/metrics-store/stats",
 	"/api/metrics-store/history",
+	"/api/availability-history",
 	"/api/diagnostics",
 	"/api/diagnostics/docker/prepare-token",
 	"/api/config",
