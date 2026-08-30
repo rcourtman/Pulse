@@ -145,8 +145,15 @@ and
 `internal/records/secure-agent-runtime-committed-main-attestation-v4-2026-08-30.json`.
 This remains artifact-bound, secret-free, self-attested systemd fixture
 evidence rather than an independently authenticated assessment or proof of the
-production Router/TLS/durable-store credential lifecycle. The repository still
-needs a fresh exact committed release-candidate run,
+production Router/TLS/durable-store credential lifecycle. The focused
+`TestActionRunnerRotationProductionRouterTLSPersistenceRestart` regression now
+exercises the real Router over HTTPS and WSS with encrypted token persistence:
+failed rotation persistence leaves the active secret and socket intact;
+replacement admission closes the exact predecessor socket; successful
+activation durably replaces its secret; restart rejects the predecessor; and
+self-revoke survives a second restart. That code-level transport proof is not
+part of the systemd receipt or an exact release-candidate exercise. The
+repository still needs a fresh exact committed release-candidate run,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation

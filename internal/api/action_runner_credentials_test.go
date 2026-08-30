@@ -499,6 +499,31 @@ func TestActionRunnerRotationProductionRouterTLSPersistenceRestart(t *testing.T)
 			t.Fatalf("activation status = %d, body=%s", response.StatusCode, payload)
 		}
 	}
+	selfRevoke := func(server *httptest.Server, credential actionRunnerCredentialResponse) {
+		t.Helper()
+		body, _ := json.Marshal(actionRunnerCredentialSelfRevokeRequest{AgentID: credential.AgentID, Hostname: credential.Hostname})
+		req, _ := http.NewRequest(http.MethodDelete, server.URL+"/api/agents/action-runner/credential", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+credential.Token)
+		req.Header.Set("Content-Type", "application/json")
+		response, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			payload, _ := io.ReadAll(response.Body)
+			t.Fatalf("self-revoke status = %d, body=%s", response.StatusCode, payload)
+		}
+	}
+	requireSocketClosed := func(conn *websocket.Conn, label string) {
+		t.Helper()
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("set %s socket deadline: %v", label, err)
+		}
+		if _, _, err := conn.ReadMessage(); err == nil {
+			t.Fatalf("%s socket remained readable after exact credential invalidation", label)
+		}
+	}
 
 	cfg := &config.Config{DataPath: dataPath, ConfigPath: dataPath, AuthUser: "admin", AuthPass: hashedPassword, AllowedOrigins: "*", EnvOverrides: map[string]bool{}}
 	router, monitor, server := newRuntime(cfg)
@@ -517,6 +542,44 @@ func TestActionRunnerRotationProductionRouterTLSPersistenceRestart(t *testing.T)
 		t.Fatal("first credential did not become active")
 	}
 
+	router.persistence.SetFileSystem(actionRunnerFailingPersistenceFS{})
+	failureBody, _ := json.Marshal(actionRunnerCredentialRequest{AgentID: hostID, Hostname: "host-1.local"})
+	failureRequest, _ := http.NewRequest(http.MethodPost, server.URL+"/api/agents/action-runner/credential", bytes.NewReader(failureBody))
+	failureRequest.SetBasicAuth("admin", "production-router-test-password")
+	failureRequest.Header.Set("Content-Type", "application/json")
+	failureResponse, err := server.Client().Do(failureRequest)
+	if err != nil {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatal(err)
+	}
+	failurePayload, readErr := io.ReadAll(failureResponse.Body)
+	failureResponse.Body.Close()
+	if readErr != nil {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatal(readErr)
+	}
+	if failureResponse.StatusCode != http.StatusInternalServerError || bytes.Contains(failurePayload, []byte(`"token"`)) {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatalf("failed rotation response = status %d body %q", failureResponse.StatusCode, failurePayload)
+	}
+	persistedAfterFailure, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
+	if err != nil {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatal(err)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != first.TokenID ||
+		len(persistedAfterFailure) != 1 || persistedAfterFailure[0].ID != first.TokenID ||
+		!router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatalf("failed HTTPS rotation changed durable credential or live session: %#v", persistedAfterFailure)
+	}
+	router.persistence = config.NewConfigPersistence(dataPath)
+
 	second := issue(server, hostID)
 	if _, ok := cfg.ValidateAPIToken(first.Token); !ok {
 		firstConn.Close()
@@ -530,6 +593,7 @@ func TestActionRunnerRotationProductionRouterTLSPersistenceRestart(t *testing.T)
 		shutdown(router, monitor, server)
 		t.Fatalf("prepared second registration = %#v", registered)
 	}
+	requireSocketClosed(firstConn, "superseded runner")
 	activate(server, second)
 	if _, ok := cfg.ValidateAPIToken(first.Token); ok {
 		secondConn.Close()
@@ -537,28 +601,55 @@ func TestActionRunnerRotationProductionRouterTLSPersistenceRestart(t *testing.T)
 		shutdown(router, monitor, server)
 		t.Fatal("activation retained first secret")
 	}
-	secondConn.Close()
-	firstConn.Close()
-	shutdown(router, monitor, server)
-
 	persisted, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
 	if err != nil {
+		secondConn.Close()
+		firstConn.Close()
+		shutdown(router, monitor, server)
 		t.Fatal(err)
 	}
 	if len(persisted) != 1 || persisted[0].ID != second.TokenID || persisted[0].ExpiresAt != nil {
-		t.Fatalf("persisted activated inventory = %#v", persisted)
+		secondConn.Close()
+		firstConn.Close()
+		shutdown(router, monitor, server)
+		t.Fatalf("durably committed rotation inventory = %#v", persisted)
 	}
+	secondConn.Close()
+	shutdown(router, monitor, server)
+
 	restartedConfig := &config.Config{DataPath: dataPath, ConfigPath: dataPath, AuthUser: "admin", AuthPass: hashedPassword, AllowedOrigins: "*", EnvOverrides: map[string]bool{}, APITokens: persisted}
 	restartedRouter, restartedMonitor, restartedServer := newRuntime(restartedConfig)
-	defer shutdown(restartedRouter, restartedMonitor, restartedServer)
 	oldConn, oldRegistration := dial(restartedServer, first)
 	oldConn.Close()
 	if oldRegistration.Success {
 		t.Fatal("durably revoked predecessor registered after server restart")
 	}
 	newConn, newRegistration := dial(restartedServer, second)
-	defer newConn.Close()
 	if !newRegistration.Success || !restartedRouter.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
+		newConn.Close()
+		shutdown(restartedRouter, restartedMonitor, restartedServer)
 		t.Fatalf("durably activated replacement after restart = %#v", newRegistration)
+	}
+
+	selfRevoke(restartedServer, second)
+	requireSocketClosed(newConn, "self-revoked runner")
+	persisted, err = config.NewConfigPersistence(dataPath).LoadAPITokens()
+	if err != nil {
+		shutdown(restartedRouter, restartedMonitor, restartedServer)
+		t.Fatal(err)
+	}
+	if len(persisted) != 0 {
+		shutdown(restartedRouter, restartedMonitor, restartedServer)
+		t.Fatalf("self-revoked credential remained durable: %#v", persisted)
+	}
+	shutdown(restartedRouter, restartedMonitor, restartedServer)
+
+	finalConfig := &config.Config{DataPath: dataPath, ConfigPath: dataPath, AuthUser: "admin", AuthPass: hashedPassword, AllowedOrigins: "*", EnvOverrides: map[string]bool{}, APITokens: persisted}
+	finalRouter, finalMonitor, finalServer := newRuntime(finalConfig)
+	defer shutdown(finalRouter, finalMonitor, finalServer)
+	revokedConn, revokedRegistration := dial(finalServer, second)
+	revokedConn.Close()
+	if revokedRegistration.Success {
+		t.Fatal("durably self-revoked replacement registered after second server restart")
 	}
 }

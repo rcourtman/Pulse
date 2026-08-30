@@ -163,10 +163,18 @@ retroactively upgrade schema v3.
 Focused regressions cover current code-level semantics. The schema-v4 guarded
 systemd evidence covers only its exact qualified commit and explicitly
 exercised fixture paths. It does not prove helper-backed update activation,
-watchdog or interrupted-recovery behavior, nor the production Router over TLS
-with durable credential persistence. It is not a substitute for exact
+watchdog or interrupted-recovery behavior, and its credential fixture is not
+the production Router. Separately,
+`TestActionRunnerRotationProductionRouterTLSPersistenceRestart` now proves the
+real Router's HTTPS/WSS credential lifecycle with encrypted durable
+persistence: failed rotation persistence preserves the active credential and
+session, replacement admission closes the exact predecessor socket, activation
+durably revokes the old secret, restart rejects it, and self-revoke remains
+effective after a second restart. That focused code-level transport proof is
+not embedded in this receipt and is not a substitute for exact
 release-candidate reproduction, representative provider/appliance
-qualification, or external review. The canonical support and residual matrix is published in
+qualification, or external review. The canonical support and residual matrix
+is published in
 `docs/AGENT_SECURITY.md`; unqualified rows remain explicit blockers rather than
 being inferred from the generic Linux result.
 
