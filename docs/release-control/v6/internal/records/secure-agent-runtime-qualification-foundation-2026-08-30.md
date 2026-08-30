@@ -4,7 +4,7 @@
 
 This slice closes implementation defects found while preparing a real Linux
 systemd qualification of the optional collector/helper/action-runner split. It
-also records a managed-development real-systemd qualification of the
+also records an exact committed-main real-systemd qualification of the
 collector/helper migration boundary and the separately credentialed action
 runner lifecycle. It does not flip the installer default and is not exact
 committed release-candidate or representative live-provider proof.
@@ -37,13 +37,18 @@ committed release-candidate or representative live-provider proof.
   separate authoritative registration proof. Installed collector binaries are
   pinned to mode `0755` rather than inheriting `mktemp` permissions.
 
-## Managed-development systemd proof
+## Exact committed-main systemd proof
 
 The disposable arm64 Colima profile `pulse-agent-qual` ran Ubuntu 24.04.4,
-kernel 6.8.0-117, and systemd 255. The exact working-tree installer and lab
-source are bound by the hashes in
-`secure-agent-runtime-systemd-receipt-2026-08-30.json`; the receipt itself has
-SHA-256 `7bf8695c2f8dd185be7552bc9192b59a054f529f8f227773f8cb9b52c495a16b`.
+kernel 6.8.0-117, and systemd 255. A clean detached worktree at commit
+`cb843e37e8a92c56d88a8a2922c23ccd2e4fd21b` built every exercised artifact and
+the lab binary. The source hashes in
+`secure-agent-runtime-systemd-receipt-2026-08-30.json` match that commit; the
+receipt has SHA-256
+`adeeec6bf02a73c27483da31d9e058a8686900324e32960399985e847487a271` and the
+separate `secure-agent-runtime-committed-main-attestation-2026-08-30.json`
+binds the receipt, commit, clean checkout, and fresh disposable VM without
+altering the generated receipt.
 The guarded lab passed all of these destructive scenarios from a clean VM:
 
 - legacy root/command-capable install with rootful Docker enabled;
@@ -69,13 +74,14 @@ The guarded lab passed all of these destructive scenarios from a clean VM:
 
 The receipt is intentionally secret-free and contains source/artifact hashes,
 host facts, resulting privilege posture, report timestamps, and the twelve
-scenario outcomes. This is managed-development proof because it exercised the
-working tree before its eventual commit identity existed.
+scenario outcomes. This is exact committed-main proof. It is still not exact
+release-candidate proof because no release candidate was designated for this
+run.
 
 ## Proof classification and residuals
 
 The focused protocol, update, runner, API, and installer regressions plus the
-managed systemd receipt are proof for these semantics. They are not a
+committed-main systemd receipt are proof for these semantics. They are not a
 substitute for exact committed release-candidate evidence, representative
 provider/appliance qualification, or external review.
 

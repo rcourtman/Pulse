@@ -1,15 +1,15 @@
 {
   "schema_version": 2,
-  "completed_at": "2026-08-30T07:49:40.116396211Z",
+  "completed_at": "2026-08-30T08:25:55.305586949Z",
   "source_hashes": {
     "scripts/install.sh": "0b557c9394f3f0741cbf4287e5ee16a88fe03e189678bddf754606458c4e276e",
     "scripts/installtests/secure_runtime_systemd_lab_test.go": "46082cf9247cd626f9b746ec9a3acfcc4f58ca3c1ced762498376d4bfccaf3f1"
   },
   "artifact_hashes": {
-    "collector_v1": "76844200cec5d2ee4c015d2858d0afb37bce078fdf5cc6e0015997ae97c95400",
-    "collector_v2": "b493b9d7c498b41cd2615d3900ed53f9bbdaeeeebd1da93f7d2657e7bb4d38a2",
-    "helper": "a0932c8ce3bb5b7e94428afb061999750e8e8a4cece7d48df6a35b125eec2f59",
-    "runner": "7429b0b28cc711b59a8f9a6b444f21254ec7a201f145f446dda5dc13d93bbf8b"
+    "collector_v1": "3f3e4bbff51143de399c0da4ee9a27f2e32294187da88f566018ae45e46edc07",
+    "collector_v2": "7bdcfa0a66402700fa9653d3d74ecebf874ea495d74b80cca2b6d0fe7af19e09",
+    "helper": "35afded11d0f2e69a6ab309f839a132fa4cd0be905adda798939de310261b1cd",
+    "runner": "51faf0e967bb8117fd6e05329caca6df56f64e38bec86f5c59f7fb2b35d2eecd"
   },
   "os_release": "PRETTY_NAME=\"Ubuntu 24.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.4 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo",
   "kernel": "Linux 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Thu May  7 17:26:37 UTC 2026 aarch64 GNU/Linux",
@@ -27,9 +27,9 @@
   "credential_rotated": true,
   "self_revoke_observed": true,
   "collector_continuity": true,
-  "report_count": 48,
-  "first_report_at": "2026-08-30T07:47:53.132981202Z",
-  "last_report_at": "2026-08-30T07:49:39.989110328Z",
+  "report_count": 49,
+  "first_report_at": "2026-08-30T08:24:04.556483257Z",
+  "last_report_at": "2026-08-30T08:25:54.775477196Z",
   "scenarios": [
     {
       "name": "legacy_root_command_capable_install",

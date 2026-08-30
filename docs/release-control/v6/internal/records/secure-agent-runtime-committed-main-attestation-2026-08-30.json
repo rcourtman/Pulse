@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "proof_classification": "exact-committed-main",
+  "qualified_commit": "cb843e37e8a92c56d88a8a2922c23ccd2e4fd21b",
+  "qualified_ref_at_run": "main",
+  "build_checkout": "detached-worktree",
+  "build_checkout_clean_except_ignored_artifacts": true,
+  "fresh_disposable_vm": true,
+  "receipt_path": "docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json",
+  "receipt_sha256": "adeeec6bf02a73c27483da31d9e058a8686900324e32960399985e847487a271",
+  "source_hashes_match_commit": true,
+  "source_hashes": {
+    "scripts/install.sh": "0b557c9394f3f0741cbf4287e5ee16a88fe03e189678bddf754606458c4e276e",
+    "scripts/installtests/secure_runtime_systemd_lab_test.go": "46082cf9247cd626f9b746ec9a3acfcc4f58ca3c1ced762498376d4bfccaf3f1"
+  },
+  "host": {
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "6.8.0-117-generic",
+    "systemd": "255 (255.4-1ubuntu8.15)",
+    "architecture": "arm64"
+  },
+  "scenario_count": 12,
+  "all_scenarios_passed": true,
+  "test_elapsed_seconds": 113.43,
+  "default_changed": false,
+  "residual_proof": [
+    "exact-release-candidate",
+    "representative-provider-and-appliance",
+    "external-security-review"
+  ]
+}

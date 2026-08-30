@@ -93,13 +93,14 @@ without changing the product default:
 
 This is a qualification foundation, not the Slice E ratchet. The generated
 setup default remains the legacy/root profile. A clean disposable arm64 Ubuntu
-systemd exercise now proves exact-working-tree install, migration, explicit and
-automatic rollback, ordinary update isolation, typed helper health, fresh
+systemd exercise now proves exact-committed-main install, migration, explicit
+and automatic rollback, ordinary update isolation, typed helper health, fresh
 registration, continued reporting, separate runner enrollment, durable typed
 receipt replay, exact credential rotation invalidation, and runner self-revoke;
-its secret-free receipt is recorded in
-`internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json`. The
-repository still needs exact committed release-candidate reproduction,
+its secret-free receipt and commit binding are recorded in
+`internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json` and its
+committed-main attestation. The repository still needs exact committed
+release-candidate reproduction,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation
