@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -25,6 +26,7 @@ type runtimeConfig struct {
 	StateDir          string
 	HealthFile        string
 	AgentIDFile       string
+	Hostname          string
 	ServerFingerprint string
 	CAFile            string
 	Insecure          bool
@@ -37,12 +39,20 @@ func loadConfig() (runtimeConfig, error) {
 		StateDir:          strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_STATE_DIR")),
 		HealthFile:        strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_HEALTH_FILE")),
 		AgentIDFile:       strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_AGENT_ID_FILE")),
+		Hostname:          strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_HOSTNAME")),
 		ServerFingerprint: strings.TrimSpace(os.Getenv("PULSE_SERVER_FINGERPRINT")),
 		CAFile:            strings.TrimSpace(os.Getenv("SSL_CERT_FILE")),
 		Insecure:          strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_INSECURE")), "true"),
 	}
 	if config.PulseURL == "" || config.TokenFile == "" || config.StateDir == "" || config.HealthFile == "" || config.AgentIDFile == "" {
 		return runtimeConfig{}, errors.New("PULSE_URL and the action-runner token, state, health, and agent identity file settings are required")
+	}
+	if config.Hostname != "" {
+		hostname, err := normalizeRunnerHostname(config.Hostname)
+		if err != nil {
+			return runtimeConfig{}, err
+		}
+		config.Hostname = hostname
 	}
 	parsed, err := url.Parse(config.PulseURL)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && !(config.Insecure && parsed.Scheme == "http")) {
@@ -83,9 +93,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	hostname, err := os.Hostname()
-	if err != nil || strings.TrimSpace(hostname) == "" {
-		return errors.New("determine action-runner hostname")
+	hostname := config.Hostname
+	if hostname == "" {
+		hostname, err = os.Hostname()
+		hostname = strings.TrimSpace(hostname)
+		if err != nil || hostname == "" {
+			return errors.New("determine action-runner hostname")
+		}
 	}
 	logger := zerolog.New(os.Stderr).With().Timestamp().Str("component", "action-runner").Logger()
 	transportConfig := actionrunner.TransportConfig{
@@ -110,6 +124,32 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+func normalizeRunnerHostname(value string) (string, error) {
+	hostname := strings.ToLower(strings.TrimSpace(value))
+	hostname = strings.TrimRight(hostname, ".")
+	if hostname == "" || len(hostname) > 253 {
+		return "", errors.New("PULSE_AGENT_RUNNER_HOSTNAME must be a valid hostname or IP address")
+	}
+	if net.ParseIP(hostname) != nil {
+		return hostname, nil
+	}
+	for _, label := range strings.Split(hostname, ".") {
+		if len(label) == 0 || len(label) > 63 || !runnerHostnameLabelByte(label[0]) || !runnerHostnameLabelByte(label[len(label)-1]) {
+			return "", errors.New("PULSE_AGENT_RUNNER_HOSTNAME must be a valid hostname or IP address")
+		}
+		for index := 1; index < len(label)-1; index++ {
+			if !runnerHostnameLabelByte(label[index]) && label[index] != '-' {
+				return "", errors.New("PULSE_AGENT_RUNNER_HOSTNAME must be a valid hostname or IP address")
+			}
+		}
+	}
+	return hostname, nil
+}
+
+func runnerHostnameLabelByte(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9'
 }
 
 func readPrivateValue(path, label string) (string, error) {

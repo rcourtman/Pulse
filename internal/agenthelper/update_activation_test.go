@@ -32,6 +32,7 @@ func testUpdateActivator(t *testing.T, verifier func([]byte, string) error) (Upd
 		ValidateOwner:           func(*os.File) error { return nil },
 		ValidateQuarantineOwner: func(*os.File) error { return nil },
 		Now:                     func() time.Time { return time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC) },
+		ScheduleRollback:        func(time.Duration, func()) func() { return func() {} },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +87,9 @@ func TestUpdateActivationAndIdentityBoundRollbackAreDurable(t *testing.T) {
 	if activated.ActiveSHA256 != newDigest || activated.RollbackSHA256 != oldDigest || activated.ActivationID == "" {
 		t.Fatalf("activation result = %#v", activated)
 	}
+	if activated.Action != "pending" || activated.RollbackDeadline.IsZero() {
+		t.Fatalf("activation is not durably pending: %#v", activated)
+	}
 	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("new-signed-binary")) {
 		t.Fatalf("installed binary = %q", installed)
 	}
@@ -112,6 +116,104 @@ func TestUpdateActivationAndIdentityBoundRollbackAreDurable(t *testing.T) {
 		ActivationID: rolledBack.ActivationID, CurrentSHA256: rolledBack.ActiveSHA256, RollbackSHA256: rolledBack.RollbackSHA256,
 	}); err == nil {
 		t.Fatal("completed rollback replay reactivated the rejected binary")
+	}
+}
+
+func TestUpdateCommitClosesRollbackWindowAndCleansStaging(t *testing.T) {
+	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	digest := stageUpdate(t, quarantine, "release-commit", testELF("committed"))
+	promoteUpdate(t, provider, "release-commit", digest)
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-commit", SHA256: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed, err := provider.Commit(context.Background(), UpdateCommitRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if committed.Action != "committed" || committed.RollbackDeadline != (time.Time{}) {
+		t.Fatalf("commit result = %#v", committed)
+	}
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("committed")) {
+		t.Fatalf("committed binary = %q", installed)
+	}
+	staged := filepath.Join(filepath.Dir(quarantine), "staging", "release-commit")
+	if _, err := os.Stat(staged); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("committed staging still exists: %v", err)
+	}
+	if retried, err := provider.Commit(context.Background(), UpdateCommitRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256,
+	}); err != nil || retried.Action != "committed" {
+		t.Fatalf("idempotent commit = %#v, %v", retried, err)
+	}
+	if _, err := provider.Rollback(context.Background(), UpdateRollbackRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256, RollbackSHA256: activation.RollbackSHA256,
+	}); err == nil {
+		t.Fatal("committed update remained rollback-eligible")
+	}
+}
+
+func TestUpdateActivatorRestartRollsBackUncommittedActivation(t *testing.T) {
+	provider, quarantine, target, state := testUpdateActivator(t, func([]byte, string) error { return nil })
+	digest := stageUpdate(t, quarantine, "release-restart", testELF("uncommitted"))
+	promoteUpdate(t, provider, "release-restart", digest)
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-restart", SHA256: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Dir(quarantine)
+	recovered, err := NewUpdateActivator(UpdateActivatorConfig{
+		QuarantineDir: quarantine,
+		StagingDir:    filepath.Join(root, "staging"),
+		TargetPath:    target,
+		StatePath:     state,
+		VerifySignature: func([]byte, string) error {
+			return nil
+		},
+		ValidateOwner:           func(*os.File) error { return nil },
+		ValidateQuarantineOwner: func(*os.File) error { return nil },
+		Now:                     func() time.Time { return activation.RollbackDeadline.Add(-time.Second) },
+		ScheduleRollback:        func(time.Duration, func()) func() { return func() {} },
+	})
+	if err != nil {
+		t.Fatalf("restart recovery: %v", err)
+	}
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("old-signed-binary")) {
+		t.Fatalf("restart recovery installed binary = %q", installed)
+	}
+	result, err := recovered.Rollback(context.Background(), UpdateRollbackRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256, RollbackSHA256: activation.RollbackSHA256,
+	})
+	if err != nil || result.Action != "rolled_back" {
+		t.Fatalf("durable restart result = %#v, %v", result, err)
+	}
+}
+
+func TestUpdateRollbackWatchdogRestoresUncommittedActivation(t *testing.T) {
+	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	activator := provider.(*updateActivator)
+	var watchdog func()
+	activator.scheduleRollback = func(_ time.Duration, callback func()) func() {
+		watchdog = callback
+		return func() {}
+	}
+	digest := stageUpdate(t, quarantine, "release-watchdog", testELF("uncommitted"))
+	promoteUpdate(t, provider, "release-watchdog", digest)
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: "release-watchdog", SHA256: digest})
+	if err != nil || watchdog == nil {
+		t.Fatalf("Activate = %#v, %v; watchdog=%v", activation, err, watchdog != nil)
+	}
+	watchdog()
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("old-signed-binary")) {
+		t.Fatalf("watchdog recovery installed binary = %q", installed)
+	}
+	result, err := provider.Rollback(context.Background(), UpdateRollbackRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256, RollbackSHA256: activation.RollbackSHA256,
+	})
+	if err != nil || result.Action != "rolled_back" {
+		t.Fatalf("watchdog durable result = %#v, %v", result, err)
 	}
 }
 

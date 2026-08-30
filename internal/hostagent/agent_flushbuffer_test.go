@@ -20,6 +20,7 @@ func TestAgent_deliverPrimaryReport_DrainsBufferedReportsBeforeCurrent(t *testin
 	var (
 		mu       sync.Mutex
 		received []string
+		accepted atomic.Int32
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body io.Reader = r.Body
@@ -45,7 +46,9 @@ func TestAgent_deliverPrimaryReport_DrainsBufferedReportsBeforeCurrent(t *testin
 	defer server.Close()
 
 	a := &Agent{
-		cfg:             Config{APIToken: "token"},
+		cfg: Config{APIToken: "token", OnPrimaryReportAccepted: func() {
+			accepted.Add(1)
+		}},
 		logger:          zerolog.Nop(),
 		httpClient:      server.Client(),
 		trimmedPulseURL: server.URL,
@@ -68,6 +71,9 @@ func TestAgent_deliverPrimaryReport_DrainsBufferedReportsBeforeCurrent(t *testin
 		if received[i] != want[i] {
 			t.Fatalf("received = %v, want %v", received, want)
 		}
+	}
+	if got := accepted.Load(); got != 1 {
+		t.Fatalf("accepted current-report callbacks = %d, want 1", got)
 	}
 }
 

@@ -55,6 +55,16 @@ type ActionRunnerIssueOptions struct {
 	Hostname    string
 }
 
+// ActionRunnerIssueResult carries the newly issued credential together with
+// the prior host-bound records it durably replaced. Callers use the replaced
+// non-secret identities to invalidate only the superseded live sessions after
+// persistence succeeds.
+type ActionRunnerIssueResult struct {
+	Token    string
+	Record   *config.APITokenRecord
+	Replaced []config.APITokenRecord
+}
+
 func ProxmoxScopes(enableCommands bool) []string {
 	scopes := []string{
 		config.ScopeAgentReport,
@@ -109,7 +119,8 @@ func ParseCommandPolicyIntent(record *config.APITokenRecord) (bool, bool) {
 }
 
 func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, opts IssueOptions) (string, *config.APITokenRecord, error) {
-	return issueAndPersistReplacing(cfg, persistence, opts, nil)
+	rawToken, record, _, err := issueAndPersistReplacing(cfg, persistence, opts, nil)
+	return rawToken, record, err
 }
 
 func issueAndPersistReplacing(
@@ -117,14 +128,14 @@ func issueAndPersistReplacing(
 	persistence *config.ConfigPersistence,
 	opts IssueOptions,
 	replace func(config.APITokenRecord) bool,
-) (string, *config.APITokenRecord, error) {
+) (string, *config.APITokenRecord, []config.APITokenRecord, error) {
 	if cfg == nil {
-		return "", nil, fmt.Errorf("config is required")
+		return "", nil, nil, fmt.Errorf("config is required")
 	}
 
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", ErrGeneration, err)
+		return "", nil, nil, fmt.Errorf("%w: %w", ErrGeneration, err)
 	}
 
 	scopes := opts.Scopes
@@ -136,19 +147,19 @@ func issueAndPersistReplacing(
 	}
 	record, err := config.NewAPITokenRecord(rawToken, opts.TokenName, scopes)
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", ErrRecord, err)
+		return "", nil, nil, fmt.Errorf("%w: %w", ErrRecord, err)
 	}
 
 	record.OrgID = strings.TrimSpace(opts.OrgID)
 	setOwnerUserID(record, opts.OwnerUserID)
 	if err := mergeMetadata(record, opts.Metadata); err != nil {
-		return "", nil, fmt.Errorf("%w: %w", ErrRecord, err)
+		return "", nil, nil, fmt.Errorf("%w: %w", ErrRecord, err)
 	}
 	if record.Metadata == nil {
 		record.Metadata = make(map[string]string)
 	}
 	if err := normalizeCredentialKind(record); err != nil {
-		return "", nil, fmt.Errorf("%w: %w", ErrRecord, err)
+		return "", nil, nil, fmt.Errorf("%w: %w", ErrRecord, err)
 	}
 	record.Metadata[IssuedAtMetadataKey] = record.CreatedAt.UTC().Format(time.RFC3339)
 
@@ -156,12 +167,15 @@ func issueAndPersistReplacing(
 	defer config.Mu.Unlock()
 
 	previousTokens := append([]config.APITokenRecord(nil), cfg.APITokens...)
+	replaced := make([]config.APITokenRecord, 0, 1)
 	if replace == nil {
 		cfg.APITokens = append(cfg.APITokens, *record)
 	} else {
 		nextTokens := make([]config.APITokenRecord, 0, len(cfg.APITokens)+1)
 		for _, existing := range cfg.APITokens {
-			if !replace(existing) {
+			if replace(existing) {
+				replaced = append(replaced, existing.Clone())
+			} else {
 				nextTokens = append(nextTokens, existing)
 			}
 		}
@@ -175,38 +189,46 @@ func issueAndPersistReplacing(
 			// that the failed request never returned. Restore the full snapshot.
 			cfg.APITokens = previousTokens
 			cfg.SortAPITokens()
-			return "", nil, fmt.Errorf("%w: %w", ErrPersist, err)
+			return "", nil, nil, fmt.Errorf("%w: %w", ErrPersist, err)
 		}
 	}
 
-	return rawToken, record, nil
+	return rawToken, record, replaced, nil
 }
 
 // IssueActionRunnerAndPersist mints the host-bound credential used by the
 // separate action runner. It fails closed on missing tenant/host identity and
 // never grants collector report, lookup, configuration, or management scopes.
 func IssueActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, opts ActionRunnerIssueOptions) (string, *config.APITokenRecord, error) {
+	result, err := IssueActionRunnerAndPersistDetailed(cfg, persistence, opts)
+	return result.Token, result.Record, err
+}
+
+// IssueActionRunnerAndPersistDetailed is the rotation-aware form used by the
+// API boundary. Replaced contains records only when the new credential was
+// durably committed; persistence failure returns an empty result.
+func IssueActionRunnerAndPersistDetailed(cfg *config.Config, persistence *config.ConfigPersistence, opts ActionRunnerIssueOptions) (ActionRunnerIssueResult, error) {
 	agentID := strings.TrimSpace(opts.AgentID)
 	hostname := unifiedresources.NormalizeFullHostname(opts.Hostname)
 	organizationID := strings.TrimSpace(opts.OrgID)
 	if organizationID == "" {
-		return "", nil, fmt.Errorf("%w: organization id is required", ErrRecord)
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: organization id is required", ErrRecord)
 	}
 	if agentID == "" {
-		return "", nil, fmt.Errorf("%w: canonical agent id is required", ErrRecord)
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: canonical agent id is required", ErrRecord)
 	}
 	if hostname == "" {
-		return "", nil, fmt.Errorf("%w: canonical hostname is required", ErrRecord)
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: canonical hostname is required", ErrRecord)
 	}
 	if len(agentID) > 128 || len(hostname) > 253 {
-		return "", nil, fmt.Errorf("%w: action runner identity exceeds maximum length", ErrRecord)
+		return ActionRunnerIssueResult{}, fmt.Errorf("%w: action runner identity exceeds maximum length", ErrRecord)
 	}
 
 	tokenName := strings.TrimSpace(opts.TokenName)
 	if tokenName == "" {
 		tokenName = "action-runner:" + hostname
 	}
-	return issueAndPersistReplacing(cfg, persistence, IssueOptions{
+	rawToken, record, replaced, err := issueAndPersistReplacing(cfg, persistence, IssueOptions{
 		TokenName:   tokenName,
 		OrgID:       organizationID,
 		OwnerUserID: opts.OwnerUserID,
@@ -224,6 +246,10 @@ func IssueActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigP
 			strings.TrimSpace(record.Metadata[CredentialKindMetadataKey]) == CredentialKindActionRunner &&
 			strings.TrimSpace(record.Metadata["bound_agent_id"]) == agentID
 	})
+	if err != nil {
+		return ActionRunnerIssueResult{}, err
+	}
+	return ActionRunnerIssueResult{Token: rawToken, Record: record, Replaced: replaced}, nil
 }
 
 func normalizeCredentialKind(record *config.APITokenRecord) error {

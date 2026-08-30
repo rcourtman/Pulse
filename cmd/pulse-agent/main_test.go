@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
@@ -1754,9 +1755,10 @@ func TestRunConfiguresTypedPrivilegeHelperFromInstallerEnvironment(t *testing.T)
 	t.Setenv("PULSE_AGENT_HELPER_SOCKET", socketPath)
 	configuredPath := ""
 	configuredUpdatePath := ""
+	helper := &helperHealthStub{}
 	newPrivilegeHelperTelemetry = func(path string) (hostagent.PrivilegedTelemetry, error) {
 		configuredPath = path
-		return nil, nil
+		return helper, nil
 	}
 	newPrivilegeHelperUpdate = func(path string) (agentupdate.PrivilegedUpdate, error) {
 		configuredUpdatePath = path
@@ -1785,6 +1787,224 @@ func TestRunConfiguresTypedPrivilegeHelperFromInstallerEnvironment(t *testing.T)
 	}
 	if configuredUpdatePath != socketPath {
 		t.Fatalf("helper update socket path = %q, want %q", configuredUpdatePath, socketPath)
+	}
+	if helper.healthCalls != 1 {
+		t.Fatalf("helper health calls = %d, want 1", helper.healthCalls)
+	}
+}
+
+type helperHealthStub struct {
+	hostagent.PrivilegedTelemetry
+	healthErr   error
+	healthCalls int
+}
+
+func (h *helperHealthStub) Health(context.Context) error {
+	h.healthCalls++
+	return h.healthErr
+}
+
+func TestRunRejectsUnhealthyTypedPrivilegeHelper(t *testing.T) {
+	originalHelper := newPrivilegeHelperTelemetry
+	originalUpdate := newPrivilegeHelperUpdate
+	originalUpdater := newUpdater
+	originalHost := newHostAgent
+	defer func() {
+		newPrivilegeHelperTelemetry = originalHelper
+		newPrivilegeHelperUpdate = originalUpdate
+		newUpdater = originalUpdater
+		newHostAgent = originalHost
+	}()
+
+	t.Setenv("PULSE_AGENT_HELPER_SOCKET", "/run/pulse-agent/helper.sock")
+	helper := &helperHealthStub{healthErr: errors.New("incompatible helper")}
+	newPrivilegeHelperTelemetry = func(string) (hostagent.PrivilegedTelemetry, error) {
+		return helper, nil
+	}
+	newPrivilegeHelperUpdate = func(string) (agentupdate.PrivilegedUpdate, error) {
+		return nil, nil
+	}
+	newUpdater = func(agentupdate.Config) *agentupdate.Updater {
+		return agentupdate.New(agentupdate.Config{Disabled: true})
+	}
+	hostCreated := false
+	newHostAgent = func(hostagent.Config) (Runnable, error) {
+		hostCreated = true
+		return &mockRunnable{}, nil
+	}
+
+	err := run(context.Background(), []string{
+		"-token", "deadbeef",
+		"-enable-docker=false",
+		"-enable-kubernetes=false",
+		"-health-addr", "",
+	}, func(string) string { return "" })
+	if err == nil || !strings.Contains(err.Error(), "verify typed privilege helper protocol") {
+		t.Fatalf("run error = %v", err)
+	}
+	if helper.healthCalls != 1 {
+		t.Fatalf("helper health calls = %d, want 1", helper.healthCalls)
+	}
+	if hostCreated {
+		t.Fatal("host agent was created after helper health failed")
+	}
+}
+
+type pendingUpdateSupervisorStub struct {
+	commitResult   agenthelper.UpdateResult
+	rollbackResult agenthelper.UpdateResult
+	commitErr      error
+	rollbackErr    error
+	commitCalls    chan agenthelper.UpdateResult
+	rollbackCalls  chan agenthelper.UpdateResult
+}
+
+func (s *pendingUpdateSupervisorStub) CreateQuarantinedArtifact() (string, *os.File, func() error, error) {
+	return "", nil, func() error { return nil }, errors.New("not implemented")
+}
+
+func (s *pendingUpdateSupervisorStub) WriteQuarantinedSignature(string, string) error {
+	return errors.New("not implemented")
+}
+
+func (s *pendingUpdateSupervisorStub) Stage(context.Context, string, string) (agenthelper.UpdateStageResult, error) {
+	return agenthelper.UpdateStageResult{}, errors.New("not implemented")
+}
+
+func (s *pendingUpdateSupervisorStub) Activate(context.Context, string, string) (agenthelper.UpdateResult, error) {
+	return agenthelper.UpdateResult{}, errors.New("not implemented")
+}
+
+func (s *pendingUpdateSupervisorStub) Commit(_ context.Context, activation agenthelper.UpdateResult) (agenthelper.UpdateResult, error) {
+	s.commitCalls <- activation
+	return s.commitResult, s.commitErr
+}
+
+func (s *pendingUpdateSupervisorStub) Rollback(_ context.Context, activation agenthelper.UpdateResult) (agenthelper.UpdateResult, error) {
+	s.rollbackCalls <- activation
+	return s.rollbackResult, s.rollbackErr
+}
+
+func testPendingUpdate(t *testing.T, stateDir string) *agentupdate.PendingPrivilegedUpdate {
+	t.Helper()
+	activation := agenthelper.UpdateResult{
+		Action:           "pending",
+		ActivationID:     "pulse-agent-0123456789abcdef0123456789abcdef:0123456789abcdef",
+		ActiveSHA256:     strings.Repeat("a", 64),
+		RollbackSHA256:   strings.Repeat("b", 64),
+		RollbackDeadline: time.Now().Add(2 * time.Second).UTC(),
+	}
+	if err := agentupdate.PersistPendingPrivilegedUpdate(stateDir, "1.0.0", activation); err != nil {
+		t.Fatal(err)
+	}
+	return &agentupdate.PendingPrivilegedUpdate{Activation: activation, PreviousVersion: "1.0.0"}
+}
+
+func TestPendingPrivilegedUpdateCommitsOnlyAfterReadinessAndAcceptedReport(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pending := testPendingUpdate(t, stateDir)
+	stub := &pendingUpdateSupervisorStub{
+		commitResult: agenthelper.UpdateResult{
+			Action:         "committed",
+			ActivationID:   pending.Activation.ActivationID,
+			ActiveSHA256:   pending.Activation.ActiveSHA256,
+			RollbackSHA256: pending.Activation.RollbackSHA256,
+		},
+		commitCalls:   make(chan agenthelper.UpdateResult, 1),
+		rollbackCalls: make(chan agenthelper.UpdateResult, 1),
+	}
+	reportAccepted := make(chan struct{})
+	close(reportAccepted)
+	var ready atomic.Bool
+	result := make(chan error, 1)
+	go func() {
+		result <- supervisePendingPrivilegedUpdate(context.Background(), stub, pending, stateDir, ready.Load, reportAccepted, time.Millisecond, nil)
+	}()
+	select {
+	case <-stub.commitCalls:
+		t.Fatal("pending update committed before local readiness")
+	case <-time.After(20 * time.Millisecond):
+	}
+	ready.Store(true)
+	select {
+	case activation := <-stub.commitCalls:
+		if activation != pending.Activation {
+			t.Fatalf("commit activation = %#v", activation)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pending update was not committed after both health signals")
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if loaded, err := agentupdate.LoadPendingPrivilegedUpdate(stateDir); err != nil || loaded != nil {
+		t.Fatalf("committed handoff = %#v, %v", loaded, err)
+	}
+	select {
+	case <-stub.rollbackCalls:
+		t.Fatal("healthy pending update rolled back")
+	default:
+	}
+}
+
+func TestPendingPrivilegedUpdateCancellationRollsBackAndClearsHandoff(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pending := testPendingUpdate(t, stateDir)
+	stub := &pendingUpdateSupervisorStub{
+		rollbackResult: agenthelper.UpdateResult{
+			Action:         "rolled_back",
+			ActivationID:   pending.Activation.ActivationID,
+			ActiveSHA256:   pending.Activation.RollbackSHA256,
+			RollbackSHA256: pending.Activation.ActiveSHA256,
+		},
+		commitCalls:   make(chan agenthelper.UpdateResult, 1),
+		rollbackCalls: make(chan agenthelper.UpdateResult, 1),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := supervisePendingPrivilegedUpdate(ctx, stub, pending, stateDir, func() bool { return false }, make(chan struct{}), time.Millisecond, nil)
+	if err == nil || !strings.Contains(err.Error(), "pending update rolled back") {
+		t.Fatalf("supervisor error = %v", err)
+	}
+	select {
+	case activation := <-stub.rollbackCalls:
+		if activation != pending.Activation {
+			t.Fatalf("rollback activation = %#v", activation)
+		}
+	default:
+		t.Fatal("pending update was not rolled back")
+	}
+	if loaded, loadErr := agentupdate.LoadPendingPrivilegedUpdate(stateDir); loadErr != nil || loaded != nil {
+		t.Fatalf("rolled-back handoff = %#v, %v", loaded, loadErr)
+	}
+}
+
+func TestPendingPrivilegedUpdateRollbackFailurePreservesHandoff(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := os.Chmod(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pending := testPendingUpdate(t, stateDir)
+	stub := &pendingUpdateSupervisorStub{
+		rollbackErr:   errors.New("helper unavailable"),
+		commitCalls:   make(chan agenthelper.UpdateResult, 1),
+		rollbackCalls: make(chan agenthelper.UpdateResult, 1),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := supervisePendingPrivilegedUpdate(ctx, stub, pending, stateDir, func() bool { return false }, make(chan struct{}), time.Millisecond, nil)
+	if err == nil || !strings.Contains(err.Error(), "typed helper rollback failed") {
+		t.Fatalf("supervisor error = %v", err)
+	}
+	loaded, loadErr := agentupdate.LoadPendingPrivilegedUpdate(stateDir)
+	if loadErr != nil || loaded == nil || loaded.Activation != pending.Activation {
+		t.Fatalf("failed-rollback handoff = %#v, %v", loaded, loadErr)
 	}
 }
 

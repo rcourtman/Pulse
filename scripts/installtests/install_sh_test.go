@@ -1802,6 +1802,23 @@ func TestInstallSHChecksDiskHeadroomBeforeDownload(t *testing.T) {
 	}
 }
 
+func TestInstallSHSetsAgentBinaryModeExplicitly(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	for _, want := range []string{
+		`chmod 0755 "$TMP_BIN"`,
+		`chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("install.sh does not pin executable mode with %q", want)
+		}
+	}
+}
+
 // TestInstallSHWatchdogPathsUseRotatingAgentLog pins the logging half of issue
 // #1617: the QNAP and Unraid watchdog loops must not shell-append agent stdout
 // to an unrotated file on the RAM-backed root; the agent's own rotating writer
@@ -5780,6 +5797,10 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"`,
 		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"`,
+		`write_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" "$runner_hostname"`,
+		`DELETE --data-binary "$payload"`,
+		`/api/agents/action-runner/credential`,
+		`Could not self-revoke the action-runner credential`,
 		`/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}`,
 		`verify_download_signature "$TMP_ACTION_RUNNER_BIN" "$runner_signature"`,
 		`install -o root -g root -m 0755 "$TMP_ACTION_RUNNER_BIN"`,
@@ -5799,6 +5820,70 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 	teardown := extractInstallShellFunction(t, "teardown_action_runner_service")
 	if strings.Contains(teardown, "teardown_systemd_agent_service") || strings.Contains(teardown, `rm -f "${INSTALL_DIR}/${BINARY_NAME}"`) {
 		t.Fatalf("runner teardown must not remove the monitoring collector:\n%s", teardown)
+	}
+}
+
+func TestInstallSHActionRunnerSelfRevokeUsesPrivateCredential(t *testing.T) {
+	const token = "runner-secret-that-must-not-appear-in-output"
+	var gotAuthorization string
+	var gotMethod string
+	var gotBody map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuthorization = r.Header.Get("Authorization")
+		gotMethod = r.Method
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode revoke body: %v", err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"success":true}`)
+	}))
+	defer server.Close()
+
+	root := t.TempDir()
+	envFile := filepath.Join(root, "runner.env")
+	tokenFile := filepath.Join(root, "token")
+	agentIDFile := filepath.Join(root, "agent-id")
+	mustWrite(t, tokenFile, token+"\n")
+	mustWrite(t, agentIDFile, "agent-secure-runtime\n")
+	if err := os.Chmod(tokenFile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, envFile, strings.Join([]string{
+		`PULSE_URL="` + server.URL + `"`,
+		`PULSE_AGENT_RUNNER_HOSTNAME="secure-runtime.lab"`,
+		`PULSE_AGENT_RUNNER_AGENT_ID_FILE="` + agentIDFile + `"`,
+		`PULSE_AGENT_RUNNER_TOKEN_FILE="` + tokenFile + `"`,
+	}, "\n")+"\n")
+
+	script := `
+set -euo pipefail
+ACTION_RUNNER_ENV_FILE="` + envFile + `"
+stat() {
+  if [[ "$1" == "-c" && "$2" == "%a" ]]; then printf '600\n'; return 0; fi
+  command stat "$@"
+}
+` + extractInstallShellFunction(t, "read_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "revoke_action_runner_credential") + `
+revoke_action_runner_credential
+printf 'revoked\n'
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("runner self-revoke: %v\n%s", err, out)
+	}
+	if strings.Contains(string(out), token) {
+		t.Fatalf("runner credential leaked in output: %s", out)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Fatalf("revoke method = %q, want DELETE", gotMethod)
+	}
+	if gotAuthorization != "Bearer "+token {
+		t.Fatalf("authorization header mismatch")
+	}
+	if gotBody["agentId"] != "agent-secure-runtime" || gotBody["hostname"] != "secure-runtime.lab" {
+		t.Fatalf("revoke body = %#v", gotBody)
 	}
 }
 

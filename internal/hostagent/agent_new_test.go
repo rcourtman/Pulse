@@ -1043,6 +1043,26 @@ func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
 	}
 }
 
+func TestNew_PrefersDurableHelperUpdatedFromHandoff(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "upgraded-host", HostID: "machine-id-1", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+	agent, err := New(Config{
+		APIToken:             "token",
+		Collector:            mc,
+		UpdatedFromVersion:   "6.0.0",
+		updatedFromVersionFn: func() string { return "stale-local-marker" },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agent.updatedFrom != "6.0.0" {
+		t.Fatalf("updatedFrom = %q, want durable helper handoff", agent.updatedFrom)
+	}
+}
+
 func TestNew_RejectsInvalidPulseURL(t *testing.T) {
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {

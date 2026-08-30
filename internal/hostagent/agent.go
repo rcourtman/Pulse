@@ -99,6 +99,13 @@ type Config struct {
 	// server upgrade within one report cycle instead of its next hourly check.
 	// Nil disables the hook; acks from observer destinations never invoke it.
 	OnServerVersion func(version string)
+	// OnPrimaryReportAccepted is called only after the current process's newly
+	// collected authoritative report is accepted. Buffered reports and observer
+	// acknowledgements do not satisfy this startup-health signal.
+	OnPrimaryReportAccepted func()
+	// UpdatedFromVersion is supplied by the durable helper-update handoff and
+	// is carried by the first report built by the replacement process.
+	UpdatedFromVersion string
 
 	Collector SystemCollector // Optional: override default system information collector (for testing)
 	// PrivilegedTelemetry routes the exceptional SMART and Proxmox LXC
@@ -400,7 +407,10 @@ func New(cfg Config) (*Agent, error) {
 	const bufferCapacity = 60
 
 	// Check if agent was recently auto-updated (only reported once per restart)
-	updatedFrom := updatedFromVersionFn()
+	updatedFrom := strings.TrimSpace(cfg.UpdatedFromVersion)
+	if updatedFrom == "" {
+		updatedFrom = updatedFromVersionFn()
+	}
 	if updatedFrom != "" {
 		logger.Info().
 			Str("previousVersion", updatedFrom).
@@ -854,6 +864,9 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 		return nil
 	}
 	agenttarget.MarkDelivery("host", "primary", "primary", true)
+	if a.cfg.OnPrimaryReportAccepted != nil {
+		a.cfg.OnPrimaryReportAccepted()
+	}
 
 	// The server has counted every availability result in this report, so they
 	// must never be offered to it again.
@@ -1167,16 +1180,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 
 	// Proxmox VE exposes per-mount LXC usage only through the node-local pct
 	// CLI. Query running containers on an independent bounded deadline.
-	var proxmoxLXCData *agentshost.ProxmoxLXCInventory
-	if a.privilegedTelemetry != nil {
-		proxmoxLXCData, err = a.privilegedTelemetry.ProxmoxLXCFilesystems(ctx)
-		if err != nil {
-			a.logger.Debug().Err(err).Msg("Typed helper could not collect Proxmox LXC filesystems")
-			proxmoxLXCData = nil
-		}
-	} else {
-		proxmoxLXCData = a.collectProxmoxLXCFilesystems(ctx)
-	}
+	proxmoxLXCData := a.collectProxmoxLXCFilesystemsForReport(ctx)
 
 	// Collect S.M.A.R.T. disk data after topology owners. Enumeration and each
 	// device probe have their own deadlines; a single shared 10-second budget

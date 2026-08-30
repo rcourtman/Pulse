@@ -34,6 +34,7 @@ func (f fakeContainerProvider) Inventory(ctx context.Context) (json.RawMessage, 
 type fakeUpdateProvider struct {
 	stage    func(context.Context, UpdateStageRequest) (UpdateStageResult, error)
 	activate func(context.Context, UpdateActivateRequest) (UpdateResult, error)
+	commit   func(context.Context, UpdateCommitRequest) (UpdateResult, error)
 	rollback func(context.Context, UpdateRollbackRequest) (UpdateResult, error)
 }
 
@@ -43,6 +44,10 @@ func (f fakeUpdateProvider) Stage(ctx context.Context, request UpdateStageReques
 
 func (f fakeUpdateProvider) Activate(ctx context.Context, request UpdateActivateRequest) (UpdateResult, error) {
 	return f.activate(ctx, request)
+}
+
+func (f fakeUpdateProvider) Commit(ctx context.Context, request UpdateCommitRequest) (UpdateResult, error) {
+	return f.commit(ctx, request)
 }
 
 func (f fakeUpdateProvider) Rollback(ctx context.Context, request UpdateRollbackRequest) (UpdateResult, error) {
@@ -187,6 +192,7 @@ func TestServerDispatchesClosedContainerAndUpdateOperations(t *testing.T) {
 	stageCalled := false
 	activateCalled := false
 	rollbackCalled := false
+	commitCalled := false
 	updates := fakeUpdateProvider{
 		stage: func(_ context.Context, request UpdateStageRequest) (UpdateStageResult, error) {
 			stageCalled = request.ArtifactID == "release-1"
@@ -194,7 +200,11 @@ func TestServerDispatchesClosedContainerAndUpdateOperations(t *testing.T) {
 		},
 		activate: func(_ context.Context, request UpdateActivateRequest) (UpdateResult, error) {
 			activateCalled = request.ArtifactID == "release-1"
-			return UpdateResult{Action: "activated", ActivationID: "release-1:0123456789abcdef"}, nil
+			return UpdateResult{Action: "pending", ActivationID: "release-1:0123456789abcdef"}, nil
+		},
+		commit: func(_ context.Context, request UpdateCommitRequest) (UpdateResult, error) {
+			commitCalled = request.ActivationID == "release-1:0123456789abcdef"
+			return UpdateResult{Action: "committed", ActivationID: request.ActivationID}, nil
 		},
 		rollback: func(_ context.Context, request UpdateRollbackRequest) (UpdateResult, error) {
 			rollbackCalled = request.ActivationID == "release-1:0123456789abcdef"
@@ -222,13 +232,18 @@ func TestServerDispatchesClosedContainerAndUpdateOperations(t *testing.T) {
 	if response := exchange(t, server, activate); !response.Success || !activateCalled {
 		t.Fatalf("activate response=%#v called=%t", response, activateCalled)
 	}
+	commit := validRequest(OperationAgentUpdateCommit)
+	commit.Payload = json.RawMessage(`{"activationId":"release-1:0123456789abcdef","currentSha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`)
+	if response := exchange(t, server, commit); !response.Success || !commitCalled {
+		t.Fatalf("commit response=%#v called=%t", response, commitCalled)
+	}
 	rollback := validRequest(OperationAgentUpdateRollback)
 	rollback.Payload = json.RawMessage(`{"activationId":"release-1:0123456789abcdef","currentSha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","rollbackSha256":"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}`)
 	if response := exchange(t, server, rollback); !response.Success || !rollbackCalled {
 		t.Fatalf("rollback response=%#v called=%t", response, rollbackCalled)
 	}
 
-	for _, operation := range []string{OperationContainerInventory, OperationAgentUpdateStage, OperationAgentUpdateActivate, OperationAgentUpdateRollback} {
+	for _, operation := range []string{OperationContainerInventory, OperationAgentUpdateStage, OperationAgentUpdateActivate, OperationAgentUpdateCommit, OperationAgentUpdateRollback} {
 		request := validRequest(operation)
 		request.Payload = json.RawMessage(`{"path":"/tmp/attacker","args":["sh"]}`)
 		requireErrorCode(t, exchange(t, server, request), ErrorInvalidRequest)

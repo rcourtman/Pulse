@@ -376,6 +376,53 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 	return nil, false
 }
 
+// InvalidateActionRunnerSession closes exactly the currently admitted typed
+// action-runner session identified by admission. A stale rotation result must
+// never evict a replacement session that has already registered for the same
+// tenant and host identity.
+func (s *Server) InvalidateActionRunnerSession(admission AgentAdmission) bool {
+	if s == nil {
+		return false
+	}
+	expected := AgentAdmission{
+		OrganizationID:   normalizeOrganizationID(admission.OrganizationID),
+		TokenID:          strings.TrimSpace(admission.TokenID),
+		AgentID:          strings.TrimSpace(admission.AgentID),
+		Hostname:         strings.TrimSpace(admission.Hostname),
+		RuntimeRole:      strings.TrimSpace(admission.RuntimeRole),
+		ActionCapability: strings.TrimSpace(admission.ActionCapability),
+	}
+	if expected.TokenID == "" || expected.AgentID == "" || expected.Hostname == "" ||
+		expected.RuntimeRole != RuntimeRoleActionRunner || expected.ActionCapability != ActionCapabilityTypedV1 {
+		return false
+	}
+	key := agentSessionKey(expected.OrganizationID, expected.AgentID)
+	s.mu.Lock()
+	current, ok := s.agents[key]
+	if !ok || current == nil || !sameActionRunnerAdmission(current.admission, expected) {
+		s.mu.Unlock()
+		return false
+	}
+	delete(s.agents, key)
+	s.mu.Unlock()
+
+	current.signalDone()
+	if current.conn != nil {
+		_ = current.conn.Close()
+	}
+	return true
+}
+
+func sameActionRunnerAdmission(current, expected AgentAdmission) bool {
+	return normalizeOrganizationID(current.OrganizationID) == expected.OrganizationID &&
+		strings.TrimSpace(current.TokenID) == expected.TokenID &&
+		strings.TrimSpace(current.AgentID) == expected.AgentID &&
+		(strings.EqualFold(strings.TrimSpace(current.Hostname), expected.Hostname) ||
+			unifiedresources.HostnamesEquivalent(current.Hostname, expected.Hostname)) &&
+		strings.TrimSpace(current.RuntimeRole) == RuntimeRoleActionRunner &&
+		strings.TrimSpace(current.ActionCapability) == ActionCapabilityTypedV1
+}
+
 func requireLegacyFullTrustConnection(ac *agentConn, operation string) error {
 	if ac == nil {
 		return fmt.Errorf("agent connection is unavailable")

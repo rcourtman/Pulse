@@ -1093,7 +1093,14 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 	if err != nil {
 		return fmt.Errorf("prepare fixed update quarantine: %w", err)
 	}
-	defer cleanup()
+	cleaned := false
+	defer func() {
+		if !cleaned {
+			if cleanupErr := cleanup(); cleanupErr != nil {
+				u.logger.Warn().Err(cleanupErr).Msg("failed to remove quarantined helper update artifact")
+			}
+		}
+	}()
 	artifactPath := file.Name()
 	hasher := sha256.New()
 	written, copyErr := io.Copy(file, io.TeeReader(io.LimitReader(body, maxBinarySizeBytes+1), hasher))
@@ -1147,22 +1154,36 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 	if err != nil {
 		return fmt.Errorf("activate signed update through typed helper: %w", err)
 	}
-	if activation.Action != "activated" || !strings.EqualFold(activation.ActiveSHA256, digest) || activation.ActivationID == "" || activation.RollbackSHA256 == "" {
-		return errors.New("typed helper returned an invalid activation result")
-	}
-	if err := restartProcessFn(execPath); err != nil {
+	rollbackActivation := func(cause error) error {
 		rollbackCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		rolledBack, rollbackErr := u.cfg.PrivilegedUpdate.Rollback(rollbackCtx, activation)
 		if rollbackErr != nil {
-			return errors.Join(fmt.Errorf("failed to restart after helper activation: %w", err), fmt.Errorf("typed helper rollback failed: %w", rollbackErr))
+			return errors.Join(cause, fmt.Errorf("typed helper rollback failed: %w", rollbackErr))
 		}
 		if rolledBack.Action != "rolled_back" || !strings.EqualFold(rolledBack.ActiveSHA256, activation.RollbackSHA256) {
-			return errors.Join(fmt.Errorf("failed to restart after helper activation: %w", err), errors.New("typed helper returned an invalid rollback result"))
+			return errors.Join(cause, errors.New("typed helper returned an invalid rollback result"))
 		}
-		return fmt.Errorf("failed to restart after helper activation; update rolled back: %w", err)
+		if clearErr := ClearPendingPrivilegedUpdate(u.cfg.StateDir); clearErr != nil {
+			return errors.Join(fmt.Errorf("%w; update rolled back", cause), fmt.Errorf("clear pending update handoff: %w", clearErr))
+		}
+		return fmt.Errorf("%w; update rolled back", cause)
 	}
-	return nil
+	if activation.Action != "pending" || !strings.EqualFold(activation.ActiveSHA256, digest) || activation.ActivationID == "" ||
+		activation.RollbackSHA256 == "" || activation.RollbackDeadline.IsZero() || !time.Now().Before(activation.RollbackDeadline) {
+		return rollbackActivation(errors.New("typed helper returned an invalid pending activation result"))
+	}
+	if err := PersistPendingPrivilegedUpdate(u.cfg.StateDir, u.cfg.CurrentVersion, activation); err != nil {
+		return rollbackActivation(fmt.Errorf("persist pending update handoff: %w", err))
+	}
+	if err := cleanup(); err != nil {
+		return rollbackActivation(fmt.Errorf("remove quarantined update after helper staging: %w", err))
+	}
+	cleaned = true
+	if err := restartProcessFn(execPath); err != nil {
+		return rollbackActivation(fmt.Errorf("failed to restart after helper activation: %w", err))
+	}
+	return rollbackActivation(errors.New("restart returned without replacing the current process"))
 }
 
 func (u *Updater) syncPersistentBinaryCopy(execPath, persistPath, platform string) {

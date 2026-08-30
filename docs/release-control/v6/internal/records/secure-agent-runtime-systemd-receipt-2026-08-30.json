@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "completed_at": "2026-08-30T00:39:22.928744899Z",
+  "source_hashes": {
+    "scripts/install.sh": "0b557c9394f3f0741cbf4287e5ee16a88fe03e189678bddf754606458c4e276e",
+    "scripts/installtests/secure_runtime_systemd_lab_test.go": "cebaeca194bd2ef1a3754230026ab73cd7c8b28427c773dbc62c86f4cd69ba28"
+  },
+  "artifact_hashes": {
+    "collector_v1": "c9c775085178102d7fea5ecc899960a3e27ad7dc41c632a83f01e0f642942379",
+    "collector_v2": "2b52cbf20884d391acd7c072b7c4af011377ef1f19b97725a76ad18a3d1154fa",
+    "helper": "9d865a4adb9fdd5e70f36ee4021acefd2b5bfe1010739ab1dd916c701818032d"
+  },
+  "os_release": "PRETTY_NAME=\"Ubuntu 24.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.4 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo",
+  "kernel": "Linux 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Thu May  7 17:26:37 UTC 2026 aarch64 GNU/Linux",
+  "systemd_version": "systemd 255 (255.4-1ubuntu8.15)",
+  "architecture": "arm64",
+  "collector_service_user": "pulse-agent",
+  "collector_process_uid": 996,
+  "collector_authority": "monitoring-only",
+  "ambient_capabilities_none": true,
+  "helper_protocol_healthy": true,
+  "state_identity_preserved": true,
+  "docker_degraded": true,
+  "report_count": 26,
+  "first_report_at": "2026-08-30T00:38:25.603885842Z",
+  "last_report_at": "2026-08-30T00:39:22.777779187Z",
+  "scenarios": [
+    {
+      "name": "legacy_root_command_capable_install",
+      "passed": true,
+      "detail": "root collector installed; docker_enabled=true"
+    },
+    {
+      "name": "read_only_inspect",
+      "passed": true,
+      "detail": "stable installer-owned files unchanged"
+    },
+    {
+      "name": "drop_in_fail_closed_rehearsal",
+      "passed": true,
+      "detail": "migration rejected before stable installer-owned files changed"
+    },
+    {
+      "name": "safe_profile_apply",
+      "passed": true,
+      "detail": "fresh server lastSeen, least-privilege identity, typed helper health"
+    },
+    {
+      "name": "explicit_safe_profile_rollback",
+      "passed": true,
+      "detail": "legacy binary, unit, authority, and service identity restored"
+    },
+    {
+      "name": "automatic_failure_rollback",
+      "passed": true,
+      "detail": "frozen lastSeen prevented commit and restored binary/unit/state identity"
+    },
+    {
+      "name": "ordinary_update_non_migration",
+      "passed": true,
+      "detail": "binary updated while root command-capable profile remained unchanged"
+    },
+    {
+      "name": "final_safe_profile_apply",
+      "passed": true,
+      "detail": "collector continued reporting after committed migration"
+    }
+  ]
+}

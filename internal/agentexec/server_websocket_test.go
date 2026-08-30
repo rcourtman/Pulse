@@ -1239,6 +1239,73 @@ func TestRevokedAdmissionInvalidatesStaleSocketBeforeDispatch(t *testing.T) {
 	}
 }
 
+func TestInvalidateActionRunnerSessionClosesExactSessionAndUnblocksInflightDispatch(t *testing.T) {
+	admission := AgentAdmission{
+		OrganizationID:   "org-a",
+		TokenID:          "runner-token",
+		AgentID:          "agent-a",
+		Hostname:         "node.example",
+		RuntimeRole:      RuntimeRoleActionRunner,
+		ActionCapability: ActionCapabilityTypedV1,
+	}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		return admission, token == admission.TokenID
+	}, func(candidate AgentAdmission) bool { return candidate == admission })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID,
+		RuntimeRole: admission.RuntimeRole, ActionCapability: admission.ActionCapability,
+		OperationReceiptVersion: operationreceipt.ProtocolVersion,
+	}))
+	if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+		t.Fatalf("registration failed: %s", ack.Message)
+	}
+
+	ctx := WithOrganizationID(context.Background(), admission.OrganizationID)
+	result := make(chan error, 1)
+	go func() {
+		_, dispatchErr := s.ExecuteHostUpdate(ctx, admission.AgentID, HostUpdatePayload{
+			RequestID: "rotation-inflight", ActionID: "action-a", Operation: HostUpdateOperationInstall,
+			ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64), Timeout: 30,
+		})
+		result <- dispatchErr
+	}()
+	message, err := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+	if err != nil || message.Type != MsgTypeHostUpdate {
+		t.Fatalf("in-flight dispatch = %#v, %v", message, err)
+	}
+
+	wrong := admission
+	wrong.TokenID = "replacement-token"
+	if s.InvalidateActionRunnerSession(wrong) {
+		t.Fatal("mismatched replacement identity evicted the current session")
+	}
+	if !s.InvalidateActionRunnerSession(admission) {
+		t.Fatal("exact action-runner admission was not invalidated")
+	}
+	select {
+	case dispatchErr := <-result:
+		if dispatchErr == nil || !strings.Contains(dispatchErr.Error(), "disconnected") {
+			t.Fatalf("in-flight dispatch error = %v", dispatchErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("in-flight dispatch did not unblock after session invalidation")
+	}
+	if _, err := s.ExecuteHostUpdate(ctx, admission.AgentID, HostUpdatePayload{
+		RequestID: "after-rotation", ActionID: "action-b", Operation: HostUpdateOperationInstall,
+		ExpectedInventoryHash: "sha256:" + strings.Repeat("b", 64), Timeout: 1,
+	}); err == nil || !strings.Contains(err.Error(), "not connected") {
+		t.Fatalf("new dispatch after invalidation = %v", err)
+	}
+}
+
 // registerCancelTestAgent registers agent "a1" over the websocket harness and
 // returns after the registration ack has been read.
 func registerCancelTestAgent(t *testing.T, s *Server, tsURL string) *cancelTestConn {

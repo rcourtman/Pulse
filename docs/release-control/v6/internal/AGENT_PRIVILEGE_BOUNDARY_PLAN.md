@@ -1,6 +1,6 @@
 # Unified Agent Privilege-Boundary Plan
 
-Last updated: 2026-08-29
+Last updated: 2026-08-30
 Status: PROPOSED
 Governance surfaces:
 - `status.json.coverage_gaps.agent-privilege-boundary-separation`
@@ -69,6 +69,40 @@ Existing hardening such as a dedicated listener, token binding, command policy,
 systemd sandboxing, scoped API tokens, and the optional least-privilege profile
 is retained as useful input. None of it substitutes for separating monitoring
 from root-equivalent and remediation authority.
+
+## Current Implementation Checkpoint (2026-08-30)
+
+The optional Linux systemd path now establishes more of the intended boundary,
+without changing the product default:
+
+- a configured helper must answer the exact versioned health protocol before
+  collector readiness, and failed helper SMART/Proxmox reads do not fall back
+  into local privileged collection;
+- helper-backed collector activation is pending under a bounded deadline until
+  the replacement is locally ready and a newly collected authoritative report
+  is accepted; explicit commit, restart/power-loss recovery, watchdog rollback,
+  and fixed staging/quarantine cleanup preserve the last-known-good binary;
+- runner enrollment persists the canonical hostname, durable credential
+  rotation invalidates only the superseded live session after storage commits,
+  and uninstall performs an exact bearer self-revoke without exposing the
+  secret in argv;
+- safe migration rejects effective unit overrides, requires a fresh post-start
+  registration timestamp and live helper protocol response, restores complete
+  state metadata and Proxmox markers on rollback, and disables rootful Docker
+  unless a usable collector-owned rootless socket exists.
+
+This is a qualification foundation, not the Slice E ratchet. The generated
+setup default remains the legacy/root profile. A clean disposable arm64 Ubuntu
+systemd exercise now proves exact-working-tree install, migration, explicit and
+automatic rollback, ordinary update isolation, typed helper health, fresh
+registration, and continued reporting; its secret-free receipt is recorded in
+`internal/records/secure-agent-runtime-systemd-receipt-2026-08-30.json`. The
+repository still needs exact committed release-candidate reproduction, runner
+rotation/revocation and typed action-receipt proof, representative Proxmox,
+SMART, Docker and rootless Podman telemetry/action parity, appliance profiles,
+and the external security review. Until those proofs are recorded, the safe
+profile remains opt-in and provider degradation remains an explicit residual
+rather than evidence that the candidate lane is complete.
 
 ## Target Architecture
 

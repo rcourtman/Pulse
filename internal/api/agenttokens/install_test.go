@@ -113,6 +113,28 @@ func TestIssueActionRunnerAndPersistReplacesMatchingBoundCredential(t *testing.T
 	}
 }
 
+func TestIssueActionRunnerAndPersistDetailedReturnsOnlyDurablyReplacedRecords(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, prior, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := IssueActionRunnerAndPersistDetailed(cfg, config.NewConfigPersistence(cfg.DataPath), ActionRunnerIssueOptions{
+		OrgID: "org-a", AgentID: "machine-123", Hostname: "renamed.example",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Token == "" || result.Record == nil || len(result.Replaced) != 1 || result.Replaced[0].ID != prior.ID {
+		t.Fatalf("detailed issue result = %#v", result)
+	}
+	if result.Record.ID == prior.ID || len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != result.Record.ID {
+		t.Fatalf("persisted replacement = %#v", cfg.APITokens)
+	}
+}
+
 func TestIssueActionRunnerAndPersistRestoresReplacedCredentialOnPersistenceFailure(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	_, prior, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{

@@ -130,6 +130,14 @@ solely to atomically replace the protocol-fixed `pulse-agent` target and its
 last-known-good copy. The collector can select no privileged source, target,
 path, command, or argument, and direct collector-owned replacement is not a
 fallback.
+Activation persists a pending identity and bounded rollback deadline before
+the new binary is trusted. The replacement collector must pass local readiness
+and have a fresh authoritative primary report accepted before it sends the
+typed commit; helper startup/restart recovery and the watchdog restore the
+last-known-good binary when activation is interrupted, expires, or never
+commits. Commit and rollback durably reap the fixed staging and quarantine
+artifacts. A socket-active check is insufficient: installer migration and the
+collector both exercise the versioned helper health protocol.
 
 The same supported Linux systemd profile can install `pulse-agent-runner` only
 through the separate `--enable-action-runner` choice, a private token file,
@@ -138,7 +146,12 @@ configuration, credential, health record, and receipt database are root-owned
 and independent from collector state. Activation is transactional and restores
 the previous runner-only files if health does not become current; disable and
 uninstall remove only remediation and leave monitoring running. The action
-credential is never placed in argv or reused as the collector token.
+credential is never placed in argv or reused as the collector token. The
+installer persists the canonical enrollment hostname for runner admission and
+uses a private curl configuration for best-effort exact self-revocation before
+local teardown, so the bearer secret does not enter argv. Server unreachability
+is warned explicitly but does not make local removal depend on the remote
+control plane.
 
 Safe-profile migration is never an ordinary update side effect.
 `--safe-profile-inspect` is read-only and reports the current authority,
@@ -150,6 +163,16 @@ privilege or changing the independently enrolled runner. These operations fail
 closed outside Linux systemd. Appliance, non-systemd, Windows, and macOS
 profiles retain an explicitly named legacy/full-trust path until their service,
 filesystem, update, helper, and runner boundaries have separate proof.
+Apply also fails before mutation when the effective collector fragment differs
+from the installer-owned unit or any systemd drop-in is present. Commit requires
+the effective non-root/no-ambient-capability unit, a live helper protocol
+response, and a registration `lastSeen` newer than the frozen legacy
+collector's value. The rollback manifest restores all state-tree ownership and
+modes plus the Proxmox registration markers the apply path can mutate. Rootful
+Docker is an explicit migration degradation: it is disabled unless a
+collector-owned, readable and writable rootless runtime socket is available;
+the safe profile never restores Docker by adding the collector to a
+root-equivalent group.
 
 Release builds and archives carry both helper and runner binaries for the five
 Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,

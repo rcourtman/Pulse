@@ -40,6 +40,7 @@ const (
 	OperationContainerInventory    = "container.inventory"
 	OperationAgentUpdateStage      = "agent_update.stage"
 	OperationAgentUpdateActivate   = "agent_update.activate"
+	OperationAgentUpdateCommit     = "agent_update.commit"
 	OperationAgentUpdateRollback   = "agent_update.rollback"
 	OperationVersion1              = 1
 )

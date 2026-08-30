@@ -193,6 +193,8 @@ SAFE_PROFILE_COLLECTOR_UNIT="/etc/systemd/system/${AGENT_NAME}.service"
 SAFE_PROFILE_TRANSACTION_DIR=""
 SAFE_PROFILE_TRANSACTION_ACTIVE="false"
 SAFE_PROFILE_TRANSACTION_COMMITTED="false"
+SAFE_PROFILE_PRIOR_REGISTRATION_LAST_SEEN=""
+AGENT_REGISTRATION_LAST_SEEN=""
 
 SYSTEMD_ENV_LINES=""
 SHELL_EXPORT_LINES=""
@@ -642,12 +644,14 @@ warn_agent_token_rejected() {
 #   2 - the server rejected the credential (401, or 403 other than a stale
 #       hostname ownership match - actionable, permanent)
 verify_agent_server_registration() {
+    local required_previous_last_seen="${1:-}"
     local lookup_id="${AGENT_ID}"
     local lookup_hostname="${HOSTNAME_OVERRIDE}"
     local lookup_query=""
     local lookup_out=""
     local lookup_status=""
     local lookup_body=""
+    local lookup_last_seen=""
     # No -f: we need the response body AND the HTTP status even on 4xx so a
     # rejected token (401/403) can be told apart from "not reported yet". The
     # -w format appends "\n<http_code>" after the body.
@@ -694,7 +698,15 @@ verify_agent_server_registration() {
             ;;
     esac
 
+    AGENT_REGISTRATION_LAST_SEEN=""
     if echo "$lookup_body" | grep -q '"agent"[[:space:]]*:' && echo "$lookup_body" | grep -q '"id"[[:space:]]*:'; then
+        lookup_last_seen=$(printf '%s' "$lookup_body" | tr -d '\r\n' |
+            sed -n 's/.*"lastSeen"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        AGENT_REGISTRATION_LAST_SEEN="$lookup_last_seen"
+        if [[ -n "$required_previous_last_seen" ]] &&
+           [[ -z "$lookup_last_seen" || "$lookup_last_seen" == "$required_previous_last_seen" ]]; then
+            return 1
+        fi
         return 0
     fi
     return 1
@@ -706,6 +718,7 @@ verify_agent_server_registration() {
 # immediate lookup routinely misses a perfectly healthy registration (#1644).
 # Return codes mirror verify_agent_server_registration.
 verify_agent_server_registration_with_retry() {
+    local required_previous_last_seen="${1:-}"
     local max_attempts=10
     local interval=3
     local attempt=0
@@ -716,7 +729,7 @@ verify_agent_server_registration_with_retry() {
     fi
 
     while [ $attempt -lt $max_attempts ]; do
-        verify_agent_server_registration
+        verify_agent_server_registration "$required_previous_last_seen"
         reg_rc=$?
         # 0 = confirmed; 2 = token rejected, which is definitive and will not
         # change with more polling.
@@ -930,7 +943,81 @@ teardown_privileged_helper_service() {
     systemctl reset-failed "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
 }
 
+read_action_runner_env_value() {
+    local key="$1"
+    local value=""
+    [[ "$key" =~ ^[A-Z0-9_]+$ ]] || return 1
+    [[ -f "$ACTION_RUNNER_ENV_FILE" && ! -L "$ACTION_RUNNER_ENV_FILE" ]] || return 1
+    value=$(sed -n "s/^${key}=\"\(.*\)\"$/\1/p" "$ACTION_RUNNER_ENV_FILE" | tail -1)
+    # Values emitted by this installer escape backslashes and quotes. The
+    # revoke contract only needs URL, hostname, and an absolute state path;
+    # refuse an escaped value instead of evaluating shell syntax to recover it.
+    [[ -n "$value" && "$value" != *'\'* && "$value" != *$'\r'* && "$value" != *$'\n'* ]] || return 1
+    printf '%s\n' "$value"
+}
+
+revoke_action_runner_credential() {
+    local runner_url=""
+    local runner_hostname=""
+    local runner_agent_id_file=""
+    local runner_agent_id=""
+    local runner_token_file=""
+    local runner_token=""
+    local token_mode=""
+    local token_size=""
+    local curl_config=""
+    local payload=""
+    local -a revoke_args
+
+    runner_url=$(read_action_runner_env_value "PULSE_URL" || true)
+    runner_hostname=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" || true)
+    runner_agent_id_file=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" || true)
+    runner_token_file=$(read_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" || true)
+    [[ "$runner_url" =~ ^https?://[^[:space:]]+$ && -n "$runner_hostname" ]] || return 1
+    [[ "$runner_agent_id_file" == /* && "$runner_agent_id_file" != *'/../'* &&
+       -f "$runner_agent_id_file" && ! -L "$runner_agent_id_file" ]] || return 1
+    [[ "$runner_token_file" == /* && "$runner_token_file" != *'/../'* &&
+       -f "$runner_token_file" && ! -L "$runner_token_file" ]] || return 1
+    runner_agent_id=$(head -1 "$runner_agent_id_file" 2>/dev/null || true)
+    (( ${#runner_agent_id} >= 1 && ${#runner_agent_id} <= 256 &&
+       ${#runner_hostname} >= 1 && ${#runner_hostname} <= 253 )) || return 1
+    [[ "$runner_agent_id" =~ ^[A-Za-z0-9._:-]+$ &&
+       "$runner_hostname" =~ ^[A-Za-z0-9._:-]+$ ]] || return 1
+    token_mode=$(stat -c '%a' "$runner_token_file" 2>/dev/null || true)
+    token_size=$(wc -c < "$runner_token_file" 2>/dev/null | tr -d ' ' || true)
+    [[ "$token_mode" =~ ^[0-7]{3,4}$ && "$token_size" =~ ^[0-9]+$ ]] || return 1
+    (( (8#$token_mode & 8#077) == 0 && token_size >= 1 && token_size <= 4096 )) || return 1
+    runner_token=$(head -1 "$runner_token_file" 2>/dev/null || true)
+    [[ -n "$runner_token" && "$runner_token" != *$'\r'* && "$runner_token" != *$'\n'* ]] || return 1
+
+    curl_config=$(mktemp)
+    chmod 0600 "$curl_config"
+    printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' \
+        "$runner_token" > "$curl_config"
+    runner_token=""
+    payload="{\"agentId\":\"${runner_agent_id}\",\"hostname\":\"${runner_hostname}\"}"
+    revoke_args=(--config "$curl_config" -fsS --connect-timeout 5 --max-time 10 -X DELETE --data-binary "$payload")
+    if grep -q '^PULSE_INSECURE="true"$' "$ACTION_RUNNER_ENV_FILE" 2>/dev/null; then
+        revoke_args+=(-k)
+    fi
+    if curl "${revoke_args[@]}" "${runner_url%/}/api/agents/action-runner/credential" >/dev/null 2>&1; then
+        rm -f "$curl_config"
+        return 0
+    fi
+    rm -f "$curl_config"
+    return 1
+}
+
 teardown_action_runner_service() {
+    local had_runner_config="false"
+    if [[ -f "$ACTION_RUNNER_ENV_FILE" || -f "$ACTION_RUNNER_TOKEN_FILE" ]]; then
+        had_runner_config="true"
+    fi
+    if revoke_action_runner_credential; then
+        log_info "Revoked the action-runner credential before removing local runner state."
+    elif [[ "$had_runner_config" == "true" ]]; then
+        log_warn "Could not self-revoke the action-runner credential; local runner removal will continue. Revoke the credential from Pulse if the server was unreachable."
+    fi
     if command -v systemctl >/dev/null 2>&1; then
         systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
         systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
@@ -1206,6 +1293,7 @@ EOF
 }
 
 write_action_runner_config() {
+    local runner_hostname="$HOSTNAME_OVERRIDE"
     if [[ -L "$ACTION_RUNNER_CONFIG_DIR" || -L "$ACTION_RUNNER_STATE_DIR" ||
           -L "$ACTION_RUNNER_TOKEN_FILE" || -L "$ACTION_RUNNER_ENV_FILE" ]]; then
         fail "Refusing unsafe symlink in the action-runner config or state boundary" "$EXIT_GENERAL"
@@ -1222,6 +1310,12 @@ write_action_runner_config() {
     chmod 0600 "$ACTION_RUNNER_TOKEN_FILE"
     ACTION_TOKEN=""
 
+    if [[ -z "$runner_hostname" ]]; then
+        runner_hostname=$(hostname 2>/dev/null || true)
+    fi
+    [[ -n "$runner_hostname" && "$runner_hostname" != *$'\r'* && "$runner_hostname" != *$'\n'* ]] ||
+        fail "Action runner requires a canonical hostname" "$EXIT_MISSING_ARGS"
+
     : > "$ACTION_RUNNER_ENV_FILE"
     chmod 0600 "$ACTION_RUNNER_ENV_FILE"
     write_action_runner_env_value "PULSE_URL" "$PULSE_URL"
@@ -1229,6 +1323,7 @@ write_action_runner_config() {
     write_action_runner_env_value "PULSE_AGENT_RUNNER_STATE_DIR" "$ACTION_RUNNER_STATE_DIR"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_HEALTH_FILE" "$ACTION_RUNNER_HEALTH_FILE"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_AGENT_ID_FILE" "${STATE_DIR%/}/agent-id"
+    write_action_runner_env_value "PULSE_AGENT_RUNNER_HOSTNAME" "$runner_hostname"
     if [[ -n "$SERVER_FINGERPRINT" ]]; then
         write_action_runner_env_value "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"
     fi
@@ -1415,6 +1510,31 @@ safe_profile_unit_property() {
     esac
 }
 
+safe_profile_effective_unit_unoverridden() {
+    local fragment_path=""
+    local drop_in_paths=""
+    fragment_path=$(systemctl show "${AGENT_NAME}.service" --property FragmentPath --value 2>/dev/null) || return 1
+    drop_in_paths=$(systemctl show "${AGENT_NAME}.service" --property DropInPaths --value 2>/dev/null) || return 1
+    [[ "$fragment_path" == "$SAFE_PROFILE_COLLECTOR_UNIT" && -z "$drop_in_paths" ]]
+}
+
+safe_profile_verify_effective_target() {
+    local unit_user=""
+    local ambient=""
+    local exec_start=""
+    local environment=""
+
+    safe_profile_effective_unit_unoverridden || return 1
+    unit_user=$(safe_profile_unit_property User)
+    ambient=$(safe_profile_unit_property AmbientCapabilities)
+    exec_start=$(safe_profile_unit_property ExecStart)
+    environment=$(safe_profile_unit_property Environment)
+    [[ "$unit_user" == "$LEAST_PRIVILEGE_USER" ]] || return 1
+    [[ -z "$ambient" ]] || return 1
+    [[ "$exec_start" != *"--enable-commands"* ]] || return 1
+    [[ "$environment" == *"PULSE_AGENT_HELPER_SOCKET=${PRIVILEGED_HELPER_SOCKET_PATH}"* ]] || return 1
+}
+
 safe_profile_inspect() {
     local unit_path="$SAFE_PROFILE_COLLECTOR_UNIT"
     local binary_path="${INSTALL_DIR}/${BINARY_NAME}"
@@ -1427,10 +1547,16 @@ safe_profile_inspect() {
     local binary_mode="missing"
     local host="false" docker="false" kubernetes="false" proxmox="false"
     local helper="false" commands="false" runner="false"
+    local fragment_path="unavailable" drop_in_paths="unavailable" unit_unoverridden="false"
 
     if safe_profile_platform_supported; then supported="true"; fi
     profile=$(safe_profile_detect_current_profile)
     if [[ -f "$unit_path" ]]; then
+        fragment_path=$(safe_profile_unit_property FragmentPath)
+        fragment_path="${fragment_path:-unavailable}"
+        drop_in_paths=$(safe_profile_unit_property DropInPaths)
+        drop_in_paths="${drop_in_paths:-none}"
+        if safe_profile_effective_unit_unoverridden; then unit_unoverridden="true"; fi
         unit_user=$(safe_profile_unit_property User)
         unit_user="${unit_user:-root}"
         ambient=$(safe_profile_unit_property AmbientCapabilities)
@@ -1455,6 +1581,9 @@ safe_profile_inspect() {
         "Pulse safe-profile migration inspection (read-only)" \
         "platform_supported=${supported}" \
         "current_profile=${profile}" \
+        "unit_fragment_path=${fragment_path}" \
+        "unit_drop_in_paths=${drop_in_paths}" \
+        "unit_unoverridden=${unit_unoverridden}" \
         "unit_user=${unit_user}" \
         "unit_groups=${groups}" \
         "ambient_capabilities=${ambient}" \
@@ -1516,6 +1645,69 @@ safe_profile_manifest_value() {
     sed -n "s/^${key}=//p" "$manifest_file" 2>/dev/null | tail -1
 }
 
+safe_profile_snapshot_state_metadata() {
+    local metadata_file="${SAFE_PROFILE_TRANSACTION_DIR}/state-metadata.bin"
+    local path=""
+    local relative_path=""
+    local entry_type="file"
+    local uid="" gid="" mode=""
+
+    [[ -d "$STATE_DIR" && ! -L "$STATE_DIR" ]] ||
+        fail "Refusing unsafe safe-profile state directory: ${STATE_DIR}" "$EXIT_GENERAL"
+    : > "$metadata_file"
+    chmod 0600 "$metadata_file"
+    while IFS= read -r -d '' path; do
+        if [[ "$path" == "$STATE_DIR" ]]; then
+            relative_path="."
+        else
+            relative_path="${path#${STATE_DIR%/}/}"
+        fi
+        entry_type="file"
+        [[ -d "$path" && ! -L "$path" ]] && entry_type="directory"
+        [[ -L "$path" ]] && entry_type="symlink"
+        uid=$(stat -c '%u' "$path") || return 1
+        gid=$(stat -c '%g' "$path") || return 1
+        mode=$(stat -c '%a' "$path") || return 1
+        printf '%s\0%s\0%s\0%s\0%s\0' \
+            "$relative_path" \
+            "$uid" \
+            "$gid" \
+            "$mode" \
+            "$entry_type" >> "$metadata_file"
+    done < <(find "$STATE_DIR" -xdev -print0)
+}
+
+safe_profile_restore_state_metadata() {
+    local transaction_dir="$1"
+    local snapshot_state_dir="$2"
+    local metadata_file="${transaction_dir}/state-metadata.bin"
+    local relative_path="" uid="" gid="" mode="" entry_type="" destination=""
+
+    [[ -f "$metadata_file" && ! -L "$metadata_file" ]] || return 1
+    while IFS= read -r -d '' relative_path &&
+          IFS= read -r -d '' uid &&
+          IFS= read -r -d '' gid &&
+          IFS= read -r -d '' mode &&
+          IFS= read -r -d '' entry_type; do
+        if [[ "$relative_path" == "." ]]; then
+            destination="$snapshot_state_dir"
+        else
+            [[ -n "$relative_path" && "$relative_path" != /* &&
+               "/${relative_path}/" != *"/../"* ]] || return 1
+            destination="${snapshot_state_dir%/}/${relative_path}"
+        fi
+        # Runtime-owned state such as SQLite WAL/SHM files can legitimately
+        # disappear while the collector is stopped. Restore the identity of
+        # every surviving pre-migration entry without turning a vanished
+        # transient file into a rollback failure.
+        [[ -e "$destination" || -L "$destination" ]] || continue
+        chown -h "${uid}:${gid}" "$destination" || return 1
+        if [[ "$entry_type" != "symlink" ]]; then
+            chmod "$mode" "$destination" || return 1
+        fi
+    done < "$metadata_file"
+}
+
 safe_profile_begin_transaction() {
     local unit_path="$SAFE_PROFILE_COLLECTOR_UNIT"
     local prior_profile=""
@@ -1525,6 +1717,8 @@ safe_profile_begin_transaction() {
 
     [[ -x "${INSTALL_DIR}/${BINARY_NAME}" && -f "$unit_path" ]] ||
         fail "--safe-profile-apply requires an existing Linux systemd Pulse collector installation" "$EXIT_MISSING_ARGS"
+    safe_profile_effective_unit_unoverridden ||
+        fail "Refusing safe-profile migration while the collector has a different effective FragmentPath or any systemd drop-in override; consolidate the effective unit first" "$EXIT_GENERAL"
     [[ ! -L "$SAFE_PROFILE_STATE_DIR" ]] ||
         fail "Refusing symlinked safe-profile transaction directory: ${SAFE_PROFILE_STATE_DIR}" "$EXIT_GENERAL"
     mkdir -p "$SAFE_PROFILE_STATE_DIR"
@@ -1539,7 +1733,7 @@ safe_profile_begin_transaction() {
 
     prior_profile=$(safe_profile_detect_current_profile)
     printf '%s\n' \
-        "FORMAT_VERSION=1" \
+        "FORMAT_VERSION=2" \
         "PRIOR_PROFILE=${prior_profile}" \
         "TARGET_PROFILE=typed-helper-monitoring-only" \
         "STATE_DIR=${STATE_DIR}" \
@@ -1575,7 +1769,14 @@ safe_profile_begin_transaction() {
     safe_profile_snapshot_entry "${STATE_DIR%/}/runtime.token" runtime-token RUNTIME_TOKEN
     safe_profile_snapshot_entry "${STATE_DIR%/}/agent-id" agent-id AGENT_ID_FILE
     safe_profile_snapshot_entry "${STATE_DIR%/}/connection.env" connection-env CONNECTION_ENV
+    safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-registered" proxmox-registered PROXMOX_REGISTERED
+    safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-pve-registered" proxmox-pve-registered PROXMOX_PVE_REGISTERED
+    safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-pbs-registered" proxmox-pbs-registered PROXMOX_PBS_REGISTERED
+    safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-pve-registration-blocked" proxmox-pve-registration-blocked PROXMOX_PVE_REGISTRATION_BLOCKED
+    safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-pbs-registration-blocked" proxmox-pbs-registration-blocked PROXMOX_PBS_REGISTRATION_BLOCKED
+    safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-detected-types" proxmox-detected-types PROXMOX_DETECTED_TYPES
     safe_profile_snapshot_entry "${PRIVILEGED_HELPER_CREDENTIAL_DIR}/token" protected-token PROTECTED_TOKEN
+    safe_profile_snapshot_state_metadata
 
     SAFE_PROFILE_TRANSACTION_ACTIVE="true"
     SAFE_PROFILE_TRANSACTION_COMMITTED="false"
@@ -1604,6 +1805,7 @@ safe_profile_restore_transaction() {
     local prior_profile=""
     local docker_member="false"
     local current_tmp=""
+    local format_version=""
 
     SAFE_PROFILE_TRANSACTION_ACTIVE="false"
     case "$transaction_dir" in
@@ -1611,7 +1813,8 @@ safe_profile_restore_transaction() {
         *) log_error "Refusing untrusted safe-profile transaction path: ${transaction_dir}"; return 1 ;;
     esac
     [[ -d "$transaction_dir" && ! -L "$transaction_dir" && -f "$manifest_file" && ! -L "$manifest_file" ]] || return 1
-    [[ "$(safe_profile_manifest_value "$manifest_file" FORMAT_VERSION)" == "1" ]] || return 1
+    format_version=$(safe_profile_manifest_value "$manifest_file" FORMAT_VERSION)
+    [[ "$format_version" == "1" || "$format_version" == "2" ]] || return 1
     snapshot_state_dir=$(safe_profile_manifest_value "$manifest_file" STATE_DIR)
     [[ -n "$snapshot_state_dir" && "$snapshot_state_dir" == /* && "$snapshot_state_dir" != "/" ]] || return 1
     prior_profile=$(safe_profile_manifest_value "$manifest_file" PRIOR_PROFILE)
@@ -1631,12 +1834,23 @@ safe_profile_restore_transaction() {
     safe_profile_restore_entry "$transaction_dir" runtime-token "${snapshot_state_dir%/}/runtime.token" RUNTIME_TOKEN
     safe_profile_restore_entry "$transaction_dir" agent-id "${snapshot_state_dir%/}/agent-id" AGENT_ID_FILE
     safe_profile_restore_entry "$transaction_dir" connection-env "${snapshot_state_dir%/}/connection.env" CONNECTION_ENV
+    if [[ "$format_version" == "2" ]]; then
+        safe_profile_restore_entry "$transaction_dir" proxmox-registered "${snapshot_state_dir%/}/proxmox-registered" PROXMOX_REGISTERED
+        safe_profile_restore_entry "$transaction_dir" proxmox-pve-registered "${snapshot_state_dir%/}/proxmox-pve-registered" PROXMOX_PVE_REGISTERED
+        safe_profile_restore_entry "$transaction_dir" proxmox-pbs-registered "${snapshot_state_dir%/}/proxmox-pbs-registered" PROXMOX_PBS_REGISTERED
+        safe_profile_restore_entry "$transaction_dir" proxmox-pve-registration-blocked "${snapshot_state_dir%/}/proxmox-pve-registration-blocked" PROXMOX_PVE_REGISTRATION_BLOCKED
+        safe_profile_restore_entry "$transaction_dir" proxmox-pbs-registration-blocked "${snapshot_state_dir%/}/proxmox-pbs-registration-blocked" PROXMOX_PBS_REGISTRATION_BLOCKED
+        safe_profile_restore_entry "$transaction_dir" proxmox-detected-types "${snapshot_state_dir%/}/proxmox-detected-types" PROXMOX_DETECTED_TYPES
+    fi
     safe_profile_restore_entry "$transaction_dir" protected-token "${PRIVILEGED_HELPER_CREDENTIAL_DIR}/token" PROTECTED_TOKEN
     if [[ "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR)" == "true" ]]; then
         chown "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_UID):$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_GID)" "$PRIVILEGED_HELPER_CREDENTIAL_DIR" || return 1
         chmod "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_MODE)" "$PRIVILEGED_HELPER_CREDENTIAL_DIR" || return 1
     else
         rmdir "$PRIVILEGED_HELPER_CREDENTIAL_DIR" 2>/dev/null || true
+    fi
+    if [[ "$format_version" == "2" ]]; then
+        safe_profile_restore_state_metadata "$transaction_dir" "$snapshot_state_dir" || return 1
     fi
     rm -f "$PRIVILEGED_HELPER_SOCKET_PATH"
 
@@ -1690,14 +1904,80 @@ safe_profile_remove_legacy_authority() {
     fi
 }
 
+safe_profile_probe_helper_protocol() {
+    local request_id="installer-health-$$"
+    local request=""
+    local request_length=0
+    local response_file=""
+    local response_size=0
+    local response_length=0
+    local response_body=""
+    local header_bytes=""
+    local header_one=0 header_two=0 header_three=0 header_four=0
+
+    command -v runuser >/dev/null 2>&1 || return 1
+    id "$LEAST_PRIVILEGE_USER" >/dev/null 2>&1 || return 1
+    [[ -S "$PRIVILEGED_HELPER_SOCKET_PATH" ]] || return 1
+    request="{\"protocolVersion\":1,\"requestId\":\"${request_id}\",\"operation\":\"helper.health\",\"operationVersion\":1,\"deadlineMillis\":2000,\"payload\":{}}"
+    request_length=${#request}
+    [[ $request_length -gt 0 && $request_length -le 65536 ]] || return 1
+    response_file=$(mktemp "${SAFE_PROFILE_TRANSACTION_DIR}/.helper-health.XXXXXX") || return 1
+    chmod 0600 "$response_file"
+    if ! {
+        printf "\\$(printf '%03o' $((request_length / 16777216 % 256)))"
+        printf "\\$(printf '%03o' $((request_length / 65536 % 256)))"
+        printf "\\$(printf '%03o' $((request_length / 256 % 256)))"
+        printf "\\$(printf '%03o' $((request_length % 256)))"
+        printf '%s' "$request"
+    } | runuser -u "$LEAST_PRIVILEGE_USER" -- curl -sS --max-time 5 \
+        --unix-socket "$PRIVILEGED_HELPER_SOCKET_PATH" --upload-file - telnet://localhost > "$response_file"; then
+        rm -f "$response_file"
+        return 1
+    fi
+    response_size=$(wc -c < "$response_file" | tr -d ' ')
+    [[ "$response_size" =~ ^[0-9]+$ && $response_size -ge 5 ]] || { rm -f "$response_file"; return 1; }
+    header_bytes=$(od -An -tu1 -N4 "$response_file")
+    read -r header_one header_two header_three header_four <<< "$header_bytes"
+    response_length=$((header_one * 16777216 + header_two * 65536 + header_three * 256 + header_four))
+    [[ $response_length -gt 0 && $response_length -le 1048576 && $response_size -eq $((response_length + 4)) ]] || {
+        rm -f "$response_file"
+        return 1
+    }
+    response_body=$(dd if="$response_file" bs=1 skip=4 count="$response_length" 2>/dev/null)
+    rm -f "$response_file"
+    printf '%s' "$response_body" | grep -q '"protocolVersion"[[:space:]]*:[[:space:]]*1' || return 1
+    printf '%s' "$response_body" | grep -q "\"requestId\"[[:space:]]*:[[:space:]]*\"${request_id}\"" || return 1
+    printf '%s' "$response_body" | grep -q '"operation"[[:space:]]*:[[:space:]]*"helper.health"' || return 1
+    printf '%s' "$response_body" | grep -q '"operationVersion"[[:space:]]*:[[:space:]]*1' || return 1
+    printf '%s' "$response_body" | grep -q '"success"[[:space:]]*:[[:space:]]*true' || return 1
+    printf '%s' "$response_body" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' || return 1
+}
+
 safe_profile_verify_declared_health() {
     local health_url=""
+    local attempt=0
+    local local_health_ready="false"
     health_url=$(resolve_agent_health_url || true)
     [[ -n "$health_url" ]] || return 1
-    curl -sf --max-time 2 "$health_url" >/dev/null 2>&1 || return 1
-    systemctl is-active --quiet "${AGENT_NAME}.service" || return 1
-    systemctl is-active --quiet "${PRIVILEGED_HELPER_NAME}.socket" || return 1
-    verify_agent_server_registration_with_retry
+
+    # systemd can report the new units active before the collector readiness
+    # endpoint and socket-activated helper have finished starting. Give that
+    # local floor a bounded window, then perform the (separately retried)
+    # authoritative server-registration proof exactly once.
+    for ((attempt = 1; attempt <= 30; attempt++)); do
+        if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1 &&
+           systemctl is-active --quiet "${AGENT_NAME}.service" &&
+           systemctl is-active --quiet "${PRIVILEGED_HELPER_NAME}.socket" &&
+           safe_profile_verify_effective_target &&
+           safe_profile_probe_helper_protocol; then
+            local_health_ready="true"
+            break
+        fi
+        sleep 1
+    done
+    [[ "$local_health_ready" == "true" ]] || return 1
+    [[ -n "$SAFE_PROFILE_PRIOR_REGISTRATION_LAST_SEEN" ]] || return 1
+    verify_agent_server_registration_with_retry "$SAFE_PROFILE_PRIOR_REGISTRATION_LAST_SEEN"
 }
 
 safe_profile_commit_transaction() {
@@ -2572,6 +2852,29 @@ discover_rootless_container_runtime() {
     fi
 
     return 1
+}
+
+safe_profile_selected_rootless_runtime_usable() {
+    local collector_uid=""
+    local socket_uid=""
+    [[ -n "$ROOTLESS_RUNTIME_KIND" && -S "$ROOTLESS_RUNTIME_SOCKET_PATH" ]] || return 1
+    collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+    socket_uid=$(stat -c '%u' "$ROOTLESS_RUNTIME_SOCKET_PATH" 2>/dev/null || true)
+    [[ -n "$collector_uid" && "$socket_uid" == "$collector_uid" ]] || return 1
+    command -v runuser >/dev/null 2>&1 || return 1
+    runuser -u "$LEAST_PRIVILEGE_USER" -- test -r "$ROOTLESS_RUNTIME_SOCKET_PATH" || return 1
+    runuser -u "$LEAST_PRIVILEGE_USER" -- test -w "$ROOTLESS_RUNTIME_SOCKET_PATH" || return 1
+}
+
+safe_profile_apply_docker_degradation() {
+    [[ "$SAFE_PROFILE_ACTION" == "apply" && "$ENABLE_DOCKER" == "true" ]] || return 0
+    if safe_profile_selected_rootless_runtime_usable; then
+        log_info "Safe-profile migration preserved container monitoring through the collector-owned ${ROOTLESS_RUNTIME_KIND} socket: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
+        return 0
+    fi
+    ENABLE_DOCKER="false"
+    DOCKER_EXPLICIT="true"
+    log_warn "Safe-profile migration disabled rootful Docker monitoring: the collector has no usable collector-owned rootless runtime. Container monitoring is an explicit migration degradation, not helper parity."
 }
 
 detect_kubernetes() {
@@ -4169,6 +4472,8 @@ if [[ "$ENABLE_DOCKER" == "true" ]] && discover_rootless_container_runtime; then
     fi
 fi
 
+safe_profile_apply_docker_degradation
+
 finalize_plist_env_block
 
 # --- Uninstall Logic ---
@@ -5023,7 +5328,7 @@ if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
     download_verified_action_runner
 fi
 
-chmod +x "$TMP_BIN"
+chmod 0755 "$TMP_BIN"
 NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
 
 # Compare versions with any leading "v" stripped so the agent binary's "v6.0.4"
@@ -5079,6 +5384,19 @@ elif command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet "${AGE
     systemctl stop "${AGENT_NAME}" 2>/dev/null || true
 fi
 
+if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+    # Freeze the legacy collector before recording its server-side freshness
+    # marker. The replacement must advance this exact registration row after
+    # activation; an old row that merely still exists cannot commit migration.
+    stop_existing_agent_service || true
+    pkill -f "^${INSTALL_DIR}/${BINARY_NAME}([[:space:]]|$)" 2>/dev/null || true
+    AGENT_REGISTRATION_LAST_SEEN=""
+    if ! verify_agent_server_registration_with_retry || [[ -z "$AGENT_REGISTRATION_LAST_SEEN" ]]; then
+        fail "Safe-profile migration could not capture the stopped collector's server registration freshness marker; restoring the previous profile" "$EXIT_GENERAL"
+    fi
+    SAFE_PROFILE_PRIOR_REGISTRATION_LAST_SEEN="$AGENT_REGISTRATION_LAST_SEEN"
+fi
+
 if [[ "$UPDATE_ONLY" == "true" && "$UPGRADE_MODE" != "true" ]]; then
     fail "No existing Pulse Agent installation found to update. Use the install command instead." "$EXIT_MISSING_ARGS"
 fi
@@ -5093,7 +5411,7 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"
 else
     mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
-    chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+    chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
 fi
 
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then

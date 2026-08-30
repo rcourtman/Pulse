@@ -131,6 +131,20 @@ func NewRegistryWithProviders(smart SMARTProvider, proxmox ProxmoxProvider, prov
 		}
 		return marshalOperationResult(result)
 	})
+	registry.add(OperationAgentUpdateCommit, OperationVersion1, providers.Updates != nil, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
+		var request UpdateCommitRequest
+		if err := decodePayload(payload, &request); err != nil {
+			return nil, invalidPayloadError(err)
+		}
+		if providers.Updates == nil {
+			return nil, unavailableError("agent update provider is not configured")
+		}
+		result, err := providers.Updates.Commit(ctx, request)
+		if err != nil {
+			return nil, providerError(err)
+		}
+		return marshalOperationResult(result)
+	})
 	registry.add(OperationAgentUpdateRollback, OperationVersion1, providers.Updates != nil, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
 		var request UpdateRollbackRequest
 		if err := decodePayload(payload, &request); err != nil {

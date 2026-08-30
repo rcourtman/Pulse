@@ -43,6 +43,24 @@ host-storage-cleanup, Proxmox guest lifecycle, and container lifecycle/update
 operations. Generic shell, exec, unrestricted `read_file`, and deploy requests
 are forbidden. Removing or disabling the runner leaves collector monitoring
 and the helper unchanged.
+When that helper socket is configured, collector startup must complete a
+versioned `helper.health` request before the runtime may become ready. A
+listening or active systemd socket alone is not helper health. Once the helper
+boundary is selected, SMART and Proxmox LXC filesystem collection fail closed
+to an omitted/degraded snapshot when the helper fails; the collector must not
+silently retry the privileged read locally.
+
+Helper-backed collector updates are a durable pending transaction rather than
+a successful binary swap. The helper records activation intent before the
+root-owned replacement, retains the last-known-good digest, and places the new
+binary under a bounded rollback deadline. The replacement process must load
+the private pending handoff, pass local readiness, and deliver a newly
+collected authoritative primary report before it may issue the identity-bound
+typed commit. Buffered or observer reports do not satisfy that floor. An
+expired, interrupted, invalid, or uncommitted activation rolls back during
+helper recovery or through the deadline watchdog; commit and rollback remove
+their fixed staging/quarantine artifacts durably. The first accepted report
+retains the previous-version update evidence from that handoff.
 
 The runner's server transport currently reuses the combined agent command
 WebSocket envelope as a migration boundary. That compatibility path may carry
@@ -53,6 +71,19 @@ have an action-runner migration path, live action-runner session parity is
 qualified, and no supported client depends on collector command delivery.
 Until those criteria are met, the combined collector command path is explicitly
 legacy/full-trust compatibility, not part of the safe profile.
+The runner service persists the same normalized canonical hostname used when
+its credential was issued; it must not substitute the machine's incidental OS
+hostname when the collector was enrolled under an override. Credential
+rotation invalidates exactly the superseded organization/token/agent/hostname
+session only after the replacement token inventory is durably stored. That
+invalidation removes the session from dispatch, closes its transport, and
+unblocks server-side waits; an already-started host mutation remains governed
+by its typed receipt and best-effort cancellation semantics rather than being
+described as rolled back. Runner uninstall attempts an authenticated
+credential self-revoke before deleting local state. The delete route may
+remove only the caller's exact host-bound action-runner record; an unreachable
+server cannot prevent local runner removal and leaves an explicit operator
+revocation residual.
 Fresh installs carry an explicit local command-authority profile. The closed
 values are `monitoring-only`, `command-capable`, and `legacy`. A
 `monitoring-only` service may accept remote configuration that keeps commands

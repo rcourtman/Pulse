@@ -33,6 +33,7 @@ type ContainerProvider interface {
 type UpdateProvider interface {
 	Stage(context.Context, UpdateStageRequest) (UpdateStageResult, error)
 	Activate(context.Context, UpdateActivateRequest) (UpdateResult, error)
+	Commit(context.Context, UpdateCommitRequest) (UpdateResult, error)
 	Rollback(context.Context, UpdateRollbackRequest) (UpdateResult, error)
 }
 

@@ -37,12 +37,15 @@ not storage-recovery authority inferred from the credential itself.
 Runner credential rotation follows the shared token-inventory commit boundary:
 failed persistence restores the complete prior inventory and returns no new
 secret, while successful persistence replaces the previous organization/agent
-binding and makes its secret unusable. That rollback protects restart-time
+binding and invalidates only that superseded live session. Exact bearer
+self-revocation uses the same durable boundary and cannot select another token,
+organization, or host. That rollback protects restart-time
 credential truth only; it is not a customer backup, recovery point, restore
 operation, or storage-cleanup grant.
 The helper-backed collector updater likewise retains only one fixed
-last-known-good executable and an identity-bound activation receipt. That
-binary rollback is agent lifecycle state, not a Pulse storage snapshot,
+last-known-good executable and an identity-bound pending/commit receipt. A
+startup recovery or deadline rollback of an uncommitted activation is agent
+lifecycle state, not a Pulse storage snapshot,
 recovery point, backup retention record, or authorization to read or mutate
 customer storage/recovery data.
 

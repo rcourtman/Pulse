@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,8 +12,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+func TestSelfRevokeActionRunnerCredentialRejectsNonRunnerExecBearer(t *testing.T) {
+	router, cfg, hostID := newActionRunnerCredentialTestRouter(t)
+	raw := "legacy-exec-token-1234567890.12345678"
+	record, err := config.NewAPITokenRecord(raw, "legacy", []string{config.ScopeAgentExec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.OrgID = "default"
+	record.Metadata = map[string]string{
+		agenttokens.RuntimeRoleMetadataKey: agenttokens.CredentialKindLegacyFullTrust,
+		"bound_agent_id":                   hostID,
+		"bound_hostname":                   "host-1.local",
+	}
+	cfg.APITokens = append(cfg.APITokens, *record)
+	body, _ := json.Marshal(actionRunnerCredentialSelfRevokeRequest{AgentID: hostID, Hostname: "host-1.local"})
+	req := httptest.NewRequest(http.MethodDelete, "/api/agents/action-runner/credential", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	actionRunnerCredentialRoute(cfg, router.handleIssueActionRunnerCredential, router.handleSelfRevokeActionRunnerCredential)(rec, req)
+	if rec.Code != http.StatusForbidden || len(cfg.APITokens) != 1 {
+		t.Fatalf("legacy self revoke = status %d tokens %#v body=%s", rec.Code, cfg.APITokens, rec.Body.String())
+	}
+}
 
 func TestSecurityTokensCreateRollsBackCompleteInventoryWhenPersistenceFails(t *testing.T) {
 	now := time.Now().UTC()

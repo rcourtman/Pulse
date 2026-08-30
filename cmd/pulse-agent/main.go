@@ -119,6 +119,87 @@ func wireUpdaterHooks(hostCfg *hostagent.Config, updater *agentupdate.Updater) {
 	hostCfg.OnServerVersion = updater.NudgeVersion
 }
 
+func pendingUpdatePreviousVersion(pending *agentupdate.PendingPrivilegedUpdate) string {
+	if pending == nil {
+		return ""
+	}
+	return pending.PreviousVersion
+}
+
+func supervisePendingPrivilegedUpdate(
+	ctx context.Context,
+	update agentupdate.PrivilegedUpdate,
+	pending *agentupdate.PendingPrivilegedUpdate,
+	stateDir string,
+	locallyReady func() bool,
+	reportAccepted <-chan struct{},
+	pollInterval time.Duration,
+	logger *zerolog.Logger,
+) error {
+	if pending == nil {
+		return nil
+	}
+	if update == nil || locallyReady == nil || pollInterval <= 0 {
+		return errors.New("pending helper update supervisor is not configured")
+	}
+	activation := pending.Activation
+	rollback := func(reason error) error {
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		result, err := update.Rollback(rollbackCtx, activation)
+		if err != nil {
+			return errors.Join(reason, fmt.Errorf("typed helper rollback failed: %w", err))
+		}
+		if result.Action != "rolled_back" || !strings.EqualFold(result.ActiveSHA256, activation.RollbackSHA256) {
+			return errors.Join(reason, errors.New("typed helper returned an invalid rollback result"))
+		}
+		if clearErr := agentupdate.ClearPendingPrivilegedUpdate(stateDir); clearErr != nil {
+			return errors.Join(fmt.Errorf("%w; pending update rolled back", reason), fmt.Errorf("clear pending update handoff: %w", clearErr))
+		}
+		return fmt.Errorf("%w; pending update rolled back", reason)
+	}
+
+	deadlineDelay := time.Until(activation.RollbackDeadline)
+	if deadlineDelay <= 0 {
+		return rollback(errors.New("pending update health deadline expired before startup"))
+	}
+	deadline := time.NewTimer(deadlineDelay)
+	defer deadline.Stop()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	reportOK := false
+	for {
+		if reportOK && locallyReady() {
+			commitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			result, err := update.Commit(commitCtx, activation)
+			cancel()
+			if err == nil && result.Action == "committed" && strings.EqualFold(result.ActiveSHA256, activation.ActiveSHA256) {
+				if err := agentupdate.ClearPendingPrivilegedUpdate(stateDir); err != nil {
+					return fmt.Errorf("clear committed update handoff: %w", err)
+				}
+				if logger != nil {
+					logger.Info().Str("activation_id", activation.ActivationID).Msg("Committed helper-backed agent update after local readiness and server report")
+				}
+				return nil
+			}
+			if logger != nil && err != nil {
+				logger.Warn().Err(err).Str("activation_id", activation.ActivationID).Msg("Pending helper update commit failed; retrying until rollback deadline")
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return rollback(fmt.Errorf("runtime stopped before pending update commit: %w", ctx.Err()))
+		case <-deadline.C:
+			return rollback(errors.New("pending update did not reach local readiness and accepted-report health floor before deadline"))
+		case <-reportAccepted:
+			reportOK = true
+			reportAccepted = nil
+		case <-ticker.C:
+		}
+	}
+}
+
 type multiValue []string
 
 func (m *multiValue) String() string {
@@ -383,7 +464,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 	// 7. Start Auto-Updater
 	var privilegedUpdate agentupdate.PrivilegedUpdate
-	if helperSocket := strings.TrimSpace(os.Getenv("PULSE_AGENT_HELPER_SOCKET")); helperSocket != "" {
+	helperSocket := strings.TrimSpace(os.Getenv("PULSE_AGENT_HELPER_SOCKET"))
+	if helperSocket != "" {
 		privilegedUpdate, err = newPrivilegeHelperUpdate(helperSocket)
 		if err != nil {
 			return fmt.Errorf("configure typed privilege-helper updates: %w", err)
@@ -403,6 +485,18 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		Disabled:           cfg.DisableAutoUpdate,
 		PrivilegedUpdate:   privilegedUpdate,
 	})
+	var pendingUpdate *agentupdate.PendingPrivilegedUpdate
+	if helperSocket != "" {
+		pendingUpdate, err = agentupdate.LoadPendingPrivilegedUpdate(cfg.StateDir)
+		if err != nil {
+			return fmt.Errorf("load pending helper update handoff: %w", err)
+		}
+	}
+	if pendingUpdate != nil && privilegedUpdate == nil {
+		return errors.New("pending helper update cannot be verified without the typed privilege helper")
+	}
+	pendingReportAccepted := make(chan struct{})
+	var pendingReportOnce sync.Once
 
 	g.Go(func() error {
 		updater.RunLoop(ctx)
@@ -418,6 +512,14 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		privilegedTelemetry, err := newPrivilegeHelperTelemetry(os.Getenv("PULSE_AGENT_HELPER_SOCKET"))
 		if err != nil {
 			return fmt.Errorf("configure typed privilege helper: %w", err)
+		}
+		if privilegedTelemetry != nil {
+			healthCtx, cancelHealth := context.WithTimeout(ctx, 10*time.Second)
+			healthErr := privilegedTelemetry.Health(healthCtx)
+			cancelHealth()
+			if healthErr != nil {
+				return fmt.Errorf("verify typed privilege helper protocol: %w", healthErr)
+			}
 		}
 		hostCfg := hostagent.Config{
 			PulseURL:                cfg.PulseURL,
@@ -450,9 +552,15 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			ModuleStatus:            runtimeStatus.moduleStatuses,
 			Observers:               hostObserverTargets(cfg.Observers),
 			PrivilegedTelemetry:     privilegedTelemetry,
+			UpdatedFromVersion:      pendingUpdatePreviousVersion(pendingUpdate),
 
 			DockerContainerUpdater:           dockerUpdaterBridge,
 			DockerContainerLifecycleOperator: dockerUpdaterBridge,
+		}
+		if pendingUpdate != nil {
+			hostCfg.OnPrimaryReportAccepted = func() {
+				pendingReportOnce.Do(func() { close(pendingReportAccepted) })
+			}
 		}
 		wireUpdaterHooks(&hostCfg, updater)
 
@@ -590,6 +698,20 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		g.Go(func() error {
 			runRemoteConfigLoop(ctx, remoteConfigClient, remoteConfigAppliers, &logger)
 			return nil
+		})
+	}
+	if pendingUpdate != nil {
+		g.Go(func() error {
+			return supervisePendingPrivilegedUpdate(
+				ctx,
+				privilegedUpdate,
+				pendingUpdate,
+				cfg.StateDir,
+				ready.Load,
+				pendingReportAccepted,
+				250*time.Millisecond,
+				&logger,
+			)
 		})
 	}
 

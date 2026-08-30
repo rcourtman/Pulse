@@ -53,6 +53,15 @@ shape, regular-file identity, symlink resistance, and byte ceiling before
 copying into fixed root-owned staging. Activation and rollback then revalidate
 the root boundary, perform atomic replacement, and durably bind the transition
 identity before changing the root-owned collector binary.
+Activation is not final authority: the helper records a bounded pending state
+and last-known-good digest before replacement, and exposes an exact typed
+commit. Only the replacement collector's local readiness plus an accepted new
+authoritative report may request commit. Restart/power-loss recovery and the
+deadline watchdog roll back an uncommitted activation, while strict private
+handoff parsing and fixed artifact cleanup prevent a collector-selected target
+or stale quarantine from widening that boundary. Configuring the helper also
+requires a successful versioned health exchange at collector startup and
+forbids privileged telemetry fallback into the collector process.
 
 Remediation credentials belong only to the separately installed
 `pulse-agent-runner`. They bind organization, canonical host identity, token
@@ -72,6 +81,14 @@ secret only after persistence succeeds, and restores the complete prior token
 inventory if persistence fails. A successful rotation invalidates the previous
 secret immediately; it never widens the collector credential or turns a
 monitoring session into an action session.
+That invalidation is exact and post-persistence: it matches organization,
+token, canonical agent, hostname, runtime role, and typed capability before
+closing the session, so a stale rotation cannot evict a replacement. The
+runner may also delete only its own matching record using its bearer
+credential; browser sessions and a caller-selected token ID are rejected, and
+persistence failure restores the prior inventory. Installer teardown keeps the
+secret in a private file/config boundary rather than argv and reports remote
+revocation failure without retaining local remediation authority.
 
 Own Pulse's canonical privacy disclosures, outbound usage-data boundary,
 and the security-facing settings surfaces that expose authentication posture,

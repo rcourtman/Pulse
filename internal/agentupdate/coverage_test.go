@@ -27,6 +27,38 @@ func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
 
+func TestPrivilegedUpdateRollbackFailurePreservesPendingHandoff(t *testing.T) {
+	originalGOOS := runtimeGOOS
+	originalRestart := restartProcessFn
+	t.Cleanup(func() {
+		runtimeGOOS = originalGOOS
+		restartProcessFn = originalRestart
+	})
+	runtimeGOOS = goOSLinux
+	restartProcessFn = func(string) error { return errors.New("exec refused") }
+
+	binary := append([]byte{0x7f, 'E', 'L', 'F'}, bytes.Repeat([]byte("x"), 128)...)
+	sum := sha256.Sum256(binary)
+	digest := hex.EncodeToString(sum[:])
+	helper := &fakePrivilegedUpdate{root: t.TempDir(), rollbackErr: errors.New("helper unavailable")}
+	if err := os.Chmod(helper.root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
+	u.selfTestFn = func(context.Context, string) error { return nil }
+
+	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update")
+	if err == nil || !strings.Contains(err.Error(), "typed helper rollback failed") {
+		t.Fatalf("performPrivilegedUpdate error = %v", err)
+	}
+	loaded, loadErr := LoadPendingPrivilegedUpdate(helper.root)
+	if loadErr != nil || loaded == nil || loaded.Activation.ActivationID != helper.activation.ActivationID ||
+		loaded.Activation.ActiveSHA256 != helper.activation.ActiveSHA256 ||
+		loaded.Activation.RollbackSHA256 != helper.activation.RollbackSHA256 {
+		t.Fatalf("failed-rollback handoff = %#v, %v", loaded, loadErr)
+	}
+}
+
 func TestUpdateRetryBackoffUsesOperationalDelays(t *testing.T) {
 	if updateRetryBaseDelay < time.Second {
 		t.Fatalf("updateRetryBaseDelay = %s, want at least 1s", updateRetryBaseDelay)

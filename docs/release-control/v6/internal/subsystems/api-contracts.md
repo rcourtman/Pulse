@@ -41,10 +41,22 @@ runtime role `action-runner`, binding version 1, and capability
 non-conflicted, non-integration host in the request tenant. Issuing again
 atomically replaces only the earlier action-runner record for that tenant and
 agent ID; a persistence failure restores the complete token inventory and
-returns no usable new secret. Monitoring credentials cannot call the issuance
-route or authenticate an action-runner session, and action-runner credentials
-cannot report, read agent configuration, or manage collectors. Unknown request
-fields and ambiguous, mismatched, or conflicted host identities fail closed.
+returns no usable new secret. Only after that durable replacement may the
+server close the exact superseded live action-runner session, remove it from
+new dispatch, and unblock its outstanding server waits. The created response
+is non-cacheable.
+
+`DELETE /api/agents/action-runner/credential` is the runner's narrowly scoped
+self-revoke operation. It requires the current `agent:exec` bearer credential,
+rejects browser/session authentication, accepts only `agentId` and `hostname`,
+and deletes only when the caller token, organization, action-runner metadata,
+and canonical host binding all match. The durable token inventory is restored
+on persistence failure; after a successful delete, the exact admitted session
+is invalidated and the route returns no credential material. Monitoring
+credentials cannot call issuance or self-revoke or authenticate an
+action-runner session, and action-runner credentials cannot report, read agent
+configuration, or manage collectors. Unknown request fields and ambiguous,
+mismatched, or conflicted host identities fail closed.
 
 The API runtime is decomposed along production domain boundaries so Go can
 compile and execute domain qualification packages concurrently. Shared tenant

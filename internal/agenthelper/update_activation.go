@@ -16,6 +16,12 @@ import (
 
 const maxUpdateArtifactBytes = 100 * 1024 * 1024
 
+const (
+	defaultUpdateRollbackWindow = 2 * time.Minute
+	minUpdateRollbackWindow     = 5 * time.Second
+	maxUpdateRollbackWindow     = 10 * time.Minute
+)
+
 type UpdateActivateRequest struct {
 	ArtifactID string `json:"artifactId"`
 	SHA256     string `json:"sha256"`
@@ -39,12 +45,18 @@ type UpdateRollbackRequest struct {
 	RollbackSHA256 string `json:"rollbackSha256"`
 }
 
+type UpdateCommitRequest struct {
+	ActivationID  string `json:"activationId"`
+	CurrentSHA256 string `json:"currentSha256"`
+}
+
 type UpdateResult struct {
-	Action         string    `json:"action"`
-	ActivationID   string    `json:"activationId"`
-	ActiveSHA256   string    `json:"activeSha256"`
-	RollbackSHA256 string    `json:"rollbackSha256"`
-	DurableAt      time.Time `json:"durableAt"`
+	Action           string    `json:"action"`
+	ActivationID     string    `json:"activationId"`
+	ActiveSHA256     string    `json:"activeSha256"`
+	RollbackSHA256   string    `json:"rollbackSha256"`
+	RollbackDeadline time.Time `json:"rollbackDeadline,omitempty"`
+	DurableAt        time.Time `json:"durableAt"`
 }
 
 type UpdateActivatorConfig struct {
@@ -56,6 +68,8 @@ type UpdateActivatorConfig struct {
 	ValidateOwner           func(*os.File) error
 	ValidateQuarantineOwner func(*os.File) error
 	Now                     func() time.Time
+	RollbackWindow          time.Duration
+	ScheduleRollback        func(time.Duration, func()) func()
 }
 
 type updateActivator struct {
@@ -69,14 +83,18 @@ type updateActivator struct {
 	validateOwner           func(*os.File) error
 	validateQuarantineOwner func(*os.File) error
 	now                     func() time.Time
+	rollbackWindow          time.Duration
+	scheduleRollback        func(time.Duration, func()) func()
+	cancelRollback          func()
 }
 
 type durableUpdateState struct {
-	Action         string    `json:"action"`
-	ActivationID   string    `json:"activationId"`
-	ActiveSHA256   string    `json:"activeSha256"`
-	RollbackSHA256 string    `json:"rollbackSha256"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	Action           string    `json:"action"`
+	ActivationID     string    `json:"activationId"`
+	ActiveSHA256     string    `json:"activeSha256"`
+	RollbackSHA256   string    `json:"rollbackSha256"`
+	RollbackDeadline time.Time `json:"rollbackDeadline,omitempty"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 func NewUpdateActivator(config UpdateActivatorConfig) (UpdateProvider, error) {
@@ -98,12 +116,31 @@ func NewUpdateActivator(config UpdateActivatorConfig) (UpdateProvider, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &updateActivator{
+	rollbackWindow := config.RollbackWindow
+	if rollbackWindow == 0 {
+		rollbackWindow = defaultUpdateRollbackWindow
+	}
+	if rollbackWindow < minUpdateRollbackWindow || rollbackWindow > maxUpdateRollbackWindow {
+		return nil, errors.New("update rollback window must be between 5 seconds and 10 minutes")
+	}
+	scheduleRollback := config.ScheduleRollback
+	if scheduleRollback == nil {
+		scheduleRollback = func(delay time.Duration, callback func()) func() {
+			timer := time.AfterFunc(delay, callback)
+			return func() { timer.Stop() }
+		}
+	}
+	activator := &updateActivator{
 		quarantineDir: config.QuarantineDir, stagingDir: config.StagingDir, targetPath: config.TargetPath,
 		rollbackPath: config.TargetPath + ".last-known-good", statePath: config.StatePath,
 		verifySignature: config.VerifySignature, validateOwner: config.ValidateOwner,
 		validateQuarantineOwner: config.ValidateQuarantineOwner, now: now,
-	}, nil
+		rollbackWindow: rollbackWindow, scheduleRollback: scheduleRollback,
+	}
+	if err := activator.recoverUncommittedLocked(); err != nil {
+		return nil, err
+	}
+	return activator, nil
 }
 
 // Stage promotes exactly one signed collector-downloaded artifact from the
@@ -186,17 +223,30 @@ func (u *updateActivator) Activate(ctx context.Context, request UpdateActivateRe
 		return UpdateResult{}, invalidArtifact("staged artifact signature is invalid")
 	}
 	activationID := request.ArtifactID + ":" + actual[:16]
-	if state, err := u.readState(); err == nil && state.ActivationID == activationID {
-		if state.Action != "activated" || !strings.EqualFold(state.ActiveSHA256, actual) {
-			return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "artifact identity has already completed a different update transition"}
+	if state, err := u.readState(); err == nil {
+		if state.Action == "preparing" || state.Action == "pending" {
+			if state.ActivationID != activationID {
+				return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "another agent update is still awaiting commit or rollback"}
+			}
+			if state.Action == "preparing" {
+				if err := u.recoverStateLocked(state); err != nil {
+					return UpdateResult{}, err
+				}
+				return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "interrupted activation was rolled back and cannot be replayed"}
+			}
+			if !strings.EqualFold(state.ActiveSHA256, actual) {
+				return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "artifact identity has already completed a different update transition"}
+			}
+			if err := u.validateInstalledState(state); err != nil {
+				return UpdateResult{}, err
+			}
+			u.schedulePendingRollbackLocked(state)
+			return updateResultFromState(state), nil
 		}
-		current, currentErr := u.readOwnedBounded(u.targetPath, maxUpdateArtifactBytes)
-		rollback, rollbackErr := u.readOwnedBounded(u.rollbackPath, maxUpdateArtifactBytes)
-		if currentErr != nil || rollbackErr != nil || !strings.EqualFold(sha256Hex(current), state.ActiveSHA256) || !strings.EqualFold(sha256Hex(rollback), state.RollbackSHA256) {
-			return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "durable activation no longer matches installed binaries"}
+		if state.ActivationID == activationID {
+			return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "artifact identity has already completed its update transition"}
 		}
-		return UpdateResult{Action: state.Action, ActivationID: state.ActivationID, ActiveSHA256: state.ActiveSHA256, RollbackSHA256: state.RollbackSHA256, DurableAt: state.UpdatedAt}, nil
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "durable update state is invalid"}
 	}
 	if err := ctx.Err(); err != nil {
@@ -207,20 +257,76 @@ func (u *updateActivator) Activate(ctx context.Context, request UpdateActivateRe
 		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "installed agent binary is unavailable or unsafe"}
 	}
 	rollbackDigest := sha256Hex(current)
+	deadline := u.now().UTC().Add(u.rollbackWindow)
+	preparing := durableUpdateState{
+		Action: "preparing", ActivationID: activationID, ActiveSHA256: actual,
+		RollbackSHA256: rollbackDigest, RollbackDeadline: deadline, UpdatedAt: u.now().UTC(),
+	}
+	if err := u.writeDurableState(preparing); err != nil {
+		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist activation intent"}
+	}
 	if err := u.installDurably(artifact, current); err != nil {
+		_ = u.recoverStateLocked(preparing)
 		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "activate staged agent binary"}
 	}
-	result := UpdateResult{
-		Action: "activated", ActivationID: activationID,
-		ActiveSHA256: actual, RollbackSHA256: rollbackDigest, DurableAt: u.now().UTC(),
+	pending := durableUpdateState{
+		Action: "pending", ActivationID: activationID,
+		ActiveSHA256: actual, RollbackSHA256: rollbackDigest,
+		RollbackDeadline: deadline, UpdatedAt: u.now().UTC(),
 	}
-	if err := u.writeState(result); err != nil {
-		// Restore the pre-activation binary if the durable receipt cannot
-		// commit. A failed operation must not leave an unjournaled activation.
-		_ = u.installDurably(current, artifact)
-		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist activation result"}
+	if err := u.writeDurableState(pending); err != nil {
+		if recoveryErr := u.recoverStateLocked(preparing); recoveryErr != nil {
+			return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist pending activation and restore last-known-good binary"}
+		}
+		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist pending activation"}
 	}
-	return result, nil
+	u.schedulePendingRollbackLocked(pending)
+	return updateResultFromState(pending), nil
+}
+
+func (u *updateActivator) Commit(ctx context.Context, request UpdateCommitRequest) (UpdateResult, error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if !validActivationID(request.ActivationID) || !validSHA256(request.CurrentSHA256) {
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "commit identity is invalid"}
+	}
+	state, err := u.readState()
+	if err != nil {
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "commit identity does not match a durable activation"}
+	}
+	if state.Action == "committed" && state.ActivationID == request.ActivationID && strings.EqualFold(state.ActiveSHA256, request.CurrentSHA256) {
+		return updateResultFromState(state), nil
+	}
+	if state.Action != "pending" || state.ActivationID != request.ActivationID || !strings.EqualFold(state.ActiveSHA256, request.CurrentSHA256) {
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "commit identity does not match the pending activation"}
+	}
+	if !u.now().UTC().Before(state.RollbackDeadline) {
+		if err := u.recoverStateLocked(state); err != nil {
+			return UpdateResult{}, err
+		}
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "activation deadline expired and the update was rolled back"}
+	}
+	if err := ctx.Err(); err != nil {
+		return UpdateResult{}, &ProviderError{Code: ErrorDeadlineExceeded, Message: "update commit deadline exceeded", Retryable: true}
+	}
+	if err := u.validateInstalledState(state); err != nil {
+		return UpdateResult{}, err
+	}
+	if err := u.removeStagedArtifact(artifactIDFromActivation(state.ActivationID)); err != nil {
+		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "remove committed update staging"}
+	}
+	pending := state
+	state.Action = "committed"
+	state.RollbackDeadline = time.Time{}
+	state.UpdatedAt = u.now().UTC()
+	if err := u.writeDurableState(state); err != nil {
+		if recoveryErr := u.recoverStateLocked(pending); recoveryErr != nil {
+			return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist update commit and restore last-known-good binary"}
+		}
+		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist update commit"}
+	}
+	u.cancelPendingRollbackLocked()
+	return updateResultFromState(state), nil
 }
 
 func (u *updateActivator) Rollback(ctx context.Context, request UpdateRollbackRequest) (UpdateResult, error) {
@@ -230,34 +336,162 @@ func (u *updateActivator) Rollback(ctx context.Context, request UpdateRollbackRe
 		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "rollback identity is invalid"}
 	}
 	state, err := u.readState()
-	if err != nil || state.Action != "activated" || state.ActivationID != request.ActivationID ||
+	if err != nil {
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "rollback identity does not match a durable activation"}
+	}
+	if state.Action == "rolled_back" && state.ActivationID == request.ActivationID &&
+		strings.EqualFold(state.RollbackSHA256, request.CurrentSHA256) && strings.EqualFold(state.ActiveSHA256, request.RollbackSHA256) {
+		return updateResultFromState(state), nil
+	}
+	if (state.Action != "pending" && state.Action != "preparing") || state.ActivationID != request.ActivationID ||
 		!strings.EqualFold(state.ActiveSHA256, request.CurrentSHA256) ||
 		!strings.EqualFold(state.RollbackSHA256, request.RollbackSHA256) {
-		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "rollback identity does not match the durable activation"}
-	}
-	current, err := u.readOwnedBounded(u.targetPath, maxUpdateArtifactBytes)
-	if err != nil || !strings.EqualFold(sha256Hex(current), state.ActiveSHA256) {
-		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "installed agent identity changed after activation"}
-	}
-	rollback, err := u.readOwnedBounded(u.rollbackPath, maxUpdateArtifactBytes)
-	if err != nil || !strings.EqualFold(sha256Hex(rollback), state.RollbackSHA256) {
-		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "last-known-good identity changed after activation"}
+		return UpdateResult{}, &ProviderError{Code: ErrorStateConflict, Message: "rollback identity does not match the pending activation"}
 	}
 	if err := ctx.Err(); err != nil {
 		return UpdateResult{}, &ProviderError{Code: ErrorDeadlineExceeded, Message: "update rollback deadline exceeded", Retryable: true}
 	}
-	if err := u.installDurably(rollback, current); err != nil {
-		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "restore last-known-good agent binary"}
+	if err := u.recoverStateLocked(state); err != nil {
+		return UpdateResult{}, err
 	}
-	result := UpdateResult{
+	rolledBack, err := u.readState()
+	if err != nil {
+		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "read durable rollback result"}
+	}
+	return updateResultFromState(rolledBack), nil
+}
+
+func (u *updateActivator) recoverUncommittedLocked() error {
+	state, err := u.readState()
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return &ProviderError{Code: ErrorStateConflict, Message: "durable update state is invalid"}
+	}
+	if state.Action != "preparing" && state.Action != "pending" {
+		return nil
+	}
+	return u.recoverStateLocked(state)
+}
+
+func (u *updateActivator) recoverStateLocked(state durableUpdateState) error {
+	if state.Action != "preparing" && state.Action != "pending" {
+		return &ProviderError{Code: ErrorStateConflict, Message: "update state is not recoverable"}
+	}
+	current, err := u.readOwnedBounded(u.targetPath, maxUpdateArtifactBytes)
+	if err != nil {
+		return &ProviderError{Code: ErrorStateConflict, Message: "installed agent binary is unavailable during recovery"}
+	}
+	currentDigest := sha256Hex(current)
+	if strings.EqualFold(currentDigest, state.ActiveSHA256) {
+		rollback, rollbackErr := u.readOwnedBounded(u.rollbackPath, maxUpdateArtifactBytes)
+		if rollbackErr != nil || !strings.EqualFold(sha256Hex(rollback), state.RollbackSHA256) {
+			return &ProviderError{Code: ErrorStateConflict, Message: "last-known-good binary is unavailable during recovery"}
+		}
+		if err := u.installDurably(rollback, current); err != nil {
+			return &ProviderError{Code: ErrorInternal, Message: "restore last-known-good agent binary"}
+		}
+	} else if !strings.EqualFold(currentDigest, state.RollbackSHA256) {
+		return &ProviderError{Code: ErrorStateConflict, Message: "installed agent identity changed during pending activation"}
+	}
+
+	rolledBack := durableUpdateState{
 		Action: "rolled_back", ActivationID: state.ActivationID,
-		ActiveSHA256: state.RollbackSHA256, RollbackSHA256: state.ActiveSHA256, DurableAt: u.now().UTC(),
+		ActiveSHA256: state.RollbackSHA256, RollbackSHA256: state.ActiveSHA256,
+		UpdatedAt: u.now().UTC(),
 	}
-	if err := u.writeState(result); err != nil {
-		_ = u.installDurably(current, rollback)
-		return UpdateResult{}, &ProviderError{Code: ErrorInternal, Message: "persist rollback result"}
+	// Keep the durable state recoverable until the staged payload has also
+	// been removed. A crash anywhere before the terminal state write will
+	// replay this same bounded rollback and cleanup on helper startup.
+	if err := u.removeStagedArtifact(artifactIDFromActivation(state.ActivationID)); err != nil {
+		return &ProviderError{Code: ErrorInternal, Message: "remove rolled-back update staging"}
 	}
-	return result, nil
+	if err := u.writeDurableState(rolledBack); err != nil {
+		return &ProviderError{Code: ErrorInternal, Message: "persist rollback result"}
+	}
+	u.cancelPendingRollbackLocked()
+	return nil
+}
+
+func (u *updateActivator) validateInstalledState(state durableUpdateState) error {
+	current, currentErr := u.readOwnedBounded(u.targetPath, maxUpdateArtifactBytes)
+	rollback, rollbackErr := u.readOwnedBounded(u.rollbackPath, maxUpdateArtifactBytes)
+	if currentErr != nil || rollbackErr != nil ||
+		!strings.EqualFold(sha256Hex(current), state.ActiveSHA256) ||
+		!strings.EqualFold(sha256Hex(rollback), state.RollbackSHA256) {
+		return &ProviderError{Code: ErrorStateConflict, Message: "durable activation no longer matches installed binaries"}
+	}
+	return nil
+}
+
+func (u *updateActivator) schedulePendingRollbackLocked(state durableUpdateState) {
+	u.cancelPendingRollbackLocked()
+	delay := state.RollbackDeadline.Sub(u.now().UTC())
+	if delay < 0 {
+		delay = 0
+	}
+	u.cancelRollback = u.scheduleRollback(delay, func() {
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		current, err := u.readState()
+		if err != nil || current.Action != "pending" || current.ActivationID != state.ActivationID {
+			return
+		}
+		_ = u.recoverStateLocked(current)
+	})
+}
+
+func (u *updateActivator) cancelPendingRollbackLocked() {
+	if u.cancelRollback != nil {
+		u.cancelRollback()
+		u.cancelRollback = nil
+	}
+}
+
+func updateResultFromState(state durableUpdateState) UpdateResult {
+	return UpdateResult{
+		Action: state.Action, ActivationID: state.ActivationID,
+		ActiveSHA256: state.ActiveSHA256, RollbackSHA256: state.RollbackSHA256,
+		RollbackDeadline: state.RollbackDeadline, DurableAt: state.UpdatedAt,
+	}
+}
+
+func artifactIDFromActivation(activationID string) string {
+	parts := strings.SplitN(activationID, ":", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	return parts[0]
+}
+
+func (u *updateActivator) removeStagedArtifact(artifactID string) error {
+	if !validArtifactID(artifactID) {
+		return errors.New("invalid staged artifact identity")
+	}
+	destination := filepath.Join(u.stagingDir, artifactID)
+	if _, err := os.Lstat(destination); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if err := u.validateDirectory(destination); err != nil {
+		return err
+	}
+	for _, name := range []string{"pulse-agent", "pulse-agent.sig"} {
+		path := filepath.Join(destination, name)
+		info, err := os.Lstat(path)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("unsafe staged artifact cleanup target")
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(destination); err != nil {
+		return err
+	}
+	return syncDirectory(u.stagingDir)
 }
 
 func (u *updateActivator) validateDirectory(path string) error {
@@ -386,8 +620,7 @@ func (u *updateActivator) installDurably(active, lastKnownGood []byte) error {
 	return syncDirectory(targetDir)
 }
 
-func (u *updateActivator) writeState(result UpdateResult) error {
-	state := durableUpdateState{Action: result.Action, ActivationID: result.ActivationID, ActiveSHA256: result.ActiveSHA256, RollbackSHA256: result.RollbackSHA256, UpdatedAt: result.DurableAt}
+func (u *updateActivator) writeDurableState(state durableUpdateState) error {
 	data, err := json.Marshal(state)
 	if err != nil {
 		return err
