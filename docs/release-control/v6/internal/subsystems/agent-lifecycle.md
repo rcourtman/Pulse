@@ -5906,6 +5906,11 @@ recovery, and uninstall lifecycle. The dedicated ephemeral Windows job must
 also clear test-only `ProgramData\Pulse` state immediately before that proof;
 the lifecycle harness still refuses to proceed when the PulseAgent service is
 already installed.
+The Windows native lifecycle job's generated install-command proof consumes
+the governed frontend toolchain and must therefore select Node.js `24`, in
+parity with the release and integration workflows. That build prerequisite
+does not widen agent runtime or installer authority, but drift to another Node
+major invalidates the native lifecycle job as release evidence.
 
 Normal release promotion requires platform-native identity for desktop agent
 binaries. macOS agents must be Developer ID signed, submitted successfully to

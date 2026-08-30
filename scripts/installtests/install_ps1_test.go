@@ -110,6 +110,7 @@ func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
 
 	workflow := string(content)
 	required := []string{
+		`node-version: '24'`,
 		`$selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'`,
 		`$selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'`,
 		`--self-test --state-dir $selfTestStateDir --log-file $selfTestLogFile`,
@@ -119,7 +120,7 @@ func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
-			t.Fatalf("native Windows self-test must keep lifecycle state isolated: %s", needle)
+			t.Fatalf("native Windows workflow must keep its governed lifecycle proof intact: %s", needle)
 		}
 	}
 }

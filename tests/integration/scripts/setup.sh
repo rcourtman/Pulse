@@ -33,13 +33,13 @@ echo "✅ Docker Compose is available"
 
 # Check Node.js
 if ! command -v node &> /dev/null; then
-    echo "❌ Node.js is not installed. Please install Node.js 18+ first."
+    echo "❌ Node.js is not installed. Please install Node.js 24 first."
     exit 1
 fi
 
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo "❌ Node.js version 18 or higher is required (found: $(node -v))"
+if [ "$NODE_VERSION" -ne 24 ]; then
+    echo "❌ Node.js major version 24 is required (found: $(node -v))"
     exit 1
 fi
 echo "✅ Node.js $(node -v) is available"

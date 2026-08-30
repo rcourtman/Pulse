@@ -69,7 +69,7 @@ and installer tooling.
 git clone https://github.com/rcourtman/Pulse.git
 cd Pulse
 
-# Install Go 1.26 and Node.js 20 with your preferred package manager.
+# Install Go 1.26 and Node.js 24 with your preferred package manager.
 
 # Install the repository and frontend dependencies exactly from their locks
 npm ci

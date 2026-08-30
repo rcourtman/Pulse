@@ -24,6 +24,18 @@ def manifest_directories(filename: str) -> list[str]:
     return sorted(directories)
 
 
+def dockerfile_directories() -> list[str]:
+    """Return every directory containing a Docker build manifest."""
+    directories = set()
+    for manifest in ROOT.rglob("Dockerfile*"):
+        relative = manifest.relative_to(ROOT)
+        if "node_modules" in relative.parts:
+            continue
+        parent = relative.parent.as_posix()
+        directories.add("/" if parent == "." else f"/{parent}")
+    return sorted(directories)
+
+
 class DependabotConfigTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -34,7 +46,15 @@ class DependabotConfigTest(unittest.TestCase):
 
     def test_covers_every_shipped_dependency_ecosystem(self) -> None:
         self.assertEqual(
-            set(self.updates), {"github-actions", "gomod", "npm", "docker"}
+            set(self.updates),
+            {
+                "github-actions",
+                "gomod",
+                "npm",
+                "docker",
+                "docker-compose",
+                "devcontainers",
+            },
         )
         self.assertEqual(self.updates["github-actions"]["directory"], "/")
         self.assertEqual(
@@ -46,9 +66,14 @@ class DependabotConfigTest(unittest.TestCase):
             manifest_directories("package-lock.json"),
         )
         self.assertEqual(
-            self.updates["docker"]["directories"],
-            ["/", "/deploy/provider-msp"],
+            sorted(self.updates["docker"]["directories"]),
+            dockerfile_directories(),
         )
+        self.assertEqual(
+            self.updates["docker-compose"]["directory"],
+            "/tests/integration",
+        )
+        self.assertEqual(self.updates["devcontainers"]["directory"], "/")
 
     def test_updates_are_weekly_staggered_and_bounded(self) -> None:
         self.assertEqual(self.config["version"], 2)
@@ -99,6 +124,17 @@ class DependabotConfigTest(unittest.TestCase):
         }
         self.assertEqual(set(ignored), {"node", "golang", "alpine"})
         self.assertTrue(all(types == all_semver for types in ignored.values()))
+
+        compose_ignored = self.updates["docker-compose"]["ignore"]
+        self.assertEqual(
+            compose_ignored,
+            [
+                {
+                    "dependency-name": "alpine",
+                    "update-types": sorted(all_semver),
+                }
+            ],
+        )
 
     def test_weekly_scan_covers_the_same_lockfiles(self) -> None:
         workflow = yaml.safe_load(SECURITY_SCAN.read_text(encoding="utf-8"))

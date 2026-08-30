@@ -49,8 +49,8 @@ if ! docker compose version >/dev/null 2>&1; then
   echo "Error: Docker Compose v2 is required on the worker." >&2
   exit 3
 fi
-if [ "$(node -p "process.versions.node.split('.')[0]")" != "20" ]; then
-  echo "Error: the worker must use Node.js 20 to match the release workflows." >&2
+if [ "$(node -p "process.versions.node.split('.')[0]")" != "24" ]; then
+  echo "Error: the worker must use Node.js 24 to match the release workflows." >&2
   exit 3
 fi
 

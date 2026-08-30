@@ -15,6 +15,18 @@ import {
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const integrationRoot = path.resolve(scriptsDir, '..');
 
+test('integration setup pins the governed Node.js major', async () => {
+  const [quickStart, setupScript] = await Promise.all([
+    fs.readFile(path.join(integrationRoot, 'QUICK_START.md'), 'utf8'),
+    fs.readFile(path.join(scriptsDir, 'setup.sh'), 'utf8'),
+  ]);
+
+  assert.match(quickStart, /- Node\.js 24 and npm/);
+  assert.match(setupScript, /if \[ "\$NODE_VERSION" -ne 24 \]; then/);
+  assert.match(setupScript, /Node\.js major version 24 is required/);
+  assert.doesNotMatch(setupScript, /Node\.js 24\+/);
+});
+
 test('buildManagedLocalBackendState uses deterministic defaults', () => {
   const state = buildManagedLocalBackendState({});
   assert.equal(state.repoRoot.endsWith('/repos/pulse'), true);

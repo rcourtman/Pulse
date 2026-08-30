@@ -4,7 +4,7 @@ ARG APPRISE_VERSION=1.12.0
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder
+FROM --platform=linux/amd64 node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
@@ -213,7 +213,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS agent_runtime
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH
@@ -254,7 +254,7 @@ ENTRYPOINT ["/usr/local/bin/pulse-agent"]
 
 # Build the pinned Apprise CLI separately so release runtimes only retain the
 # Python interpreter and installed notification dependencies, not pip.
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS apprise-builder
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS apprise-builder
 
 ARG APPRISE_VERSION
 
@@ -265,7 +265,7 @@ RUN apk --no-cache add python3 py3-pip && \
 
 # Base operating-system surface shared by source-built and candidate-assembled
 # Pulse server images.
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-foundation
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS pulse-runtime-foundation
 
 ARG APPRISE_VERSION
 
@@ -416,7 +416,7 @@ RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1 && \
     chown -R pulse:pulse /opt/pulse
 
 # Unified Agent image assembled from the same immutable candidate payload.
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime_prebuilt
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS agent_runtime_prebuilt
 
 ARG TARGETARCH
 ARG TARGETVARIANT

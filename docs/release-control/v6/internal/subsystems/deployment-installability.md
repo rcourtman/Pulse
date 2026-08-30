@@ -2793,6 +2793,17 @@ That same supply-chain boundary also owns the checked-in build roots
 themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
 manifest-list digest so multi-arch release builds do not silently drift onto a
 different upstream filesystem just because a mutable tag was republished.
+The governed frontend and container lines are Node.js `24` and Alpine `3.24`.
+Every `actions/setup-node` release, governance, security, integration, and
+native-agent job, the release-preflight worker, the developer container, and
+the release frontend stages must stay on Node.js `24`; local integration setup
+must reject a different major instead of treating newer non-LTS majors as
+equivalent. Shipped and test Dockerfiles must pin every external base to a full
+manifest-list digest, and checked-in integration Compose images must do the
+same. Node.js `24` is normally supported through `2028-04-30` and Alpine
+`3.24` through `2028-06-01`; a weekly repository check must fail once either
+governed line has less than 180 days of normal upstream support remaining so a
+replacement can be qualified before delivery depends on an unsupported line.
 The governed v6 release Go patch level is part of that same boundary:
 `go.mod`, `scripts/.go-version`, `scripts/install-go-toolchain.sh`,
 `scripts/build-release.sh`, the Go builder stages in `Dockerfile` and

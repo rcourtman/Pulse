@@ -2,7 +2,7 @@ services:
   # Seed a deterministic bootstrap token for first-run setup E2E flows.
   # This is only used by the test stack and is safe to keep deterministic.
   seed-bootstrap-token:
-    image: alpine:3.20
+    image: alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: pulse-test-seed-bootstrap-token
     environment:
       - PULSE_E2E_BOOTSTRAP_TOKEN=${PULSE_E2E_BOOTSTRAP_TOKEN:-0123456789abcdef0123456789abcdef0123456789abcdef}

@@ -80,7 +80,9 @@ updates:
   - package-ecosystem: "docker"
     directories:
       - "/"
+      - "/.devcontainer"
       - "/deploy/provider-msp"
+      - "/tests/integration/mock-github-server"
     schedule:
       interval: "weekly"
       day: "tuesday"
@@ -110,3 +112,33 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
           - "version-update:semver-patch"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/tests/integration"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:40"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+    # Keep the governed Alpine release line explicit while allowing automatic
+    # digest refreshes for the seed container used by release qualification.
+    ignore:
+      - dependency-name: "alpine"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+
+  - package-ecosystem: "devcontainers"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:50"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"

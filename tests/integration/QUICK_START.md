@@ -5,7 +5,7 @@ This guide will help you get the update integration tests running quickly.
 ## Prerequisites
 
 - Docker and Docker Compose
-- Node.js 18+ and npm
+- Node.js 24 and npm
 - Go 1.25+ (for building mock server)
 
 ## Setup (One-time)
