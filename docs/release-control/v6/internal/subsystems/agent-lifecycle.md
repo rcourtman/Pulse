@@ -43,6 +43,13 @@ host-storage-cleanup, Proxmox guest lifecycle, and container lifecycle/update
 operations. Generic shell, exec, unrestricted `read_file`, and deploy requests
 are forbidden. Removing or disabling the runner leaves collector monitoring
 and the helper unchanged.
+`docs/AGENT_SECURITY.md` owns the canonical safe-profile platform,
+privilege, telemetry, and action qualification matrix, and its shipped frontend
+copy must remain byte-identical. Each unqualified or unavailable row must name
+the fail-closed behavior, residual owner, and concrete removal condition.
+Implemented or mocked behavior is never promoted to live-provider
+qualification, and the safe profile cannot become the general default while a
+matrix row required by that default remains unqualified.
 Safe-profile collector credentials carry only `agent:report` and the
 host-bound `agent:config:read` capability; they carry neither `agent:exec` nor
 the broader `agent:manage` scope. Migration to that profile must durably remove

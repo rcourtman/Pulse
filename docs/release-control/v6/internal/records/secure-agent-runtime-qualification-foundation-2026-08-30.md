@@ -126,7 +126,9 @@ unauthenticated, artifact-bound self-attestation rather than independent proof.
 Focused regressions and the schema-v3 guarded systemd evidence cover the current
 committed-main semantics. They are not a substitute for exact release-candidate
 reproduction, representative provider/appliance qualification, or external
-review.
+review. The canonical support and residual matrix is published in
+`docs/AGENT_SECURITY.md`; unqualified rows remain explicit blockers rather than
+being inferred from the generic Linux result.
 
 The safe profile therefore remains opt-in. The default may not ratchet until
 the exact release candidate reproduces the complete systemd result;

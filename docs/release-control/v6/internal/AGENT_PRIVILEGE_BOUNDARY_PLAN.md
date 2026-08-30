@@ -366,7 +366,9 @@ Required proof:
 
 Deliver:
 
-- publish the per-platform privilege and telemetry matrix
+- publish and keep current the per-platform privilege and telemetry matrix in
+  `docs/AGENT_SECURITY.md`; every unqualified row names its owner, visible
+  fail-closed behavior, and removal condition
 - run migration rehearsals on representative Proxmox, Linux, Docker/Podman,
   SMART, and update environments
 - complete an external security review focused on the local helper protocol,

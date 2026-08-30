@@ -184,6 +184,32 @@ live-host migration and helper update staging/activation/rollback exercises,
 container-runtime parity, and appliance qualification are still required
 before the profile can become the general default.
 
+### Safe-profile support and qualification matrix
+
+`Qualified` below means the named evidence exercised the behavior on a real
+operating-system boundary. `Implemented, unqualified` means the closed code
+path and focused regressions exist, but representative live-provider evidence
+does not. `Unavailable` means the safe installer refuses or visibly degrades
+that capability; it never falls back to a root collector, Docker group, sudo,
+or generic command path.
+
+| Platform or capability | Preferred boundary | Safe-profile behavior | Qualification and default implication | Residual owner and removal condition |
+|---|---|---|---|---|
+| Proxmox VE/PBS/PMG inventory, status, storage, and ordinary metrics | API-only connection with a narrowly scoped token; no host agent | No collector, helper, or runner authority is required for this data | Supported independently of the safe host-agent profile; it does not prove host-local SMART, LXC filesystem, or action parity | `agent-lifecycle`: keep API permissions and returned telemetry covered by provider tests |
+| Standard Linux systemd host telemetry and collector update | Unprivileged `pulse-agent` plus the root-owned typed helper | Core `/proc`, filesystem, network, RAID, and hwmon telemetry stays in the collector; signed update activation crosses the fixed helper transaction | **Qualified on disposable Ubuntu 24.04.4 arm64 at committed main** for install, migration, explicit/automatic rollback, update, helper health, reporting continuity, and process/credential separation. Remains opt-in pending exact-RC reproduction and external review | `deployment-installability` and `security-privacy`: reproduce the twelve-scenario receipt from the designated release candidate and accept the external boundary review |
+| Linux SMART telemetry | `smart.snapshot` through the no-network helper; no caller-selected device or arguments | Implemented, unqualified on representative physical disks. Helper failure omits/degrades SMART only; the collector does not retry as root | Does not yet justify SMART parity or a default change | `agent-lifecycle`: record live SATA, SAS/controller, USB bridge, and NVMe evidence, including standby, permission failure, timeout, and partial-data cases |
+| Proxmox node-local LXC filesystem telemetry | `proxmox.lxc_filesystems` through the no-network helper using fixed bounded `pct` operations | Implemented, unqualified on a representative PVE node. Helper failure omits/degrades this snapshot only | Does not yet justify Proxmox host-agent parity or a default change | `agent-lifecycle`: record live running/stopped LXC, mount, timeout, output-bound, and helper-loss behavior on supported PVE versions |
+| Rootful Docker or Podman inventory | No direct collector access to a root-equivalent daemon socket | **Unavailable in the safe profile.** Migration disables the provider visibly. A closed helper `container.inventory` operation exists, but collector integration and live parity are not qualified | Rootful container parity is an explicit default blocker; the legacy/root profile is not safe-profile evidence | `agent-lifecycle`: either integrate and qualify bounded helper inventory or retain the explicit degradation permanently |
+| Collector-owned rootless Docker or Podman | Direct access only to one usable runtime socket owned by the `pulse-agent` UID | Implemented, unqualified live. Ambiguous, root-owned, unreadable, unwritable, or unavailable sockets disable container monitoring | Does not yet justify container-runtime parity or a default change | `deployment-installability`: record fresh install, migration, restart, socket-loss, ambiguity, and telemetry parity on both rootless Docker and rootless Podman |
+| Separate runner package update and package-cache cleanup | Root-owned `pulse-agent-runner`, host-bound action credential, typed request, postcondition, and durable receipt | A real verified apt-cache mutation, stale-fingerprint refusal, replay, rotation, and self-revocation are qualified in the committed-main systemd receipt | Qualified only for the exercised apt-cache mutation; it does not qualify every runner operation or an exact release candidate | `agent-lifecycle` and `api-contracts`: reproduce from the RC and add representative package-update success/failure/cancellation evidence |
+| Separate runner Proxmox guest and container lifecycle/update actions | Root-owned runner with closed typed protocols; never the monitoring collector | Implemented, unqualified on representative PVE and container-runtime targets | No live-provider action-parity claim and no default change | `agent-lifecycle`: record target-bound success, stale-state refusal, cancellation, reconnect/replay, and independent postconditions on disposable real targets |
+| Appliance, non-systemd, Windows, and macOS host-agent profiles | Platform API where sufficient; otherwise an explicitly named legacy/full-trust profile | **Unavailable for safe-profile apply.** The installer fails closed instead of silently installing a root-equivalent profile | Excluded from the Linux safe-profile claim | `deployment-installability`: land a platform-specific service, filesystem, update, helper, migration, rollback, and live-proof contract before marking that platform supported |
+
+The committed-main Linux evidence is recorded in
+`docs/release-control/v6/internal/records/secure-agent-runtime-qualification-foundation-2026-08-30.md`.
+That receipt is artifact-bound operator self-attestation, not an independently
+authenticated external assessment. The safe profile therefore remains opt-in.
+
 Monitoring never implies remediation. On the supported Linux systemd profile,
 an operator may separately enroll the typed action runner:
 
