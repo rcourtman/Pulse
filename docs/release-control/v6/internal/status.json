@@ -9807,6 +9807,55 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "infrastructure-aware-service-assurance",
+      "summary": "Pulse can execute and correlate basic availability probes, but it does not yet preserve trustworthy categorical history, verify application response contracts, combine runtime, platform, network, application, dependency, location, and freshness evidence into one service-delivery journey, or synthesize infrastructure-aware incidents and timelines. Without one governed product model, incremental protocol additions would produce a parallel monitor inventory and imitate endpoint-monitoring products instead of extending Pulse's canonical resource, relationship, fleet, and Patrol strengths.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-08-30",
+      "lane_ids": [
+        "L6",
+        "L8",
+        "L13",
+        "L16",
+        "L19",
+        "L22",
+        "L23"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "alerts",
+        "api-contracts",
+        "frontend-primitives",
+        "monitoring",
+        "patrol-intelligence",
+        "unified-resources"
+      ],
+      "proposed_resolution": "new-lane",
+      "coverage_impact": 9,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/AVAILABILITY_HISTORY_CONTRACT.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/SERVICE_ASSURANCE_PLAN.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/availability_poller.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/servicediscovery/availability_suggestion.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
@@ -9836,6 +9885,41 @@
       "demand_evidence": [
         "community-feedback: https://www.youtube.com/watch?v=cdaA-CJG-Ds",
         "architecture-plan: docs/release-control/v6/internal/AGENT_PRIVILEGE_BOUNDARY_PLAN.md"
+      ]
+    },
+    {
+      "id": "infrastructure-aware-service-assurance",
+      "name": "Infrastructure-Aware Service Assurance",
+      "summary": "Extend Pulse from infrastructure-state monitoring into service-delivery assurance by attaching active application verification to canonical resources, preserving coverage-aware history, using discovered services and remote agents for setup and observation, correlating failures through infrastructure relationships, and presenting the resulting evidence through fleet, incident, timeline, and Patrol workflows instead of a standalone monitor clone.",
+      "status": "proposed",
+      "recorded_at": "2026-08-30",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L6",
+        "L8",
+        "L13",
+        "L16",
+        "L19",
+        "L22",
+        "L23"
+      ],
+      "coverage_gap_ids": [
+        "infrastructure-aware-service-assurance"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "alerts",
+        "api-contracts",
+        "frontend-primitives",
+        "monitoring",
+        "patrol-intelligence",
+        "unified-resources"
+      ],
+      "demand_evidence": [
+        "architecture-plan: docs/release-control/v6/internal/SERVICE_ASSURANCE_PLAN.md",
+        "demand-contract: docs/AVAILABILITY_HISTORY_CONTRACT.md",
+        "product-demand: pulse-pro/FEATURE_REQUESTS.md#fleet-scale-machine-availability-and-service-probes",
+        "telemetry: 339 of 6578 active persistent installs configured 2449 availability targets on 2026-08-29; 70 installs had at least 10 targets"
       ]
     }
   ],
