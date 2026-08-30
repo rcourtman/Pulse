@@ -174,6 +174,10 @@ type ResourceDiscovery struct {
 	// and known default ports. When approved by the user this becomes a canonical
 	// availability target via POST /api/availability-targets.
 	SuggestedAvailabilityProbe *AvailabilityProbeSuggestion `json:"suggested_availability_probe,omitempty"`
+	// The exact proposal evidence an operator dismissed. A dismissal remains in
+	// force only while it matches SuggestedAvailabilityProbe.EvidenceFingerprint;
+	// materially changed discovery evidence is reviewable again.
+	DismissedAvailabilityProbeFingerprint string `json:"dismissed_availability_probe_fingerprint,omitempty"`
 }
 
 // AvailabilityProbeSuggestion represents a suggested availability probe
@@ -182,12 +186,13 @@ type ResourceDiscovery struct {
 // existing POST /api/availability-targets API. There is no second management
 // surface.
 type AvailabilityProbeSuggestion struct {
-	Protocol    string `json:"protocol"` // "http", "https", "tcp"
-	Address     string `json:"address"`  // IP or hostname
-	Port        int    `json:"port,omitempty"`
-	Path        string `json:"path,omitempty"`
-	ServiceName string `json:"service_name"` // Human-readable service name for display
-	Reason      string `json:"reason"`       // Why this suggestion was generated
+	Protocol            string `json:"protocol"` // "http", "https", "tcp"
+	Address             string `json:"address"`  // IP or hostname
+	Port                int    `json:"port,omitempty"`
+	Path                string `json:"path,omitempty"`
+	ServiceName         string `json:"service_name"`         // Human-readable service name for display
+	Reason              string `json:"reason"`               // Why this suggestion was generated
+	EvidenceFingerprint string `json:"evidence_fingerprint"` // Stable identity for review/dismissal and stale-action rejection
 }
 
 // DiscoveryFact represents a single discovered fact about a resource.
@@ -297,23 +302,33 @@ type UpdateNotesRequest struct {
 	UserSecrets map[string]string `json:"user_secrets,omitempty"`
 }
 
+// UpdateAvailabilityProposalRequest records an explicit operator disposition
+// for the currently presented discovery proposal. The evidence fingerprint is
+// mandatory so a stale browser cannot dismiss materially newer evidence.
+type UpdateAvailabilityProposalRequest struct {
+	EvidenceFingerprint string `json:"evidence_fingerprint"`
+	Status              string `json:"status"` // "dismissed" or "reviewable"
+}
+
 // DiscoverySummary provides a summary of discoveries for listing.
 type DiscoverySummary struct {
-	ID             string          `json:"id"`
-	ResourceType   ResourceType    `json:"resource_type"`
-	ResourceID     string          `json:"resource_id"`
-	TargetID       string          `json:"target_id,omitempty"`
-	AgentID        string          `json:"agent_id,omitempty"`
-	Hostname       string          `json:"hostname"`
-	ServiceType    string          `json:"service_type"`
-	ServiceName    string          `json:"service_name"`
-	ServiceVersion string          `json:"service_version"`
-	Category       ServiceCategory `json:"category"`
-	Confidence     float64         `json:"confidence"`
-	HasUserNotes   bool            `json:"has_user_notes"`
-	UpdatedAt      time.Time       `json:"updated_at"`
-	Fingerprint    string          `json:"fingerprint,omitempty"` // Current fingerprint
-	NeedsDiscovery bool            `json:"needs_discovery"`       // True if fingerprint changed
+	ID                                    string                       `json:"id"`
+	ResourceType                          ResourceType                 `json:"resource_type"`
+	ResourceID                            string                       `json:"resource_id"`
+	TargetID                              string                       `json:"target_id,omitempty"`
+	AgentID                               string                       `json:"agent_id,omitempty"`
+	Hostname                              string                       `json:"hostname"`
+	ServiceType                           string                       `json:"service_type"`
+	ServiceName                           string                       `json:"service_name"`
+	ServiceVersion                        string                       `json:"service_version"`
+	Category                              ServiceCategory              `json:"category"`
+	Confidence                            float64                      `json:"confidence"`
+	HasUserNotes                          bool                         `json:"has_user_notes"`
+	UpdatedAt                             time.Time                    `json:"updated_at"`
+	Fingerprint                           string                       `json:"fingerprint,omitempty"` // Current fingerprint
+	NeedsDiscovery                        bool                         `json:"needs_discovery"`       // True if fingerprint changed
+	SuggestedAvailabilityProbe            *AvailabilityProbeSuggestion `json:"suggested_availability_probe,omitempty"`
+	DismissedAvailabilityProbeFingerprint string                       `json:"dismissed_availability_probe_fingerprint,omitempty"`
 }
 
 // ToSummary converts a full discovery to a summary.
@@ -321,21 +336,23 @@ func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
 	targetID := d.TargetID
 
 	return DiscoverySummary{
-		ID:             d.ID,
-		ResourceType:   d.ResourceType,
-		ResourceID:     d.ResourceID,
-		TargetID:       targetID,
-		AgentID:        d.AgentID,
-		Hostname:       d.Hostname,
-		ServiceType:    d.ServiceType,
-		ServiceName:    d.ServiceName,
-		ServiceVersion: d.ServiceVersion,
-		Category:       d.Category,
-		Confidence:     d.Confidence,
-		HasUserNotes:   d.UserNotes != "",
-		UpdatedAt:      d.UpdatedAt,
-		Fingerprint:    d.Fingerprint,
-		NeedsDiscovery: false, // Will be set by caller if fingerprint changed
+		ID:                                    d.ID,
+		ResourceType:                          d.ResourceType,
+		ResourceID:                            d.ResourceID,
+		TargetID:                              targetID,
+		AgentID:                               d.AgentID,
+		Hostname:                              d.Hostname,
+		ServiceType:                           d.ServiceType,
+		ServiceName:                           d.ServiceName,
+		ServiceVersion:                        d.ServiceVersion,
+		Category:                              d.Category,
+		Confidence:                            d.Confidence,
+		HasUserNotes:                          d.UserNotes != "",
+		UpdatedAt:                             d.UpdatedAt,
+		Fingerprint:                           d.Fingerprint,
+		NeedsDiscovery:                        false, // Will be set by caller if fingerprint changed
+		SuggestedAvailabilityProbe:            d.SuggestedAvailabilityProbe,
+		DismissedAvailabilityProbeFingerprint: d.DismissedAvailabilityProbeFingerprint,
 	}
 }
 

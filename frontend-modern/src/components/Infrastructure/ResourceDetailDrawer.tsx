@@ -247,6 +247,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   agentId={config().agentId}
                   resourceId={config().resourceId}
                   hostname={config().hostname}
+                  canonicalResourceId={props.resource.id}
                   commandsEnabled={drawer.agentMeta()?.commandsEnabled}
                   showManualRunAction
                 />

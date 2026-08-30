@@ -158,6 +158,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
                 agentId={config().agentId}
                 resourceId={config().resourceId}
                 hostname={config().hostname}
+                canonicalResourceId={props.host.id}
                 showManualRunAction
               />
             </Suspense>

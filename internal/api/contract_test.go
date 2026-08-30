@@ -924,19 +924,27 @@ func TestContract_MockDiscoveryEndpointsUseCanonicalPayloads(t *testing.T) {
 		if err := json.NewDecoder(detailRec.Body).Decode(&detail); err != nil {
 			t.Fatalf("decode discovery detail: %v", err)
 		}
-		if !discoveryContractValueEmpty(detail["suggested_url"]) {
-			dockerDetail = detail
-			break
+		proposal, hasProposal := detail["suggested_availability_probe"].(map[string]any)
+		if discoveryContractValueEmpty(detail["suggested_url"]) ||
+			!hasProposal ||
+			discoveryContractValueEmpty(proposal["evidence_fingerprint"]) {
+			continue
 		}
+		dockerDetail = detail
+		break
 	}
 	if dockerDetail == nil {
-		t.Fatalf("expected mock discovery summaries to include Docker workload URL context: %#v", listBody.Discoveries)
+		t.Fatalf("expected mock discovery summaries to include Docker workload URL context and an evidence-bound availability proposal: %#v", listBody.Discoveries)
 	}
 	for _, key := range []string{"service_name", "service_version", "config_paths", "ports", "suggested_url", "cli_access_version"} {
 		value, ok := dockerDetail[key]
 		if !ok || discoveryContractValueEmpty(value) {
 			t.Fatalf("mock discovery detail missing %s: %#v", key, dockerDetail)
 		}
+	}
+	proposal, ok := dockerDetail["suggested_availability_probe"].(map[string]any)
+	if !ok || discoveryContractValueEmpty(proposal["evidence_fingerprint"]) {
+		t.Fatalf("mock discovery detail missing evidence-bound availability proposal: %#v", dockerDetail)
 	}
 	if _, ok := dockerDetail["raw_command_output"]; ok {
 		t.Fatalf("mock discovery detail exposed raw command output: %#v", dockerDetail)

@@ -36,6 +36,7 @@ import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCard
 import { useDiscoveryTabState } from './useDiscoveryTabState';
 import { orderFactsByActionability } from './factOrdering';
 import { deriveCliCommand } from './cliCommand';
+import { AvailabilityProposalCard } from './AvailabilityProposalCard';
 
 // Keep in sync with backend servicediscovery.DiscoveryEngineVersion. A discovery
 // with a lower (or absent) version predates the current discovery engine, so its
@@ -46,6 +47,8 @@ interface DiscoveryTabProps {
   resourceType: ResourceType;
   agentId?: string;
   resourceId: string;
+  /** Canonical unified-resource id used for an explicit assurance attachment. */
+  canonicalResourceId?: string;
   hostname: string;
   /** Whether commands are enabled for this agent (from agent config) */
   commandsEnabled?: boolean;
@@ -71,6 +74,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     isScanning,
     liveElapsedSeconds,
     notesText,
+    mutateDiscovery,
     saveError,
     scanError,
     scanProgress,
@@ -843,6 +847,18 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     </p>
                   </Show>
                 </div>
+              </Show>
+
+              <Show when={d().suggested_availability_probe && props.canonicalResourceId}>
+                <AvailabilityProposalCard
+                  discovery={d()}
+                  resourceType={props.resourceType}
+                  targetId={props.agentId || ''}
+                  resourceId={props.resourceId}
+                  canonicalResourceId={props.canonicalResourceId!}
+                  connectedAgents={connectedAgents()?.agents ?? []}
+                  onDiscoveryUpdated={mutateDiscovery}
+                />
               </Show>
 
               {/* CLI Access */}

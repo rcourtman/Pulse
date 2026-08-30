@@ -335,6 +335,7 @@ export const ResourceAccessDisclosure: Component<{
                       agentId={config().agentId}
                       resourceId={config().resourceId}
                       hostname={config().hostname}
+                      canonicalResourceId={props.resource.id}
                       commandsEnabled={props.drawer.agentMeta()?.commandsEnabled}
                     />
                   </Suspense>

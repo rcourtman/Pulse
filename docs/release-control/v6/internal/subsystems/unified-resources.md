@@ -215,6 +215,8 @@ about the same disk cannot diverge.
 68. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
 69. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
     69a. `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`
+    69b. `frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx`
+    69c. `frontend-modern/src/components/Discovery/availabilityProposalModel.ts`
 70. `frontend-modern/src/utils/agentResources.ts`
 71. `frontend-modern/src/utils/canonicalResourceTypes.ts`
 72. `frontend-modern/src/utils/resourceBadgePresentation.ts`
@@ -3804,6 +3806,15 @@ continue to use the operator-saved web-interface URL. Version, config-path,
 port, and endpoint facts surfaced outside the Discovery sub-tab must be
 labelled as Discovery-observed so API-owned resource facts and command-derived
 facts remain distinguishable.
+Availability proposals are the bounded exception that can become active
+resource evidence only through explicit review. The resource drawer supplies
+the canonical resource ID; the proposal surface previews inferred endpoint and
+behavior separately from operator-controlled name, cadence, and observation
+location; and the final action posts one enabled target with that exact
+`linkedResourceId`. Equivalent attached or standalone endpoints are detected
+before creation. Machine-scoped review may dismiss or restore several service
+proposals, but an item without the current canonical resource context remains
+review-only rather than attaching by hostname, address, or display name.
 That label must be visible through the shared Discovery provenance marker on
 compact cards, suggested URL panels, and other out-of-tab Discovery values
 rather than buried in helper text or inferred from the tab where the operator

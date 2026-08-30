@@ -1,7 +1,7 @@
 # Infrastructure-Aware Service Assurance Plan
 
 Last updated: 2026-08-30
-Status: ACCEPTED — SLICES A AND B IMPLEMENTED
+Status: ACCEPTED — SLICES A, B, AND C IMPLEMENTED
 Governance surfaces:
 
 - `status.json.coverage_gaps.infrastructure-aware-service-assurance`
@@ -228,7 +228,7 @@ Implementation record (2026-08-30): Slice A is delivered through the
 monitoring-owned categorical history store and rollups, server-authored
 configuration revisions and remote receipt timeline, the bounded
 `/api/availability-history` batch contract, and the URL-owned Availability
-fleet presentation. Its release proofs live in the owner contract. Slices C
+fleet presentation. Its release proofs live in the owner contract. Slices D
 through H remain ordered future work; acceptance of this product lane does not
 imply that deferred breadth is already delivered.
 
@@ -269,7 +269,7 @@ re-entry. Current status and unified-resource facets preserve transport
 reachability separately from typed application correctness while the overall
 result remains the alert and history outcome. Legacy targets without an
 explicit contract retain their previous HEAD-with-bounded-GET-fallback
-semantics. Slices C through H remain ordered future work.
+semantics. Slices D through H remain ordered future work.
 
 ### Slice C: Discovery-Led Assurance Onboarding
 
@@ -292,6 +292,19 @@ Exit conditions:
   changes;
 - ambiguous identity or endpoint evidence fails to a review state rather than
   attaching to a guessed resource.
+
+Implementation record (2026-08-30): Slice C is delivered through the existing
+Discovery suggestion and availability-target contracts. Each bounded
+HTTP/HTTPS/TCP proposal carries a normalized evidence fingerprint; dismissals
+persist only for that exact evidence and stale disposition writes fail with a
+conflict. The canonical resource drawer previews inferred endpoint and
+application behavior separately from operator-controlled name, cadence, and
+observation location, offers an unsaved test, detects equivalent attached or
+standalone endpoints, and creates one explicitly enabled availability target
+with the drawer's canonical resource ID only after the operator chooses the
+activation action. A machine-scoped queue supports bulk review and
+evidence-bound dismiss/restore without bulk activation or guessed resource
+attachment. Slices D through H remain ordered future work.
 
 ### Slice D: Multi-Location Delivery Evidence
 

@@ -1517,12 +1517,23 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 				// Suggest web interface URL and availability probe using Docker host hostname
 				discovery.SuggestedURL = SuggestWebURL(discovery, host.Hostname)
 				discovery.SuggestedAvailabilityProbe = SuggestAvailabilityProbe(discovery, host.Hostname)
+				preserveAvailabilityProposalDismissal(existing, discovery)
 
 				if err := s.store.Save(discovery); err != nil {
 					log.Warn().Err(err).Str("id", id).Msg("failed to save discovery")
 				}
 			}
 		}
+	}
+}
+
+func preserveAvailabilityProposalDismissal(existing, next *ResourceDiscovery) {
+	if existing == nil || next == nil || next.SuggestedAvailabilityProbe == nil {
+		return
+	}
+	dismissed := strings.TrimSpace(existing.DismissedAvailabilityProbeFingerprint)
+	if dismissed != "" && dismissed == next.SuggestedAvailabilityProbe.EvidenceFingerprint {
+		next.DismissedAvailabilityProbeFingerprint = dismissed
 	}
 }
 
@@ -2064,6 +2075,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	if existing != nil {
 		discovery.UserNotes = existing.UserNotes
 		discovery.UserSecrets = existing.UserSecrets
+		discovery.DismissedAvailabilityProbeFingerprint = existing.DismissedAvailabilityProbeFingerprint
 		if discovery.DiscoveredAt.IsZero() || existing.DiscoveredAt.Before(discovery.DiscoveredAt) {
 			discovery.DiscoveredAt = existing.DiscoveredAt
 		}
@@ -3550,6 +3562,12 @@ func (s *Service) lookupHostnameFromState(resourceType ResourceType, hostID, res
 // UpdateNotes updates user notes for a discovery.
 func (s *Service) UpdateNotes(id string, notes string, secrets map[string]string) error {
 	return s.store.UpdateNotes(id, notes, secrets)
+}
+
+// UpdateAvailabilityProposalDisposition records a reviewed discovery proposal
+// without creating or activating a network check.
+func (s *Service) UpdateAvailabilityProposalDisposition(id, evidenceFingerprint string, dismissed bool) error {
+	return s.store.UpdateAvailabilityProposalDisposition(id, evidenceFingerprint, dismissed)
 }
 
 // DeleteDiscovery deletes a discovery.

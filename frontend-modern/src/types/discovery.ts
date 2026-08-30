@@ -97,6 +97,7 @@ export interface ResourceDiscovery {
   suggested_url_source_detail?: string;
   suggested_url_diagnostic?: string;
   suggested_availability_probe?: AvailabilityProbeSuggestion;
+  dismissed_availability_probe_fingerprint?: string;
 }
 
 export interface AvailabilityProbeSuggestion {
@@ -106,6 +107,8 @@ export interface AvailabilityProbeSuggestion {
   path?: string;
   service_name: string;
   reason: string;
+  /** Present on proposals normalized by the governed review contract. */
+  evidence_fingerprint?: string;
 }
 
 export interface DiscoverySummary {
@@ -126,7 +129,11 @@ export interface DiscoverySummary {
   updated_at: string;
   fingerprint?: string; // Current fingerprint
   needs_discovery?: boolean; // True if fingerprint changed
+  suggested_availability_probe?: AvailabilityProbeSuggestion;
+  dismissed_availability_probe_fingerprint?: string;
 }
+
+export type AvailabilityProposalStatus = 'dismissed' | 'reviewable';
 
 export interface DiscoveryProgress {
   resource_id: string;

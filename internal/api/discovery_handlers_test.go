@@ -364,6 +364,41 @@ func TestHandleDeleteDiscovery(t *testing.T) {
 	assert.Nil(t, d)
 }
 
+func TestHandleUpdateAvailabilityProposal(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+	proposal := servicediscovery.SuggestAvailabilityProbe(&servicediscovery.ResourceDiscovery{
+		ServiceType: "grafana",
+		ServiceName: "Grafana",
+	}, "10.0.0.8")
+	discovery := &servicediscovery.ResourceDiscovery{
+		ID:                         "vm:node1:100",
+		ResourceType:               servicediscovery.ResourceTypeVM,
+		ResourceID:                 "100",
+		TargetID:                   "node1",
+		SuggestedAvailabilityProbe: proposal,
+	}
+	require.NoError(t, store.Save(discovery))
+
+	body := fmt.Sprintf(`{"evidence_fingerprint":%q,"status":"dismissed"}`, proposal.EvidenceFingerprint)
+	req := httptest.NewRequest(http.MethodPut, "/api/discovery/vm/node1/100/availability-proposal", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	h.HandleUpdateAvailabilityProposal(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var updated servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&updated))
+	assert.Equal(t, proposal.EvidenceFingerprint, updated.DismissedAvailabilityProbeFingerprint)
+
+	staleReq := httptest.NewRequest(http.MethodPut, "/api/discovery/vm/node1/100/availability-proposal", bytes.NewBufferString(`{"evidence_fingerprint":"sha256:stale","status":"dismissed"}`))
+	staleRec := httptest.NewRecorder()
+	h.HandleUpdateAvailabilityProposal(staleRec, staleReq)
+	assert.Equal(t, http.StatusConflict, staleRec.Code)
+
+	invalidReq := httptest.NewRequest(http.MethodPut, "/api/discovery/vm/node1/100/availability-proposal", bytes.NewBufferString(fmt.Sprintf(`{"evidence_fingerprint":%q,"status":"accepted"}`, proposal.EvidenceFingerprint)))
+	invalidRec := httptest.NewRecorder()
+	h.HandleUpdateAvailabilityProposal(invalidRec, invalidReq)
+	assert.Equal(t, http.StatusBadRequest, invalidRec.Code)
+}
+
 func TestHandleGetStatus(t *testing.T) {
 	h, _, _ := setupDiscoveryHandlers(t)
 

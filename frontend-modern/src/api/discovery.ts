@@ -14,6 +14,8 @@ import type {
   TriggerDiscoveryRequest,
   UpdateNotesRequest,
   DiscoveryInfo,
+  AvailabilityProposalStatus,
+  APIResourceType,
 } from '../types/discovery';
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 
@@ -207,6 +209,34 @@ export async function updateDiscoveryNotes(
     response,
     'Failed to update notes',
     'Failed to parse updated discovery notes',
+  );
+}
+
+/**
+ * Dismiss or restore the exact availability proposal currently shown for a
+ * discovery. The backend rejects stale evidence fingerprints with HTTP 409.
+ * This never creates or activates a network check.
+ */
+export async function updateAvailabilityProposal(
+  resourceType: ResourceType | APIResourceType,
+  targetId: string,
+  resourceId: string,
+  evidenceFingerprint: string,
+  status: AvailabilityProposalStatus,
+): Promise<ResourceDiscovery> {
+  const path = `${API_BASE}/${encodeURIComponent(resolveAPIResourceType(resourceType as ResourceType))}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/availability-proposal`;
+  const response = await apiFetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      evidence_fingerprint: evidenceFingerprint,
+      status,
+    }),
+  });
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to update availability proposal',
+    'Failed to parse updated availability proposal',
   );
 }
 

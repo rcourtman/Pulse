@@ -242,6 +242,7 @@ after persistence.
    2b. `internal/api/chartapi/service.go`
    2c. `internal/api/chartapi/types.go`
 3. `internal/api/discovery_handlers.go`
+   3a. `frontend-modern/src/api/discovery.ts`
 4. `internal/api/alerting/alerts.go`
    4a. `internal/api/attention_handlers.go`
    4b. `internal/api/attention_receipts.go`
@@ -8788,6 +8789,16 @@ as a `network-endpoint`. Browser callers may test unsaved or saved targets, but
 the persisted target list remains owned by `/api/availability-targets` and
 must be managed from `/settings/monitoring/availability`, not reconstructed
 from resource snapshots or monitored-system counts.
+The discovery API additively carries a read-only
+`suggested_availability_probe` with an evidence fingerprint plus the matching
+dismissed fingerprint. Collection responses include that bounded proposal so
+machine-scoped review does not fan out detail reads. `PUT
+/api/discovery/{type}/{target}/{id}/availability-proposal` accepts only
+`dismissed` or `reviewable` plus the exact current evidence fingerprint, uses
+`monitoring:write`, rejects stale fingerprints with `409`, and never creates
+an availability target. Approval continues through the existing explicit
+`POST /api/availability-targets` contract, preserving one execution and
+management surface.
 Remote probe rows preserve the agent-authored check time as observation
 metadata, but API freshness and `lastSeenAt` projections use the server-authored
 receipt time supplied by monitoring. API consumers must not substitute the

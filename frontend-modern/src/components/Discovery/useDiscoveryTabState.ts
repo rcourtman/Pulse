@@ -345,6 +345,8 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     isScanning,
     liveElapsedSeconds,
     notesText,
+    mutateDiscovery: mutate,
+    refetchDiscovery: refetch,
     saveError,
     scanError,
     scanProgress,

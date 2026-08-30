@@ -73,6 +73,10 @@ func cloneResourceDiscovery(src *ResourceDiscovery) *ResourceDiscovery {
 			cloned.RawCommandOutput[k] = v
 		}
 	}
+	if src.SuggestedAvailabilityProbe != nil {
+		proposal := *src.SuggestedAvailabilityProbe
+		cloned.SuggestedAvailabilityProbe = &proposal
+	}
 
 	return &cloned
 }
@@ -124,6 +128,14 @@ func normalizeDiscovery(d *ResourceDiscovery) {
 	}
 	if d.ResourceType == ResourceTypeAgent && strings.TrimSpace(d.AgentID) == "" {
 		d.AgentID = d.TargetID
+	}
+	if d.SuggestedAvailabilityProbe != nil {
+		d.SuggestedAvailabilityProbe = finalizeAvailabilityProbeSuggestion(d.SuggestedAvailabilityProbe)
+		if d.DismissedAvailabilityProbeFingerprint != d.SuggestedAvailabilityProbe.EvidenceFingerprint {
+			d.DismissedAvailabilityProbeFingerprint = ""
+		}
+	} else {
+		d.DismissedAvailabilityProbeFingerprint = ""
 	}
 }
 
@@ -629,6 +641,32 @@ func (s *Store) UpdateNotes(id string, notes string, secrets map[string]string) 
 		return fmt.Errorf("save updated discovery %s notes: %w", id, err)
 	}
 	return nil
+}
+
+// UpdateAvailabilityProposalDisposition records an operator's decision against
+// the current evidence only. It rejects stale fingerprints rather than letting
+// an old browser hide a newly changed proposal.
+func (s *Store) UpdateAvailabilityProposalDisposition(id, evidenceFingerprint string, dismissed bool) error {
+	discovery, err := s.Get(id)
+	if err != nil {
+		return err
+	}
+	if discovery == nil {
+		return ErrAvailabilityProposalNotFound
+	}
+	if discovery.SuggestedAvailabilityProbe == nil {
+		return ErrAvailabilityProposalNotFound
+	}
+	expected := discovery.SuggestedAvailabilityProbe.EvidenceFingerprint
+	if strings.TrimSpace(evidenceFingerprint) == "" || evidenceFingerprint != expected {
+		return ErrAvailabilityProposalEvidenceChanged
+	}
+	if dismissed {
+		discovery.DismissedAvailabilityProbeFingerprint = expected
+	} else {
+		discovery.DismissedAvailabilityProbeFingerprint = ""
+	}
+	return s.Save(discovery)
 }
 
 // GetMultiple retrieves multiple discoveries by ID.

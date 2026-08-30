@@ -166,6 +166,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                 agentId={target().agentId}
                 resourceId={target().agentId}
                 hostname={target().hostname || displayName()}
+                canonicalResourceId={props.node.id}
                 showManualRunAction
               />
             </Suspense>

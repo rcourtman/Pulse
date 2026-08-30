@@ -138,3 +138,22 @@ func TestSuggestAvailabilityProbe_ServiceNameFallback(t *testing.T) {
 		t.Errorf("service_name = %q, want grafana (fallback to matched key)", got.ServiceName)
 	}
 }
+
+func TestAvailabilityProposalFingerprintTracksMaterialEvidence(t *testing.T) {
+	discovery := &ResourceDiscovery{ServiceType: "grafana", ServiceName: "Grafana"}
+	first := SuggestAvailabilityProbe(discovery, "GRAFANA.LOCAL.")
+	second := SuggestAvailabilityProbe(discovery, "grafana.local")
+	if first == nil || second == nil || first.EvidenceFingerprint == "" {
+		t.Fatalf("expected fingerprinted suggestions: first=%+v second=%+v", first, second)
+	}
+	if first.EvidenceFingerprint != second.EvidenceFingerprint {
+		t.Fatalf("equivalent endpoint fingerprints differ: %q != %q", first.EvidenceFingerprint, second.EvidenceFingerprint)
+	}
+
+	changed := *second
+	changed.Path = "/health"
+	finalizeAvailabilityProbeSuggestion(&changed)
+	if changed.EvidenceFingerprint == first.EvidenceFingerprint {
+		t.Fatal("materially changed path must produce a new evidence fingerprint")
+	}
+}

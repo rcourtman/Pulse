@@ -10,6 +10,7 @@ import {
   listDiscoveriesByType,
   runDiscoveryRefresh,
   triggerDiscovery,
+  updateAvailabilityProposal,
 } from '@/api/discovery';
 import { apiFetch } from '@/utils/apiClient';
 
@@ -18,6 +19,50 @@ describe('discovery api', () => {
 
   beforeEach(() => {
     apiFetchMock.mockReset();
+  });
+
+  it('records a proposal disposition against the exact evidence fingerprint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 'app-container:host-1:grafana',
+          resource_type: 'app-container',
+          resource_id: 'grafana',
+          target_id: 'host-1',
+          suggested_availability_probe: {
+            protocol: 'http',
+            address: '10.0.0.8',
+            port: 3000,
+            service_name: 'Grafana',
+            reason: 'service default: grafana',
+            evidence_fingerprint: 'sha256:grafana',
+          },
+          dismissed_availability_probe_fingerprint: 'sha256:grafana',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await updateAvailabilityProposal(
+      'app-container',
+      'host-1',
+      'grafana',
+      'sha256:grafana',
+      'dismissed',
+    );
+
+    expect(result.dismissed_availability_probe_fingerprint).toBe('sha256:grafana');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/discovery/docker/host-1/grafana/availability-proposal',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evidence_fingerprint: 'sha256:grafana',
+          status: 'dismissed',
+        }),
+      },
+    );
   });
 
   it('returns null for missing agent discovery without calling detail endpoint', async () => {

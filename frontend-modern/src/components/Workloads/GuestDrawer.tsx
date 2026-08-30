@@ -150,6 +150,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
               agentId={discoveryAgentId()}
               resourceId={discoveryResourceId()}
               hostname={props.guest.name}
+              canonicalResourceId={props.guest.id}
               showManualRunAction
             />
           </Suspense>

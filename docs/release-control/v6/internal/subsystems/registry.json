@@ -5617,6 +5617,7 @@
         "internal/fleethealth/",
         "internal/maintenancesentinel/",
         "internal/monitoring/",
+        "internal/servicediscovery/",
         "internal/storagehealth/",
         "internal/truenas/",
         "pkg/diskinventory/",
@@ -5667,6 +5668,22 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "service-discovery-assurance-runtime",
+            "label": "discovery-led service assurance proposal proof",
+            "match_prefixes": [
+              "internal/servicediscovery/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/discovery_handlers_test.go",
+              "internal/servicediscovery/availability_suggestion_test.go",
+              "internal/servicediscovery/service_test.go",
+              "internal/servicediscovery/store_test.go"
+            ]
+          },
           {
             "id": "maintenance-verification-runtime",
             "label": "post-maintenance verification monitoring proof",
@@ -7677,6 +7694,8 @@
         "internal/unifiedresources/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
+        "frontend-modern/src/components/Discovery/availabilityProposalModel.ts",
         "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
         "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
         "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts",
@@ -7878,6 +7897,8 @@
             "label": "unified resource consumer proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
+              "frontend-modern/src/components/Discovery/availabilityProposalModel.ts",
               "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
               "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
               "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts",
@@ -7988,6 +8009,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/Discovery/__tests__/AvailabilityProposalCard.test.tsx",
+              "frontend-modern/src/components/Discovery/__tests__/availabilityProposalModel.test.ts",
               "frontend-modern/src/components/Discovery/__tests__/useDiscoveryFeatureAvailability.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",

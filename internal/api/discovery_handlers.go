@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -318,7 +319,7 @@ func mockDiscoveryFixtureToService(fixture *mockfixtures.DiscoveryFixture) *serv
 		userSecrets[key] = value
 	}
 
-	return &servicediscovery.ResourceDiscovery{
+	discovery := &servicediscovery.ResourceDiscovery{
 		ID:                       fixture.ID,
 		ResourceType:             servicediscovery.ResourceType(fixture.ResourceType),
 		ResourceID:               fixture.ResourceID,
@@ -352,6 +353,8 @@ func mockDiscoveryFixtureToService(fixture *mockfixtures.DiscoveryFixture) *serv
 		SuggestedURLSourceDetail: fixture.SuggestedURLSourceDetail,
 		SuggestedURLDiagnostic:   fixture.SuggestedURLDiagnostic,
 	}
+	discovery.SuggestedAvailabilityProbe = servicediscovery.SuggestAvailabilityProbe(discovery, fixture.Hostname)
+	return discovery
 }
 
 func mockDiscoveryFixturesToService(fixtures []*mockfixtures.DiscoveryFixture) []*servicediscovery.ResourceDiscovery {
@@ -661,6 +664,70 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 
 	// Redact sensitive fields for non-admin users
 	if !isAdmin {
+		discovery = redactSensitiveFields(discovery)
+	}
+	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))
+}
+
+// HandleUpdateAvailabilityProposal handles
+// PUT /api/discovery/{type}/{target}/{id}/availability-proposal. It records a
+// review disposition only; canonical checks are still created explicitly via
+// POST /api/availability-targets.
+func (h *DiscoveryHandlers) HandleUpdateAvailabilityProposal(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/")
+	path = strings.TrimSuffix(path, "/availability-proposal")
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path")
+		return
+	}
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	discoveryID := servicediscovery.MakeResourceID(resourceType, parts[1], parts[2])
+
+	var req servicediscovery.UpdateAvailabilityProposalRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4*1024))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status != "dismissed" && status != "reviewable" {
+		writeDiscoveryError(w, http.StatusBadRequest, "status must be dismissed or reviewable")
+		return
+	}
+	if err := h.service.UpdateAvailabilityProposalDisposition(
+		discoveryID,
+		strings.TrimSpace(req.EvidenceFingerprint),
+		status == "dismissed",
+	); err != nil {
+		switch {
+		case errors.Is(err, servicediscovery.ErrAvailabilityProposalNotFound):
+			writeDiscoveryError(w, http.StatusNotFound, err.Error())
+		case errors.Is(err, servicediscovery.ErrAvailabilityProposalEvidenceChanged):
+			writeDiscoveryError(w, http.StatusConflict, err.Error())
+		default:
+			log.Error().Err(err).Str("id", discoveryID).Msg("Failed to update availability proposal")
+			writeDiscoveryError(w, http.StatusInternalServerError, "Failed to update availability proposal")
+		}
+		return
+	}
+
+	discovery, err := h.service.GetDiscovery(discoveryID)
+	if err != nil || discovery == nil {
+		writeDiscoveryError(w, http.StatusInternalServerError, "Proposal updated but failed to fetch result")
+		return
+	}
+	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
 	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))

@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,6 +169,49 @@ func TestStore_SaveGetListAndNotes(t *testing.T) {
 	}
 	if store.Exists(d1.ID) {
 		t.Fatalf("expected discovery to be deleted")
+	}
+}
+
+func TestStoreAvailabilityProposalDispositionIsEvidenceBound(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	discovery := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "grafana"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "grafana",
+		TargetID:     "host1",
+		SuggestedAvailabilityProbe: SuggestAvailabilityProbe(
+			&ResourceDiscovery{ServiceType: "grafana", ServiceName: "Grafana"},
+			"10.0.0.8",
+		),
+	}
+	if err := store.Save(discovery); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+	fingerprint := discovery.SuggestedAvailabilityProbe.EvidenceFingerprint
+	if err := store.UpdateAvailabilityProposalDisposition(discovery.ID, fingerprint, true); err != nil {
+		t.Fatalf("dismiss error: %v", err)
+	}
+	dismissed, _ := store.Get(discovery.ID)
+	if dismissed.DismissedAvailabilityProbeFingerprint != fingerprint {
+		t.Fatalf("dismissed fingerprint = %q, want %q", dismissed.DismissedAvailabilityProbeFingerprint, fingerprint)
+	}
+
+	if err := store.UpdateAvailabilityProposalDisposition(discovery.ID, "sha256:stale", true); !errors.Is(err, ErrAvailabilityProposalEvidenceChanged) {
+		t.Fatalf("stale dismissal error = %v, want ErrAvailabilityProposalEvidenceChanged", err)
+	}
+
+	dismissed.SuggestedAvailabilityProbe.Path = "/health"
+	if err := store.Save(dismissed); err != nil {
+		t.Fatalf("Save changed proposal error: %v", err)
+	}
+	reopened, _ := store.Get(discovery.ID)
+	if reopened.DismissedAvailabilityProbeFingerprint != "" {
+		t.Fatalf("materially changed evidence retained dismissal: %q", reopened.DismissedAvailabilityProbeFingerprint)
 	}
 }
 

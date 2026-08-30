@@ -1,8 +1,18 @@
 package servicediscovery
 
 import (
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"net"
+	"path"
+	"strconv"
 	"strings"
+)
+
+var (
+	ErrAvailabilityProposalNotFound        = errors.New("availability proposal not found")
+	ErrAvailabilityProposalEvidenceChanged = errors.New("availability proposal evidence changed")
 )
 
 // tcpServiceDefaults maps service types to their default TCP probe port.
@@ -38,25 +48,25 @@ func SuggestAvailabilityProbe(discovery *ResourceDiscovery, hostIP string) *Avai
 
 	// 1. Web services → HTTP/HTTPS probe
 	if defaults, matched, ok := lookupWebServiceDefault(normalized); ok {
-		return &AvailabilityProbeSuggestion{
+		return finalizeAvailabilityProbeSuggestion(&AvailabilityProbeSuggestion{
 			Protocol:    defaults.Protocol,
 			Address:     hostIP,
 			Port:        defaults.Port,
 			Path:        defaults.Path,
 			ServiceName: pickServiceName(discovery, matched),
 			Reason:      fmt.Sprintf("service default: %s", matched),
-		}
+		})
 	}
 
 	// 2. TCP-only services (databases, brokers) → TCP probe
 	if port, matched, ok := lookupTCPServiceDefault(normalized); ok {
-		return &AvailabilityProbeSuggestion{
+		return finalizeAvailabilityProbeSuggestion(&AvailabilityProbeSuggestion{
 			Protocol:    "tcp",
 			Address:     hostIP,
 			Port:        port,
 			ServiceName: pickServiceName(discovery, matched),
 			Reason:      fmt.Sprintf("tcp service default: %s", matched),
-		}
+		})
 	}
 
 	// 3. Fallback: try hostname/name against the defaults maps.
@@ -64,27 +74,74 @@ func SuggestAvailabilityProbe(discovery *ResourceDiscovery, hostIP string) *Avai
 	hostnameNormalized := normalizeServiceTypeForLookup(discovery.Hostname)
 	if hostnameNormalized != "" && hostnameNormalized != normalized {
 		if defaults, matched, ok := lookupWebServiceDefault(hostnameNormalized); ok {
-			return &AvailabilityProbeSuggestion{
+			return finalizeAvailabilityProbeSuggestion(&AvailabilityProbeSuggestion{
 				Protocol:    defaults.Protocol,
 				Address:     hostIP,
 				Port:        defaults.Port,
 				Path:        defaults.Path,
 				ServiceName: pickServiceName(discovery, matched),
 				Reason:      fmt.Sprintf("hostname match: %s", matched),
-			}
+			})
 		}
 		if port, matched, ok := lookupTCPServiceDefault(hostnameNormalized); ok {
-			return &AvailabilityProbeSuggestion{
+			return finalizeAvailabilityProbeSuggestion(&AvailabilityProbeSuggestion{
 				Protocol:    "tcp",
 				Address:     hostIP,
 				Port:        port,
 				ServiceName: pickServiceName(discovery, matched),
 				Reason:      fmt.Sprintf("hostname tcp match: %s", matched),
-			}
+			})
 		}
 	}
 
 	return nil
+}
+
+// finalizeAvailabilityProbeSuggestion normalizes a suggestion and binds it to
+// the exact evidence an operator is being asked to review. The fingerprint is
+// intentionally independent of discovery timestamps and unrelated facts: a
+// dismissal reopens only when the proposed endpoint, behavior, identity, or
+// inference reason materially changes.
+func finalizeAvailabilityProbeSuggestion(suggestion *AvailabilityProbeSuggestion) *AvailabilityProbeSuggestion {
+	if suggestion == nil {
+		return nil
+	}
+	suggestion.Protocol = strings.ToLower(strings.TrimSpace(suggestion.Protocol))
+	suggestion.Address = normalizeAvailabilitySuggestionAddress(suggestion.Address)
+	suggestion.Path = normalizeAvailabilitySuggestionPath(suggestion.Path)
+	suggestion.ServiceName = strings.TrimSpace(suggestion.ServiceName)
+	suggestion.Reason = strings.TrimSpace(suggestion.Reason)
+	fingerprintInput := strings.Join([]string{
+		suggestion.Protocol,
+		suggestion.Address,
+		strconv.Itoa(suggestion.Port),
+		suggestion.Path,
+		strings.ToLower(suggestion.ServiceName),
+		strings.ToLower(suggestion.Reason),
+	}, "\x00")
+	sum := sha256.Sum256([]byte(fingerprintInput))
+	suggestion.EvidenceFingerprint = fmt.Sprintf("sha256:%x", sum[:])
+	return suggestion
+}
+
+func normalizeAvailabilitySuggestionAddress(address string) string {
+	trimmed := strings.TrimSpace(address)
+	if parsed := net.ParseIP(strings.Trim(trimmed, "[]")); parsed != nil {
+		return parsed.String()
+	}
+	return strings.ToLower(strings.TrimSuffix(trimmed, "."))
+}
+
+func normalizeAvailabilitySuggestionPath(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	normalized := path.Clean("/" + strings.TrimPrefix(trimmed, "/"))
+	if normalized == "/" && trimmed != "/" {
+		return ""
+	}
+	return normalized
 }
 
 // normalizeServiceTypeForLookup normalizes a service type string for map lookup.

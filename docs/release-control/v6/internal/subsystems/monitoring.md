@@ -547,6 +547,10 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 31a. `internal/availabilityprobe/probe.go`
 31b. `internal/config/availability.go`
 31c. `pkg/tlsutil/certificate.go`
+31d. `internal/servicediscovery/availability_suggestion.go`
+31e. `internal/servicediscovery/types.go`
+31f. `internal/servicediscovery/store.go`
+31g. `internal/servicediscovery/service.go`
 32. `internal/monitoring/scheduler.go`
 33. `internal/monitoring/docker_detection.go`
 34. `internal/monitoring/monitor_polling_containers.go`
@@ -1480,6 +1484,16 @@ evidence envelopes, telemetry, logs, or Patrol context. Execution-defined
 contract edits use the existing server-authored configuration revision so
 history visibly breaks at the new proof definition instead of blending unlike
 checks.
+Discovery-led assurance proposals remain monitoring-owned read evidence until
+an operator explicitly creates a canonical availability target. The
+`internal/servicediscovery` suggestion contract derives only bounded
+HTTP/HTTPS/TCP candidates, normalizes each candidate into a stable evidence
+fingerprint, and persists dismissal against that exact fingerprint. Equivalent
+rediscovery retains a dismissal; a material endpoint, service identity, or
+inference-reason change clears it. Disposition writes reject stale
+fingerprints, and neither discovery refresh nor dismissal may create, enable,
+schedule, or execute a network check. The explicit availability-target create
+path remains the sole activation boundary.
 HTTPS checks also author one canonical certificate observation from the same
 probe execution. `internal/availabilityprobe` captures the presented leaf and
 `pkg/tlsutil/certificate.go` derives subject, issuer, SANs, SHA-256 fingerprint,

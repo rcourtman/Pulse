@@ -372,6 +372,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 			// GET /api/discovery/agent/{agentId}/{resourceId}/progress → get scan progress
 			// POST /api/discovery/agent/{agentId}/{resourceId} → trigger discovery
 			// PUT /api/discovery/agent/{agentId}/{resourceId}/notes → update notes
+			// PUT /api/discovery/agent/{agentId}/{resourceId}/availability-proposal → dismiss or restore a proposal
 			// DELETE /api/discovery/agent/{agentId}/{resourceId} → delete discovery
 			path := strings.TrimPrefix(req.URL.Path, pathPrefix)
 			pathParts := strings.Split(strings.TrimSuffix(path, "/"), "/")
@@ -406,6 +407,8 @@ func (r *Router) registerMonitoringResourceRoutes(
 				}
 				if strings.HasSuffix(req.URL.Path, "/notes") {
 					r.discoveryHandlers.HandleUpdateNotes(w, req)
+				} else if strings.HasSuffix(req.URL.Path, "/availability-proposal") {
+					r.discoveryHandlers.HandleUpdateAvailabilityProposal(w, req)
 				} else {
 					http.Error(w, "Not found", http.StatusNotFound)
 				}
@@ -443,6 +446,8 @@ func (r *Router) registerMonitoringResourceRoutes(
 			}
 			if strings.HasSuffix(path, "/notes") {
 				r.discoveryHandlers.HandleUpdateNotes(w, req)
+			} else if strings.HasSuffix(path, "/availability-proposal") {
+				r.discoveryHandlers.HandleUpdateAvailabilityProposal(w, req)
 			} else {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
