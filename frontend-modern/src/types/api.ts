@@ -1308,11 +1308,35 @@ export interface Stats {
 }
 
 // Alert types
+export type AlertFailureClass =
+  | 'runtime'
+  | 'network-path'
+  | 'application-response'
+  | 'certificate'
+  | 'dependency'
+  | 'evidence-coverage';
+
+export interface AlertCorrelationObservation {
+  alertId: string;
+  resourceId: string;
+  resourceName: string;
+  failureClass: AlertFailureClass;
+  level: 'info' | 'warning' | 'critical';
+  observedAt: string;
+  evidenceIds?: string[];
+}
+
 export interface AlertCorrelation {
   key: string;
-  kind: 'shared-system';
+  kind: 'shared-system' | 'infrastructure-incident';
   role: 'primary' | 'supporting';
   reason: string;
+  failureClass?: AlertFailureClass;
+  inference?: 'supported-cause' | 'observation-set';
+  primaryAlertId?: string;
+  primaryResourceId?: string;
+  affectedResourceIds?: string[];
+  observations?: AlertCorrelationObservation[];
 }
 
 export interface Alert {

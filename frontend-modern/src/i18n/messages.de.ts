@@ -74,6 +74,20 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.group.linkedSignal': '+{count} verknuepftes Signal',
   'alerts.overview.group.linkedSignals': '+{count} verknuepfte Signale',
   'alerts.overview.group.related': '+{count} zugehoerig',
+  'alerts.overview.synthesis.title.supported': 'Gestuetzte Infrastrukturursache',
+  'alerts.overview.synthesis.title.observationSet': 'Zusammenhaengende Beobachtungen',
+  'alerts.overview.synthesis.failure.runtime': 'Laufzeit',
+  'alerts.overview.synthesis.failure.networkPath': 'Netzwerkpfad',
+  'alerts.overview.synthesis.failure.applicationResponse': 'Anwendungsantwort',
+  'alerts.overview.synthesis.failure.certificate': 'Zertifikat',
+  'alerts.overview.synthesis.failure.dependency': 'Abhaengigkeit',
+  'alerts.overview.synthesis.failure.evidenceCoverage': 'Evidenzabdeckung',
+  'alerts.overview.synthesis.counts': '{affected} betroffene Ressourcen · {observations} Beobachtungen',
+  'alerts.overview.synthesis.review': 'Synthese-Evidenz pruefen',
+  'alerts.overview.synthesis.challenge.supported':
+    'Alle verknuepften Signale unten oeffnen und ihre Zeitpunkte vergleichen, bevor diese Ursache akzeptiert wird.',
+  'alerts.overview.synthesis.challenge.observationSet':
+    'Diese Beobachtungen haengen zusammen, aber Pulse hat keine Grundursache festgestellt.',
   'alerts.overview.acknowledgedBadge': 'Bestaetigt',
   'alerts.overview.empty.description':
     'Warnmeldungen erscheinen hier, wenn Schwellwerte ueberschritten werden',

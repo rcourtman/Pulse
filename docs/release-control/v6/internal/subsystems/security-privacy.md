@@ -1346,6 +1346,15 @@ Patrol context must not retain or export customer network names, addresses,
 agent identity, or location labels. Durable categorical history remains keyed
 only by the logical target and its aggregate conclusion; location identity is
 not a new telemetry, history, or customer-identity dimension.
+Infrastructure incident synthesis remains inside that same boundary. Its alert
+correlation envelope may retain only canonical alert/resource IDs, typed
+failure class and inference, severity, observation time, and existing evidence
+IDs. It must not copy probe addresses, observation-location names, response or
+request bodies, headers, credentials, raw provider metadata, or unbounded error
+text into alerts, event logs, frontend catalogs, telemetry, or Patrol context.
+Localized synthesis labels are product copy only and must not change API token
+names, privacy disclosures, authentication terminology, or non-translatable
+security identifiers.
 That same outbound usage telemetry floor now also permits content-free update
 funnel counters derived from local update history inside the same rotating
 30-day telemetry window: update attempts, successful updates, failed or

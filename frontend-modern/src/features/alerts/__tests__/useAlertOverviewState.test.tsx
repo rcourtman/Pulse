@@ -205,6 +205,53 @@ describe('useAlertOverviewState', () => {
     ]);
   });
 
+  it('groups explicit infrastructure synthesis without hiding the supporting detector', () => {
+    const startTime = new Date(Date.now() - 60_000).toISOString();
+    const root = {
+      ...makeAlert('root', startTime),
+      resourceId: 'agent:edge-1',
+      correlation: {
+        key: 'infrastructure:root',
+        kind: 'infrastructure-incident' as const,
+        role: 'primary' as const,
+        reason: 'Supported by canonical relationships.',
+        failureClass: 'runtime' as const,
+        inference: 'supported-cause' as const,
+      },
+    };
+    const symptom = {
+      ...makeAlert('symptom', startTime),
+      resourceId: 'availability:checkout',
+      correlation: {
+        key: 'infrastructure:root',
+        kind: 'infrastructure-incident' as const,
+        role: 'supporting' as const,
+        reason: 'Grouped beneath Edge host.',
+        failureClass: 'network-path' as const,
+        inference: 'supported-cause' as const,
+      },
+    };
+    const [activeAlerts] = createSignal<Record<string, Alert>>({ root, symptom });
+
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+
+    expect(result.groupedAlerts()).toEqual([
+      expect.objectContaining({
+        key: 'correlation:infrastructure-incident:infrastructure:root',
+        primary: root,
+        related: [symptom],
+        correlated: true,
+      }),
+    ]);
+  });
+
   it('does not infer correlation by truncating resource paths', () => {
     const startTime = new Date(Date.now() - 60_000).toISOString();
     const first = { ...makeAlert('first', startTime), resourceId: 'host/one/disk:sda' };

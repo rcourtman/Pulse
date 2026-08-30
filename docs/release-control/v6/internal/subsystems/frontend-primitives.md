@@ -6913,6 +6913,24 @@ primitives, and introduce no parallel group component. Localization and
 presentation proofs live in `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 and `frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts`.
 
+Infrastructure synthesis reuses that alert group and disclosure interaction
+rather than introducing an incident dashboard beside Alerts. A backend-declared
+`infrastructure-incident` group renders a compact summary immediately above its
+primary alert, labels the failure layer and whether the backend established a
+supported cause or only a related observation set, and exposes the backend
+reason, affected count, observation times, and bounded evidence IDs inside a
+native details disclosure. The existing linked-signal control expands every
+supporting detector card, so the operator can compare timing and challenge the
+inference without losing alert-level acknowledgement, snooze, timeline,
+monitoring-policy, or Patrol actions.
+
+The summary must not derive relationships, choose a root cause, hide
+contradictory observations, or render an observation set as causal. Failure
+class and synthesis labels route through the shared English, German, and
+Spanish catalogs. `AlertIncidentSynthesisSummary.test.tsx`,
+`useAlertOverviewState.test.tsx`, and `i18n.test.ts` pin inspectability,
+uncertainty wording, and additive group behavior at the frontend boundary.
+
 ### Mobile destinations are links and update evidence stays explicit
 
 Fixed mobile destinations and menu destinations that navigate are anchors with

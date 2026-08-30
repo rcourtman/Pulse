@@ -4623,6 +4623,19 @@ by alert identifier and computed in one manager pass. No active alerts returns
 `[]`, never `null`. This bulk form is the list-surface contract; clients must
 not replace it with one request per alert, and an unavailable diagnosis read
 must not change the independently sourced active-alert projection.
+The active-alert and delivery-diagnosis contracts also expose deterministic
+infrastructure incident synthesis additively. An alert correlation may be
+`shared-system` or `infrastructure-incident`; the latter carries a typed failure
+class, `supported-cause` or `observation-set` inference, primary identity,
+affected resource IDs, and bounded observation/evidence references. Clients
+must keep every returned alert independently addressable and must not infer
+causality when the backend returns `observation-set`. A supported secondary
+symptom reports delivery reason `correlated_primary`; it remains an active
+alert even though the primary owns notification delivery. Older clients remain
+compatible because the correlation object and its synthesis fields are
+optional. `frontend-modern/src/types/api.ts`,
+`internal/alerts/incident_synthesis_test.go`, and the alert overview tests pin
+the wire vocabulary and independent detector presentation.
 `GET /api/alerts/events` is the read-only API projection of the additive alert
 event log and also requires `monitoring:read`. Optional `alertIdentifier`,
 comma/repeated `type`, RFC 3339 `since`, and positive `limit` filters narrow a

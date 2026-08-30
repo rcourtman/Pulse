@@ -1,29 +1,30 @@
 {
   "version": 1,
-  "base_sha": "e094a55b4500d2a10b6ab44b350c2fffcc55e73d",
-  "verified_at": "2026-08-30T20:37:10Z",
+  "base_sha": "47c1cee895fea1c395871acb307acbf3711cb4d5",
+  "verified_at": "2026-08-30T21:19:54Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/availabilityTargets.ts",
-    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
-    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
-    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
-    "frontend-modern/src/types/resource.ts",
-    "frontend-modern/src/utils/availabilityProbeAgents.ts"
+    "frontend-modern/src/features/alerts/AlertIncidentSynthesisSummary.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/features/alerts/incidentSynthesisPresentation.ts",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/types/api.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/availabilityTargets.ts": "0a20277a8c453b753e8c09f7250722670211a33bcae2addad7d19502f921f365",
-    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "ec13f364ee9c55f6859c448797fed427255999723524ff0f51cb54cc9f864ea5",
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "622e0c7ad72c4f313c8d971295662e6549d9f13c5fbd788d3cc8803c827af176",
-    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "cd03ed43bca379c8359c11c67f235d49a4a1c6b905c987a4ce404ce59443bbf6",
-    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "3c775ad5b08023f9a2814a9dc939992db363a7e5113a351d4fb65ad0946f0d97",
-    "frontend-modern/src/types/resource.ts": "a4e87ae08ec69349122075ca422ced08a56e1f14294088488198c5ff8af25dba",
-    "frontend-modern/src/utils/availabilityProbeAgents.ts": "7f92c5fc5012bdbb322825b4a03f26fb5dc6d20d260cda8b2c2e86b66283b005"
+    "frontend-modern/src/features/alerts/AlertIncidentSynthesisSummary.tsx": "4c407221597fbe5bd39853d0cc4f35f62955e5e5354d5f520328bd61593f2f0a",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "d313bc7c99659a875bf474af48fbfc46e825e69fadca4787adf80c3d1e4d9ccc",
+    "frontend-modern/src/features/alerts/incidentSynthesisPresentation.ts": "db413b54911aadb73a300b6460260a7c6dc2ce245375a0323cb6e0244f96f3e5",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "338aecd07546264d19e0db9a29a9c01ea337a416f316a3a4d24383d4eb9ab22e",
+    "frontend-modern/src/i18n/messages.de.ts": "8240c64256088196a224939438b510aecbf55372639b5db4182af5becde4df59",
+    "frontend-modern/src/i18n/messages.es.ts": "a932a856c2b4d83efe79c50c96e597767ba4a08c2e1252bdfca29a2e89b87875",
+    "frontend-modern/src/i18n/messages.ts": "43a757e00eaa7879c400895c9c59a930e31513dbf03e0ae6d60f7e72a6ad9962",
+    "frontend-modern/src/types/api.ts": "f6f313ff304c6d9eaf72fe3225cc7e1615e9f989c44862080ccdcbe267bb8cec"
   },
   "routes": [
-    "/standalone/availability",
-    "/settings/monitoring/availability?add=target&targetKind=service"
+    "/alerts/overview"
   ],
   "viewports": [
     {
@@ -36,15 +37,17 @@
     }
   ],
   "states": [
-    "multi-location target editor with the local Pulse path and connected-agent paths, including the Community-tier remote-path entitlement boundary",
-    "degraded service with one reachable and one unreachable observation path, preserved as Paths disagree with 2/2 reporting",
-    "expanded resource evidence showing per-path state, latency, checked time, freshness, aggregate degraded state, and no universal outage",
-    "desktop and narrow layouts with settled data, dialog bounds, responsive navigation, and no page or dialog horizontal overflow"
+    "settled Alerts overview backed by the local mock runtime and a deterministic supported-cause Alert contract fixture",
+    "supported infrastructure cause summary with runtime classification, affected-resource count, and bounded observation count",
+    "expanded synthesis evidence with resource names, typed failure classes, observation times, and long evidence identifiers",
+    "expanded linked signal cards beneath the declared primary alert",
+    "desktop and narrow layouts with no horizontal overflow or clipped alert actions"
   ],
   "interactions": [
-    "opened the add service/device check flow and inspected the bounded observation-location selector without saving a mock target",
-    "opened the Frontend Swarm service resource details from Availability checks and expanded the multi-location evidence",
-    "confirmed the local path reports 9 ms while edge-london reports Unreachable and the aggregate remains Degraded",
-    "repeated the final route, state, clipping, and overflow checks at 1280x800 and 390x844 after rebasing onto the current main base"
+    "opened the Alerts overview after the local backend and WebSocket stream reported connected",
+    "expanded Review synthesis evidence and inspected both independent detector observations",
+    "expanded the linked signal group and confirmed the supporting alert retained its own actions and lifecycle card",
+    "repeated the expanded evidence and linked-signal checks at 1280x800 and 390x844",
+    "removed the temporary browser-only contract fixture and retained only the production synthesis implementation"
   ]
 }

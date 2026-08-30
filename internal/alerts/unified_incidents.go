@@ -240,6 +240,11 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		m.clearAlertNoLock(storageKey)
 	}
 
+	// Synthesize over the post-recovery live set before updating or dispatching
+	// any detector. Supporting symptoms retain their independent lifecycle but
+	// can share one evidence-backed incident presentation and delivery decision.
+	m.applyInfrastructureIncidentSynthesisNoLock(resourcesByID, desired)
+
 	for storageKey, alert := range desired {
 		if existing, exists := m.getActiveAlertNoLock(storageKey); exists && existing != nil {
 			existing.LastSeen = alert.LastSeen
@@ -251,6 +256,14 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			existing.Instance = alert.Instance
 			existing.Message = alert.Message
 			existing.Metadata = alert.Metadata
+			// Infrastructure synthesis is recomputed from the complete current
+			// detector set on every pass. Copy that current result onto the
+			// retained lifecycle object; otherwise an existing alert would lose
+			// its group after one reconciliation. A pre-existing non-synthesis
+			// correlation stays authoritative when this cycle has no replacement.
+			if alert.Correlation != nil || existing.Correlation == nil {
+				existing.Correlation = cloneAlertCorrelation(alert.Correlation)
+			}
 			// Each sync re-observes the incident, so carry the cycle's evidence
 			// into the live alert. Without this the envelope attached at first
 			// raise ages out (availability evidence drifts past its validity

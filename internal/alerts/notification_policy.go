@@ -38,6 +38,7 @@ const (
 	AlertDeliveryReasonCooldown              = "cooldown"
 	AlertDeliveryReasonQuietHours            = "quiet_hours"
 	AlertDeliveryReasonMonitorOnly           = "monitor_only"
+	AlertDeliveryReasonCorrelatedPrimary     = "correlated_primary"
 )
 
 // AlertDeliveryDiagnosis is a read-only projection of the alert manager's
@@ -181,6 +182,13 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
 			AlertDeliveryReasonSnoozed, "Notification suppressed: alert is snoozed.",
 			details)
+		return false
+	}
+	if isSupportedInfrastructureSymptom(alert) {
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonCorrelatedPrimary,
+			"Notification suppressed: a supported primary infrastructure alert owns delivery for this incident group.",
+			map[string]string{"primaryAlertId": alert.Correlation.PrimaryAlertID})
 		return false
 	}
 
@@ -358,6 +366,15 @@ func isMonitorOnlyAlert(alert *Alert) bool {
 		}
 	}
 	return false
+}
+
+func isSupportedInfrastructureSymptom(alert *Alert) bool {
+	return alert != nil &&
+		alert.Correlation != nil &&
+		alert.Correlation.Kind == AlertCorrelationKindInfrastructureIncident &&
+		alert.Correlation.Role == AlertCorrelationRoleSupporting &&
+		alert.Correlation.Inference == AlertCorrelationInferenceSupportedCause &&
+		strings.TrimSpace(alert.Correlation.PrimaryAlertID) != ""
 }
 
 // isInQuietHours checks if the current time is within quiet hours
@@ -785,6 +802,8 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 	switch {
 	case alert.Acknowledged:
 		diagnosis.setSuppressed(AlertDeliveryReasonAcknowledged, "Alert is acknowledged, so firing notifications are suppressed.")
+	case isSupportedInfrastructureSymptom(alert):
+		diagnosis.setSuppressed(AlertDeliveryReasonCorrelatedPrimary, "A supported primary infrastructure alert owns notification delivery for this grouped symptom.")
 	case func() bool {
 		until, snoozed := alertSnoozeUntil(alert, now)
 		if !snoozed {

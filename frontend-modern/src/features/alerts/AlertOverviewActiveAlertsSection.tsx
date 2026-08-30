@@ -16,6 +16,7 @@ import {
 
 import { AlertOverviewAlertCard } from './AlertOverviewAlertCard';
 import { useAlertGroupExpansion } from './useAlertGroupExpansion';
+import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import type { AlertOverviewState } from './useAlertOverviewState';
 
@@ -129,6 +130,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
           >
             {(group) => (
               <div>
+                <AlertIncidentSynthesisSummary alert={group.primary} />
                 <AlertOverviewAlertCard
                   alert={group.primary}
                   state={props.state}

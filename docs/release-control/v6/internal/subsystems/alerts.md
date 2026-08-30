@@ -263,6 +263,7 @@ default construction path still restores.
 3. `internal/alerts/canonical_metric.go`
 4. `internal/alerts/canonical_lifecycle.go`
 5. `internal/alerts/unified_incidents.go`
+5a. `internal/alerts/incident_synthesis.go`
 6. `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`
 7. `frontend-modern/src/utils/alertOverviewPresentation.ts`
 8. `frontend-modern/src/utils/alertResourceTablePresentation.ts`
@@ -2442,3 +2443,42 @@ optional. `internal/alerts/correlation_test.go`,
 `internal/monitoring/alert_correlation_test.go`, and
 `frontend-modern/src/features/alerts/__tests__/useAlertOverviewState.test.tsx`
 pin lifecycle independence, fail-open identity, and client grouping.
+
+### Infrastructure incident synthesis is deterministic and evidence preserving
+
+The same optional alert `correlation` boundary also admits the
+`infrastructure-incident` kind. It adds one of six typed failure classes
+(`runtime`, `network-path`, `application-response`, `certificate`,
+`dependency`, or `evidence-coverage`), an inference state
+(`supported-cause` or `observation-set`), the primary alert and resource IDs,
+sorted affected resource IDs, and a bounded observation list carrying alert,
+resource, severity, observation time, and evidence IDs. It never copies
+provider response bodies, credentials, arbitrary metadata, or error payloads.
+
+`internal/alerts/incident_synthesis.go` derives this context from the complete
+post-recovery active detector set plus active canonical relationships from
+`ResourceRelationshipsWithCanonicalParent`. It may traverse at most eight
+dependency edges and records at most 100 observations. Exact relationship
+direction, confidence of at least 0.8, a current primary failure, and bounded
+event ordering are required for `supported-cause`. Healthy or disagreeing
+primary resource state, weaker topology, late timing, cycles, or incomplete
+support must remain an `observation-set`. Name similarity, resource-ID prefix
+truncation, message parsing, and coincident timestamps remain forbidden causal
+evidence.
+
+Every grouped alert still owns its canonical spec, acknowledgement, history,
+timeline, evidence, and recovery. Synthesis is recomputed on each unified
+incident reconciliation and clears stale synthesized links, so primary-first
+recovery leaves the still-failing symptom visible as standalone immediately.
+Existing `shared-system` correlations remain authoritative and are not
+overwritten. Resource maintenance and monitoring intent continue through the
+canonical resource-policy and intent gates before synthesis; no group-local
+mute or maintenance state is allowed.
+
+Only a supporting member of a `supported-cause` group suppresses duplicate
+notification delivery, with the typed `correlated_primary` reason and primary
+alert ID in the event log. The primary remains the one delivery owner.
+`observation-set` members continue to notify independently because Pulse has
+not established causality. `incident_synthesis_test.go` pins classification,
+contradiction downgrade, bounded evidence, duplicate-delivery suppression, and
+partial-recovery behavior.

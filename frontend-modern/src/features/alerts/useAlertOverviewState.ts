@@ -16,7 +16,10 @@ export interface AlertGroup {
 
 export function computeAlertGroupKey(alert: Alert): string {
   const correlation = alert.correlation;
-  if (correlation?.kind === 'shared-system' && correlation.key.trim() !== '') {
+  if (
+    (correlation?.kind === 'shared-system' || correlation?.kind === 'infrastructure-incident') &&
+    correlation.key.trim() !== ''
+  ) {
     return `correlation:${correlation.kind}:${correlation.key.trim()}`;
   }
   const resourceId = alert.resourceId?.trim();

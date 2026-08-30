@@ -10,7 +10,8 @@ import (
 type AlertCorrelationKind string
 
 const (
-	AlertCorrelationKindSharedSystem AlertCorrelationKind = "shared-system"
+	AlertCorrelationKindSharedSystem           AlertCorrelationKind = "shared-system"
+	AlertCorrelationKindInfrastructureIncident AlertCorrelationKind = "infrastructure-incident"
 )
 
 type AlertCorrelationRole string
@@ -20,14 +21,52 @@ const (
 	AlertCorrelationRoleSupporting AlertCorrelationRole = "supporting"
 )
 
+type AlertFailureClass string
+
+const (
+	AlertFailureClassRuntime             AlertFailureClass = "runtime"
+	AlertFailureClassNetworkPath         AlertFailureClass = "network-path"
+	AlertFailureClassApplicationResponse AlertFailureClass = "application-response"
+	AlertFailureClassCertificate         AlertFailureClass = "certificate"
+	AlertFailureClassDependency          AlertFailureClass = "dependency"
+	AlertFailureClassEvidenceCoverage    AlertFailureClass = "evidence-coverage"
+)
+
+type AlertCorrelationInference string
+
+const (
+	AlertCorrelationInferenceSupportedCause AlertCorrelationInference = "supported-cause"
+	AlertCorrelationInferenceObservationSet AlertCorrelationInference = "observation-set"
+)
+
+// AlertCorrelationObservation is a bounded, content-free description of one
+// independently evaluated detector in an incident synthesis group. It keeps
+// the source alert and its evidence addressable without copying arbitrary
+// provider payloads into the correlation contract.
+type AlertCorrelationObservation struct {
+	AlertID      string            `json:"alertId"`
+	ResourceID   string            `json:"resourceId"`
+	ResourceName string            `json:"resourceName"`
+	FailureClass AlertFailureClass `json:"failureClass"`
+	Level        AlertLevel        `json:"level"`
+	ObservedAt   time.Time         `json:"observedAt"`
+	EvidenceIDs  []string          `json:"evidenceIds,omitempty"`
+}
+
 // AlertCorrelation is presentation-only incident context. It lets clients
 // present independently evaluated alerts as signals from one verified system
 // without merging their canonical detector lifecycles.
 type AlertCorrelation struct {
-	Key    string               `json:"key"`
-	Kind   AlertCorrelationKind `json:"kind"`
-	Role   AlertCorrelationRole `json:"role"`
-	Reason string               `json:"reason"`
+	Key                 string                        `json:"key"`
+	Kind                AlertCorrelationKind          `json:"kind"`
+	Role                AlertCorrelationRole          `json:"role"`
+	Reason              string                        `json:"reason"`
+	FailureClass        AlertFailureClass             `json:"failureClass,omitempty"`
+	Inference           AlertCorrelationInference     `json:"inference,omitempty"`
+	PrimaryAlertID      string                        `json:"primaryAlertId,omitempty"`
+	PrimaryResourceID   string                        `json:"primaryResourceId,omitempty"`
+	AffectedResourceIDs []string                      `json:"affectedResourceIds,omitempty"`
+	Observations        []AlertCorrelationObservation `json:"observations,omitempty"`
 }
 
 // NewSharedSystemAlertCorrelation returns a bounded shared-system correlation.
@@ -50,10 +89,29 @@ func NewSharedSystemAlertCorrelation(key string, role AlertCorrelationRole, reas
 }
 
 func cloneAlertCorrelation(correlation *AlertCorrelation) *AlertCorrelation {
-	if correlation == nil || correlation.Kind != AlertCorrelationKindSharedSystem {
+	if correlation == nil {
 		return nil
 	}
-	return NewSharedSystemAlertCorrelation(correlation.Key, correlation.Role, correlation.Reason)
+	if correlation.Kind == AlertCorrelationKindSharedSystem {
+		return NewSharedSystemAlertCorrelation(correlation.Key, correlation.Role, correlation.Reason)
+	}
+	if correlation.Kind != AlertCorrelationKindInfrastructureIncident ||
+		strings.TrimSpace(correlation.Key) == "" ||
+		strings.TrimSpace(correlation.Reason) == "" ||
+		(correlation.Role != AlertCorrelationRolePrimary && correlation.Role != AlertCorrelationRoleSupporting) ||
+		(correlation.Inference != AlertCorrelationInferenceSupportedCause && correlation.Inference != AlertCorrelationInferenceObservationSet) {
+		return nil
+	}
+	clone := *correlation
+	clone.AffectedResourceIDs = append([]string(nil), correlation.AffectedResourceIDs...)
+	if len(correlation.Observations) > 0 {
+		clone.Observations = make([]AlertCorrelationObservation, len(correlation.Observations))
+		for index := range correlation.Observations {
+			clone.Observations[index] = correlation.Observations[index]
+			clone.Observations[index].EvidenceIDs = append([]string(nil), correlation.Observations[index].EvidenceIDs...)
+		}
+	}
+	return &clone
 }
 
 // Alert represents an active alert

@@ -1,7 +1,7 @@
 # Infrastructure-Aware Service Assurance Plan
 
 Last updated: 2026-08-30
-Status: ACCEPTED — SLICES A, B, C, AND D IMPLEMENTED
+Status: ACCEPTED — SLICES A, B, C, D, AND E IMPLEMENTED
 Governance surfaces:
 
 - `status.json.coverage_gaps.infrastructure-aware-service-assurance`
@@ -370,6 +370,23 @@ Exit conditions:
 - one infrastructure failure does not produce an unbounded notification storm;
 - unsupported causality is labeled as an observation set, not a root cause;
 - recovery order and partial recovery remain visible.
+
+Implementation record (2026-08-30): Slice E is delivered through the canonical
+alert correlation seam. The alert manager classifies current detector evidence
+as runtime, network path, application response, certificate, dependency, or
+evidence-coverage failure; traverses only active canonical resource
+relationships; and groups supported downstream symptoms beneath one primary
+alert without merging detector identity, acknowledgement, history, or recovery.
+Each group carries a bounded list of affected resources, observation times, and
+evidence IDs. Contradictory resource health, weak relationship confidence, or
+unsupported timing downgrades the result to a visible observation set rather
+than a causal claim. Supported secondary symptoms stay visible and expandable
+but use the primary alert's notification delivery, while observation sets keep
+independent delivery. When the primary recovers first, remaining symptoms
+immediately return to standalone presentation. The Alerts overview exposes the
+classification, inference reason, affected count, and reviewable observation
+set at desktop and narrow widths. Slices F through H remain ordered future
+work.
 
 ### Slice F: Unified Timeline and Patrol Investigation
 
