@@ -44,6 +44,7 @@ SECRET_CONTEXT_TOKEN_RE = re.compile(r"(?<![\w.])secrets\b")
 NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
+PERMISSIONS_RE = re.compile(r"^(\s*)permissions\s*:\s*(.*?)\s*$")
 
 
 @dataclass(frozen=True)
@@ -154,11 +155,16 @@ def audit_workflow(path: Path) -> list[Finding]:
                 )
 
     permission_declarations = [
-        index
+        (index, match)
         for index, line in enumerate(lines)
-        if re.match(r"^permissions\s*:", line)
+        if (match := PERMISSIONS_RE.match(line.split("#", 1)[0]))
     ]
-    if len(permission_declarations) != 1:
+    top_level_permissions = [
+        (index, match)
+        for index, match in permission_declarations
+        if not match.group(1)
+    ]
+    if len(top_level_permissions) != 1:
         findings.append(
             Finding(
                 path,
@@ -166,17 +172,20 @@ def audit_workflow(path: Path) -> list[Finding]:
                 "workflow must declare top-level permissions explicitly exactly once",
             )
         )
-    elif lines[permission_declarations[0]].split("#", 1)[0].strip() not in {
-        "permissions:",
-        "permissions: {}",
-    }:
-        findings.append(
-            Finding(
-                path,
-                permission_declarations[0] + 1,
-                "workflow permissions must use a scope mapping or explicit empty mapping",
+    for index, match in permission_declarations:
+        # GitHub applies job-level permissions after the workflow default. Audit
+        # every declaration so a job cannot reintroduce read-all, write-all, or
+        # a dynamic grant beneath an otherwise least-privilege workflow.
+        inline_value = match.group(2)
+        if inline_value not in {"", "{}"}:
+            scope = "workflow" if not match.group(1) else "job"
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    f"{scope} permissions must use a scope mapping or explicit empty mapping",
+                )
             )
-        )
 
     for index, line in enumerate(lines):
         line_number = index + 1

@@ -12,11 +12,12 @@ Use `false` unless a later command in the same job performs an authenticated
 Git write. The small number of write-path exceptions use `true` with the
 machine-checked `# required: authenticated git writes` rationale.
 
-Each workflow declares its default `GITHUB_TOKEN` permissions explicitly and
-enumerates scopes instead of using `read-all` or `write-all`. Workflow inputs,
-secrets, `github.token`, and attacker-controlled GitHub event metadata are
-passed to `run` steps through `env`; they are data and must never be
-interpolated into the generated shell program.
+Each workflow declares its default `GITHUB_TOKEN` permissions explicitly, and
+both workflow defaults and job-level overrides enumerate scopes instead of
+using `read-all`, `write-all`, or dynamic grants. Workflow inputs, secrets,
+`github.token`, and attacker-controlled GitHub event metadata are passed to
+`run` steps through `env`; they are data and must never be interpolated into
+the generated shell program.
 
 Workflows triggered by `pull_request` cannot reference confidential repository
 secrets. Canonical governance therefore keeps its pull-request checks local to

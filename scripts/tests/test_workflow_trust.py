@@ -113,6 +113,41 @@ steps:
         dynamic = self.audit("permissions: ${{ inputs.permissions }}\njobs: {}\n")
         self.assertTrue(any("scope mapping" in finding for finding in dynamic))
 
+    def test_rejects_broad_or_dynamic_job_permission_overrides(self) -> None:
+        broad = self.audit(
+            """permissions:
+  contents: read
+jobs:
+  unsafe:
+    permissions: write-all
+"""
+        )
+        self.assertTrue(any("job permissions" in finding for finding in broad))
+
+        dynamic = self.audit(
+            """permissions: {}
+jobs:
+  unsafe:
+    permissions: ${{ inputs.permissions }}
+"""
+        )
+        self.assertTrue(any("job permissions" in finding for finding in dynamic))
+
+    def test_accepts_explicit_job_permission_mappings(self) -> None:
+        findings = self.audit(
+            """permissions:
+  contents: read
+jobs:
+  read_only:
+    permissions: {}
+  publisher:
+    permissions:
+      contents: write
+      id-token: write
+"""
+        )
+        self.assertEqual(findings, [])
+
     def test_rejects_shell_template_data_but_accepts_env_data(self) -> None:
         findings = self.audit(
             """permissions: {}
