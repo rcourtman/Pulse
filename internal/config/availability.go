@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -14,7 +16,58 @@ const (
 	DefaultAvailabilityTimeoutMillis    = 2000
 	DefaultAvailabilityFailureThreshold = 2
 	DefaultCertificateExpiryWarningDays = 30
+	MaxAvailabilityHTTPBodyBytes        = 8192
+	MaxAvailabilityHTTPResponseBytes    = 65536
 )
+
+type AvailabilityHTTPMethod string
+
+const (
+	AvailabilityHTTPMethodHEAD AvailabilityHTTPMethod = "HEAD"
+	AvailabilityHTTPMethodGET  AvailabilityHTTPMethod = "GET"
+	AvailabilityHTTPMethodPOST AvailabilityHTTPMethod = "POST"
+)
+
+type AvailabilityHTTPAuthType string
+
+const (
+	AvailabilityHTTPAuthNone   AvailabilityHTTPAuthType = "none"
+	AvailabilityHTTPAuthBasic  AvailabilityHTTPAuthType = "basic"
+	AvailabilityHTTPAuthBearer AvailabilityHTTPAuthType = "bearer"
+)
+
+// AvailabilityHTTPHeader uses a stable ID so API clients can edit a redacted
+// header without receiving its stored value. A nil Value means "leave the
+// stored value unchanged" on update; an explicit empty string clears it.
+type AvailabilityHTTPHeader struct {
+	ID    string  `json:"id"`
+	Name  string  `json:"name"`
+	Value *string `json:"value,omitempty"`
+}
+
+// AvailabilityHTTPAuthentication contains execution credentials. Secret
+// values are pointers so update requests can distinguish omitted from empty.
+// The API must redact them before returning a target to a client.
+type AvailabilityHTTPAuthentication struct {
+	Type        AvailabilityHTTPAuthType `json:"type"`
+	Username    string                   `json:"username,omitempty"`
+	Password    *string                  `json:"password,omitempty"`
+	BearerToken *string                  `json:"bearerToken,omitempty"`
+}
+
+// AvailabilityHTTPConfig is an explicit application response contract. A nil
+// config preserves the legacy HEAD-with-GET-fallback reachability semantics.
+type AvailabilityHTTPConfig struct {
+	Method            AvailabilityHTTPMethod         `json:"method"`
+	Headers           []AvailabilityHTTPHeader       `json:"headers,omitempty"`
+	Authentication    AvailabilityHTTPAuthentication `json:"authentication"`
+	Body              *string                        `json:"body,omitempty"`
+	ExpectedStatusMin int                            `json:"expectedStatusMin"`
+	ExpectedStatusMax int                            `json:"expectedStatusMax"`
+	TextContains      string                         `json:"textContains,omitempty"`
+	JSONPath          string                         `json:"jsonPath,omitempty"`
+	JSONEquals        string                         `json:"jsonEquals,omitempty"`
+}
 
 type AvailabilityProbeProtocol string
 
@@ -75,6 +128,10 @@ type AvailabilityTarget struct {
 	// check runs from the local Pulse instance. Agent existence is validated at
 	// the API layer, not here, because config has no view of monitor state.
 	ProbeAgentID string `json:"probeAgentId,omitempty"`
+	// HTTP is absent for legacy targets. Its request body, credentials, and
+	// header values are encrypted with the rest of availability target storage
+	// and are never returned by the API.
+	HTTP *AvailabilityHTTPConfig `json:"http,omitempty"`
 }
 
 // NewAvailabilityTarget returns a new target with generated ID and defaults.
@@ -124,6 +181,25 @@ func (t *AvailabilityTarget) ApplyDefaults() {
 			t.UDPMode = AvailabilityUDPResponseRequired
 		}
 	}
+	if t.HTTP != nil {
+		if t.HTTP.Method == "" {
+			t.HTTP.Method = AvailabilityHTTPMethodGET
+		}
+		if t.HTTP.Authentication.Type == "" {
+			t.HTTP.Authentication.Type = AvailabilityHTTPAuthNone
+		}
+		if t.HTTP.ExpectedStatusMin == 0 {
+			t.HTTP.ExpectedStatusMin = 200
+		}
+		if t.HTTP.ExpectedStatusMax == 0 {
+			t.HTTP.ExpectedStatusMax = 399
+		}
+		for i := range t.HTTP.Headers {
+			if strings.TrimSpace(t.HTTP.Headers[i].ID) == "" {
+				t.HTTP.Headers[i].ID = uuid.NewString()
+			}
+		}
+	}
 }
 
 func (t AvailabilityTarget) EffectivePollIntervalSecs() int {
@@ -160,6 +236,7 @@ func AvailabilityExecutionConfigChanged(previous, next AvailabilityTarget) bool 
 		previous.UDPMode != next.UDPMode ||
 		previous.UDPRequest != next.UDPRequest ||
 		previous.UDPExpected != next.UDPExpected ||
+		!reflect.DeepEqual(previous.HTTP, next.HTTP) ||
 		previous.EffectiveTimeoutMillis() != next.EffectiveTimeoutMillis() ||
 		previous.EffectivePollIntervalSecs() != next.EffectivePollIntervalSecs() ||
 		previous.ProbeAgentID != next.ProbeAgentID
@@ -232,6 +309,13 @@ func (t AvailabilityTarget) Validate() error {
 	} else if t.UDPMode != "" || t.UDPRequest != "" || t.UDPExpected != "" {
 		return fmt.Errorf("UDP settings may only be used with UDP availability targets")
 	}
+	if protocol == AvailabilityProbeHTTP || protocol == AvailabilityProbeHTTPS {
+		if err := validateAvailabilityHTTPConfig(t.HTTP); err != nil {
+			return err
+		}
+	} else if t.HTTP != nil {
+		return fmt.Errorf("HTTP response contracts may only be used with HTTP or HTTPS availability targets")
+	}
 	if protocol != AvailabilityProbeHTTPS && (t.CertificateMonitoringDisabled || t.CertificateExpiryWarningDays != 0) {
 		return fmt.Errorf("certificate monitoring settings may only be used with HTTPS availability targets")
 	}
@@ -277,13 +361,16 @@ func (t AvailabilityTarget) HTTPURL() (*url.URL, error) {
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("invalid http availability address: %w", err)
+		return nil, fmt.Errorf("invalid http availability address")
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return nil, fmt.Errorf("http availability targets require http or https scheme")
 	}
 	if strings.TrimSpace(u.Hostname()) == "" {
 		return nil, fmt.Errorf("http availability target host is required")
+	}
+	if u.User != nil {
+		return nil, fmt.Errorf("http availability target credentials must use the authentication fields")
 	}
 	if t.Port > 0 {
 		u.Host = net.JoinHostPort(u.Hostname(), fmt.Sprintf("%d", t.Port))
@@ -316,8 +403,169 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	}
 	target.LinkedResourceID = strings.TrimSpace(target.LinkedResourceID)
 	target.ProbeAgentID = strings.TrimSpace(target.ProbeAgentID)
+	if target.HTTP != nil {
+		target.HTTP.Method = AvailabilityHTTPMethod(strings.ToUpper(strings.TrimSpace(string(target.HTTP.Method))))
+		target.HTTP.Authentication.Type = AvailabilityHTTPAuthType(strings.ToLower(strings.TrimSpace(string(target.HTTP.Authentication.Type))))
+		target.HTTP.Authentication.Username = strings.TrimSpace(target.HTTP.Authentication.Username)
+		target.HTTP.TextContains = strings.TrimSpace(target.HTTP.TextContains)
+		target.HTTP.JSONPath = strings.TrimSpace(target.HTTP.JSONPath)
+		target.HTTP.JSONEquals = strings.TrimSpace(target.HTTP.JSONEquals)
+		for i := range target.HTTP.Headers {
+			target.HTTP.Headers[i].ID = strings.TrimSpace(target.HTTP.Headers[i].ID)
+			target.HTTP.Headers[i].Name = strings.TrimSpace(target.HTTP.Headers[i].Name)
+		}
+		if target.HTTP.Authentication.Type != AvailabilityHTTPAuthBasic {
+			target.HTTP.Authentication.Username = ""
+			target.HTTP.Authentication.Password = nil
+		}
+		if target.HTTP.Authentication.Type != AvailabilityHTTPAuthBearer {
+			target.HTTP.Authentication.BearerToken = nil
+		}
+		if target.HTTP.Method != AvailabilityHTTPMethodPOST {
+			target.HTTP.Body = nil
+		}
+	}
+	if target.Protocol != AvailabilityProbeHTTP && target.Protocol != AvailabilityProbeHTTPS {
+		target.HTTP = nil
+	}
 	target.ApplyDefaults()
 	return target
+}
+
+func validateAvailabilityHTTPConfig(contract *AvailabilityHTTPConfig) error {
+	if contract == nil {
+		return nil
+	}
+	switch contract.Method {
+	case AvailabilityHTTPMethodHEAD, AvailabilityHTTPMethodGET, AvailabilityHTTPMethodPOST:
+	default:
+		return fmt.Errorf("HTTP response contract method must be HEAD, GET, or POST")
+	}
+	if contract.ExpectedStatusMin < 100 || contract.ExpectedStatusMin > 599 ||
+		contract.ExpectedStatusMax < 100 || contract.ExpectedStatusMax > 599 ||
+		contract.ExpectedStatusMin > contract.ExpectedStatusMax {
+		return fmt.Errorf("HTTP expected status range must be between 100 and 599")
+	}
+	if contract.Body != nil {
+		if contract.Method != AvailabilityHTTPMethodPOST {
+			return fmt.Errorf("HTTP request bodies may only be used with POST")
+		}
+		if len(*contract.Body) > MaxAvailabilityHTTPBodyBytes {
+			return fmt.Errorf("HTTP request body must be %d bytes or less", MaxAvailabilityHTTPBodyBytes)
+		}
+	}
+	if len(contract.TextContains) > 256 {
+		return fmt.Errorf("HTTP text assertion must be 256 bytes or less")
+	}
+	if len(contract.JSONPath) > 256 || len(contract.JSONEquals) > 512 {
+		return fmt.Errorf("HTTP JSON assertion is too long")
+	}
+	if contract.JSONPath != "" && !validAvailabilityJSONPath(contract.JSONPath) {
+		return fmt.Errorf("HTTP JSON path must use dot fields and numeric array indexes")
+	}
+	if contract.Method == AvailabilityHTTPMethodHEAD && (contract.TextContains != "" || contract.JSONPath != "") {
+		return fmt.Errorf("HTTP HEAD contracts cannot assert a response body")
+	}
+	if contract.JSONEquals != "" && contract.JSONPath == "" {
+		return fmt.Errorf("HTTP JSON expected value requires a JSON path")
+	}
+	if len(contract.Headers) > 16 {
+		return fmt.Errorf("HTTP response contracts support at most 16 request headers")
+	}
+	seenIDs := make(map[string]struct{}, len(contract.Headers))
+	seenNames := make(map[string]struct{}, len(contract.Headers))
+	totalHeaderValueBytes := 0
+	for _, header := range contract.Headers {
+		if header.ID == "" || header.Name == "" || !validAvailabilityHTTPHeaderName(header.Name) {
+			return fmt.Errorf("HTTP request headers require a valid name and stable id")
+		}
+		name := strings.ToLower(header.Name)
+		switch name {
+		case "authorization", "host", "content-length", "connection", "transfer-encoding", "proxy-authorization":
+			return fmt.Errorf("HTTP request header %q is reserved", header.Name)
+		}
+		if _, ok := seenIDs[header.ID]; ok {
+			return fmt.Errorf("HTTP request header ids must be unique")
+		}
+		if _, ok := seenNames[name]; ok {
+			return fmt.Errorf("HTTP request header names must be unique")
+		}
+		seenIDs[header.ID] = struct{}{}
+		seenNames[name] = struct{}{}
+		if header.Value != nil {
+			if strings.ContainsAny(*header.Value, "\r\n") {
+				return fmt.Errorf("HTTP request header values must not contain newlines")
+			}
+			totalHeaderValueBytes += len(*header.Value)
+		}
+	}
+	if totalHeaderValueBytes > 8192 {
+		return fmt.Errorf("HTTP request header values must total 8192 bytes or less")
+	}
+	switch contract.Authentication.Type {
+	case AvailabilityHTTPAuthNone:
+	case AvailabilityHTTPAuthBasic:
+		if contract.Authentication.Username == "" || contract.Authentication.Password == nil || *contract.Authentication.Password == "" {
+			return fmt.Errorf("HTTP basic authentication requires a username and password")
+		}
+	case AvailabilityHTTPAuthBearer:
+		if contract.Authentication.BearerToken == nil || *contract.Authentication.BearerToken == "" {
+			return fmt.Errorf("HTTP bearer authentication requires a token")
+		}
+	default:
+		return fmt.Errorf("HTTP authentication type must be none, basic, or bearer")
+	}
+	return nil
+}
+
+func validAvailabilityHTTPHeaderName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, char := range name {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || strings.ContainsRune("!#$%&'*+-.^_`|~", char)) {
+			return false
+		}
+	}
+	return true
+}
+
+func validAvailabilityJSONPath(rawPath string) bool {
+	path := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(rawPath), "$"))
+	path = strings.TrimPrefix(path, ".")
+	if path == "" {
+		return true
+	}
+	for _, segment := range strings.Split(path, ".") {
+		if segment == "" {
+			return false
+		}
+		name := segment
+		indexes := ""
+		if bracket := strings.IndexByte(segment, '['); bracket >= 0 {
+			name = segment[:bracket]
+			indexes = segment[bracket:]
+		}
+		if strings.ContainsAny(name, "[]") || (name == "" && indexes == "") {
+			return false
+		}
+		for indexes != "" {
+			if !strings.HasPrefix(indexes, "[") {
+				return false
+			}
+			end := strings.IndexByte(indexes, ']')
+			if end <= 1 {
+				return false
+			}
+			index, err := strconv.Atoi(indexes[1:end])
+			if err != nil || index < 0 {
+				return false
+			}
+			indexes = indexes[end+1:]
+		}
+	}
+	return true
 }
 
 func normalizeAvailabilityUDPMode(mode AvailabilityUDPMode) AvailabilityUDPMode {

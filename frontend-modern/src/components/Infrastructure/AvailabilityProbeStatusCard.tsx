@@ -74,6 +74,30 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
     return err.length > 40 ? `${err.slice(0, 40)}…` : err;
   };
   const certificate = () => props.availability.certificate;
+  const transportLabel = () => {
+    switch (props.availability.transportOutcome) {
+      case 'reachable':
+        return 'Endpoint answered';
+      case 'unreachable':
+        return 'No response';
+      case 'indeterminate':
+        return 'Indeterminate';
+      default:
+        return null;
+    }
+  };
+  const applicationLabel = () => {
+    if (
+      !props.availability.applicationOutcome ||
+      props.availability.applicationOutcome === 'not_configured'
+    ) {
+      return null;
+    }
+    const status = props.availability.applicationStatusCode
+      ? ` · HTTP ${props.availability.applicationStatusCode}`
+      : '';
+    return `${props.availability.applicationOutcome === 'passed' ? 'Contract passed' : 'Contract failed'}${status}`;
+  };
   const certificateTrust = () => {
     switch (certificate()?.trustStatus) {
       case 'trusted':
@@ -168,6 +192,22 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
             presentation()?.freshnessLabel === 'stale' ? 'text-amber-600 dark:text-amber-300' : ''
           }
         />
+        <Show when={transportLabel()}>
+          {(label) => <InfoCardKeyValueRow label="Reachability" value={label()} />}
+        </Show>
+        <Show when={applicationLabel()}>
+          {(label) => (
+            <InfoCardKeyValueRow
+              label="Application"
+              value={label()}
+              valueClass={
+                props.availability.applicationOutcome === 'passed'
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-red-600 dark:text-red-400'
+              }
+            />
+          )}
+        </Show>
         <Show when={presentation()?.correlationLabel}>
           {(label) => (
             <InfoCardKeyValueRow

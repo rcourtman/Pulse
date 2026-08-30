@@ -761,10 +761,14 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
    poll-provider path. `internal/monitoring/availability_poller.go` owns ICMP,
    TCP, and HTTP probes, provider health, scheduler task construction, and
    supplemental unified-resource records for saved availability targets.
-   HTTP and HTTPS probes start with `HEAD` and retry once with `GET` only when
-   the endpoint explicitly reports that `HEAD` is unsupported (`405 Method
-   Not Allowed` or `501 Not Implemented`). Other server-error responses remain
-   failed probes and must not be converted into reachability evidence.
+   Legacy HTTP and HTTPS targets without an explicit response contract start
+   with `HEAD` and retry once with `GET` only when the endpoint explicitly
+   reports that `HEAD` is unsupported (`405 Method Not Allowed` or `501 Not
+   Implemented`). Explicit application contracts instead execute their bounded
+   `HEAD`, `GET`, or `POST` request exactly once, distinguish a received HTTP
+   response from an application assertion failure, and inspect no more than
+   64 KiB of response content. Other server-error responses remain failed
+   probes and must not be converted into healthy application evidence.
    Failed endpoint probes are observed runtime state for that target; they
    must publish provider health and incidents without dead-lettering the
    scheduler task itself.
@@ -1464,6 +1468,18 @@ retention lifecycle, are deleted with the target, and retain no target address,
 agent identity, raw error, certificate detail, or customer identity. The
 monitoring-read batch path is bounded to 200 targets and 120 presentation
 buckets without a query per target.
+HTTP/S application response contracts extend that same source-owned provider
+without creating a second uptime product or result store. Current status and
+unified-resource availability data carry the transport outcome separately from
+the typed application outcome, HTTP status, and bounded failure code; the
+overall availability outcome remains the alert/history state so a reachable
+endpoint returning an incorrect application response can still fail the saved
+service check. Request bodies, response bodies, Basic passwords, bearer tokens,
+and operator header values never enter status, categorical history, incidents,
+evidence envelopes, telemetry, logs, or Patrol context. Execution-defined
+contract edits use the existing server-authored configuration revision so
+history visibly breaks at the new proof definition instead of blending unlike
+checks.
 HTTPS checks also author one canonical certificate observation from the same
 probe execution. `internal/availabilityprobe` captures the presented leaf and
 `pkg/tlsutil/certificate.go` derives subject, issuer, SANs, SHA-256 fingerprint,

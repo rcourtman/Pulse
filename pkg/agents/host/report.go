@@ -136,14 +136,18 @@ type ProxmoxLXCContainer struct {
 // ("reachable", "unreachable", "indeterminate"); anything else is treated as
 // indeterminate by the server.
 type AvailabilityProbeResult struct {
-	ObservationID  string                          `json:"observationId,omitempty"`
-	TargetID       string                          `json:"targetId"`
-	ConfigRevision int64                           `json:"configRevision,omitempty"`
-	Outcome        string                          `json:"outcome"`
-	LatencyMillis  int64                           `json:"latencyMillis"`
-	CheckedAt      time.Time                       `json:"checkedAt"`
-	Error          string                          `json:"error,omitempty"`
-	Certificate    *tlsutil.CertificateObservation `json:"certificate,omitempty"`
+	ObservationID          string                          `json:"observationId,omitempty"`
+	TargetID               string                          `json:"targetId"`
+	ConfigRevision         int64                           `json:"configRevision,omitempty"`
+	Outcome                string                          `json:"outcome"`
+	TransportOutcome       string                          `json:"transportOutcome,omitempty"`
+	ApplicationOutcome     string                          `json:"applicationOutcome,omitempty"`
+	ApplicationStatusCode  int                             `json:"applicationStatusCode,omitempty"`
+	ApplicationFailureCode string                          `json:"applicationFailureCode,omitempty"`
+	LatencyMillis          int64                           `json:"latencyMillis"`
+	CheckedAt              time.Time                       `json:"checkedAt"`
+	Error                  string                          `json:"error,omitempty"`
+	Certificate            *tlsutil.CertificateObservation `json:"certificate,omitempty"`
 }
 
 // ClusterNodeSensors contains temperature sensor data collected from a Proxmox

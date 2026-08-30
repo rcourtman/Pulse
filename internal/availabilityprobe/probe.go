@@ -10,8 +10,11 @@
 package availabilityprobe
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -39,11 +42,30 @@ const (
 	OutcomeIndeterminate Outcome = "indeterminate"
 )
 
+// ApplicationOutcome is separate from transport reachability so Pulse can
+// distinguish "the endpoint answered" from "the service returned what the
+// operator defined as healthy".
+type ApplicationOutcome string
+
+const (
+	ApplicationNotConfigured ApplicationOutcome = "not_configured"
+	ApplicationPassed        ApplicationOutcome = "passed"
+	ApplicationFailed        ApplicationOutcome = "failed"
+)
+
+type ApplicationResult struct {
+	Outcome     ApplicationOutcome `json:"outcome"`
+	StatusCode  int                `json:"statusCode,omitempty"`
+	FailureCode string             `json:"failureCode,omitempty"`
+}
+
 // ProbeResult carries the reachability outcome plus HTTPS certificate posture
 // when the target completed a TLS handshake.
 type ProbeResult struct {
-	Outcome     Outcome                         `json:"outcome"`
-	Certificate *tlsutil.CertificateObservation `json:"certificate,omitempty"`
+	Outcome          Outcome                         `json:"outcome"`
+	TransportOutcome Outcome                         `json:"transportOutcome"`
+	Application      *ApplicationResult              `json:"application,omitempty"`
+	Certificate      *tlsutil.CertificateObservation `json:"certificate,omitempty"`
 }
 
 // Run executes one agentless availability check.
@@ -77,19 +99,17 @@ func DetailedResult(ctx context.Context, target config.AvailabilityTarget) (Prob
 	switch target.Protocol {
 	case config.AvailabilityProbeICMP:
 		outcome, err := outcomeFromError(probeICMP(probeCtx, target))
-		return ProbeResult{Outcome: outcome}, err
+		return ProbeResult{Outcome: outcome, TransportOutcome: outcome}, err
 	case config.AvailabilityProbeTCP:
 		outcome, err := outcomeFromError(probeTCP(probeCtx, target))
-		return ProbeResult{Outcome: outcome}, err
+		return ProbeResult{Outcome: outcome, TransportOutcome: outcome}, err
 	case config.AvailabilityProbeUDP:
 		outcome, err := probeUDP(probeCtx, target)
-		return ProbeResult{Outcome: outcome}, err
+		return ProbeResult{Outcome: outcome, TransportOutcome: outcome}, err
 	case config.AvailabilityProbeHTTP, config.AvailabilityProbeHTTPS:
-		certificate, err := probeHTTP(probeCtx, target, timeout)
-		outcome, probeErr := outcomeFromError(err)
-		return ProbeResult{Outcome: outcome, Certificate: certificate}, probeErr
+		return probeHTTP(probeCtx, target, timeout)
 	default:
-		return ProbeResult{Outcome: OutcomeUnreachable}, fmt.Errorf("unsupported availability protocol %q", target.Protocol)
+		return ProbeResult{Outcome: OutcomeUnreachable, TransportOutcome: OutcomeUnreachable}, fmt.Errorf("unsupported availability protocol %q", target.Protocol)
 	}
 }
 
@@ -262,20 +282,23 @@ func probeTCPViaSystem(ctx context.Context, host string, port, timeoutMillis int
 	return fmt.Errorf("tcp probe failed: %s", details)
 }
 
-func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout time.Duration) (*tlsutil.CertificateObservation, error) {
+func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout time.Duration) (ProbeResult, error) {
 	u, err := target.HTTPURL()
 	if err != nil {
-		return nil, err
+		return httpTransportFailure(err)
 	}
 	opts := httpOutboundOptions()
 	u, err = securityutil.ValidateOutboundFetchURL(ctx, u.String(), opts)
 	if err != nil {
-		return nil, fmt.Errorf("http availability target URL validation failed: %w", err)
+		return httpTransportFailure(fmt.Errorf("http availability target URL validation failed: %w", err))
 	}
 	client := securityutil.NewRestrictedOutboundHTTPClient(timeout, opts)
+	if target.HTTP != nil {
+		return probeHTTPContract(ctx, client, u, target.HTTP)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("build http availability request: %w", err)
+		return httpTransportFailure(fmt.Errorf("build http availability request: %w", err))
 	}
 	req.Header.Set("User-Agent", "Pulse availability probe")
 	resp, err := client.Do(req)
@@ -286,15 +309,19 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 			return probeHTTPGet(ctx, client, u)
 		}
 		if resp.StatusCode >= http.StatusInternalServerError {
-			return certificate, fmt.Errorf("http probe returned %s", resp.Status)
+			return ProbeResult{Outcome: OutcomeUnreachable, TransportOutcome: OutcomeReachable, Certificate: certificate}, fmt.Errorf("http probe returned status %d", resp.StatusCode)
 		}
-		return certificate, nil
+		return ProbeResult{Outcome: OutcomeReachable, TransportOutcome: OutcomeReachable, Certificate: certificate}, nil
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, ctxErr
+		return httpTransportFailure(ctxErr)
 	}
 
-	return nil, fmt.Errorf("http probe failed: %w", err)
+	return httpTransportFailure(fmt.Errorf("http probe failed: %w", err))
+}
+
+func httpTransportFailure(err error) (ProbeResult, error) {
+	return ProbeResult{Outcome: OutcomeUnreachable, TransportOutcome: OutcomeUnreachable}, err
 }
 
 func httpOutboundOptions() securityutil.RestrictedOutboundHTTPOptions {
@@ -306,25 +333,174 @@ func httpOutboundOptions() securityutil.RestrictedOutboundHTTPOptions {
 	}
 }
 
-func probeHTTPGet(ctx context.Context, client *http.Client, u *url.URL) (*tlsutil.CertificateObservation, error) {
+func probeHTTPGet(ctx context.Context, client *http.Client, u *url.URL) (ProbeResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("build http availability fallback request: %w", err)
+		return httpTransportFailure(fmt.Errorf("build http availability fallback request: %w", err))
 	}
 	req.Header.Set("User-Agent", "Pulse availability probe")
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
+			return httpTransportFailure(ctxErr)
 		}
-		return nil, fmt.Errorf("http probe failed: %w", err)
+		return httpTransportFailure(fmt.Errorf("http probe failed: %w", err))
 	}
 	defer resp.Body.Close()
 	certificate := certificateObservationFromResponse(resp)
 	if resp.StatusCode >= http.StatusInternalServerError {
-		return certificate, fmt.Errorf("http probe returned %s", resp.Status)
+		return ProbeResult{Outcome: OutcomeUnreachable, TransportOutcome: OutcomeReachable, Certificate: certificate}, fmt.Errorf("http probe returned status %d", resp.StatusCode)
 	}
-	return certificate, nil
+	return ProbeResult{Outcome: OutcomeReachable, TransportOutcome: OutcomeReachable, Certificate: certificate}, nil
+}
+
+func probeHTTPContract(ctx context.Context, client *http.Client, u *url.URL, contract *config.AvailabilityHTTPConfig) (ProbeResult, error) {
+	var body io.Reader
+	if contract.Body != nil {
+		body = bytes.NewBufferString(*contract.Body)
+	}
+	req, err := http.NewRequestWithContext(ctx, string(contract.Method), u.String(), body)
+	if err != nil {
+		return httpTransportFailure(fmt.Errorf("build http availability request: %w", err))
+	}
+	req.Header.Set("User-Agent", "Pulse availability probe")
+	for _, header := range contract.Headers {
+		if header.Value != nil {
+			req.Header.Set(header.Name, *header.Value)
+		}
+	}
+	switch contract.Authentication.Type {
+	case config.AvailabilityHTTPAuthBasic:
+		req.SetBasicAuth(contract.Authentication.Username, valueOrEmpty(contract.Authentication.Password))
+	case config.AvailabilityHTTPAuthBearer:
+		req.Header.Set("Authorization", "Bearer "+valueOrEmpty(contract.Authentication.BearerToken))
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return httpTransportFailure(ctxErr)
+		}
+		return httpTransportFailure(fmt.Errorf("http probe failed: %w", err))
+	}
+	defer resp.Body.Close()
+	certificate := certificateObservationFromResponse(resp)
+	result := ProbeResult{
+		Outcome:          OutcomeReachable,
+		TransportOutcome: OutcomeReachable,
+		Certificate:      certificate,
+		Application: &ApplicationResult{
+			Outcome:    ApplicationPassed,
+			StatusCode: resp.StatusCode,
+		},
+	}
+	if resp.StatusCode < contract.ExpectedStatusMin || resp.StatusCode > contract.ExpectedStatusMax {
+		return applicationFailure(result, "status_mismatch", fmt.Sprintf("http response status %d was outside the expected %d-%d range", resp.StatusCode, contract.ExpectedStatusMin, contract.ExpectedStatusMax))
+	}
+	if contract.TextContains == "" && contract.JSONPath == "" {
+		return result, nil
+	}
+	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, config.MaxAvailabilityHTTPResponseBytes+1))
+	if readErr != nil {
+		return applicationFailure(result, "response_read_failed", "http response body could not be read")
+	}
+	if len(responseBody) > config.MaxAvailabilityHTTPResponseBytes {
+		return applicationFailure(result, "response_too_large", fmt.Sprintf("http response body exceeded the %d byte assertion limit", config.MaxAvailabilityHTTPResponseBytes))
+	}
+	if contract.TextContains != "" && !bytes.Contains(responseBody, []byte(contract.TextContains)) {
+		return applicationFailure(result, "text_mismatch", "http response did not contain the expected text")
+	}
+	if contract.JSONPath != "" {
+		var document any
+		decoder := json.NewDecoder(bytes.NewReader(responseBody))
+		decoder.UseNumber()
+		if err := decoder.Decode(&document); err != nil {
+			return applicationFailure(result, "json_invalid", "http response was not valid JSON")
+		}
+		value, ok := lookupJSONPath(document, contract.JSONPath)
+		if !ok {
+			return applicationFailure(result, "json_path_missing", "http response did not contain the expected JSON path")
+		}
+		if contract.JSONEquals != "" && normalizedJSONAssertionValue(value) != contract.JSONEquals {
+			return applicationFailure(result, "json_value_mismatch", "http response JSON value did not match the expected value")
+		}
+	}
+	return result, nil
+}
+
+func applicationFailure(result ProbeResult, code, message string) (ProbeResult, error) {
+	result.Outcome = OutcomeUnreachable
+	result.Application.Outcome = ApplicationFailed
+	result.Application.FailureCode = code
+	return result, fmt.Errorf("%s", message)
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func normalizedJSONAssertionValue(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
+}
+
+// lookupJSONPath supports a deliberately bounded field/index vocabulary such
+// as "status", "data.healthy", or "items[0].state". It is not a scripting
+// language and cannot execute operator-authored expressions.
+func lookupJSONPath(document any, rawPath string) (any, bool) {
+	path := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(rawPath), "$"))
+	path = strings.TrimPrefix(path, ".")
+	if path == "" {
+		return document, true
+	}
+	current := document
+	for _, segment := range strings.Split(path, ".") {
+		if segment == "" {
+			return nil, false
+		}
+		name := segment
+		indexes := ""
+		if bracket := strings.Index(segment, "["); bracket >= 0 {
+			name = segment[:bracket]
+			indexes = segment[bracket:]
+		}
+		if name != "" {
+			object, ok := current.(map[string]any)
+			if !ok {
+				return nil, false
+			}
+			current, ok = object[name]
+			if !ok {
+				return nil, false
+			}
+		}
+		for indexes != "" {
+			if !strings.HasPrefix(indexes, "[") {
+				return nil, false
+			}
+			end := strings.IndexByte(indexes, ']')
+			if end <= 1 {
+				return nil, false
+			}
+			index, err := strconv.Atoi(indexes[1:end])
+			array, ok := current.([]any)
+			if err != nil || !ok || index < 0 || index >= len(array) {
+				return nil, false
+			}
+			current = array[index]
+			indexes = indexes[end+1:]
+		}
+	}
+	return current, true
 }
 
 func certificateObservationFromResponse(response *http.Response) *tlsutil.CertificateObservation {

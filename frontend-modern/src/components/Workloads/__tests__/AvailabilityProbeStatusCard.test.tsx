@@ -99,4 +99,27 @@ describe('AvailabilityProbeStatusCard', () => {
     expect(screen.getByTitle(/0123456789abcdef/)).toHaveTextContent('0123456789abcdef…');
     expect(screen.getByTitle('Warning window: 30 days')).toHaveTextContent('2027');
   });
+
+  it('separates endpoint reachability from application correctness', () => {
+    render(() => (
+      <AvailabilityProbeStatusCard
+        availability={{
+          targetId: 'probe-orders',
+          address: 'orders.example.test',
+          protocol: 'https',
+          enabled: true,
+          available: false,
+          lastChecked: new Date().toISOString(),
+          transportOutcome: 'reachable',
+          applicationOutcome: 'failed',
+          applicationStatusCode: 503,
+          applicationFailureCode: 'status_mismatch',
+          lastError: 'http response status 503 was outside the expected 200-299 range',
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Endpoint answered')).toBeInTheDocument();
+    expect(screen.getByText('Contract failed · HTTP 503')).toBeInTheDocument();
+  });
 });

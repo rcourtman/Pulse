@@ -306,6 +306,17 @@ shape so local and remote checks derive identical trust vocabulary. Certificate
 identity, validity, and trust are observation payloads only. They do not renew
 the target lease, agent enrollment, host heartbeat, or command readiness beyond
 the accepted report's existing server-receipt evidence.
+An assigned HTTP/S application-response contract travels to the owning agent
+only through its authenticated remote-config assignment. The agent may receive
+the encrypted-at-rest request body, Basic password, bearer token, and operator
+header values because it must execute the check, but it must never copy those
+values, response bytes, or arbitrary remote content into logs, module status,
+the host report, telemetry, or Patrol context. The shared probe returns only
+the overall outcome, transport outcome, typed application outcome, HTTP status,
+bounded failure code/message, latency, and optional certificate observation.
+Local and assigned-agent execution must therefore use the same method, status,
+body-size, assertion, redirect, and outbound-URL limits, while the report
+ingestion boundary continues to reject stale revisions and non-owning agents.
 
 Explicit disk inclusion is an agent lifecycle input. The CLI, persisted
 service arguments, unified host agent, and Docker/Podman agent must carry the

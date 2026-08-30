@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestNormalizeAvailabilityTargetPreservesHTTPAddress(t *testing.T) {
 	target := NormalizeAvailabilityTarget(AvailabilityTarget{
@@ -123,6 +127,43 @@ func TestAvailabilityTargetHTTPURLAppliesPortAndPath(t *testing.T) {
 	}
 }
 
+func TestAvailabilityTargetHTTPURLDoesNotEchoMalformedAddress(t *testing.T) {
+	const sentinel = "address-secret-sentinel"
+	target := AvailabilityTarget{
+		Address:  "http://[" + sentinel,
+		Protocol: AvailabilityProbeHTTP,
+	}
+	_, err := target.HTTPURL()
+	if err == nil {
+		t.Fatal("HTTPURL() error = nil, want malformed address error")
+	}
+	if strings.Contains(err.Error(), sentinel) {
+		t.Fatalf("HTTPURL() error leaked malformed address content: %v", err)
+	}
+}
+
+func TestAvailabilityHTTPContractRejectsUnboundedOrExecutableShapes(t *testing.T) {
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address: "https://service.local/health", Protocol: AvailabilityProbeHTTPS, Enabled: true,
+		HTTP: &AvailabilityHTTPConfig{
+			Method:            AvailabilityHTTPMethodGET,
+			Authentication:    AvailabilityHTTPAuthentication{Type: AvailabilityHTTPAuthNone},
+			ExpectedStatusMin: 200, ExpectedStatusMax: 299,
+			JSONPath: "data[not-an-index].status",
+		},
+	})
+	if err := target.Validate(); err == nil {
+		t.Fatal("Validate() error = nil, want bounded JSON path validation")
+	}
+
+	target.HTTP.JSONPath = "data.status"
+	secret := "value"
+	target.HTTP.Headers = []AvailabilityHTTPHeader{{ID: "reserved", Name: "Authorization", Value: &secret}}
+	if err := target.Validate(); err == nil {
+		t.Fatal("Validate() error = nil, want reserved header validation")
+	}
+}
+
 func TestAvailabilityTargetValidateRejectsTCPWithoutPort(t *testing.T) {
 	target := NormalizeAvailabilityTarget(AvailabilityTarget{
 		Address:  "device.local",
@@ -193,6 +234,55 @@ func TestAvailabilityTargetsRoundTripThroughPersistence(t *testing.T) {
 	}
 	if loaded[0].PollIntervalSecs != DefaultAvailabilityPollIntervalSecs {
 		t.Fatalf("poll interval = %d, want default", loaded[0].PollIntervalSecs)
+	}
+}
+
+func TestAvailabilityHTTPContractSecretsRemainEncryptedAtRest(t *testing.T) {
+	persistence := NewConfigPersistence(t.TempDir())
+	password := "plaintext-password-sentinel"
+	token := "plaintext-token-sentinel"
+	header := "plaintext-header-sentinel"
+	body := "plaintext-body-sentinel"
+	target := AvailabilityTarget{
+		ID: "secure-http", Address: "https://service.local/health", Protocol: AvailabilityProbeHTTPS, Enabled: true,
+		HTTP: &AvailabilityHTTPConfig{
+			Method:         AvailabilityHTTPMethodPOST,
+			Headers:        []AvailabilityHTTPHeader{{ID: "header-1", Name: "X-Health-Key", Value: &header}},
+			Authentication: AvailabilityHTTPAuthentication{Type: AvailabilityHTTPAuthBasic, Username: "pulse", Password: &password},
+			Body:           &body, ExpectedStatusMin: 200, ExpectedStatusMax: 299,
+		},
+	}
+	bearerTarget := AvailabilityTarget{
+		ID: "secure-bearer", Address: "https://service.local/bearer-health", Protocol: AvailabilityProbeHTTPS, Enabled: true,
+		HTTP: &AvailabilityHTTPConfig{
+			Method:            AvailabilityHTTPMethodGET,
+			Authentication:    AvailabilityHTTPAuthentication{Type: AvailabilityHTTPAuthBearer, BearerToken: &token},
+			ExpectedStatusMin: 200, ExpectedStatusMax: 299,
+		},
+	}
+	if err := persistence.SaveAvailabilityTargets([]AvailabilityTarget{target, bearerTarget}); err != nil {
+		t.Fatalf("SaveAvailabilityTargets() error = %v", err)
+	}
+	raw, err := os.ReadFile(persistence.availabilityFile)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", persistence.availabilityFile, err)
+	}
+	for _, secret := range []string{password, token, header, body} {
+		if strings.Contains(string(raw), secret) {
+			t.Fatalf("encrypted availability file contains plaintext secret %q", secret)
+		}
+	}
+	loaded, err := persistence.LoadAvailabilityTargets()
+	if err != nil || len(loaded) != 2 || loaded[0].HTTP == nil || loaded[1].HTTP == nil {
+		t.Fatalf("LoadAvailabilityTargets() = %+v, %v", loaded, err)
+	}
+	if loaded[0].HTTP.Authentication.Password == nil || *loaded[0].HTTP.Authentication.Password != password ||
+		loaded[0].HTTP.Headers[0].Value == nil || *loaded[0].HTTP.Headers[0].Value != header ||
+		loaded[0].HTTP.Body == nil || *loaded[0].HTTP.Body != body {
+		t.Fatalf("decrypted contract did not round trip: %+v", loaded[0].HTTP)
+	}
+	if loaded[1].HTTP.Authentication.BearerToken == nil || *loaded[1].HTTP.Authentication.BearerToken != token {
+		t.Fatalf("decrypted bearer token did not round trip: %+v", loaded[1].HTTP)
 	}
 }
 

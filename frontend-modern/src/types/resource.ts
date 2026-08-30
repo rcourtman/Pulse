@@ -1506,6 +1506,10 @@ export interface ResourceAvailabilityMeta {
   address?: string;
   protocol?: string;
   probeOutcome?: string;
+  transportOutcome?: string;
+  applicationOutcome?: 'not_configured' | 'passed' | 'failed' | string;
+  applicationStatusCode?: number;
+  applicationFailureCode?: string;
   udpMode?: string;
   port?: number;
   path?: string;

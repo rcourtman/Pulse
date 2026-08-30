@@ -4653,6 +4653,15 @@ the shared resource drawer by canonical resource ID, while
 already carried by that resource. History absence or failure cannot overwrite
 the unified resource's current status, correlation, source ownership, or
 navigation identity.
+For HTTP/S checks with an explicit application response contract, the
+availability facet preserves two source-owned facts: `transportOutcome`
+describes whether the endpoint answered, while `applicationOutcome`,
+`applicationStatusCode`, and `applicationFailureCode` describe whether the
+bounded saved contract passed. The overall resource status still follows the
+saved check outcome, so an answering endpoint with an incorrect application
+response is not presented as healthy. Resource payloads, evidence envelopes,
+incidents, relationships, and history must never contain request or response
+bodies, Basic passwords, bearer tokens, or operator header values.
 Shared unified-resource consumers now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant resource fetch state, so the canonical resource hooks do not

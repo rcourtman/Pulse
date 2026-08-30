@@ -755,7 +755,7 @@ func TestApplyHostReportIngestsAssignedAvailabilityResults(t *testing.T) {
 			Platform: "linux",
 		},
 		AvailabilityResults: []agentshost.AvailabilityProbeResult{
-			{TargetID: "remote", Outcome: "reachable", LatencyMillis: 17, CheckedAt: checkedAt},
+			{TargetID: "remote", Outcome: "reachable", TransportOutcome: "reachable", ApplicationOutcome: "passed", ApplicationStatusCode: 204, LatencyMillis: 17, CheckedAt: checkedAt},
 			{TargetID: "foreign", Outcome: "reachable", LatencyMillis: 3, CheckedAt: checkedAt},
 		},
 		Timestamp: checkedAt,
@@ -779,6 +779,9 @@ func TestApplyHostReportIngestsAssignedAvailabilityResults(t *testing.T) {
 	}
 	if status.ProbeAgentID != "probe-host" {
 		t.Fatalf("probe agent attribution = %q, want probe-host", status.ProbeAgentID)
+	}
+	if status.TransportOutcome != "reachable" || status.ApplicationOutcome != "passed" || status.ApplicationStatusCode != 204 {
+		t.Fatalf("application evidence = %+v, want reachable transport and passed HTTP 204", status)
 	}
 	if !status.LastChecked.Equal(checkedAt) {
 		t.Fatalf("last checked = %v, want %v", status.LastChecked, checkedAt)

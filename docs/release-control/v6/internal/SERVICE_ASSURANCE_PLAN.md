@@ -1,7 +1,7 @@
 # Infrastructure-Aware Service Assurance Plan
 
 Last updated: 2026-08-30
-Status: ACCEPTED — SLICE A IMPLEMENTED
+Status: ACCEPTED — SLICES A AND B IMPLEMENTED
 Governance surfaces:
 
 - `status.json.coverage_gaps.infrastructure-aware-service-assurance`
@@ -228,7 +228,7 @@ Implementation record (2026-08-30): Slice A is delivered through the
 monitoring-owned categorical history store and rollups, server-authored
 configuration revisions and remote receipt timeline, the bounded
 `/api/availability-history` batch contract, and the URL-owned Availability
-fleet presentation. Its release proofs live in the owner contract. Slices B
+fleet presentation. Its release proofs live in the owner contract. Slices C
 through H remain ordered future work; acceptance of this product lane does not
 imply that deferred breadth is already delivered.
 
@@ -257,6 +257,19 @@ Exit conditions:
 - failure output is bounded and actionable without persisting arbitrary remote
   content;
 - current reachability-only configurations migrate without semantic change.
+
+Implementation record (2026-08-30): Slice B is delivered through one bounded,
+explicit HTTP/S contract shared by local and assigned-agent execution. The
+saved target owns method, accepted status range, optional POST body, headers,
+Basic or bearer authentication, text assertion, and structured JSON field
+equality. Write-only values are encrypted at rest, omitted from API and
+evidence payloads, and reused only while the endpoint origin is unchanged;
+changing scheme, host, or effective port requires explicit credential
+re-entry. Current status and unified-resource facets preserve transport
+reachability separately from typed application correctness while the overall
+result remains the alert and history outcome. Legacy targets without an
+explicit contract retain their previous HEAD-with-bounded-GET-fallback
+semantics. Slices C through H remain ordered future work.
 
 ### Slice C: Discovery-Led Assurance Onboarding
 

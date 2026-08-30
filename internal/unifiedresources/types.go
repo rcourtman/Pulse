@@ -1740,32 +1740,36 @@ const (
 
 // AvailabilityData contains agentless endpoint probe metadata for a resource.
 type AvailabilityData struct {
-	TargetID              string                             `json:"targetId,omitempty"`
-	LinkedResourceID      string                             `json:"linkedResourceId,omitempty"`
-	Name                  string                             `json:"name,omitempty"`
-	TargetKind            string                             `json:"targetKind,omitempty"`
-	Address               string                             `json:"address,omitempty"`
-	Protocol              string                             `json:"protocol,omitempty"`
-	ProbeOutcome          string                             `json:"probeOutcome,omitempty"`
-	ProbeAgentID          string                             `json:"probeAgentId,omitempty"`
-	UDPMode               string                             `json:"udpMode,omitempty"`
-	Port                  int                                `json:"port,omitempty"`
-	Path                  string                             `json:"path,omitempty"`
-	Enabled               bool                               `json:"enabled"`
-	Available             bool                               `json:"available"`
-	LastChecked           *time.Time                         `json:"lastChecked,omitempty"`
-	LastSuccess           *time.Time                         `json:"lastSuccess,omitempty"`
-	LatencyMillis         int64                              `json:"latencyMillis,omitempty"`
-	ConsecutiveFailures   int                                `json:"consecutiveFailures,omitempty"`
-	LastError             string                             `json:"lastError,omitempty"`
-	FailureThreshold      int                                `json:"failureThreshold,omitempty"`
-	PollIntervalSeconds   int                                `json:"pollIntervalSeconds,omitempty"`
-	TimeoutMillis         int                                `json:"timeoutMillis,omitempty"`
-	CorrelationState      AvailabilityCorrelationState       `json:"correlationState,omitempty"`
-	CorrelationRule       string                             `json:"correlationRule,omitempty"`
-	CorrelationReason     string                             `json:"correlationReason,omitempty"`
-	CorrelationCandidates int                                `json:"correlationCandidates,omitempty"`
-	Evidence              *operationaltrust.EvidenceEnvelope `json:"evidence,omitempty"`
+	TargetID               string                             `json:"targetId,omitempty"`
+	LinkedResourceID       string                             `json:"linkedResourceId,omitempty"`
+	Name                   string                             `json:"name,omitempty"`
+	TargetKind             string                             `json:"targetKind,omitempty"`
+	Address                string                             `json:"address,omitempty"`
+	Protocol               string                             `json:"protocol,omitempty"`
+	ProbeOutcome           string                             `json:"probeOutcome,omitempty"`
+	TransportOutcome       string                             `json:"transportOutcome,omitempty"`
+	ApplicationOutcome     string                             `json:"applicationOutcome,omitempty"`
+	ApplicationStatusCode  int                                `json:"applicationStatusCode,omitempty"`
+	ApplicationFailureCode string                             `json:"applicationFailureCode,omitempty"`
+	ProbeAgentID           string                             `json:"probeAgentId,omitempty"`
+	UDPMode                string                             `json:"udpMode,omitempty"`
+	Port                   int                                `json:"port,omitempty"`
+	Path                   string                             `json:"path,omitempty"`
+	Enabled                bool                               `json:"enabled"`
+	Available              bool                               `json:"available"`
+	LastChecked            *time.Time                         `json:"lastChecked,omitempty"`
+	LastSuccess            *time.Time                         `json:"lastSuccess,omitempty"`
+	LatencyMillis          int64                              `json:"latencyMillis,omitempty"`
+	ConsecutiveFailures    int                                `json:"consecutiveFailures,omitempty"`
+	LastError              string                             `json:"lastError,omitempty"`
+	FailureThreshold       int                                `json:"failureThreshold,omitempty"`
+	PollIntervalSeconds    int                                `json:"pollIntervalSeconds,omitempty"`
+	TimeoutMillis          int                                `json:"timeoutMillis,omitempty"`
+	CorrelationState       AvailabilityCorrelationState       `json:"correlationState,omitempty"`
+	CorrelationRule        string                             `json:"correlationRule,omitempty"`
+	CorrelationReason      string                             `json:"correlationReason,omitempty"`
+	CorrelationCandidates  int                                `json:"correlationCandidates,omitempty"`
+	Evidence               *operationaltrust.EvidenceEnvelope `json:"evidence,omitempty"`
 
 	CertificateMonitoring        bool                            `json:"certificateMonitoring,omitempty"`
 	CertificateExpiryWarningDays int                             `json:"certificateExpiryWarningDays,omitempty"`

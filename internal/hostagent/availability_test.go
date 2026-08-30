@@ -118,6 +118,35 @@ func TestAvailabilityTargetsFromSettingsHandlesMissingAndUnusableValues(t *testi
 	}
 }
 
+func TestAvailabilityTargetsFromSettingsPreservesHTTPExecutionSecrets(t *testing.T) {
+	settings := availabilitySetting(map[string]interface{}{
+		"id": "http-contract", "address": "https://service.local/health", "protocol": "https", "enabled": true,
+		"http": map[string]interface{}{
+			"method": "POST", "body": `{"operation":"health"}`,
+			"expectedStatusMin": float64(200), "expectedStatusMax": float64(299),
+			"authentication": map[string]interface{}{"type": "bearer", "bearerToken": "agent-secret-token"},
+			"headers":        []interface{}{map[string]interface{}{"id": "tenant", "name": "X-Tenant", "value": "tenant-a"}},
+			"jsonPath":       "status", "jsonEquals": "healthy",
+		},
+	})
+
+	targets, err := availabilityTargetsFromSettings(settings)
+	if err != nil || len(targets) != 1 || targets[0].HTTP == nil {
+		t.Fatalf("availabilityTargetsFromSettings() = %+v, %v", targets, err)
+	}
+	contract := targets[0].HTTP
+	if contract.Body == nil || *contract.Body != `{"operation":"health"}` ||
+		contract.Authentication.BearerToken == nil || *contract.Authentication.BearerToken != "agent-secret-token" ||
+		len(contract.Headers) != 1 || contract.Headers[0].Value == nil || *contract.Headers[0].Value != "tenant-a" {
+		t.Fatalf("decoded HTTP contract = %+v, want complete execution values", contract)
+	}
+
+	decodedAgain, err := availabilityTargetsFromSettings(settings)
+	if err != nil || !availabilityAssignmentsEqual(targets, decodedAgain) {
+		t.Fatalf("identical pointer-backed HTTP assignments were reported as changed: %+v, %v", decodedAgain, err)
+	}
+}
+
 func TestApplyRemoteAvailabilityTargetsReconcilesAssignments(t *testing.T) {
 	agent := &Agent{
 		logger:       zerolog.New(io.Discard),

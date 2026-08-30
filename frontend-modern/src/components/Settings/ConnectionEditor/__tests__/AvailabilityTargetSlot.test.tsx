@@ -63,6 +63,7 @@ const agentHostResource = (agentId: string, displayName: string) => ({
 const mockedCreate = vi.mocked(AvailabilityTargetsAPI.create);
 const mockedList = vi.mocked(AvailabilityTargetsAPI.list);
 const mockedUpdate = vi.mocked(AvailabilityTargetsAPI.update);
+const mockedTest = vi.mocked(AvailabilityTargetsAPI.test);
 
 describe('AvailabilityTargetSlot', () => {
   beforeEach(() => {
@@ -242,6 +243,180 @@ describe('AvailabilityTargetSlot', () => {
         }),
       ),
     );
+  });
+
+  it('creates an HTTP application response contract from the proof question', async () => {
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'https' } });
+    expect(
+      screen.getByRole('heading', { name: 'What proves this service is working?' }),
+    ).toBeInTheDocument();
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Orders API' } });
+    fireEvent.input(screen.getByLabelText(/^URL or host/), {
+      target: { value: 'https://orders.example.test/health' },
+    });
+    fireEvent.change(screen.getByLabelText('Request method'), { target: { value: 'POST' } });
+    fireEvent.input(screen.getByLabelText('Accepted status from'), { target: { value: '200' } });
+    fireEvent.input(screen.getByLabelText('Accepted status to'), { target: { value: '204' } });
+    fireEvent.input(screen.getByLabelText(/^Request body \(optional\)/), {
+      target: { value: '{"operation":"health"}' },
+    });
+    fireEvent.change(screen.getByLabelText('Authentication'), { target: { value: 'bearer' } });
+    fireEvent.input(screen.getByLabelText('Bearer token'), { target: { value: 'token-value' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add header' }));
+    fireEvent.input(screen.getByLabelText('Header name'), { target: { value: 'X-Tenant' } });
+    fireEvent.input(screen.getByLabelText('Header value'), { target: { value: 'tenant-a' } });
+    fireEvent.input(screen.getByPlaceholderText('data.status'), {
+      target: { value: 'data.status' },
+    });
+    fireEvent.input(screen.getByPlaceholderText('ok'), {
+      target: { value: 'healthy' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+    expect(mockedCreate.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        protocol: 'https',
+        http: expect.objectContaining({
+          method: 'POST',
+          body: '{"operation":"health"}',
+          expectedStatusMin: 200,
+          expectedStatusMax: 204,
+          authentication: { type: 'bearer', bearerToken: 'token-value' },
+          headers: [expect.objectContaining({ name: 'X-Tenant', value: 'tenant-a' })],
+          jsonPath: 'data.status',
+          jsonEquals: 'healthy',
+        }),
+      }),
+    );
+  });
+
+  it('preserves write-only HTTP values when editing without re-entering them', async () => {
+    mockedList.mockResolvedValue([
+      {
+        id: 'target-1',
+        name: 'Orders API',
+        address: 'https://orders.example.test/health',
+        protocol: 'https',
+        enabled: true,
+        http: {
+          method: 'POST',
+          headers: [{ id: 'tenant-header', name: 'X-Tenant' }],
+          authentication: { type: 'basic', username: 'pulse' },
+          expectedStatusMin: 200,
+          expectedStatusMax: 299,
+          jsonPath: 'status',
+          jsonEquals: 'healthy',
+        },
+        httpSecrets: {
+          bodyConfigured: true,
+          passwordConfigured: true,
+          bearerTokenConfigured: false,
+          headers: [{ id: 'tenant-header', valueConfigured: true }],
+        },
+      },
+    ]);
+    mockedUpdate.mockResolvedValue({
+      id: 'target-1',
+      name: 'Orders API',
+      address: 'https://orders.example.test/health',
+      protocol: 'https',
+      enabled: true,
+    });
+
+    render(() => (
+      <AvailabilityTargetSlot editingTargetId="target-1" onCancel={vi.fn()} onSaved={vi.fn()} />
+    ));
+    await waitFor(() => expect(screen.getByLabelText('Request method')).toHaveValue('POST'));
+    expect(screen.getByLabelText('Password')).toHaveAttribute(
+      'placeholder',
+      'Stored securely — leave blank to keep it',
+    );
+    expect(screen.getByLabelText(/^Request body \(optional\)/)).toHaveAttribute(
+      'placeholder',
+      'Stored securely — leave blank to keep it',
+    );
+    expect(screen.getByLabelText('Header value')).toHaveAttribute(
+      'placeholder',
+      'Stored securely — leave blank to keep it',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+    const [, payload] = mockedUpdate.mock.calls.at(-1)!;
+    expect(payload.http?.body).toBeUndefined();
+    expect(payload.http?.authentication.password).toBeUndefined();
+    expect(payload.http?.headers).toEqual([
+      { id: 'tenant-header', name: 'X-Tenant', value: undefined },
+    ]);
+  });
+
+  it('can explicitly remove a stored POST body without changing the request method', async () => {
+    mockedList.mockResolvedValue([
+      {
+        id: 'target-1',
+        name: 'Orders API',
+        address: 'https://orders.example.test/health',
+        protocol: 'https',
+        enabled: true,
+        http: {
+          method: 'POST',
+          headers: [],
+          authentication: { type: 'none' },
+          expectedStatusMin: 200,
+          expectedStatusMax: 299,
+        },
+        httpSecrets: {
+          bodyConfigured: true,
+          passwordConfigured: false,
+          bearerTokenConfigured: false,
+          headers: [],
+        },
+      },
+    ]);
+    mockedUpdate.mockResolvedValue({
+      id: 'target-1',
+      name: 'Orders API',
+      address: 'https://orders.example.test/health',
+      protocol: 'https',
+      enabled: true,
+    });
+
+    render(() => (
+      <AvailabilityTargetSlot editingTargetId="target-1" onCancel={vi.fn()} onSaved={vi.fn()} />
+    ));
+    await waitFor(() => expect(screen.getByLabelText('Request method')).toHaveValue('POST'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove stored body' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
+
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+    const [, payload] = mockedUpdate.mock.calls.at(-1)!;
+    expect(payload.http?.method).toBe('POST');
+    expect(payload.http?.body).toBe('');
+  });
+
+  it('explains a reachable endpoint with a failing application contract', async () => {
+    mockedTest.mockResolvedValue({
+      success: false,
+      latencyMillis: 18,
+      outcome: 'unreachable',
+      transportOutcome: 'reachable',
+      application: { outcome: 'failed', statusCode: 503, failureCode: 'status_mismatch' },
+      error: 'http response status 503 was outside the expected 200-299 range',
+    });
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'http' } });
+    fireEvent.input(screen.getByLabelText(/^URL or host/), {
+      target: { value: 'http://orders.example.test/health' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Test probe' }));
+
+    expect(
+      await screen.findByText(/Endpoint answered in 18 ms, but the application contract failed/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/HTTP 503/)).toBeInTheDocument();
   });
 
   describe('external probe assignment', () => {

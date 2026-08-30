@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -129,15 +130,7 @@ func normalizeAvailabilityAssignments(targets []config.AvailabilityTarget) []con
 }
 
 func availabilityAssignmentsEqual(left, right []config.AvailabilityTarget) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for i := range left {
-		if left[i] != right[i] {
-			return false
-		}
-	}
-	return true
+	return reflect.DeepEqual(left, right)
 }
 
 func (m *availabilityProbeModule) assignments() []config.AvailabilityTarget {
@@ -243,13 +236,19 @@ func (m *availabilityProbeModule) check(ctx context.Context, target config.Avail
 	}
 
 	result := agentshost.AvailabilityProbeResult{
-		ObservationID:  uuid.NewString(),
-		TargetID:       target.ID,
-		ConfigRevision: target.ConfigRevision,
-		Outcome:        string(probeResult.Outcome),
-		LatencyMillis:  latency.Milliseconds(),
-		CheckedAt:      m.now().UTC(),
-		Certificate:    probeResult.Certificate.Clone(),
+		ObservationID:    uuid.NewString(),
+		TargetID:         target.ID,
+		ConfigRevision:   target.ConfigRevision,
+		Outcome:          string(probeResult.Outcome),
+		TransportOutcome: string(probeResult.TransportOutcome),
+		LatencyMillis:    latency.Milliseconds(),
+		CheckedAt:        m.now().UTC(),
+		Certificate:      probeResult.Certificate.Clone(),
+	}
+	if probeResult.Application != nil {
+		result.ApplicationOutcome = string(probeResult.Application.Outcome)
+		result.ApplicationStatusCode = probeResult.Application.StatusCode
+		result.ApplicationFailureCode = probeResult.Application.FailureCode
 	}
 	if err != nil {
 		message := strings.TrimSpace(err.Error())

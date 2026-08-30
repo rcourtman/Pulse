@@ -1465,6 +1465,29 @@ payload shape change when the portal presents compact client rows.
     the same secret-free `certificate` observation returned by the runtime
     probe, while reachability success remains independent from trust posture so
     an operator can diagnose an untrusted but reachable endpoint.
+    HTTP/S targets may also carry one explicit `http` application-response
+    contract. Its bounded vocabulary is `HEAD`, `GET`, or `POST`, one accepted
+    status range, at most sixteen operator headers, optional Basic or bearer
+    authentication, an optional POST body of at most 8 KiB, and bounded text
+    and JSON-path assertions over at most 64 KiB of response content. An absent
+    `http` block preserves the legacy HEAD-with-GET-fallback behavior for saved
+    targets without a migration rewrite. Every execution-field edit, including
+    a contract or secret change, advances the server-authored configuration
+    revision and therefore the existing availability-history revision boundary.
+    Request bodies, passwords, bearer tokens, and header values are write-only.
+    List/create/update responses return only `httpSecrets` presence markers;
+    Updates and unsaved tests that identify an existing target merge omitted
+    write-only values from encrypted persistence before validation/execution
+    only while scheme, host, and effective port remain unchanged. An endpoint
+    origin change clears omitted body/header values and requires Basic or
+    bearer credentials to be entered again before the target can be saved or
+    tested; stored credentials must never follow an address edit silently.
+    Test and current-status responses expose transport reachability separately
+    from the typed application outcome, status code, and bounded failure code,
+    but never return the request body, response body, credential values, or
+    arbitrary remote content. Contract tests must pin redaction, unchanged-
+    secret preservation, bounded evaluation, and the reachable-but-incorrect
+    application case.
     Availability target protocol vocabulary is canonicalized at the API/config
     boundary: clients may submit `ping` as a user-facing alias for the ICMP
     check, but saved targets, API reads, probe status, connections rows, and

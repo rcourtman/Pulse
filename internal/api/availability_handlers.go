@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/availabilityprobe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -23,15 +24,30 @@ type AvailabilityHandlers struct {
 
 type availabilityTargetResponse struct {
 	config.AvailabilityTarget
-	Status *monitoring.AvailabilityProbeStatus `json:"status,omitempty"`
+	Status      *monitoring.AvailabilityProbeStatus `json:"status,omitempty"`
+	HTTPSecrets *availabilityHTTPSecretState        `json:"httpSecrets,omitempty"`
+}
+
+type availabilityHTTPSecretState struct {
+	BodyConfigured        bool                                `json:"bodyConfigured"`
+	PasswordConfigured    bool                                `json:"passwordConfigured"`
+	BearerTokenConfigured bool                                `json:"bearerTokenConfigured"`
+	Headers               []availabilityHTTPHeaderSecretState `json:"headers,omitempty"`
+}
+
+type availabilityHTTPHeaderSecretState struct {
+	ID              string `json:"id"`
+	ValueConfigured bool   `json:"valueConfigured"`
 }
 
 type availabilityTestResponse struct {
-	Success       bool                            `json:"success"`
-	LatencyMillis int64                           `json:"latencyMillis"`
-	Outcome       string                          `json:"outcome,omitempty"`
-	Error         string                          `json:"error,omitempty"`
-	Certificate   *tlsutil.CertificateObservation `json:"certificate,omitempty"`
+	Success          bool                                 `json:"success"`
+	LatencyMillis    int64                                `json:"latencyMillis"`
+	Outcome          string                               `json:"outcome,omitempty"`
+	TransportOutcome string                               `json:"transportOutcome,omitempty"`
+	Application      *availabilityprobe.ApplicationResult `json:"application,omitempty"`
+	Error            string                               `json:"error,omitempty"`
+	Certificate      *tlsutil.CertificateObservation      `json:"certificate,omitempty"`
 }
 
 func NewAvailabilityHandlers(
@@ -125,7 +141,7 @@ func (h *AvailabilityHandlers) HandleList(w http.ResponseWriter, r *http.Request
 	}
 	responses := make([]availabilityTargetResponse, 0, len(targets))
 	for _, target := range targets {
-		response := availabilityTargetResponse{AvailabilityTarget: config.NormalizeAvailabilityTarget(target)}
+		response := availabilityTargetAPIResponse(target)
 		if status, ok := statuses[target.ID]; ok {
 			statusCopy := status
 			response.Status = &statusCopy
@@ -175,7 +191,7 @@ func (h *AvailabilityHandlers) HandleAdd(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	h.refreshMonitor(r.Context())
-	writeJSON(w, http.StatusCreated, target)
+	writeJSON(w, http.StatusCreated, availabilityTargetAPIResponse(target))
 }
 
 func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -211,11 +227,12 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 	}
 
 	previous := config.NormalizeAvailabilityTarget(targets[index])
-	target, ok := decodeAvailabilityTargetRequest(w, r, previous)
+	target, ok := decodeAvailabilityTargetRequest(w, r, availabilityTargetWithoutHTTPSecrets(previous))
 	if !ok {
 		return
 	}
 	target.ID = targetID
+	target = mergeAvailabilityHTTPSecrets(previous, target)
 	target = config.NormalizeAvailabilityTarget(target)
 	target.ConfigRevision = previous.ConfigRevision
 	if config.AvailabilityExecutionConfigChanged(previous, target) {
@@ -234,7 +251,7 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	h.refreshMonitor(r.Context())
-	writeJSON(w, http.StatusOK, target)
+	writeJSON(w, http.StatusOK, availabilityTargetAPIResponse(target))
 }
 
 func (h *AvailabilityHandlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
@@ -287,6 +304,20 @@ func (h *AvailabilityHandlers) HandleTestConnection(w http.ResponseWriter, r *ht
 	if !ok {
 		return
 	}
+	if strings.TrimSpace(target.ID) != "" {
+		if h != nil && h.getPersistence != nil {
+			if persistence := h.getPersistence(r.Context()); persistence != nil {
+				if targets, err := persistence.LoadAvailabilityTargets(); err == nil {
+					for _, saved := range targets {
+						if strings.TrimSpace(saved.ID) == strings.TrimSpace(target.ID) {
+							target = mergeAvailabilityHTTPSecrets(config.NormalizeAvailabilityTarget(saved), target)
+							break
+						}
+					}
+				}
+			}
+		}
+	}
 	h.testTarget(w, r, target)
 }
 
@@ -336,10 +367,12 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 		latencyMs = 1
 	}
 	response := availabilityTestResponse{
-		Success:       err == nil,
-		LatencyMillis: latencyMs,
-		Outcome:       string(result.Outcome),
-		Certificate:   result.Certificate.Clone(),
+		Success:          err == nil,
+		LatencyMillis:    latencyMs,
+		Outcome:          string(result.Outcome),
+		TransportOutcome: string(result.TransportOutcome),
+		Application:      result.Application,
+		Certificate:      result.Certificate.Clone(),
 	}
 	if err != nil {
 		response.Error = err.Error()
@@ -350,12 +383,131 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 func decodeAvailabilityTargetRequest(w http.ResponseWriter, r *http.Request, base config.AvailabilityTarget) (config.AvailabilityTarget, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	defer r.Body.Close()
-	target := base
+	target := cloneAvailabilityTarget(base)
 	if err := json.NewDecoder(r.Body).Decode(&target); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body", nil)
 		return config.AvailabilityTarget{}, false
 	}
 	return target, true
+}
+
+func availabilityTargetAPIResponse(target config.AvailabilityTarget) availabilityTargetResponse {
+	target = config.NormalizeAvailabilityTarget(target)
+	response := availabilityTargetResponse{AvailabilityTarget: cloneAvailabilityTarget(target)}
+	if target.HTTP == nil {
+		return response
+	}
+	state := &availabilityHTTPSecretState{
+		BodyConfigured:        target.HTTP.Body != nil && *target.HTTP.Body != "",
+		PasswordConfigured:    target.HTTP.Authentication.Password != nil && *target.HTTP.Authentication.Password != "",
+		BearerTokenConfigured: target.HTTP.Authentication.BearerToken != nil && *target.HTTP.Authentication.BearerToken != "",
+	}
+	response.HTTP.Body = nil
+	response.HTTP.Authentication.Password = nil
+	response.HTTP.Authentication.BearerToken = nil
+	for i := range response.HTTP.Headers {
+		configured := target.HTTP.Headers[i].Value != nil && *target.HTTP.Headers[i].Value != ""
+		state.Headers = append(state.Headers, availabilityHTTPHeaderSecretState{
+			ID: target.HTTP.Headers[i].ID, ValueConfigured: configured,
+		})
+		response.HTTP.Headers[i].Value = nil
+	}
+	response.HTTPSecrets = state
+	return response
+}
+
+func availabilityTargetWithoutHTTPSecrets(target config.AvailabilityTarget) config.AvailabilityTarget {
+	target = cloneAvailabilityTarget(target)
+	if target.HTTP == nil {
+		return target
+	}
+	target.HTTP.Body = nil
+	target.HTTP.Authentication.Password = nil
+	target.HTTP.Authentication.BearerToken = nil
+	for i := range target.HTTP.Headers {
+		target.HTTP.Headers[i].Value = nil
+	}
+	return target
+}
+
+func mergeAvailabilityHTTPSecrets(previous, next config.AvailabilityTarget) config.AvailabilityTarget {
+	previous = config.NormalizeAvailabilityTarget(previous)
+	next = cloneAvailabilityTarget(next)
+	if previous.HTTP == nil || next.HTTP == nil {
+		return next
+	}
+	// Write-only values may be reused while editing the same endpoint, but must
+	// never follow a changed origin. Otherwise an address edit or unsaved test
+	// could silently replay a stored credential to another server.
+	if !sameAvailabilityHTTPOrigin(previous, next) {
+		return next
+	}
+	if next.HTTP.Body == nil {
+		next.HTTP.Body = cloneStringPointer(previous.HTTP.Body)
+	}
+	if next.HTTP.Authentication.Password == nil && next.HTTP.Authentication.Type == previous.HTTP.Authentication.Type {
+		next.HTTP.Authentication.Password = cloneStringPointer(previous.HTTP.Authentication.Password)
+	}
+	if next.HTTP.Authentication.BearerToken == nil && next.HTTP.Authentication.Type == previous.HTTP.Authentication.Type {
+		next.HTTP.Authentication.BearerToken = cloneStringPointer(previous.HTTP.Authentication.BearerToken)
+	}
+	previousHeaders := make(map[string]*string, len(previous.HTTP.Headers))
+	for _, header := range previous.HTTP.Headers {
+		previousHeaders[header.ID] = header.Value
+	}
+	for i := range next.HTTP.Headers {
+		if next.HTTP.Headers[i].Value == nil {
+			next.HTTP.Headers[i].Value = cloneStringPointer(previousHeaders[next.HTTP.Headers[i].ID])
+		}
+	}
+	return next
+}
+
+func sameAvailabilityHTTPOrigin(previous, next config.AvailabilityTarget) bool {
+	previousURL, err := previous.HTTPURL()
+	if err != nil {
+		return false
+	}
+	nextURL, err := next.HTTPURL()
+	if err != nil {
+		return false
+	}
+	previousPort := previousURL.Port()
+	if previousPort == "" {
+		previousPort = map[string]string{"http": "80", "https": "443"}[strings.ToLower(previousURL.Scheme)]
+	}
+	nextPort := nextURL.Port()
+	if nextPort == "" {
+		nextPort = map[string]string{"http": "80", "https": "443"}[strings.ToLower(nextURL.Scheme)]
+	}
+	return strings.EqualFold(previousURL.Scheme, nextURL.Scheme) &&
+		strings.EqualFold(previousURL.Hostname(), nextURL.Hostname()) &&
+		previousPort == nextPort
+}
+
+func cloneAvailabilityTarget(target config.AvailabilityTarget) config.AvailabilityTarget {
+	clone := target
+	if target.HTTP == nil {
+		return clone
+	}
+	httpClone := *target.HTTP
+	httpClone.Body = cloneStringPointer(target.HTTP.Body)
+	httpClone.Authentication.Password = cloneStringPointer(target.HTTP.Authentication.Password)
+	httpClone.Authentication.BearerToken = cloneStringPointer(target.HTTP.Authentication.BearerToken)
+	httpClone.Headers = append([]config.AvailabilityHTTPHeader(nil), target.HTTP.Headers...)
+	for i := range httpClone.Headers {
+		httpClone.Headers[i].Value = cloneStringPointer(httpClone.Headers[i].Value)
+	}
+	clone.HTTP = &httpClone
+	return clone
+}
+
+func cloneStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 func availabilityTargetIDFromPath(path string) (string, bool) {

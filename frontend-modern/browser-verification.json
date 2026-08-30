@@ -1,18 +1,22 @@
 {
   "version": 1,
-  "base_sha": "712f1a3bfeff8f78de242b97fc66526d8f7c5761",
-  "verified_at": "2026-08-30T15:06:15Z",
+  "base_sha": "34849268e58652489d2a359886fb7fdd5bddd959",
+  "verified_at": "2026-08-30T16:33:41Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/Dialog.tsx",
-    "frontend-modern/src/components/shared/useDialogState.ts"
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Dialog.tsx": "58b41841c2ac21939a9e1493754c314e77a1650d1d024de152ebbb39ba3d67a0",
-    "frontend-modern/src/components/shared/useDialogState.ts": "290cab00130c6de5731499a008cc432eb588c97c62e24d0b21940946d37e6e9c"
+    "frontend-modern/src/api/availabilityTargets.ts": "e8eba84f95617889782888152ef55fd92668071d35873e622de3a4fb0f39fee5",
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "0f498ccc635f02f4d64848995bc3bb9a1fc4cf060812d0f66fa2a918976c25a8",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "8f47a84f61d5ea083743a7945803adc85c7495b67bd1d97df807ec91750a2330",
+    "frontend-modern/src/types/resource.ts": "a524ae7b84ad2400e2a7cf1fab213824f3a9335cdadb9f42f1d73a5a0b21978f"
   },
   "routes": [
-    "/settings/infrastructure"
+    "/settings/monitoring/availability?add=target"
   ],
   "viewports": [
     {
@@ -25,15 +29,18 @@
     }
   ],
   "states": [
-    "The Add infrastructure dialog remained visible and horizontally contained with its close control focused at desktop and narrow viewports",
-    "The active dialog portal stayed interactive while the app root and every other body-level surface were inert",
-    "A body-level surface added after opening became inert before inspection",
-    "Closing restored ordinary surfaces while preserving a surface that was already inert before opening"
+    "new HTTP availability check with the explicit application-response contract",
+    "GET contract with text assertion and reachable endpoint whose application assertion failed",
+    "GET contract with reachable endpoint and passing application assertion",
+    "POST contract with request body, bearer authentication, and operator header controls",
+    "phone-width failure and success feedback positioned above the sticky action footer"
   ],
   "interactions": [
-    "opened Add infrastructure from its real settings trigger at desktop and narrow viewports",
-    "verified a late-added background action could not be activated while the modal was open",
-    "closed with Escape and verified focus returned to the Add infrastructure trigger",
-    "activated the late-added action after close to verify restored operability"
+    "changed probe type from ICMP to HTTP",
+    "changed request method between GET and POST",
+    "selected bearer authentication and added then removed an operator header",
+    "entered an endpoint and text assertion and ran test-before-save",
+    "confirmed transport-reachable application failure and full contract success messages",
+    "verified the contract controls and feedback at desktop and phone widths"
   ]
 }

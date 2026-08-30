@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -204,6 +205,137 @@ func TestAvailabilityHandlersTestSavedTarget(t *testing.T) {
 	}
 	if response.Certificate == nil || response.Certificate.TrustStatus != "self-signed" {
 		t.Fatalf("certificate = %+v, want self-signed test-server certificate", response.Certificate)
+	}
+}
+
+func TestAvailabilityHandlersRedactAndPreserveHTTPContractSecrets(t *testing.T) {
+	const password = "never-return-this-password"
+	const headerValue = "never-return-this-header"
+	const requestBody = `{"secret":"never-return-this-body"}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, gotPassword, ok := r.BasicAuth()
+		if !ok || username != "pulse" || gotPassword != password {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.Header.Get("X-Contract-Key") != headerValue {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"healthy"}`))
+	}))
+	defer server.Close()
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	handler := NewAvailabilityHandlers(
+		func(_ context.Context) *config.ConfigPersistence { return persistence },
+		nil,
+		nil,
+	)
+	passwordValue, headerSecret, bodyValue := password, headerValue, requestBody
+	target := config.AvailabilityTarget{
+		ID: "contract-target", Name: "Contract target", Address: server.URL,
+		Protocol: config.AvailabilityProbeHTTP, Enabled: true, TimeoutMillis: 1000,
+		HTTP: &config.AvailabilityHTTPConfig{
+			Method:         config.AvailabilityHTTPMethodPOST,
+			Headers:        []config.AvailabilityHTTPHeader{{ID: "contract-key", Name: "X-Contract-Key", Value: &headerSecret}},
+			Authentication: config.AvailabilityHTTPAuthentication{Type: config.AvailabilityHTTPAuthBasic, Username: "pulse", Password: &passwordValue},
+			Body:           &bodyValue, ExpectedStatusMin: 200, ExpectedStatusMax: 299,
+			JSONPath: "status", JSONEquals: "healthy",
+		},
+	}
+	createRec := httptest.NewRecorder()
+	handler.HandleAdd(createRec, httptest.NewRequest(http.MethodPost, "/api/availability-targets", availabilityRequestBody(t, target)))
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("HandleAdd status = %d, body=%s", createRec.Code, createRec.Body.String())
+	}
+	for _, secret := range []string{password, headerValue, requestBody} {
+		if strings.Contains(createRec.Body.String(), secret) {
+			t.Fatalf("create response leaked secret %q: %s", secret, createRec.Body.String())
+		}
+	}
+
+	var created availabilityTargetResponse
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created response: %v", err)
+	}
+	if created.HTTPSecrets == nil || !created.HTTPSecrets.PasswordConfigured || !created.HTTPSecrets.BodyConfigured ||
+		len(created.HTTPSecrets.Headers) != 1 || !created.HTTPSecrets.Headers[0].ValueConfigured {
+		t.Fatalf("secret state = %+v, want configured flags", created.HTTPSecrets)
+	}
+	if created.HTTP == nil || created.HTTP.Authentication.Password != nil || created.HTTP.Body != nil || created.HTTP.Headers[0].Value != nil {
+		t.Fatalf("redacted target still contains secret values: %+v", created.HTTP)
+	}
+
+	created.Name = "Renamed contract target"
+	updateRec := httptest.NewRecorder()
+	handler.HandleUpdate(updateRec, httptest.NewRequest(http.MethodPut, "/api/availability-targets/contract-target", availabilityRequestBody(t, created.AvailabilityTarget)))
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("HandleUpdate status = %d, body=%s", updateRec.Code, updateRec.Body.String())
+	}
+	loaded, err := persistence.LoadAvailabilityTargets()
+	if err != nil || len(loaded) != 1 {
+		t.Fatalf("LoadAvailabilityTargets() = %+v, %v", loaded, err)
+	}
+	stored := loaded[0]
+	if stored.HTTP == nil || stored.HTTP.Authentication.Password == nil || *stored.HTTP.Authentication.Password != password ||
+		stored.HTTP.Body == nil || *stored.HTTP.Body != requestBody || stored.HTTP.Headers[0].Value == nil || *stored.HTTP.Headers[0].Value != headerValue {
+		t.Fatalf("stored contract did not preserve write-only secrets: %+v", stored.HTTP)
+	}
+	if stored.ConfigRevision != 1 {
+		t.Fatalf("display-only edit revision = %d, want 1", stored.ConfigRevision)
+	}
+
+	testRec := httptest.NewRecorder()
+	handler.HandleTestConnection(testRec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/test", availabilityRequestBody(t, created.AvailabilityTarget)))
+	if testRec.Code != http.StatusOK {
+		t.Fatalf("HandleTestConnection status = %d, body=%s", testRec.Code, testRec.Body.String())
+	}
+	var tested availabilityTestResponse
+	if err := json.NewDecoder(testRec.Body).Decode(&tested); err != nil {
+		t.Fatalf("decode test response: %v", err)
+	}
+	if !tested.Success || tested.TransportOutcome != "reachable" || tested.Application == nil || tested.Application.Outcome != "passed" {
+		t.Fatalf("test response = %+v, want reachable transport and passing application", tested)
+	}
+	for _, secret := range []string{password, headerValue, requestBody, "healthy"} {
+		if strings.Contains(testRec.Body.String(), secret) {
+			t.Fatalf("test response leaked request or response content %q: %s", secret, testRec.Body.String())
+		}
+	}
+
+	changedOriginReached := false
+	changedOrigin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		changedOriginReached = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer changedOrigin.Close()
+	created.Address = changedOrigin.URL
+	changedOriginUpdateRec := httptest.NewRecorder()
+	handler.HandleUpdate(changedOriginUpdateRec, httptest.NewRequest(http.MethodPut, "/api/availability-targets/contract-target", availabilityRequestBody(t, created.AvailabilityTarget)))
+	if changedOriginUpdateRec.Code != http.StatusBadRequest {
+		t.Fatalf("changed-origin update status = %d, body=%s; want re-entry validation", changedOriginUpdateRec.Code, changedOriginUpdateRec.Body.String())
+	}
+	changedOriginTestRec := httptest.NewRecorder()
+	handler.HandleTestConnection(changedOriginTestRec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/test", availabilityRequestBody(t, created.AvailabilityTarget)))
+	if changedOriginTestRec.Code != http.StatusBadRequest {
+		t.Fatalf("changed-origin test status = %d, body=%s; want re-entry validation", changedOriginTestRec.Code, changedOriginTestRec.Body.String())
+	}
+	if changedOriginReached {
+		t.Fatal("stored HTTP values were replayed to a changed origin")
+	}
+
+	created.Address = server.URL
+	created.HTTP.JSONEquals = "ready"
+	revisionRec := httptest.NewRecorder()
+	handler.HandleUpdate(revisionRec, httptest.NewRequest(http.MethodPut, "/api/availability-targets/contract-target", availabilityRequestBody(t, created.AvailabilityTarget)))
+	if revisionRec.Code != http.StatusOK {
+		t.Fatalf("contract-edit HandleUpdate status = %d, body=%s", revisionRec.Code, revisionRec.Body.String())
+	}
+	loaded, err = persistence.LoadAvailabilityTargets()
+	if err != nil || len(loaded) != 1 || loaded[0].ConfigRevision != 2 {
+		t.Fatalf("contract edit revision = %+v, %v; want revision 2", loaded, err)
 	}
 }
 

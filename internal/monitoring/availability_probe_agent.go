@@ -26,14 +26,16 @@ const availabilityProbeStaleError = "no recent report from probe agent"
 // ProbeAvailabilityResult is one availability observation reported by a remote
 // host agent that owns the target's execution.
 type ProbeAvailabilityResult struct {
-	ObservationID  string
-	TargetID       string
-	ConfigRevision int64
-	Outcome        availabilityprobe.Outcome
-	LatencyMillis  int64
-	CheckedAt      time.Time
-	Error          string
-	Certificate    *tlsutil.CertificateObservation
+	ObservationID    string
+	TargetID         string
+	ConfigRevision   int64
+	Outcome          availabilityprobe.Outcome
+	TransportOutcome availabilityprobe.Outcome
+	Application      *availabilityprobe.ApplicationResult
+	LatencyMillis    int64
+	CheckedAt        time.Time
+	Error            string
+	Certificate      *tlsutil.CertificateObservation
 }
 
 // availabilityProbeAssignmentTracker provides a grace reference for a newly
@@ -60,15 +62,23 @@ func probeAvailabilityResultsFromReport(reported []agentshost.AvailabilityProbeR
 		default:
 			outcome = availabilityprobe.OutcomeIndeterminate
 		}
+		transportOutcome := availabilityprobe.Outcome(strings.ToLower(strings.TrimSpace(entry.TransportOutcome)))
+		switch transportOutcome {
+		case availabilityprobe.OutcomeReachable, availabilityprobe.OutcomeUnreachable, availabilityprobe.OutcomeIndeterminate:
+		default:
+			transportOutcome = outcome
+		}
 		results = append(results, ProbeAvailabilityResult{
-			ObservationID:  strings.TrimSpace(entry.ObservationID),
-			TargetID:       strings.TrimSpace(entry.TargetID),
-			ConfigRevision: entry.ConfigRevision,
-			Outcome:        outcome,
-			LatencyMillis:  entry.LatencyMillis,
-			CheckedAt:      entry.CheckedAt,
-			Error:          strings.TrimSpace(entry.Error),
-			Certificate:    entry.Certificate.Clone(),
+			ObservationID:    strings.TrimSpace(entry.ObservationID),
+			TargetID:         strings.TrimSpace(entry.TargetID),
+			ConfigRevision:   entry.ConfigRevision,
+			Outcome:          outcome,
+			TransportOutcome: transportOutcome,
+			Application:      applicationResultFromReport(entry),
+			LatencyMillis:    entry.LatencyMillis,
+			CheckedAt:        entry.CheckedAt,
+			Error:            strings.TrimSpace(entry.Error),
+			Certificate:      entry.Certificate.Clone(),
 		})
 	}
 	return results
@@ -157,7 +167,7 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 		if observationID == "" {
 			observationID = legacyProbeAvailabilityObservationID(hostID, result)
 		}
-		m.applyAvailabilityObservation(target, observationID, checkedAt.UTC(), latency, outcome, probeErr, result.Certificate, hostID, receivedAt)
+		m.applyAvailabilityObservationDetailed(target, observationID, checkedAt.UTC(), latency, outcome, result.TransportOutcome, result.Application, probeErr, result.Certificate, hostID, receivedAt)
 		applied++
 	}
 
@@ -165,6 +175,26 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 		return
 	}
 	m.updateResourceStore(m.GetState())
+}
+
+func applicationResultFromReport(entry agentshost.AvailabilityProbeResult) *availabilityprobe.ApplicationResult {
+	outcome := availabilityprobe.ApplicationOutcome(strings.ToLower(strings.TrimSpace(entry.ApplicationOutcome)))
+	switch outcome {
+	case availabilityprobe.ApplicationNotConfigured, availabilityprobe.ApplicationPassed, availabilityprobe.ApplicationFailed:
+	default:
+		return nil
+	}
+	failureCode := strings.TrimSpace(entry.ApplicationFailureCode)
+	switch failureCode {
+	case "", "status_mismatch", "response_read_failed", "response_too_large", "text_mismatch", "json_invalid", "json_path_missing", "json_value_mismatch":
+	default:
+		failureCode = ""
+	}
+	statusCode := entry.ApplicationStatusCode
+	if statusCode < 100 || statusCode > 599 {
+		statusCode = 0
+	}
+	return &availabilityprobe.ApplicationResult{Outcome: outcome, StatusCode: statusCode, FailureCode: failureCode}
 }
 
 func legacyProbeAvailabilityObservationID(hostID string, result ProbeAvailabilityResult) string {
@@ -323,6 +353,12 @@ func availabilityProbeAgentTargetPayload(target config.AvailabilityTarget) map[s
 	}
 	if target.UDPExpected != "" {
 		payload["udpExpectedResponse"] = target.UDPExpected
+	}
+	if target.HTTP != nil {
+		// Assigned agents need the complete execution contract. These values are
+		// delivered only through authenticated remote config and are never echoed
+		// in the result/report payload.
+		payload["http"] = target.HTTP
 	}
 	return payload
 }

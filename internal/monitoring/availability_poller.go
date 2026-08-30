@@ -25,23 +25,27 @@ type tlsCert = tlsutil.CertificateObservation
 // AvailabilityProbeStatus captures the last observed state of an agentless
 // endpoint probe.
 type AvailabilityProbeStatus struct {
-	TargetID            string    `json:"targetId"`
-	Name                string    `json:"name"`
-	TargetKind          string    `json:"targetKind,omitempty"`
-	Address             string    `json:"address"`
-	Protocol            string    `json:"protocol"`
-	Outcome             string    `json:"outcome,omitempty"`
-	Enabled             bool      `json:"enabled"`
-	Available           bool      `json:"available"`
-	LastChecked         time.Time `json:"lastChecked,omitempty"`
-	LastSuccess         time.Time `json:"lastSuccess,omitempty"`
-	LatencyMillis       int64     `json:"latencyMillis,omitempty"`
-	ConsecutiveFailures int       `json:"consecutiveFailures,omitempty"`
-	LastError           string    `json:"lastError,omitempty"`
-	FailureThreshold    int       `json:"failureThreshold,omitempty"`
-	ProbeAgentID        string    `json:"probeAgentId,omitempty"`
-	Certificate         *tlsCert  `json:"certificate,omitempty"`
-	CertificateCurrent  bool      `json:"-"`
+	TargetID               string    `json:"targetId"`
+	Name                   string    `json:"name"`
+	TargetKind             string    `json:"targetKind,omitempty"`
+	Address                string    `json:"address"`
+	Protocol               string    `json:"protocol"`
+	Outcome                string    `json:"outcome,omitempty"`
+	TransportOutcome       string    `json:"transportOutcome,omitempty"`
+	ApplicationOutcome     string    `json:"applicationOutcome,omitempty"`
+	ApplicationStatusCode  int       `json:"applicationStatusCode,omitempty"`
+	ApplicationFailureCode string    `json:"applicationFailureCode,omitempty"`
+	Enabled                bool      `json:"enabled"`
+	Available              bool      `json:"available"`
+	LastChecked            time.Time `json:"lastChecked,omitempty"`
+	LastSuccess            time.Time `json:"lastSuccess,omitempty"`
+	LatencyMillis          int64     `json:"latencyMillis,omitempty"`
+	ConsecutiveFailures    int       `json:"consecutiveFailures,omitempty"`
+	LastError              string    `json:"lastError,omitempty"`
+	FailureThreshold       int       `json:"failureThreshold,omitempty"`
+	ProbeAgentID           string    `json:"probeAgentId,omitempty"`
+	Certificate            *tlsCert  `json:"certificate,omitempty"`
+	CertificateCurrent     bool      `json:"-"`
 	// ProbeReportReceivedAt is server-authored freshness evidence for a remote
 	// observation. Keep it off the wire: LastChecked remains the agent's
 	// observation time, while disconnect detection must not trust agent clock
@@ -332,7 +336,7 @@ func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.Avai
 	result, err := ProbeAvailabilityTargetDetailedResult(ctx, target)
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
-	m.applyAvailabilityObservation(target, uuid.NewString(), checkedAt, latency, result.Outcome, err, result.Certificate, "", time.Time{})
+	m.applyAvailabilityObservationDetailed(target, uuid.NewString(), checkedAt, latency, result.Outcome, result.TransportOutcome, result.Application, err, result.Certificate, "", time.Time{})
 	m.updateResourceStore(m.GetState())
 }
 
@@ -350,7 +354,26 @@ func (m *Monitor) applyAvailabilityObservation(
 	probeAgentID string,
 	probeReportReceivedAt time.Time,
 ) {
-	m.setAvailabilityStatusWithCertificate(target, checkedAt, latency, outcome, probeErr, certificate, probeAgentID, probeReportReceivedAt)
+	m.applyAvailabilityObservationDetailed(target, observationID, checkedAt, latency, outcome, outcome, nil, probeErr, certificate, probeAgentID, probeReportReceivedAt)
+}
+
+func (m *Monitor) applyAvailabilityObservationDetailed(
+	target config.AvailabilityTarget,
+	observationID string,
+	checkedAt time.Time,
+	latency time.Duration,
+	outcome AvailabilityProbeOutcome,
+	transportOutcome availabilityprobe.Outcome,
+	application *availabilityprobe.ApplicationResult,
+	probeErr error,
+	certificate *tlsutil.CertificateObservation,
+	probeAgentID string,
+	probeReportReceivedAt time.Time,
+) {
+	if transportOutcome == "" {
+		transportOutcome = outcome
+	}
+	m.setAvailabilityStatusWithDetails(target, checkedAt, latency, outcome, transportOutcome, application, probeErr, certificate, probeAgentID, probeReportReceivedAt)
 	m.recordAvailabilityHistory(target, observationID, checkedAt, latency, outcome, probeErr, probeAgentID, probeReportReceivedAt)
 
 	if probeErr == nil {
@@ -436,11 +459,32 @@ func (m *Monitor) setAvailabilityStatusWithCertificate(
 	probeAgentID string,
 	probeReportReceivedAt time.Time,
 ) {
+	m.setAvailabilityStatusWithDetails(target, checkedAt, latency, outcome, outcome, nil, probeErr, certificate, probeAgentID, probeReportReceivedAt)
+}
+
+func (m *Monitor) setAvailabilityStatusWithDetails(
+	target config.AvailabilityTarget,
+	checkedAt time.Time,
+	latency time.Duration,
+	outcome AvailabilityProbeOutcome,
+	transportOutcome availabilityprobe.Outcome,
+	application *availabilityprobe.ApplicationResult,
+	probeErr error,
+	certificate *tlsutil.CertificateObservation,
+	probeAgentID string,
+	probeReportReceivedAt time.Time,
+) {
 	if m == nil {
 		return
 	}
 	status := availabilityStatusFromTarget(target)
 	status.Outcome = string(outcome)
+	status.TransportOutcome = string(transportOutcome)
+	if application != nil {
+		status.ApplicationOutcome = string(application.Outcome)
+		status.ApplicationStatusCode = application.StatusCode
+		status.ApplicationFailureCode = application.FailureCode
+	}
 	status.LastChecked = checkedAt
 	status.Certificate = certificate.Clone()
 	status.CertificateCurrent = status.Certificate != nil
@@ -530,27 +574,31 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 	}
 	resourceStatus := availabilityResourceStatus(target, status)
 	data := &unifiedresources.AvailabilityData{
-		TargetID:            target.ID,
-		LinkedResourceID:    strings.TrimSpace(target.LinkedResourceID),
-		Name:                target.DisplayName(),
-		TargetKind:          string(target.TargetKind),
-		Address:             target.Address,
-		Protocol:            string(target.Protocol),
-		ProbeOutcome:        status.Outcome,
-		ProbeAgentID:        status.ProbeAgentID,
-		UDPMode:             string(target.UDPMode),
-		Port:                target.Port,
-		Path:                target.Path,
-		Enabled:             target.Enabled,
-		Available:           status.Available,
-		LastChecked:         timePointerIfSet(status.LastChecked),
-		LastSuccess:         timePointerIfSet(status.LastSuccess),
-		LatencyMillis:       status.LatencyMillis,
-		ConsecutiveFailures: status.ConsecutiveFailures,
-		LastError:           status.LastError,
-		FailureThreshold:    target.EffectiveFailureThreshold(),
-		PollIntervalSeconds: target.EffectivePollIntervalSecs(),
-		TimeoutMillis:       target.EffectiveTimeoutMillis(),
+		TargetID:               target.ID,
+		LinkedResourceID:       strings.TrimSpace(target.LinkedResourceID),
+		Name:                   target.DisplayName(),
+		TargetKind:             string(target.TargetKind),
+		Address:                target.Address,
+		Protocol:               string(target.Protocol),
+		ProbeOutcome:           status.Outcome,
+		TransportOutcome:       status.TransportOutcome,
+		ApplicationOutcome:     status.ApplicationOutcome,
+		ApplicationStatusCode:  status.ApplicationStatusCode,
+		ApplicationFailureCode: status.ApplicationFailureCode,
+		ProbeAgentID:           status.ProbeAgentID,
+		UDPMode:                string(target.UDPMode),
+		Port:                   target.Port,
+		Path:                   target.Path,
+		Enabled:                target.Enabled,
+		Available:              status.Available,
+		LastChecked:            timePointerIfSet(status.LastChecked),
+		LastSuccess:            timePointerIfSet(status.LastSuccess),
+		LatencyMillis:          status.LatencyMillis,
+		ConsecutiveFailures:    status.ConsecutiveFailures,
+		LastError:              status.LastError,
+		FailureThreshold:       target.EffectiveFailureThreshold(),
+		PollIntervalSeconds:    target.EffectivePollIntervalSecs(),
+		TimeoutMillis:          target.EffectiveTimeoutMillis(),
 	}
 	data.CertificateMonitoring = target.CertificateMonitoringEnabled()
 	data.CertificateExpiryWarningDays = target.EffectiveCertificateExpiryWarningDays()

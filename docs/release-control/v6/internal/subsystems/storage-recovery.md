@@ -1747,6 +1747,16 @@ recovery scope, or a storage/recovery-owned secret source.
     `certificate_*` incident on those availability facets remain monitoring and
     alerts context. They do not prove storage encryption, backup integrity,
     repository authenticity, protection coverage, or restore readiness.
+    The same neutrality applies to HTTP/S application-response contracts.
+    Transport and application outcomes may explain liveness, but accepted
+    status ranges, text/JSON assertions, and typed failure codes are not backup
+    verification or restore evidence. Request bodies, response bodies, Basic
+    passwords, bearer tokens, and operator header values remain encrypted
+    configuration inputs and must never enter storage/recovery inventory,
+    history, exports, evidence, diagnostics, or recovery authority.
+    Omitted write-only values may be reused only while the HTTP/S endpoint
+    origin is unchanged; a scheme, host, or effective-port change must not
+    replay stored values to the new endpoint.
 31. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/chartapi/service.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     Expiry sweeps, oldest-payload eviction, and byte/cardinality limits in that
     shared chart cache are transport memory controls only. Storage and recovery

@@ -13,6 +13,8 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import {
   AvailabilityTargetsAPI,
   type AvailabilityProbeProtocol,
+  type AvailabilityHTTPAuthType,
+  type AvailabilityHTTPMethod,
   type AvailabilityTarget,
   type AvailabilityTargetKind,
   type AvailabilityTestResponse,
@@ -63,6 +65,29 @@ interface AvailabilityForm {
   failureThreshold: string;
   monitorCertificate: boolean;
   certificateExpiryWarningDays: string;
+  httpMethod: AvailabilityHTTPMethod;
+  httpStatusMin: string;
+  httpStatusMax: string;
+  httpTextContains: string;
+  httpJSONPath: string;
+  httpJSONEquals: string;
+  httpAuthType: AvailabilityHTTPAuthType;
+  httpUsername: string;
+  httpPassword: string;
+  httpPasswordConfigured: boolean;
+  httpBearerToken: string;
+  httpBearerTokenConfigured: boolean;
+  httpBody: string;
+  httpBodyConfigured: boolean;
+  httpBodyTouched: boolean;
+  httpHeaders: AvailabilityHTTPHeaderForm[];
+}
+
+interface AvailabilityHTTPHeaderForm {
+  id: string;
+  name: string;
+  value: string;
+  valueConfigured: boolean;
 }
 
 export interface AvailabilityTargetSlotProps {
@@ -100,28 +125,70 @@ const newAvailabilityForm = (
   failureThreshold: '2',
   monitorCertificate: true,
   certificateExpiryWarningDays: '30',
+  httpMethod: 'GET',
+  httpStatusMin: '200',
+  httpStatusMax: '399',
+  httpTextContains: '',
+  httpJSONPath: '',
+  httpJSONEquals: '',
+  httpAuthType: 'none',
+  httpUsername: '',
+  httpPassword: '',
+  httpPasswordConfigured: false,
+  httpBearerToken: '',
+  httpBearerTokenConfigured: false,
+  httpBody: '',
+  httpBodyConfigured: false,
+  httpBodyTouched: false,
+  httpHeaders: [],
 });
 
-const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => ({
-  id: target.id,
-  name: target.name ?? '',
-  targetKind: target.targetKind ?? 'service',
-  address: target.address ?? '',
-  protocol: target.protocol ?? 'icmp',
-  port: target.port ? String(target.port) : '',
-  path: target.path ?? '',
-  udpMode: target.udpMode ?? 'response_required',
-  udpRequest: target.udpRequest ?? '',
-  udpExpectedResponse: target.udpExpectedResponse ?? '',
-  linkedResourceId: target.linkedResourceId ?? '',
-  probeAgentId: target.probeAgentId ?? '',
-  enabled: target.enabled ?? true,
-  pollIntervalSeconds: String(target.pollIntervalSeconds ?? 60),
-  timeoutMillis: String(target.timeoutMillis ?? 2000),
-  failureThreshold: String(target.failureThreshold ?? 2),
-  monitorCertificate: target.certificateMonitoringDisabled !== true,
-  certificateExpiryWarningDays: String(target.certificateExpiryWarningDays ?? 30),
-});
+const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => {
+  const headerSecrets = new Map(
+    (target.httpSecrets?.headers ?? []).map((header) => [header.id, header.valueConfigured]),
+  );
+  return {
+    id: target.id,
+    name: target.name ?? '',
+    targetKind: target.targetKind ?? 'service',
+    address: target.address ?? '',
+    protocol: target.protocol ?? 'icmp',
+    port: target.port ? String(target.port) : '',
+    path: target.path ?? '',
+    udpMode: target.udpMode ?? 'response_required',
+    udpRequest: target.udpRequest ?? '',
+    udpExpectedResponse: target.udpExpectedResponse ?? '',
+    linkedResourceId: target.linkedResourceId ?? '',
+    probeAgentId: target.probeAgentId ?? '',
+    enabled: target.enabled ?? true,
+    pollIntervalSeconds: String(target.pollIntervalSeconds ?? 60),
+    timeoutMillis: String(target.timeoutMillis ?? 2000),
+    failureThreshold: String(target.failureThreshold ?? 2),
+    monitorCertificate: target.certificateMonitoringDisabled !== true,
+    certificateExpiryWarningDays: String(target.certificateExpiryWarningDays ?? 30),
+    httpMethod: target.http?.method ?? 'GET',
+    httpStatusMin: String(target.http?.expectedStatusMin ?? 200),
+    httpStatusMax: String(target.http?.expectedStatusMax ?? 399),
+    httpTextContains: target.http?.textContains ?? '',
+    httpJSONPath: target.http?.jsonPath ?? '',
+    httpJSONEquals: target.http?.jsonEquals ?? '',
+    httpAuthType: target.http?.authentication.type ?? 'none',
+    httpUsername: target.http?.authentication.username ?? '',
+    httpPassword: '',
+    httpPasswordConfigured: target.httpSecrets?.passwordConfigured ?? false,
+    httpBearerToken: '',
+    httpBearerTokenConfigured: target.httpSecrets?.bearerTokenConfigured ?? false,
+    httpBody: '',
+    httpBodyConfigured: target.httpSecrets?.bodyConfigured ?? false,
+    httpBodyTouched: false,
+    httpHeaders: (target.http?.headers ?? []).map((header) => ({
+      id: header.id,
+      name: header.name,
+      value: '',
+      valueConfigured: headerSecrets.get(header.id) ?? false,
+    })),
+  };
+};
 
 const parsePositiveInt = (value: string): number | undefined => {
   const parsed = Number.parseInt(value.trim(), 10);
@@ -129,7 +196,11 @@ const parsePositiveInt = (value: string): number | undefined => {
 };
 
 const availabilityTestSuccessDescription = (result: AvailabilityTestResponse): string => {
-  const base = `Probe reached the target in ${result.latencyMillis} ms.`;
+  const application = result.application;
+  const base =
+    application?.outcome === 'passed'
+      ? `Endpoint answered in ${result.latencyMillis} ms and the application contract passed${application.statusCode ? ` (HTTP ${application.statusCode})` : ''}.`
+      : `Probe reached the target in ${result.latencyMillis} ms.`;
   const certificate = result.certificate;
   if (!certificate) return base;
   const trust = certificate.trustStatus.replace('-', ' ');
@@ -144,8 +215,23 @@ const availabilityTestSuccessDescription = (result: AvailabilityTestResponse): s
   })}.`;
 };
 
+const availabilityTestFailureDescription = (result: AvailabilityTestResponse): string => {
+  if (result.transportOutcome === 'reachable' && result.application?.outcome === 'failed') {
+    const status = result.application.statusCode ? ` HTTP ${result.application.statusCode}.` : '';
+    return `Endpoint answered in ${result.latencyMillis} ms, but the application contract failed.${status} ${result.error || 'The response did not satisfy the configured assertion.'}`;
+  }
+  return result.error || 'Probe failed.';
+};
+
 const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
   const port = parsePositiveInt(form.port);
+  const isHTTP = form.protocol === 'http' || form.protocol === 'https';
+  const httpPassword = form.httpPassword ? form.httpPassword : undefined;
+  const httpBearerToken = form.httpBearerToken ? form.httpBearerToken : undefined;
+  const httpBody =
+    form.httpMethod === 'POST' && (form.httpBodyTouched || form.httpBody)
+      ? form.httpBody
+      : undefined;
   return {
     id: form.id,
     name: form.name.trim(),
@@ -169,6 +255,30 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     certificateMonitoringDisabled: form.protocol === 'https' ? !form.monitorCertificate : false,
     certificateExpiryWarningDays:
       form.protocol === 'https' ? parsePositiveInt(form.certificateExpiryWarningDays) : 0,
+    http: isHTTP
+      ? {
+          method: form.httpMethod,
+          headers: form.httpHeaders.map((header) => ({
+            id: header.id,
+            name: header.name.trim(),
+            value: header.value || undefined,
+          })),
+          authentication: {
+            type: form.httpAuthType,
+            username: form.httpAuthType === 'basic' ? form.httpUsername.trim() : undefined,
+            password: form.httpAuthType === 'basic' ? httpPassword : undefined,
+            bearerToken: form.httpAuthType === 'bearer' ? httpBearerToken : undefined,
+          },
+          body: httpBody,
+          expectedStatusMin: parsePositiveInt(form.httpStatusMin) ?? 200,
+          expectedStatusMax: parsePositiveInt(form.httpStatusMax) ?? 399,
+          textContains:
+            form.httpMethod !== 'HEAD' ? form.httpTextContains.trim() || undefined : undefined,
+          jsonPath: form.httpMethod !== 'HEAD' ? form.httpJSONPath.trim() || undefined : undefined,
+          jsonEquals:
+            form.httpMethod !== 'HEAD' ? form.httpJSONEquals.trim() || undefined : undefined,
+        }
+      : undefined,
   };
 };
 
@@ -228,6 +338,12 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   const [testing, setTesting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [testResult, setTestResult] = createSignal<AvailabilityTestResponse | null>(null);
+  let feedbackElement: HTMLDivElement | undefined;
+  const revealFeedback = () => {
+    if (typeof feedbackElement?.scrollIntoView === 'function') {
+      feedbackElement.scrollIntoView({ block: 'nearest' });
+    }
+  };
   // Set when the server rejects a probe assignment with the canonical 402, so a
   // stale cached capability set still lands on the upgrade gate.
   const [probeLicenseRejected, setProbeLicenseRejected] = createSignal(false);
@@ -260,6 +376,29 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     }
     setError(null);
     setTestResult(null);
+  };
+
+  const updateHTTPHeader = (index: number, patch: Partial<AvailabilityHTTPHeaderForm>) => {
+    updateForm({
+      httpHeaders: form().httpHeaders.map((header, headerIndex) =>
+        headerIndex === index ? { ...header, ...patch } : header,
+      ),
+    });
+  };
+
+  const addHTTPHeader = () => {
+    const id =
+      globalThis.crypto?.randomUUID?.() ??
+      `http-header-${Date.now()}-${form().httpHeaders.length + 1}`;
+    updateForm({
+      httpHeaders: [...form().httpHeaders, { id, name: '', value: '', valueConfigured: false }],
+    });
+  };
+
+  const removeHTTPHeader = (index: number) => {
+    updateForm({
+      httpHeaders: form().httpHeaders.filter((_, headerIndex) => headerIndex !== index),
+    });
   };
 
   const selectedPresetConfig = () => availabilityPresetById(selectedPreset());
@@ -328,8 +467,10 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     try {
       const result = await AvailabilityTargetsAPI.test(payloadFromForm(form()));
       setTestResult(result);
+      queueMicrotask(revealFeedback);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Availability test failed.');
+      queueMicrotask(revealFeedback);
     } finally {
       setTesting(false);
     }
@@ -435,7 +576,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                 ? 'Use a hostname or IP address and the port to open.'
                 : form().protocol === 'udp'
                   ? 'Use a hostname or unicast IP. UDP checks send one small datagram per poll.'
-                  : 'Use a full URL or a hostname. HTTP statuses below 500 count as reachable.'}
+                  : 'Use a full URL or hostname, then define the accepted application response below.'}
           </span>
         </label>
         <FormSelect
@@ -524,6 +665,257 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               placeholder="/health"
             />
           </label>
+        </Show>
+        <Show when={form().protocol === 'http' || form().protocol === 'https'}>
+          <section class="space-y-4 rounded-lg border border-border bg-surface-alt/40 p-4 sm:col-span-2">
+            <div>
+              <h3 class="text-sm font-semibold text-base-content">
+                What proves this service is working?
+              </h3>
+              <p class="mt-1 text-xs text-muted">
+                Pulse records whether the endpoint answered separately from whether this response
+                contract passed. Response bodies and credentials are never stored as evidence.
+              </p>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-3">
+              <FormSelect
+                label="Request method"
+                value={form().httpMethod}
+                onChange={(event) =>
+                  updateForm({ httpMethod: event.currentTarget.value as AvailabilityHTTPMethod })
+                }
+              >
+                <option value="HEAD">HEAD</option>
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+              </FormSelect>
+              <label class={formField}>
+                <span class={formLabel}>Accepted status from</span>
+                <input
+                  class={formControl}
+                  inputMode="numeric"
+                  value={form().httpStatusMin}
+                  onInput={(event) => updateForm({ httpStatusMin: event.currentTarget.value })}
+                  placeholder="200"
+                />
+              </label>
+              <label class={formField}>
+                <span class={formLabel}>Accepted status to</span>
+                <input
+                  class={formControl}
+                  inputMode="numeric"
+                  value={form().httpStatusMax}
+                  onInput={(event) => updateForm({ httpStatusMax: event.currentTarget.value })}
+                  placeholder="399"
+                />
+              </label>
+            </div>
+
+            <Show when={form().httpMethod === 'POST'}>
+              <label class={formField}>
+                <span class={formLabel}>Request body (optional)</span>
+                <textarea
+                  class={`${formControl} min-h-24 font-mono text-xs`}
+                  value={form().httpBody}
+                  onInput={(event) =>
+                    updateForm({
+                      httpBody: event.currentTarget.value,
+                      httpBodyConfigured: false,
+                      httpBodyTouched: true,
+                    })
+                  }
+                  placeholder={
+                    form().httpBodyConfigured
+                      ? 'Stored securely — leave blank to keep it'
+                      : '{"operation":"health"}'
+                  }
+                />
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span class={formHelpText}>
+                    Up to 8 KiB. Kept out of history and test output.
+                  </span>
+                  <Show when={form().httpBodyConfigured && !form().httpBodyTouched}>
+                    <button
+                      type="button"
+                      class="text-xs font-medium text-error hover:underline"
+                      onClick={() =>
+                        updateForm({
+                          httpBody: '',
+                          httpBodyConfigured: false,
+                          httpBodyTouched: true,
+                        })
+                      }
+                    >
+                      Remove stored body
+                    </button>
+                  </Show>
+                </div>
+              </label>
+            </Show>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <FormSelect
+                label="Authentication"
+                value={form().httpAuthType}
+                onChange={(event) =>
+                  updateForm({
+                    httpAuthType: event.currentTarget.value as AvailabilityHTTPAuthType,
+                  })
+                }
+              >
+                <option value="none">None</option>
+                <option value="basic">Basic authentication</option>
+                <option value="bearer">Bearer token</option>
+              </FormSelect>
+              <Show when={form().httpAuthType === 'basic'}>
+                <label class={formField}>
+                  <span class={formLabel}>Username</span>
+                  <input
+                    class={formControl}
+                    value={form().httpUsername}
+                    autocomplete="username"
+                    onInput={(event) => updateForm({ httpUsername: event.currentTarget.value })}
+                  />
+                </label>
+                <label class={formField}>
+                  <span class={formLabel}>Password</span>
+                  <input
+                    class={formControl}
+                    type="password"
+                    autocomplete="new-password"
+                    value={form().httpPassword}
+                    onInput={(event) =>
+                      updateForm({
+                        httpPassword: event.currentTarget.value,
+                        httpPasswordConfigured: false,
+                      })
+                    }
+                    placeholder={
+                      form().httpPasswordConfigured
+                        ? 'Stored securely — leave blank to keep it'
+                        : 'Required'
+                    }
+                  />
+                </label>
+              </Show>
+              <Show when={form().httpAuthType === 'bearer'}>
+                <label class={formField}>
+                  <span class={formLabel}>Bearer token</span>
+                  <input
+                    class={formControl}
+                    type="password"
+                    autocomplete="new-password"
+                    value={form().httpBearerToken}
+                    onInput={(event) =>
+                      updateForm({
+                        httpBearerToken: event.currentTarget.value,
+                        httpBearerTokenConfigured: false,
+                      })
+                    }
+                    placeholder={
+                      form().httpBearerTokenConfigured
+                        ? 'Stored securely — leave blank to keep it'
+                        : 'Required'
+                    }
+                  />
+                </label>
+              </Show>
+            </div>
+
+            <div class="space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class={formLabel}>Request headers</div>
+                  <div class={formHelpText}>
+                    Optional operator-defined headers. Values are write-only.
+                  </div>
+                </div>
+                <Button variant="outline" size="settingsAction" onClick={addHTTPHeader}>
+                  Add header
+                </Button>
+              </div>
+              <For each={form().httpHeaders}>
+                {(header, index) => (
+                  <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                    <label class={formField}>
+                      <span class={formLabel}>Header name</span>
+                      <input
+                        class={formControl}
+                        value={header.name}
+                        onInput={(event) =>
+                          updateHTTPHeader(index(), { name: event.currentTarget.value })
+                        }
+                        placeholder="X-Health-Check"
+                      />
+                    </label>
+                    <label class={formField}>
+                      <span class={formLabel}>Header value</span>
+                      <input
+                        class={formControl}
+                        type="password"
+                        value={header.value}
+                        onInput={(event) =>
+                          updateHTTPHeader(index(), {
+                            value: event.currentTarget.value,
+                            valueConfigured: false,
+                          })
+                        }
+                        placeholder={
+                          header.valueConfigured
+                            ? 'Stored securely — leave blank to keep it'
+                            : 'Value'
+                        }
+                      />
+                    </label>
+                    <Button
+                      variant="dangerOutline"
+                      size="settingsAction"
+                      onClick={() => removeHTTPHeader(index())}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
+              </For>
+            </div>
+
+            <Show when={form().httpMethod !== 'HEAD'}>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label class={formField}>
+                  <span class={formLabel}>Response contains text (optional)</span>
+                  <input
+                    class={formControl}
+                    value={form().httpTextContains}
+                    onInput={(event) => updateForm({ httpTextContains: event.currentTarget.value })}
+                    placeholder="healthy"
+                  />
+                </label>
+                <div />
+                <label class={formField}>
+                  <span class={formLabel}>JSON path (optional)</span>
+                  <input
+                    class={formControl}
+                    value={form().httpJSONPath}
+                    onInput={(event) => updateForm({ httpJSONPath: event.currentTarget.value })}
+                    placeholder="data.status"
+                  />
+                  <span class={formHelpText}>
+                    Dot fields and bounded array indexes are supported.
+                  </span>
+                </label>
+                <label class={formField}>
+                  <span class={formLabel}>JSON value equals (optional)</span>
+                  <input
+                    class={formControl}
+                    value={form().httpJSONEquals}
+                    onInput={(event) => updateForm({ httpJSONEquals: event.currentTarget.value })}
+                    placeholder="ok"
+                  />
+                </label>
+              </div>
+            </Show>
+          </section>
         </Show>
         <Show when={form().protocol === 'https'}>
           <div class="flex items-center rounded-md border border-border bg-surface-alt px-4 py-3">
@@ -638,59 +1030,61 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
         </div>
       </div>
 
-      <Show when={testResult()}>
-        {(result) => (
-          <CalloutCard
-            role={result().success ? 'status' : 'alert'}
-            tone={
-              result().outcome === 'indeterminate'
-                ? 'warning'
-                : result().success
-                  ? 'success'
-                  : 'danger'
-            }
-            scale="compact"
-            padding="sm"
-            description={
-              result().outcome === 'indeterminate'
-                ? `No UDP rejection was received in ${result().latencyMillis} ms. The port is open or filtered, not proven reachable.`
-                : result().success
-                  ? availabilityTestSuccessDescription(result())
-                  : result().error || 'Probe failed.'
-            }
-          />
-        )}
-      </Show>
+      <div ref={feedbackElement} class="scroll-mb-56 space-y-2 sm:scroll-mb-24">
+        <Show when={testResult()}>
+          {(result) => (
+            <CalloutCard
+              role={result().success ? 'status' : 'alert'}
+              tone={
+                result().outcome === 'indeterminate'
+                  ? 'warning'
+                  : result().success
+                    ? 'success'
+                    : 'danger'
+              }
+              scale="compact"
+              padding="sm"
+              description={
+                result().outcome === 'indeterminate'
+                  ? `No UDP rejection was received in ${result().latencyMillis} ms. The port is open or filtered, not proven reachable.`
+                  : result().success
+                    ? availabilityTestSuccessDescription(result())
+                    : availabilityTestFailureDescription(result())
+              }
+            />
+          )}
+        </Show>
 
-      <Show when={error()}>
-        {(message) => (
-          <CalloutCard
-            role="alert"
-            tone="danger"
-            scale="compact"
-            padding="sm"
-            description={message()}
-          />
-        )}
-      </Show>
+        <Show when={error()}>
+          {(message) => (
+            <CalloutCard
+              role="alert"
+              tone="danger"
+              scale="compact"
+              padding="sm"
+              description={message()}
+            />
+          )}
+        </Show>
 
-      <Show when={props.deleteError}>
-        {(message) => (
-          <CalloutCard
-            role="alert"
-            tone="danger"
-            scale="compact"
-            padding="sm"
-            description={message()}
-          />
-        )}
-      </Show>
+        <Show when={props.deleteError}>
+          {(message) => (
+            <CalloutCard
+              role="alert"
+              tone="danger"
+              scale="compact"
+              padding="sm"
+              description={message()}
+            />
+          )}
+        </Show>
 
-      <Show when={props.deleteConfirming}>
-        <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
-          Click remove again to confirm. Historical resource data and alerts remain available.
-        </div>
-      </Show>
+        <Show when={props.deleteConfirming}>
+          <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
+            Click remove again to confirm. Historical resource data and alerts remain available.
+          </div>
+        </Show>
+      </div>
 
       <div class="sticky bottom-0 -mx-4 mt-auto border-t border-border bg-surface px-4 py-3 shadow-[0_-8px_16px_rgba(15,23,42,0.04)]">
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">

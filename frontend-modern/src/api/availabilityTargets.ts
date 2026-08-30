@@ -6,6 +6,42 @@ const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'udp' | 'http' | 'https';
 export type AvailabilityUDPMode = 'response_required' | 'open_or_filtered';
 export type AvailabilityTargetKind = 'machine' | 'service' | 'device';
+export type AvailabilityHTTPMethod = 'HEAD' | 'GET' | 'POST';
+export type AvailabilityHTTPAuthType = 'none' | 'basic' | 'bearer';
+
+export interface AvailabilityHTTPHeader {
+  id: string;
+  name: string;
+  /** Write-only. Omitted values preserve the stored secret on update. */
+  value?: string;
+}
+
+export interface AvailabilityHTTPConfig {
+  method: AvailabilityHTTPMethod;
+  headers?: AvailabilityHTTPHeader[];
+  authentication: {
+    type: AvailabilityHTTPAuthType;
+    username?: string;
+    /** Write-only. */
+    password?: string;
+    /** Write-only. */
+    bearerToken?: string;
+  };
+  /** Write-only POST body. */
+  body?: string;
+  expectedStatusMin: number;
+  expectedStatusMax: number;
+  textContains?: string;
+  jsonPath?: string;
+  jsonEquals?: string;
+}
+
+export interface AvailabilityHTTPSecretState {
+  bodyConfigured: boolean;
+  passwordConfigured: boolean;
+  bearerTokenConfigured: boolean;
+  headers?: Array<{ id: string; valueConfigured: boolean }>;
+}
 
 export interface AvailabilityProbeStatus {
   targetId: string;
@@ -14,6 +50,10 @@ export interface AvailabilityProbeStatus {
   address: string;
   protocol: AvailabilityProbeProtocol | string;
   outcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
+  transportOutcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
+  applicationOutcome?: 'not_configured' | 'passed' | 'failed' | string;
+  applicationStatusCode?: number;
+  applicationFailureCode?: string;
   enabled: boolean;
   available: boolean;
   lastChecked?: string;
@@ -56,6 +96,8 @@ export interface AvailabilityTarget {
    * string because the server decodes updates onto the existing record.
    */
   probeAgentId?: string;
+  http?: AvailabilityHTTPConfig;
+  httpSecrets?: AvailabilityHTTPSecretState;
   status?: AvailabilityProbeStatus;
 }
 
@@ -63,6 +105,12 @@ export interface AvailabilityTestResponse {
   success: boolean;
   latencyMillis: number;
   outcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
+  transportOutcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
+  application?: {
+    outcome: 'not_configured' | 'passed' | 'failed' | string;
+    statusCode?: number;
+    failureCode?: string;
+  };
   error?: string;
   certificate?: ResourceCertificateObservation;
 }
