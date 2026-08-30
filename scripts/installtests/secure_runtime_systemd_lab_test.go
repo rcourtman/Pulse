@@ -549,7 +549,7 @@ func (f *secureRuntimeLabFixture) handleActionRunnerSelfRevoke(w http.ResponseWr
 		return
 	}
 	f.actionServer.InvalidateActionRunnerSession(admission)
-	writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"success": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Request) {
@@ -1083,6 +1083,23 @@ func TestSecureRuntimeFixtureAcceptsBearerOnlyCollectorLifecycleLookup(t *testin
 	fixture.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated lifecycle lookup status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSecureRuntimeFixtureSelfRevokeUsesBodylessNoContentResponse(t *testing.T) {
+	fixture := newSecureRuntimeLabFixture(nil, "", nil, nil, "fixture")
+	defer fixture.actionServer.Shutdown()
+	body := fmt.Sprintf(`{"agentId":%q,"hostname":%q}`, secureRuntimeLabAgentID, secureRuntimeLabHostname)
+	request := httptest.NewRequest(http.MethodDelete, "/api/agents/action-runner/credential", strings.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+secureRuntimeRunnerSecretV1)
+	recorder := httptest.NewRecorder()
+	fixture.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent || recorder.Body.Len() != 0 {
+		t.Fatalf("self-revoke response = status %d body %q, want bodyless 204", recorder.Code, recorder.Body.String())
+	}
+	_, revoked, revokeCount := fixture.actionSnapshot()
+	if !revoked || revokeCount != 1 {
+		t.Fatalf("self-revoke state = revoked:%t count:%d", revoked, revokeCount)
 	}
 }
 
