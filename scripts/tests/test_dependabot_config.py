@@ -12,6 +12,18 @@ CONFIG = ROOT / ".github" / "dependabot.yml"
 SECURITY_SCAN = ROOT / ".github" / "workflows" / "security-scan.yml"
 
 
+def manifest_directories(filename: str) -> list[str]:
+    """Return repository-relative Dependabot directories for every manifest."""
+    directories = set()
+    for manifest in ROOT.rglob(filename):
+        relative = manifest.relative_to(ROOT)
+        if "node_modules" in relative.parts:
+            continue
+        parent = relative.parent.as_posix()
+        directories.add("/" if parent == "." else f"/{parent}")
+    return sorted(directories)
+
+
 class DependabotConfigTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -26,17 +38,12 @@ class DependabotConfigTest(unittest.TestCase):
         )
         self.assertEqual(self.updates["github-actions"]["directory"], "/")
         self.assertEqual(
-            self.updates["gomod"]["directories"],
-            ["/", "/tests/integration/mock-github-server"],
+            sorted(self.updates["gomod"]["directories"]),
+            manifest_directories("go.mod"),
         )
         self.assertEqual(
-            self.updates["npm"]["directories"],
-            [
-                "/",
-                "/frontend-modern",
-                "/internal/cloudcp/portal/frontend",
-                "/tests/integration",
-            ],
+            sorted(self.updates["npm"]["directories"]),
+            manifest_directories("package-lock.json"),
         )
         self.assertEqual(
             self.updates["docker"]["directories"],
@@ -98,16 +105,17 @@ class DependabotConfigTest(unittest.TestCase):
         jobs = workflow["jobs"]
         self.assertEqual(
             set(jobs["govulncheck"]["strategy"]["matrix"]["directory"]),
-            {".", "tests/integration/mock-github-server"},
+            {
+                "." if path == "/" else path.removeprefix("/")
+                for path in manifest_directories("go.mod")
+            },
         )
         npm_sets = jobs["npm-audit"]["strategy"]["matrix"]["include"]
         self.assertEqual(
             {item["directory"] for item in npm_sets},
             {
-                ".",
-                "frontend-modern",
-                "internal/cloudcp/portal/frontend",
-                "tests/integration",
+                "." if path == "/" else path.removeprefix("/")
+                for path in manifest_directories("package-lock.json")
             },
         )
         scan_steps = jobs["npm-audit"]["steps"]
