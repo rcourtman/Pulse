@@ -179,9 +179,7 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 // sessionIsOrgScoped reports whether the request is bound to a tenant
 // organization rather than the instance itself. Instance-admin rules must not
 // be applied to an org-scoped session: those callers are governed by their
-// organization's own management rules, and on a control plane configuring no
-// local admin they would otherwise inherit the SSO fallback in
-// sessionUserCarriesAdminPrivileges and each become an instance administrator.
+// organization's own management rules rather than global RBAC assignments.
 func sessionIsOrgScoped(req *http.Request) bool {
 	if req == nil {
 		return false
@@ -196,10 +194,10 @@ func sessionIsOrgScoped(req *http.Request) bool {
 
 // sessionUserCarriesAdminPrivileges reports whether a non-org-scoped session
 // username carries instance admin privileges: the configured local admin
-// identity, an RBAC assignment granting the admin action (how SSO group role
-// mappings make an SSO user an admin, #1533/#1535), or any SSO principal when
-// the instance has no local admin configured at all — the v5 OIDC-only
-// pattern, where SSO sessions are the only administrators the instance has.
+// identity or an RBAC assignment granting the admin action on all resources.
+// SSO authentication alone never grants instance administration; SSO-only
+// deployments must map a trusted identity-provider group to an administrator
+// role or retain a configured local administrator.
 func sessionUserCarriesAdminPrivileges(cfg *config.Config, sessionUser string) bool {
 	sessionUser = strings.TrimSpace(sessionUser)
 	if sessionUser == "" {
@@ -215,7 +213,7 @@ func sessionUserCarriesAdminPrivileges(cfg *config.Config, sessionUser string) b
 	if sessionUserHasRBACAdminGrant(sessionUser) {
 		return true
 	}
-	return configuredAdmin == "" && strings.HasPrefix(sessionUser, "sso:")
+	return false
 }
 
 // sessionUserHasRBACAdminGrant reports whether the user's effective RBAC

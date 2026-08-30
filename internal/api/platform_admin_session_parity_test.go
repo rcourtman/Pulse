@@ -54,11 +54,8 @@ func billingAdminCapability(t *testing.T, router *Router, user string) bool {
 	return caps["billingAdmin"] == true
 }
 
-// The billingAdmin capability is published from canAccessPlatformAdminSurface,
-// which treats any instance administrator as a platform admin. The route behind
-// it compared the session user against cfg.AuthUser alone, so on an instance
-// whose only administrators are SSO principals the UI offered the surface and
-// the route refused it.
+// The billingAdmin capability and its route share the explicit RBAC
+// administrator boundary on an SSO-only instance.
 func TestPlatformAdminRouteAgreesWithBillingAdminCapability(t *testing.T) {
 	prev := auth.GetAuthorizer()
 	auth.SetAuthorizer(&auth.DefaultAuthorizer{})
@@ -66,10 +63,14 @@ func TestPlatformAdminRouteAgreesWithBillingAdminCapability(t *testing.T) {
 
 	cfg := platformAdminConfig(t, "")
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	manager := installTestRBACManager(t)
 	ssoOwner := "sso:owner@example.com"
+	if err := manager.UpdateUserRoles(ssoOwner, []string{auth.RoleAdmin}); err != nil {
+		t.Fatalf("assign SSO administrator role: %v", err)
+	}
 
 	if !billingAdminCapability(t, router, ssoOwner) {
-		t.Fatal("precondition: billingAdmin must be advertised to the OIDC-only administrator")
+		t.Fatal("precondition: billingAdmin must be advertised to the explicit SSO administrator")
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/hosted/organizations", nil)
@@ -81,10 +82,8 @@ func TestPlatformAdminRouteAgreesWithBillingAdminCapability(t *testing.T) {
 	}
 }
 
-// An org-scoped tenant session is not an instance administrator, whatever its
-// username. Without this the SSO fallback in sessionUserCarriesAdminPrivileges
-// would make every tenant on a control plane with no local admin a platform
-// admin, which is a far worse failure than the one being fixed.
+// An org-scoped tenant session is not an instance administrator, even when the
+// same principal has a global RBAC administrator grant.
 func TestPlatformAdminRouteRefusesOrgScopedTenantSession(t *testing.T) {
 	prev := auth.GetAuthorizer()
 	auth.SetAuthorizer(&auth.DefaultAuthorizer{})
@@ -92,6 +91,10 @@ func TestPlatformAdminRouteRefusesOrgScopedTenantSession(t *testing.T) {
 
 	cfg := platformAdminConfig(t, "")
 	tenant := "sso:tenant@example.com"
+	manager := installTestRBACManager(t)
+	if err := manager.UpdateUserRoles(tenant, []string{auth.RoleAdmin}); err != nil {
+		t.Fatalf("assign SSO administrator role: %v", err)
+	}
 
 	handlerReached := false
 	guarded := RequirePlatformAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +115,8 @@ func TestPlatformAdminRouteRefusesOrgScopedTenantSession(t *testing.T) {
 		t.Fatalf("org-scoped tenant session reached the platform admin surface (code %d)", rec.Code)
 	}
 
-	// The same principal without an org binding is the instance administrator.
+	// The same explicitly authorized principal without an org binding is the
+	// instance administrator.
 	req2 := httptest.NewRequest(http.MethodGet, "/api/hosted/organizations", nil)
 	req2.AddCookie(platformAdminSession(t, tenant))
 	rec2 := httptest.NewRecorder()

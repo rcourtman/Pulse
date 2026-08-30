@@ -34,6 +34,14 @@ Restrict access to specific users or groups:
 - **Allowed Domains**: Restrict to specific email domains (e.g., `example.com`).
 - **Allowed Emails**: Allow specific email addresses.
 
+> **Administrator requirement**: SSO authentication does not grant instance
+> administrator privileges by itself. Before removing the configured local
+> administrator or relying on SSO-only access, map a trusted IdP group to the
+> built-in `admin` role. Keep that administrator group in **Allowed Groups** so
+> the login and authorization boundaries describe the same trusted population.
+> An empty **Allowed Groups** list allows every IdP user to sign in, but does not
+> make those users administrators.
+
 ### Group-to-Role Mapping
 
 Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles. Mapping groups to the built-in `admin`, `operator`, and `viewer` roles is included with Community SSO. Creating custom roles and manually managing user assignments remain Pro RBAC features.
@@ -62,6 +70,9 @@ See [CONFIGURATION.md](CONFIGURATION.md).
 - Multiple groups can map to multiple roles (user gets all matching roles).
 - Role assignments are updated on every login to reflect current group membership.
 - Role changes are logged to the audit log for compliance tracking.
+- Instance-administration routes require the built-in `admin` role or another
+  role with an explicit `admin` grant on all resources. The `operator` and
+  `viewer` mappings never inherit administrator access on SSO-only instances.
 
 **Example:**
 If a user has groups `["oidc-admins", "developers"]` and you have mappings:

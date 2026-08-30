@@ -231,7 +231,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Check domain restrictions
-	if len(provider.AllowedDomains) > 0 && result.Email != "" {
+	if len(provider.AllowedDomains) > 0 {
 		if !matchesDomain(result.Email, provider.AllowedDomains) {
 			log.Debug().
 				Str("email", result.Email).
@@ -244,7 +244,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Check email restrictions
-	if len(provider.AllowedEmails) > 0 && result.Email != "" {
+	if len(provider.AllowedEmails) > 0 {
 		if !matchesValue(result.Email, provider.AllowedEmails) {
 			log.Debug().
 				Str("email", result.Email).

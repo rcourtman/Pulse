@@ -2081,6 +2081,14 @@ corrupt or stale inputs must keep their source files, and non-default
 organization stores must never consume the default organization's legacy
 files.
 
+Configuration export and import are recovery-adjacent privileged operations.
+On an SSO-enabled instance, browser sessions must carry an effective RBAC
+`admin` grant on `*`; SSO authentication alone is never recovery authority when
+no local administrator is configured. Keep
+`TestConfigTransferSSOViewerDeniedBeforeBodyRead` proving that an unassigned or
+viewer SSO session is refused before an import body is read, and keep the
+canonical pre-handler authorization proof covering both transfer routes.
+
 1. Update this contract when canonical storage or recovery entry points move. Routes added under the shared `internal/api/` extension point that are clearly outside storage/recovery ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, the startup-seed dispatch in `NewAISettingsHandler`, and the cached-preflight integration into the Patrol `tools` readiness check — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem. Exact scoped-run identity resolution and structured `present`, `resolved`, or `uncertain` Patrol finding assessments on that shared boundary are also adjacent AI/API state. Storage and recovery may supply evidence or observe the resulting finding, but an assessment is not backup success, restore verification, recovery freshness, storage health, or permission to mutate a storage system.
    Content-free Pulse Intelligence telemetry rollups under shared
    `internal/api/` are also adjacent-only. Storage and recovery may consume

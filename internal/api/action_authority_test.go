@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,6 +110,60 @@ func TestExplicitActionAuthorizerCanGrantNonAdminBrowserSession(t *testing.T) {
 
 	if !called {
 		t.Fatalf("explicit action grant was denied: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestActionRoutesRequireExplicitSSOAdminOnSSOOnlyInstance(t *testing.T) {
+	previousAuthorizer := auth.GetAuthorizer()
+	auth.SetAuthorizer(&auth.DefaultAuthorizer{})
+	t.Cleanup(func() { auth.SetAuthorizer(previousAuthorizer) })
+
+	router := newConfigTransferTestRouter(t, false, enabledConfigTransferSSO(config.SSOProviderTypeOIDC))
+	manager := installTestRBACManager(t)
+	const ssoAdmin = "sso:action-admin@example.invalid"
+	if err := manager.UpdateUserRoles(ssoAdmin, []string{auth.RoleAdmin}); err != nil {
+		t.Fatalf("assign SSO administrator role: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		body string
+	}{
+		{name: "plan", path: "/api/actions/plan", body: `{}`},
+		{name: "decision", path: "/api/actions/missing/decision", body: `{"outcome":"approved"}`},
+		{name: "execute", path: "/api/actions/missing/execute", body: `{}`},
+	}
+
+	for _, user := range []struct {
+		name       string
+		principal  string
+		wantDenied bool
+	}{
+		{name: "unassigned viewer", principal: "sso:action-viewer@example.invalid", wantDenied: true},
+		{name: "explicit administrator", principal: ssoAdmin, wantDenied: false},
+	} {
+		t.Run(user.name, func(t *testing.T) {
+			sessionToken := "action-route-" + strings.ReplaceAll(user.name, " ", "-")
+			GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", user.principal)
+			csrf := generateCSRFToken(sessionToken)
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+					req.Header.Set("Content-Type", "application/json")
+					req.Header.Set("X-CSRF-Token", csrf)
+					req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+					rec := httptest.NewRecorder()
+					router.Handler().ServeHTTP(rec, req)
+					if user.wantDenied && rec.Code != http.StatusForbidden {
+						t.Fatalf("status=%d, want 403: %s", rec.Code, rec.Body.String())
+					}
+					if !user.wantDenied && rec.Code == http.StatusForbidden {
+						t.Fatalf("explicit SSO administrator was denied: %s", rec.Body.String())
+					}
+				})
+			}
+		})
 	}
 }
 

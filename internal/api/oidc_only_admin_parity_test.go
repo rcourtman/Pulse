@@ -54,19 +54,21 @@ func exportStatusFor(t *testing.T, router *Router, user string) int {
 	return rec.Code
 }
 
-// On the OIDC-only pattern there is no local admin, so SSO principals are the
-// instance's administrators and ensureAdminSession admits them. Several guards
-// compared the session user against cfg.AuthUser instead, which is empty here,
-// so they could admit nobody at all and locked the operator out of discovery,
-// public URL capture and their own config export.
-func TestOIDCOnlyAdminReachesEveryAdminGuard(t *testing.T) {
+// SSO-only deployments retain a usable administration path through an
+// explicit RBAC administrator grant. Authentication without that grant is not
+// instance administration.
+func TestSSOOnlyExplicitAdminReachesEveryAdminGuard(t *testing.T) {
 	prev := auth.GetAuthorizer()
 	auth.SetAuthorizer(&auth.DefaultAuthorizer{})
 	defer auth.SetAuthorizer(prev)
 
 	cfg := adminParityConfig(t, "")
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	manager := installTestRBACManager(t)
 	ssoAdmin := "sso:owner@example.com"
+	if err := manager.UpdateUserRoles(ssoAdmin, []string{auth.RoleAdmin}); err != nil {
+		t.Fatalf("assign SSO administrator role: %v", err)
+	}
 
 	if !sessionUserCarriesAdminPrivileges(cfg, ssoAdmin) {
 		t.Fatal("precondition: the canonical helper must treat this principal as an admin")
@@ -75,18 +77,36 @@ func TestOIDCOnlyAdminReachesEveryAdminGuard(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	req.AddCookie(adminParitySession(t, ssoAdmin))
 	if !canCapturePublicURL(cfg, req) {
-		t.Error("canCapturePublicURL refused the OIDC-only administrator")
+		t.Error("canCapturePublicURL refused the explicit SSO administrator")
 	}
 
 	h := &DiscoveryHandlers{config: cfg}
 	req2 := httptest.NewRequest(http.MethodGet, "/api/discovery/status", nil)
 	req2.AddCookie(adminParitySession(t, ssoAdmin))
 	if !h.isAdminRequest(req2) {
-		t.Error("discovery isAdminRequest refused the OIDC-only administrator")
+		t.Error("discovery isAdminRequest refused the explicit SSO administrator")
 	}
 
 	if code := exportStatusFor(t, router, ssoAdmin); code == http.StatusForbidden {
-		t.Error("config export refused the OIDC-only administrator")
+		t.Error("config export refused the explicitly authorized SSO administrator")
+	}
+
+	ssoViewer := "sso:viewer@example.com"
+	if sessionUserCarriesAdminPrivileges(cfg, ssoViewer) {
+		t.Fatal("unassigned SSO user inherited instance administration")
+	}
+	req3 := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req3.AddCookie(adminParitySession(t, ssoViewer))
+	if canCapturePublicURL(cfg, req3) {
+		t.Error("public URL capture admitted an unassigned SSO user")
+	}
+	req4 := httptest.NewRequest(http.MethodGet, "/api/discovery/status", nil)
+	req4.AddCookie(adminParitySession(t, ssoViewer))
+	if h.isAdminRequest(req4) {
+		t.Error("discovery admitted an unassigned SSO user")
+	}
+	if code := exportStatusFor(t, router, ssoViewer); code != http.StatusForbidden {
+		t.Errorf("config export for an unassigned SSO user = %d, want 403", code)
 	}
 }
 

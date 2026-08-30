@@ -235,8 +235,13 @@ func TestConfigTransferAuthorizedInstanceModesReachHandler(t *testing.T) {
 	for _, providerType := range []config.SSOProviderType{config.SSOProviderTypeOIDC, config.SSOProviderTypeSAML} {
 		t.Run("SSO session "+string(providerType), func(t *testing.T) {
 			router := newConfigTransferTestRouter(t, false, enabledConfigTransferSSO(providerType))
+			manager := installTestRBACManager(t)
+			const ssoAdmin = "sso:owner@example.invalid"
+			if err := manager.UpdateUserRoles(ssoAdmin, []string{internalauth.RoleAdmin}); err != nil {
+				t.Fatalf("assign SSO administrator role: %v", err)
+			}
 			sessionToken := "synthetic-sso-session-" + string(providerType)
-			GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "sso:owner@example.invalid")
+			GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", ssoAdmin)
 			csrf := generateCSRFToken(sessionToken)
 			for _, path := range []string{"/api/config/export", "/api/config/import"} {
 				body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
@@ -334,6 +339,33 @@ func TestConfigTransferTokenScopesAndOrganizationBinding(t *testing.T) {
 	boundRouter.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden || body.reads != 0 {
 		t.Fatalf("cross-organization token denial = status %d, reads %d", rec.Code, body.reads)
+	}
+}
+
+func TestConfigTransferSSOViewerDeniedBeforeBodyRead(t *testing.T) {
+	for _, providerType := range []config.SSOProviderType{config.SSOProviderTypeOIDC, config.SSOProviderTypeSAML} {
+		t.Run(string(providerType), func(t *testing.T) {
+			router := newConfigTransferTestRouter(t, false, enabledConfigTransferSSO(providerType))
+			installTestRBACManager(t)
+			sessionToken := "synthetic-sso-viewer-session-" + string(providerType)
+			GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "sso:viewer@example.invalid")
+			csrf := generateCSRFToken(sessionToken)
+
+			for _, path := range []string{"/api/config/export", "/api/config/import"} {
+				body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
+				req := httptest.NewRequest(http.MethodPost, path, body)
+				req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+				req.Header.Set("X-CSRF-Token", csrf)
+				rec := httptest.NewRecorder()
+				router.Handler().ServeHTTP(rec, req)
+				if rec.Code != http.StatusForbidden {
+					t.Errorf("%s SSO viewer = status %d, want 403: %s", path, rec.Code, rec.Body.String())
+				}
+				if body.reads != 0 {
+					t.Errorf("%s SSO viewer denial read body %d times", path, body.reads)
+				}
+			}
+		})
 	}
 }
 
@@ -445,8 +477,13 @@ func TestSecurityStatusMatchesConfigTransferPolicy(t *testing.T) {
 	t.Run("export override is ineffective with SSO", func(t *testing.T) {
 		t.Setenv("ALLOW_UNPROTECTED_EXPORT", "true")
 		router := newConfigTransferTestRouter(t, false, enabledConfigTransferSSO(config.SSOProviderTypeOIDC))
+		manager := installTestRBACManager(t)
+		const ssoAdmin = "sso:owner@example.invalid"
+		if err := manager.UpdateUserRoles(ssoAdmin, []string{internalauth.RoleAdmin}); err != nil {
+			t.Fatalf("assign SSO administrator role: %v", err)
+		}
 		sessionToken := "synthetic-security-status-session"
-		GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "sso:owner@example.invalid")
+		GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", ssoAdmin)
 		req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 		req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
 		rec := httptest.NewRecorder()

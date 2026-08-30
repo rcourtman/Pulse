@@ -127,6 +127,7 @@ stable. Keep v5.1.35 as the explicit rollback target for the v6.0.0 cutover.
 - Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
 - Open **Settings → System → Updates** and review the upgrade checks on the update plan. Pulse checks the server update path, current agent continuity, and agent reporting token scope before you install. These checks describe the currently reported fleet; they do not prove every installed agent is online or already updated.
 - Confirm you can access the host/container console (for rollback and bootstrap token retrieval)
+- If the instance uses SSO without a configured local administrator, map a trusted IdP group to the built-in `admin` role before upgrading. SSO authentication alone does not grant instance-administrator access; an unmapped, `operator`, or `viewer` SSO session cannot manage settings, transfer configuration, or control infrastructure actions.
 - If you have any external integrations or scripts: review the **API Changes** section below
 
 ## Upgrade Paths

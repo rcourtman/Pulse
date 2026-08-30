@@ -166,26 +166,44 @@ func TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC(t *testing.T) {
 	}
 }
 
-// On the OIDC-only pattern there is no local admin, so SSO principals are the
-// instance's administrators. They must keep the tabs, and the routes agree.
-func TestSettingsCapabilitiesGrantSSOAdminWhenNoLocalAdminConfigured(t *testing.T) {
+// An SSO-only deployment advertises admin settings only to a principal with
+// an explicit RBAC administrator grant.
+func TestSettingsCapabilitiesRequireExplicitSSOAdminWhenNoLocalAdminConfigured(t *testing.T) {
 	prevAuthorizer := auth.GetAuthorizer()
 	auth.SetAuthorizer(&auth.DefaultAuthorizer{})
 	defer auth.SetAuthorizer(prevAuthorizer)
 
 	cfg := newCapabilityConfig(t, "")
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	manager := installTestRBACManager(t)
+	const ssoAdmin = "sso:owner@example.com"
+	if err := manager.UpdateUserRoles(ssoAdmin, []string{auth.RoleAdmin}); err != nil {
+		t.Fatalf("assign SSO administrator role: %v", err)
+	}
 
-	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, "sso:owner@example.com"))
+	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, ssoAdmin))
 	if caps["apiAccessRead"] != true {
-		t.Fatalf("apiAccessRead = %v on an OIDC-only instance, want true", caps["apiAccessRead"])
+		t.Fatalf("apiAccessRead = %v for explicit SSO administrator, want true", caps["apiAccessRead"])
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/tokens", nil)
-	req.AddCookie(capabilitySessionCookie(t, "sso:owner@example.com"))
+	req.AddCookie(capabilitySessionCookie(t, ssoAdmin))
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code == http.StatusForbidden {
-		t.Fatal("OIDC-only instance must not refuse its own SSO administrator")
+		t.Fatal("SSO-only instance refused its explicit SSO administrator")
+	}
+
+	const ssoViewer = "sso:viewer@example.com"
+	viewerCaps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, ssoViewer))
+	if viewerCaps["apiAccessRead"] == true {
+		t.Fatal("unassigned SSO user was advertised API access administration")
+	}
+	viewerReq := httptest.NewRequest(http.MethodGet, "/api/security/tokens", nil)
+	viewerReq.AddCookie(capabilitySessionCookie(t, ssoViewer))
+	viewerRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(viewerRec, viewerReq)
+	if viewerRec.Code != http.StatusForbidden {
+		t.Fatalf("unassigned SSO user status = %d, want 403", viewerRec.Code)
 	}
 }

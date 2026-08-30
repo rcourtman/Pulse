@@ -4308,19 +4308,22 @@ auto-register mutation boundary.
     RBAC licence allows everything, while `ensureSettingsScope` refused the
     request (`28fd2d1c1`). `canCapturePublicURL`, `discovery.isAdminRequest` and
     the config export and import guards compared the session user against
-    `cfg.AuthUser` directly, which is empty on an instance whose only
-    administrators are SSO principals, so they refused callers the settings
-    routes admitted (`7d066f1d5`). `RequirePlatformAdmin` did the same against
-    the `billingAdmin` capability (`563a3aa06`).
+    `cfg.AuthUser` directly, which cannot recognize an SSO principal carrying
+    an explicit RBAC administrator grant (`7d066f1d5`).
+    `RequirePlatformAdmin` did the same against the `billingAdmin` capability
+    (`563a3aa06`).
 
     Therefore: a session admin decision is `sessionUserCarriesAdminPrivileges`,
     reached through `ensureAdminSession` or `snapshot.sessionIsAdmin` rather
-    than re-derived. A caller bound to a tenant organization is never an
-    instance administrator regardless of username, tested with
-    `sessionIsOrgScoped`, because that helper's SSO fallback is correct for a
-    single-tenant instance and would hand every tenant platform admin on a
-    control plane configuring no local admin. Authorizer output alone cannot
-    establish a capability while `DefaultAuthorizer` allows every action.
+    than re-derived. That decision accepts only the configured local
+    administrator identity or an effective RBAC allow for `admin` on `*`.
+    SSO authentication, an `sso:` principal prefix, and the absence of a local
+    administrator are never authorization. SSO-only deployments retain their
+    administration path by mapping a trusted IdP group to an administrator
+    role. A caller bound to a tenant organization is never an instance
+    administrator regardless of username, tested with `sessionIsOrgScoped`.
+    Authorizer output alone cannot establish a capability while
+    `DefaultAuthorizer` allows every action.
 
     New capability fields must state which route they describe and be exercised
     against it in both directions, since a source read cannot establish what a
@@ -4328,12 +4331,23 @@ auto-register mutation boundary.
     handler. Regression coverage:
     `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` in
     `internal/api/security_status_capability_enforcement_test.go`,
-    `TestOIDCOnlyAdminReachesEveryAdminGuard` and
+    `TestSettingsCapabilitiesRequireExplicitSSOAdminWhenNoLocalAdminConfigured`
+    in `internal/api/security_status_capability_enforcement_test.go`,
+    `TestSSOOnlyExplicitAdminReachesEveryAdminGuard` and
     `TestUnrelatedSSOUserStillRefusedWhenLocalAdminConfigured` in
     `internal/api/oidc_only_admin_parity_test.go`, and
     `TestPlatformAdminRouteAgreesWithBillingAdminCapability` and
     `TestPlatformAdminRouteRefusesOrgScopedTenantSession` in
-    `internal/api/platform_admin_session_parity_test.go`.
+    `internal/api/platform_admin_session_parity_test.go`. Configuration
+    transfer and infrastructure-action routes must prove the same boundary with
+    `TestConfigTransferSSOViewerDeniedBeforeBodyRead` and
+    `TestActionRoutesRequireExplicitSSOAdminOnSSOOnlyInstance`.
+
+36. Configured SSO admission restrictions fail closed on missing identity
+    claims. OIDC and SAML providers with `allowedEmails` or `allowedDomains`
+    must reject an assertion that omits the email claim; absence is not a way
+    around an allowlist. Group restrictions remain independently mandatory
+    when configured.
 
 ## Current State
 

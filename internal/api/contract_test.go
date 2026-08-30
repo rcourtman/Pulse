@@ -229,6 +229,47 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 	}
 }
 
+func TestContract_SSOAuthenticationNeverImpliesInstanceAdmin(t *testing.T) {
+	adminSource, err := os.ReadFile(filepath.Clean("security_setup_fix.go"))
+	if err != nil {
+		t.Fatalf("read canonical session administrator authority: %v", err)
+	}
+	adminAuthority := string(adminSource)
+	for _, invariant := range []string{
+		"if sessionUserHasRBACAdminGrant(sessionUser)",
+		"return false",
+	} {
+		if !strings.Contains(adminAuthority, invariant) {
+			t.Fatalf("canonical session administrator authority missing %q", invariant)
+		}
+	}
+	if strings.Contains(adminAuthority, `strings.HasPrefix(sessionUser, "sso:")`) {
+		t.Fatal("SSO identity prefix must not imply instance administrator authority")
+	}
+
+	samlSource, err := os.ReadFile(filepath.Clean("saml_handlers.go"))
+	if err != nil {
+		t.Fatalf("read SAML authentication authority: %v", err)
+	}
+	samlAuthority := string(samlSource)
+	for _, invariant := range []string{
+		"if len(provider.AllowedDomains) > 0 {",
+		"if len(provider.AllowedEmails) > 0 {",
+	} {
+		if !strings.Contains(samlAuthority, invariant) {
+			t.Fatalf("SAML authentication authority missing fail-closed allowlist check %q", invariant)
+		}
+	}
+	for _, forbidden := range []string{
+		`len(provider.AllowedDomains) > 0 && result.Email != ""`,
+		`len(provider.AllowedEmails) > 0 && result.Email != ""`,
+	} {
+		if strings.Contains(samlAuthority, forbidden) {
+			t.Fatalf("SAML allowlist must not be bypassed when the email claim is absent: found %q", forbidden)
+		}
+	}
+}
+
 type basicActionContractAuthorizer struct {
 	wantUser string
 }

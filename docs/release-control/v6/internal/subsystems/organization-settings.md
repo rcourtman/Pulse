@@ -144,7 +144,16 @@ create, review, and approve cross-organization shares.
     rows, disable mutations, retain a visible retry notice, and do not render
     the normal empty state until a healthy response has been received.
 
-11. A rejected legacy RBAC import must not destroy the store. The import is
+11. Keep the canonical and shipped RBAC guides explicit that SSO
+    authentication is identity, not instance-administrator authority. An
+    SSO-only deployment must map a trusted IdP group to the built-in `admin`
+    role (or retain a configured local administrator); `operator`, `viewer`,
+    and unassigned sessions remain non-administrative even when no local
+    administrator exists. Preserve this boundary in
+    `frontend-modern/src/utils/__tests__/docsLinks.test.ts` together with exact
+    canonical/public guide parity.
+
+12. A rejected legacy RBAC import must not destroy the store. The import is
     transactional and leaves the legacy files in place, so a failure leaves the
     database un-migrated rather than half-migrated, which denies access rather
     than granting it. Failing manager construction instead takes the whole org's

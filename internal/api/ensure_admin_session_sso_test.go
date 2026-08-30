@@ -10,6 +10,18 @@ import (
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
+func installTestRBACManager(t *testing.T) internalauth.Manager {
+	t.Helper()
+	manager, err := internalauth.NewFileManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("new file manager: %v", err)
+	}
+	original := internalauth.GetManager()
+	internalauth.SetManager(manager)
+	t.Cleanup(func() { internalauth.SetManager(original) })
+	return manager
+}
+
 // The privileged-session gate only recognised cfg.AuthUser, so SSO users —
 // keyed by their provider-scoped principal — could never reach settings-scoped
 // routes, even with an admin group role mapping (#1533, #1535).
@@ -17,13 +29,7 @@ func TestEnsureAdminSessionSSOUsers(t *testing.T) {
 	dir := t.TempDir()
 	InitSessionStore(dir)
 
-	manager, err := internalauth.NewFileManager(t.TempDir())
-	if err != nil {
-		t.Fatalf("new file manager: %v", err)
-	}
-	origManager := internalauth.GetManager()
-	internalauth.SetManager(manager)
-	t.Cleanup(func() { internalauth.SetManager(origManager) })
+	manager := installTestRBACManager(t)
 
 	newSessionRequest := func(t *testing.T, username string) *http.Request {
 		t.Helper()
@@ -57,7 +63,8 @@ func TestEnsureAdminSessionSSOUsers(t *testing.T) {
 		{name: "sso user with admin role passes", cfg: cfgWithAdmin, user: ssoAdmin, want: true},
 		{name: "sso user without roles is rejected when local admin exists", cfg: cfgWithAdmin, user: ssoPlain, want: false},
 		{name: "local non-admin user is rejected", cfg: cfgWithAdmin, user: "mallory", want: false},
-		{name: "sso user passes on an instance with no local admin", cfg: cfgNoAdmin, user: ssoPlain, want: true},
+		{name: "sso admin role passes on an instance with no local admin", cfg: cfgNoAdmin, user: ssoAdmin, want: true},
+		{name: "sso user without roles is rejected when no local admin exists", cfg: cfgNoAdmin, user: ssoPlain, want: false},
 		{name: "non-sso session is rejected when no local admin configured", cfg: cfgNoAdmin, user: "mallory", want: false},
 	}
 
@@ -77,13 +84,7 @@ func TestEnsureAdminSessionSSOUsers(t *testing.T) {
 }
 
 func TestSessionUserHasRBACAdminGrant(t *testing.T) {
-	manager, err := internalauth.NewFileManager(t.TempDir())
-	if err != nil {
-		t.Fatalf("new file manager: %v", err)
-	}
-	origManager := internalauth.GetManager()
-	internalauth.SetManager(manager)
-	t.Cleanup(func() { internalauth.SetManager(origManager) })
+	manager := installTestRBACManager(t)
 
 	if err := manager.UpdateUserRoles("adm", []string{internalauth.RoleAdmin}); err != nil {
 		t.Fatalf("assign admin: %v", err)

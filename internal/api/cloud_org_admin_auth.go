@@ -16,13 +16,11 @@ import (
 // - Dev bypass
 //
 // Session/OIDC are allowed only for an instance administrator, which is the
-// configured platform admin user, a holder of an RBAC admin grant, or an SSO
-// principal on an instance that configures no local admin at all. That is the
-// same rule canAccessPlatformAdminSurface uses to publish the billingAdmin
-// capability, so the surface the UI offers and the routes behind it agree.
-// An org-scoped tenant session is never a platform admin whatever its username,
-// which is what keeps a tenant on a control plane with no local admin from
-// inheriting the OIDC-only fallback.
+// configured platform admin user or a holder of an explicit RBAC admin grant.
+// That is the same rule canAccessPlatformAdminSurface uses to publish the
+// billingAdmin capability, so the surface the UI offers and the routes behind
+// it agree. An org-scoped tenant session is never a platform admin whatever its
+// username.
 // API tokens are denied to prevent tenant users from invoking hosted
 // control-plane operations with bearer credentials.
 func RequirePlatformAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {

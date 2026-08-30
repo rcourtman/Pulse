@@ -172,6 +172,13 @@ describe('docsLinks', () => {
     expect(compactGuide).toContain(
       'Creating custom roles and manually managing user assignments require Pro RBAC',
     );
+    expect(compactGuide).toContain('SSO authentication is not an administrator grant');
+    expect(compactGuide).toContain(
+      'map at least one trusted IdP group to the built-in `admin` role',
+    );
+    expect(compactGuide).toContain(
+      'never elevates that user merely because no local administrator is configured',
+    );
   });
 
   it('ships the configuration transfer authorization contract', () => {

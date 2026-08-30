@@ -27,6 +27,12 @@ Users can hold multiple roles. Their effective permissions are combined across a
 
 When using OIDC/SSO, built-in roles can be automatically assigned based on group membership on every plan. See [OIDC Group-to-Role Mapping](OIDC.md#group-to-role-mapping) for configuration. Creating custom roles and manually managing user assignments require Pro RBAC.
 
+SSO authentication is not an administrator grant. An SSO-only deployment must
+map at least one trusted IdP group to the built-in `admin` role (or retain a
+configured local administrator) before operators can use instance-administration
+routes. Mapping a user to `operator`, `viewer`, or no role never elevates that
+user merely because no local administrator is configured.
+
 ---
 
 ## Quick Start
