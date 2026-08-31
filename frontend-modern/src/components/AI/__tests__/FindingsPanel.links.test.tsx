@@ -565,13 +565,13 @@ describe('FindingsPanel resource links', () => {
     expectCollapsedFinding('Provider connection issue');
   });
 
-  it('opens durable finding outcomes directly from an active Patrol row', async () => {
+  it('toggles durable finding outcomes directly from an active Patrol row', async () => {
     render(() => <FindingsPanel findingsSource="patrol" />);
 
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     const options = screen.getByRole('button', {
-      name: 'Open resolve and dismiss options for Provider connection issue',
+      name: 'Finding options for Provider connection issue',
     });
     expect(options).toHaveAttribute('aria-expanded', 'false');
 
@@ -584,6 +584,13 @@ describe('FindingsPanel resource links', () => {
     expect(screen.getByRole('button', { name: 'Dismiss: Later' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create rule from this' })).toBeInTheDocument();
 
+    fireEvent.click(options);
+    expect(options).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.queryByRole('complementary', { name: 'Review Provider connection issue' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(options);
     fireEvent.click(
       screen.getByRole('button', { name: 'Close review panel for Provider connection issue' }),
     );

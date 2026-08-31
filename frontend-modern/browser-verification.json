@@ -1,34 +1,37 @@
 {
   "version": 1,
-  "base_sha": "1e8d4ea92b2d721b6148a2f07f876f4264ea70d5",
-  "verified_at": "2026-08-31T20:31:17Z",
+  "base_sha": "57598cbf3ef8eae78cb7a1c71631d0bf04a130f9",
+  "verified_at": "2026-08-31T21:19:58Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Toast/Toast.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/Toast/Toast.tsx": "8dbabcd3c92884b8edb9320b465b48d7256bffa7bbb30bee2b275d5b023d1ecb"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "18c7fbdd3a27b634675cfc039f7bfaec43015f5d8ec9d6a15d92ad1f93d4a5f7"
   },
-  "routes": ["/"],
+  "routes": [
+    "/patrol"
+  ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 320,
-      "height": 720
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "expanded error detail remained fully visible inside a 296px-wide narrow notification card",
-    "pointer hover kept a timed informational notification visible past its original deadline",
-    "keyboard focus kept a timed error notification visible past its original deadline",
-    "desktop success notification settled at the 500px width cap with its right viewport inset"
+    "active Patrol finding options collapsed with aria-expanded false",
+    "active Patrol finding outcome review expanded with Resolve or dismiss controls visible",
+    "same finding options collapsed again with its review panel removed",
+    "desktop and narrow layouts remained readable and fit without horizontal overflow"
   ],
   "interactions": [
-    "opened expandable error details and visually inspected wrapping at 320px",
-    "dismissed an expanded notification with its named close action",
-    "hovered a timed notification, moved away, and observed dismissal continue from remaining time",
-    "focused a timed notification action, moved focus away, and observed dismissal continue from remaining time",
-    "resized current-build Chromium from 320x720 to 1280x800 and measured notification geometry"
+    "opened and closed one finding options disclosure by pointer at desktop width",
+    "opened the same disclosure with keyboard Enter and closed it with Space at narrow width",
+    "verified the visible Finding options label is included in the accessible name",
+    "verified aria-expanded and aria-controls matched the rendered disclosure state"
   ]
 }

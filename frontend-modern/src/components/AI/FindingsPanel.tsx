@@ -989,8 +989,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       props.onFindingClick?.(finding);
     };
 
-    const openFindingOptions = (event: MouseEvent) => {
+    const toggleFindingOptions = (event: MouseEvent) => {
       event.stopPropagation();
+      if (expandedId() === finding.id && manageOpenId() === finding.id) {
+        setExpandedId(null);
+        setManageOpenId(null);
+        return;
+      }
       setExpandedId(finding.id);
       setManageOpenId(finding.id);
       props.onFindingClick?.(finding);
@@ -1347,10 +1352,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             >
               <button
                 type="button"
-                aria-label={`Open resolve and dismiss options for ${title.label}`}
+                aria-label={`Finding options for ${title.label}`}
                 aria-expanded={manageOpenId() === finding.id}
                 aria-controls={`finding-${finding.id}-manage`}
-                onClick={openFindingOptions}
+                onClick={toggleFindingOptions}
                 class="inline-flex min-h-11 items-center rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0"
                 title="Resolve, dismiss, remember as expected, or create a rule"
               >
