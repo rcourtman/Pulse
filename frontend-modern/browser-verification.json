@@ -1,20 +1,17 @@
 {
   "version": 1,
-  "base_sha": "70c1d0a178f5c093a74c99000dc18e91d11e301f",
-  "verified_at": "2026-08-31T10:34:29Z",
+  "base_sha": "8f877bee14263289e6f18b501221f579214b89f9",
+  "verified_at": "2026-08-31T16:50:09Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
-    "frontend-modern/src/content/help/updates.ts",
-    "frontend-modern/src/utils/updatesPresentation.ts"
+    "frontend-modern/src/components/shared/TagBadges.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "c574825033e3a90459b7acadd4bff81b109dfbdfa1e4e83ba58dc6a138471d06",
-    "frontend-modern/src/content/help/updates.ts": "c08f943d9f8db7b33d6f6ab5212d6d2dbe29eda07d07b4f2749426f3b03d6fb3",
-    "frontend-modern/src/utils/updatesPresentation.ts": "13a9254170cde398994443de7f1555e7120d4e5a1151ff76174b80d66a729f8c"
+    "frontend-modern/src/components/shared/TagBadges.tsx": "ce3f8112a72a8f1c772f3cf78ebb21e7de0abf858df6b7a922762c49f6933f53"
   },
   "routes": [
-    "/settings/system-updates"
+    "/proxmox?cols=name:280,tags:160",
+    "/proxmox"
   ],
   "viewports": [
     {
@@ -27,17 +24,19 @@
     }
   ],
   "states": [
-    "Stable selected with production-ready guidance and automatic stable updates available",
-    "Preview selected with beta-versus-release-candidate guidance and manual-channel notice",
-    "Preview selected with automatic stable updates disabled and the reason visible",
-    "saved Preview selection retained after a full browser reload",
-    "Stable and Preview cards, guidance, and update history visible at desktop and phone widths"
+    "unselected workload tag filters rendered as named native buttons",
+    "focused tag tooltip visible with a visible focus ring and no clipping",
+    "tag filter selected and then cleared through keyboard activation",
+    "tooltip dismissed by pointer leave and Escape while focus remained on the tag button",
+    "multiple adjacent tag targets remained compact at 20px with 4px spacing",
+    "390px responsive workload layout omitted wide-only tag controls and remained within the viewport"
   ],
   "interactions": [
-    "navigated from Settings to Pulse server updates",
-    "changed the release channel from Stable to Preview and saved it",
-    "reloaded the page and confirmed the saved Preview selection persisted",
-    "changed back to Stable and confirmed the stable controls and copy returned",
-    "verified the complete update-channel surface at desktop and 390px phone widths"
+    "opened the Proxmox workload table with a supported shareable Name-and-Tags column layout",
+    "hovered and left a tag target to show and dismiss its tooltip",
+    "focused a tag target, dismissed its tooltip with Escape, and confirmed focus remained",
+    "pressed Enter twice to select and clear the same tag filter through aria-pressed state",
+    "inspected tag target geometry and tooltip placement in current-build Chromium",
+    "inspected the responsive Proxmox workload table at 390px and confirmed the existing wide-only tag omission without clipping"
   ]
 }

@@ -3837,6 +3837,17 @@ That same owner now also holds the CSP-safe tag-dot rendering contract: tag
 color and active-state emphasis must travel through SVG fill/stroke attributes
 or stable classes, not inline `background-color`, `box-shadow`, or other
 `style=` mutations that break the hosted demo CSP.
+The shared tag owner also carries the complete accessibility contract for
+compact tag disclosure. Every rendered tag must expose its name without
+depending on pointer hover. Callers that provide filtering behavior must get
+named native toggle buttons with current selection represented by
+`aria-pressed`; informational tags and collapsed tag counts must remain
+keyboard focusable so the same tooltip content is available on focus. Pointer
+leave, blur, and Escape must dismiss those tooltips, focus must remain visibly
+identifiable, and the compact dot presentation must use spaced 20px targets
+rather than restoring an 8px click-only hit area. Feature rows and detail
+surfaces must extend these shared semantics instead of wrapping tag dots in
+feature-local click or tooltip handlers.
 TagBadges also owns Proxmox tag color fidelity. When a caller supplies a
 source instance, the primitive must read that instance's `pveTagStyles` entry
 before the legacy aggregate `pveTagColors` map, and it must honor the Proxmox

@@ -261,6 +261,19 @@ describe('TagBadges', () => {
   });
 
   describe('click interaction', () => {
+    it('renders clickable tags as named native toggle buttons', () => {
+      render(() => <TagBadges tags={['web', 'db']} activeSearch="tags:web" onTagClick={vi.fn()} />);
+
+      const activeTag = screen.getByRole('button', { name: 'Filter by tag web' });
+      const inactiveTag = screen.getByRole('button', { name: 'Filter by tag db' });
+
+      expect(activeTag).toHaveAttribute('type', 'button');
+      expect(activeTag).toHaveAttribute('aria-pressed', 'true');
+      expect(inactiveTag).toHaveAttribute('aria-pressed', 'false');
+      expect(activeTag).toHaveClass('h-5', 'w-5');
+      expect(activeTag.parentElement).toHaveClass('gap-1');
+    });
+
     it('calls onTagClick with the tag name when a dot is clicked', () => {
       const onTagClick = vi.fn();
       render(() => <TagBadges tags={['web', 'db']} onTagClick={onTagClick} />);
@@ -298,6 +311,14 @@ describe('TagBadges', () => {
       const dot = getTagDots()[0] as HTMLElement;
       expect(() => fireEvent.click(dot.parentElement!)).not.toThrow();
     });
+
+    it('exposes non-clickable tags as named, focusable images instead of inert color dots', () => {
+      render(() => <TagBadges tags={['web']} />);
+
+      const tag = screen.getByRole('img', { name: 'Tag: web' });
+      expect(tag).toHaveAttribute('tabindex', '0');
+      expect(tag).toHaveAttribute('title', 'web');
+    });
   });
 
   describe('tooltip behavior', () => {
@@ -319,6 +340,22 @@ describe('TagBadges', () => {
       expect(hideTooltipMock).toHaveBeenCalledTimes(1);
     });
 
+    it('shows and hides a clickable tag tooltip through keyboard focus', () => {
+      render(() => <TagBadges tags={['web']} onTagClick={vi.fn()} />);
+      const tag = screen.getByRole('button', { name: 'Filter by tag web' });
+
+      fireEvent.focus(tag);
+      expect(showTooltipMock).toHaveBeenCalledWith('web', expect.any(Number), expect.any(Number), {
+        align: 'center',
+        direction: 'up',
+      });
+
+      fireEvent.keyDown(tag, { key: 'Escape' });
+      expect(hideTooltipMock).toHaveBeenCalledTimes(1);
+      fireEvent.blur(tag);
+      expect(hideTooltipMock).toHaveBeenCalledTimes(2);
+    });
+
     it('shows tooltip with joined hidden tags on +X hover', () => {
       render(() => <TagBadges tags={['a', 'b', 'c', 'd', 'e']} />);
       const overflowIndicator = screen.getByText('+2');
@@ -335,6 +372,19 @@ describe('TagBadges', () => {
       const overflowIndicator = screen.getByText('+2');
       fireEvent.mouseLeave(overflowIndicator.parentElement!);
       expect(hideTooltipMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('names the overflow disclosure and reveals its tags on focus', () => {
+      render(() => <TagBadges tags={['a', 'b', 'c', 'd', 'e']} />);
+      const overflow = screen.getByRole('img', { name: '2 more tags: d, e' });
+
+      expect(overflow).toHaveAttribute('tabindex', '0');
+      fireEvent.focus(overflow);
+      expect(showTooltipMock).toHaveBeenCalledWith('d\ne', expect.any(Number), expect.any(Number), {
+        align: 'center',
+        direction: 'up',
+        maxWidth: 260,
+      });
     });
   });
 
