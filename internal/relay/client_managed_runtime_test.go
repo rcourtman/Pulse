@@ -222,16 +222,17 @@ func managedRelayWorkspaceRoots(t *testing.T) (string, string) {
 		t.Fatal("resolve runtime caller for managed relay test")
 	}
 	pulseRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	pulseProRoot := os.Getenv("PULSE_REPO_ROOT_PULSE_PRO")
-	if pulseProRoot == "" {
+	pulseProRoot := strings.TrimSpace(os.Getenv("PULSE_REPO_ROOT_PULSE_PRO"))
+	hasExplicitPulseProRoot := pulseProRoot != ""
+	if !hasExplicitPulseProRoot {
 		pulseProRoot = filepath.Join(filepath.Dir(pulseRoot), "pulse-pro")
 	}
 	pulseProRelayDir := filepath.Join(pulseProRoot, "relay-server")
 	if _, err := os.Stat(filepath.Join(pulseProRelayDir, "main.go")); err != nil {
-		if os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("PULSE_REPO_ROOT_PULSE_PRO") == "" {
-			t.Skipf("managed relay runtime proof requires sibling pulse-pro relay-server; skipping in GitHub Actions without PULSE_REPO_ROOT_PULSE_PRO override: %v", err)
+		if hasExplicitPulseProRoot {
+			t.Fatalf("managed relay runtime proof was explicitly configured with PULSE_REPO_ROOT_PULSE_PRO=%s, but relay-server is unavailable: %v", pulseProRoot, err)
 		}
-		t.Fatalf("managed relay runtime proof requires sibling pulse-pro relay-server at %s: %v", pulseProRelayDir, err)
+		t.Skipf("managed relay runtime proof requires sibling pulse-pro relay-server; skipping single-repository checkout (set PULSE_REPO_ROOT_PULSE_PRO to enforce): %v", err)
 	}
 	return pulseRoot, pulseProRelayDir
 }

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -200,16 +201,17 @@ func managedLicenseServerDir(t *testing.T) string {
 		t.Fatal("resolve caller for managed license server test")
 	}
 	pulseRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	pulseProRoot := os.Getenv("PULSE_REPO_ROOT_PULSE_PRO")
-	if pulseProRoot == "" {
+	pulseProRoot := strings.TrimSpace(os.Getenv("PULSE_REPO_ROOT_PULSE_PRO"))
+	hasExplicitPulseProRoot := pulseProRoot != ""
+	if !hasExplicitPulseProRoot {
 		pulseProRoot = filepath.Join(filepath.Dir(pulseRoot), "pulse-pro")
 	}
 	licenseServerDir := filepath.Join(pulseProRoot, "license-server")
 	if _, err := os.Stat(filepath.Join(licenseServerDir, "main.go")); err != nil {
-		if os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("PULSE_REPO_ROOT_PULSE_PRO") == "" {
-			t.Skipf("managed license-server proof requires sibling pulse-pro license-server; skipping in GitHub Actions without PULSE_REPO_ROOT_PULSE_PRO override: %v", err)
+		if hasExplicitPulseProRoot {
+			t.Fatalf("managed license-server proof was explicitly configured with PULSE_REPO_ROOT_PULSE_PRO=%s, but license-server is unavailable: %v", pulseProRoot, err)
 		}
-		t.Fatalf("managed license-server proof requires sibling pulse-pro license-server at %s: %v", licenseServerDir, err)
+		t.Skipf("managed license-server proof requires sibling pulse-pro license-server; skipping single-repository checkout (set PULSE_REPO_ROOT_PULSE_PRO to enforce): %v", err)
 	}
 	return licenseServerDir
 }
