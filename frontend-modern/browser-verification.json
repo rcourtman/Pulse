@@ -1,27 +1,25 @@
 {
   "version": 1,
-  "base_sha": "bad717f16eb7620dfd9c9f3f135be95f9a2f9642",
-  "verified_at": "2026-08-31T05:57:10Z",
+  "base_sha": "70c1d0a178f5c093a74c99000dc18e91d11e301f",
+  "verified_at": "2026-08-31T10:34:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
-    "frontend-modern/src/types/api.ts"
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
+    "frontend-modern/src/content/help/updates.ts",
+    "frontend-modern/src/utils/updatesPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "ba9e8a4eb3588bc7486d58f98342e9f5bf53a3f8f8247cb4c5597ebce31b41e5",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "83fb8ae7e26900368b8413bcf771b2b44d3dc32134996db2ebe058378468521a",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "254da9ce1fe77adf5c28d9c6f690cc0940d1236337e5d2f24acf810f07108eea",
-    "frontend-modern/src/types/api.ts": "e69bd7171e43f92d75e844cd138fbd2f7a11b24dea2cb3a118dfdfffa505fba1"
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "c574825033e3a90459b7acadd4bff81b109dfbdfa1e4e83ba58dc6a138471d06",
+    "frontend-modern/src/content/help/updates.ts": "c08f943d9f8db7b33d6f6ab5212d6d2dbe29eda07d07b4f2749426f3b03d6fb3",
+    "frontend-modern/src/utils/updatesPresentation.ts": "13a9254170cde398994443de7f1555e7120d4e5a1151ff76174b80d66a729f8c"
   },
   "routes": [
-    "/proxmox/backups/date"
+    "/settings/system-updates"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 1000
+      "height": 900
     },
     {
       "width": 390,
@@ -29,16 +27,17 @@
     }
   ],
   "states": [
-    "incomplete PBS snapshot with authoritative active writer rendered Running",
-    "terminally incomplete PBS snapshot with authoritative no-writer observation rendered Failed in danger tone",
-    "completed PBS snapshots retained Verified state below incomplete artifacts",
-    "failed/incomplete search result and restored unfiltered Running plus Failed results",
-    "full desktop and compact narrow recovery-table layouts with complete unclipped state badges"
+    "Stable selected with production-ready guidance and automatic stable updates available",
+    "Preview selected with beta-versus-release-candidate guidance and manual-channel notice",
+    "Preview selected with automatic stable updates disabled and the reason visible",
+    "saved Preview selection retained after a full browser reload",
+    "Stable and Preview cards, guidance, and update history visible at desktop and phone widths"
   ],
   "interactions": [
-    "signed in to the final production build and navigated to the Proxmox By date backups route",
-    "scrolled the terminally incomplete artifact into view and inspected its Failed badge placement and clipping",
-    "entered failed incomplete in the backup search with the keyboard and verified only the failed artifact remained",
-    "selected and cleared the search with the keyboard and verified Running and Failed artifacts both returned"
+    "navigated from Settings to Pulse server updates",
+    "changed the release channel from Stable to Preview and saved it",
+    "reloaded the page and confirmed the saved Preview selection persisted",
+    "changed back to Stable and confirmed the stable controls and copy returned",
+    "verified the complete update-channel surface at desktop and 390px phone widths"
   ]
 }

@@ -29,20 +29,24 @@ The next-candidate release notes and changelog must also describe newly stable
 integration fields when external receivers need them to consume the release;
 packet proof keeps the customer-facing summary and detailed changelog aligned.
 
-A published release candidate is a cohort checkpoint rather than a delivery
-vehicle for each individual fix. After the first RC on a version line, public
-RC publications on that line are separated by at least 24 hours of observation.
+A published alpha, beta, or RC is a cohort checkpoint rather than a delivery
+vehicle for each individual fix. Public checkpoints at the same maturity stage
+on one version line are separated by at least 24 hours of observation.
 Compatible fixes and packet evidence may accumulate during that window, while
 draft creation and Release Dry Run remain available. Narrow reporter validation
 uses immutable issue-and-commit test images and does not force or bypass a new
-public RC.
+public preview. Beta is the normal user-validation stage. RC is reserved for a
+build believed capable of becoming stable without product changes and must run
+the stable-depth integration gate.
 
-Release-note comparison ranges are channel-specific. Each RC compares against
-the immediately preceding RC on the same version line, with RC1 comparing
-against the previous stable release. A stable GA release compares against the
-previous stable release, not the final RC, so it can retell the complete release
-train as a small number of user-recognizable themes. Stable notes must synthesize
-the final product outcomes instead of concatenating RC notes or enumerating the
+Release-note comparison ranges are maturity-specific. Each prerelease compares
+against the immediately preceding checkpoint at the same stage. A first beta
+compares against the latest alpha when one exists, and a first RC compares
+against the latest beta or alpha. The first alpha falls back to the previous
+stable release. A stable GA release compares against the previous stable
+release, not the final RC, so it can retell the complete release train as a
+small number of user-recognizable themes. Stable notes must synthesize the final
+product outcomes instead of concatenating prerelease notes or enumerating the
 underlying commits.
 
 Release-note synthesis is model-led. The harness supplies the comparison range,

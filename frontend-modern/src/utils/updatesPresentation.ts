@@ -16,12 +16,12 @@ export const UPDATES_PANEL_COPY = {
   updatePreferencesTitle: 'Update Preferences',
   autoUpdateTitle: 'Automatic Stable Updates',
   autoUpdateDescription:
-    'Supported host installs can automatically apply stable releases. Pre-release testing always stays manual.',
-  previewChannelTitle: 'Pre-release builds stay on a manual preview channel.',
+    'Supported host installs can automatically apply stable releases. Preview testing always stays manual.',
+  previewChannelTitle: 'Preview builds stay on a manual channel.',
   previewChannelDescription:
-    'Use this on staging or internal validation environments. Automatic stable updates stay disabled on pre-release builds so preview installs do not drift between channels unattended.',
+    'Use beta builds for user testing and release candidates only when they may become stable without product changes. Keep preview installs on staging or internal validation environments.',
   previewChannelAutoUpdateNotice:
-    'Automatic stable updates are unavailable while the pre-release preview channel is selected.',
+    'Automatic stable updates are unavailable while the Preview channel is selected.',
   // The host systemd timer owns the schedule (daily overnight window with a
   // randomized delay, see install.sh); it is not configurable from the UI.
   autoUpdateScheduleNote:

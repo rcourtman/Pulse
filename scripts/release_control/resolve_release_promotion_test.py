@@ -12,21 +12,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ResolveReleasePromotionTest(unittest.TestCase):
-    def test_dev_prerelease_uses_prerelease_path(self) -> None:
-        metadata = resolver.resolve_metadata(
-            version="6.0.0-dev",
-            promoted_from_tag_input="",
-            rollback_version_input="5.1.14",
-            ga_date_input="",
-            v5_eos_date_input="",
-            hotfix_exception=False,
-            hotfix_reason_input="",
-            release_notes_input="",
-            tag_exists_fn=lambda tag: tag == "v5.1.14",
-        )
-        self.assertEqual(metadata["rollback_tag"], "v5.1.14")
-        self.assertEqual(metadata["promoted_from_tag"], "")
-        self.assertEqual(metadata["soak_hours"], "")
+    def test_published_release_versions_use_explicit_maturity_stages(self) -> None:
+        for version, expected in (
+            ("6.5.0-alpha.1", "alpha"),
+            ("6.5.0-beta.2", "beta"),
+            ("6.5.0-rc.3", "rc"),
+            ("6.5.0", "stable"),
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(resolver.release_stage(version), expected)
+
+        for unsupported in ("6.5.0-dev", "6.5.0-preview.1", "6.5.0-beta.0"):
+            with self.subTest(unsupported=unsupported):
+                with self.assertRaisesRegex(ValueError, "Unsupported release version"):
+                    resolver.release_stage(unsupported)
 
     def test_prerelease_requires_explicit_stable_rollback(self) -> None:
         metadata = resolver.resolve_metadata(
@@ -44,6 +43,23 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["rollback_command"], "sudo /bin/update --version v5.1.14")
         self.assertEqual(metadata["promoted_from_tag"], "")
         self.assertEqual(metadata["soak_hours"], "")
+        self.assertEqual(metadata["release_stage"], "rc")
+
+    def test_beta_uses_the_published_prerelease_path(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.5.0-beta.1",
+            promoted_from_tag_input="",
+            rollback_version_input="6.4.1",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            tag_exists_fn=lambda tag: tag == "v6.4.1",
+        )
+        self.assertEqual(metadata["release_stage"], "beta")
+        self.assertEqual(metadata["promotion_mode"], "prerelease")
+        self.assertEqual(metadata["promoted_from_tag"], "")
 
     def test_first_rc_has_no_observation_window_to_wait_for(self) -> None:
         metadata = resolver.resolve_metadata(
@@ -109,6 +125,27 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         )
         self.assertEqual(metadata["previous_prerelease_tag"], "v6.4.0-rc.12")
         self.assertEqual(metadata["prerelease_observation_hours"], "24")
+
+    def test_observation_window_is_scoped_to_the_same_maturity_stage(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.5.0-rc.1",
+            promoted_from_tag_input="",
+            rollback_version_input="6.4.1",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            enforce_prerelease_observation_window=True,
+            list_published_prereleases_fn=lambda: [
+                ("v6.5.0-alpha.2", 100),
+                ("v6.5.0-beta.4", 200),
+            ],
+            tag_exists_fn=lambda tag: tag == "v6.4.1",
+            now_unix_fn=lambda: 201,
+        )
+        self.assertEqual(metadata["release_stage"], "rc")
+        self.assertEqual(metadata["previous_prerelease_tag"], "")
 
     def test_rehearsal_does_not_query_or_enforce_publication_window(self) -> None:
         metadata = resolver.resolve_metadata(

@@ -927,7 +927,8 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	// list position: GitHub returns releases sorted by created_at, and v5-line
 	// maintenance releases interleave with v6 releases in the same repo, so
 	// the most recently published stable is not necessarily the highest one.
-	// Prerelease channel: newest release (prerelease or stable), even if not newer than current
+	// Preview channel: newest published alpha, beta, RC, or stable release, even
+	// if not newer than current. The historical "rc" value remains the wire key.
 	// Stable channel: newest stable release, even if not newer than current
 	// The caller will determine if it's actually an update by comparing versions
 	var newestRC, newestStable *ReleaseInfo
@@ -962,9 +963,9 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	}
 
 	if channel == "rc" {
-		// For the prerelease channel: return the highest version among both
-		// candidates, so prerelease users are moved forward onto stable once
-		// the rc line lands (6.0.5 > 6.0.0-rc.7).
+		// For the preview channel: return the highest version among both
+		// candidates, so preview users are moved forward onto stable once the
+		// prerelease line lands (6.0.5 > 6.0.0-rc.7).
 		if newestStable != nil && (newestRC == nil || newestStableVer.IsNewerThan(newestRCVer)) {
 			if newestStableVer.IsNewerThan(currentVer) {
 				log.Info().Str("version", newestStable.TagName).Msg("Found stable update for prerelease user")

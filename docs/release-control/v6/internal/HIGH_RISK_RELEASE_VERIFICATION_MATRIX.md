@@ -1043,6 +1043,33 @@ Companion drill:
   fails when rehearsed, demo deployment is detached from the release DAG, or
   routine mode can bypass a same-version RC or an RC-required runtime change.
 
+## Gate: `prerelease-maturity-integrity`
+
+- Owner lanes: `L1`
+- Risk covered:
+  User-validation builds can be mislabeled as release candidates, beta tags can
+  be treated as stable by update identity, or RC publication can take the
+  reduced beta test path. Any of those failures makes the version label a false
+  readiness claim.
+- Minimum evidence tier: `test-proof`
+- Canonical proof commands:
+  1. `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
+  2. `go test ./internal/updates -count=1`
+  3. `go test ./scripts/installtests -run TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges -count=1`
+  4. `cd frontend-modern && npx vitest run src/components/Settings/__tests__/updatesSettingsModel.branchcov0712.test.ts src/utils/__tests__/updatesPresentation.test.ts`
+- Pass when:
+  Published version validation accepts only stable, `alpha.N`, `beta.N`, and
+  `rc.N`; beta is the documented user-testing stage; only RC provides normal
+  stable-promotion lineage; RC runs the stable-depth integration job; release
+  notes advance across maturity stages; runtime identity and ordering treat
+  alpha, beta, and RC as published previews; and user-facing update copy names
+  the channel Preview while retaining `rc` only as the compatibility wire value.
+- Block release if:
+  A beta is presented as stable or as a release candidate, an RC skips the
+  stable-depth integration gate, stable promotion accepts alpha or beta
+  lineage, prerelease ordering is not SemVer-correct, or the product copy
+  teaches users that every preview is an RC.
+
 ## Gate: `single-build-release-promotion-path`
 
 - Owner lanes: `L1`

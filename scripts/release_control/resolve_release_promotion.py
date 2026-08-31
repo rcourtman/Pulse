@@ -19,6 +19,9 @@ from repo_file_io import REPO_ROOT, git_env
 SEMVER_STABLE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 SEMVER_STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEMVER_PRERELEASE_RE = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
+SEMVER_PUBLISHED_PRERELEASE_RE = re.compile(
+    r"^(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)\.([1-9]\d*)$"
+)
 SEMVER_RC_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-rc\.(\d+)$")
 MIN_PRERELEASE_OBSERVATION_HOURS = 24
 WINDOWS_AUTHENTICODE_AVAILABLE = False
@@ -98,6 +101,21 @@ def normalize_tag(value: str) -> str:
 
 def is_prerelease_version(version: str) -> bool:
     return bool(SEMVER_PRERELEASE_RE.search(version))
+
+
+def release_stage(version: str) -> str:
+    """Return the governed publication stage for a release version."""
+
+    normalized = (version or "").strip().removeprefix("v")
+    if SEMVER_STABLE_RE.fullmatch(normalized):
+        return "stable"
+    match = SEMVER_PUBLISHED_PRERELEASE_RE.fullmatch(normalized)
+    if match:
+        return match.group(4)
+    raise ValueError(
+        f"Unsupported release version {version!r}. Published versions must use "
+        "X.Y.Z, X.Y.Z-alpha.N, X.Y.Z-beta.N, or X.Y.Z-rc.N."
+    )
 
 
 def is_stable_patch_version(version: str) -> bool:
@@ -209,21 +227,26 @@ def list_published_prereleases() -> list[tuple[str, int]]:
     return published
 
 
-def latest_same_version_rc_publication(
+def latest_same_stage_prerelease_publication(
     version: str,
     candidate_tag: str,
     published_prereleases: list[tuple[str, int]],
 ) -> tuple[str, int] | None:
-    candidate_match = SEMVER_RC_RE.match(version)
+    candidate_match = SEMVER_PUBLISHED_PRERELEASE_RE.match(version)
     if not candidate_match:
         return None
     version_base = candidate_match.groups()[:3]
+    candidate_stage = candidate_match.group(4)
     matches: list[tuple[str, int]] = []
     for release_tag, published_unix in published_prereleases:
-        release_match = re.match(r"^v(\d+)\.(\d+)\.(\d+)-rc\.(\d+)$", release_tag)
+        release_match = re.match(
+            r"^v(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)\.([1-9]\d*)$",
+            release_tag,
+        )
         if (
             release_match
             and release_match.groups()[:3] == version_base
+            and release_match.group(4) == candidate_stage
             and release_tag != candidate_tag
         ):
             matches.append((release_tag, published_unix))
@@ -297,6 +320,7 @@ def resolve_metadata(
     tag_created_unix_fn: Callable[[str], int] = tag_created_unix,
     now_unix_fn: Callable[[], int] = lambda: int(time.time()),
 ) -> dict[str, str]:
+    stage = release_stage(version)
     tag = normalize_tag(version)
     rollback_tag = normalize_tag(rollback_version_input)
     ga_date = (ga_date_input or "").strip()
@@ -304,7 +328,7 @@ def resolve_metadata(
     hotfix_reason = normalize_whitespace(hotfix_reason_input)
     unsigned_windows_reason = normalize_whitespace(unsigned_windows_reason_input)
     release_notes = release_notes_input or ""
-    is_prerelease = is_prerelease_version(version)
+    is_prerelease = stage != "stable"
     stable_patch = is_stable_patch_version(version)
     promotion_mode = "prerelease" if is_prerelease else "stable-rc-promotion"
     stable_version_match = SEMVER_STABLE_RE.match(version)
@@ -373,7 +397,7 @@ def resolve_metadata(
         if hotfix_exception:
             raise ValueError("hotfix_exception applies only to stable promotions.")
         if enforce_prerelease_observation_window:
-            previous_publication = latest_same_version_rc_publication(
+            previous_publication = latest_same_stage_prerelease_publication(
                 version,
                 tag,
                 list_published_prereleases_fn(),
@@ -391,8 +415,8 @@ def resolve_metadata(
                     ).isoformat().replace("+00:00", "Z")
                     raise ValueError(
                         f"Prerelease {tag} would replace {previous_prerelease_tag} after only "
-                        f"{observation_hours} hours of public observation. Same-version release "
-                        f"candidates require {MIN_PRERELEASE_OBSERVATION_HOURS} hours between "
+                        f"{observation_hours} hours of public observation. Same-version {stage} "
+                        f"checkpoints require {MIN_PRERELEASE_OBSERVATION_HOURS} hours between "
                         f"publications. Accumulate fixes or use an issue-scoped reporter test image "
                         f"until {next_publish_at}."
                     )
@@ -501,6 +525,7 @@ def resolve_metadata(
                     )
 
     return {
+        "release_stage": stage,
         "promotion_mode": promotion_mode,
         "is_stable_patch": "true" if stable_patch else "false",
         "promoted_from_tag": promoted_from_tag,
@@ -542,7 +567,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--enforce-prerelease-observation-window",
         action="store_true",
-        help="Reject public same-version RC publication less than 24 hours after the prior RC.",
+        help=(
+            "Reject a public alpha, beta, or RC publication less than 24 hours after "
+            "the prior same-version checkpoint at the same maturity stage."
+        ),
     )
     return parser.parse_args()
 

@@ -1,5 +1,6 @@
 name: Pulse Release Pipeline
-# Optimized: parallel jobs, fast prerelease path
+# Alpha and beta use the fast preview path. RCs run the stable-depth release
+# checks because an RC is a build the maintainer believes can become stable.
 
 on:
   workflow_dispatch:
@@ -88,6 +89,7 @@ jobs:
       version: ${{ steps.extract.outputs.version }}
       tag: ${{ steps.extract.outputs.tag }}
       is_prerelease: ${{ steps.extract.outputs.is_prerelease }}
+      release_stage: ${{ steps.promotion.outputs.release_stage }}
       source_branch: ${{ steps.extract.outputs.source_branch }}
       required_branch: ${{ steps.branch_policy.outputs.required_branch }}
       promoted_from_tag: ${{ steps.promotion.outputs.promoted_from_tag }}
@@ -480,12 +482,13 @@ jobs:
         run: ./scripts/run-release-backend-tests.sh --data-root "$RUNNER_TEMP/pulse-test-data"
 
 
-  # Integration tests - skipped for prereleases (they've been tested in CI)
+  # Alpha and beta builds are feedback checkpoints. RC and stable publication
+  # run the deeper integration gate because an RC must be promotable in intent.
   integration_tests:
     needs:
       - prepare
       - frontend_bundle
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' }}
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && needs.prepare.outputs.release_stage != 'alpha' && needs.prepare.outputs.release_stage != 'beta' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -869,7 +872,7 @@ jobs:
             --release-notes-file "$NOTES_FILE" \
             --release-visuals-file "$VISUAL_MARKDOWN_FILE" \
             --output "$RENDERED_NOTES_FILE" \
-            --promotion-channel "${{ needs.prepare.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}" \
+            --promotion-channel "${{ needs.prepare.outputs.release_stage }}" \
             --candidate-tag "${{ needs.prepare.outputs.tag }}" \
             --promoted-prerelease-tag "${{ needs.prepare.outputs.promoted_from_tag }}" \
             --rollback-target "${{ needs.prepare.outputs.rollback_tag }}" \

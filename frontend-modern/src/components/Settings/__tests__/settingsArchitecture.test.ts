@@ -40,6 +40,7 @@ import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
 import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
+import updatesSettingsModelSource from '../updatesSettingsModel.ts?raw';
 import updateHistorySectionSource from '../UpdateHistorySection.tsx?raw';
 import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
 import updatesPresentationSource from '../../../utils/updatesPresentation.ts?raw';
@@ -167,6 +168,19 @@ describe('settings architecture guardrails', () => {
     expect(settingsPageShellSource).not.toContain('animate-slideInRight');
     expect(settingsPageShellSource).not.toContain('min-h-[600px]">');
     expect(settingsDialogsSource).toContain('export const SettingsDialogs');
+  });
+
+  it('keeps preview release maturity explicit in the shared update settings surface', () => {
+    expect(updatesSettingsModelSource).toContain("title: 'Preview'");
+    expect(updatesSettingsModelSource).toContain(
+      'Beta user-testing builds and release candidates for opt-in validation',
+    );
+    expect(updatesPresentationSource).toContain(
+      'Use beta builds for user testing and release candidates only when they may become stable without product changes.',
+    );
+    expect(updatesPresentationSource).toContain(
+      'Automatic stable updates are unavailable while the Preview channel is selected.',
+    );
   });
 
   it('keeps infrastructure onboarding query-backed under the shared settings shell', () => {

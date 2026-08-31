@@ -924,7 +924,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
-        self.assertIn("Every candidate intended for broad customer use must ship to `rc`", content)
+        self.assertIn("`beta.N` is the normal user-testing stage", content)
+        self.assertIn("`rc.N` is reserved for a build the release owner believes", content)
+        self.assertIn("Stable promotion lineage must come from a published `rc.N`", content)
         self.assertIn("live run of the release pipeline for the prerelease tag itself", content)
         self.assertIn("an accidental git tag by itself", content)
         self.assertIn("does not count as a shipped prerelease", content)
@@ -936,7 +938,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Exact v6 GA and v5 end-of-support dates locked before GA publish", content)
         self.assertIn("governed prerelease and stable release branches", content)
         self.assertIn("Customer-facing private Pulse Pro archives", content)
-        self.assertIn("public RC tag", content)
+        self.assertIn("public alpha, beta, or RC tag", content)
         self.assertIn("license.pulserelay.pro/pulse-pro:6.0.0", content)
         self.assertIn("moving branch", content)
         self.assertIn("`implemented`", content)
@@ -1489,12 +1491,18 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('git fetch --prune origin main "${REQUIRED_BRANCH}" --tags', content)
         self.assertIn('REQUIRED_BRANCH: ${{ steps.branch_policy.outputs.required_branch }}', content)
         self.assertIn("resolve_release_promotion.py", content)
+        self.assertIn("release_stage: ${{ steps.promotion.outputs.release_stage }}", content)
         self.assertIn("--enforce-prerelease-observation-window", content)
         self.assertIn("DRAFT_ONLY_INPUT", content)
         self.assertIn("--enforce-prerelease-observation-window", helper)
         self.assertNotIn("--enforce-prerelease-observation-window", dry_run_workflow)
         self.assertNotIn("--enforce-prerelease-observation-window", dry_run_helper)
         self.assertIn("render_release_body.py", content)
+        self.assertIn('--promotion-channel "${{ needs.prepare.outputs.release_stage }}"', content)
+        self.assertIn(
+            "needs.prepare.outputs.release_stage != 'alpha' && needs.prepare.outputs.release_stage != 'beta'",
+            content,
+        )
         self.assertIn("build_rollback_section", renderer)
         self.assertIn("uses: ./.github/workflows/publish-docker.yml", content)
         self.assertIn("release-convergence.yml/dispatches", content)
@@ -1515,10 +1523,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("hours of prerelease soak", resolver)
         self.assertIn("minimum is 72 hours unless hotfix_exception is true", resolver)
         self.assertIn("MIN_PRERELEASE_OBSERVATION_HOURS = 24", resolver)
-        self.assertIn("cohort checkpoint, not a delivery vehicle", policy)
+        self.assertIn("cohort checkpoint, not a delivery vehicle", normalize_ws(policy))
         self.assertIn("at least 24 hours of public observation", normalize_ws(source_of_truth))
         self.assertIn(
-            "public RC publications on that line are separated by at least 24 hours",
+            "Public checkpoints at the same maturity stage on one version line are separated by at least 24 hours",
             normalize_ws(contract),
         )
         self.assertIn("build_rollback_section", renderer)
@@ -2176,6 +2184,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Assemble exact-candidate runtime and agent images", qualifier_workflow)
         self.assertIn('kind load docker-image "${SMOKE_IMAGE_REPOSITORY}:${SMOKE_IMAGE_TAG}" --name pulse-test', qualifier_workflow)
         self.assertIn('--set image.repository="${SMOKE_IMAGE_REPOSITORY}"', qualifier_workflow)
+
         self.assertIn('--set image.pullPolicy=Never', qualifier_workflow)
         self.assertNotIn("needs.docker_build.result", release_workflow)
         self.assertNotIn("needs.helm_smoke.result", release_workflow)

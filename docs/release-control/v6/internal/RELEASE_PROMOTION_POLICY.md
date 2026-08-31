@@ -17,12 +17,15 @@ Cloud, and self-hosted production users.
    - The only recommended channel for paid and production environments.
    - Publishes only non-prerelease tags.
    - The only channel eligible for unattended broad rollout.
-2. `rc`
-   - Opt-in preview channel for internal use, staging-like environments, and
-     explicitly willing preview users.
-   - Publishes prerelease tags such as `6.0.0-rc.1`.
+2. `preview` (stored as `rc` in the existing update-channel API and persisted
+   settings for backward compatibility)
+   - Opt-in channel for internal use, staging-like environments, and explicitly
+     willing preview users.
+   - Publishes governed prerelease tags such as `6.5.0-alpha.1`,
+     `6.5.0-beta.1`, and `6.5.0-rc.1`.
    - Must never be the default channel.
-   - In v6, `rc` affects manual and in-app update selection; unattended
+   - In v6, the legacy `rc` wire value affects manual and in-app preview update
+     selection; unattended
      systemd auto-updates remain `stable`-only.
 3. Source builds
    - Are not a customer-facing release channel.
@@ -32,11 +35,12 @@ Cloud, and self-hosted production users.
 
 A reporter test image is an issue-scoped diagnostic source build for one or a
 few explicitly participating Docker users. It exists to validate a reviewed
-fix quickly without manufacturing an RC or exposing the broader preview
+fix quickly without publishing a prerelease or exposing the broader preview
 cohort to an unqualified candidate.
 
-It is not a fourth release channel. It does not count as `rc`, `stable`, a
-published prerelease, release qualification, or stable-promotion lineage.
+It is not a fourth release channel. It does not count as alpha, beta, RC,
+stable, a published prerelease, release qualification, or stable-promotion
+lineage.
 
 ### Eligibility
 
@@ -54,7 +58,9 @@ Use a reporter test image only when all of these conditions hold:
    handling, or a widened authentication, authorization, tenant, billing,
    licensing, relay, or other trust boundary
 
-If any condition is false or uncertain, use the governed RC path.
+If any condition is false or uncertain, use the governed prerelease path. Use
+beta while user validation or planned product changes remain. Use RC only when
+the build is believed capable of becoming stable without product changes.
 
 ### Build And Publication
 
@@ -105,7 +111,7 @@ If any condition is false or uncertain, use the governed RC path.
    paid runtime, cross-repo compatibility, migrations, security boundaries,
    or the wider release.
 5. A successful test does not force an immediate patch release. Schedule the
-   fix by severity and active customer harm. Any later RC, stable, or patch
+   fix by severity and active customer harm. Any later prerelease, stable, or patch
    must rebuild and qualify through the canonical release workflow rather
    than promote the reporter image.
 
@@ -113,9 +119,9 @@ If any condition is false or uncertain, use the governed RC path.
 
 1. A reporter test image must never create a GitHub release or git tag, update
    release notes or update feeds, publish Helm, move Docker aliases, update the
-   demo, stage or promote private paid artifacts, or satisfy an RC or stable
+   demo, stage or promote private paid artifacts, or satisfy a prerelease or stable
    release gate.
-2. Never attach `latest`, a stable version, an RC version, or another mutable
+2. Never attach `latest`, a stable version, an alpha, beta, or RC version, or another mutable
    alias to the image.
 3. Failed validation is fixed forward from a new reviewed commit and published
    under a new commit-derived tag. Shared tags and digests are immutable.
@@ -129,7 +135,7 @@ If any condition is false or uncertain, use the governed RC path.
    work.
 2. Do not move directly from "issue fixed" to "all customers updated".
 3. Channel promotion is the primary customer-safety boundary.
-4. Branch topology may change over time; the `stable` versus `rc` customer
+4. Branch topology may change over time; the `stable` versus `preview` customer
    contract must not.
 5. The active release profile in `docs/release-control/control_plane.json`
    owns the governed prerelease and stable release branches for the current
@@ -194,9 +200,17 @@ TLS-unverified receipts leave the claim at `implemented` or
 
 ## Prerelease Rules
 
-1. Every candidate intended for broad customer use must ship to `rc` before it
-   is eligible for `stable`.
-2. Each published prerelease must have:
+1. Published prereleases use one of three maturity stages:
+   - `alpha.N` is incomplete or experimental and intended for internal or
+     tightly controlled evaluation.
+   - `beta.N` is the normal user-testing stage. It may contain known gaps and
+     planned product changes and is not represented as a possible stable build.
+   - `rc.N` is reserved for a build the release owner believes can become
+     stable without product changes. RC publication runs the stable-depth
+     integration gate in addition to the common release checks.
+2. Stable promotion lineage must come from a published `rc.N`. Alpha and beta
+   evidence inform the release, but neither can be promoted directly to stable.
+3. Each published prerelease must have:
    - Targeted automated checks for touched release surfaces.
    - A smoke install on a fresh or staging-like environment.
    - Release notes plus the rollback target and exact reinstall command recorded before publish.
@@ -204,17 +218,19 @@ TLS-unverified receipts leave the claim at `implemented` or
      only structural workflow validation.
    - A governed prerelease publication record; an accidental git tag by itself
      does not count as a shipped prerelease.
-3. A published release candidate is a cohort checkpoint, not a delivery vehicle
-   for each individual fix. After the first RC on a version line, at least 24
-   hours of public observation must elapse before another RC on that line may be
-   published. Accumulate compatible fixes and release-note outcomes during the
-   window. Candidate preparation, draft creation, and Release Dry Run remain
-   available throughout it because they do not replace the public cohort.
-4. Use an immutable issue-and-commit reporter test image for narrow confirmation
+4. A published alpha, beta, or RC is a cohort checkpoint, not a delivery
+   vehicle for each individual fix. After the first checkpoint at a maturity
+   stage on a version line, at least 24 hours of public observation must elapse
+   before another checkpoint at that same stage may be published. Moving from
+   alpha to beta or beta to RC is a maturity decision and starts a new stage.
+   Accumulate compatible fixes and release-note outcomes during the window.
+   Candidate preparation, draft creation, and Release Dry Run remain available
+   throughout it because they do not replace the public cohort.
+5. Use an immutable issue-and-commit reporter test image for narrow confirmation
    that cannot justify a new public cohort. Broad release qualification remains
-   on the RC path, but successful narrow validation does not bypass the 24-hour
-   publication boundary.
-5. Failed prereleases are fixed forward and replaced with a new prerelease. They are never
+   on the governed prerelease path, but successful narrow validation does not
+   bypass the 24-hour publication boundary.
+6. Failed prereleases are fixed forward and replaced with a new prerelease. They are never
    promoted as-is to `stable`.
 
 ## Paid Pro Artifact Lineage
@@ -222,9 +238,10 @@ TLS-unverified receipts leave the claim at `implemented` or
 1. Customer-facing private Pulse Pro archives and private Pulse Pro Docker images
    must track the same immutable release checkpoint as the public Pulse release
    they support.
-2. During the v6 RC phase, private Pro artifacts must be built from the exact
-   public RC tag, use the same RC version, and publish under RC-shaped artifact
-   names, R2 prefixes, and Docker tags such as `6.0.0-rc.5`.
+2. During a v6 prerelease phase, private Pro artifacts must be built from the
+   exact public alpha, beta, or RC tag, use that same version, and publish under
+   matching artifact names, R2 prefixes, and Docker tags such as
+   `6.5.0-beta.1`.
 3. Do not build or advertise `license.pulserelay.pro/pulse-pro:6.0.0`, a
    `pulse-pro-v6.0.0-...` private archive, or a GA-shaped private R2 prefix
    until the intentional v6 GA publish.
@@ -267,7 +284,8 @@ TLS-unverified receipts leave the claim at `implemented` or
    it validates the proof packet signatures, installs the exact manifest on
    `pulse-license`, runs the live customer-path proof, and restores the previous
    remote manifest if the gate fails. Do not send customer instructions from a
-   customer-facing private Pro RC/GA release until that command passes.
+   customer-facing private Pro prerelease or stable release until that command
+   passes.
 
 ## v5 Maintenance Policy
 
@@ -298,10 +316,11 @@ TLS-unverified receipts leave the claim at `implemented` or
 
 1. A first stable release, a stable minor release, and every patch that crosses
    one of the RC-required risk boundaries below must be promoted from a commit
-   that has already been exercised as a published prerelease.
-2. A prerelease git tag counts as stable-promotion lineage only if that prerelease was
-   actually published through the governed prerelease path; accidental or abandoned git
-   tags do not satisfy the stable-promotion requirement.
+   that has already been exercised as a published RC.
+2. An RC git tag counts as stable-promotion lineage only if that RC was actually
+   published through the governed prerelease path. Alpha tags, beta tags, and
+   accidental or abandoned RC tags do not satisfy the stable-promotion
+   requirement.
 3. For v6 GA, do not promote to `stable` until the active control-plane target
    is the GA-promotion target and satisfies its `release_ready` completion
    rule.
@@ -505,7 +524,7 @@ TLS-unverified receipts leave the claim at `implemented` or
 
 ## Single-Build Release Path
 
-1. Every normal RC, stable, and patch release is initiated once through
+1. Every normal alpha, beta, RC, stable, and patch release is initiated once through
    `create-release.yml`. The workflow builds one exact-SHA candidate with the
    native signing lanes required by that version's governed policy while
    frontend, backend, Docker, Helm, and integration checks run in parallel. No
@@ -600,7 +619,8 @@ TLS-unverified receipts leave the claim at `implemented` or
 
 1. Default installs stay on `stable`.
 2. Broad customer announcements and unattended updates target `stable` only.
-3. `rc` enrollment must be explicit and reversible.
+3. Preview enrollment must be explicit and reversible. The persisted and API
+   wire value remains `rc` until a separately governed compatibility migration.
 4. Paid production tenants should remain on `stable` unless they are knowingly
    participating in preview validation.
 
@@ -608,8 +628,8 @@ TLS-unverified receipts leave the claim at `implemented` or
 
 1. Never delete or rewrite shipped tags to hide a bad release; supersede them
    with a newer release and explicit guidance.
-2. If a prerelease is bad, hold it in `rc`, fix forward, and cut the next prerelease. Do not
-   promote it.
+2. If a prerelease is bad, hold it in the Preview channel, fix forward, and cut
+   the next prerelease. Do not promote it.
 3. If a stable release is bad:
    - Pause further promotion or auto-update exposure.
    - Direct affected users to the prior stable pin.

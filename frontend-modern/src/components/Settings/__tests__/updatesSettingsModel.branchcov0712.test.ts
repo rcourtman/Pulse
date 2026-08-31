@@ -97,8 +97,8 @@ describe('getUpdateChannelCardOptions', () => {
       },
       {
         value: 'rc',
-        title: 'Pre-release',
-        description: 'Early preview builds for staging, internal validation, and opt-in testers',
+        title: 'Preview',
+        description: 'Beta user-testing builds and release candidates for opt-in validation',
         tone: 'accent',
         disabled: undefined,
       },
@@ -128,7 +128,7 @@ describe('getUpdateChannelCardOptions', () => {
     expect(options[1]?.disabled).toBe(false);
     // Titles/descriptions are the constant copy.
     expect(options[0]?.title).toBe('Stable');
-    expect(options[1]?.title).toBe('Pre-release');
+    expect(options[1]?.title).toBe('Preview');
   });
 });
 

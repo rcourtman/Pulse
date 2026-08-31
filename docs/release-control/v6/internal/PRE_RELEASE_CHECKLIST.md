@@ -10,6 +10,19 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - Use `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` for the trust-critical hosted, relay, mobile, entitlement, org-scope, and API-token checks that must be manually confirmed before release.
 - Follow `RELEASE_PROMOTION_POLICY.md` for channel routing, prerelease soak, stable promotion, and rollback expectations.
 
+## Maturity Decision
+
+- [ ] Use `alpha.N` only for incomplete or experimental internal evaluation.
+- [ ] Use `beta.N` for the normal user-testing phase when known gaps or planned
+  product changes mean the build is not a stable candidate.
+- [ ] Use `rc.N` only when the release owner believes the build can become
+  stable without product changes. RC publication runs the stable-depth
+  integration gate and is the only normal prerelease lineage eligible for
+  stable promotion.
+- [ ] Keep the existing `rc` update-channel wire value as the compatibility
+  identifier for all published previews. User-facing copy calls this the
+  Preview channel and the version tag communicates alpha, beta, or RC maturity.
+
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
 - `status.json` is no longer overclaiming threshold-unmet gates as passed.

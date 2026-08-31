@@ -44,7 +44,7 @@ if [ -z "$VERSION" ]; then
     echo "Usage: $0 <version> [comparison-tag]" >&2
     echo "       $0 --resolve-base <version>" >&2
     echo "       $0 --visual-plan <version> <notes-file> [comparison-tag]" >&2
-    echo "Example: $0 6.4.0-rc.6" >&2
+    echo "Example: $0 6.5.0-beta.1" >&2
     exit 1
 fi
 
@@ -71,22 +71,38 @@ latest_stable_before() {
 
 resolve_comparison_tag() {
     local version=$1
-    local base rc expected
+    local base stage sequence expected candidate prior_stage
 
-    if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-rc\.([0-9]+)$ ]]; then
+    if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-(alpha|beta|rc)\.([1-9][0-9]*)$ ]]; then
         base=${BASH_REMATCH[1]}
-        rc=${BASH_REMATCH[2]}
-        if (( rc > 1 )); then
-            expected="v${base}-rc.$((rc - 1))"
+        stage=${BASH_REMATCH[2]}
+        sequence=${BASH_REMATCH[3]}
+        if (( sequence > 1 )); then
+            expected="v${base}-${stage}.$((sequence - 1))"
             if ! git merge-base --is-ancestor "$expected" HEAD 2>/dev/null; then
-                echo "Expected immediately preceding RC tag '$expected' is not an ancestor of HEAD" >&2
+                echo "Expected immediately preceding ${stage} tag '$expected' is not an ancestor of HEAD" >&2
                 return 1
             fi
             printf '%s\n' "$expected"
             return
         fi
+
+        case "$stage" in
+            beta) prior_stage=alpha ;;
+            rc) prior_stage='beta|alpha' ;;
+            alpha) prior_stage='' ;;
+        esac
+        if [ -n "$prior_stage" ]; then
+            while IFS= read -r candidate; do
+                if [[ "$candidate" =~ ^v${base}-(${prior_stage})\.[1-9][0-9]*$ ]] && \
+                   git merge-base --is-ancestor "$candidate" HEAD 2>/dev/null; then
+                    printf '%s\n' "$candidate"
+                    return
+                fi
+            done < <(git tag --list "v${base}-*" --sort=-version:refname)
+        fi
     elif [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "Unsupported release version '$version'; expected X.Y.Z or X.Y.Z-rc.N" >&2
+        echo "Unsupported release version '$version'; expected X.Y.Z or X.Y.Z-(alpha|beta|rc).N" >&2
         return 1
     fi
 
@@ -116,10 +132,11 @@ if [ "$MODE" = "resolve-base" ]; then
     exit 0
 fi
 
-if [[ "$VERSION" == *-rc.* ]]; then
-    RELEASE_RANGE_GUIDANCE="This RC covers ${PREVIOUS_TAG}..HEAD."
+if [[ "$VERSION" =~ -((alpha|beta|rc))\. ]]; then
+    RELEASE_STAGE=${BASH_REMATCH[1]}
+    RELEASE_RANGE_GUIDANCE="This ${RELEASE_STAGE} preview covers ${PREVIOUS_TAG}..HEAD."
 else
-    RELEASE_RANGE_GUIDANCE="This stable release covers ${PREVIOUS_TAG}..HEAD. The same-version RC packets under docs/releases/ are available evidence."
+    RELEASE_RANGE_GUIDANCE="This stable release covers ${PREVIOUS_TAG}..HEAD. The same-version prerelease packets under docs/releases/ are available evidence."
 fi
 
 if [ "$MODE" = "generate" ]; then

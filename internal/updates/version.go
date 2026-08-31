@@ -16,9 +16,10 @@ import (
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
 var (
-	semverRe  = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
-	rcNumRe   = regexp.MustCompile(`rc\.?(\d+)`)
-	gitHashRe = regexp.MustCompile(`^([0-9a-fA-F]{7,})(-dirty)?$`)
+	semverRe           = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
+	rcNumRe            = regexp.MustCompile(`rc\.?(\d+)`)
+	publishedPreviewRe = regexp.MustCompile(`^(alpha|beta|rc)\.([1-9][0-9]*)$`)
+	gitHashRe          = regexp.MustCompile(`^([0-9a-fA-F]{7,})(-dirty)?$`)
 )
 
 // BuildVersion is the version string injected at build time via ldflags.
@@ -42,6 +43,24 @@ func (v *Version) IsRCPrerelease() bool {
 	return rcNumRe.MatchString(strings.ToLower(strings.TrimSpace(v.Prerelease)))
 }
 
+// PreviewStage returns the governed published prerelease stage. The update
+// channel retains the historical "rc" wire value for compatibility, but it
+// carries alpha, beta, and release-candidate builds.
+func (v *Version) PreviewStage() string {
+	if v == nil {
+		return ""
+	}
+	matches := publishedPreviewRe.FindStringSubmatch(strings.ToLower(strings.TrimSpace(v.Prerelease)))
+	if len(matches) == 0 {
+		return ""
+	}
+	return matches[1]
+}
+
+func (v *Version) IsPreviewPrerelease() bool {
+	return v.PreviewStage() != ""
+}
+
 func (v *Version) IsPublishedReleaseAssetVersion() bool {
 	if v == nil {
 		return false
@@ -49,7 +68,7 @@ func (v *Version) IsPublishedReleaseAssetVersion() bool {
 	if v.Build != "" {
 		return false
 	}
-	return v.Prerelease == "" || v.IsRCPrerelease()
+	return v.Prerelease == "" || v.IsPreviewPrerelease()
 }
 
 // VersionInfo contains detailed version information
@@ -137,16 +156,63 @@ func (v *Version) Compare(other *Version) int {
 		return -1 // v is prerelease, other is release
 	}
 	if v.Prerelease != other.Prerelease {
-		// Try to parse RC numbers for comparison
-		vRC := extractRCNumber(v.Prerelease)
-		otherRC := extractRCNumber(other.Prerelease)
-		if vRC >= 0 && otherRC >= 0 {
-			return compareInts(vRC, otherRC)
-		}
-		return strings.Compare(v.Prerelease, other.Prerelease)
+		return comparePrerelease(v.Prerelease, other.Prerelease)
 	}
 
 	return 0
+}
+
+func comparePrerelease(left string, right string) int {
+	leftIdentifiers := strings.Split(left, ".")
+	rightIdentifiers := strings.Split(right, ".")
+	limit := min(len(leftIdentifiers), len(rightIdentifiers))
+
+	for index := 0; index < limit; index++ {
+		leftIdentifier := leftIdentifiers[index]
+		rightIdentifier := rightIdentifiers[index]
+		leftNumber, leftNumeric := numericPrereleaseIdentifier(leftIdentifier)
+		rightNumber, rightNumeric := numericPrereleaseIdentifier(rightIdentifier)
+
+		switch {
+		case leftNumeric && rightNumeric:
+			if comparison := compareNumericPrereleaseIdentifiers(leftNumber, rightNumber); comparison != 0 {
+				return comparison
+			}
+		case leftNumeric:
+			return -1
+		case rightNumeric:
+			return 1
+		default:
+			if comparison := strings.Compare(leftIdentifier, rightIdentifier); comparison != 0 {
+				return comparison
+			}
+		}
+	}
+
+	return compareInts(len(leftIdentifiers), len(rightIdentifiers))
+}
+
+func numericPrereleaseIdentifier(identifier string) (string, bool) {
+	if identifier == "" {
+		return "", false
+	}
+	for _, character := range identifier {
+		if character < '0' || character > '9' {
+			return "", false
+		}
+	}
+	normalized := strings.TrimLeft(identifier, "0")
+	if normalized == "" {
+		normalized = "0"
+	}
+	return normalized, true
+}
+
+func compareNumericPrereleaseIdentifiers(left string, right string) int {
+	if len(left) != len(right) {
+		return compareInts(len(left), len(right))
+	}
+	return strings.Compare(left, right)
 }
 
 // IsNewerThan returns true if v is newer than other
@@ -230,8 +296,7 @@ func DescribeUsageDataVersion(raw string) UsageDataVersionIdentity {
 	identity.Build = parsed.Build
 	identity.Channel = usageDataVersionChannel(parsed)
 	identity.IsDevelopment = identity.Channel == "dev"
-	identity.IsPublishedRelease = (identity.Channel == "stable" || identity.Channel == "rc") &&
-		parsed.IsPublishedReleaseAssetVersion()
+	identity.IsPublishedRelease = parsed.IsPublishedReleaseAssetVersion()
 	return identity
 }
 
@@ -358,7 +423,7 @@ func sanitizePrereleaseIdentifier(raw string) string {
 func detectChannelFromVersion(version string) string {
 	trimmed := strings.TrimSpace(version)
 	if parsed, err := ParseVersion(trimmed); err == nil {
-		if parsed.IsRCPrerelease() {
+		if parsed.IsPreviewPrerelease() {
 			return "rc"
 		}
 		return "stable"
@@ -373,8 +438,8 @@ func usageDataVersionChannel(version *Version) string {
 	switch {
 	case version.Build != "":
 		return "dev"
-	case version.IsRCPrerelease():
-		return "rc"
+	case version.IsPreviewPrerelease():
+		return version.PreviewStage()
 	case version.Prerelease == "":
 		return "stable"
 	case strings.EqualFold(version.Prerelease, "dev"), strings.HasPrefix(strings.ToLower(version.Prerelease), "dev."):

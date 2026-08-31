@@ -18,9 +18,36 @@ echo "Pre-flight checks for release v${VERSION}..."
 echo ""
 
 IS_PRERELEASE="false"
-if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
+RELEASE_STAGE="stable"
+if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.([1-9][0-9]*)$ ]]; then
   IS_PRERELEASE="true"
+  RELEASE_STAGE="${BASH_REMATCH[1]}"
+elif [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "❌ Unsupported release version: ${VERSION}"
+  echo "Use X.Y.Z, X.Y.Z-alpha.N, X.Y.Z-beta.N, or X.Y.Z-rc.N."
+  exit 1
 fi
+
+case "$RELEASE_STAGE" in
+  alpha)
+    echo "Maturity: alpha (incomplete internal evaluation build)"
+    ;;
+  beta)
+    echo "Maturity: beta (user-testing build that is not yet release-ready)"
+    ;;
+  rc)
+    echo "Maturity: release candidate (believed capable of becoming stable without product changes)"
+    echo "RC publication runs the stable-depth integration gate."
+    read -r -p "Confirm this build is genuinely a release candidate [y/N]: " RC_CONFIRMATION
+    if [[ ! "$RC_CONFIRMATION" =~ ^[Yy]$ ]]; then
+      echo "Release cancelled. Use a beta version while further product changes are expected."
+      exit 1
+    fi
+    ;;
+  stable)
+    echo "Maturity: stable (general production release)"
+    ;;
+esac
 
 # Check 1: VERSION file matches
 FILE_VERSION=$(cat VERSION | tr -d '\n')

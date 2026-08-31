@@ -9015,6 +9015,44 @@
       ]
     },
     {
+      "id": "prerelease-maturity-integrity",
+      "summary": "Confirm published previews use alpha for incomplete evaluation, beta for user testing with expected product changes, and RC only for promotable-intent builds; only RC provides normal stable lineage, RC runs stable-depth integration, and runtime identity keeps every published prerelease on the Preview channel.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "test-proof",
+      "status": "passed",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L1"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/updates/version_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/installtests/build_release_assets_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/release_promotion_policy_test.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/resolve_release_promotion_test.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
+    },
+    {
       "id": "pulse-intelligence-rg-01-rg-12",
       "summary": "The closed RG-01 through RG-12 Pulse Intelligence matrix reached independent GO for bounded limited autonomy at core a63b3eae2b5a62ee6803bfb4eee8fadbbba8e449 and Pulse Mobile a1ddb451618664025d22a986fbd3fd837e4ffe97. Exact-SHA unit/integration, Docker and Debian/Ubuntu Colima, clean Product Trust browser, and physical-iPad/live-Relay proof are sealed by /Volumes/Development/.pulse-proof-artifacts/rg12-a63b3eae-a1ddb451-final-20260712T234230Z with SHA256SUMS hash 58778244cb370be4bf7bd74a8316a5bf4e8ec4dca23f08e45c5bc8cfec152397 and aggregate evidence /Volumes/Development/.pulse-proof-artifacts/pulse-intelligence-evidence-a63b3eae2b5a62ee6803bfb4eee8fadbbba8e449-final.json. This gate does not certify arbitrary infrastructure mutation or general MSP-scale autonomy.",
       "owner": "task-12",

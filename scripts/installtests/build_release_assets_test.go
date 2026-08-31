@@ -3792,6 +3792,14 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	commit("stable 6.3.2 hotfix")
 	runGit("tag", "v6.3.2")
 	runGit("checkout", "main")
+	commit("alpha 1")
+	runGit("tag", "v6.4.0-alpha.1")
+	commit("alpha 2")
+	runGit("tag", "v6.4.0-alpha.2")
+	commit("beta 1")
+	runGit("tag", "v6.4.0-beta.1")
+	commit("beta 2")
+	runGit("tag", "v6.4.0-beta.2")
 	for rc := 1; rc <= 10; rc++ {
 		commit("release candidate " + strconv.Itoa(rc))
 		runGit("tag", "v6.4.0-rc."+strconv.Itoa(rc))
@@ -3850,8 +3858,20 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 	if got := resolve("6.4.0-rc.11"); got != "v6.4.0-rc.10" {
 		t.Fatalf("RC comparison base = %q, want v6.4.0-rc.10", got)
 	}
-	if got := resolve("6.4.0-rc.1"); got != "v6.3.2" {
-		t.Fatalf("RC1 comparison base = %q, want v6.3.2", got)
+	if got := resolve("6.4.0-alpha.1"); got != "v6.3.2" {
+		t.Fatalf("alpha.1 comparison base = %q, want v6.3.2", got)
+	}
+	if got := resolve("6.4.0-alpha.2"); got != "v6.4.0-alpha.1" {
+		t.Fatalf("alpha.2 comparison base = %q, want v6.4.0-alpha.1", got)
+	}
+	if got := resolve("6.4.0-beta.1"); got != "v6.4.0-alpha.2" {
+		t.Fatalf("beta.1 comparison base = %q, want v6.4.0-alpha.2", got)
+	}
+	if got := resolve("6.4.0-beta.2"); got != "v6.4.0-beta.1" {
+		t.Fatalf("beta.2 comparison base = %q, want v6.4.0-beta.1", got)
+	}
+	if got := resolve("6.4.0-rc.1"); got != "v6.4.0-beta.2" {
+		t.Fatalf("rc.1 comparison base = %q, want v6.4.0-beta.2", got)
 	}
 	if got := resolve("6.4.0"); got != "v6.3.2" {
 		t.Fatalf("GA comparison base = %q, want v6.3.2", got)

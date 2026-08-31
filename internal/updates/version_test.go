@@ -146,6 +146,12 @@ func TestDetectChannelFromVersion(t *testing.T) {
 	if got := detectChannelFromVersion("4.24.0-rc.3"); got != "rc" {
 		t.Fatalf("detectChannelFromVersion rc = %s, expected rc", got)
 	}
+	if got := detectChannelFromVersion("6.5.0-beta.2"); got != "rc" {
+		t.Fatalf("detectChannelFromVersion beta = %s, expected preview wire channel rc", got)
+	}
+	if got := detectChannelFromVersion("6.5.0-alpha.1"); got != "rc" {
+		t.Fatalf("detectChannelFromVersion alpha = %s, expected preview wire channel rc", got)
+	}
 
 	if got := detectChannelFromVersion("6.0.0-dev+git.45.gabcdef"); got != "stable" {
 		t.Fatalf("detectChannelFromVersion dev = %s, expected stable", got)
@@ -205,6 +211,8 @@ func TestVersionIsPublishedReleaseAssetVersion(t *testing.T) {
 		expected bool
 	}{
 		{name: "stable release", version: "6.0.0", expected: true},
+		{name: "alpha prerelease", version: "6.5.0-alpha.1", expected: true},
+		{name: "beta prerelease", version: "6.5.0-beta.2", expected: true},
 		{name: "rc prerelease", version: "6.0.0-rc.1", expected: true},
 		{name: "dev prerelease", version: "6.0.0-dev", expected: false},
 		{name: "build metadata", version: "6.0.0+git.1.gabcdef", expected: false},
@@ -289,6 +297,14 @@ func TestDescribeUsageDataVersion(t *testing.T) {
 		wantDevelopment bool
 		wantPublished   bool
 	}{
+		{
+			name:          "published beta keeps its maturity stage",
+			input:         "v6.5.0-beta.2",
+			wantVersion:   "6.5.0-beta.2",
+			wantRaw:       "v6.5.0-beta.2",
+			wantChannel:   "beta",
+			wantPublished: true,
+		},
 		{
 			name:          "published rc strips accidental v prefix",
 			input:         "v6.0.0-rc.1",
@@ -452,6 +468,18 @@ func TestVersionCompare(t *testing.T) {
 			v1:       Version{Major: 4, Minor: 24, Patch: 0, Prerelease: "beta"},
 			v2:       Version{Major: 4, Minor: 24, Patch: 0, Prerelease: "alpha"},
 			expected: 1, // "beta" > "alpha" lexically
+		},
+		{
+			name:     "beta sequence uses numeric SemVer precedence",
+			v1:       Version{Major: 6, Minor: 5, Patch: 0, Prerelease: "beta.10"},
+			v2:       Version{Major: 6, Minor: 5, Patch: 0, Prerelease: "beta.2"},
+			expected: 1,
+		},
+		{
+			name:     "release candidate follows beta",
+			v1:       Version{Major: 6, Minor: 5, Patch: 0, Prerelease: "rc.1"},
+			v2:       Version{Major: 6, Minor: 5, Patch: 0, Prerelease: "beta.12"},
+			expected: 1,
 		},
 	}
 

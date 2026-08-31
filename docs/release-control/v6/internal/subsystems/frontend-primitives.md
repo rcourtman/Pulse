@@ -278,6 +278,16 @@ The single-column narrow layout must keep labels, help, values, percent suffixes
 and the full scroll journey inside the app scroll shell without horizontal
 overflow.
 
+The System Updates channel selector presents `Stable` and `Preview` as the two
+operator choices. `Preview` is the user-facing umbrella for governed alpha,
+beta, and release-candidate publications: its guidance must say that beta is
+for user testing while product changes are still expected, and that an RC is
+only appropriate when the build could become stable without product changes.
+The historical `rc` settings value remains a compatibility identifier, not a
+display label or permission to describe every preview as release-ready.
+Automatic stable updates remain unavailable while Preview is selected, and
+that manual-channel consequence must stay visible at desktop and narrow widths.
+
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`
