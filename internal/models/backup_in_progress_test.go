@@ -179,3 +179,68 @@ func TestUpdateVMsForInstancePreservesBackupInProgress(t *testing.T) {
 		t.Error("BackupInProgress lost across instance update")
 	}
 }
+
+// A PBS-to-PBS sync interrupted mid-snapshot leaves a manifest-less copy of
+// an already-completed backup on the target datastore. That partial copy
+// carries the original backup time, so it is never newer than its completed
+// twin and must not report the guest as backing up until the sync is
+// repaired (#1815).
+func TestSyncGuestBackupTimesIgnoresPartialSyncCopyOfCompletedBackup(t *testing.T) {
+	state := NewState()
+	now := time.Now()
+	backupTime := now.Add(-2 * time.Hour)
+
+	state.UpdateVMs([]VM{
+		{VMID: 117, Name: "win11-pvepc", Instance: "pve-pc", Node: "pve-pc"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		// Completed snapshot on the primary PBS.
+		{ID: "done-117", VMID: "117", BackupType: "vm", BackupTime: backupTime,
+			Instance: "verdeclose", Datastore: "main", Namespace: "pve-pc"},
+		// Partial copy of the same snapshot on the sync target.
+		{ID: "partial-117", VMID: "117", BackupType: "vm", BackupTime: backupTime,
+			Instance: "offsite", Datastore: "sync", Namespace: "pve-pc", InProgress: true},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	vm := snapshot.VMs[0]
+	if !vm.LastBackup.Equal(backupTime) {
+		t.Errorf("LastBackup = %v, want %v", vm.LastBackup, backupTime)
+	}
+	if vm.BackupInProgress {
+		t.Error("BackupInProgress = true, want false for a partial sync copy of a completed backup")
+	}
+}
+
+// A manifest-less snapshot with no completed twin left must age out the same
+// way a stale running task does: whatever was writing it is long gone.
+func TestSyncGuestBackupTimesIgnoresAbandonedInFlightSnapshot(t *testing.T) {
+	state := NewState()
+	now := time.Now()
+
+	state.UpdateVMs([]VM{
+		{VMID: 117, Name: "win11-pvepc", Instance: "pve-pc", Node: "pve-pc"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{ID: "flight-117", VMID: "117", BackupType: "vm", BackupTime: now.Add(-72 * time.Hour),
+			Instance: "verdeclose", Datastore: "main", Namespace: "pve-pc", InProgress: true},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	if snapshot.VMs[0].BackupInProgress {
+		t.Error("BackupInProgress = true, want false for an abandoned in-flight snapshot")
+	}
+	if !snapshot.VMs[0].LastBackup.IsZero() {
+		t.Errorf("LastBackup = %v, want zero", snapshot.VMs[0].LastBackup)
+	}
+}

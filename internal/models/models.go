@@ -4360,10 +4360,12 @@ func (s *State) UpdateContainers(containers []Container) {
 	s.LastUpdate = time.Now()
 }
 
-// runningBackupTaskMaxAge bounds how long an unfinished vzdump task keeps
+// runningBackupTaskMaxAge bounds how long unfinished backup evidence (a
+// vzdump task still listed as running, or a manifest-less PBS snapshot) keeps
 // reporting a guest as backing up. Task lists stop refreshing for an
-// unreachable instance, and a wedged multi-day vzdump is not a state worth
-// advertising as "running" on the guest badge.
+// unreachable instance, partial snapshots survive interrupted syncs, and a
+// wedged multi-day backup is not a state worth advertising as "running" on
+// the guest badge.
 const runningBackupTaskMaxAge = 24 * time.Hour
 
 // backupKey creates a composite key for backup matching using instance and VMID.
@@ -4752,8 +4754,14 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 		s.VMs[i].LastBackup = lastBackup
 		_, taskRunning := runningBackupTask[key]
+		// A manifest-less PBS snapshot that is not newer than the guest's last
+		// completed backup is a partial copy left behind by an interrupted
+		// sync, not a backup being written now, and one older than the
+		// running-task cutoff has been abandoned. Neither may pin the guest
+		// as backing up (#1815).
+		inFlight := findBestPBSBackup(pbsInProgressBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
 		s.VMs[i].BackupInProgress = taskRunning ||
-			!findBestPBSBackup(pbsInProgressBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name).IsZero()
+			(inFlight.After(lastBackup) && !inFlight.Before(runningTaskCutoff))
 	}
 
 	// Update Containers - recompute from current backup evidence instead of preserving stale values
@@ -4772,8 +4780,10 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 		s.Containers[i].LastBackup = lastBackup
 		_, taskRunning := runningBackupTask[key]
+		// Same partial-copy and abandonment guards as the VM loop (#1815).
+		inFlight := findBestPBSBackup(pbsInProgressBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
 		s.Containers[i].BackupInProgress = taskRunning ||
-			!findBestPBSBackup(pbsInProgressBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name).IsZero()
+			(inFlight.After(lastBackup) && !inFlight.Before(runningTaskCutoff))
 	}
 
 	s.LastUpdate = time.Now()
