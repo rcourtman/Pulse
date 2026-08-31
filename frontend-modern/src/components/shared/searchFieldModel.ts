@@ -24,6 +24,7 @@ export interface SearchFieldProps {
   class?: string;
   inputClass?: string;
   disabled?: boolean;
+  autofocus?: boolean;
   onKeyDown?: (event: SearchFieldKeyboardEvent) => void;
   onFocus?: (event: SearchFieldFocusEvent) => void;
   onBlur?: (event: SearchFieldFocusEvent) => void;

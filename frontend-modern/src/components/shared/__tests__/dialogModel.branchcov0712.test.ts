@@ -6,11 +6,8 @@ import {
   getDialogViewportClass,
 } from '@/components/shared/dialogModel';
 
-// Drive every branch of getDialogViewportClass, getDialogAlignmentClass, and
-// getDialogPanelClass. Each function is a single ternary keyed on
-// `layout === 'drawer-right'`; getDialogPanelClass adds a `panelClass ?? ...`
-// nullish-coalescing with its own inner drawer-vs-modal ternary, plus a final
-// `.trim()`. Every assertion is exact-string equality.
+// Drive every layout branch of the dialog presentation helpers. Every
+// assertion is exact-string equality so responsive placement cannot drift.
 
 describe('getDialogViewportClass', () => {
   it("returns the 'p-0' padding arm for the drawer-right layout", () => {
@@ -22,6 +19,12 @@ describe('getDialogViewportClass', () => {
   it("returns the 'p-4 sm:p-6' padding arm for the modal layout", () => {
     expect(getDialogViewportClass('modal')).toBe(
       'relative h-full overflow-y-auto pointer-events-none p-4 sm:p-6',
+    );
+  });
+
+  it('uses compact padding for the mobile-sheet layout', () => {
+    expect(getDialogViewportClass('mobile-sheet')).toBe(
+      'relative h-full overflow-y-auto pointer-events-none p-3',
     );
   });
 
@@ -48,6 +51,12 @@ describe('getDialogAlignmentClass', () => {
     );
   });
 
+  it('bottom-aligns the mobile sheet and centers it at the small breakpoint', () => {
+    expect(getDialogAlignmentClass('mobile-sheet')).toBe(
+      'flex min-h-full items-end justify-center sm:items-center',
+    );
+  });
+
   it("falls into the modal (else) arm for any value that isn't strictly 'drawer-right'", () => {
     const foreign = 'bottom-sheet' as unknown as DialogLayout;
     expect(getDialogAlignmentClass(foreign)).toBe(
@@ -64,6 +73,7 @@ describe('getDialogPanelClass', () => {
   const DRAWER_BRANCH =
     'h-dvh max-w-[720px] rounded-none border-y-0 border-r-0 animate-slide-up sm:h-full sm:max-h-dvh sm:rounded-l-xl sm:border-y sm:border-r-0';
   const MODAL_BRANCH = 'max-h-[calc(100dvh-2rem)] rounded-md animate-slide-up';
+  const MOBILE_SHEET_BRANCH = 'max-h-[calc(100dvh-1.5rem)] rounded-md animate-slide-up';
 
   describe('layout ternary — drawer-right arm', () => {
     it('emits the drawer branch and trims the trailing empty fallback when panelClass is undefined', () => {
@@ -102,6 +112,18 @@ describe('getDialogPanelClass', () => {
       // '' is non-nullish so ?? does not fire; the modal-only max-w-lg default
       // is NOT appended. The trailing whitespace is removed by .trim().
       expect(getDialogPanelClass('modal', '')).toBe(`${BASE} ${MODAL_BRANCH}`);
+    });
+  });
+
+  describe('mobile-sheet layout', () => {
+    it('uses the compact viewport height and modal width fallback', () => {
+      expect(getDialogPanelClass('mobile-sheet')).toBe(`${BASE} ${MOBILE_SHEET_BRANCH} max-w-lg`);
+    });
+
+    it('accepts a custom panel width', () => {
+      expect(getDialogPanelClass('mobile-sheet', 'max-w-[30rem]')).toBe(
+        `${BASE} ${MOBILE_SHEET_BRANCH} max-w-[30rem]`,
+      );
     });
   });
 

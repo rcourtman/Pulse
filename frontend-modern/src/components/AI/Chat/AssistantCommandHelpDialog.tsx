@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import {
   type AssistantSlashCommandAvailability,
@@ -16,6 +16,7 @@ import {
   AI_CHAT_COMMAND_HELP_TITLE,
 } from '@/utils/aiChatPresentation';
 import { SearchField } from '@/components/shared/SearchField';
+import { Dialog } from '@/components/shared/Dialog';
 
 interface AssistantCommandHelpDialogProps {
   availability?: AssistantSlashCommandAvailability;
@@ -26,7 +27,6 @@ interface AssistantCommandHelpDialogProps {
 export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProps) {
   const [commandSearchQuery, setCommandSearchQuery] = createSignal('');
   const [selectedCommandIndex, setSelectedCommandIndex] = createSignal(0);
-  let searchInputRef: HTMLInputElement | undefined;
 
   const commands = createMemo(() =>
     filterAssistantSlashCommands(commandSearchQuery(), undefined, {
@@ -58,10 +58,6 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
     const controlOnly = event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
 
     switch (event.key) {
-      case 'Escape':
-        consumeDialogCloseKey(event);
-        props.onClose();
-        break;
       case 'ArrowDown':
         consumeDialogCloseKey(event);
         moveSelectedCommand(1);
@@ -111,22 +107,15 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
     }
   });
 
-  onMount(() => {
-    queueMicrotask(() => searchInputRef?.focus());
-  });
-
   return (
-    <div
-      class="absolute inset-0 z-50 flex items-end bg-slate-950/20 p-3 sm:items-center sm:justify-center"
-      onClick={props.onClose}
+    <Dialog
+      isOpen={true}
+      onClose={props.onClose}
+      layout="mobile-sheet"
+      panelClass="max-w-[30rem] shadow-xl"
+      ariaLabel={AI_CHAT_COMMAND_HELP_TITLE}
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label={AI_CHAT_COMMAND_HELP_TITLE}
-        class="max-h-[min(34rem,calc(100%-1.5rem))] w-full max-w-[30rem] overflow-hidden rounded-md border border-border bg-surface shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <>
         <div class="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 py-3">
           <h3 class="text-sm font-semibold text-base-content">{AI_CHAT_COMMAND_HELP_TITLE}</h3>
           <button
@@ -141,9 +130,7 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
         </div>
         <div class="border-b border-border px-3 py-2">
           <SearchField
-            inputRef={(element) => {
-              searchInputRef = element;
-            }}
+            autofocus
             value={commandSearchQuery()}
             onChange={setCommandSearchQuery}
             title={AI_CHAT_COMMAND_HELP_SEARCH_LABEL}
@@ -229,7 +216,7 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
             </For>
           </Show>
         </div>
-      </section>
-    </div>
+      </>
+    </Dialog>
   );
 }

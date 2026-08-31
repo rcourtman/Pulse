@@ -15,6 +15,7 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
         placeholder={props.placeholder ?? 'Search...'}
         value={props.value}
         disabled={props.disabled}
+        autofocus={props.autofocus}
         onInput={(e) => props.onChange(e.currentTarget.value)}
         onKeyDown={search.handleKeyDown}
         onFocus={search.handleFocus}

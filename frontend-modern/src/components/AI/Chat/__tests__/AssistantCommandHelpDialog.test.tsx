@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { Show, createSignal } from 'solid-js';
 import { AssistantCommandHelpDialog } from '../AssistantCommandHelpDialog';
 
 afterEach(cleanup);
@@ -144,5 +145,39 @@ describe('AssistantCommandHelpDialog', () => {
     expect(escapeEvent.defaultPrevented).toBe(true);
     expect(laterDocumentHandler).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('contains focus, isolates the background, and restores the invoking control', async () => {
+    const [isOpen, setIsOpen] = createSignal(false);
+    render(() => (
+      <>
+        <button type="button" onClick={() => setIsOpen(true)}>
+          Open command help
+        </button>
+        <Show when={isOpen()}>
+          <AssistantCommandHelpDialog onClose={() => setIsOpen(false)} onRunCommand={vi.fn()} />
+        </Show>
+      </>
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Open command help' });
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    const search = await screen.findByLabelText('Search Assistant commands');
+    await waitFor(() => expect(search).toHaveFocus());
+    const dialog = screen.getByRole('dialog', { name: 'Assistant commands' });
+    expect(dialog.closest('[data-dialog-layer]')).not.toHaveAttribute('inert');
+    expect(trigger.closest('div')).toHaveAttribute('inert');
+
+    const options = screen.getAllByRole('option');
+    const lastOption = options[options.length - 1];
+    lastOption.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: 'Close Assistant commands' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Assistant commands' }));
+    expect(screen.queryByRole('dialog', { name: 'Assistant commands' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });
