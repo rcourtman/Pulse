@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TagInput } from './TagInput';
 import tagInputSource from './TagInput.tsx?raw';
@@ -35,9 +36,11 @@ describe('TagInput', () => {
   it('adds tags on enter and removes the last one on backspace when empty', () => {
     const onChange = vi.fn();
 
-    render(() => <TagInput tags={['alpha']} onChange={onChange} placeholder="Add tag" />);
+    render(() => (
+      <TagInput tags={['alpha']} label="Resource tags" onChange={onChange} placeholder="Add tag" />
+    ));
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('textbox', { name: 'Resource tags' });
 
     fireEvent.input(input, { target: { value: 'beta' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -48,10 +51,17 @@ describe('TagInput', () => {
     expect(onChange).toHaveBeenCalledWith([]);
   });
 
-  it('focuses the input when the container is clicked and hides placeholder when tags exist', () => {
-    render(() => <TagInput tags={['alpha']} onChange={vi.fn()} placeholder="Add tag" />);
+  it('keeps its accessible name when tags hide the placeholder and focuses on container click', () => {
+    const [tags, setTags] = createSignal<string[]>([]);
+    render(() => (
+      <TagInput tags={tags()} label="Resource tags" onChange={vi.fn()} placeholder="Add tag" />
+    ));
 
-    const input = screen.getByRole('textbox') as HTMLInputElement;
+    const input = screen.getByRole('textbox', { name: 'Resource tags' }) as HTMLInputElement;
+    expect(input).toHaveAttribute('placeholder', 'Add tag');
+    setTags(['alpha']);
+
+    expect(screen.getByRole('textbox', { name: 'Resource tags' })).toBe(input);
     expect(input.placeholder).toBe('');
 
     fireEvent.click(input.parentElement as HTMLElement);

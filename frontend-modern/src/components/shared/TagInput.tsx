@@ -38,7 +38,7 @@ export function TagInput(props: TagInputProps) {
         onKeyDown={state.handleKeyDown}
         onBlur={state.handleBlur}
         placeholder={getTagInputPlaceholder(props.tags.length, props.placeholder)}
-        aria-label={getTagInputPlaceholder(props.tags.length, props.placeholder)}
+        aria-label={props.label}
         class={TAG_INPUT_FIELD_CLASS}
       />
     </div>

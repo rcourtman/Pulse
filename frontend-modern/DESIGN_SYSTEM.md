@@ -14,6 +14,7 @@ This document outlines the standard UI primitives, tokens, and components that c
 - `npm run lint:headers` audits header composition and page-level header usage policy.
 - Routed surfaces must use shared header primitives (`PageHeader`, `SectionHeader`, `SettingsPanel`, `OperationsPanel`) instead of raw `<h1>` markup.
 - Visible form labels must either use `for` with a matching control ID or wrap a native labelable control; use a heading, paragraph, or span for non-control captions.
+- Shared form controls must keep a stable accessible name as their value changes; a placeholder is input guidance, not a label.
 - Only explicit non-visual route wrappers are exempt from header primitive requirements.
 - Theme ownership policy:
   - Only `src/utils/theme.ts` and `index.html` may read/write theme keys (`pulseThemePreference`, `darkMode`, `pulse_dark_mode`) or toggle the root `dark` class.

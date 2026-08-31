@@ -12,6 +12,7 @@ import {
 export interface TagInputProps {
   tags: string[];
   onChange: (tags: string[]) => void;
+  label: string;
   placeholder?: string;
   class?: string;
 }

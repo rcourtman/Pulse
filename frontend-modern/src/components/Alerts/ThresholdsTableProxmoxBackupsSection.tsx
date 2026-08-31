@@ -149,6 +149,7 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
               </p>
               <TagInput
                 tags={tableProps.backupDefaults().ignoreVMIDs ?? []}
+                label={state.backupOrphanedPresentation.ignoreVmidsLabel}
                 onChange={(tags) => {
                   state.updateBackupDefaults((prev) => ({ ...prev, ignoreVMIDs: tags }));
                   tableProps.setHasUnsavedChanges(true);

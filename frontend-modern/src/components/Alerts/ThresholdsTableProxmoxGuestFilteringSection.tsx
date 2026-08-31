@@ -29,6 +29,7 @@ export function ThresholdsTableProxmoxGuestFilteringSection(props: ThresholdsTab
           </div>
           <TagInput
             tags={tableProps.ignoredGuestPrefixes()}
+            label={state.guestFilterPresentation.ignoredPrefixes.title}
             onChange={(tags) => {
               tableProps.setIgnoredGuestPrefixes(tags);
               tableProps.setHasUnsavedChanges(true);
@@ -48,6 +49,7 @@ export function ThresholdsTableProxmoxGuestFilteringSection(props: ThresholdsTab
           </div>
           <TagInput
             tags={tableProps.guestTagWhitelist()}
+            label={state.guestFilterPresentation.tagWhitelist.title}
             onChange={(tags) => {
               tableProps.setGuestTagWhitelist(tags);
               tableProps.setHasUnsavedChanges(true);
@@ -67,6 +69,7 @@ export function ThresholdsTableProxmoxGuestFilteringSection(props: ThresholdsTab
           </div>
           <TagInput
             tags={tableProps.guestTagBlacklist()}
+            label={state.guestFilterPresentation.tagBlacklist.title}
             onChange={(tags) => {
               tableProps.setGuestTagBlacklist(tags);
               tableProps.setHasUnsavedChanges(true);

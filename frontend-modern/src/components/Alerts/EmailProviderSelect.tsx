@@ -259,6 +259,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
         <TagInput
           tags={props.config.tagFilter ?? []}
+          label="Resource tag routing"
           onChange={(tagFilter) => props.onChange({ ...props.config, tagFilter })}
           placeholder="Add a resource tag"
         />

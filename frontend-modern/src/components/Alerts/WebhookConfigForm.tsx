@@ -196,6 +196,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         </div>
         <TagInput
           tags={props.formData().tagFilter ?? []}
+          label="Resource tag routing"
           onChange={(tagFilter) => props.setFormData((prev) => ({ ...prev, tagFilter }))}
           placeholder="Add a resource tag"
         />
