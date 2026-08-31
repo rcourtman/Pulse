@@ -68,6 +68,21 @@ type Response struct {
 
 const maxHTTPErrorBodyBytes = 4096
 
+func decodeLimitedJSONResponse(resp *http.Response, maxBytes int64, destination any) error {
+	if err := securityutil.LimitResponseBody(resp, maxBytes); err != nil {
+		return err
+	}
+
+	encoded, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(encoded, destination); err != nil {
+		return err
+	}
+	return nil
+}
+
 // New creates a new remote config client.
 func New(cfg Config) *Client {
 	cfg, cfgErr := normalizeConfig(cfg)
@@ -168,7 +183,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	}
 
 	var configResp Response
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxConfigResponseBodyBytes)).Decode(&configResp); err != nil {
+	if err := decodeLimitedJSONResponse(resp, maxConfigResponseBodyBytes, &configResp); err != nil {
 		logger.Warn().
 			Err(err).
 			Str("action", "decode_response_failed").
@@ -346,7 +361,7 @@ func (c *Client) resolveAgentID(ctx context.Context) (string, error) {
 			ID string `json:"id"`
 		} `json:"agent"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAgentLookupResponseBodyBytes)).Decode(&payload); err != nil {
+	if err := decodeLimitedJSONResponse(resp, maxAgentLookupResponseBodyBytes, &payload); err != nil {
 		logger.Warn().
 			Err(err).
 			Str("action", "agent_lookup_decode_failed").
