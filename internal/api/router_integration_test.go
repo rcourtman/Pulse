@@ -39,6 +39,8 @@ type integrationServer struct {
 	config  *config.Config
 }
 
+const websocketContractReadTimeout = 60 * time.Second
+
 func wsHeadersForHTTP(t *testing.T, serverURL string) http.Header {
 	t.Helper()
 
@@ -50,6 +52,36 @@ func wsHeadersForHTTP(t *testing.T, serverURL string) http.Header {
 	headers := http.Header{}
 	headers.Set("Origin", origin)
 	return headers
+}
+
+func readWebSocketMessageOfType(t *testing.T, conn *gorillaws.Conn, expected string) map[string]any {
+	t.Helper()
+
+	if err := conn.SetReadDeadline(time.Now().Add(websocketContractReadTimeout)); err != nil {
+		t.Fatalf("set websocket read deadline while waiting for %q: %v", expected, err)
+	}
+
+	for {
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read websocket message while waiting for %q: %v", expected, err)
+		}
+
+		var msg map[string]any
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("decode websocket message while waiting for %q: %v", expected, err)
+		}
+		msgType, _ := msg["type"].(string)
+		if msgType != expected {
+			continue
+		}
+
+		payload, _ := msg["data"].(map[string]any)
+		if payload == nil {
+			payload = map[string]any{}
+		}
+		return payload
+	}
 }
 
 func newIntegrationServer(t *testing.T) *integrationServer {
@@ -1530,43 +1562,8 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	}
 	defer conn.Close()
 
-	readMsg := func() (string, map[string]any) {
-		t.Helper()
-		if err := conn.SetReadDeadline(time.Now().Add(15 * time.Second)); err != nil {
-			t.Fatalf("set deadline: %v", err)
-		}
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			t.Fatalf("read message: %v", err)
-		}
-		var msg map[string]any
-		if err := json.Unmarshal(data, &msg); err != nil {
-			t.Fatalf("decode message: %v", err)
-		}
-		typeVal, _ := msg["type"].(string)
-		payload := map[string]any{}
-		if raw, ok := msg["data"].(map[string]any); ok {
-			payload = raw
-		}
-		return typeVal, payload
-	}
-
-	// Heartbeat pings interleave freely with the connect sequence, so wait
-	// for each expected type instead of asserting strict message order.
-	readType := func(expected string) map[string]any {
-		t.Helper()
-		for i := 0; i < 6; i++ {
-			msgType, payload := readMsg()
-			if msgType == expected {
-				return payload
-			}
-		}
-		t.Fatalf("timed out waiting for %q websocket message", expected)
-		return nil
-	}
-
-	readType("welcome")
-	payload := readType("initialState")
+	readWebSocketMessageOfType(t, conn, "welcome")
+	payload := readWebSocketMessageOfType(t, conn, "initialState")
 
 	legacyKeys := []string{
 		"nodes",
@@ -1586,7 +1583,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	state := srv.monitor.BuildFrontendState()
 	srv.hub.BroadcastState(state)
 
-	payload = readType("rawData")
+	payload = readWebSocketMessageOfType(t, conn, "rawData")
 	for _, key := range legacyKeys {
 		if _, ok := payload[key]; ok {
 			t.Fatalf("broadcast payload should not include legacy key %q", key)
@@ -1605,41 +1602,8 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 	}
 	defer conn.Close()
 
-	readMsg := func() (string, map[string]any) {
-		t.Helper()
-		if err := conn.SetReadDeadline(time.Now().Add(15 * time.Second)); err != nil {
-			t.Fatalf("set deadline: %v", err)
-		}
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			t.Fatalf("read message: %v", err)
-		}
-		var msg map[string]any
-		if err := json.Unmarshal(data, &msg); err != nil {
-			t.Fatalf("decode message: %v", err)
-		}
-		typeVal, _ := msg["type"].(string)
-		payload := map[string]any{}
-		if raw, ok := msg["data"].(map[string]any); ok {
-			payload = raw
-		}
-		return typeVal, payload
-	}
-
-	readType := func(expected string) map[string]any {
-		t.Helper()
-		for i := 0; i < 6; i++ {
-			msgType, payload := readMsg()
-			if msgType == expected {
-				return payload
-			}
-		}
-		t.Fatalf("timed out waiting for %q websocket message", expected)
-		return nil
-	}
-
-	readType("welcome")
-	readType("initialState")
+	readWebSocketMessageOfType(t, conn, "welcome")
+	readWebSocketMessageOfType(t, conn, "initialState")
 
 	contractState := models.StateFrontend{
 		Resources: []models.ResourceFrontend{
@@ -1668,7 +1632,7 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 	}
 
 	srv.hub.BroadcastState(contractState)
-	payload := readType("rawData")
+	payload := readWebSocketMessageOfType(t, conn, "rawData")
 
 	requiredArrayKeys := []string{"resources", "connectedInfrastructure"}
 	for _, key := range requiredArrayKeys {
@@ -1714,41 +1678,8 @@ func TestWebsocketPayloadUsesCanonicalStateContract(t *testing.T) {
 	}
 	defer conn.Close()
 
-	readMsg := func() (string, map[string]any) {
-		t.Helper()
-		if err := conn.SetReadDeadline(time.Now().Add(15 * time.Second)); err != nil {
-			t.Fatalf("set deadline: %v", err)
-		}
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			t.Fatalf("read message: %v", err)
-		}
-		var msg map[string]any
-		if err := json.Unmarshal(data, &msg); err != nil {
-			t.Fatalf("decode message: %v", err)
-		}
-		typeVal, _ := msg["type"].(string)
-		payload := map[string]any{}
-		if raw, ok := msg["data"].(map[string]any); ok {
-			payload = raw
-		}
-		return typeVal, payload
-	}
-
-	readType := func(expected string) map[string]any {
-		t.Helper()
-		for i := 0; i < 6; i++ {
-			msgType, payload := readMsg()
-			if msgType == expected {
-				return payload
-			}
-		}
-		t.Fatalf("timed out waiting for %q websocket message", expected)
-		return nil
-	}
-
-	readType("welcome")
-	readType("initialState")
+	readWebSocketMessageOfType(t, conn, "welcome")
+	readWebSocketMessageOfType(t, conn, "initialState")
 
 	testState := models.StateFrontend{
 		Resources: []models.ResourceFrontend{
@@ -1777,7 +1708,7 @@ func TestWebsocketPayloadUsesCanonicalStateContract(t *testing.T) {
 	}
 
 	srv.hub.BroadcastState(testState)
-	canonicalPayload := readType("rawData")
+	canonicalPayload := readWebSocketMessageOfType(t, conn, "rawData")
 
 	legacyKeys := []string{
 		"nodes",
