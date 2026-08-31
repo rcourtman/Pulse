@@ -298,8 +298,8 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			SetupToken          string `json:"setupToken"`
 		}
 
-		if err := json.NewDecoder(req.Body).Decode(&setupRequest); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+		if err := decodeSecurityRequestBody(w, req, &setupRequest); err != nil {
+			http.Error(w, "Invalid request body", securityRequestErrorStatus(err))
 			return
 		}
 
@@ -789,8 +789,8 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 		Token string `json:"token"`
 	}
 
-	if err := json.NewDecoder(rq.Body).Decode(&validateRequest); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := decodeSecurityRequestBody(w, rq, &validateRequest); err != nil {
+		http.Error(w, "Invalid request body", securityRequestErrorStatus(err))
 		return
 	}
 

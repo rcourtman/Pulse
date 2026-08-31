@@ -3,7 +3,6 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -146,8 +145,8 @@ func (r *Router) handleValidateBootstrapToken(w http.ResponseWriter, req *http.R
 		var payload struct {
 			Token string `json:"token"`
 		}
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		if err := decodeSecurityRequestBody(w, req, &payload); err != nil {
+			http.Error(w, "Invalid request payload", securityRequestErrorStatus(err))
 			return
 		}
 		token = strings.TrimSpace(payload.Token)

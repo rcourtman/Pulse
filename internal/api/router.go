@@ -3904,8 +3904,8 @@ func (r *Router) handleUpdateRelayConfig(w http.ResponseWriter, req *http.Reques
 		InstanceSecret       *string `json:"instance_secret"`
 		AlertMinimumSeverity *string `json:"alert_minimum_severity"`
 	}
-	if err := json.NewDecoder(req.Body).Decode(&update); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if err := decodeSecurityRequestBody(w, req, &update); err != nil {
+		http.Error(w, "invalid request body", securityRequestErrorStatus(err))
 		return
 	}
 
@@ -5326,8 +5326,8 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		NewPassword     string `json:"newPassword"`
 	}
 
-	if err := json.NewDecoder(req.Body).Decode(&changeReq); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
+	if err := decodeSecurityRequestBody(w, req, &changeReq); err != nil {
+		writeErrorResponse(w, securityRequestErrorStatus(err), "invalid_request",
 			"Invalid request body", nil)
 		return
 	}
@@ -5696,8 +5696,8 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		RememberMe bool   `json:"rememberMe"`
 	}
 
-	if err := json.NewDecoder(req.Body).Decode(&loginReq); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
+	if err := decodeSecurityRequestBody(w, req, &loginReq); err != nil {
+		writeErrorResponse(w, securityRequestErrorStatus(err), "invalid_request",
 			"Invalid request body", nil)
 		return
 	}
@@ -5877,8 +5877,8 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 			Identifier string `json:"identifier"` // Can be username or IP
 		}
 
-		if err := json.NewDecoder(req.Body).Decode(&resetReq); err != nil {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
+		if err := decodeSecurityRequestBody(w, req, &resetReq); err != nil {
+			writeErrorResponse(w, securityRequestErrorStatus(err), "invalid_request",
 				"Invalid request body", nil)
 			return
 		}

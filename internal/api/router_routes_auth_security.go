@@ -544,8 +544,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				Duration int    `json:"duration,omitempty"` // Duration in minutes for token generation
 			}
 
-			if err := json.NewDecoder(req.Body).Decode(&recoveryRequest); err != nil {
-				http.Error(w, "Invalid request", http.StatusBadRequest)
+			if err := decodeSecurityRequestBody(w, req, &recoveryRequest); err != nil {
+				http.Error(w, "Invalid request", securityRequestErrorStatus(err))
 				return
 			}
 
