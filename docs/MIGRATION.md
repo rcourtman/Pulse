@@ -66,6 +66,11 @@ Because local login credentials are stored in `.env` (not part of exports), you 
 3.  **Update Agents**:
     *   **Unified Agent**: Update the `--token` flag in your service definition.
     *   **Containerized agent**: Update `PULSE_TOKEN` in the agent container environment.
+    *   **New server address?** Agents dial the address they were installed
+        with (the `--url` flag, or `PULSE_URL` for containerized agents), so
+        agents disappear from the new instance until that value is updated in
+        each agent's service definition. Fronting Pulse with a DNS name
+        instead of an IP address makes future moves invisible to agents.
     *   *Tip: Use **Settings → Infrastructure → Install on a host** to generate updated install commands.*
 4.  **Relay/Pro/legacy Pro+/Cloud**: Re-activate your license key after migration (license files are not included in exports).
 
