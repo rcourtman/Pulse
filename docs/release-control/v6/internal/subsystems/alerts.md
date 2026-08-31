@@ -466,7 +466,12 @@ transition references recovery evidence separate from its trigger evidence.
    using normalized owned storage roots and fixed storage leaves only.
    Event-log projection changes must preserve parity with the in-memory
    JSON-history model, and migration changes must retain a retryable source or
-   backup until every legacy entry is durably imported.
+   backup until every legacy entry is durably imported. The event log also
+   owns per-consumer projection watermarks in `alert_store_meta`
+   (`projection_watermark:<consumer>`): replay consumers pass their watermark
+   as the walk's `AfterID` cursor so boot-time repair visits only the
+   un-projected tail, and lowering a watermark (including to zero) is the
+   supported way to force a full replay after a projection store rebuild.
 5. Add or change locked alert-investigation commercial handoff behavior through
    `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` while
    preserving the shared upgrade-navigation contract; the alert surface may

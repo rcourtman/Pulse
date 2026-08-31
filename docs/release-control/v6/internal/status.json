@@ -9899,6 +9899,45 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "alert-lifecycle-replay-startup-scalability",
+      "summary": "Alert lifecycle projection replay walks the entire durable event log on every boot, twice (monitor start and the canonical resource-store boundary), synchronously on the HTTP serving path, and every replayed event triggers a full incident-store JSON rewrite. With a large event log (64k events on the dev mock instance) startup exceeds the dev supervisor's health-kill window, so the backend restarts forever and never serves. Replay needs a durable projection watermark so boot only walks the un-projected tail, needs to run off the serving path, and incident-store persistence needs save coalescing so replay and live bursts stop rewriting the full store per event.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-08-31",
+      "lane_ids": [
+        "L6",
+        "L13"
+      ],
+      "subsystem_ids": [
+        "alerts",
+        "monitoring"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 6,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/ai/memory/incidents.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/event_emission.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/eventlog/eventlog.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor_alerts.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [

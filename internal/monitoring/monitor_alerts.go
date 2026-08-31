@@ -433,15 +433,84 @@ func (m *Monitor) isActiveAlertOccurrence(candidate *alerts.Alert) bool {
 	return false
 }
 
+const (
+	// alertLifecycleProjectionConsumer names the replay watermark shared by the
+	// incident-timeline and canonical resource-change projections, which one
+	// replay pass applies together.
+	alertLifecycleProjectionConsumer = "alert-lifecycle-timelines-v1"
+	// alertProjectionCheckpointEvery bounds how much replay progress a mid-pass
+	// crash can lose: the watermark is persisted after this many visited events
+	// as well as at the end of a completed pass.
+	alertProjectionCheckpointEvery = 512
+)
+
+// scheduleAlertProjectionCatchUp runs lifecycle projection replay and
+// active-alert reconciliation in the background. The walk is bounded by the
+// durable projection watermark, so it must never run synchronously on the
+// serving path: a large un-projected backlog (first boot after upgrade, a
+// reset watermark) would otherwise block router construction and health
+// serving, and dev supervisors kill an unresponsive backend long before a full
+// 200MB-log replay finishes.
+func (m *Monitor) scheduleAlertProjectionCatchUp() {
+	if m == nil {
+		return
+	}
+	m.alertProjectionWG.Add(1)
+	go func() {
+		defer m.alertProjectionWG.Done()
+		defer recoverFromPanic("alertProjectionCatchUp")
+		m.replayAlertLifecycleProjections()
+		m.reconcileActiveAlertTimelines()
+	}()
+}
+
 func (m *Monitor) replayAlertLifecycleProjections() {
 	if m == nil || m.alertManager == nil {
 		return
 	}
-	if err := m.alertManager.ReplayLifecycleEvents(func(event alerts.LifecycleEvent) error {
+	// Serialize passes instead of skipping: a second trigger waits for the
+	// in-flight pass and then walks the (now tiny) remaining tail, so callers
+	// that need replay-complete semantics can rely on a finished call.
+	m.alertProjectionReplayMu.Lock()
+	defer m.alertProjectionReplayMu.Unlock()
+
+	m.mu.RLock()
+	_, hasRecorder := m.resourceStore.(canonicalResourceChangeRecorder)
+	hasIncidents := m.incidentStore != nil
+	m.mu.RUnlock()
+	// The watermark only advances when the full projection surface is
+	// attached. A pass that runs before the canonical resource store exists
+	// repairs what it can but must not mark those events applied, or their
+	// resource-timeline projections would never materialize.
+	advance := hasRecorder && hasIncidents
+
+	afterID := m.alertManager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer)
+	maxApplied := afterID
+	visited := 0
+	err := m.alertManager.ReplayLifecycleEvents(afterID, func(eventID int64, event alerts.LifecycleEvent) error {
 		m.handleAlertLifecycleEvent(event)
+		if eventID > maxApplied {
+			maxApplied = eventID
+		}
+		visited++
+		if advance && visited%alertProjectionCheckpointEvery == 0 {
+			m.alertManager.StoreLifecycleProjectionWatermark(alertLifecycleProjectionConsumer, maxApplied)
+		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		log.Error().Err(err).Msg("failed to replay canonical alert lifecycle projections")
+		return
+	}
+	if advance && maxApplied > afterID {
+		m.alertManager.StoreLifecycleProjectionWatermark(alertLifecycleProjectionConsumer, maxApplied)
+	}
+	if visited > 0 {
+		log.Info().
+			Int("events", visited).
+			Int64("watermark", maxApplied).
+			Bool("watermarkAdvanced", advance).
+			Msg("alert lifecycle projection replay completed")
 	}
 }
 
@@ -477,7 +546,11 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 	if alert == nil || m == nil {
 		return
 	}
+	// Background catch-up replay runs concurrently with SetResourceStore, so
+	// the store handle must be read under the monitor lock.
+	m.mu.RLock()
 	recorder, ok := m.resourceStore.(canonicalResourceChangeRecorder)
+	m.mu.RUnlock()
 	if !ok || recorder == nil {
 		return
 	}

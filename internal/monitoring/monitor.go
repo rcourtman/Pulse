@@ -1111,6 +1111,8 @@ type Monitor struct {
 	alertPushCallback          func(*alerts.Alert)
 	connectionsSnapshotLister  func() []alerts.ConnectionSnapshot // returns platform connection snapshots for the connection-degraded check
 	incidentStore              *memory.IncidentStore
+	alertProjectionReplayMu    sync.Mutex     // serializes lifecycle projection replay passes
+	alertProjectionWG          sync.WaitGroup // tracks scheduled background catch-up runs
 	notificationMgr            *notifications.NotificationManager
 	deadMan                    *deadManRuntime
 	deadManProgressUnixNano    atomic.Int64
@@ -2004,11 +2006,13 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		m.discoveryService = nil
 	}
 
-	// Set up alert callbacks
+	// Set up alert callbacks. Projection replay is deliberately absent here:
+	// the canonical resource store is not attached yet, so a replay now could
+	// not advance the durable watermark and would walk the same events again
+	// at the SetResourceStore boundary, which owns the single scheduled
+	// catch-up pass.
 	m.alertManager.SubscribeLifecycleCallback(m.handleAlertLifecycleEvent)
 	m.wireExternalAlertCallbacks(wsHub)
-	m.replayAlertLifecycleProjections()
-	m.reconcileActiveAlertTimelines()
 	m.markDeadManMonitoringProgress(time.Now().UTC())
 	if err := m.deadManConfigurationLoadError(); err != nil {
 		m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{
@@ -4572,11 +4576,12 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 		}
 	}
 	if timelineAttached {
-		// NewMonitor replays before the API-owned durable resource store is
-		// attached. Replay again at the canonical boundary so restart repair
-		// reaches resource history as well as the incident fallback cache.
-		m.replayAlertLifecycleProjections()
-		m.reconcileActiveAlertTimelines()
+		// The canonical boundary: with the durable resource store attached,
+		// restart repair can reach resource history as well as the incident
+		// fallback cache, and the replay watermark may advance. Run it in the
+		// background — router construction and health serving must not wait
+		// behind an un-projected backlog.
+		m.scheduleAlertProjectionCatchUp()
 	}
 
 	// Immediately backfill the store from current state so ReadState

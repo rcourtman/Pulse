@@ -2311,6 +2311,17 @@ The monitor-owned incident store wiring must therefore attach the canonical
 resource timeline reader whenever the unified monitor adapter is present, so
 operator alert timelines and AI incident context project those lifecycle events
 from canonical history instead of reading a second monitoring-owned timeline.
+Lifecycle projection replay is bounded by a durable projection watermark
+(`alert-lifecycle-timelines-v1`, stored beside the event log) and runs as one
+background catch-up pass scheduled at the canonical resource-store boundary —
+never synchronously on router construction or health serving, because a large
+un-projected backlog must delay projections, not startup. The watermark
+advances, with periodic mid-pass checkpoints, only when a pass runs with both
+the incident store and the canonical resource-change recorder attached; a
+partial-surface pass repairs what it can without marking events applied.
+Resetting the watermark to zero forces a full repair replay for rebuilt
+projection stores, while wiping a projection store without resetting the
+watermark leaves already-applied events to request-time read-repair only.
 
 The registry proof map now treats provider discovery and metrics history as
 their own governed runtime surfaces instead of leaving them folded into a
