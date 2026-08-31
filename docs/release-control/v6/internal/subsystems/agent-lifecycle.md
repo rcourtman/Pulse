@@ -186,7 +186,15 @@ check before classification or rewrite. Stop failure or a still-active process
 retains every backup and never restores predecessor files beneath that process.
 Indeterminate activation recovery may unmask and re-enable the runner only
 after rebuilding and durably committing both files; otherwise it leaves the
-unit masked, disabled, and backed up.
+unit masked, disabled, and backed up. Before that recovery path restarts a
+retained replacement, it must reload and revalidate the effective FragmentPath,
+drop-in absence, executable, identity, environment file, address families, and
+hardening properties. A failed effective-target check retains the exact new
+credential and runtime but re-establishes the disabled runtime mask instead of
+starting the rejected root unit. Re-fencing is itself fail-closed: disable,
+runtime-mask, daemon-reload, and inactive-state checks must all succeed before
+the installer may claim the rejected unit is fenced or discard predecessor
+repair artifacts.
 Issuance and every runner boundary use the same
 bounded action-identity vocabulary. Credential
 rotation is a prepare/commit transaction. Issuance stores a ten-minute pending
@@ -2374,6 +2382,13 @@ agent inventory, registration state, or command-channel readiness.
    rolling back, or deleting the recovery handoff.
    The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Public control-plane hostnames remain HTTPS/WSS, but self-hosted local control planes may use plain HTTP/WS when the host is loopback, a private, link-local, or carrier-grade NAT IP, a single-label LAN name, or a local DNS suffix such as `.local`, `.lan`, `.home`, `.home.arpa`, or `.internal`; installer-persisted local HTTP URLs must not be accepted by one runtime path and rejected by another.
    Plaintext to a host that does not look local is available only as an explicit operator override: the `--allow-plaintext-http` flag (`PULSE_AGENT_ALLOW_PLAINTEXT_HTTP`) records process-wide consent through `securityutil.SetOperatorPlaintextHTTPConsent` before any module validates a URL, applies uniformly to every agent transport (HTTP and WS), warns at startup that the API token travels in cleartext, defaults closed, and is never emitted by generated install commands. It exists for self-hosted networks numbered from nominally public IP space; the Pulse server never sets it.
+   Bearer-bearing collector HTTP requests never inherit an ambient proxy for a
+   plaintext destination, including an explicitly allowed local/private or
+   operator-consented URL. They connect directly to the selected destination
+   so `HTTP_PROXY` cannot silently receive the cleartext credential. HTTPS
+   destinations may continue to use the operator's proxy environment because
+   the bearer stays inside the authenticated TLS tunnel; redirects remain
+   forbidden in both cases.
    The unified agent CLI copy follows the same command-execution vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Pulse command execution for Patrol actions and governed Proxmox LXC Docker inventory rather than reviving AI auto-fix language.
    The `--disk-exclude` help text must describe device names or paths and
    mount-point patterns, and the repeatable flag must append values rather than

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -501,6 +502,23 @@ func (a *Agent) nextReportSequenceID() string {
 	return agentshost.FormatReportSequenceID(a.reportStreamID, a.reportSequence.Add(1))
 }
 
+func agentControlPlaneProxy(request *http.Request) (*url.URL, error) {
+	return resolveAgentControlPlaneProxy(request, http.ProxyFromEnvironment)
+}
+
+func resolveAgentControlPlaneProxy(request *http.Request, ambient func(*http.Request) (*url.URL, error)) (*url.URL, error) {
+	if request == nil || request.URL == nil || strings.EqualFold(request.URL.Scheme, "http") {
+		// Plaintext self-hosted control-plane traffic already carries its bearer
+		// in the clear on the explicitly selected local/private path. Never let
+		// ambient process state silently redirect that credential to a proxy.
+		return nil, nil
+	}
+	if ambient == nil {
+		return nil, nil
+	}
+	return ambient(request)
+}
+
 func newAgentHTTPClient(caCertPath string, insecureSkipVerify bool, serverFingerprint string) (*http.Client, error) {
 	tlsConfig, err := agenttls.NewClientTLSConfig(caCertPath, insecureSkipVerify, serverFingerprint)
 	if err != nil {
@@ -509,7 +527,7 @@ func newAgentHTTPClient(caCertPath string, insecureSkipVerify bool, serverFinger
 	return &http.Client{
 		Timeout: 15 * time.Second,
 		Transport: &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
+			Proxy:           agentControlPlaneProxy,
 			TLSClientConfig: tlsConfig,
 		},
 		// Redirects can rewrite report POSTs to GETs and must never cross an

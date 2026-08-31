@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -77,6 +78,51 @@ func TestNew_AllowsLocalNetworkHTTPPulseURL(t *testing.T) {
 	}
 	if agent.trimmedPulseURL != "http://192.168.0.98:7655" {
 		t.Fatalf("trimmedPulseURL = %q", agent.trimmedPulseURL)
+	}
+}
+
+func TestAgentControlPlaneProxyKeepsPlaintextBearerTrafficDirect(t *testing.T) {
+	proxyURL, err := url.Parse("http://proxy.example:3128")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ambientCalls := 0
+	ambient := func(*http.Request) (*url.URL, error) {
+		ambientCalls++
+		return proxyURL, nil
+	}
+
+	plaintext, err := http.NewRequest(http.MethodPost, "http://192.168.0.98:7655/api/agents/report", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveAgentControlPlaneProxy(plaintext, ambient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil || ambientCalls != 0 {
+		t.Fatalf("plaintext proxy = %v, ambient calls = %d; want direct transport", got, ambientCalls)
+	}
+
+	secure, err := http.NewRequest(http.MethodPost, "https://pulse.example/api/agents/report", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = resolveAgentControlPlaneProxy(secure, ambient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.String() != proxyURL.String() || ambientCalls != 1 {
+		t.Fatalf("HTTPS proxy = %v, ambient calls = %d; want %s", got, ambientCalls, proxyURL)
+	}
+
+	client, err := newAgentHTTPClient("", false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport.Proxy == nil {
+		t.Fatal("agent HTTP transport does not use the credential-aware proxy policy")
 	}
 }
 

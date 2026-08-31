@@ -6676,33 +6676,48 @@ func TestInstallSHActionRunnerPostCommitReadinessFailureRetainsReplacement(t *te
 		recoveryConfigFailure bool
 		stopFailure           bool
 		rollback              bool
+		effectiveTargetValid  bool
+		effectiveTargetDrifts bool
+		remaskFailure         bool
 		tokenWriteBody        string
 		wantToken             string
 	}{
 		{
 			name: "durable pending cancellation authorizes rollback", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 0`, rollback: true,
-			tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "old:token\n",
+			effectiveTargetValid: true, tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "old:token\n",
 		},
 		{
 			name: "activation committed or cancel indeterminate", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 1`,
-			tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
+			effectiveTargetValid: true, tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
+		},
+		{
+			name: "unsafe effective target stays fenced after indeterminate cancellation", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 1`,
+			effectiveTargetValid: false, tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
+		},
+		{
+			name: "post-install effective target drift stays fenced", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 1`,
+			effectiveTargetValid: true, effectiveTargetDrifts: true, tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
+		},
+		{
+			name: "effective target remask failure retains repair artifacts", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 1`,
+			effectiveTargetValid: false, remaskFailure: true, tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
 		},
 		{
 			name: "replacement authority state durable write failure", cancelBody: "return 1", recoveryConfigFailure: true,
-			tokenWriteBody: `: > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "",
+			effectiveTargetValid: true, tokenWriteBody: `: > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "",
 		},
 		{
 			name: "failed stop retains fenced recovery material", cancelBody: "return 91", stopFailure: true,
-			tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
+			effectiveTargetValid: true, tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			testInstallSHActionRunnerReadinessFailureRetainsReplacement(t, test.cancelBody, test.recoveryConfigFailure, test.stopFailure, test.rollback, test.tokenWriteBody, test.wantToken)
+			testInstallSHActionRunnerReadinessFailureRetainsReplacement(t, test.cancelBody, test.recoveryConfigFailure, test.stopFailure, test.rollback, test.effectiveTargetValid, test.effectiveTargetDrifts, test.remaskFailure, test.tokenWriteBody, test.wantToken)
 		})
 	}
 }
 
-func testInstallSHActionRunnerReadinessFailureRetainsReplacement(t *testing.T, cancelBody string, recoveryConfigFailure, stopFailure, rollback bool, tokenWriteBody, wantToken string) {
+func testInstallSHActionRunnerReadinessFailureRetainsReplacement(t *testing.T, cancelBody string, recoveryConfigFailure, stopFailure, rollback, effectiveTargetValid, effectiveTargetDrifts, remaskFailure bool, tokenWriteBody, wantToken string) {
 	t.Helper()
 	cancelFunction := `cancel_pending_action_runner_credential() { ` + cancelBody + `; }`
 	root := t.TempDir()
@@ -6746,6 +6761,11 @@ CURL_CA_BUNDLE=""
 EXIT_GENERAL=1
 RECOVERY_CONFIG_FAILURE="` + strconv.FormatBool(recoveryConfigFailure) + `"
 STOP_FAILURE="` + strconv.FormatBool(stopFailure) + `"
+EFFECTIVE_TARGET_VALID="` + strconv.FormatBool(effectiveTargetValid) + `"
+EFFECTIVE_TARGET_DRIFTS="` + strconv.FormatBool(effectiveTargetDrifts) + `"
+EFFECTIVE_TARGET_MARKER="` + filepath.Join(root, "effective-target-validated") + `"
+REMASK_FAILURE="` + strconv.FormatBool(remaskFailure) + `"
+MASK_COUNT_FILE="` + filepath.Join(root, "runtime-mask-count") + `"
 CONFIG_WRITE_MARKER="` + filepath.Join(root, "config-write-marker") + `"
 SERVICE_ACTIVE_MARKER="` + filepath.Join(root, "service-active-marker") + `"
 generate_action_runner_activation_nonce() { printf '%064d\n' 0; }
@@ -6778,6 +6798,15 @@ stat() {
 systemctl() {
     printf '%s\n' "$*" >> "` + serviceLog + `"
     case "$1" in
+		mask)
+			mask_count=0
+			if [[ -e "$MASK_COUNT_FILE" ]]; then read -r mask_count < "$MASK_COUNT_FILE"; fi
+			mask_count=$((mask_count + 1))
+			printf '%s\n' "$mask_count" > "$MASK_COUNT_FILE"
+			if [[ "$REMASK_FAILURE" == "true" && "$mask_count" -gt 2 ]]; then
+				return 1
+			fi
+			;;
         restart) : > "$SERVICE_ACTIVE_MARKER" ;;
         stop)
             if [[ "$STOP_FAILURE" == "true" ]]; then
@@ -6790,12 +6819,20 @@ systemctl() {
     return 0
 }
 action_runner_health_matches_activation() { return 1; }
+action_runner_verify_effective_target() {
+	[[ "$EFFECTIVE_TARGET_VALID" == "true" ]] || return 1
+	if [[ "$EFFECTIVE_TARGET_DRIFTS" == "true" && -e "$EFFECTIVE_TARGET_MARKER" ]]; then
+		return 1
+	fi
+	: > "$EFFECTIVE_TARGET_MARKER"
+}
 resolve_action_runner_agent_id() { printf 'agent-1\n'; }
 ` + cancelFunction + `
 sleep() { return 0; }
 log_error() { printf 'ERROR: %s\n' "$1" >&2; }
 log_info() { printf 'INFO: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
+` + extractInstallShellFunction(t, "action_runner_reestablish_repair_fence") + `
 ` + extractInstallShellFunction(t, "provision_action_runner") + `
 provision_action_runner
 `
@@ -6844,10 +6881,11 @@ provision_action_runner
 	if err != nil {
 		t.Fatal(err)
 	}
-	if (recoveryConfigFailure || stopFailure) && len(backups) == 0 {
+	retainsRepairArtifacts := recoveryConfigFailure || stopFailure || remaskFailure
+	if retainsRepairArtifacts && len(backups) == 0 {
 		t.Fatal("durable authority-state failure removed every predecessor backup before repair")
 	}
-	if !recoveryConfigFailure && !stopFailure && len(backups) != 0 {
+	if !retainsRepairArtifacts && len(backups) != 0 {
 		t.Fatalf("revoked predecessor backups retained: %v", backups)
 	}
 	serviceCalls, err := os.ReadFile(serviceLog)
@@ -6863,7 +6901,7 @@ provision_action_runner
 	if disableAt < 0 || maskAt < disableAt || writeAt < maskAt {
 		t.Fatalf("runner was not disabled and runtime-masked before authority files changed: %s", serviceCalls)
 	}
-	if (recoveryConfigFailure || stopFailure) && strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
+	if (recoveryConfigFailure || stopFailure || remaskFailure) && strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
 		t.Fatalf("runner restarted without a complete durable authority state: %s", serviceCalls)
 	}
 	serviceLines := "\n" + string(serviceCalls)
@@ -6872,11 +6910,22 @@ provision_action_runner
 	if (recoveryConfigFailure || stopFailure) && lastMaskAt < lastUnmaskAt {
 		t.Fatalf("runner remained unmasked without a complete durable authority state: %s", serviceCalls)
 	}
-	if !recoveryConfigFailure && !stopFailure && !strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
+	if !recoveryConfigFailure && !stopFailure && effectiveTargetValid && !effectiveTargetDrifts && !strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
 		t.Fatalf("replacement was not stopped for classification and restarted for repair: %s", serviceCalls)
 	}
-	if !recoveryConfigFailure && !stopFailure && lastUnmaskAt < lastMaskAt {
+	if !recoveryConfigFailure && !stopFailure && effectiveTargetValid && !effectiveTargetDrifts && lastUnmaskAt < lastMaskAt {
 		t.Fatalf("complete authority state was not unmasked for restart: %s", serviceCalls)
+	}
+	if !recoveryConfigFailure && !stopFailure && (!effectiveTargetValid || effectiveTargetDrifts) {
+		if strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
+			t.Fatalf("unsafe effective target was restarted: %s", serviceCalls)
+		}
+		if lastMaskAt < lastUnmaskAt || !strings.Contains(string(out), "effective-target validation") {
+			t.Fatalf("unsafe effective target did not remain fenced with an actionable diagnostic:\n%s\n%s", serviceCalls, out)
+		}
+	}
+	if remaskFailure && !strings.Contains(string(out), "could not re-establish the disabled runtime mask") {
+		t.Fatalf("remask failure was not surfaced explicitly:\n%s\n%s", serviceCalls, out)
 	}
 }
 
