@@ -150,7 +150,21 @@ The same supported Linux systemd profile can install `pulse-agent-runner` only
 through the separate `--enable-action-runner` choice, a private token file,
 and the already selected typed helper profile. The runner binary, unit,
 configuration, credential, health record, and receipt database are root-owned
-and independent from collector state. Activation is transactional: the server
+and independent from collector state. Before any restart or activation, the
+installer stages the bearer and environment on the same root-owned filesystem,
+synchronizes the complete temporary file, atomically renames it into place,
+and synchronizes the containing directory. It disables and runtime-masks an
+existing unit before either file changes, without interrupting the
+already-running predecessor, and unmask/re-enables it only after both files are
+durably complete. The runtime mask suppresses `Restart=on-failure` during the
+transaction; persistent disablement keeps it closed after reboot. A write, ownership,
+identity, sync, or rename failure cannot expose a partially written live file
+or make mixed authority state bootable. Indeterminate recovery must rebuild
+both files before re-enable, and readiness failure re-establishes the
+stop/disable/runtime-mask fence plus an authoritative inactive-state check
+before classification or rewrite. Stop failure or a still-active process never
+restores predecessor files beneath that process. Failure leaves the unit
+masked, disabled, and backed up. Activation is transactional: the server
 keeps the prior credential valid while a bounded replacement registers without
 dispatch authority in a separate pending session slot. Pending reconnects can
 replace only that slot and cannot evict or interrupt the active dispatch

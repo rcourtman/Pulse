@@ -1395,6 +1395,10 @@ EOF
 write_action_runner_config() {
     local runner_hostname="$HOSTNAME_OVERRIDE"
     local runner_agent_id=""
+    local runner_env_target="$ACTION_RUNNER_ENV_FILE"
+    local ACTION_RUNNER_ENV_FILE="$runner_env_target"
+    local runner_env_tmp=""
+    local old_umask=""
     if [[ -L "$ACTION_RUNNER_CONFIG_DIR" || -L "$ACTION_RUNNER_STATE_DIR" ||
           -L "$ACTION_RUNNER_TOKEN_FILE" || -L "$ACTION_RUNNER_ENV_FILE" ]]; then
         fail "Refusing unsafe symlink in the action-runner config or state boundary" "$EXIT_GENERAL"
@@ -1409,7 +1413,8 @@ write_action_runner_config() {
 	fi
 
     if [[ -n "$ACTION_TOKEN" ]]; then
-        printf '%s\n' "$ACTION_TOKEN" > "$ACTION_RUNNER_TOKEN_FILE"
+        persist_action_runner_replacement_token "$ACTION_TOKEN" ||
+            fail "Could not atomically persist the action-runner credential" "$EXIT_GENERAL"
     elif [[ ! -s "$ACTION_RUNNER_TOKEN_FILE" ]]; then
         fail "--enable-action-runner requires a separate --action-token-file on first install" "$EXIT_MISSING_ARGS"
     fi
@@ -1428,7 +1433,14 @@ write_action_runner_config() {
 		fail "Action runner requires a safely resolved canonical collector identity" "$EXIT_MISSING_ARGS"
 	AGENT_ID="$runner_agent_id"
 
-    : > "$ACTION_RUNNER_ENV_FILE"
+    old_umask=$(umask)
+    umask 077
+    runner_env_tmp=$(mktemp "${ACTION_RUNNER_CONFIG_DIR%/}/.runner-env.XXXXXX") || {
+        umask "$old_umask"
+        fail "Could not stage the action-runner environment" "$EXIT_GENERAL"
+    }
+    umask "$old_umask"
+    ACTION_RUNNER_ENV_FILE="$runner_env_tmp"
     chmod 0600 "$ACTION_RUNNER_ENV_FILE"
     write_action_runner_env_value "PULSE_URL" "$PULSE_URL"
     write_action_runner_env_value "PULSE_AGENT_RUNNER_TOKEN_FILE" "$ACTION_RUNNER_TOKEN_FILE"
@@ -1447,6 +1459,13 @@ write_action_runner_config() {
         write_action_runner_env_value "PULSE_INSECURE" "true"
     fi
     chown root:root "$ACTION_RUNNER_ENV_FILE"
+    if ! sync -f "$ACTION_RUNNER_ENV_FILE" ||
+       ! mv -f "$ACTION_RUNNER_ENV_FILE" "$runner_env_target" ||
+       ! sync -f "$ACTION_RUNNER_CONFIG_DIR"; then
+        rm -f "$runner_env_tmp"
+        fail "Could not atomically persist the action-runner environment" "$EXIT_GENERAL"
+    fi
+    ACTION_RUNNER_ENV_FILE="$runner_env_target"
 }
 
 generate_action_runner_activation_nonce() {
@@ -1647,6 +1666,7 @@ provision_action_runner() {
 	local replacement_action_token=""
 	local expected_agent_id=""
 	local expected_hostname="$HOSTNAME_OVERRIDE"
+	local runner_stop_succeeded="false"
 
 	if [[ -n "$ACTION_TOKEN" ]]; then
 		credential_replacement_requested="true"
@@ -1677,6 +1697,10 @@ provision_action_runner() {
 	ACTION_RUNNER_ACTIVATION_NONCE="$activation_nonce"
 	if (
 		set -e
+		if [[ "$had_unit" == "true" ]]; then
+			systemctl disable "${ACTION_RUNNER_NAME}.service"
+			systemctl mask --runtime "${ACTION_RUNNER_NAME}.service"
+		fi
 		rm -f "$ACTION_RUNNER_HEALTH_FILE"
         mkdir -p "$PRIVILEGE_HELPER_DIR"
         install -o root -g root -m 0755 "$TMP_ACTION_RUNNER_BIN" "${ACTION_RUNNER_BINARY_PATH}.new"
@@ -1687,6 +1711,7 @@ provision_action_runner() {
         chown root:root "${ACTION_RUNNER_SERVICE_UNIT}.new"
         chmod 0644 "${ACTION_RUNNER_SERVICE_UNIT}.new"
         mv "${ACTION_RUNNER_SERVICE_UNIT}.new" "$ACTION_RUNNER_SERVICE_UNIT"
+		systemctl unmask --runtime "${ACTION_RUNNER_NAME}.service"
         systemctl daemon-reload
         action_runner_verify_effective_target
         systemctl enable "${ACTION_RUNNER_NAME}.service"
@@ -1712,17 +1737,33 @@ provision_action_runner() {
     fi
 
 	if [[ "$runner_active" != "true" ]]; then
-		systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+		if systemctl stop "${ACTION_RUNNER_NAME}.service" 2>/dev/null; then
+			runner_stop_succeeded="true"
+		fi
+		if ! systemctl disable "${ACTION_RUNNER_NAME}.service" 2>/dev/null ||
+		   ! systemctl mask --runtime "${ACTION_RUNNER_NAME}.service" 2>/dev/null; then
+			ACTION_RUNNER_ACTIVATION_NONCE=""
+			fail "Action runner recovery could not fence automatic restart; the runner was stopped and local recovery material was retained" "$EXIT_GENERAL"
+		fi
+		if [[ "$runner_stop_succeeded" != "true" ]] ||
+		   systemctl is-active --quiet "${ACTION_RUNNER_NAME}.service" 2>/dev/null; then
+			ACTION_RUNNER_ACTIVATION_NONCE=""
+			fail "Action runner recovery could not confirm the replacement is inactive; the unit remains masked and disabled, and every local recovery artifact was retained" "$EXIT_GENERAL"
+		fi
 		if [[ "$credential_replacement_requested" == "true" ]]; then
 			expected_agent_id=$(resolve_action_runner_agent_id || true)
 			if ! cancel_pending_action_runner_credential "$expected_agent_id" "$expected_hostname" "$replacement_action_token"; then
 				log_error "The server did not durably confirm cancellation of the pending action-runner credential. The predecessor cannot be restored because activation may already be committed."
-				if ! persist_action_runner_replacement_token "$replacement_action_token"; then
+				if ! (
+					ACTION_TOKEN="$replacement_action_token"
+					write_action_runner_config
+				); then
 					replacement_action_token=""
-					log_error "Could not durably persist the exact replacement action-runner credential. The runner remains stopped, the predecessor was not restored, and action-runner re-enrollment is required."
+					log_error "Could not durably persist the complete replacement action-runner credential and environment. The runner remains disabled, the predecessor was not restored, and action-runner re-enrollment is required."
 					ACTION_RUNNER_ACTIVATION_NONCE=""
-					fail "Action runner credential recovery requires re-enrollment; no predecessor credential was restored" "$EXIT_GENERAL"
+					fail "Action runner authority-state recovery requires re-enrollment; no predecessor credential was restored" "$EXIT_GENERAL"
 				fi
+				ACTION_TOKEN=""
 				log_error "The exact replacement credential and runtime were retained durably; repair is required."
 				replacement_action_token=""
 				rm -f "${ACTION_RUNNER_BINARY_PATH}.new" "${ACTION_RUNNER_SERVICE_UNIT}.new"
@@ -1732,6 +1773,7 @@ provision_action_runner() {
 					"${ACTION_RUNNER_ENV_FILE}${backup_suffix}" \
 					"${ACTION_RUNNER_TOKEN_FILE}${backup_suffix}"
 				systemctl daemon-reload 2>/dev/null || true
+				systemctl unmask --runtime "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
 				systemctl enable --now "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
 				ACTION_RUNNER_ACTIVATION_NONCE=""
 				fail "Action runner activation requires repair; the new credential and runtime were retained and the previous credential was not restored" "$EXIT_GENERAL"
@@ -1756,6 +1798,7 @@ provision_action_runner() {
         fi
         systemctl daemon-reload 2>/dev/null || true
         if [[ "$had_unit" == "true" && "$had_binary" == "true" ]]; then
+			systemctl unmask --runtime "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
             systemctl enable --now "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
 		fi
 		ACTION_RUNNER_ACTIVATION_NONCE=""

@@ -146,7 +146,24 @@ registration does not wait for the collector's first-report identity file;
 the private identity file remains the compatibility fallback for installs
 whose ID is generated later. That direct binding is authoritative for runner
 startup, activation health, and self-revocation even if a stale collector
-identity file is present. Issuance and every runner boundary use the same
+identity file is present. Before any runner restart or activation attempt, the
+installer replaces both the root-only bearer file and the root-owned
+environment through same-filesystem temporary files, synchronizes each file,
+renames it atomically, and synchronizes the containing directory. An existing
+unit is disabled and runtime-masked before either live file changes, while its
+already-running predecessor may continue with its in-memory credential until
+the final restart. The mask prevents `Restart=on-failure` from reopening mixed
+on-disk state during that interval; disabling preserves the same fail-closed
+posture across a reboot, where the runtime mask no longer exists.
+A staging, identity, or sync failure cannot truncate a live file or make mixed
+on-disk authority state bootable. Readiness failure re-establishes the
+stop/disable/runtime-mask fence and requires an authoritative inactive-state
+check before classification or rewrite. Stop failure or a still-active process
+retains every backup and never restores predecessor files beneath that process.
+Indeterminate activation recovery may unmask and re-enable the runner only
+after rebuilding and durably committing both files; otherwise it leaves the
+unit masked, disabled, and backed up.
+Issuance and every runner boundary use the same
 bounded action-identity vocabulary. Credential
 rotation is a prepare/commit transaction. Issuance stores a ten-minute pending
 replacement beside the active predecessor; the pending transport may register

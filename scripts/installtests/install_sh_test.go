@@ -5999,7 +5999,8 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 		`action_runner_health_matches_activation "$expected_agent_id" "$activation_nonce"`,
 		`[[ "$health_agent_id" == "$expected_agent_id" && "$health_activation_nonce" == "$expected_nonce" ]]`,
 		`cancel_pending_action_runner_credential "$expected_agent_id" "$expected_hostname" "$replacement_action_token"`,
-		`persist_action_runner_replacement_token "$replacement_action_token"`,
+		`ACTION_TOKEN="$replacement_action_token"`,
+		`Could not durably persist the complete replacement action-runner credential and environment`,
 		`if ! cancel_pending_action_runner_credential`,
 		`The exact replacement credential and runtime were retained durably`,
 		`did not durably confirm cancellation`,
@@ -6043,10 +6044,18 @@ EXIT_MISSING_ARGS=2
 fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
 chown() { return 0; }
+stat() {
+    case "$1:$2" in
+        '-c:%u') printf '0\n' ;;
+        '-c:%a') printf '600\n' ;;
+        *) command stat "$@" ;;
+    esac
+}
 ` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
 ` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
 ` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
 ` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
+` + extractInstallShellFunction(t, "persist_action_runner_replacement_token") + `
 ` + extractInstallShellFunction(t, "write_action_runner_config") + `
 write_action_runner_config
 `
@@ -6060,6 +6069,129 @@ write_action_runner_config
 	want := `PULSE_AGENT_RUNNER_AGENT_ID="agent-bound-before-collector-report"`
 	if !strings.Contains(string(content), want) {
 		t.Fatalf("action-runner environment missing immediate identity binding %q:\n%s", want, content)
+	}
+	for path, wantMode := range map[string]os.FileMode{
+		filepath.Join(root, "config", "token"): 0o600,
+		envFile:                                0o600,
+	} {
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Fatal(statErr)
+		}
+		if got := info.Mode().Perm(); got != wantMode {
+			t.Fatalf("%s mode = %o, want %o", path, got, wantMode)
+		}
+	}
+}
+
+func TestInstallSHActionRunnerConfigFailureLeavesOnlyCompleteFiles(t *testing.T) {
+	for _, test := range []struct {
+		name            string
+		failPattern     string
+		wantToken       string
+		wantEnvironment string
+		wantDiagnostic  string
+	}{
+		{
+			name:            "credential sync failure preserves predecessor",
+			failPattern:     ".replacement-token.",
+			wantToken:       "old-runner-token\n",
+			wantEnvironment: "old-runner-environment\n",
+			wantDiagnostic:  "atomically persist the action-runner credential",
+		},
+		{
+			name:            "environment sync failure preserves complete environment",
+			failPattern:     ".runner-env.",
+			wantToken:       "new-runner-token\n",
+			wantEnvironment: "old-runner-environment\n",
+			wantDiagnostic:  "atomically persist the action-runner environment",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			configDir := filepath.Join(root, "config")
+			stateDir := filepath.Join(root, "state")
+			if err := os.MkdirAll(configDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			tokenPath := filepath.Join(configDir, "token")
+			envPath := filepath.Join(configDir, "runner.env")
+			if err := os.WriteFile(tokenPath, []byte("old-runner-token\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(envPath, []byte("old-runner-environment\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			script := `
+set -u
+ACTION_RUNNER_CONFIG_DIR="` + configDir + `"
+ACTION_RUNNER_STATE_DIR="` + stateDir + `"
+ACTION_RUNNER_TOKEN_FILE="` + tokenPath + `"
+ACTION_RUNNER_ENV_FILE="` + envPath + `"
+ACTION_RUNNER_HEALTH_FILE="` + filepath.Join(stateDir, "health.json") + `"
+ACTION_RUNNER_ACTIVATION_NONCE="` + strings.Repeat("a", 64) + `"
+STATE_DIR="` + filepath.Join(root, "collector") + `"
+HOSTNAME_OVERRIDE="secure-runtime.lab"
+AGENT_ID="agent-durable"
+ACTION_TOKEN="new-runner-token"
+PULSE_URL="https://pulse.example"
+SERVER_FINGERPRINT=""
+CURL_CA_BUNDLE=""
+INSECURE="false"
+EXIT_GENERAL=1
+EXIT_MISSING_ARGS=2
+FAIL_PATTERN="` + test.failPattern + `"
+fail() { printf '%s\n' "$1" >&2; exit "$2"; }
+install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
+chown() { return 0; }
+stat() {
+    case "$1:$2" in
+        '-c:%u') printf '0\n' ;;
+        '-c:%a') printf '600\n' ;;
+        *) command stat "$@" ;;
+    esac
+}
+sync() {
+    if [[ "${2:-}" == *"$FAIL_PATTERN"* ]]; then
+        return 1
+    fi
+    command sync "$@"
+}
+` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
+` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
+` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
+` + extractInstallShellFunction(t, "persist_action_runner_replacement_token") + `
+` + extractInstallShellFunction(t, "write_action_runner_config") + `
+write_action_runner_config
+`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err == nil || !strings.Contains(string(out), test.wantDiagnostic) {
+				t.Fatalf("fault injection did not fail closed: %v\n%s", err, out)
+			}
+			if strings.Contains(string(out), "new-runner-token") {
+				t.Fatalf("credential leaked in failure output: %s", out)
+			}
+			for path, want := range map[string]string{tokenPath: test.wantToken, envPath: test.wantEnvironment} {
+				got, readErr := os.ReadFile(path)
+				if readErr != nil {
+					t.Fatalf("read %s: %v", path, readErr)
+				}
+				if string(got) != want {
+					t.Fatalf("%s = %q, want complete %q", path, got, want)
+				}
+			}
+			for _, pattern := range []string{".replacement-token.*", ".runner-env.*"} {
+				matches, globErr := filepath.Glob(filepath.Join(configDir, pattern))
+				if globErr != nil {
+					t.Fatal(globErr)
+				}
+				if len(matches) != 0 {
+					t.Fatalf("temporary authority files were retained: %v", matches)
+				}
+			}
+		})
 	}
 }
 
@@ -6089,6 +6221,7 @@ install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$des
 ` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
 ` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
 ` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "persist_action_runner_replacement_token") + `
 ` + extractInstallShellFunction(t, "write_action_runner_config") + `
 write_action_runner_config
 `
@@ -6158,12 +6291,20 @@ EXIT_MISSING_ARGS=2
 fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 install() { local destination="${!#}"; mkdir -p "$destination"; chmod 0700 "$destination"; }
 chown() { return 0; }
+stat() {
+    case "$1:$2" in
+        '-c:%u') printf '0\n' ;;
+        '-c:%a') printf '600\n' ;;
+        *) command stat "$@" ;;
+    esac
+}
 ` + extractInstallShellFunction(t, "collector_lifecycle_binary") + `
 ` + extractInstallShellFunction(t, "read_action_runner_env_value") + `
 ` + extractInstallShellFunction(t, "resolve_action_runner_agent_id") + `
 ` + extractInstallShellFunction(t, "write_action_runner_env_value") + `
 ` + extractInstallShellFunction(t, "action_runner_url_uses_loopback_http") + `
 ` + extractInstallShellFunction(t, "action_runner_url_transport_allowed") + `
+` + extractInstallShellFunction(t, "persist_action_runner_replacement_token") + `
 ` + extractInstallShellFunction(t, "write_action_runner_config") + `
 write_action_runner_config
 printf 'attacker-rewrite\n' > "${STATE_DIR}/agent-id"
@@ -6279,12 +6420,13 @@ action_runner_health_matches_activation "agent-1" "` + nonce + `"
 
 func TestInstallSHActionRunnerPostCommitReadinessFailureRetainsReplacement(t *testing.T) {
 	for _, test := range []struct {
-		name           string
-		cancelBody     string
-		persistFailure bool
-		rollback       bool
-		tokenWriteBody string
-		wantToken      string
+		name                  string
+		cancelBody            string
+		recoveryConfigFailure bool
+		stopFailure           bool
+		rollback              bool
+		tokenWriteBody        string
+		wantToken             string
 	}{
 		{
 			name: "durable pending cancellation authorizes rollback", cancelBody: `[[ "$3" == "new-runner-token" ]] || return 1; return 0`, rollback: true,
@@ -6295,23 +6437,23 @@ func TestInstallSHActionRunnerPostCommitReadinessFailureRetainsReplacement(t *te
 			tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
 		},
 		{
-			name: "replacement token durable write failure", cancelBody: "return 1", persistFailure: true,
+			name: "replacement authority state durable write failure", cancelBody: "return 1", recoveryConfigFailure: true,
 			tokenWriteBody: `: > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "",
+		},
+		{
+			name: "failed stop retains fenced recovery material", cancelBody: "return 91", stopFailure: true,
+			tokenWriteBody: `printf 'new-runner-token\n' > "$ACTION_RUNNER_TOKEN_FILE"`, wantToken: "new-runner-token\n",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			testInstallSHActionRunnerReadinessFailureRetainsReplacement(t, test.cancelBody, test.persistFailure, test.rollback, test.tokenWriteBody, test.wantToken)
+			testInstallSHActionRunnerReadinessFailureRetainsReplacement(t, test.cancelBody, test.recoveryConfigFailure, test.stopFailure, test.rollback, test.tokenWriteBody, test.wantToken)
 		})
 	}
 }
 
-func testInstallSHActionRunnerReadinessFailureRetainsReplacement(t *testing.T, cancelBody string, persistFailure, rollback bool, tokenWriteBody, wantToken string) {
+func testInstallSHActionRunnerReadinessFailureRetainsReplacement(t *testing.T, cancelBody string, recoveryConfigFailure, stopFailure, rollback bool, tokenWriteBody, wantToken string) {
 	t.Helper()
 	cancelFunction := `cancel_pending_action_runner_credential() { ` + cancelBody + `; }`
-	persistFunction := extractInstallShellFunction(t, "persist_action_runner_replacement_token")
-	if persistFailure {
-		persistFunction = `persist_action_runner_replacement_token() { return 1; }`
-	}
 	root := t.TempDir()
 	binPath := filepath.Join(root, "bin", "pulse-agent-runner")
 	unitPath := filepath.Join(root, "systemd", "pulse-agent-runner.service")
@@ -6351,9 +6493,18 @@ PULSE_URL="http://127.0.0.1:7655"
 INSECURE="true"
 CURL_CA_BUNDLE=""
 EXIT_GENERAL=1
+RECOVERY_CONFIG_FAILURE="` + strconv.FormatBool(recoveryConfigFailure) + `"
+STOP_FAILURE="` + strconv.FormatBool(stopFailure) + `"
+CONFIG_WRITE_MARKER="` + filepath.Join(root, "config-write-marker") + `"
+SERVICE_ACTIVE_MARKER="` + filepath.Join(root, "service-active-marker") + `"
 generate_action_runner_activation_nonce() { printf '%064d\n' 0; }
 restore_selinux_contexts() { return 0; }
 write_action_runner_config() {
+    printf 'write-config\n' >> "` + serviceLog + `"
+    if [[ -e "$CONFIG_WRITE_MARKER" && "$RECOVERY_CONFIG_FAILURE" == "true" ]]; then
+        return 1
+    fi
+    : > "$CONFIG_WRITE_MARKER"
     ` + tokenWriteBody + `
     printf 'new:env\n' > "$ACTION_RUNNER_ENV_FILE"
 }
@@ -6375,6 +6526,16 @@ stat() {
 }
 systemctl() {
     printf '%s\n' "$*" >> "` + serviceLog + `"
+    case "$1" in
+        restart) : > "$SERVICE_ACTIVE_MARKER" ;;
+        stop)
+            if [[ "$STOP_FAILURE" == "true" ]]; then
+                return 1
+            fi
+            rm -f "$SERVICE_ACTIVE_MARKER"
+            ;;
+        is-active) [[ -e "$SERVICE_ACTIVE_MARKER" ]] ; return ;;
+    esac
     return 0
 }
 action_runner_health_matches_activation() { return 1; }
@@ -6384,7 +6545,6 @@ sleep() { return 0; }
 log_error() { printf 'ERROR: %s\n' "$1" >&2; }
 log_info() { printf 'INFO: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
-` + persistFunction + `
 ` + extractInstallShellFunction(t, "provision_action_runner") + `
 provision_action_runner
 `
@@ -6396,14 +6556,19 @@ provision_action_runner
 		if !strings.Contains(string(out), "rolling back runner-only files") || strings.Contains(string(out), "retained durably") {
 			t.Fatalf("204 cancellation did not exclusively authorize predecessor restore:\n%s", out)
 		}
-	} else if persistFailure {
+	} else if stopFailure {
+		if !strings.Contains(string(out), "could not confirm the replacement is inactive") ||
+			strings.Contains(string(out), "did not durably confirm cancellation") {
+			t.Fatalf("failed stop did not retain fenced recovery state before classification:\n%s", out)
+		}
+	} else if recoveryConfigFailure {
 		if strings.Contains(string(out), "retained durably") || !strings.Contains(string(out), "re-enrollment") {
-			t.Fatalf("durable token failure did not fail closed for re-enrollment:\n%s", out)
+			t.Fatalf("durable authority-state failure did not fail closed for re-enrollment:\n%s", out)
 		}
 	} else if !strings.Contains(string(out), "replacement credential and runtime were retained durably") || !strings.Contains(string(out), "repair") {
 		t.Fatalf("missing repair-required result:\n%s", out)
 	}
-	if !rollback && !strings.Contains(string(out), "did not durably confirm cancellation") {
+	if !rollback && !stopFailure && !strings.Contains(string(out), "did not durably confirm cancellation") {
 		t.Fatalf("missing atomic cancellation diagnostic:\n%s", out)
 	}
 	wantBinary, wantUnit, wantEnv := "new:runner\n", "new:unit\n", "new:env\n"
@@ -6428,10 +6593,10 @@ provision_action_runner
 	if err != nil {
 		t.Fatal(err)
 	}
-	if persistFailure && len(backups) == 0 {
-		t.Fatal("durable token failure removed every predecessor backup before repair")
+	if (recoveryConfigFailure || stopFailure) && len(backups) == 0 {
+		t.Fatal("durable authority-state failure removed every predecessor backup before repair")
 	}
-	if !persistFailure && len(backups) != 0 {
+	if !recoveryConfigFailure && !stopFailure && len(backups) != 0 {
 		t.Fatalf("revoked predecessor backups retained: %v", backups)
 	}
 	serviceCalls, err := os.ReadFile(serviceLog)
@@ -6441,11 +6606,26 @@ provision_action_runner
 	if !strings.Contains(string(serviceCalls), "stop pulse-agent-runner.service") {
 		t.Fatalf("replacement was not stopped before classification: %s", serviceCalls)
 	}
-	if persistFailure && strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
-		t.Fatalf("runner restarted without a durably retained replacement credential: %s", serviceCalls)
+	disableAt := strings.Index(string(serviceCalls), "disable pulse-agent-runner.service")
+	maskAt := strings.Index(string(serviceCalls), "mask --runtime pulse-agent-runner.service")
+	writeAt := strings.Index(string(serviceCalls), "write-config")
+	if disableAt < 0 || maskAt < disableAt || writeAt < maskAt {
+		t.Fatalf("runner was not disabled and runtime-masked before authority files changed: %s", serviceCalls)
 	}
-	if !persistFailure && !strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
+	if (recoveryConfigFailure || stopFailure) && strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
+		t.Fatalf("runner restarted without a complete durable authority state: %s", serviceCalls)
+	}
+	serviceLines := "\n" + string(serviceCalls)
+	lastMaskAt := strings.LastIndex(serviceLines, "\nmask --runtime pulse-agent-runner.service")
+	lastUnmaskAt := strings.LastIndex(serviceLines, "\nunmask --runtime pulse-agent-runner.service")
+	if (recoveryConfigFailure || stopFailure) && lastMaskAt < lastUnmaskAt {
+		t.Fatalf("runner remained unmasked without a complete durable authority state: %s", serviceCalls)
+	}
+	if !recoveryConfigFailure && !stopFailure && !strings.Contains(string(serviceCalls), "enable --now pulse-agent-runner.service") {
 		t.Fatalf("replacement was not stopped for classification and restarted for repair: %s", serviceCalls)
+	}
+	if !recoveryConfigFailure && !stopFailure && lastUnmaskAt < lastMaskAt {
+		t.Fatalf("complete authority state was not unmasked for restart: %s", serviceCalls)
 	}
 }
 
