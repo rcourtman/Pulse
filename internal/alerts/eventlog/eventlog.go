@@ -85,6 +85,11 @@ type Filter struct {
 	Since   time.Time
 	Until   time.Time
 	Limit   int
+	// AfterID restricts matches to events with a strictly greater durable id.
+	// It is the projection-watermark cursor: replay consumers pass the highest
+	// id they have fully applied so a walk visits only the un-projected tail
+	// instead of the whole log.
+	AfterID int64
 }
 
 const (
@@ -802,6 +807,10 @@ func eventFilterWhere(filter Filter) ([]string, []any) {
 	if !filter.Until.IsZero() {
 		where = append(where, "occurred_at <= ?")
 		args = append(args, filter.Until.UTC().Format(time.RFC3339Nano))
+	}
+	if filter.AfterID > 0 {
+		where = append(where, "id > ?")
+		args = append(args, filter.AfterID)
 	}
 	return where, args
 }

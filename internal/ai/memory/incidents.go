@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -272,6 +273,8 @@ type IncidentStoreConfig struct {
 type IncidentStore struct {
 	mu                    sync.RWMutex
 	saveMu                sync.Mutex
+	savePending           atomic.Bool  // a queued save will capture the latest state; further requests coalesce
+	savesCompleted        atomic.Int64 // completed saveToDisk passes, observable by tests
 	incidents             []*incidentShell
 	maxIncidents          int
 	maxEvents             int
@@ -1482,6 +1485,14 @@ func (s *IncidentStore) saveAsync() {
 	if s.dataDir == "" || s.filePath == "" {
 		return
 	}
+	// Coalesce: each save marshals the whole store, so a burst of mutations
+	// (lifecycle replay, alert storms) must not queue one full serialization
+	// per call. One pending save is enough — it snapshots the store when it
+	// runs, so it covers every mutation made before it started, and any
+	// mutation after the pending flag clears queues exactly one more save.
+	if !s.savePending.CompareAndSwap(false, true) {
+		return
+	}
 	go func() {
 		if err := s.saveToDisk(); err != nil {
 			log.Warn().Err(err).Msg("failed to save incident history")
@@ -1492,6 +1503,11 @@ func (s *IncidentStore) saveAsync() {
 func (s *IncidentStore) saveToDisk() error {
 	s.saveMu.Lock()
 	defer s.saveMu.Unlock()
+
+	// Clear the coalescing flag only once this save actually starts: the
+	// snapshot below covers every mutation made before this point, and a
+	// mutation after it queues exactly one follow-up save.
+	s.savePending.Store(false)
 
 	if s.dataDir == "" || s.filePath == "" {
 		return nil
@@ -1519,6 +1535,7 @@ func (s *IncidentStore) saveToDisk() error {
 	if err := os.Rename(tmpFile, s.filePath); err != nil {
 		return err
 	}
+	s.savesCompleted.Add(1)
 	return nil
 }
 

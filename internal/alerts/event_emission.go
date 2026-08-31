@@ -73,13 +73,16 @@ func (m *Manager) AlertEvents(filter eventlog.Filter) ([]eventlog.Event, error) 
 	return store.Query(filter)
 }
 
-// ReplayLifecycleEvents visits every durable lifecycle transition and migrated
-// history snapshot oldest first. It is the projection-repair seam for
-// consumers such as incident and resource timelines: delivery callbacks are
-// deliberately not involved. Migrated snapshots carry a final occurrence
-// state rather than a transition; consumers must expand only the facts present
-// in that snapshot.
-func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error {
+// ReplayLifecycleEvents visits durable lifecycle transitions and migrated
+// history snapshots with ids above afterID, oldest occurrence first. It is the
+// projection-repair seam for consumers such as incident and resource
+// timelines: delivery callbacks are deliberately not involved. Migrated
+// snapshots carry a final occurrence state rather than a transition; consumers
+// must expand only the facts present in that snapshot. afterID is the
+// consumer's projection watermark (zero replays the full log); the visitor
+// receives each event's durable id so it can advance that watermark once the
+// event's projections are applied.
+func (m *Manager) ReplayLifecycleEvents(afterID int64, visit func(eventID int64, event LifecycleEvent) error) error {
 	if m == nil || visit == nil {
 		return nil
 	}
@@ -87,7 +90,7 @@ func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error 
 	if store == nil {
 		return nil
 	}
-	return store.WalkOldest(eventlog.Filter{Types: []string{
+	return store.WalkOldest(eventlog.Filter{AfterID: afterID, Types: []string{
 		eventlog.TypeFired,
 		eventlog.TypeRefired,
 		eventlog.TypeResolved,
@@ -108,7 +111,7 @@ func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error 
 				Msg("skipping invalid alert lifecycle snapshot during projection replay")
 			return nil
 		}
-		return visit(LifecycleEvent{
+		return visit(event.ID, LifecycleEvent{
 			Type:       event.Type,
 			OccurredAt: event.OccurredAt,
 			Alert:      &snapshot,
@@ -116,6 +119,31 @@ func (m *Manager) ReplayLifecycleEvents(visit func(LifecycleEvent) error) error 
 			Persisted:  true,
 		})
 	})
+}
+
+// LifecycleProjectionWatermark returns the durable replay watermark for a
+// named projection consumer, or zero when no event log is enabled.
+func (m *Manager) LifecycleProjectionWatermark(name string) int64 {
+	if m == nil {
+		return 0
+	}
+	return m.eventLogStore().ProjectionWatermark(name)
+}
+
+// StoreLifecycleProjectionWatermark durably advances (or resets) the replay
+// watermark for a named projection consumer. Failures are logged, not fatal:
+// a stale watermark only means the next replay revisits already-idempotent
+// projections.
+func (m *Manager) StoreLifecycleProjectionWatermark(name string, eventID int64) {
+	if m == nil {
+		return
+	}
+	if err := m.eventLogStore().SetProjectionWatermark(name, eventID); err != nil {
+		log.Warn().Err(err).
+			Str("consumer", name).
+			Int64("eventID", eventID).
+			Msg("failed to persist lifecycle projection watermark")
+	}
 }
 
 // recordAlertEvent emits one canonical lifecycle transition and appends it to

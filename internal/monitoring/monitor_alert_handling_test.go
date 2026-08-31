@@ -345,6 +345,7 @@ func TestLifecycleReplayMaterializesImportedHistoryTimeline(t *testing.T) {
 	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore))
 	monitor.SetResourceStore(adapter)
 	monitor.SetResourceStore(adapter)
+	monitor.alertProjectionWG.Wait()
 
 	timeline := incidentStore.GetTimelineByAlertAt(snapshot.ID, snapshot.StartTime)
 	if timeline == nil || timeline.Status != memory.IncidentStatusResolved || !timeline.Acknowledged {
@@ -359,6 +360,72 @@ func TestLifecycleReplayMaterializesImportedHistoryTimeline(t *testing.T) {
 	}
 	if len(changes) != 3 {
 		t.Fatalf("imported canonical changes = %d, want fired, acknowledged, and resolved", len(changes))
+	}
+}
+
+func TestLifecycleReplayWatermarkBoundsSubsequentPasses(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	manager.EnableEventLog()
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+
+	vm := models.VM{ID: "watermark-vm", Name: "Watermark VM", Node: "node-1", Instance: "pve-1", Status: "stopped"}
+	manager.CheckGuest(vm, vm.Instance)
+	manager.CheckGuest(vm, vm.Instance)
+	vm.Status = "running"
+	manager.CheckGuest(vm, vm.Instance)
+
+	// A pass without the canonical resource store repairs incidents but must
+	// not advance the durable watermark, or resource-timeline projections for
+	// those events would never materialize.
+	partial := &Monitor{alertManager: manager, incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{})}
+	partial.replayAlertLifecycleProjections()
+	if got := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer); got != 0 {
+		t.Fatalf("watermark after partial-surface replay = %d, want 0", got)
+	}
+
+	resourceStore := unifiedresources.NewMemoryStore()
+	monitor := &Monitor{
+		alertManager:  manager,
+		incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{}),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
+	}
+	monitor.replayAlertLifecycleProjections()
+	watermark := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer)
+	if watermark == 0 {
+		t.Fatal("watermark did not advance after full-surface replay")
+	}
+
+	// A later pass walks only events beyond the watermark, so fresh projection
+	// stores stay empty: nothing is left to replay.
+	freshResources := unifiedresources.NewMemoryStore()
+	rerun := &Monitor{
+		alertManager:  manager,
+		incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{}),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(freshResources)),
+	}
+	rerun.replayAlertLifecycleProjections()
+	if changes, err := freshResources.GetRecentChanges(vm.ID, time.Time{}, 10); err != nil || len(changes) != 0 {
+		t.Fatalf("bounded pass wrote %d changes (err %v), want none", len(changes), err)
+	}
+
+	// Resetting the watermark forces a full repair replay for rebuilt stores.
+	manager.StoreLifecycleProjectionWatermark(alertLifecycleProjectionConsumer, 0)
+	rerun.replayAlertLifecycleProjections()
+	changes, err := freshResources.GetRecentChanges(vm.ID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges after watermark reset: %v", err)
+	}
+	if len(changes) != 2 {
+		t.Fatalf("reset replay wrote %d canonical changes, want fired and resolved", len(changes))
+	}
+	if got := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer); got != watermark {
+		t.Fatalf("watermark after reset replay = %d, want %d", got, watermark)
 	}
 }
 
