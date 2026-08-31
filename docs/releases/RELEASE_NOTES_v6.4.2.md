@@ -19,7 +19,10 @@ actions and SSO-only deployments.
 - **Same-name Proxmox estates stay distinct after restart** - Durable identity recovery now uses qualified provider endpoints and fails closed on reused short names or IP addresses, preventing one estate from absorbing another during provider-first startup.
 - **Partial Proxmox cluster coverage is visible** - Infrastructure settings now names uncovered nodes, explains that each needs its own agent for host telemetry, and offers node-level install actions instead of treating partial coverage as complete.
 - **Agent Doctor reports privilege-helper degradation** - Failures in the typed local privilege helper now appear as a bounded diagnostic reason while affected telemetry is omitted without widening the collector's privileges.
-- **Release workflow checkouts retain their security boundary** - Build, qualification, publication, recovery, and deployment workflows now use the protected checkout baseline and reject privileged fork checkout paths.
+- **Action-runner upgrades fail closed and recover durably** - Installer updates now stage authority files atomically, fence the runner during replacement, and preserve a consistent recovery state when activation or credential cancellation is interrupted.
+- **TrueNAS API keys identify their owner** - Adding or editing an API-key connection now requires the key owner's username, avoiding ambiguous credentials that TrueNAS cannot authenticate reliably.
+- **Configuration forms expose reliable labels** - Settings, setup, alert, infrastructure, and workload controls now provide programmatic labels for screen readers and other assistive technology.
+- **Privileged workflows stay bound to canonical code** - Build, qualification, publication, recovery, deployment, retry, and security workflows now validate their protected checkout baseline and reject privileged fork or substituted-code execution paths.
 
 ## Before you upgrade
 
