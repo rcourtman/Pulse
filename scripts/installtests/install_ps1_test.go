@@ -110,6 +110,7 @@ func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
 
 	workflow := string(content)
 	required := []string{
+		`uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0`,
 		`node-version: '24'`,
 		`$selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'`,
 		`$selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'`,

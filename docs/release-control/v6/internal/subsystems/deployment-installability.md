@@ -4712,3 +4712,17 @@ The opt-in belongs only to the generated systemd service. Container and
 terminal output remain unprefixed, and the logger tees the unmodified record to
 the rotating file sink and authenticated live-log broadcaster. Installer and
 logging tests pin the unit directives, level mapping, and sink isolation.
+
+### Release automation preserves protected checkout semantics
+
+Every repository checkout in build, packaging, publication, qualification,
+recovery, and deployment automation uses the reviewed immutable
+`actions/checkout` v6.1.0 pin. That baseline refuses fork pull-request checkout
+on privileged events unless a workflow explicitly opts out; Pulse prohibits
+that opt-out and the `pull_request_target` trigger. Dependency refreshes must
+update the central workflow-trust allowlist and its regression proof together,
+so a routine pin change cannot silently remove this release-automation trust
+boundary. `scripts/check_workflow_trust.py`,
+`scripts/tests/test_workflow_trust.py`, and
+`scripts/installtests/build_release_assets_test.go` pin the policy and the
+release-workflow integration.

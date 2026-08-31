@@ -7,6 +7,12 @@ smoke suite. Remote actions and reusable workflows must use full commit SHAs,
 container actions must use SHA-256 digests, and GitHub-hosted runners must use
 dated image labels rather than moving `-latest` aliases.
 
+Checkout pins additionally belong to a reviewed allowlist whose current floor
+includes GitHub's fail-closed fork-PR protection for privileged events. The
+audit prohibits `pull_request_target` entirely and rejects checkout's
+`allow-unsafe-pr-checkout` opt-out; privileged work must remain isolated from
+pull-request code rather than bypassing the upstream guard.
+
 Every `actions/checkout` step must also set `persist-credentials` explicitly.
 Use `false` unless a later command in the same job performs an authenticated
 Git write. The small number of write-path exceptions use `true` with the

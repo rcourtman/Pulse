@@ -43,6 +43,12 @@ SECRET_CONTEXT_TOKEN_RE = re.compile(r"(?<![\w.])secrets\b")
 # configuration mechanism. Confidential credentials have no PR exception.
 NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
+# v6.1.0 backports checkout's fail-closed fork-PR protection for privileged
+# pull_request_target and workflow_run events. Keep this exact-pin allowlist
+# reviewable: a dependency refresh must not silently discard that boundary.
+PROTECTED_CHECKOUT_PINS = frozenset(
+    {"d23441a48e516b6c34aea4fa41551a30e30af803"}
+)
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
 PERMISSIONS_RE = re.compile(r"^(\s*)permissions\s*:\s*(.*?)\s*$")
 JOBS_RE = re.compile(r"^(\s*)jobs\s*:\s*$")
@@ -198,6 +204,16 @@ def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
     findings = _audit_runner_job_timeouts(path, lines)
 
+    if _has_trigger(lines, "pull_request_target"):
+        findings.append(
+            Finding(
+                path,
+                1,
+                "pull_request_target is prohibited; use pull_request or isolate "
+                "privileged work from pull-request code",
+            )
+        )
+
     if _has_trigger(lines, "pull_request"):
         for index, line in enumerate(lines):
             code = line.split("#", 1)[0]
@@ -326,9 +342,35 @@ def audit_workflow(path: Path) -> list[Finding]:
         # applying checkout-specific credential controls.
         if not dependency.lower().startswith(CHECKOUT_PREFIX):
             continue
+        if ref not in PROTECTED_CHECKOUT_PINS:
+            findings.append(
+                Finding(
+                    path,
+                    line_number,
+                    "checkout pin is outside the reviewed privileged-event "
+                    "protection baseline",
+                )
+            )
+        checkout_block = _checkout_block(lines, index)
+        unsafe_pr_settings = [
+            (block_index, block_line)
+            for block_index, block_line in checkout_block
+            if re.match(r"^\s*allow-unsafe-pr-checkout\s*:", block_line)
+        ]
+        for setting_index, setting in unsafe_pr_settings:
+            if not re.match(
+                r"^\s*allow-unsafe-pr-checkout\s*:\s*false(?:\s|$)", setting
+            ):
+                findings.append(
+                    Finding(
+                        path,
+                        setting_index + 1,
+                        "checkout must not opt out of privileged-event PR protection",
+                    )
+                )
         credential_settings = [
             (block_index, block_line)
-            for block_index, block_line in _checkout_block(lines, index)
+            for block_index, block_line in checkout_block
             if re.match(r"^\s*persist-credentials\s*:", block_line)
         ]
         if len(credential_settings) != 1:

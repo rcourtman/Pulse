@@ -25,14 +25,14 @@ jobs:
         working-directory: repos/pulse
     steps:
       - name: Checkout repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
           fetch-depth: 1
           path: repos/pulse
 
       - name: Checkout pulse-pro evidence repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: rcourtman/pulse-pro
           token: ${{ secrets.WORKFLOW_PAT }}
@@ -41,7 +41,7 @@ jobs:
           path: repos/pulse-pro
 
       - name: Checkout pulse-enterprise evidence repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: rcourtman/pulse-enterprise
           token: ${{ secrets.WORKFLOW_PAT }}
@@ -50,7 +50,7 @@ jobs:
           path: repos/pulse-enterprise
 
       - name: Checkout pulse-mobile evidence repo
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: rcourtman/pulse-mobile
           token: ${{ secrets.WORKFLOW_PAT }}

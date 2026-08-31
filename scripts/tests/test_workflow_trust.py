@@ -20,6 +20,7 @@ SPEC.loader.exec_module(workflow_trust)
 
 PIN = "a" * 40
 DIGEST = "b" * 64
+CHECKOUT_PIN = next(iter(workflow_trust.PROTECTED_CHECKOUT_PINS))
 
 
 class WorkflowTrustTest(unittest.TestCase):
@@ -38,7 +39,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@{PIN}
+      - uses: actions/checkout@{CHECKOUT_PIN}
         with:
           persist-credentials: false
       - uses: owner/action/path@{PIN} # v1
@@ -161,11 +162,44 @@ steps:
             any("must set persist-credentials" in finding for finding in mixed_case)
         )
 
-    def test_accepts_documented_authenticated_git_write(self) -> None:
+    def test_requires_reviewed_protected_checkout_pin(self) -> None:
         findings = self.audit(
             f"""permissions: {{}}
 steps:
   - uses: actions/checkout@{PIN}
+    with:
+      persist-credentials: false
+"""
+        )
+        self.assertTrue(
+            any(
+                "privileged-event protection baseline" in finding
+                for finding in findings
+            )
+        )
+
+    def test_rejects_privileged_pr_trigger_and_checkout_opt_out(self) -> None:
+        findings = self.audit(
+            f"""on:
+  pull_request_target:
+permissions: {{}}
+steps:
+  - uses: actions/checkout@{CHECKOUT_PIN}
+    with:
+      persist-credentials: false
+      allow-unsafe-pr-checkout: true
+"""
+        )
+        self.assertTrue(
+            any("pull_request_target is prohibited" in finding for finding in findings)
+        )
+        self.assertTrue(any("must not opt out" in finding for finding in findings))
+
+    def test_accepts_documented_authenticated_git_write(self) -> None:
+        findings = self.audit(
+            f"""permissions: {{}}
+steps:
+  - uses: actions/checkout@{CHECKOUT_PIN}
     with:
       persist-credentials: true  # required: authenticated git writes
 """

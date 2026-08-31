@@ -7262,3 +7262,15 @@ The node drawer may use `Node.LinkedAgentID` to label Pulse coverage, but that
 presentation does not combine agent lifecycle with package evidence. The
 polling states are pinned independently in
 `internal/monitoring/node_pending_updates_evidence_test.go`.
+
+### Native agent lifecycle proof preserves protected checkout semantics
+
+The native Linux and Windows agent lifecycle jobs obtain their source through
+the reviewed immutable `actions/checkout` v6.1.0 pin. That baseline refuses
+fork pull-request checkout on privileged events unless a workflow explicitly
+opts out; Pulse prohibits that opt-out and the `pull_request_target` trigger.
+A dependency refresh must update the central workflow-trust allowlist and the
+native lifecycle workflow proof together, so lifecycle qualification cannot
+silently execute under a weaker checkout boundary.
+`scripts/check_workflow_trust.py`, `scripts/tests/test_workflow_trust.py`, and
+`scripts/installtests/install_ps1_test.go` pin that relationship.
