@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 const (
@@ -18,6 +20,9 @@ const (
 	AgentAPITokenHeader             = "X-API-Token"
 	AgentSurfaceHeader              = "X-Pulse-Agent-Surface"
 	AgentSurfacePulseMCP            = "pulse_mcp"
+
+	maxManifestResponseBodyBytes   int64 = 1 << 20  // 1 MiB
+	maxCapabilityResponseBodyBytes int64 = 16 << 20 // 16 MiB
 )
 
 // HTTPDoer is the shared minimum interface for agent-surface HTTP clients.
@@ -130,8 +135,12 @@ func FetchManifest(ctx context.Context, client HTTPDoer, baseURL string) (*Manif
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: status %d", AgentCapabilitiesPath, resp.StatusCode)
 	}
+	body, err := readBoundedResponseBody(resp, maxManifestResponseBodyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("GET %s response: %w", AgentCapabilitiesPath, err)
+	}
 	var manifest Manifest
-	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+	if err := json.Unmarshal(body, &manifest); err != nil {
 		return nil, fmt.Errorf("decode manifest: %w", err)
 	}
 	return &manifest, nil
@@ -174,7 +183,7 @@ func CallCapabilityHTTP(ctx context.Context, client HTTPDoer, baseURL, token str
 		return HTTPCallResponse{}, fmt.Errorf("%s %s: %w", cap.Method, projected.Path, err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBoundedResponseBody(resp, maxCapabilityResponseBodyBytes)
 	if err != nil {
 		return HTTPCallResponse{}, fmt.Errorf("read %s %s response: %w", cap.Method, projected.Path, err)
 	}
@@ -185,6 +194,13 @@ func CallCapabilityHTTP(ctx context.Context, client HTTPDoer, baseURL, token str
 		Header:     resp.Header.Clone(),
 		Body:       body,
 	}, nil
+}
+
+func readBoundedResponseBody(resp *http.Response, limit int64) ([]byte, error) {
+	if err := securityutil.LimitResponseBody(resp, limit); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(resp.Body)
 }
 
 // CallCapabilityHTTPByName resolves and executes a named manifest capability

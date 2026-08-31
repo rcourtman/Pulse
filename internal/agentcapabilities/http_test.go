@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,6 +38,27 @@ func TestFetchManifestUsesSharedDiscoveryPath(t *testing.T) {
 	if manifest.Version != "v1" || len(manifest.Capabilities) != 1 {
 		t.Fatalf("manifest = %+v", manifest)
 	}
+}
+
+func TestFetchManifestRejectsDeclaredOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", fmt.Sprint(maxManifestResponseBodyBytes+1))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	_, err := FetchManifest(context.Background(), server.Client(), server.URL)
+	assertResponseSizeLimitError(t, err, maxManifestResponseBodyBytes)
+}
+
+func TestFetchManifestRejectsUndeclaredOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeUndeclaredOversizedResponse(w, maxManifestResponseBodyBytes)
+	}))
+	defer server.Close()
+
+	_, err := FetchManifest(context.Background(), server.Client(), server.URL)
+	assertResponseSizeLimitError(t, err, maxManifestResponseBodyBytes)
 }
 
 func TestBuildCapabilityHTTPRequestProjectsPathBodyAndAuth(t *testing.T) {
@@ -194,6 +216,68 @@ func TestCallCapabilityHTTPExecutesManifestProjection(t *testing.T) {
 	}
 	if got.Body != `{"reason":"operator requested"}` {
 		t.Fatalf("body = %s", got.Body)
+	}
+}
+
+func TestCallCapabilityHTTPRejectsDeclaredOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", fmt.Sprint(maxCapabilityResponseBodyBytes+1))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	_, err := CallCapabilityHTTP(context.Background(), server.Client(), server.URL, "token", Capability{
+		Name:   FleetContextCapabilityName,
+		Method: http.MethodGet,
+		Path:   FleetContextCapabilityPath,
+	}, nil)
+	assertResponseSizeLimitError(t, err, maxCapabilityResponseBodyBytes)
+}
+
+func TestCallCapabilityHTTPRejectsUndeclaredOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeUndeclaredOversizedResponse(w, maxCapabilityResponseBodyBytes)
+	}))
+	defer server.Close()
+
+	_, err := CallCapabilityHTTP(context.Background(), server.Client(), server.URL, "token", Capability{
+		Name:   FleetContextCapabilityName,
+		Method: http.MethodGet,
+		Path:   FleetContextCapabilityPath,
+	}, nil)
+	assertResponseSizeLimitError(t, err, maxCapabilityResponseBodyBytes)
+}
+
+func assertResponseSizeLimitError(t *testing.T, err error, limit int64) {
+	t.Helper()
+	want := fmt.Sprintf("response body exceeds %d bytes", limit)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func writeUndeclaredOversizedResponse(w http.ResponseWriter, limit int64) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	prefix := []byte(`{"padding":"`)
+	if _, err := w.Write(prefix); err != nil {
+		return
+	}
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
+	chunk := strings.Repeat("x", 32*1024)
+	remaining := limit + 1 - int64(len(prefix))
+	for remaining > 0 {
+		writeSize := int64(len(chunk))
+		if writeSize > remaining {
+			writeSize = remaining
+		}
+		if _, err := io.WriteString(w, chunk[:int(writeSize)]); err != nil {
+			return
+		}
+		remaining -= writeSize
 	}
 }
 
