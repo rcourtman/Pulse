@@ -59,6 +59,17 @@ source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"
 
 HOT_DEV_LAB_MODE_FILE="${HOT_DEV_LAB_MODE_FILE:-${ROOT_DIR}/tmp/hot-dev.lab-agents-mode}"
 
+# Keep build temp files off the boot volume. The Go linker's dsymutil step
+# writes its DWARF output under TMPDIR (not GOTMPDIR), so on a machine with a
+# space-constrained system disk the backend build fails with ENOSPC even
+# though GOCACHE/GOTMPDIR already live on the big volume. Follow the
+# machine's configured GOTMPDIR when one exists.
+HOT_DEV_GO_TMPDIR="$(go env GOTMPDIR 2>/dev/null || true)"
+if [[ -n "${HOT_DEV_GO_TMPDIR}" ]]; then
+    mkdir -p "${HOT_DEV_GO_TMPDIR}" 2>/dev/null || true
+    export TMPDIR="${HOT_DEV_GO_TMPDIR}"
+fi
+
 # --- Helper Functions ---
 
 log_info() { printf "\033[0;34m[hot-dev]\033[0m %s\n" "$1"; }
