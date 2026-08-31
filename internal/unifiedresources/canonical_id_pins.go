@@ -145,8 +145,8 @@ func (index *identityPinIndex) findProxmoxNode(resource Resource, identity Resou
 	}
 
 	clusterName := strings.TrimSpace(identity.ClusterName)
-	endpoint := NormalizeFullHostname(extractHostname(resource.Proxmox.HostURL))
-	if endpoint != "" && net.ParseIP(endpoint) == nil {
+	endpoint := proxmoxProviderPinHostname(resource)
+	if endpoint != "" {
 		if clusterName != "" {
 			if pin, ok := resolvePinBucket(index.byClusterHost[clusterHostPinKey(clusterName, endpoint)], endpoint, machineID, dmiUUID); ok {
 				return pin, true
@@ -169,6 +169,23 @@ func (index *identityPinIndex) findProxmoxNode(resource Resource, identity Resou
 		}
 	}
 	return ResourceIdentityPin{}, false
+}
+
+// proxmoxProviderPinHostname returns endpoint evidence that is sufficiently
+// scoped to persist and recover a Proxmox node pin. IP addresses and
+// single-label names are commonly reused across independent private networks,
+// so neither can distinguish estates on its own. A qualified configured name
+// can preserve standalone continuity without falling back to the native node's
+// typically short hostname.
+func proxmoxProviderPinHostname(resource Resource) string {
+	if resource.Proxmox == nil {
+		return ""
+	}
+	endpoint := NormalizeFullHostname(extractHostname(resource.Proxmox.HostURL))
+	if endpoint == "" || net.ParseIP(endpoint) != nil || !strings.Contains(endpoint, ".") {
+		return ""
+	}
+	return endpoint
 }
 
 // resolvePinBucket resolves a hostname bucket lookup. The bucket must be

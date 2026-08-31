@@ -93,3 +93,36 @@ func TestIssue1753LegacyShortHostnamePinCannotClaimMultipleProviderScopes(t *tes
 		}
 	}
 }
+
+func TestIssue1753RepeatedShortProviderEndpointCannotClaimLegacyPin(t *testing.T) {
+	store := NewMemoryStore()
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID:  MachineIdentityCanonicalID(ResourceTypeAgent, "machine-staging"),
+		ResourceType: ResourceTypeAgent,
+		MachineID:    "machine-staging",
+		Hostname:     "pve",
+	}}); err != nil {
+		t.Fatalf("seed legacy identity pin: %v", err)
+	}
+
+	registry := NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{
+		{ID: "staging-pve", NodeIdentity: "staging-pve", Name: "pve", DisplayName: "Staging", Instance: "staging", Host: "https://pve:8006", Status: "online"},
+		{ID: "production-pve", NodeIdentity: "production-pve", Name: "pve", DisplayName: "Production", Instance: "production", Host: "https://pve:8006", Status: "online"},
+	}})
+
+	var nodes []Resource
+	for _, resource := range registry.ListForPresentation() {
+		if resource.Type == ResourceTypeAgent && resource.Proxmox != nil {
+			nodes = append(nodes, resource)
+		}
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("repeated short endpoint collapsed provider scopes: %+v", nodes)
+	}
+	for _, node := range nodes {
+		if node.Identity.MachineID != "" {
+			t.Fatalf("short endpoint leaked machine identity into %q: %+v", node.Proxmox.Instance, node.Identity)
+		}
+	}
+}

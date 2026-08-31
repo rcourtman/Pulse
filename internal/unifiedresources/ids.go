@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 )
@@ -177,7 +176,7 @@ func identityPinForResource(resource *Resource) (ResourceIdentityPin, bool) {
 	// pin that provider-scoped hostname so a provider-only boot can recover the
 	// machine identity without making the short name globally authoritative.
 	if resource.Proxmox != nil {
-		if endpoint := NormalizeFullHostname(extractHostname(resource.Proxmox.HostURL)); endpoint != "" && net.ParseIP(endpoint) == nil {
+		if endpoint := proxmoxProviderPinHostname(*resource); endpoint != "" {
 			hostname = endpoint
 		}
 	}
