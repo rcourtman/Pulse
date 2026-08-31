@@ -16,17 +16,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
-// suppressBenchLogs disables zerolog for the duration of a benchmark to prevent
-// log I/O from skewing results.
+// TestMain installs a discard-by-default sink, so benchmarks avoid log I/O
+// without mutating zerolog's process-global logger.
 func suppressBenchLogs(b *testing.B) {
 	b.Helper()
-	orig := log.Logger
-	log.Logger = zerolog.Nop()
-	b.Cleanup(func() { log.Logger = orig })
 }
 
 // setBenchUnexportedField sets an unexported field on a struct via reflection.

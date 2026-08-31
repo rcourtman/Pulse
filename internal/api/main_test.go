@@ -19,7 +19,8 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("PULSE_UPDATE_SERVER", "http://127.0.0.1:1")
 	_ = os.Setenv("PULSE_DATA_DIR", dataDir)
 	allowLoopbackSSOFetch = true
-	log.Logger = zerolog.Nop()
+	log.Logger = zerolog.New(testLogSink).Level(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	code := m.Run()
 	_ = os.RemoveAll(dataDir)
 	os.Exit(code)

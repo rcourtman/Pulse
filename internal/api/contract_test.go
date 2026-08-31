@@ -66,7 +66,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	tmock "github.com/stretchr/testify/mock"
 )
 
@@ -24487,19 +24486,13 @@ func TestContract_AuthorizationRefusalKeepsStatusWhileLoggingAtDebug(t *testing.
 
 	// Capture only the request phase — router construction emits unrelated
 	// startup warnings that have nothing to do with authorization.
-	var logBuf bytes.Buffer
-	prevLogger := log.Logger
-	prevLevel := zerolog.GlobalLevel()
-	log.Logger = zerolog.New(&logBuf).Level(zerolog.DebugLevel)
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	logBuf := captureTestLogs(t)
 
 	authDenialMu.Lock()
 	authDenials = make(map[string]*authDenialCounter)
 	authDenialMu.Unlock()
 
 	t.Cleanup(func() {
-		log.Logger = prevLogger
-		zerolog.SetGlobalLevel(prevLevel)
 		authDenialMu.Lock()
 		authDenials = make(map[string]*authDenialCounter)
 		authDenialMu.Unlock()

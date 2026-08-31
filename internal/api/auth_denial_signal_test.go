@@ -1,48 +1,20 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
-// lockedLogBuffer keeps log capture safe when another package goroutine logs
-// while an auth-denial test owns the process-wide zerolog logger. bytes.Buffer
-// is not safe for concurrent writes or for a read racing a write.
-type lockedLogBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *lockedLogBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *lockedLogBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
-}
-
-// captureAuthDenialLogs swaps the global logger for a buffer at debug level and
-// resets the denial tracker, so each case starts from a known window.
+// captureAuthDenialLogs resets the denial tracker and captures logs through the
+// process-wide synchronized test sink, so each case starts from a known window.
 func captureAuthDenialLogs(t *testing.T) *lockedLogBuffer {
 	t.Helper()
 
-	var buf lockedLogBuffer
-	prevLogger := log.Logger
-	prevLevel := zerolog.GlobalLevel()
-	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel)
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	buf := captureTestLogs(t)
 
 	authDenialMu.Lock()
 	authDenials = make(map[string]*authDenialCounter)
@@ -50,15 +22,13 @@ func captureAuthDenialLogs(t *testing.T) *lockedLogBuffer {
 
 	prevNow := authDenialNow
 	t.Cleanup(func() {
-		log.Logger = prevLogger
-		zerolog.SetGlobalLevel(prevLevel)
 		authDenialNow = prevNow
 		authDenialMu.Lock()
 		authDenials = make(map[string]*authDenialCounter)
 		authDenialMu.Unlock()
 	})
 
-	return &buf
+	return buf
 }
 
 func countLogEvents(t *testing.T, buf *lockedLogBuffer, level, message string) int {

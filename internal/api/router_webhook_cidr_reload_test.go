@@ -8,8 +8,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor verifies the fix
@@ -99,22 +97,11 @@ func TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor(t *testing.T) {
 	}
 }
 
-// captureRouterSettingsLogs swaps the global logger for a locked buffer so
+// captureRouterSettingsLogs uses the synchronized process-wide test sink so
 // tests can assert on warnings emitted by system-settings load failures.
 func captureRouterSettingsLogs(t *testing.T) *lockedLogBuffer {
 	t.Helper()
-
-	var buf lockedLogBuffer
-	prevLogger := log.Logger
-	prevLevel := zerolog.GlobalLevel()
-	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel)
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	t.Cleanup(func() {
-		log.Logger = prevLogger
-		zerolog.SetGlobalLevel(prevLevel)
-	})
-
-	return &buf
+	return captureTestLogs(t)
 }
 
 // unreadableSystemSettings returns a ConfigPersistence whose LoadSystemSettings
