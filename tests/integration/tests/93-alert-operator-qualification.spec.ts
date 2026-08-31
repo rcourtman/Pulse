@@ -272,8 +272,12 @@ test.describe('Alert operator qualification', () => {
     });
   });
 
-  test('shows per-alert delivery diagnosis and interleaves held notification evidence', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
+  test('shows per-alert delivery diagnosis and interleaves held notification evidence', async ({ page }, testInfo) => {
+    await page.setViewportSize(
+      testInfo.project.name.startsWith('mobile-')
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 1000 },
+    );
     await routeStateWithActiveAlerts(page, [activeDeliveryAlert]);
     await page.route('**/api/alerts/config', (route) =>
       route.fulfill({
@@ -306,24 +310,33 @@ test.describe('Alert operator qualification', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          overall_healthy: true,
+          overall_healthy: false,
           queue: {
-            status: 'healthy',
-            healthy: true,
+            status: 'degraded',
+            healthy: false,
             pending: 0,
             sending: 0,
             sent: 1,
-            failed: 0,
-            dlq: 0,
-            terminal_failure_count: 0,
-            attention_required: 0,
-            reason_codes: [],
+            failed: 1,
+            dlq: 2,
+            terminal_failure_count: 3,
+            attention_required: 3,
+            reason_codes: ['retained_failed_deliveries', 'retained_dead_letter_deliveries'],
             completed_retention_days: 7,
             dead_letter_retention_days: 30,
             counts_are_retention_bounded: true,
             retry_attempts_affect_health: false,
             terminal_failures_affect_health: true,
-            failure_classes_7d: {},
+            failure_classes_7d: {
+              authentication: 3,
+              rate_limited: 0,
+              connectivity: 0,
+              tls: 0,
+              configuration: 0,
+              rejected: 0,
+              server_error: 0,
+              unknown: 0,
+            },
             failure_classes_available: true,
             failure_class_window_days: 7,
           },
@@ -336,6 +349,8 @@ test.describe('Alert operator qualification', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           window_days: 7,
+          completed_retention_days: 7,
+          dead_letter_retention_days: 30,
           entries: [
             {
               notificationId: 'attempt-1',
@@ -381,6 +396,17 @@ test.describe('Alert operator qualification', () => {
     await page.goto('/alerts/notifications', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Delivery activity' })).toBeVisible();
+    await expect(
+      page.getByText(
+        /Dismiss retained failures to clear this warning without deleting delivery history/,
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'Completed attempts are retained for 7 days. Failures that exhausted retries remain available for 30 days.',
+        { exact: false },
+      ),
+    ).toBeVisible();
     await expect(page.getByText('Deferred')).toBeVisible();
     await expect(page.getByText('Quiet hours')).toBeVisible();
     await expect(page.getByText('Delivered', { exact: true })).toBeVisible();

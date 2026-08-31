@@ -1752,7 +1752,7 @@ func TestRunConfiguresTypedPrivilegeHelperFromInstallerEnvironment(t *testing.T)
 		newHostAgent = originalHost
 	}()
 
-	const socketPath = "/run/pulse-agent/helper.sock"
+	socketPath := filepath.Join(t.TempDir(), "helper.sock")
 	t.Setenv("PULSE_AGENT_HELPER_SOCKET", socketPath)
 	configuredPath := ""
 	configuredUpdatePath := ""
@@ -1817,7 +1817,7 @@ func TestRunRejectsUnhealthyTypedPrivilegeHelper(t *testing.T) {
 		newHostAgent = originalHost
 	}()
 
-	t.Setenv("PULSE_AGENT_HELPER_SOCKET", "/run/pulse-agent/helper.sock")
+	t.Setenv("PULSE_AGENT_HELPER_SOCKET", filepath.Join(t.TempDir(), "helper.sock"))
 	helper := &helperHealthStub{healthErr: errors.New("incompatible helper")}
 	newPrivilegeHelperTelemetry = func(string) (hostagent.PrivilegedTelemetry, error) {
 		return helper, nil

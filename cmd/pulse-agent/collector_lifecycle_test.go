@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/collectorlifecycle"
+	internalsecurity "github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 func TestCollectorLifecycleCommandReducesAuthorityWithFileBearer(t *testing.T) {
@@ -111,6 +112,9 @@ func writeCollectorLifecycleToken(t *testing.T, bearer string) string {
 	path := filepath.Join(t.TempDir(), "collector.token")
 	if err := os.WriteFile(path, []byte(bearer), 0600); err != nil {
 		t.Fatal(err)
+	}
+	if err := internalsecurity.HardenPrivatePath(path, 0600); err != nil {
+		t.Fatalf("harden collector lifecycle token: %v", err)
 	}
 	return path
 }

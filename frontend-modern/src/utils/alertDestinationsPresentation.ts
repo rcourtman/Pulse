@@ -211,7 +211,7 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
       diagnostic = `Most recent terminal failures were classified as ${dominant[0].replace('_', ' ')} (${dominant[1]}). ${guidanceByClass[dominant[0]] ?? guidanceByClass.unknown}`;
     }
   }
-  return `${summary}. These notifications were not delivered. ${diagnostic} Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them; dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.`;
+  return `${summary}. These notifications were not delivered. ${diagnostic} Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them. Dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.`;
 }
 
 export function getAlertDestinationsDeliveryRefreshLabel() {
@@ -266,7 +266,7 @@ export function getAlertDestinationsDeliveryLogDescription(
   completedRetentionDays: number,
   deadLetterRetentionDays: number,
 ) {
-  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days; failures that exhausted retries remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
+  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days. Failures that exhausted retries remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
 }
 
 export function getAlertDestinationsDeliveryLogEmpty() {

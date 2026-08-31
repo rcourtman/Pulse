@@ -2544,6 +2544,8 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		"runs-on: ubuntu-24.04",
 		"attestations: write",
 		"id-token: write",
+		`EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}`,
+		`test "$(git rev-parse HEAD)" = "${EXPECTED_SOURCE_SHA}"`,
 		"./scripts/build-secure-runtime-qualification.sh",
 		"secure-runtime-compiler-subjects.sha256",
 		"secure-runtime-compiler-provenance.sigstore.json",
@@ -2554,6 +2556,9 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	}
 	if strings.Contains(hostedJob, "PULSE_UPDATE_SIGNING_KEY") || strings.Contains(hostedJob, "PULSE_LICENSE_PUBLIC_KEY") {
 		t.Fatal("hosted secure-runtime compiler must not receive private signing or license material")
+	}
+	if strings.Contains(hostedJob, `test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"`) {
+		t.Fatal("hosted secure-runtime compiler must pass the requested source SHA through env instead of generating shell source")
 	}
 
 	builder := read("scripts", "build-secure-runtime-qualification.sh")

@@ -183,7 +183,7 @@ describe('alertDestinationsPresentation', () => {
         failureClassesAvailable: true,
       }),
     ).toBe(
-      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Most recent terminal failures were classified as authentication (3). Check destination credentials, tokens, and account permissions. Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them; dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.',
+      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Most recent terminal failures were classified as authentication (3). Check destination credentials, tokens, and account permissions. Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them. Dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.',
     );
     expect(
       getAlertDestinationsDeliveryHealthDescription({

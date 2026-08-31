@@ -63,9 +63,7 @@ describe('AlertIncidentSynthesisSummary', () => {
     await fireEvent.click(screen.getByText('Review synthesis evidence'));
     expect(screen.getByText('Checkout')).toBeInTheDocument();
     expect(screen.getByText('evidence_checkout')).toBeInTheDocument();
-    expect(
-      screen.getByText(/compare its timing before accepting this cause/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/compare its timing before accepting this cause/i)).toBeInTheDocument();
   });
 
   it('labels contradictory correlation as an observation set without claiming root cause', () => {

@@ -135,12 +135,13 @@ jobs:
 
       - name: Build hosted qualification subjects
         env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           test "$(tr -d '\n' < VERSION)" = "${VERSION}"
-          test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SOURCE_SHA}"
           ./scripts/build-secure-runtime-qualification.sh \
             "${VERSION}" \
             "$RUNNER_TEMP/secure-runtime-qualification" \

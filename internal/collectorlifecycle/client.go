@@ -261,10 +261,9 @@ func readPrivateBearer(path string, tokenOwnerUID *uint64) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("inspect collector lifecycle token file descriptor: %w", err)
 	}
-	// The typed collector credential is root-owned 0640 with read access only
-	// for its dedicated service group. Group write/execute and all other access
-	// are forbidden; 0600 remains valid for legacy/root-only installs.
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0037 != 0 {
+	// Apply the platform-native privacy boundary before validating the owner.
+	// Unix uses mode bits; Windows enforces the equivalent protected DACL below.
+	if !info.Mode().IsRegular() || !credentialFileModePrivate(info) {
 		return "", errors.New("collector lifecycle token file must be a private regular file")
 	}
 	if err := validateCredentialFileOwner(path, info, tokenOwnerUID); err != nil {

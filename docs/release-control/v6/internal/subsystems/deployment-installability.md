@@ -1909,7 +1909,10 @@ artifact-selection behaviour.
    immutable action SHAs, GitHub-hosted jobs must target an explicit Ubuntu LTS
    runner image instead of `ubuntu-latest`, and checked-in CI/test Dockerfiles
    under this subsystem must pin base images by immutable `@sha256` digest and
-   must not depend on floating `:latest` base tags.
+   must not depend on floating `:latest` base tags. Workflow dispatch inputs,
+   secrets, and attacker-controlled event metadata must enter generated runner
+   scripts through explicit environment variables; `${{ }}` interpolation in
+   a `run` program is not an acceptable data boundary.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.

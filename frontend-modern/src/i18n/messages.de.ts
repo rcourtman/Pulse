@@ -82,7 +82,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.synthesis.failure.certificate': 'Zertifikat',
   'alerts.overview.synthesis.failure.dependency': 'Abhaengigkeit',
   'alerts.overview.synthesis.failure.evidenceCoverage': 'Evidenzabdeckung',
-  'alerts.overview.synthesis.counts': '{affected} betroffene Ressourcen · {observations} Beobachtungen',
+  'alerts.overview.synthesis.counts':
+    '{affected} betroffene Ressourcen · {observations} Beobachtungen',
   'alerts.overview.synthesis.review': 'Synthese-Evidenz pruefen',
   'alerts.overview.synthesis.challenge.supported':
     'Alle verknuepften Signale unten oeffnen und ihre Zeitpunkte vergleichen, bevor diese Ursache akzeptiert wird.',

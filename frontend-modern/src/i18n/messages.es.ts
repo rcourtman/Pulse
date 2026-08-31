@@ -81,7 +81,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.overview.synthesis.failure.certificate': 'Certificado',
   'alerts.overview.synthesis.failure.dependency': 'Dependencia',
   'alerts.overview.synthesis.failure.evidenceCoverage': 'Cobertura de evidencia',
-  'alerts.overview.synthesis.counts': '{affected} recursos afectados · {observations} observaciones',
+  'alerts.overview.synthesis.counts':
+    '{affected} recursos afectados · {observations} observaciones',
   'alerts.overview.synthesis.review': 'Revisar la evidencia de la sintesis',
   'alerts.overview.synthesis.challenge.supported':
     'Expande cada senal vinculada y compara su tiempo antes de aceptar esta causa.',

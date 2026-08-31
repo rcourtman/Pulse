@@ -6059,6 +6059,15 @@ the governed frontend toolchain and must therefore select Node.js `24`, in
 parity with the release and integration workflows. That build prerequisite
 does not widen agent runtime or installer authority, but drift to another Node
 major invalidates the native lifecycle job as release evidence.
+Platform-native lifecycle proof must exercise the platform's real filesystem
+boundary rather than importing Unix test assumptions. Collector bearer files
+use owner and mode checks on Unix and protected owner/DACL checks on Windows;
+test credentials must be hardened through that same platform abstraction.
+Privilege-helper test paths must be absolute under the executing platform, and
+download fixtures must derive the release asset OS and architecture from the
+native runner. A fixture that silently requests amd64 on arm64, or a Windows
+test rejected only because `/run/...` is not a Windows absolute path, is not
+valid lifecycle evidence.
 
 Normal release promotion requires platform-native identity for desktop agent
 binaries. macOS agents must be Developer ID signed, submitted successfully to

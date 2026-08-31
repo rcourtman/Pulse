@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,7 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 		}
 	}
 
+	binaryName := "pulse-mcp-" + runtime.GOOS + "-" + runtime.GOARCH
 	tests := []struct {
 		name         string
 		manifest     func(binary []byte) string
@@ -31,7 +33,7 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 			name: "valid signed manifest",
 			manifest: func(binary []byte) string {
 				digest := sha256.Sum256(binary)
-				return fmt.Sprintf("%x  pulse-mcp-linux-amd64\n", digest)
+				return fmt.Sprintf("%x  %s\n", digest, binaryName)
 			},
 			wantSuccess: true,
 			wantOutput:  "release signature verified",
@@ -40,7 +42,7 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 			name: "manifest unavailable",
 			manifest: func(binary []byte) string {
 				digest := sha256.Sum256(binary)
-				return fmt.Sprintf("%x  pulse-mcp-linux-amd64\n", digest)
+				return fmt.Sprintf("%x  %s\n", digest, binaryName)
 			},
 			missingAsset: "checksums.txt",
 			wantOutput:   "could not fetch checksums.txt; refusing unverified install",
@@ -49,7 +51,7 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 			name: "signature unavailable",
 			manifest: func(binary []byte) string {
 				digest := sha256.Sum256(binary)
-				return fmt.Sprintf("%x  pulse-mcp-linux-amd64\n", digest)
+				return fmt.Sprintf("%x  %s\n", digest, binaryName)
 			},
 			missingAsset: "checksums.txt.sshsig",
 			wantOutput:   "could not fetch checksums.txt.sshsig; refusing unverified install",
@@ -58,7 +60,7 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 			name: "signature invalid",
 			manifest: func(binary []byte) string {
 				digest := sha256.Sum256(binary)
-				return fmt.Sprintf("%x  pulse-mcp-linux-amd64\n", digest)
+				return fmt.Sprintf("%x  %s\n", digest, binaryName)
 			},
 			invalidSig: true,
 			wantOutput: "cryptographic signature verification failed for checksums.txt",
@@ -75,16 +77,16 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 			name: "binary duplicated",
 			manifest: func(binary []byte) string {
 				digest := sha256.Sum256(binary)
-				return fmt.Sprintf("%x  pulse-mcp-linux-amd64\n%x  pulse-mcp-linux-amd64\n", digest, digest)
+				return fmt.Sprintf("%x  %s\n%x  %s\n", digest, binaryName, digest, binaryName)
 			},
 			wantOutput: "checksums.txt must contain exactly one valid SHA256 entry",
 		},
 		{
 			name: "digest mismatch",
 			manifest: func(_ []byte) string {
-				return strings.Repeat("0", 64) + "  pulse-mcp-linux-amd64\n"
+				return strings.Repeat("0", 64) + "  " + binaryName + "\n"
 			},
-			wantOutput: "sha256 mismatch for pulse-mcp-linux-amd64",
+			wantOutput: "sha256 mismatch for " + binaryName,
 		},
 	}
 
@@ -101,7 +103,7 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 			}
 
 			binary := []byte("test pulse-mcp executable\n")
-			writeTestFile(t, filepath.Join(fixtureDir, "pulse-mcp-linux-amd64"), binary, 0o644)
+			writeTestFile(t, filepath.Join(fixtureDir, binaryName), binary, 0o644)
 			manifestPath := filepath.Join(fixtureDir, "checksums.txt")
 			writeTestFile(t, manifestPath, []byte(tt.manifest(binary)), 0o644)
 

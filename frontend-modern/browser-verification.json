@@ -1,31 +1,22 @@
 {
   "version": 1,
-  "base_sha": "22fd662fb794f63efb9d3ca2158de73c4e07e1b8",
-  "verified_at": "2026-08-30T23:35:47Z",
+  "base_sha": "fda955627f3dd8d4c844de040e56d209864815e7",
+  "verified_at": "2026-08-31T01:58:05Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/notifications.ts",
-    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
-    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
-    "frontend-modern/src/features/alerts/OverviewTab.tsx",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts",
     "frontend-modern/src/utils/alertDestinationsPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "3351869d747f2b915173d4923c61ee020256930c35d545976c1050976d38e587",
-    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "1f8109a0405636c6e28af4f182fa20c03fe466379962f613960bf9e8eb9aac50",
-    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "b3eb5fb9d465d70d2ce38d36cef287a15df6f79736139fad1f7186b015446760",
-    "frontend-modern/src/features/alerts/OverviewTab.tsx": "663960cfbc9980fac55593e7bcc20d9a72c7ba1947d6c9a73d7ffc242f9b561d",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "f09fe60111afdc634f5dd6dd631c5f0947f3b6fd7d8b213adb17f5b3c27c0534",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "047fe800ad7c4f8ed875f83214a5a161a4342c31799e5efeca5ca2c54054bed1",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "e46ef2147f70229dc5a78c3167c7ec2021059816799e585b7f3e092fa861fdd3"
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "30cda34c77ce5b7f92b7ef71dc5715ddccf831419f258d4419204152c718baea"
   },
-  "routes": ["/alerts/overview", "/alerts/notifications"],
+  "routes": [
+    "/alerts/overview",
+    "/alerts/notifications"
+  ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 1000
     },
     {
       "width": 390,
@@ -33,17 +24,14 @@
     }
   ],
   "states": [
-    "degraded delivery health with one failed and two dead-lettered retained deliveries",
-    "mixed-retention activity with a named webhook, alert identifier, failure class, redacted-safe error text, and absolute timestamp",
-    "refresh in progress with the activity refresh control disabled",
-    "empty delivery activity after a successful refresh",
-    "unavailable delivery activity after a failed refresh",
-    "desktop and narrow layouts with health before activity and no horizontal overflow"
+    "active alert with a rate-limited delivery diagnosis",
+    "degraded delivery health with retained failures and 7/30-day retention",
+    "delivery activity interleaving a held notification and a delivered attempt",
+    "delivery activity after held-event refresh becomes unavailable"
   ],
   "interactions": [
-    "followed Review delivery activity from Alerts Overview to the Notifications route at 1280x800 and 390x844",
-    "confirmed the Notifications activity request used the bounded limit=200 query",
-    "inspected seven-day completed and 30-day dead-letter retention copy plus semantic absolute timestamps at both viewports",
-    "refreshed activity through loading, restored, empty, and unavailable responses and confirmed loading disabled the refresh control"
+    "navigated from alert overview to notifications",
+    "focused and activated Refresh delivery status with the keyboard",
+    "verified retained delivered evidence remains after held-event refresh fallback"
   ]
 }

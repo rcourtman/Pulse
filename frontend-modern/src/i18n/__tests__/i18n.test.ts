@@ -126,7 +126,9 @@ describe('i18n foundation', () => {
       expect(t('alerts.overview.group.acknowledge', { count: 3 }, locale)).toBeTruthy();
       expect(t('alerts.overview.synthesis.title.supported', undefined, locale)).toBeTruthy();
       expect(t('alerts.overview.synthesis.title.observationSet', undefined, locale)).toBeTruthy();
-      expect(t('alerts.overview.synthesis.failure.applicationResponse', undefined, locale)).toBeTruthy();
+      expect(
+        t('alerts.overview.synthesis.failure.applicationResponse', undefined, locale),
+      ).toBeTruthy();
       expect(t('alerts.overview.synthesis.review', undefined, locale)).toBeTruthy();
     }
   });

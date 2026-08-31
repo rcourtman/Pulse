@@ -74,7 +74,7 @@ describe('AlertDeliveryHealthCard', () => {
       'Check destination credentials, tokens, and account permissions',
     );
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'dismiss retained failures to clear this warning without deleting delivery history',
+      'Dismiss retained failures to clear this warning without deleting delivery history',
     );
     expect(screen.getByRole('link', { name: 'Review delivery activity' })).toHaveAttribute(
       'href',
