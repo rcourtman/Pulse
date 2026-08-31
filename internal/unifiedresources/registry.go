@@ -4898,30 +4898,56 @@ func canonicalKubernetesTypedSourceID(clusterSourceID, kind, uid, namespace, nam
 }
 
 func buildKubernetesNodeHostLookup(hosts []models.Host) map[string]*models.Host {
-	lookup := make(map[string]*models.Host, len(hosts)*2)
+	lookup := make(map[string]*models.Host, len(hosts)*3)
 	for i := range hosts {
 		host := &hosts[i]
 		if host == nil {
 			continue
 		}
 
+		machineID := strings.TrimSpace(host.MachineID)
+		if machineID != "" {
+			addKubernetesNodeHostLookupEntry(lookup, "machine:"+machineID, host)
+		}
+
 		exactKey := strings.ToLower(strings.TrimSpace(host.Hostname))
 		if exactKey != "" {
-			lookup["agent:"+exactKey] = host
+			addKubernetesNodeHostLookupEntry(lookup, "agent:"+exactKey, host)
 		}
 
 		normalized := NormalizeHostname(host.Hostname)
 		if normalized != "" {
-			if _, exists := lookup["short:"+normalized]; !exists {
-				lookup["short:"+normalized] = host
-			}
+			addKubernetesNodeHostLookupEntry(lookup, "short:"+normalized, host)
 		}
 	}
 	return lookup
 }
 
+// addKubernetesNodeHostLookupEntry retains nil for ambiguous identifiers so a
+// duplicate hostname or cloned machine ID can never select an arbitrary host.
+func addKubernetesNodeHostLookupEntry(lookup map[string]*models.Host, key string, host *models.Host) {
+	if key == "" || host == nil {
+		return
+	}
+	if existing, exists := lookup[key]; exists {
+		if existing != host {
+			lookup[key] = nil
+		}
+		return
+	}
+	lookup[key] = host
+}
+
 func resolveKubernetesNodeHost(node models.KubernetesNode, lookup map[string]*models.Host) *models.Host {
 	if len(lookup) == 0 {
+		return nil
+	}
+	if machineID := strings.TrimSpace(node.MachineID); machineID != "" {
+		return lookup["machine:"+machineID]
+	}
+	// Host-agent state has no DMI UUID to compare with SystemUUID. Do not
+	// downgrade a strong Kubernetes identity to a hostname guess.
+	if strings.TrimSpace(node.SystemUUID) != "" {
 		return nil
 	}
 

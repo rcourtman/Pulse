@@ -3032,6 +3032,8 @@ func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.Ku
 		Tags: append([]string(nil), node.Roles...),
 	}
 	identity := ResourceIdentity{
+		MachineID: strings.TrimSpace(node.MachineID),
+		DMIUUID:   strings.TrimSpace(node.SystemUUID),
 		Hostnames: uniqueStrings([]string{
 			node.Name,
 			clusterName + ":" + node.Name,

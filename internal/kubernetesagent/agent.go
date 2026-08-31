@@ -1504,6 +1504,8 @@ func (a *Agent) collectNodes(ctx context.Context) ([]agentsk8s.Node, error) {
 			nodes = append(nodes, agentsk8s.Node{
 				UID:                     string(node.UID),
 				Name:                    node.Name,
+				MachineID:               node.Status.NodeInfo.MachineID,
+				SystemUUID:              node.Status.NodeInfo.SystemUUID,
 				Ready:                   ready,
 				Unschedulable:           node.Spec.Unschedulable,
 				KubeletVersion:          node.Status.NodeInfo.KubeletVersion,

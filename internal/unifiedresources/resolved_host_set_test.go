@@ -349,6 +349,26 @@ func TestCollectHostCandidates_K8sMultipleNodes(t *testing.T) {
 	}
 }
 
+func TestCollectHostCandidates_K8sUsesReportedNodeIdentity(t *testing.T) {
+	state := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID: "k1", Name: "k8s-prod", Status: "online",
+			Nodes: []models.KubernetesNode{{
+				UID: "kn1", Name: "node1", Ready: true,
+				MachineID: " machine-1 ", SystemUUID: " system-uuid-1 ",
+			}},
+		}},
+	}
+	candidates := CollectHostCandidates(state, nil, nil, nil, nil)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 K8s node candidate, got %d", len(candidates))
+	}
+	identity := candidates[0].Identity
+	if identity.MachineID != "machine-1" || identity.DMIUUID != "system-uuid-1" {
+		t.Fatalf("unexpected K8s identity: %+v", identity)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // K8s node identity enrichment
 // ---------------------------------------------------------------------------
@@ -421,6 +441,32 @@ func TestEnrichK8sNodeIdentity_AmbiguousNormalizedHostnameSkipsEnrichment(t *tes
 	}
 	if len(identity.MACAddresses) != 0 {
 		t.Fatalf("expected no MAC enrichment on ambiguous normalized hostname, got %v", identity.MACAddresses)
+	}
+}
+
+func TestEnrichK8sNodeIdentity_MachineIDDoesNotTrustDuplicateHostname(t *testing.T) {
+	hosts := []models.Host{
+		{ID: "wrong", Hostname: "node1", MachineID: "machine-wrong", NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:55"}}},
+		{ID: "right", Hostname: "node1", MachineID: "machine-right", NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:66"}}},
+	}
+	identity := ResourceIdentity{MachineID: "machine-right", Hostnames: []string{"node1"}}
+	enrichK8sNodeIdentity(&identity, "node1", hosts)
+
+	if len(identity.MACAddresses) != 1 || identity.MACAddresses[0] != "00:11:22:33:44:66" {
+		t.Fatalf("expected only the authoritative machine's MAC, got %v", identity.MACAddresses)
+	}
+}
+
+func TestEnrichK8sNodeIdentity_SystemUUIDDoesNotTrustHostname(t *testing.T) {
+	hosts := []models.Host{{
+		ID: "same-name", Hostname: "node1", MachineID: "machine-other",
+		NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:55"}},
+	}}
+	identity := ResourceIdentity{DMIUUID: "system-uuid-1", Hostnames: []string{"node1"}}
+	enrichK8sNodeIdentity(&identity, "node1", hosts)
+
+	if identity.MachineID != "" || len(identity.MACAddresses) != 0 {
+		t.Fatalf("expected system UUID identity to remain authoritative, got %+v", identity)
 	}
 }
 

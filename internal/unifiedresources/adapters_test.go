@@ -1569,12 +1569,14 @@ func TestResourceFromKubernetesNodeProjectsClusterAgentVersion(t *testing.T) {
 		AgentVersion: "5.1.34",
 	}
 	node := models.KubernetesNode{
-		UID:   "node-1",
-		Name:  "worker-1",
-		Ready: true,
+		UID:        "node-1",
+		Name:       "worker-1",
+		MachineID:  " machine-1 ",
+		SystemUUID: " system-1 ",
+		Ready:      true,
 	}
 
-	resource, _ := resourceFromKubernetesNode(cluster, node, nil, nil)
+	resource, identity := resourceFromKubernetesNode(cluster, node, nil, nil)
 	if resource.Type != ResourceTypeK8sNode {
 		t.Fatalf("resource type = %q, want %q", resource.Type, ResourceTypeK8sNode)
 	}
@@ -1589,6 +1591,9 @@ func TestResourceFromKubernetesNodeProjectsClusterAgentVersion(t *testing.T) {
 	}
 	if resource.Kubernetes.AgentVersion != "5.1.34" {
 		t.Fatalf("agent version = %q, want 5.1.34", resource.Kubernetes.AgentVersion)
+	}
+	if identity.MachineID != "machine-1" || identity.DMIUUID != "system-1" {
+		t.Fatalf("node identity = %+v, want reported machine and system IDs", identity)
 	}
 }
 

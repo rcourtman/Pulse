@@ -238,6 +238,8 @@ func TestCollectNodes_MapsReadyRolesAndResources(t *testing.T) {
 			Spec: corev1.NodeSpec{Unschedulable: true},
 			Status: corev1.NodeStatus{
 				NodeInfo: corev1.NodeSystemInfo{
+					MachineID:               "machine-n1",
+					SystemUUID:              "system-n1",
 					KubeletVersion:          "v1.30.0",
 					ContainerRuntimeVersion: "containerd://1.7.0",
 					OSImage:                 "linux",
@@ -272,6 +274,9 @@ func TestCollectNodes_MapsReadyRolesAndResources(t *testing.T) {
 	n := nodes[0]
 	if !n.Ready || !n.Unschedulable {
 		t.Fatalf("unexpected ready/unschedulable: %+v", n)
+	}
+	if n.MachineID != "machine-n1" || n.SystemUUID != "system-n1" {
+		t.Fatalf("unexpected node identity: machine=%q system=%q", n.MachineID, n.SystemUUID)
 	}
 	if n.Capacity.CPUCores != 4 || n.Allocatable.CPUCores != 3 {
 		t.Fatalf("unexpected cpu: %+v", n)

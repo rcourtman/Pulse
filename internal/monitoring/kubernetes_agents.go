@@ -127,6 +127,8 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 		nodes = append(nodes, models.KubernetesNode{
 			UID:                     strings.TrimSpace(n.UID),
 			Name:                    strings.TrimSpace(n.Name),
+			MachineID:               strings.TrimSpace(n.MachineID),
+			SystemUUID:              strings.TrimSpace(n.SystemUUID),
 			Ready:                   n.Ready,
 			Unschedulable:           n.Unschedulable,
 			KubeletVersion:          strings.TrimSpace(n.KubeletVersion),

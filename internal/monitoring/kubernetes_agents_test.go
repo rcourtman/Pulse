@@ -59,6 +59,9 @@ func TestApplyKubernetesReport(t *testing.T) {
 	report := agentsk8s.Report{
 		Agent:   agentsk8s.AgentInfo{ID: "agent-1", IntervalSeconds: 10},
 		Cluster: agentsk8s.ClusterInfo{ID: "cluster-1", Name: "cluster"},
+		Nodes: []agentsk8s.Node{{
+			UID: "node-1", Name: "worker-1", MachineID: " machine-1 ", SystemUUID: " system-1 ",
+		}},
 	}
 
 	cluster, err := monitor.ApplyKubernetesReport(report, nil)
@@ -67,6 +70,9 @@ func TestApplyKubernetesReport(t *testing.T) {
 	}
 	if cluster.ID != "cluster-1" || cluster.DisplayName != "cluster" {
 		t.Fatalf("unexpected cluster: %+v", cluster)
+	}
+	if len(cluster.Nodes) != 1 || cluster.Nodes[0].MachineID != "machine-1" || cluster.Nodes[0].SystemUUID != "system-1" {
+		t.Fatalf("unexpected node identity: %+v", cluster.Nodes)
 	}
 	if !monitor.state.ConnectionHealth[kubernetesConnectionPrefix+"cluster-1"] {
 		t.Fatal("expected connection health to be true")

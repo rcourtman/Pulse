@@ -429,17 +429,14 @@ func k8sCandidates(cluster models.KubernetesCluster, hosts []models.Host) []Host
 		}
 
 		identity := ResourceIdentity{
+			MachineID: strings.TrimSpace(kn.MachineID),
+			DMIUUID:   strings.TrimSpace(kn.SystemUUID),
 			Hostnames: uniqueStrings([]string{nodeName}),
 		}
 
-		// TODO: K8s node identity is weak — no machine-id or MAC available from
-		// the Kubernetes API. Attempt to enrich from linked host agents by hostname
-		// match. Without enrichment, K8s nodes only match by hostname which falls
-		// below the high-confidence threshold and stays separate (safe behavior).
-		// Note: In environments with duplicate short hostnames across domains/clusters,
-		// the first-match enrichment may attach the wrong identity. This is a known
-		// limitation; without additional signals from the K8s API, there's no way
-		// to disambiguate.
+		// Kubernetes reports machine-id and system UUID directly in NodeSystemInfo.
+		// Enrichment uses those authoritative values when present; hostname matching
+		// remains only for reports from older agents that omitted both fields.
 		enrichK8sNodeIdentity(&identity, nodeName, hosts)
 
 		status := "offline"
@@ -465,7 +462,29 @@ func k8sCandidates(cluster models.KubernetesCluster, hosts []models.Host) []Host
 // matching hostname and copies its machine-id and MAC addresses to strengthen
 // the K8s node's identity.
 func enrichK8sNodeIdentity(identity *ResourceIdentity, nodeName string, hosts []models.Host) {
-	if nodeName == "" || len(hosts) == 0 {
+	if identity == nil || len(hosts) == 0 {
+		return
+	}
+
+	// A direct Kubernetes machine ID must never acquire another host's MACs by
+	// hostname. Besides being unnecessary, that could create a transitive merge
+	// between two different machines that happen to share a hostname.
+	if machineID := strings.TrimSpace(identity.MachineID); machineID != "" {
+		for i := range hosts {
+			host := &hosts[i]
+			if strings.TrimSpace(host.MachineID) != machineID {
+				continue
+			}
+			_, macs := collectInterfaceIDs(host.NetworkInterfaces)
+			identity.MACAddresses = uniqueStrings(append(identity.MACAddresses, macs...))
+			return
+		}
+		return
+	}
+
+	// System UUID is already a strong DMI identity. Host-agent state does not
+	// carry DMI UUID today, so retaining it alone is safer than guessing by name.
+	if strings.TrimSpace(identity.DMIUUID) != "" || nodeName == "" {
 		return
 	}
 

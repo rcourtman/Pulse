@@ -1579,6 +1579,8 @@ type RemovedKubernetesCluster struct {
 type KubernetesNode struct {
 	UID                     string   `json:"uid"`
 	Name                    string   `json:"name"`
+	MachineID               string   `json:"machineId,omitempty"`
+	SystemUUID              string   `json:"systemUuid,omitempty"`
 	Ready                   bool     `json:"ready"`
 	Unschedulable           bool     `json:"unschedulable,omitempty"`
 	KubeletVersion          string   `json:"kubeletVersion,omitempty"`

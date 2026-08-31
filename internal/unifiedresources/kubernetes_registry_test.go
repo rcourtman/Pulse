@@ -379,6 +379,49 @@ func TestIngestSnapshotLinksKubernetesNodesToHostAgentMetrics(t *testing.T) {
 	}
 }
 
+func TestIngestSnapshotLinksKubernetesNodeByMachineIDNotDuplicateHostname(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "wrong", Hostname: "worker-1", MachineID: "machine-wrong", Status: "online", LastSeen: now, CPUUsage: 11},
+			{ID: "right", Hostname: "worker-1", MachineID: "machine-right", Status: "online", LastSeen: now, CPUUsage: 72},
+		},
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID: "cluster-1", Name: "prod", Status: "online", LastSeen: now,
+			Nodes: []models.KubernetesNode{{UID: "node-1", Name: "worker-1", MachineID: "machine-right"}},
+		}},
+	}
+
+	registry := NewRegistry(NewMemoryStore())
+	registry.IngestSnapshot(snapshot)
+
+	var linked *Resource
+	for _, resource := range registry.ListByType(ResourceTypeAgent) {
+		if resource.Kubernetes != nil {
+			resourceCopy := resource
+			linked = &resourceCopy
+			break
+		}
+	}
+	if linked == nil || linked.Agent == nil || linked.Agent.MachineID != "machine-right" {
+		t.Fatalf("expected Kubernetes node to link to authoritative machine, got %+v", linked)
+	}
+	if linked.Metrics == nil || linked.Metrics.CPU == nil || linked.Metrics.CPU.Value != 72 {
+		t.Fatalf("expected metrics from authoritative machine, got %+v", linked.Metrics)
+	}
+}
+
+func TestResolveKubernetesNodeHostRejectsAmbiguousLegacyHostname(t *testing.T) {
+	hosts := []models.Host{
+		{ID: "one", Hostname: "worker-1", MachineID: "machine-1"},
+		{ID: "two", Hostname: "worker-1", MachineID: "machine-2"},
+	}
+	lookup := buildKubernetesNodeHostLookup(hosts)
+	if got := resolveKubernetesNodeHost(models.KubernetesNode{Name: "worker-1"}, lookup); got != nil {
+		t.Fatalf("ambiguous hostname selected host %+v", got)
+	}
+}
+
 func TestIngestSnapshotKubernetesCapabilitiesFromK8sMetrics(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
