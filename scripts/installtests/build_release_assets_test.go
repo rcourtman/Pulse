@@ -3672,8 +3672,8 @@ func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
 	backendJob := workflowJobBlock(t, string(workflowBytes), "backend_tests")
-	if !strings.Contains(backendJob, "timeout-minutes: 55") {
-		t.Fatal("release backend job must retain the measured PVE execution ceiling with setup and cleanup headroom")
+	if !strings.Contains(backendJob, "timeout-minutes: 70") {
+		t.Fatal("release backend job must retain the measured stable execution ceiling with setup and cleanup headroom")
 	}
 	for _, invalidCeiling := range []string{"timeout-minutes: 20", "timeout-minutes: 30", "timeout-minutes: 40"} {
 		if strings.Contains(backendJob, invalidCeiling) {

@@ -451,7 +451,12 @@ jobs:
     # runner before post-step accounting. Keep the outer job above the canonical
     # 45-minute API watchdog so checkout, bundle transfer, shard planning, and
     # cleanup cannot pre-empt the process that owns stuck-package detection.
-    timeout-minutes: 55
+    # Stable v6.4.2 rehearsal 33417470872 completed all three API shards in
+    # 32 minutes, then exhausted the former 55-minute ceiling while the
+    # independently bounded non-API graph was still passing packages. Keep
+    # every inner watchdog unchanged and leave enough outer cleanup headroom
+    # for the expanded secure-runtime install tests on a cold hosted worker.
+    timeout-minutes: 70
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:

@@ -2221,7 +2221,13 @@ volume-weighted `4/1/1` allocation, passes `-p 2` to `go test`, and sets
 therefore eight CPUs instead of eight API CPUs plus unbounded non-API package
 concurrency. Each
 API shard has a 45-minute cumulative watchdog, the non-API graph retains its
-30-minute watchdog, and the enclosing job has a 55-minute ceiling. Constrained
+30-minute per-package watchdog, and the enclosing job has a 70-minute ceiling.
+Stable `v6.4.2` rehearsal `33417470872` supplied the measured hosted-worker
+evidence for that outer budget: all three race-enabled API shards passed in
+1,911, 1,437, and 1,777 seconds, while the non-API graph continued passing
+packages until the former 55-minute ceiling canceled it during the expanded
+secure-runtime install-test package. The added headroom does not weaken or
+extend either inner watchdog. Constrained
 one-vCPU hosts run the non-API graph before the API shard rather than knowingly
 oversubscribing the host. The deterministic CPU allocator and release guards
 pin this partition and reject a job ceiling that could pre-empt the API
