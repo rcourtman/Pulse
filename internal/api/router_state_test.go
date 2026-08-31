@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -276,7 +277,7 @@ func TestBuildStateSummaryCountsSnapshotResources(t *testing.T) {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
 
-	summary := buildStateSummary(registry, len(snapshot.ActiveAlerts), snapshot.LastUpdate)
+	summary := buildStateSummary(registry, registry.List(), snapshot.ActiveAlerts, snapshot.LastUpdate)
 
 	assert.Equal(t, 1, summary.ActiveAlerts)
 	assert.Equal(t, 2, summary.Nodes)
@@ -289,4 +290,29 @@ func TestBuildStateSummaryCountsSnapshotResources(t *testing.T) {
 		assert.Equal(t, int64(3600), summary.DockerHosts[0].UptimeSeconds)
 		assert.Equal(t, 12.5, summary.DockerHosts[0].CPUUsagePercent)
 	}
+}
+
+func TestSummarizeResourceHealthKeepsStaleVisibleAndCapsAttention(t *testing.T) {
+	resources := make([]unifiedresources.Resource, 0, 54)
+	resources = append(resources,
+		unifiedresources.Resource{ID: "critical", Name: "Critical", Type: unifiedresources.ResourceTypeAgent, Health: &unifiedresources.ResourceHealth{Verdict: unifiedresources.HealthCritical, Reasons: []unifiedresources.ResourceHealthReason{{Code: "offline"}}}},
+		unifiedresources.Resource{ID: "stale", Name: "Stale", Type: unifiedresources.ResourceTypeAgent, Health: &unifiedresources.ResourceHealth{Verdict: unifiedresources.HealthStale, Reasons: []unifiedresources.ResourceHealthReason{{Code: "telemetry_stale"}}}},
+		unifiedresources.Resource{ID: "healthy", Name: "Healthy", Type: unifiedresources.ResourceTypeAgent, Health: &unifiedresources.ResourceHealth{Verdict: unifiedresources.HealthOK, Reasons: []unifiedresources.ResourceHealthReason{}}},
+		unifiedresources.Resource{ID: "off", Name: "Off", Type: unifiedresources.ResourceTypeVM, Health: &unifiedresources.ResourceHealth{Verdict: unifiedresources.HealthOff, Reasons: []unifiedresources.ResourceHealthReason{{Code: "powered_off"}}}},
+	)
+	for i := 0; i < 50; i++ {
+		resources = append(resources, unifiedresources.Resource{
+			ID: fmt.Sprintf("unknown-%02d", i), Name: fmt.Sprintf("Unknown %02d", i), Type: unifiedresources.ResourceTypeAgent,
+			Health: &unifiedresources.ResourceHealth{Verdict: unifiedresources.HealthUnknown, Reasons: []unifiedresources.ResourceHealthReason{{Code: "telemetry_missing"}}},
+		})
+	}
+
+	counts, attention := summarizeResourceHealth(resources)
+	assert.Equal(t, stateSummaryVerdicts{OK: 1, Critical: 1, Stale: 1, Off: 1, Unknown: 50}, counts)
+	assert.Len(t, attention, stateSummaryAttentionLimit)
+	assert.Equal(t, "critical", attention[0].ID)
+	assert.Equal(t, "stale", attention[1].ID)
+	payload, err := json.Marshal(stateSummaryResponse{Verdicts: counts, Attention: attention})
+	assert.NoError(t, err)
+	assert.Less(t, len(payload), 5*1024)
 }

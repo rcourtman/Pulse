@@ -1,6 +1,7 @@
 import {
   ACTIONS_PATH,
   DOCKER_PATH,
+  HOME_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
@@ -31,6 +32,11 @@ function normalizeRoute(route: string): string {
 }
 
 const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
+  {
+    id: 'home',
+    matches: (route) => route === HOME_PATH,
+    preload: () => import('@/features/home/HomePageSurface').then(() => undefined),
+  },
   {
     id: 'proxmox',
     matches: (route) => route === PROXMOX_PATH || route.startsWith(`${PROXMOX_PATH}/`),

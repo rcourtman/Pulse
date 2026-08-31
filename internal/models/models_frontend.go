@@ -1062,6 +1062,7 @@ type ResourceFrontend struct {
 	Labels    map[string]string       `json:"labels"`
 	CustomURL string                  `json:"customUrl,omitempty"`
 	LastSeen  int64                   `json:"lastSeen"` // Unix milliseconds
+	Health    json.RawMessage         `json:"health,omitempty"`
 	Alerts    []ResourceAlertFrontend `json:"alerts"`
 
 	IncidentCount         int    `json:"incidentCount,omitempty"`

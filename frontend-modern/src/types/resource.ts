@@ -105,6 +105,18 @@ export type SourceType =
 export type ResourceStatus =
   'online' | 'offline' | 'running' | 'stopped' | 'degraded' | 'warning' | 'paused' | 'unknown';
 
+export type ResourceHealthVerdict = 'ok' | 'attention' | 'critical' | 'stale' | 'off' | 'unknown';
+
+export interface ResourceHealthReason {
+  code: string;
+  detail?: string;
+}
+
+export interface ResourceHealth {
+  verdict: ResourceHealthVerdict;
+  reasons: ResourceHealthReason[];
+}
+
 // Metric value with optional limits
 export interface ResourceMetric {
   current: number; // Current value (percentage or bytes)
@@ -1622,6 +1634,7 @@ export interface Resource {
   labels?: Record<string, string>;
   customUrl?: string;
   lastSeen: number; // Unix milliseconds
+  health?: ResourceHealth;
   alerts?: ResourceAlert[];
   incidents?: ResourceIncident[];
   incidentCount?: number;

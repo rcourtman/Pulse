@@ -1,7 +1,7 @@
 # Home Status Wall Spec
 
-Last updated: 2026-07-10
-Status: PLANNED
+Last updated: 2026-09-01
+Status: IMPLEMENTED (tab-reachable; default-route gate remains)
 Owner of record: Richard (product decisions), implementing agent (execution)
 Related evidence: GitHub issues #1478, #1433, #1460
 
@@ -139,12 +139,12 @@ additively — existing fields keep their names and types (external users may
 already consume them):
 
 - `verdicts`: object of counts `{ok, attention, critical, stale, off, unknown}`
-- `attention`: array (capped at 50, most severe first) of
+- `attention`: array (capped at 30, most severe first) of
   `{id, name, type, platformType, verdict, topReason}`
 
 Update `router_state_test.go` / `state_summary` tests accordingly. Payload
-target stays well under 5 KB for a 200-resource fleet; the `attention` cap
-guarantees boundedness.
+target stays well under 5 KB for a 200-resource fleet; implementation testing
+reduced the originally proposed cap from 50 to 30 to preserve that target.
 
 Governance: this changes an API surface — update the api-contracts
 subsystem notes honestly. As of 2026-07-10

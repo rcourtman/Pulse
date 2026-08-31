@@ -18,6 +18,7 @@ const v2Resource = {
   status: 'online',
   lastSeen: '2026-02-06T12:00:00Z',
   sources: ['agent'],
+  health: { verdict: 'ok' as const, reasons: [] },
   facetCounts: {
     recentChanges: 1,
   },
@@ -1139,6 +1140,7 @@ describe('useUnifiedResources', () => {
 
     expect(result!.resources()[0]?.id).toBe(v2Resource.id);
     expect(result!.resources()[0]?.displayName).toBe(v2Resource.name);
+    expect(result!.resources()[0]?.health).toEqual({ verdict: 'ok', reasons: [] });
 
     dispose();
   });

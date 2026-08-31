@@ -48,6 +48,12 @@ type TenantStateProvider interface {
 	UnifiedResourceSnapshotForTenant(orgID string) ([]unified.Resource, time.Time)
 }
 
+// TenantResourceHealthAlertProvider is the optional tenant-safe alert slice
+// used to decorate resource responses with canonical fleet posture.
+type TenantResourceHealthAlertProvider interface {
+	ResourceHealthAlertsForTenant(orgID string) []unified.ResourceHealthAlert
+}
+
 // UnifiedResourceSnapshotProvider supplies a canonical unified-resource seed
 // and freshness marker for the default tenant.
 type UnifiedResourceSnapshotProvider interface {
@@ -164,6 +170,7 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 	// Flat copy so the per-request decorations below stay top-level writes
 	// on request-owned elements while nested data remains shared.
 	allResources := flatCopyResources(sharedResources)
+	allResources = unified.AttachResourceHealth(allResources, h.resourceHealthAlerts(orgID), time.Now().UTC())
 	h.applyActionAvailability(r.Context(), allResources)
 	resources := allResources
 	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
@@ -204,6 +211,28 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response.NormalizeCollections())
+}
+
+func (h *QueryService) resourceHealthAlerts(orgID string) []unified.ResourceHealthAlert {
+	if provider, ok := h.tenantStateProvider.(TenantResourceHealthAlertProvider); ok {
+		return provider.ResourceHealthAlertsForTenant(orgID)
+	}
+	if orgID != "" && orgID != "default" {
+		return nil
+	}
+	if h.stateProvider == nil {
+		return nil
+	}
+	snapshot := h.stateProvider.ReadSnapshot()
+	out := make([]unified.ResourceHealthAlert, 0, len(snapshot.ActiveAlerts))
+	for _, alert := range snapshot.ActiveAlerts {
+		out = append(out, unified.ResourceHealthAlert{
+			ResourceID: alert.ResourceID,
+			Level:      alert.Level,
+			Type:       alert.Type,
+		})
+	}
+	return out
 }
 
 // HandleStorageSummary handles GET /api/resources/storage-summary.

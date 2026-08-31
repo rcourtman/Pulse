@@ -1,5 +1,6 @@
 import {
   DOCKER_PATH,
+  HOME_PATH,
   ACTIONS_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
@@ -10,6 +11,7 @@ import {
 } from './resourceLinks';
 
 export type AppTabId =
+  | 'home'
   | 'standalone'
   | 'proxmox'
   | 'docker'
@@ -24,6 +26,7 @@ export type AppTabId =
 export type ActiveAppTabId = AppTabId | null;
 
 export function getActiveTabForPath(path: string): ActiveAppTabId {
+  if (path === HOME_PATH || path.startsWith(`${HOME_PATH}/`)) return 'home';
   if (path.startsWith(PROXMOX_PATH)) return 'proxmox';
   if (path.startsWith(DOCKER_PATH)) return 'docker';
   if (path.startsWith(KUBERNETES_PATH)) return 'kubernetes';

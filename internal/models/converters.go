@@ -1172,6 +1172,7 @@ type ResourceConvertInput struct {
 	Labels                map[string]string
 	CustomURL             string
 	LastSeenUnix          int64
+	Health                json.RawMessage
 	Alerts                []ResourceAlertInput
 	IncidentCount         int
 	IncidentCode          string
@@ -1260,6 +1261,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		Labels:                nil,
 		CustomURL:             input.CustomURL,
 		LastSeen:              input.LastSeenUnix,
+		Health:                input.Health,
 		IncidentCount:         input.IncidentCount,
 		IncidentCode:          input.IncidentCode,
 		IncidentSeverity:      input.IncidentSeverity,

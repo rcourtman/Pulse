@@ -16,6 +16,7 @@ import type {
   ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
   ResourceDockerMeta,
+  ResourceHealth,
   ResourceMetricsTarget,
   ResourceAvailabilityMeta,
   ResourcePBSMeta,
@@ -209,6 +210,7 @@ type APIResource = {
   sources?: string[];
   platformScopes?: string[];
   sourceStatus?: Record<string, { status: string; lastSeen: string; error?: string }>;
+  health?: ResourceHealth;
   identity?: {
     machineId?: string;
     hostnames?: string[];
@@ -836,6 +838,7 @@ const toResource = (v2: APIResource): Resource => {
     parentName: v2.parentName,
     clusterId: getExplicitResourceClusterName(v2),
     status: resolveStatus(v2.status),
+    health: v2.health,
     incidents: (v2.incidents || [])
       .map((incident) => ({
         provider: incident.provider,

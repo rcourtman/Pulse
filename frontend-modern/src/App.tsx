@@ -42,6 +42,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   DOCKER_PATH,
+  HOME_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
@@ -99,6 +100,7 @@ function isWorkspaceEntryRoutePath(pathname: string): boolean {
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
+const HomePage = lazy(() => import('./features/home/HomePageSurface'));
 const ActionsPage = lazy(() => import('./pages/Actions'));
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
@@ -631,6 +633,7 @@ function App() {
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
       <Route path="/infrastructure" component={RuntimeHomePage} />
+      <Route path={HOME_PATH} component={HomePage} />
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={DOCKER_PATH} component={DockerPage} />

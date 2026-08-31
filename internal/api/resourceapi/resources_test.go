@@ -42,6 +42,38 @@ func (p resourceUnifiedSeedProvider) UnifiedResourceSnapshot() ([]unified.Resour
 	return out, p.snapshot.LastUpdate
 }
 
+func TestResourceListIncludesCanonicalHealthFromActiveAlerts(t *testing.T) {
+	now := time.Now().UTC()
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{
+			LastUpdate:   now,
+			ActiveAlerts: []models.Alert{{ResourceID: "host-1", Level: "critical", Type: "offline"}},
+		},
+		resources: []unified.Resource{{
+			ID: "host-1", Name: "Host One", Type: unified.ResourceTypeAgent, Status: unified.StatusOnline,
+			LastSeen: now, Sources: []unified.DataSource{unified.SourceAgent},
+		}},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
+	h.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var response ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data) != 1 || response.Data[0].Health == nil {
+		t.Fatalf("missing resource health: %+v", response.Data)
+	}
+	if response.Data[0].Health.Verdict != unified.HealthCritical {
+		t.Fatalf("verdict = %q, want critical", response.Data[0].Health.Verdict)
+	}
+}
+
 type mutableResourceUnifiedSeedProvider struct {
 	snapshot  models.StateSnapshot
 	resources []unified.Resource

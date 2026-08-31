@@ -80,6 +80,26 @@ func (p *MultiTenantStateProvider) UnifiedResourceSnapshotForTenant(orgID string
 	return monitor.UnifiedResourceSnapshot()
 }
 
+// ResourceHealthAlertsForTenant returns only the minimal alert facts needed by
+// the resource health projection, resolved from the same tenant monitor as the
+// resource seed.
+func (p *MultiTenantStateProvider) ResourceHealthAlertsForTenant(orgID string) []unifiedresources.ResourceHealthAlert {
+	monitor := p.monitorForTenant(orgID)
+	if monitor == nil {
+		return nil
+	}
+	active := monitor.ActiveAlertsSnapshot()
+	out := make([]unifiedresources.ResourceHealthAlert, 0, len(active))
+	for _, alert := range active {
+		out = append(out, unifiedresources.ResourceHealthAlert{
+			ResourceID: alert.ResourceID,
+			Level:      alert.Level,
+			Type:       alert.Type,
+		})
+	}
+	return out
+}
+
 // SetMultiTenantMonitor updates the multi-tenant monitor manager.
 // Used during reload.
 func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {

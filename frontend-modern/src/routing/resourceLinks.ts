@@ -16,6 +16,7 @@ export const WORKLOADS_QUERY_PARAMS = {
   summaryGroup: 'summaryGroup',
 } as const;
 
+export const HOME_PATH = '/home';
 export const STANDALONE_PATH = '/standalone';
 export const STANDALONE_DEFAULT_TAB = 'machines';
 export const STANDALONE_QUERY_PARAMS = {

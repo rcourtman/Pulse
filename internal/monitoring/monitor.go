@@ -4247,6 +4247,11 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
 	broadcastResources = m.applyPersistedMetadataToUnifiedResources(broadcastResources)
+	broadcastResources = unifiedresources.AttachResourceHealth(
+		broadcastResources,
+		resourceHealthAlerts(frontendState.ActiveAlerts),
+		time.Now().UTC(),
+	)
 	broadcastFrontendResources, broadcastCatalogs := convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
 	frontendState.Resources = broadcastFrontendResources
 	frontendState.CapabilityCatalog = broadcastCatalogs.capabilities
@@ -5699,11 +5704,32 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
+	resourcesForBroadcast := m.applyPersistedMetadataToUnifiedResources(m.getUnifiedResourcesForBroadcast())
+	resourcesForBroadcast = unifiedresources.AttachResourceHealth(
+		resourcesForBroadcast,
+		resourceHealthAlerts(m.activeAlertsSnapshot()),
+		time.Now().UTC(),
+	)
 	resources, _ := convertResourcesForBroadcast(
-		m.applyPersistedMetadataToUnifiedResources(m.getUnifiedResourcesForBroadcast()),
+		resourcesForBroadcast,
 		broadcastMetricsTargetResolver(store),
 	)
 	return resources
+}
+
+func resourceHealthAlerts(active []models.Alert) []unifiedresources.ResourceHealthAlert {
+	if len(active) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.ResourceHealthAlert, 0, len(active))
+	for _, alert := range active {
+		out = append(out, unifiedresources.ResourceHealthAlert{
+			ResourceID: alert.ResourceID,
+			Level:      alert.Level,
+			Type:       alert.Type,
+		})
+	}
+	return out
 }
 
 func (m *Monitor) applyPersistedMetadataToUnifiedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
@@ -6090,6 +6116,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		Labels:                monitorLabels(resource),
 		CustomURL:             strings.TrimSpace(resource.CustomURL),
 		LastSeenUnix:          monitorLastSeenUnix(resource.LastSeen),
+		Health:                monitorRawJSON(resource.Health),
 		IncidentCount:         resource.IncidentCount,
 		IncidentCode:          resource.IncidentCode,
 		IncidentSeverity:      string(resource.IncidentSeverity),

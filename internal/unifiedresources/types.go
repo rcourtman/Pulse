@@ -13,13 +13,14 @@ import (
 
 // Resource represents a unified resource aggregated across multiple data sources.
 type Resource struct {
-	ID         string         `json:"id"`
-	Type       ResourceType   `json:"type"`
-	Technology string         `json:"technology,omitempty"`
-	Name       string         `json:"name"`
-	Status     ResourceStatus `json:"status"`
-	LastSeen   time.Time      `json:"lastSeen"`
-	UpdatedAt  time.Time      `json:"updatedAt,omitempty"`
+	ID         string          `json:"id"`
+	Type       ResourceType    `json:"type"`
+	Technology string          `json:"technology,omitempty"`
+	Name       string          `json:"name"`
+	Status     ResourceStatus  `json:"status"`
+	LastSeen   time.Time       `json:"lastSeen"`
+	UpdatedAt  time.Time       `json:"updatedAt,omitempty"`
+	Health     *ResourceHealth `json:"health,omitempty"`
 
 	DiscoveryTarget    *DiscoveryTarget            `json:"discoveryTarget,omitempty"`
 	DiscoveryReadiness *ResourceDiscoveryReadiness `json:"discoveryReadiness,omitempty"`

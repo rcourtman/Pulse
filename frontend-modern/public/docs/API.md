@@ -85,9 +85,32 @@ Returns a lightweight integration summary for external dashboards and checks. Re
       "cpuUsagePercent": 12.5
     }
   ],
+  "verdicts": {
+    "ok": 17,
+    "attention": 1,
+    "critical": 1,
+    "stale": 1,
+    "off": 2,
+    "unknown": 0
+  },
+  "attention": [
+    {
+      "id": "node-1",
+      "name": "PVE Node 1",
+      "type": "agent",
+      "platformType": "proxmox",
+      "verdict": "critical",
+      "topReason": { "code": "offline" }
+    }
+  ],
   "lastUpdate": "2026-05-24T10:11:12Z"
 }
 ```
+
+`verdicts` uses the canonical `ok`, `attention`, `critical`, `stale`, `off`,
+and `unknown` fleet-health vocabulary. `attention` is severity ordered and
+capped at 30 entries. Powered-off workloads are neutral (`off`), and stale or
+missing telemetry is never reported as `ok`.
 
 ### Simple Stats (HTML)
 `GET /simple-stats`
@@ -113,6 +136,11 @@ Query params:
 - `order`: `asc` (default) or `desc`
 
 Note: `GET /api/resources` is optimized for list views. Some large, platform-specific fields may be omitted from the list response and are only returned by `GET /api/resources/{id}`.
+
+Each list resource can include a backend-owned `health` envelope with a
+canonical `verdict` and stable `reasons` (`code` plus optional compact
+`detail`). Consumers should use this envelope for cross-platform posture
+instead of deriving health from provider-specific status strings.
 
 Note: guest disk usage percentages use `-1` as an "unknown" sentinel — reported when a VM is stopped or its guest agent is unavailable, so there is no filesystem view to measure. Consumers should treat negative values as "no data", not as a percentage; the accompanying `diskStatusReason` field (e.g. `vm-stopped`, `agent-disabled`) says why.
 

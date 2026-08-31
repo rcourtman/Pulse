@@ -145,6 +145,120 @@ test("Actions remains named, directly reachable, keyboard accessible, and free o
   });
 });
 
+test("Home status wall is readable and motionless across desktop and phone widths", async ({
+  page,
+}, testInfo) => {
+  const lastSeen = "2026-08-31T22:30:00Z";
+  const resource = (
+    id: string,
+    name: string,
+    type: string,
+    sources: string[],
+    verdict: string,
+    reason?: { code: string; detail?: string },
+  ) => ({
+    id,
+    name,
+    type,
+    sources,
+    status:
+      verdict === "off"
+        ? "stopped"
+        : verdict === "critical"
+          ? "offline"
+          : "online",
+    lastSeen,
+    health: { verdict, reasons: reason ? [reason] : [] },
+  });
+  const resources = [
+    resource("node-down", "PVE node down", "agent", ["proxmox"], "critical", {
+      code: "offline",
+    }),
+    resource("vm-warning", "Billing VM", "vm", ["proxmox"], "attention", {
+      code: "warning_alert",
+      detail: "memory",
+    }),
+    resource("agent-stale", "Remote agent", "agent", ["agent"], "stale", {
+      code: "telemetry_stale",
+      detail: "12m",
+    }),
+    resource(
+      "container-off",
+      "Batch worker",
+      "app-container",
+      ["docker"],
+      "off",
+      {
+        code: "powered_off",
+      },
+    ),
+    resource(
+      "check-down",
+      "Customer portal",
+      "network-endpoint",
+      ["availability"],
+      "critical",
+      { code: "availability_failed" },
+    ),
+    ...Array.from({ length: 65 }, (_, index) =>
+      resource(
+        `healthy-${index + 1}`,
+        `Healthy VM ${index + 1}`,
+        "vm",
+        ["proxmox"],
+        "ok",
+      ),
+    ),
+  ];
+  await page.route("**/api/resources?*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: resources,
+        meta: { totalPages: 1 },
+        aggregations: { total: resources.length },
+      }),
+    }),
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/home", { waitUntil: "domcontentloaded" });
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Home" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "3 need attention" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /PVE node down: Critical/ }),
+  ).toBeVisible();
+  const showAll = page.getByRole("button", { name: "Show all (5)" });
+  await expect(showAll).toBeVisible();
+  await showAll.click();
+  await expect(page.getByRole("button", { name: "Show less" })).toBeVisible();
+
+  expect(await scanForWcagViolations(page)).toEqual([]);
+  expect(await scanForUnexpectedReducedMotion(page)).toEqual([]);
+  await testInfo.attach("home-desktop", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await scanForWcagViolations(page)).toEqual([]);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    ),
+  ).toBeFalsy();
+  await testInfo.attach("home-phone", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
+});
+
 test("representative authenticated surfaces have no automatically detectable WCAG A/AA violations", async ({
   page,
 }) => {

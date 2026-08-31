@@ -2737,11 +2737,14 @@ a new API state machine, queue contract, or verification-accounting field.
    That same shared API contract also owns the external resource `type`, canonical display name, and cluster identity published through `/api/resources` and `/api/state`; the websocket/state hydrate path must not emit legacy aliases or raw store labels once the unified resource contract has normalized them.
    Lightweight integration polling uses the same canonical read-state boundary:
    `GET /api/state/summary` is an authenticated `monitoring:read` route that
-   returns only aggregate counts, Docker host summaries, active-alert count,
-   and `lastUpdate`. It must stay derived from the unified read state plus the
-   alert snapshot, and must not expose `resources`, per-resource histories,
-   raw provider payloads, command data, or child arrays from the full
-   `/api/state` dashboard hydrate.
+   returns aggregate counts, Docker host summaries, active-alert count,
+   canonical verdict counts, a severity-ordered attention projection capped at
+   30 resources, and `lastUpdate`. It must stay derived from the unified read
+   state plus the tenant-scoped alert snapshot, and must not expose full
+   resources, per-resource histories, raw provider payloads, command data, or
+   child arrays from the full `/api/state` hydrate. The same backend-owned
+   `health` envelope is additive on `/api/resources` and websocket resource
+   rows; frontend surfaces must not re-derive health from provider status.
    Realtime `/api/state` and websocket `resources` snapshots must also collapse
    transient split host identities before broadcast: a Proxmox-node row and a
    host-agent row for the same machine must leave the API boundary as one
