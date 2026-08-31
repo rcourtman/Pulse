@@ -251,6 +251,24 @@ proofs are recorded, the safe profile remains opt-in and provider degradation
 remains an explicit residual rather than evidence that the candidate lane is
 complete.
 
+Rootless runtime admission is now exact by construction. The installer defers
+safe-profile discovery until the dedicated `pulse-agent` account exists,
+requires the socket owner and read/write subject to match that UID, and treats
+simultaneously usable Docker and Podman sockets as an ambiguity rather than
+silently choosing one. The collector independently rebuilds the same one-live-
+endpoint set before every initial connection or reconnect and never probes a
+candidate whose endpoint fails the rootless-path, ownership, or ambiguity
+checks. It accepts the resulting connection only when daemon metadata also
+attests rootless mode. An exact pin recovered
+from the root-owned service unit survives an update while the socket is absent,
+and the running collector can transition between direct rootless monitoring
+and typed-helper summary fallback without restarting or enabling collector
+actions. Legacy Docker report-response commands, registry update scans, and
+orphan-backup cleanup are disabled statically whenever the helper-backed safe
+profile is configured. This is implementation proof only; the live fresh-install, restart,
+ambiguity, loss, bidirectional recovery, and telemetry-parity matrix remains
+the qualification residual.
+
 ## Target Architecture
 
 ### 1. API-Only Monitoring

@@ -630,6 +630,52 @@ func TestHandleCommand(t *testing.T) {
 	})
 }
 
+func TestMonitoringOnlyCollectorRejectsForgedReportCommand(t *testing.T) {
+	var ack agentsdocker.CommandAck
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/report") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"commands":[{"id":"forged-update","type":"update_container","payload":{"containerId":"container-1"}}]}`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/commands/forged-update/ack") {
+			if err := json.NewDecoder(r.Body).Decode(&ack); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	mutations := 0
+	helper := &helperInventoryStub{}
+	agent := &Agent{
+		cfg:    Config{HelperInventory: helper},
+		hostID: "safe-host",
+		docker: &fakeDockerClient{
+			containerInspectFn: func(context.Context, string) (containertypes.InspectResponse, error) {
+				mutations++
+				return containertypes.InspectResponse{}, errors.New("must not execute")
+			},
+		},
+		httpClients: map[bool]*http.Client{false: server.Client()},
+		logger:      zerolog.Nop(),
+	}
+	target := TargetConfig{Name: "primary", URL: server.URL, Token: "token", Authoritative: true}
+	if err := agent.sendReportToTarget(context.Background(), target, []byte("ignored"), 0); err != nil {
+		t.Fatalf("safe report response: %v", err)
+	}
+	if mutations != 0 {
+		t.Fatalf("forged report command reached direct runtime %d times", mutations)
+	}
+	if ack.Status != agentsdocker.CommandStatusFailed || !strings.Contains(ack.Message, "Monitoring-only collector") {
+		t.Fatalf("rejected command acknowledgement = %+v", ack)
+	}
+}
+
 func TestHandleStopCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("systemd stop-command behavior is not available on Windows")

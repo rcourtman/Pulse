@@ -133,6 +133,9 @@ type Agent struct {
 	cfg                 Config
 	docker              dockerClient
 	helperInventory     ContainerInventory
+	directDisableChecks bool
+	directServices      bool
+	directTasks         bool
 	daemonHost          string
 	daemonID            string // Cached at init; Podman can return unstable IDs across calls
 	runtime             RuntimeKind
@@ -293,6 +296,10 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("dockeragent.New: normalize runtime: %w", err)
 	}
 
+	directDisableChecks := cfg.DisableUpdateChecks
+	directServices := cfg.IncludeServices
+	directTasks := cfg.IncludeTasks
+
 	connect := connectRuntimeFn
 	if cfg.HelperInventory != nil {
 		// The helper profile must reject rootful, remote, and otherwise
@@ -300,13 +307,15 @@ func New(cfg Config) (*Agent, error) {
 		connect = connectCollectorRuntimeFn
 	}
 	runtimeDockerClient, info, runtimeKind, connectErr := connect(runtimePref, logger)
-	if connectErr == nil && cfg.HelperInventory != nil && !collectorOwnsRootlessEndpoint(runtimeDockerClient.DaemonHost()) {
-		endpoint := runtimeDockerClient.DaemonHost()
-		closeErr := runtimeDockerClient.Close()
-		runtimeDockerClient = nil
-		connectErr = fmt.Errorf("direct runtime endpoint %q is not a collector-owned rootless Unix socket", endpoint)
-		if closeErr != nil {
-			connectErr = errors.Join(connectErr, fmt.Errorf("close rejected direct runtime client: %w", closeErr))
+	if connectErr == nil && cfg.HelperInventory != nil {
+		validationErr := validateCollectorDirectRuntime(runtimeDockerClient, info)
+		if validationErr != nil {
+			closeErr := runtimeDockerClient.Close()
+			runtimeDockerClient = nil
+			connectErr = validationErr
+			if closeErr != nil {
+				connectErr = errors.Join(connectErr, fmt.Errorf("close rejected direct runtime client: %w", closeErr))
+			}
 		}
 	}
 	if connectErr == nil && cfg.HelperInventory != nil && cfg.HelperOperationStatus != nil {
@@ -453,29 +462,32 @@ func New(cfg Config) (*Agent, error) {
 		helperInventory = cfg.HelperInventory
 	}
 	agent := &Agent{
-		cfg:                cfg,
-		docker:             runtimeClient,
-		helperInventory:    helperInventory,
-		daemonHost:         daemonHost,
-		daemonID:           info.ID, // Cache at init for stable agent ID
-		runtime:            runtimeKind,
-		runtimePref:        runtimePref,
-		runtimeVer:         info.ServerVersion,
-		agentVersion:       agentVersion,
-		reportStreamID:     reportStreamID,
-		supportsSwarm:      runtimeKind == RuntimeDocker,
-		httpClients:        httpClients,
-		trustedHTTPClients: trustedHTTPClients,
-		logger:             *logger,
-		machineID:          machineID,
-		hostName:           hostName,
-		targets:            cfg.Targets,
-		allowedStates:      make(map[string]struct{}, len(stateFilters)),
-		stateFilters:       stateFilters,
-		prevContainerCPU:   make(map[string]cpuSample),
-		reportBuffer:       primaryBuffer,
-		reportBuffers:      reportBuffers,
-		registryChecker:    newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
+		cfg:                 cfg,
+		docker:              runtimeClient,
+		helperInventory:     helperInventory,
+		directDisableChecks: directDisableChecks,
+		directServices:      directServices,
+		directTasks:         directTasks,
+		daemonHost:          daemonHost,
+		daemonID:            info.ID, // Cache at init for stable agent ID
+		runtime:             runtimeKind,
+		runtimePref:         runtimePref,
+		runtimeVer:          info.ServerVersion,
+		agentVersion:        agentVersion,
+		reportStreamID:      reportStreamID,
+		supportsSwarm:       runtimeKind == RuntimeDocker,
+		httpClients:         httpClients,
+		trustedHTTPClients:  trustedHTTPClients,
+		logger:              *logger,
+		machineID:           machineID,
+		hostName:            hostName,
+		targets:             cfg.Targets,
+		allowedStates:       make(map[string]struct{}, len(stateFilters)),
+		stateFilters:        stateFilters,
+		prevContainerCPU:    make(map[string]cpuSample),
+		reportBuffer:        primaryBuffer,
+		reportBuffers:       reportBuffers,
+		registryChecker:     newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
 	agent.registryChecker.credentials = registryCredentialSourceForConfig(cfg, *logger)
@@ -660,9 +672,36 @@ func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClien
 }
 
 func connectCollectorOwnedRootlessRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
-	return connectRuntimeWithProbe(preference, logger, func(opts []client.Opt) (dockerClient, systemtypes.Info, error) {
-		return tryRuntimeCandidateWithEndpointAdmission(opts, collectorOwnsRootlessEndpoint)
+	candidates, err := collectorRootlessRuntimeCandidates(preference)
+	if err != nil {
+		return nil, systemtypes.Info{}, RuntimeAuto, err
+	}
+	return connectRuntimeCandidatesWithProbe(preference, candidates, logger, func(opts []client.Opt) (dockerClient, systemtypes.Info, error) {
+		cli, info, probeErr := tryRuntimeCandidateWithEndpointAdmission(opts, collectorOwnsRootlessEndpoint)
+		if probeErr != nil {
+			return nil, systemtypes.Info{}, probeErr
+		}
+		if !runtimeInfoIsRootless(info) {
+			endpoint := cli.DaemonHost()
+			closeErr := cli.Close()
+			probeErr = fmt.Errorf("runtime endpoint %q is owned by the collector but the daemon did not attest rootless mode", endpoint)
+			if closeErr != nil {
+				probeErr = errors.Join(probeErr, fmt.Errorf("close non-rootless runtime client: %w", closeErr))
+			}
+			return nil, systemtypes.Info{}, probeErr
+		}
+		return cli, info, nil
 	})
+}
+
+func runtimeInfoIsRootless(info systemtypes.Info) bool {
+	for _, option := range info.SecurityOptions {
+		normalized := strings.ToLower(strings.TrimSpace(option))
+		if normalized == "rootless" || normalized == "name=rootless" || strings.HasPrefix(normalized, "name=rootless,") {
+			return true
+		}
+	}
+	return false
 }
 
 func connectRuntimeWithProbe(
@@ -670,7 +709,15 @@ func connectRuntimeWithProbe(
 	logger *zerolog.Logger,
 	probe func([]client.Opt) (dockerClient, systemtypes.Info, error),
 ) (dockerClient, systemtypes.Info, RuntimeKind, error) {
-	candidates := buildRuntimeCandidatesFn(preference)
+	return connectRuntimeCandidatesWithProbe(preference, buildRuntimeCandidatesFn(preference), logger, probe)
+}
+
+func connectRuntimeCandidatesWithProbe(
+	preference RuntimeKind,
+	candidates []runtimeCandidate,
+	logger *zerolog.Logger,
+	probe func([]client.Opt) (dockerClient, systemtypes.Info, error),
+) (dockerClient, systemtypes.Info, RuntimeKind, error) {
 	var attempts []string
 
 	for _, candidate := range candidates {
@@ -924,10 +971,6 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	ticker := newTickerFn(interval)
 	defer ticker.Stop()
-	if a.helperInventory != nil {
-		return a.runHelperInventoryLoop(ctx, ticker)
-	}
-
 	const (
 		updateInterval        = 24 * time.Hour
 		startupJitterWindow   = 2 * time.Minute
@@ -942,8 +985,9 @@ func (a *Agent) Run(ctx context.Context) error {
 	cleanupTicker := newTickerFn(15 * time.Minute)
 	defer cleanupTicker.Stop()
 
-	// Perform cleanup of orphaned backup containers on startup
-	go a.cleanupOrphanedBackups(ctx)
+	// Perform cleanup only while a directly admitted runtime is active. The
+	// typed helper exposes summary inventory and never grants lifecycle access.
+	a.scheduleDirectCleanup()
 
 	if err := a.collectOnce(ctx); err != nil {
 		if errors.Is(err, ErrStopRequested) {
@@ -975,33 +1019,14 @@ func (a *Agent) Run(ctx context.Context) error {
 					Msg("Failed to send docker report")
 			}
 		case <-updateTimer.C:
-			go a.checkForUpdates(ctx)
+			a.scheduleDirectUpdateCheck()
 			nextDelay := updateInterval + randomDurationFn(recurringJitterWindow)
 			if nextDelay <= 0 {
 				nextDelay = updateInterval
 			}
 			updateTimer.Reset(nextDelay)
 		case <-cleanupTicker.C:
-			go a.cleanupOrphanedBackups(ctx)
-		}
-	}
-}
-
-func (a *Agent) runHelperInventoryLoop(ctx context.Context, ticker *time.Ticker) error {
-	collect := func(phase string) {
-		if err := a.collectOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			a.logger.Error().Err(err).Str("phase", phase).
-				Str("collection_mode", agentsdocker.CollectionModeTypedHelperSummary).
-				Msg("Failed to send typed helper container summary")
-		}
-	}
-	collect("startup")
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			collect("periodic")
+			a.scheduleDirectCleanup()
 		}
 	}
 }
@@ -1071,6 +1096,10 @@ func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report,
 	a.collectMu.Lock()
 	defer a.collectMu.Unlock()
 
+	if a.helperInventory != nil {
+		a.maybePromoteCollectorRootlessRuntime()
+	}
+
 	var report agentsdocker.Report
 	var err error
 	if a.helperInventory != nil {
@@ -1078,8 +1107,12 @@ func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report,
 	} else {
 		report, err = a.buildReport(ctx)
 	}
-	if err != nil && a.helperInventory == nil && a.maybeReconnectRuntime(err) {
-		report, err = a.buildReport(ctx)
+	if err != nil && a.helperInventory == nil {
+		if a.maybeReconnectRuntime(err) {
+			report, err = a.buildReport(ctx)
+		} else if a.runtimeGoneStreak >= runtimeReconnectFailureThreshold && a.maybeFallbackToHelperInventory(ctx) {
+			report, err = a.buildHelperInventoryReport(ctx)
+		}
 	}
 	if err != nil {
 		buildErr := fmt.Errorf("build docker report: %w", err)
@@ -1103,11 +1136,46 @@ func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report,
 	return report, nil
 }
 
-// ContainerActionsAvailable reports whether this module owns a direct runtime
-// client. Summary-only helper inventory never grants lifecycle or update
-// authority to the collector.
+// ContainerActionsAvailable reports whether this is a legacy direct-runtime
+// module. A collector configured with the typed helper is a monitoring-only
+// component even while it uses an admitted rootless socket directly; mutation
+// authority remains isolated in the separate action runner.
 func (a *Agent) ContainerActionsAvailable() bool {
-	return a != nil && a.helperInventory == nil && a.docker != nil
+	if a == nil {
+		return false
+	}
+	a.collectMu.Lock()
+	defer a.collectMu.Unlock()
+	return a.cfg.HelperInventory == nil && a.docker != nil
+}
+
+// scheduleDirectCleanup reserves the background slot while holding collectMu,
+// so a helper fallback cannot close the direct client between the mode check
+// and task admission.
+func (a *Agent) scheduleDirectCleanup() {
+	a.collectMu.Lock()
+	defer a.collectMu.Unlock()
+	if a.cfg.HelperInventory != nil || a.helperInventory != nil || a.docker == nil || !a.tryStartCleanupTask() {
+		return
+	}
+	a.runAsync(func(ctx context.Context) {
+		defer a.finishCleanupTask()
+		a.cleanupOrphanedBackupsTask(ctx)
+	})
+}
+
+// scheduleDirectUpdateCheck applies the same admission ordering to self-update
+// work, which can otherwise overlap a direct-to-helper mode transition.
+func (a *Agent) scheduleDirectUpdateCheck() {
+	a.collectMu.Lock()
+	defer a.collectMu.Unlock()
+	if a.cfg.HelperInventory != nil || a.helperInventory != nil || a.docker == nil || !a.tryStartUpdateCheck() {
+		return
+	}
+	a.runAsync(func(ctx context.Context) {
+		defer a.finishUpdateCheck()
+		a.checkForUpdatesTask(ctx)
+	})
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
@@ -1375,7 +1443,16 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 }
 
 func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	switch strings.ToLower(command.Type) {
+	commandType := strings.ToLower(command.Type)
+	if a.cfg.HelperInventory != nil {
+		switch commandType {
+		case agentsdocker.CommandTypeUpdateContainer, agentsdocker.CommandTypeUpdateAll, agentsdocker.CommandTypeCheckUpdates:
+			a.rejectMonitoringOnlyCommand(ctx, target, command)
+			return nil
+		}
+	}
+
+	switch commandType {
 	case agentsdocker.CommandTypeStop:
 		return a.handleStopCommand(ctx, target, command)
 	case agentsdocker.CommandTypeUpdateContainer:
@@ -1391,6 +1468,29 @@ func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command 
 			Str("commandID", command.ID).
 			Msg("Received unsupported control command")
 		return nil
+	}
+}
+
+func (a *Agent) rejectMonitoringOnlyCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) {
+	a.logger.Warn().
+		Str("target", target.URL).
+		Str("command", command.Type).
+		Str("commandID", command.ID).
+		Msg("Rejected Docker control command in monitoring-only collector profile")
+	if strings.TrimSpace(command.ID) == "" {
+		return
+	}
+	if err := a.sendCommandAck(
+		ctx,
+		target,
+		command.ID,
+		agentsdocker.CommandStatusFailed,
+		"Monitoring-only collector profile does not execute container control commands",
+	); err != nil {
+		a.logger.Warn().Err(err).
+			Str("target", target.URL).
+			Str("commandID", command.ID).
+			Msg("Failed to acknowledge rejected Docker control command")
 	}
 }
 

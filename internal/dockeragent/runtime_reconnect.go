@@ -2,6 +2,7 @@ package dockeragent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
@@ -21,6 +22,19 @@ import (
 // socket-activated rootless podman API socket vanishes when the login session
 // ends) and without a reconnect the agent errors forever until restarted.
 const runtimeReconnectFailureThreshold = 3
+
+func validateCollectorDirectRuntime(cli dockerClient, info systemtypes.Info) error {
+	if cli == nil {
+		return fmt.Errorf("collector direct runtime client is nil")
+	}
+	if !collectorOwnsRootlessEndpoint(cli.DaemonHost()) {
+		return fmt.Errorf("direct runtime endpoint %q is not a collector-owned rootless Unix socket", cli.DaemonHost())
+	}
+	if !runtimeInfoIsRootless(info) {
+		return fmt.Errorf("direct runtime endpoint %q did not attest rootless mode", cli.DaemonHost())
+	}
+	return nil
+}
 
 // swappableDockerClient lets the agent replace its runtime connection while
 // concurrent goroutines (orphan cleanup, container update commands) keep using
@@ -174,15 +188,17 @@ func (a *Agent) maybeReconnectRuntime(err error) bool {
 			Msg("Container runtime endpoint unavailable; reconnect attempt failed")
 		return false
 	}
-	if a.cfg.HelperInventory != nil && !collectorOwnsRootlessEndpoint(cli.DaemonHost()) {
-		endpoint := cli.DaemonHost()
-		if closeErr := cli.Close(); closeErr != nil {
-			a.logger.Debug().Err(closeErr).Msg("Failed to close rejected runtime reconnect client")
+	if a.cfg.HelperInventory != nil {
+		validationErr := validateCollectorDirectRuntime(cli, info)
+		if validationErr != nil {
+			if closeErr := cli.Close(); closeErr != nil {
+				a.logger.Debug().Err(closeErr).Msg("Failed to close rejected runtime reconnect client")
+			}
+			a.logger.Warn().
+				Err(validationErr).
+				Msg("Rejected runtime reconnect outside the collector-owned rootless boundary")
+			return false
 		}
-		a.logger.Warn().
-			Str("daemon_host", endpoint).
-			Msg("Rejected runtime reconnect outside the collector-owned rootless boundary")
-		return false
 	}
 
 	previous := a.adoptRuntimeConnection(cli, info, runtimeKind)
@@ -199,6 +215,101 @@ func (a *Agent) maybeReconnectRuntime(err error) bool {
 	return true
 }
 
+// maybePromoteCollectorRootlessRuntime is called under collectMu while the
+// agent is using helper summary inventory. Each collection re-evaluates the
+// exact collector-owned endpoint set, so a rootless daemon that appears later
+// can recover full direct monitoring without a process restart.
+func (a *Agent) maybePromoteCollectorRootlessRuntime() bool {
+	if a == nil || a.helperInventory == nil || a.cfg.HelperInventory == nil {
+		return false
+	}
+
+	cli, info, runtimeKind, err := connectCollectorRuntimeFn(a.runtimePref, &a.logger)
+	if err != nil {
+		return false
+	}
+	if err := validateCollectorDirectRuntime(cli, info); err != nil {
+		if closeErr := cli.Close(); closeErr != nil {
+			a.logger.Debug().Err(closeErr).Msg("Failed to close rejected promoted runtime client")
+		}
+		a.logger.Warn().Err(err).Msg("Rejected promoted runtime outside the collector-owned rootless boundary")
+		return false
+	}
+
+	a.cfg.DisableUpdateChecks = a.directDisableChecks
+	a.cfg.IncludeServices = a.directServices
+	a.cfg.IncludeTasks = a.directTasks
+	previous := a.adoptRuntimeConnection(cli, info, runtimeKind)
+	a.helperInventory = nil
+	if a.registryChecker != nil {
+		a.registryChecker.SetEnabled(!a.cfg.DisableUpdateChecks)
+	}
+	if a.cfg.HelperOperationStatus != nil {
+		a.cfg.HelperOperationStatus.Record("container.inventory", nil)
+	}
+	if previous != nil {
+		if closeErr := previous.Close(); closeErr != nil {
+			a.logger.Debug().Err(closeErr).Msg("Failed to close stale runtime client after helper recovery")
+		}
+	}
+	a.runtimeGoneStreak = 0
+	a.logger.Info().
+		Str("runtime", string(runtimeKind)).
+		Str("daemon_host", cli.DaemonHost()).
+		Msg("Recovered direct collector-owned rootless runtime monitoring")
+	return true
+}
+
+// maybeFallbackToHelperInventory is called under collectMu after direct
+// runtime reconnect has reached its failure threshold. It changes mode only
+// after a complete helper snapshot is available and no direct-runtime
+// background operation remains active.
+func (a *Agent) maybeFallbackToHelperInventory(ctx context.Context) bool {
+	if a == nil || a.helperInventory != nil || a.cfg.HelperInventory == nil || !a.backgroundTasksIdle() {
+		return false
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, helperInventoryOperationDeadline)
+	result, err := a.cfg.HelperInventory.Inventory(probeCtx)
+	cancel()
+	if err == nil {
+		_, err = selectHelperRuntime(result, a.runtimePref)
+	}
+	if err != nil {
+		a.recordHelperInventoryStatus(err)
+		a.logger.Warn().Err(err).Msg("Typed helper inventory unavailable during rootless runtime recovery")
+		return false
+	}
+
+	if a.docker != nil {
+		if closeErr := a.docker.Close(); closeErr != nil {
+			a.logger.Debug().Err(closeErr).Msg("Failed to close unavailable direct runtime client")
+		}
+	}
+	a.docker = nil
+	a.helperInventory = a.cfg.HelperInventory
+	a.daemonHost = ""
+	a.daemonID = ""
+	a.cfg.DisableUpdateChecks = true
+	a.cfg.IncludeServices = false
+	a.cfg.IncludeTasks = false
+	if a.registryChecker != nil {
+		a.registryChecker.SetEnabled(false)
+	}
+	a.clearDockerCollectionCaches()
+	a.recordHelperInventoryStatus(nil)
+	a.logger.Info().
+		Str("collection_mode", "typed-helper-summary").
+		Msg("Fell back to typed helper inventory after rootless runtime loss")
+	return true
+}
+
+func (a *Agent) backgroundTasksIdle() bool {
+	a.backgroundMu.Lock()
+	defer a.backgroundMu.Unlock()
+	return !a.updateCheckRunning && !a.cleanupTaskRunning
+}
+
 // adoptRuntimeConnection swaps in a freshly discovered runtime connection and
 // refreshes the runtime identity fields. Called under collectMu; returns the
 // replaced client so the caller can close it.
@@ -208,10 +319,13 @@ func (a *Agent) adoptRuntimeConnection(cli dockerClient, info systemtypes.Info, 
 		previous = sw.swap(cli)
 	} else {
 		previous = a.docker
-		a.docker = cli
+		a.docker = newSwappableDockerClient(cli)
 	}
 
 	a.daemonHost = cli.DaemonHost()
+	if info.ID != "" {
+		a.daemonID = info.ID
+	}
 	a.runtimeVer = info.ServerVersion
 	if runtimeKind != a.runtime {
 		a.logger.Info().

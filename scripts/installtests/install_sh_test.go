@@ -2207,6 +2207,11 @@ func TestInstallSHPersistsRootlessContainerRuntimeServiceEnvironment(t *testing.
 		`ROOTLESS_RUNTIME_SOCKET_URI=""`,
 		`system_docker_runtime_is_active() {`,
 		`discover_rootless_container_runtime() {`,
+		`discover_safe_profile_rootless_container_runtime() {`,
+		`recover_safe_profile_rootless_runtime_pin() {`,
+		`resolve_initial_container_monitoring_detection() {`,
+		`resolve_safe_profile_container_runtime() {`,
+		`configure_discovered_rootless_runtime_environment() {`,
 		// Issue #1647: a live rootful Docker must win before any rootless
 		// socket discovery pins podman variables into the service environment.
 		`if system_docker_runtime_is_active; then`,
@@ -2217,6 +2222,9 @@ func TestInstallSHPersistsRootlessContainerRuntimeServiceEnvironment(t *testing.
 		`append_service_env "CONTAINER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"`,
 		`append_service_env "PODMAN_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"`,
 		`append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"`,
+		`Multiple collector-owned rootless container-runtime sockets are usable`,
+		`provision_least_privilege_user`,
+		`discover_safe_profile_rootless_container_runtime`,
 		`env_line="$SYSTEMD_ENV_LINES"`,
 		`local service_env_lines="$SHELL_EXPORT_LINES"`,
 		`</array>${PLIST_ENV_BLOCK}`,
@@ -2227,6 +2235,249 @@ func TestInstallSHPersistsRootlessContainerRuntimeServiceEnvironment(t *testing.
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing rootless service environment persistence contract: %s", needle)
 		}
+	}
+}
+
+func TestInstallSHSafeProfileRootlessDiscoveryIsCollectorOwnedAndUnambiguous(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "pulse-safe-rootless-*")
+	if err != nil {
+		t.Fatalf("mktemp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dockerDir := filepath.Join(tmpDir, "run", "user", "991")
+	podmanDir := filepath.Join(tmpDir, "run", "user", "991", "podman")
+	if err := os.MkdirAll(dockerDir, 0o755); err != nil {
+		t.Fatalf("mkdir Docker runtime dir: %v", err)
+	}
+	if err := os.MkdirAll(podmanDir, 0o755); err != nil {
+		t.Fatalf("mkdir Podman runtime dir: %v", err)
+	}
+	dockerPath := filepath.Join(dockerDir, "docker.sock")
+	dockerListener, err := net.Listen("unix", dockerPath)
+	if err != nil {
+		t.Fatalf("listen Docker socket: %v", err)
+	}
+	defer dockerListener.Close()
+	podmanPath := filepath.Join(podmanDir, "podman.sock")
+	podmanListener, err := net.Listen("unix", podmanPath)
+	if err != nil {
+		t.Fatalf("listen Podman socket: %v", err)
+	}
+	defer podmanListener.Close()
+
+	common := `
+		set -euo pipefail
+		LEAST_PRIVILEGE_USER=pulse-agent
+		PULSE_ROOTLESS_RUNTIME_ROOT="` + filepath.Join(tmpDir, "run", "user") + `"
+		log_warn() { :; }
+		uname() { echo Linux; }
+		id() { [[ "$1" == "-u" && "$2" == "pulse-agent" ]] && echo 991; }
+		runuser() { return 0; }
+` + extractInstallShellFunction(t, "discover_safe_profile_rootless_container_runtime") + `
+`
+
+	oneOwned := common + `
+		stat() {
+			[[ "$2" == "%a" ]] && { echo 600; return; }
+			case "$3" in
+				"` + dockerPath + `") echo 991 ;;
+				"` + podmanPath + `") echo 1000 ;;
+				*) return 1 ;;
+			esac
+		}
+		discover_safe_profile_rootless_container_runtime
+		[[ "$ROOTLESS_RUNTIME_KIND" == docker ]]
+		[[ "$ROOTLESS_RUNTIME_SOCKET_PATH" == "` + dockerPath + `" ]]
+	`
+	if out, err := exec.Command("bash", "-c", oneOwned).CombinedOutput(); err != nil {
+		t.Fatalf("single collector-owned socket: %v\n%s", err, out)
+	}
+
+	ambiguous := common + `
+		stat() { [[ "$2" == "%a" ]] && echo 600 || echo 991; }
+		if discover_safe_profile_rootless_container_runtime; then
+			echo "ambiguous sockets were accepted" >&2
+			exit 1
+		fi
+		[[ -z "$ROOTLESS_RUNTIME_SOCKET_PATH" ]]
+	`
+	if out, err := exec.Command("bash", "-c", ambiguous).CombinedOutput(); err != nil {
+		t.Fatalf("ambiguous collector-owned sockets: %v\n%s", err, out)
+	}
+
+	crossUser := common + `
+		stat() { echo 1000; }
+		if discover_safe_profile_rootless_container_runtime; then
+			echo "cross-user sockets were accepted" >&2
+			exit 1
+		fi
+	`
+	if out, err := exec.Command("bash", "-c", crossUser).CombinedOutput(); err != nil {
+		t.Fatalf("cross-user sockets: %v\n%s", err, out)
+	}
+
+	unreadable := common + `
+		stat() {
+			[[ "$2" == "%a" ]] && { echo 600; return; }
+			case "$3" in
+				"` + dockerPath + `") echo 991 ;;
+				*) echo 1000 ;;
+			esac
+		}
+		runuser() { return 1; }
+		if discover_safe_profile_rootless_container_runtime; then
+			echo "collector-unreadable socket was accepted" >&2
+			exit 1
+		fi
+	`
+	if out, err := exec.Command("bash", "-c", unreadable).CombinedOutput(); err != nil {
+		t.Fatalf("collector-unreadable socket: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHSafeProfileRejectsSymlinkedRootlessSocket(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "psr-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	runtimeRoot := filepath.Join(tmpDir, "run", "user")
+	runtimeDir := filepath.Join(runtimeRoot, "991")
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realPath := filepath.Join(runtimeDir, "real.sock")
+	listener, err := net.Listen("unix", realPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	if err := os.Symlink(realPath, filepath.Join(runtimeDir, "docker.sock")); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `
+		set -euo pipefail
+		LEAST_PRIVILEGE_USER=pulse-agent
+		PULSE_ROOTLESS_RUNTIME_ROOT="` + runtimeRoot + `"
+		log_warn() { :; }
+		uname() { echo Linux; }
+		id() { [[ "$1" == -u && "$2" == pulse-agent ]] && echo 991; }
+		stat() { echo 991; }
+		runuser() { return 0; }
+` + extractInstallShellFunction(t, "discover_safe_profile_rootless_container_runtime") + `
+		if discover_safe_profile_rootless_container_runtime; then
+			echo "symlinked runtime socket was accepted" >&2
+			exit 1
+		fi
+	`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("symlinked safe rootless socket: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHSafeProfileDefersDetectionWithoutDaemonProbe(t *testing.T) {
+	script := `
+		set -euo pipefail
+		DOCKER_EXPLICIT=false
+		LEAST_PRIVILEGE=true
+		PRIVILEGED_HELPER_ENABLED=true
+		SAFE_PROFILE_DOCKER_DETECTION_DEFERRED=false
+		ENABLE_DOCKER=true
+		probe_log="${TMPDIR}/probe-log"
+		log_info() { :; }
+		detect_docker() { echo daemon-probe >> "$probe_log"; return 0; }
+` + extractInstallShellFunction(t, "resolve_initial_container_monitoring_detection") + `
+		resolve_initial_container_monitoring_detection
+		[[ "$SAFE_PROFILE_DOCKER_DETECTION_DEFERRED" == true ]]
+		[[ ! -e "$probe_log" ]]
+	`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "TMPDIR="+t.TempDir())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("deferred safe detection: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHSafeProfileResolvesRuntimeOnlyAfterCollectorProvisioning(t *testing.T) {
+	script := `
+		set -euo pipefail
+		SAFE_PROFILE_DOCKER_DETECTION_DEFERRED=true
+		ENABLE_DOCKER=false
+		configured=false
+		log_info() { :; }
+		recover_safe_profile_rootless_runtime_pin() { return 1; }
+		discover_safe_profile_rootless_container_runtime() {
+			ROOTLESS_RUNTIME_KIND=docker
+			ROOTLESS_RUNTIME_SOCKET_PATH=/run/user/991/docker.sock
+			ROOTLESS_RUNTIME_SOCKET_URI=unix:///run/user/991/docker.sock
+			ROOTLESS_RUNTIME_XDG_DIR=/run/user/991
+			return 0
+		}
+		safe_profile_fixed_container_runtime_socket_present() { echo unexpected-fixed-probe >&2; return 1; }
+		configure_discovered_rootless_runtime_environment() { configured=true; }
+		safe_profile_apply_docker_degradation() { :; }
+` + extractInstallShellFunction(t, "resolve_safe_profile_container_runtime") + `
+		resolve_safe_profile_container_runtime
+		[[ "$ENABLE_DOCKER" == true && "$configured" == true ]]
+	`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("post-provision safe runtime resolution: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHRecoversExactRootlessPinWhileSocketIsOffline(t *testing.T) {
+	tmpDir := t.TempDir()
+	unitPath := filepath.Join(tmpDir, "pulse-agent.service")
+	rootlessRoot := filepath.Join(tmpDir, "run", "user")
+	expectedPath := filepath.Join(rootlessRoot, "991", "docker.sock")
+	unit := "[Service]\nUser=pulse-agent\nEnvironment=\"DOCKER_HOST=unix://" + expectedPath + "\"\n"
+	if err := os.WriteFile(unitPath, []byte(unit), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `
+		set -euo pipefail
+		AGENT_NAME=pulse-agent
+		LEAST_PRIVILEGE_USER=pulse-agent
+		PULSE_AGENT_SYSTEMD_UNIT_PATH="` + unitPath + `"
+		PULSE_ROOTLESS_RUNTIME_ROOT="` + rootlessRoot + `"
+		ROOTLESS_RUNTIME_KIND=""
+		ROOTLESS_RUNTIME_SOCKET_PATH=""
+		ROOTLESS_RUNTIME_SOCKET_URI=""
+		ROOTLESS_RUNTIME_XDG_DIR=""
+		id() { [[ "$1" == -u && "$2" == pulse-agent ]] && echo 991; }
+		stat() {
+			case "$2" in
+				%u) echo 0 ;;
+				%a) echo 644 ;;
+				*) return 1 ;;
+			esac
+		}
+` + extractInstallShellFunction(t, "recover_safe_profile_rootless_runtime_pin") + `
+		if [[ "${EXPECT_REJECT:-false}" == true ]]; then
+			if recover_safe_profile_rootless_runtime_pin; then exit 9; fi
+			exit 0
+		fi
+		recover_safe_profile_rootless_runtime_pin
+		[[ "$ROOTLESS_RUNTIME_KIND" == docker ]]
+		[[ "$ROOTLESS_RUNTIME_SOCKET_PATH" == "` + expectedPath + `" ]]
+		[[ "$ROOTLESS_RUNTIME_SOCKET_URI" == "unix://` + expectedPath + `" ]]
+		[[ ! -e "$ROOTLESS_RUNTIME_SOCKET_PATH" ]]
+	`
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("recover offline rootless pin: %v\n%s", err, out)
+	}
+
+	conflicting := strings.Replace(unit, "\n", "\nEnvironment=\"PODMAN_HOST=unix://"+filepath.Join(rootlessRoot, "991", "podman", "podman.sock")+"\"\n", 1)
+	if err := os.WriteFile(unitPath, []byte(conflicting), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "EXPECT_REJECT=true")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("conflicting recovered pin was not rejected: %v\n%s", err, out)
 	}
 }
 

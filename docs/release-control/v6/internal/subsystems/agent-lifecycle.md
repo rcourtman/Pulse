@@ -78,6 +78,21 @@ boundary is selected, SMART, Proxmox LXC filesystem, and rootful Docker/Podman
 container inventory collection fail closed to an omitted/degraded snapshot
 when the helper fails; the collector must not silently retry the privileged
 read locally or adopt a rootful container-runtime socket.
+Direct rootless runtime admission is a separate exact path. Installer
+discovery runs only after the dedicated collector UID exists, accepts one
+readable/writable socket owned by that UID across Docker and Podman, and treats
+multiple usable sockets as ambiguous. The collector independently reconstructs
+that single live endpoint before its first daemon API request and on reconnect;
+rootful-path, remote, cross-user, missing, and ambiguous endpoints are rejected
+without a daemon request. The selected endpoint's daemon must then attest rootless mode through its
+information response. Exact same-UID environment pins recovered from an
+installer-owned service unit may resolve automatic Docker/Podman ambiguity and
+survive socket downtime; conflicting pins fail closed. The collector retries
+direct admission while using helper summary inventory and falls back to a
+complete helper snapshot after repeated direct-runtime loss, without exposing
+container actions in either safe-profile mode. Static profile gates also reject
+legacy Docker report-response update commands and suppress registry scans and
+orphan-backup cleanup in the collector.
 The collector reports that runtime truth as the shared
 `typed-privilege-helper` module. SMART, Proxmox, and `container.inventory`
 operation failures remain independently active until that exact operation
@@ -3115,7 +3130,7 @@ file path. `TestLoadConfig`, `TestCustomSensorKindsAndHTTPFreshness`, and
 `TestCustomSensorMetricJSONRoundTrip` pin CLI plumbing, runtime semantics, and
 the additive report wire shape.
 
-### Rootful Docker outranks rootless socket discovery and runtime labels are truthful
+### Legacy rootful precedence and safe rootless admission are explicit
 
 Installer container-runtime discovery
 (`discover_rootless_container_runtime` in `scripts/install.sh`) consults a
@@ -3129,6 +3144,20 @@ service environment. This holds for auto-detection and for explicit
 socket (socket-activated for root's login session on Debian/OMV) outranked a
 healthy rootful Docker and pinned the agent to a socket that vanished with the
 session.
+
+That precedence applies to the legacy/root service only. A typed-helper safe
+profile cannot use the rootful socket directly, so it defers rootless discovery
+until `pulse-agent` has been provisioned, scans Docker and Podman as one
+candidate set, and persists an endpoint only when exactly one socket is owned
+and readable/writable by that collector UID. A socket owned by root or another
+login user is ignored; two usable sockets are an explicit ambiguity. The agent
+repeats the same exact-one admission on startup and reconnect, including the
+standard `/run/user/<uid>/docker.sock` and
+`/run/user/<uid>/podman/podman.sock` paths, before any daemon information probe.
+The information response must independently attest rootless mode; an owned
+socket path proxying a rootful daemon is closed and rejected. A root-owned unit
+that is not group/world-writable can preserve its exact standard-path pin
+through an update even while the socket is offline.
 
 On the agent side (`internal/dockeragent/agent.go`), the podman runtime
 preference is an ordering hint, not an identity override: `detectRuntime` no
@@ -7028,8 +7057,14 @@ collector uses this operation only as a summary-only reporting fallback when
 direct runtime admission fails; it does not expose update or lifecycle methods,
 and reports preserve that reduction as `collectionMode: typed-helper-summary`.
 Under the helper profile, direct runtime candidates are admitted by endpoint
-type, collector UID ownership, and rootless runtime path before the first daemon
-API request; rejected candidates are closed without probing daemon information.
+type, collector UID ownership, rootless runtime path, and an exact-one live
+candidate rule before the first daemon API request. Rejected rootful, remote,
+cross-user, missing, conflicting-pin, and ambiguous Docker/Podman candidates
+are never probed. A candidate that passes the filesystem boundary must also
+attest rootless daemon mode. The same admission is rebuilt during daemon
+reconnect; the collector can promote from helper summary to direct rootless
+monitoring or fall back after repeated direct loss, and the safe collector never
+exports container action authority in either mode.
 The `agent_update.activate.v1` and `agent_update.rollback.v1` families accept only
 fixed-root, regular, owned, digest-bound update artifacts and produce durable
 activation identity around an atomic swap. Their collector staging,

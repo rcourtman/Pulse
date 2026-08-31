@@ -42,6 +42,11 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	if err != nil {
 		return agentsdocker.Report{}, fmt.Errorf("failed to query docker info: %w", annotateDockerConnectionError(err))
 	}
+	if a.cfg.HelperInventory != nil {
+		if err := validateCollectorDirectRuntime(a.docker, info); err != nil {
+			return agentsdocker.Report{}, fmt.Errorf("%w: %v", errCollectorRuntimeBoundaryChanged, err)
+		}
+	}
 
 	a.runtimeVer = info.ServerVersion
 	if a.daemonHost == "" {
