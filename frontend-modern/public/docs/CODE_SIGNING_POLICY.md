@@ -75,19 +75,43 @@ Normal stable publication and stable dry runs select `signpath` directly.
   and verified independently after publication.
 - The GitHub-hosted `build-release-candidate.yml` assembly job emits SLSA v1
   provenance for every candidate file after complete local validation. Its
-  portable Sigstore bundle is published as
-  `release-build-provenance.sigstore.json` and covered by the immutable
-  candidate manifest. Verification rejects self-hosted provenance.
+  Sigstore bundle is then added to the immutable candidate as
+  `release-build-provenance.sigstore.json`; publication cannot replace that
+  bundle without failing the candidate manifest. This preserves the exact
+  builder evidence for offline verification instead of recreating provenance
+  in the later publication job.
+- The exact-version OCI Helm chart is published only by the hosted
+  `publish-helm-chart.yml` workflow. Its SHA-256 manifest digest and GitHub
+  build-provenance attestation must bind to the release source commit before
+  the digest enters `release-activation.json`. Activation recovery repeats
+  that verification, and Helm Pages refuses to advertise a chart whose OCI
+  tag, signer workflow, source commit, or digest has drifted from the immutable
+  activation packet.
+- Release activation requires GitHub CLI 2.97.0 or newer, which includes the
+  literal signer-identity matcher fix. The shared
+  `scripts/require-safe-gh-attestation.sh` guard enforces this floor. The
+  published checksum manifest must carry build provenance from the exact
+  `build-release-candidate.yml` workflow and release source commit;
+  repository-level provenance is not sufficient. Immutable releases created
+  before portable candidate bundles remain verified against their original
+  `create-release.yml` publication provenance. Both paths reject provenance
+  emitted from a self-hosted runner.
 - Every new release is assembled and validated as a draft. Its activation
   marker is uploaded and digest-checked before publication; GitHub must then
   report the published release as immutable, protecting its tag and complete
-  asset set from replacement.
+  asset set from replacement. A GitHub-hosted publication preflight proves the
+  repository setting before compilation, signing, private staging, or draft
+  assembly begins, and activation repeats that setting check immediately before
+  publication to catch later drift.
 - Customer-facing image aliases, Helm indexes, paid-runtime pointers, and demo
   environments are not promoted until `gh release verify <tag> --repo
   rcourtman/Pulse` validates GitHub's signed release attestation and `gh release
   verify-asset <tag> <downloaded-asset> --repo rcourtman/Pulse` binds the
-  downloaded activation marker to that attestation. Operators can use the same
-  commands to verify the packet and any downloaded release asset independently.
+  downloaded activation marker to that attestation. The activation verifier
+  also binds the release's downloaded `checksums.txt` to that immutable packet
+  and verifies its exact workflow and source provenance. Operators can use the
+  same commands to verify the packet and any downloaded release asset
+  independently.
 
 ## Project roles
 

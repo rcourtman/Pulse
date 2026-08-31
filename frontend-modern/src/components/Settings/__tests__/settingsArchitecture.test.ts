@@ -890,13 +890,13 @@ describe('settings architecture guardrails', () => {
       'coarse deployment and lifecycle buckets',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'aggregate resource and outcome counts, coarse feature flags, and content-free Patrol, Assistant, and capability-API usage counters',
+      'aggregate resource and outcome counts, coarse feature flags, content-free Patrol, Assistant, and capability-API usage counters, and four session-deduplicated workload-history adoption counts',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).not.toContain(
       'Pulse Intelligence loop adoption',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'identifiers, URLs, paths, locale, browser events, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses',
+      'identifiers, URLs, paths, locale, raw browser events, an event-level clickstream, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses',
     );
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.payloadAriaLabel');
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.resetId');

@@ -13603,7 +13603,7 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}},"platformAdmission":{"proxmox":false,"docker":false,"kubernetes":false,"truenas":false,"vmware":false,"standalone":false}}}`
+	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}},"platformAdmission":{"proxmox":false,"docker":false,"kubernetes":false,"truenas":false,"vmware":false,"standalone":false}},"facets":{"byType":{},"incidentCount":0}}`
 	if got := strings.TrimSpace(rec.Body.String()); got != want {
 		t.Fatalf("tenant resource fallback contract = %s, want %s", got, want)
 	}
@@ -14100,7 +14100,7 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 		},
 	}
 
-	got, err := json.Marshal(payload)
+	got, err := json.Marshal(payload.NormalizeCollections())
 	if err != nil {
 		t.Fatalf("marshal resource response: %v", err)
 	}
@@ -14169,7 +14169,8 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 			}
 		],
 		"meta":{"page":1,"limit":50,"total":1,"totalPages":1},
-		"aggregations":{"total":1,"byType":{"vm":1},"byStatus":{"online":1},"bySource":{"proxmox":1},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}}}
+		"aggregations":{"total":1,"byType":{"vm":1},"byStatus":{"online":1},"bySource":{"proxmox":1},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}}},
+		"facets":{"byType":{},"incidentCount":0}
 	}`
 
 	assertJSONSnapshot(t, got, want)
@@ -18275,7 +18276,9 @@ func TestContract_AgentSubstrateDocReflectsCurrentMCPOnboarding(t *testing.T) {
 		"projects each manifest capability into one MCP tool",
 		"`--emit-notifications`",
 		"The one-line installers `install-mcp.sh` and `install-mcp.ps1`",
-		"verify its checksum",
+		"verify the checksum manifest against Pulse's pinned release key",
+		"then verify the binary's checksum",
+		"refuse installation when any integrity evidence is unavailable or invalid",
 		"`cmd/agent-probe`",
 	} {
 		if !strings.Contains(normalized, required) {

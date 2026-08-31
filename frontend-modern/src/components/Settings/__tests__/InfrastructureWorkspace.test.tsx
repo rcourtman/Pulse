@@ -92,6 +92,9 @@ vi.mock('../useInfrastructureOperationsState', () => ({
     acknowledgeNoToken: vi.fn(),
     commandsUnlocked: () => true,
     confirmedNoToken: () => true,
+    customCaPath: () => '',
+    insecureMode: () => false,
+    selectedAgentUrl: () => 'http://pulse',
     getAgentConnectionUpgradeCommand: (connection: Connection, installFlags: string[] = []) =>
       `upgrade ${connection.id}${installFlags.length > 0 ? ` ${installFlags.join(' ')}` : ''}`,
     getAgentConnectionUpgradeCommandRequiresToken: () => false,

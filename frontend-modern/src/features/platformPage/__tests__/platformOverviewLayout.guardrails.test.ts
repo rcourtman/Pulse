@@ -415,7 +415,7 @@ describe('platform overview layout guardrails', () => {
 
   it('keeps remaining platform phone identity and actions usable', () => {
     expect(truenasStorageTopologyTableSource).toMatch(
-      /sortKey="kind"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"/,
+      /sortKey="kind"[\s\S]{0,160}?platform-table-mobile-w-15 md:w-\[10%\]/,
     );
     expect(truenasStorageTopologyTableSource).toContain("return 'pl-6 sm:pl-11'");
     expect(truenasStorageTopologyTableSource).toMatch(
@@ -491,7 +491,9 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).toContain('<TrueNASStorageTopologyTable');
     expect(truenasPageSurfaceSource).toContain('<TrueNASProtection');
     expect(truenasPageSurfaceSource).toContain('platform: TRUENAS_PLATFORM_FILTER');
-    expect(truenasPageSurfaceSource).toContain('source=truenas,agent');
+    expect(truenasPageSurfaceSource).toContain(
+      'source=truenas&type=agent,vm,app-container,network-share,storage,physical_disk',
+    );
     expect(truenasPageSurfaceSource).not.toContain('forcedView="pools"');
     expect(truenasPageSurfaceSource).not.toContain('<RecoverySurface');
     expect(truenasPageSurfaceSource).not.toContain('<StorageSurface');

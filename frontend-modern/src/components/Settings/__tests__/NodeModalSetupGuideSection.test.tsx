@@ -111,7 +111,9 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getAllByText(/Pulse Agent root service/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/temperatures, SMART, ZFS, Ceph, and mdadm/i)).toBeInTheDocument();
     expect(screen.getByText(/Docker inside Proxmox LXCs:/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Pulse command execution/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/does not grant remote\s+command authority/i).length).toBeGreaterThan(
+      0,
+    );
     const tlsOverride = screen.getByRole('checkbox', {
       name: /Skip TLS certificate verification when downloading the installer/i,
     });

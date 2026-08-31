@@ -118,7 +118,7 @@ describe('AlertDeliveryLogCard', () => {
 
     expect(screen.getByText(/Completed attempts are retained for 7 days/)).toBeInTheDocument();
     expect(
-      screen.getByText(/failures that exhausted retries remain available for 30 days/),
+      screen.getByText(/Failures that exhausted retries remain available for 30 days/),
     ).toBeInTheDocument();
     const timestamps = Array.from(container.querySelectorAll('time'));
     expect(timestamps[0]).toHaveAttribute('datetime', log.entries[0].timestamp);
