@@ -97,6 +97,14 @@ func run(args []string) error {
 		ValidateCommitter:       validatePulseAgentCommitter,
 		ValidateOwner:           agenthelper.StrictRootOwnedFile,
 		ValidateQuarantineOwner: agenthelper.FileOwnedByUID(uid),
+		ReportRecoveryFailure: func(event agenthelper.UpdateRecoveryFailure) {
+			log.Printf(
+				"update_recovery=retry activation_id=%q retry_in_ms=%d error=%q",
+				event.ActivationID,
+				event.RetryIn.Milliseconds(),
+				event.Error,
+			)
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("configure update activation: %w", err)

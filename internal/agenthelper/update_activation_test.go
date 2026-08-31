@@ -278,6 +278,285 @@ func TestUpdateRollbackWatchdogRestoresUncommittedActivation(t *testing.T) {
 	}
 }
 
+func TestUpdateRollbackWatchdogIgnoresSupersededCallback(t *testing.T) {
+	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	activator := provider.(*updateActivator)
+	type scheduledAttempt struct {
+		callback func()
+	}
+	var attempts []scheduledAttempt
+	var cancelled []bool
+	var failures []UpdateRecoveryFailure
+	activator.scheduleRollback = func(_ time.Duration, callback func()) func() {
+		index := len(attempts)
+		attempts = append(attempts, scheduledAttempt{callback: callback})
+		cancelled = append(cancelled, false)
+		return func() { cancelled[index] = true }
+	}
+	activator.reportRecoveryFailure = func(failure UpdateRecoveryFailure) {
+		failures = append(failures, failure)
+	}
+
+	artifactID := "release-watchdog-reschedule"
+	replacement := testELF("uncommitted-reschedule")
+	digest := stageUpdate(t, quarantine, artifactID, replacement)
+	promoteUpdate(t, provider, artifactID, digest)
+	request := UpdateActivateRequest{ArtifactID: artifactID, SHA256: digest, Version: "1.1.0"}
+	if _, err := provider.Activate(context.Background(), request); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+	if _, err := provider.Activate(context.Background(), request); err != nil {
+		t.Fatalf("idempotent Activate: %v", err)
+	}
+	if len(attempts) != 2 || len(cancelled) != 2 || !cancelled[0] {
+		t.Fatalf("rescheduled attempts=%d cancelled=%v", len(attempts), cancelled)
+	}
+
+	attempts[0].callback()
+	if len(attempts) != 2 || len(failures) != 0 || activator.cancelRollback == nil {
+		t.Fatalf("superseded callback disturbed current timer: attempts=%d failures=%#v current=%v", len(attempts), failures, activator.cancelRollback != nil)
+	}
+	if installed, _ := os.ReadFile(target); string(installed) != string(replacement) {
+		t.Fatalf("superseded callback changed installed binary: %q", installed)
+	}
+	state, err := activator.readState()
+	if err != nil || state.Action != "pending" {
+		t.Fatalf("superseded callback state = %#v, %v", state, err)
+	}
+
+	attempts[1].callback()
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("old-signed-binary")) {
+		t.Fatalf("current callback did not restore LKG: %q", installed)
+	}
+}
+
+func TestUpdateRollbackWatchdogIgnoresCallbackAfterTerminalState(t *testing.T) {
+	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	activator := provider.(*updateActivator)
+	var callbacks []func()
+	var failures []UpdateRecoveryFailure
+	activator.scheduleRollback = func(_ time.Duration, callback func()) func() {
+		callbacks = append(callbacks, callback)
+		return func() {}
+	}
+	activator.reportRecoveryFailure = func(failure UpdateRecoveryFailure) {
+		failures = append(failures, failure)
+	}
+
+	artifactID := "release-watchdog-terminal"
+	replacement := testELF("uncommitted-terminal")
+	digest := stageUpdate(t, quarantine, artifactID, replacement)
+	promoteUpdate(t, provider, artifactID, digest)
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: artifactID, SHA256: digest, Version: "1.1.0"})
+	if err != nil || len(callbacks) != 1 {
+		t.Fatalf("Activate = %#v, %v; callbacks=%d", activation, err, len(callbacks))
+	}
+	if _, err := provider.Rollback(context.Background(), UpdateRollbackRequest{
+		ActivationID: activation.ActivationID, CurrentSHA256: activation.ActiveSHA256, RollbackSHA256: activation.RollbackSHA256,
+	}); err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+
+	callbacks[0]()
+	if len(callbacks) != 1 || len(failures) != 0 || activator.cancelRollback != nil {
+		t.Fatalf("terminal stale callback changed timer state: callbacks=%d failures=%#v current=%v", len(callbacks), failures, activator.cancelRollback != nil)
+	}
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("old-signed-binary")) {
+		t.Fatalf("terminal stale callback changed installed binary: %q", installed)
+	}
+	state, err := activator.readState()
+	if err != nil || state.Action != "rolled_back" {
+		t.Fatalf("terminal stale callback state = %#v, %v", state, err)
+	}
+}
+
+func TestUpdateRollbackWatchdogArmsRetryBeforeReportingFailure(t *testing.T) {
+	provider, quarantine, _, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	activator := provider.(*updateActivator)
+	type scheduledAttempt struct {
+		delay    time.Duration
+		callback func()
+	}
+	var attempts []scheduledAttempt
+	activator.scheduleRollback = func(delay time.Duration, callback func()) func() {
+		attempts = append(attempts, scheduledAttempt{delay: delay, callback: callback})
+		return func() {}
+	}
+	reporterDone := make(chan bool, 1)
+	activator.reportRecoveryFailure = func(failure UpdateRecoveryFailure) {
+		// Re-entering the update mutex would deadlock if diagnostics were emitted
+		// before the retry was armed and the recovery callback released the lock.
+		activator.mu.Lock()
+		retryArmed := len(attempts) == 2 && attempts[1].delay == failure.RetryIn && activator.cancelRollback != nil
+		activator.mu.Unlock()
+		reporterDone <- retryArmed
+	}
+
+	artifactID := "release-watchdog-report"
+	digest := stageUpdate(t, quarantine, artifactID, testELF("uncommitted-report"))
+	promoteUpdate(t, provider, artifactID, digest)
+	if _, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: artifactID, SHA256: digest, Version: "1.1.0"}); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+	rollbackPath := activator.rollbackPath
+	unavailableRollback := rollbackPath + ".unavailable"
+	if err := os.Rename(rollbackPath, unavailableRollback); err != nil {
+		t.Fatal(err)
+	}
+
+	callbackDone := make(chan struct{})
+	go func() {
+		attempts[0].callback()
+		close(callbackDone)
+	}()
+	select {
+	case retryArmed := <-reporterDone:
+		if !retryArmed {
+			t.Fatal("recovery failure was reported before its retry became authoritative")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("recovery reporter could not re-enter the released update mutex")
+	}
+	select {
+	case <-callbackDone:
+	case <-time.After(time.Second):
+		t.Fatal("recovery callback did not return after reporting failure")
+	}
+}
+
+func TestUpdateRollbackWatchdogRetriesPreRestoreFailureWithBoundedBackoff(t *testing.T) {
+	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	activator := provider.(*updateActivator)
+	type scheduledAttempt struct {
+		delay    time.Duration
+		callback func()
+	}
+	var attempts []scheduledAttempt
+	var failures []UpdateRecoveryFailure
+	activator.scheduleRollback = func(delay time.Duration, callback func()) func() {
+		attempts = append(attempts, scheduledAttempt{delay: delay, callback: callback})
+		return func() {}
+	}
+	activator.reportRecoveryFailure = func(failure UpdateRecoveryFailure) {
+		failures = append(failures, failure)
+	}
+
+	artifactID := "release-watchdog-retry"
+	replacement := testELF("uncommitted-retry")
+	digest := stageUpdate(t, quarantine, artifactID, replacement)
+	promoteUpdate(t, provider, artifactID, digest)
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: artifactID, SHA256: digest, Version: "1.1.0"})
+	if err != nil || len(attempts) != 1 {
+		t.Fatalf("Activate = %#v, %v; attempts=%d", activation, err, len(attempts))
+	}
+
+	rollbackPath := target + ".last-known-good"
+	unavailableRollback := rollbackPath + ".unavailable"
+	if err := os.Rename(rollbackPath, unavailableRollback); err != nil {
+		t.Fatal(err)
+	}
+	for attemptIndex, wantDelay := range []time.Duration{
+		initialRollbackRetryDelay,
+		2 * initialRollbackRetryDelay,
+		4 * initialRollbackRetryDelay,
+		8 * initialRollbackRetryDelay,
+		maxRollbackRetryDelay,
+		maxRollbackRetryDelay,
+	} {
+		attempts[attemptIndex].callback()
+		if len(attempts) != attemptIndex+2 {
+			t.Fatalf("attempt %d scheduled %d callbacks, want %d", attemptIndex, len(attempts), attemptIndex+2)
+		}
+		if attempts[attemptIndex+1].delay != wantDelay {
+			t.Fatalf("retry %d delay = %s, want %s", attemptIndex+1, attempts[attemptIndex+1].delay, wantDelay)
+		}
+		if len(failures) != attemptIndex+1 || failures[attemptIndex].ActivationID != activation.ActivationID || failures[attemptIndex].RetryIn != wantDelay {
+			t.Fatalf("retry %d recovery event = %#v", attemptIndex+1, failures)
+		}
+		if installed, _ := os.ReadFile(target); string(installed) != string(replacement) {
+			t.Fatalf("retry %d changed replacement before LKG recovery: %q", attemptIndex+1, installed)
+		}
+		state, stateErr := activator.readState()
+		if stateErr != nil || state.Action != "pending" || state.ActivationID != activation.ActivationID {
+			t.Fatalf("retry %d state = %#v, %v", attemptIndex+1, state, stateErr)
+		}
+	}
+
+	if err := os.Rename(unavailableRollback, rollbackPath); err != nil {
+		t.Fatal(err)
+	}
+	attempts[len(attempts)-1].callback()
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("old-signed-binary")) {
+		t.Fatalf("successful retry installed binary = %q", installed)
+	}
+	state, err := activator.readState()
+	if err != nil || state.Action != "rolled_back" || state.ActivationID != activation.ActivationID {
+		t.Fatalf("successful retry state = %#v, %v", state, err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(quarantine), "staging", artifactID)); !os.IsNotExist(err) {
+		t.Fatalf("successful retry retained staged artifact: %v", err)
+	}
+}
+
+func TestUpdateRollbackWatchdogRetriesPostRestoreCleanupFailure(t *testing.T) {
+	provider, quarantine, target, _ := testUpdateActivator(t, func([]byte, string) error { return nil })
+	activator := provider.(*updateActivator)
+	type scheduledAttempt struct {
+		delay    time.Duration
+		callback func()
+	}
+	var attempts []scheduledAttempt
+	var failures []UpdateRecoveryFailure
+	activator.scheduleRollback = func(delay time.Duration, callback func()) func() {
+		attempts = append(attempts, scheduledAttempt{delay: delay, callback: callback})
+		return func() {}
+	}
+	activator.reportRecoveryFailure = func(failure UpdateRecoveryFailure) {
+		failures = append(failures, failure)
+	}
+
+	artifactID := "release-watchdog-cleanup"
+	replacement := testELF("uncommitted-cleanup")
+	digest := stageUpdate(t, quarantine, artifactID, replacement)
+	promoteUpdate(t, provider, artifactID, digest)
+	activation, err := provider.Activate(context.Background(), UpdateActivateRequest{ArtifactID: artifactID, SHA256: digest, Version: "1.1.0"})
+	if err != nil || len(attempts) != 1 {
+		t.Fatalf("Activate = %#v, %v; attempts=%d", activation, err, len(attempts))
+	}
+
+	stagedDir := filepath.Join(filepath.Dir(quarantine), "staging", artifactID)
+	stagedSignature := filepath.Join(stagedDir, "pulse-agent.sig")
+	if err := os.Remove(stagedSignature); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(stagedSignature, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	attempts[0].callback()
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("old-signed-binary")) {
+		t.Fatalf("first recovery did not restore LKG before cleanup failure: %q", installed)
+	}
+	state, err := activator.readState()
+	if err != nil || state.Action != "pending" {
+		t.Fatalf("cleanup failure state = %#v, %v", state, err)
+	}
+	if len(attempts) != 2 || attempts[1].delay != initialRollbackRetryDelay || len(failures) != 1 {
+		t.Fatalf("cleanup failure retry attempts=%#v failures=%#v", attempts, failures)
+	}
+
+	if err := os.RemoveAll(stagedDir); err != nil {
+		t.Fatal(err)
+	}
+	attempts[1].callback()
+	if installed, _ := os.ReadFile(target); string(installed) != string(testELF("old-signed-binary")) {
+		t.Fatalf("cleanup retry reactivated rejected binary: %q", installed)
+	}
+	state, err = activator.readState()
+	if err != nil || state.Action != "rolled_back" || state.ActivationID != activation.ActivationID {
+		t.Fatalf("cleanup retry state = %#v, %v", state, err)
+	}
+}
+
 func TestUpdateActivationRejectsInvalidSignatureAndExecutable(t *testing.T) {
 	provider, staging, _, _ := testUpdateActivator(t, func([]byte, string) error { return errors.New("untrusted") })
 	digest := stageUpdate(t, staging, "bad-signature", testELF("binary"))

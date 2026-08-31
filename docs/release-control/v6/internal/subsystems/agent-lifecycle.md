@@ -139,6 +139,11 @@ expired, interrupted, invalid, or uncommitted activation rolls back during
 helper recovery or through the deadline watchdog; commit and rollback remove
 their fixed staging/quarantine artifacts durably. The first accepted report
 retains the previous-version update evidence from that handoff.
+Deadline recovery retains the exact pending identity and retries transient
+state-read, last-known-good restore, cleanup, and persistence failures with a
+nonzero bounded backoff until the durable state becomes terminal. Each failed
+attempt is emitted to the helper log with the activation identity and retry
+delay; a failed attempt never silently disarms automatic rollback.
 Before staging or activation, the helper must establish that the signed target
 is the Pulse agent Go command, that its declared and operational version equals
 the requested target, and that the target advances the installed version.
