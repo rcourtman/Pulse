@@ -12,6 +12,13 @@ Use `false` unless a later command in the same job performs an authenticated
 Git write. The small number of write-path exceptions use `true` with the
 machine-checked `# required: authenticated git writes` rationale.
 
+Every job that executes on a runner declares one literal `timeout-minutes`
+budget. Reusable-workflow caller jobs cannot set a timeout and delegate that
+responsibility to each runner job in the called workflow. The trust check
+rejects omitted, dynamic, duplicate, zero, or platform-invalid budgets so a
+stalled check or publisher cannot silently occupy a runner for GitHub's
+six-hour default.
+
 Each workflow declares its default `GITHUB_TOKEN` permissions explicitly, and
 both workflow defaults and job-level overrides enumerate scopes instead of
 using `read-all`, `write-all`, or dynamic grants. Workflow inputs, secrets,

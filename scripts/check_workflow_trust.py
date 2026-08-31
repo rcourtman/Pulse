@@ -45,6 +45,10 @@ NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
 PERMISSIONS_RE = re.compile(r"^(\s*)permissions\s*:\s*(.*?)\s*$")
+JOBS_RE = re.compile(r"^(\s*)jobs\s*:\s*$")
+JOB_RE = re.compile(r"^(\s*)([A-Za-z0-9_-]+)\s*:\s*$")
+RUNS_ON_RE = re.compile(r"^(\s*)runs-on\s*:")
+TIMEOUT_RE = re.compile(r"^(\s*)timeout-minutes\s*:\s*(.*?)\s*$")
 
 
 @dataclass(frozen=True)
@@ -119,9 +123,80 @@ def _has_trigger(lines: list[str], event: str) -> bool:
     return False
 
 
+def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
+    """Require each locally executed job to declare one bounded time budget."""
+    findings: list[Finding] = []
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if JOBS_RE.match(line.split("#", 1)[0])
+        ),
+        None,
+    )
+    if jobs_index is None:
+        return findings
+
+    jobs_indent = _indent(lines[jobs_index])
+    job_starts: list[tuple[int, int]] = []
+    for index in range(jobs_index + 1, len(lines)):
+        code = lines[index].split("#", 1)[0]
+        if code.strip() and _indent(code) <= jobs_indent:
+            break
+        match = JOB_RE.match(code)
+        if match and len(match.group(1)) == jobs_indent + 2:
+            job_starts.append((index, len(match.group(1))))
+
+    for position, (job_index, job_indent) in enumerate(job_starts):
+        end_index = (
+            job_starts[position + 1][0]
+            if position + 1 < len(job_starts)
+            else len(lines)
+        )
+        direct_indent = job_indent + 2
+        runner_lines: list[int] = []
+        timeout_declarations: list[tuple[int, str]] = []
+        for index in range(job_index + 1, end_index):
+            code = lines[index].split("#", 1)[0]
+            run_match = RUNS_ON_RE.match(code)
+            if run_match and len(run_match.group(1)) == direct_indent:
+                runner_lines.append(index)
+            timeout_match = TIMEOUT_RE.match(code)
+            if timeout_match and len(timeout_match.group(1)) == direct_indent:
+                timeout_declarations.append(
+                    (index, timeout_match.group(2).strip())
+                )
+
+        # Reusable-workflow caller jobs have `uses` instead of `runs-on` and
+        # cannot declare timeout-minutes. The called workflow owns its budgets.
+        if not runner_lines:
+            continue
+        if len(timeout_declarations) != 1:
+            findings.append(
+                Finding(
+                    path,
+                    runner_lines[0] + 1,
+                    "runner job must declare explicit timeout-minutes exactly once",
+                )
+            )
+            continue
+
+        timeout_index, timeout_value = timeout_declarations[0]
+        if not timeout_value.isdigit() or not 1 <= int(timeout_value) <= 360:
+            findings.append(
+                Finding(
+                    path,
+                    timeout_index + 1,
+                    "runner job timeout-minutes must be a literal integer from 1 through 360",
+                )
+            )
+
+    return findings
+
+
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
-    findings: list[Finding] = []
+    findings = _audit_runner_job_timeouts(path, lines)
 
     if _has_trigger(lines, "pull_request"):
         for index, line in enumerate(lines):

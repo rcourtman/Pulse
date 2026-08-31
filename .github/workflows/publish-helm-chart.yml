@@ -46,6 +46,7 @@ jobs:
   publish:
     name: Package and Push Helm Chart
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     outputs:
       chart_digest: ${{ steps.proof.outputs.chart_digest }}
     permissions:

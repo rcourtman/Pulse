@@ -309,6 +309,7 @@ jobs:
   e2e-verdict:
     name: E2E verdict
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs:
       - tier-selection
       - e2e

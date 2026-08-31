@@ -71,6 +71,7 @@ jobs:
             runner: windows-2025
             unix: false
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -177,6 +178,7 @@ jobs:
   freebsd-build-contract:
     name: FreeBSD cross-build contract
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

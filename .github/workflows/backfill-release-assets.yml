@@ -18,6 +18,7 @@ concurrency:
 jobs:
   backfill:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write
 

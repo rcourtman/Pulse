@@ -36,6 +36,7 @@ class WorkflowTrustTest(unittest.TestCase):
 jobs:
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@{PIN}
         with:
@@ -62,6 +63,74 @@ jobs:
         self.assertTrue(any("mutable hosted runner" in finding for finding in findings))
         self.assertTrue(any("full commit SHA" in finding for finding in findings))
         self.assertTrue(any("sha256 digest" in finding for finding in findings))
+
+    def test_requires_bounded_literal_runner_job_timeout(self) -> None:
+        missing = self.audit(
+            """permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo test
+"""
+        )
+        self.assertTrue(
+            any("explicit timeout-minutes" in finding for finding in missing)
+        )
+
+        duplicate = self.audit(
+            """permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    timeout-minutes: 20
+    steps:
+      - run: echo test
+"""
+        )
+        self.assertTrue(
+            any("explicit timeout-minutes" in finding for finding in duplicate)
+        )
+
+        dynamic = self.audit(
+            """permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ inputs.timeout }}
+    steps:
+      - run: echo test
+"""
+        )
+        self.assertTrue(
+            any("integer from 1 through 360" in finding for finding in dynamic)
+        )
+
+        for invalid_value in ("0", "361"):
+            invalid = self.audit(
+                f"""permissions: {{}}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: {invalid_value}
+    steps:
+      - run: echo test
+"""
+            )
+            self.assertTrue(
+                any("integer from 1 through 360" in finding for finding in invalid)
+            )
+
+    def test_reusable_workflow_jobs_do_not_require_caller_timeout(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  delegated:
+    uses: ./.github/workflows/reusable.yml
+"""
+        )
+        self.assertEqual(findings, [])
 
     def test_rejects_implicit_or_unjustified_checkout_credentials(self) -> None:
         omitted = self.audit(
@@ -226,6 +295,7 @@ permissions: {}
 jobs:
   trusted:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}

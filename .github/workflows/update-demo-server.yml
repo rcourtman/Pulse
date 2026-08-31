@@ -44,6 +44,7 @@ permissions:
 jobs:
   resolve:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       tag: ${{ steps.target.outputs.tag }}
       target: ${{ steps.target.outputs.target }}
@@ -173,6 +174,7 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.skip != 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     environment: ${{ needs.resolve.outputs.environment_name }}
     env:
       DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}

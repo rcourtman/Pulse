@@ -13,6 +13,7 @@ concurrency:
 jobs:
   recover:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     environment: demo-stable
     env:
       DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}

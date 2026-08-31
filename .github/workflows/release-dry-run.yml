@@ -476,6 +476,7 @@ jobs:
       - demo_path_preflight
     if: ${{ always() }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Enforce exact-SHA rehearsal outcomes
         env:

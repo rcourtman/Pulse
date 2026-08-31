@@ -415,6 +415,7 @@ jobs:
       - update_stable_demo
     if: ${{ always() }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Require every applicable surface to converge
         env:
@@ -466,6 +467,7 @@ jobs:
       - convergence_verdict
     if: ${{ always() && needs.acquire_customer_promotion_lease.outputs.lock_sha != '' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
