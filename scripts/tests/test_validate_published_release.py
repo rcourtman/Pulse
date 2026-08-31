@@ -87,6 +87,12 @@ class ValidatePublishedReleaseTest(unittest.TestCase):
             path.with_suffix(path.suffix + ".sshsig")
         )
 
+    def replace_signed_checksums(self, content: str) -> None:
+        checksums = self.assets / "checksums.txt"
+        checksums.write_text(content, encoding="utf-8")
+        checksums.with_suffix(".txt.sshsig").unlink()
+        self.sign(checksums)
+
     def write_fake_tools(self) -> None:
         curl = self.bin_dir / "curl"
         curl.write_text(
@@ -160,6 +166,46 @@ printf '%s\n' "${FAKE_SSH_PUBLIC_KEY}"
         result = self.run_validator(include_key=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY is required", result.stderr)
+
+    def test_rejects_authenticated_manifest_with_duplicate_filename(self) -> None:
+        checksums = (self.assets / "checksums.txt").read_text(encoding="utf-8")
+        install_line = next(
+            line for line in checksums.splitlines() if line.endswith("  install.sh")
+        )
+        self.replace_signed_checksums(f"{checksums}{install_line}\n")
+
+        result = self.run_validator()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "Duplicate release asset filename in checksums.txt: install.sh",
+            result.stderr,
+        )
+
+    def test_rejects_authenticated_manifest_with_trailing_fields(self) -> None:
+        checksums = (self.assets / "checksums.txt").read_text(encoding="utf-8")
+        malformed = checksums.replace("  install.sh\n", "  install.sh unexpected\n")
+        self.replace_signed_checksums(malformed)
+
+        result = self.run_validator()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "Malformed checksums line (unexpected fields for install.sh).",
+            result.stderr,
+        )
+
+    def test_validates_final_manifest_entry_without_newline(self) -> None:
+        checksums = (self.assets / "checksums.txt").read_text(encoding="utf-8")
+        self.replace_signed_checksums(checksums.rstrip("\n"))
+        (self.assets / "install.sh.sshsig").write_text(
+            "not a signature\n", encoding="utf-8"
+        )
+
+        result = self.run_validator()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SSH signature verification failed for install.sh", result.stderr)
 
 
 if __name__ == "__main__":

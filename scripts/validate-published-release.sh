@@ -103,13 +103,20 @@ if [[ ! -s "$RELEASE_SBOM_PATH" ]]; then
 fi
 
 status=0
+SEEN_FILENAMES_PATH="${TMP_DIR}/checksums-filenames.txt"
+: >"$SEEN_FILENAMES_PATH"
 
-while read -r checksum filename _; do
+while read -r checksum filename extra || [[ -n "${checksum:-}${filename:-}${extra:-}" ]]; do
     [[ -z "${checksum:-}" ]] && continue
     [[ "$checksum" =~ ^# ]] && continue
     if [[ -z "${filename:-}" ]]; then
         echo "Malformed checksums line (missing filename): $checksum" >&2
-        status=1
+        status=$((status + 1))
+        continue
+    fi
+    if [[ -n "${extra:-}" ]]; then
+        echo "Malformed checksums line (unexpected fields for ${filename})." >&2
+        status=$((status + 1))
         continue
     fi
     if [[ ! "$checksum" =~ ^[0-9a-f]{64}$ ]]; then
@@ -122,6 +129,12 @@ while read -r checksum filename _; do
         status=$((status + 1))
         continue
     fi
+    if grep -Fxq -- "$filename" "$SEEN_FILENAMES_PATH"; then
+        echo "Duplicate release asset filename in checksums.txt: ${filename}" >&2
+        status=$((status + 1))
+        continue
+    fi
+    printf '%s\n' "$filename" >>"$SEEN_FILENAMES_PATH"
 
     artifact_url="${BASE_URL}/${filename}"
     echo "Verifying ${filename}..."
