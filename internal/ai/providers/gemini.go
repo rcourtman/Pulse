@@ -550,7 +550,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			return nil, fmt.Errorf("request failed: %w", err)
 		}
 
-		respBody, err = io.ReadAll(resp.Body)
+		respBody, err = readProviderResponseBody(resp)
 		resp.Body.Close()
 		if err != nil {
 			lastErr = fmt.Errorf("failed to read response: %w", err)
@@ -818,8 +818,12 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		}
 
 		if resp.StatusCode == 429 || resp.StatusCode == 503 || resp.StatusCode >= 500 {
-			respBody, _ := io.ReadAll(resp.Body)
+			respBody, readErr := readProviderResponseBody(resp)
 			resp.Body.Close()
+			if readErr != nil {
+				lastErr = fmt.Errorf("failed to read response: %w", readErr)
+				continue
+			}
 			var errResp geminiError
 			errMsg := string(respBody)
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
@@ -839,8 +843,11 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, readErr := readProviderResponseBody(resp)
 		resp.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("failed to read response: %w", readErr)
+		}
 		var errResp geminiError
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
 			errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
@@ -850,6 +857,9 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 	}
 	defer resp.Body.Close()
+	if err := limitProviderResponseBody(resp); err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
 
 	// Parse SSE stream
 	reader := resp.Body
@@ -984,9 +994,15 @@ func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := readProviderResponseBody(resp)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read response: %w", readErr)
+		}
 		errMsg := appendRateLimitInfo(string(body), resp)
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+	}
+	if err := limitProviderResponseBody(resp); err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var result struct {

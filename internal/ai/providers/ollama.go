@@ -352,7 +352,7 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := readProviderResponseBody(resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -520,8 +520,14 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, readErr := readProviderResponseBody(resp)
+		if readErr != nil {
+			return fmt.Errorf("failed to read response: %w", readErr)
+		}
 		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+	if err := limitProviderResponseBody(resp); err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// Parse NDJSON stream (newline-delimited JSON, not SSE)
@@ -798,8 +804,14 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := readProviderResponseBody(resp)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read response: %w", readErr)
+		}
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+	if err := limitProviderResponseBody(resp); err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var result struct {

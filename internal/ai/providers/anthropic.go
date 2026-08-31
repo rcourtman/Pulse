@@ -337,7 +337,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			continue
 		}
 
-		respBody, err = io.ReadAll(resp.Body)
+		respBody, err = readProviderResponseBody(resp)
 		resp.Body.Close()
 		if err != nil {
 			lastErr = fmt.Errorf("failed to read response: %w", err)
@@ -465,8 +465,14 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := readProviderResponseBody(resp)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read response: %w", readErr)
+		}
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+	if err := limitProviderResponseBody(resp); err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var result struct {
@@ -645,7 +651,10 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, readErr := readProviderResponseBody(resp)
+		if readErr != nil {
+			return fmt.Errorf("failed to read response: %w", readErr)
+		}
 		var errResp anthropicError
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
 			errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
@@ -653,6 +662,9 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		}
 		errMsg := appendRateLimitInfo(string(respBody), resp)
 		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+	}
+	if err := limitProviderResponseBody(resp); err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// Parse SSE stream

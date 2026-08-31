@@ -122,6 +122,9 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) (retErr error) {
 		log.Warn().Int("status", resp.StatusCode).Msg("models.dev API returned non-200 status")
 		return nil
 	}
+	if err := limitProviderResponseBody(resp); err != nil {
+		return fmt.Errorf("providers.NotableModelsCache.Refresh: read response: %w", err)
+	}
 
 	// Parse the response - it's a map of provider ID to provider info
 	var providers map[string]ModelsDevProvider
