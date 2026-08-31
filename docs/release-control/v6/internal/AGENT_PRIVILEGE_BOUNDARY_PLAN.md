@@ -206,12 +206,17 @@ artifact to the checksums and record both workflow identities, a
 GitHub-hosted-only compiler policy, the source commit, Go toolchain, package,
 target, `CGO_ENABLED`, `-trimpath`, `-buildvcs=false`, exact ldflags, version,
 and production update-key fingerprint. Hosted assembly of a payload emitted by
-a self-hosted compiler is not trusted compilation provenance. The current
-compiler workflow is self-hosted and the release workflow does not yet publish
-the compiler provenance, secure-runtime build contract, or full multi-version
-qualification artifact set. Therefore release-candidate classification fails
-closed, and current local lab evidence remains committed-main, artifact-bound,
-and self-attested even if a local tag exists.
+a self-hosted compiler is not trusted compilation provenance. The canonical
+compiler workflow now has a separate GitHub-hosted qualification job that
+builds and attests the six Linux amd64 subjects without signing secrets. Hosted
+candidate assembly requires its current collector, helper, and runner to match
+the ordinary release payload byte for byte, then publishes the three predecessor
+collectors, compiler provenance, and build contract through the normal signed
+release packet. A published prerelease automatically runs the twenty-scenario
+lab on a disposable systemd host and invokes this verifier with all four
+release signatures. No qualifying RC containing this wiring has been published
+yet, so current evidence remains committed-main, artifact-bound, and
+self-attested; a local tag still cannot upgrade it to RC status.
 
 Schema-v6 committed-main classification is likewise not caller-relative. The
 attester accepts only `origin/main`, requires the canonical Pulse origin URL,

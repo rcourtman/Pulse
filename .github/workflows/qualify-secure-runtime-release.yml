@@ -1,0 +1,245 @@
+name: Qualify Secure Runtime Release Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Immutable vX.Y.Z-rc.N release tag to qualify'
+        required: true
+        type: string
+
+permissions:
+  attestations: read
+  contents: read
+
+jobs:
+  qualify-secure-runtime-release:
+    name: Qualify Immutable RC on Disposable systemd
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Resolve immutable RC identity
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-}"
+          [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || {
+            echo "::error::Secure-runtime release qualification requires an exact vX.Y.Z-rc.N tag."
+            exit 1
+          }
+          release_json="$RUNNER_TEMP/secure-runtime-release.json"
+          for attempt in $(seq 1 30); do
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" > "${release_json}"
+            if jq -e --arg tag "${tag}" '.tag_name == $tag and .draft == false and .prerelease == true and .immutable == true' "${release_json}" >/dev/null; then
+              break
+            fi
+            if [[ "${attempt}" == 30 ]]; then
+              jq -c '{tag_name, draft, prerelease, immutable}' "${release_json}" >&2
+              echo "::error::Release did not reach immutable prerelease state."
+              exit 1
+            fi
+            sleep 10
+          done
+          release_id="$(jq -er '.id | select(type == "number" and . > 0)' "${release_json}")"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact release tag
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ steps.release.outputs.tag }}
+
+      - name: Verify detached release source
+        id: source
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          commit="$(git rev-parse "${TAG}^{commit}")"
+          test "$(git branch --show-current)" = ""
+          test -z "$(git status --short --untracked-files=all)"
+          git merge-base --is-ancestor "${commit}" origin/main
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download exact immutable qualification packet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/secure-runtime-release" "$RUNNER_TEMP/secure-runtime-evidence"
+          for asset in \
+            checksums.txt \
+            release-build-provenance.sigstore.json \
+            secure-runtime-compiler-provenance.sigstore.json \
+            secure-runtime-build-contract-v1.json \
+            pulse-secure-runtime-collector-v1-linux-amd64 \
+            pulse-secure-runtime-collector-v1-linux-amd64.sig \
+            pulse-secure-runtime-collector-v2-linux-amd64 \
+            pulse-secure-runtime-collector-v2-linux-amd64.sig \
+            pulse-secure-runtime-collector-v3-linux-amd64 \
+            pulse-secure-runtime-collector-v3-linux-amd64.sig \
+            pulse-agent-linux-amd64 \
+            pulse-agent-linux-amd64.sig \
+            pulse-agent-helper-linux-amd64 \
+            pulse-agent-runner-linux-amd64; do
+            gh release download "${TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --dir "$RUNNER_TEMP/secure-runtime-release" \
+              --pattern "${asset}"
+          done
+          chmod 0755 \
+            "$RUNNER_TEMP/secure-runtime-release"/pulse-secure-runtime-collector-v*-linux-amd64 \
+            "$RUNNER_TEMP/secure-runtime-release"/pulse-agent-linux-amd64 \
+            "$RUNNER_TEMP/secure-runtime-release"/pulse-agent-helper-linux-amd64 \
+            "$RUNNER_TEMP/secure-runtime-release"/pulse-agent-runner-linux-amd64
+
+      - name: Build exact-source qualification harness
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go test -c \
+              -o "$RUNNER_TEMP/secure-runtime-release/installtests-linux-amd64.test" \
+              ./scripts/installtests
+
+      - name: Build disposable systemd host image
+        run: |
+          set -euo pipefail
+          context="$RUNNER_TEMP/secure-runtime-systemd-image"
+          mkdir -p "${context}/empty"
+          tee "${context}/Dockerfile" >/dev/null <<'DOCKERFILE'
+          FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
+          ENV container=docker
+          RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                ca-certificates curl dbus systemd systemd-sysv util-linux && \
+              apt-get clean && \
+              systemctl mask dev-hugepages.mount sys-fs-fuse-connections.mount systemd-remount-fs.service
+          STOPSIGNAL SIGRTMIN+3
+          CMD ["/sbin/init"]
+          DOCKERFILE
+          docker build \
+            --tag pulse-secure-runtime-systemd:ubuntu-24.04 \
+            --file "${context}/Dockerfile" \
+            "${context}/empty"
+
+      - name: Run schema-v6 systemd qualification
+        id: lab
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          container="pulse-secure-runtime-qualification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "container=${container}" >> "$GITHUB_OUTPUT"
+          docker run \
+            --detach \
+            --name "${container}" \
+            --privileged \
+            --cgroupns=host \
+            --tmpfs /run \
+            --tmpfs /run/lock \
+            --volume /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            --volume "${GITHUB_WORKSPACE}:/workspace:ro" \
+            --volume "$RUNNER_TEMP/secure-runtime-release:/release:ro" \
+            --volume "$RUNNER_TEMP/secure-runtime-evidence:/evidence:rw" \
+            pulse-secure-runtime-systemd:ubuntu-24.04
+          for attempt in $(seq 1 30); do
+            if docker exec "${container}" systemctl show-environment >/dev/null 2>&1; then
+              break
+            fi
+            if [[ "${attempt}" == 30 ]]; then
+              docker logs "${container}"
+              exit 1
+            fi
+            sleep 2
+          done
+          docker exec "${container}" sh -c \
+            'for command in curl id nsenter runuser systemctl; do command -v "$command" >/dev/null || exit 1; done'
+          docker exec "${container}" sh -c \
+            'printf "%s\n" "PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1" > /etc/pulse-secure-runtime-lab'
+          start_epoch="$(date +%s)"
+          docker exec \
+            --env PULSE_SECURE_RUNTIME_SYSTEMD_LAB=1 \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V1=/release/pulse-secure-runtime-collector-v1-linux-amd64 \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V1_SIGNATURE=/release/pulse-secure-runtime-collector-v1-linux-amd64.sig \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V2=/release/pulse-secure-runtime-collector-v2-linux-amd64 \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V2_SIGNATURE=/release/pulse-secure-runtime-collector-v2-linux-amd64.sig \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V3=/release/pulse-secure-runtime-collector-v3-linux-amd64 \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V3_SIGNATURE=/release/pulse-secure-runtime-collector-v3-linux-amd64.sig \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V4=/release/pulse-agent-linux-amd64 \
+            --env PULSE_SECURE_RUNTIME_COLLECTOR_V4_SIGNATURE=/release/pulse-agent-linux-amd64.sig \
+            --env PULSE_SECURE_RUNTIME_HELPER=/release/pulse-agent-helper-linux-amd64 \
+            --env PULSE_SECURE_RUNTIME_RUNNER=/release/pulse-agent-runner-linux-amd64 \
+            --env PULSE_SECURE_RUNTIME_RECEIPT=/evidence/receipt.json \
+            --env "PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v6-${TAG}.json" \
+            --env PULSE_SECURE_RUNTIME_TRANSCRIPT=/evidence/transcript.jsonl \
+            --env "PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v6-${TAG}.jsonl" \
+            "${container}" \
+            sh -c 'cd /workspace/scripts/installtests && exec /release/installtests-linux-amd64.test -test.run "^TestSecureRuntimeSystemdLab$" -test.count=1 -test.v'
+          elapsed="$(( $(date +%s) - start_epoch ))"
+          if [[ "${elapsed}" -lt 1 ]]; then elapsed=1; fi
+          echo "elapsed_seconds=${elapsed}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release-candidate secure-runtime attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUALIFIED_COMMIT: ${{ steps.source.outputs.commit }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/secure-runtime-release"
+          evidence_dir="$RUNNER_TEMP/secure-runtime-evidence"
+          update_fingerprint="$(jq -er '.update_key_fingerprint' "${release_dir}/secure-runtime-build-contract-v1.json")"
+          python3 scripts/release_control/secure_runtime_attestation_v6.py \
+            --checkout "${GITHUB_WORKSPACE}" \
+            --commit "${QUALIFIED_COMMIT}" \
+            --main-ref origin/main \
+            --receipt "${evidence_dir}/receipt.json" \
+            --receipt-record-path "docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v6-${TAG}.json" \
+            --transcript "${evidence_dir}/transcript.jsonl" \
+            --collector-v1 "${release_dir}/pulse-secure-runtime-collector-v1-linux-amd64" \
+            --collector-v2 "${release_dir}/pulse-secure-runtime-collector-v2-linux-amd64" \
+            --collector-v3 "${release_dir}/pulse-secure-runtime-collector-v3-linux-amd64" \
+            --collector-v4 "${release_dir}/pulse-agent-linux-amd64" \
+            --helper "${release_dir}/pulse-agent-helper-linux-amd64" \
+            --runner "${release_dir}/pulse-agent-runner-linux-amd64" \
+            --collector-v1-signature "${release_dir}/pulse-secure-runtime-collector-v1-linux-amd64.sig" \
+            --collector-v2-signature "${release_dir}/pulse-secure-runtime-collector-v2-linux-amd64.sig" \
+            --collector-v3-signature "${release_dir}/pulse-secure-runtime-collector-v3-linux-amd64.sig" \
+            --collector-v4-signature "${release_dir}/pulse-agent-linux-amd64.sig" \
+            --elapsed-seconds "${{ steps.lab.outputs.elapsed_seconds }}" \
+            --release-candidate-tag "${TAG}" \
+            --release-repository "${GITHUB_REPOSITORY}" \
+            --release-id "${RELEASE_ID}" \
+            --release-checksums "${release_dir}/checksums.txt" \
+            --release-assembly-provenance "${release_dir}/release-build-provenance.sigstore.json" \
+            --release-compiler-provenance "${release_dir}/secure-runtime-compiler-provenance.sigstore.json" \
+            --release-build-contract "${release_dir}/secure-runtime-build-contract-v1.json" \
+            --expected-release-update-key-fingerprint "${update_fingerprint}" \
+            --output "${evidence_dir}/attestation.json"
+
+      - name: Stop disposable systemd host
+        if: ${{ always() && steps.lab.outputs.container != '' }}
+        run: docker rm --force "${{ steps.lab.outputs.container }}"
+
+      - name: Upload immutable RC qualification evidence
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: secure-runtime-qualification-${{ steps.release.outputs.tag }}-${{ steps.source.outputs.commit }}
+          path: ${{ runner.temp }}/secure-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0

@@ -559,6 +559,65 @@ sed -i "s|^CP_PULSE_IMAGE=.*|CP_PULSE_IMAGE=ghcr.io/rcourtman/pulse:v${VERSION}|
 printf '%s\n' "${VERSION}" > "${provider_msp_bundle_dir}/VERSION"
 tar -czf "${provider_msp_bundle_asset}" -C "${BUILD_DIR}" "${provider_msp_bundle_root}"
 
+# Import the small GitHub-hosted secure-runtime qualification packet before
+# SBOM, checksum, and signature generation. The ordinary release payload stays
+# canonical for current binaries: hosted compiler output is accepted only when
+# collector-v4, helper, and runner reproduce those exact bytes.
+if [[ -n "${PULSE_SECURE_RUNTIME_QUALIFICATION_DIR:-}" ]]; then
+    qualification_dir="$(cd "${PULSE_SECURE_RUNTIME_QUALIFICATION_DIR}" && pwd)"
+    qualification_expected=(
+        pulse-secure-runtime-collector-v1-linux-amd64
+        pulse-secure-runtime-collector-v2-linux-amd64
+        pulse-secure-runtime-collector-v3-linux-amd64
+        pulse-agent-linux-amd64
+        pulse-agent-helper-linux-amd64
+        pulse-agent-runner-linux-amd64
+        secure-runtime-build-contract-v1.json
+        secure-runtime-compiler-provenance.sigstore.json
+        secure-runtime-compiler-subjects.sha256
+    )
+    mapfile -t qualification_actual < <(find "${qualification_dir}" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+    mapfile -t qualification_expected_sorted < <(printf '%s\n' "${qualification_expected[@]}" | sort)
+    if [[ "$(printf '%s\n' "${qualification_actual[@]}")" != "$(printf '%s\n' "${qualification_expected_sorted[@]}")" ]]; then
+        echo "Error: hosted secure-runtime qualification packet has an unexpected file set." >&2
+        printf 'Expected:\n%s\nActual:\n%s\n' \
+            "$(printf '%s\n' "${qualification_expected_sorted[@]}")" \
+            "$(printf '%s\n' "${qualification_actual[@]}")" >&2
+        exit 1
+    fi
+    for qualification_name in "${qualification_expected[@]}"; do
+        if [[ ! -f "${qualification_dir}/${qualification_name}" || -L "${qualification_dir}/${qualification_name}" ]]; then
+            echo "Error: hosted secure-runtime qualification subject is not a regular non-symlink file: ${qualification_name}" >&2
+            exit 1
+        fi
+    done
+    cmp "${qualification_dir}/pulse-agent-linux-amd64" "${BUILD_DIR}/pulse-agent-linux-amd64" || {
+        echo "Error: hosted secure-runtime collector-v4 does not reproduce the release collector." >&2
+        exit 1
+    }
+    cmp "${qualification_dir}/pulse-agent-helper-linux-amd64" "${BUILD_DIR}/pulse-agent-helper-linux-amd64" || {
+        echo "Error: hosted secure-runtime helper does not reproduce the release helper." >&2
+        exit 1
+    }
+    cmp "${qualification_dir}/pulse-agent-runner-linux-amd64" "${BUILD_DIR}/pulse-agent-runner-linux-amd64" || {
+        echo "Error: hosted secure-runtime runner does not reproduce the release runner." >&2
+        exit 1
+    }
+    for qualification_name in \
+        pulse-secure-runtime-collector-v1-linux-amd64 \
+        pulse-secure-runtime-collector-v2-linux-amd64 \
+        pulse-secure-runtime-collector-v3-linux-amd64 \
+        secure-runtime-build-contract-v1.json \
+        secure-runtime-compiler-provenance.sigstore.json; do
+        install -m 0644 "${qualification_dir}/${qualification_name}" "${RELEASE_DIR}/${qualification_name}"
+    done
+    chmod 0755 "${RELEASE_DIR}"/pulse-secure-runtime-collector-v*-linux-amd64
+    echo "Imported hosted secure-runtime qualification packet."
+elif [[ "${PULSE_REQUIRE_SECURE_RUNTIME_QUALIFICATION:-false}" == "true" ]]; then
+    echo "Error: release requires the hosted secure-runtime qualification packet." >&2
+    exit 1
+fi
+
 pulse_release_generate_packet_sbom "${RELEASE_DIR}" "${RELEASE_PACKET_SBOM}"
 mapfile -t checksum_files < <(pulse_release_collect_checksum_files "${RELEASE_DIR}")
 pulse_release_write_checksums_and_signatures "${RELEASE_DIR}" "${checksum_files[@]}"

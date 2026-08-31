@@ -99,3 +99,76 @@ jobs:
           retention-days: 1
           compression-level: 0
           overwrite: true
+
+  compile-secure-runtime-qualification:
+    name: Compile Hosted Secure Runtime Qualification Packet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Validate isolated compiler request
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${REQUEST_ID}" =~ ^[0-9]+-[0-9]+$ ]]
+          test "${GITHUB_SHA}" = "${EXPECTED_SOURCE_SHA}"
+          test "${GITHUB_WORKFLOW_SHA}" = "${EXPECTED_SOURCE_SHA}"
+
+      - name: Checkout exact release source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build hosted qualification subjects
+        env:
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\n' < VERSION)" = "${VERSION}"
+          test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
+          ./scripts/build-secure-runtime-qualification.sh \
+            "${VERSION}" \
+            "$RUNNER_TEMP/secure-runtime-qualification" \
+            amd64
+
+      - name: Attest hosted qualification subjects
+        id: attest_secure_runtime
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-checksums: ${{ runner.temp }}/secure-runtime-qualification/secure-runtime-compiler-subjects.sha256
+
+      - name: Preserve portable compiler provenance
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.attest_secure_runtime.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          test -s "${PROVENANCE_BUNDLE}"
+          jq -e 'type == "object"' "${PROVENANCE_BUNDLE}" >/dev/null
+          install -m 0644 \
+            "${PROVENANCE_BUNDLE}" \
+            "$RUNNER_TEMP/secure-runtime-qualification/secure-runtime-compiler-provenance.sigstore.json"
+
+      - name: Upload hosted qualification packet
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: secure-runtime-qualification-${{ inputs.source_sha }}-${{ inputs.version }}-${{ inputs.request_id }}
+          path: ${{ runner.temp }}/secure-runtime-qualification/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true

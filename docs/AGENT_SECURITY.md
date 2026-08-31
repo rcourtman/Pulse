@@ -204,9 +204,14 @@ an immutable signed GitHub Release packet, release-attested checksums, trusted
 hosted-builder SLSA provenance, and a signed build contract that binds every
 qualification artifact to its package, toolchain, exact build settings and
 ldflags, version, production update-key fingerprint, and release checksum.
-The current release workflow does not yet emit that complete secure-runtime
-build contract or the four-version qualification artifact set, so a local tag
-or VCS-stamped lab binary cannot upgrade the proof to RC status.
+The release workflow now builds that four-version Linux amd64 qualification
+set on a separate GitHub-hosted compiler job, verifies the current collector,
+helper, and runner against the ordinary release bytes, publishes compiler
+provenance and the signed build contract, and automatically runs the guarded
+systemd lab after an immutable prerelease is published. No release candidate
+containing this wiring has been published yet, so current evidence remains
+committed-main proof; a local tag or VCS-stamped lab binary still cannot
+upgrade it to RC status.
 
 The typed-helper profile cannot be combined with `--grant-smart` or
 `--grant-pct`. The collector never joins the rootful Docker group. When no

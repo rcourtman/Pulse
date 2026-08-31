@@ -40,6 +40,7 @@ BUILD_CONTRACT_NAME = "secure-runtime-build-contract-v1.json"
 CHECKSUMS_NAME = "checksums.txt"
 ASSEMBLY_PROVENANCE_NAME = "release-build-provenance.sigstore.json"
 COMPILER_PROVENANCE_NAME = "secure-runtime-compiler-provenance.sigstore.json"
+COLLECTOR_SIGNATURE_NAMES = ("collector_v1", "collector_v2", "collector_v3", "collector_v4")
 
 REQUIRED_SCENARIOS = (
     "legacy_root_command_capable_install",
@@ -376,6 +377,37 @@ def immutable_artifact_snapshot(
                 )
 
 
+@contextlib.contextmanager
+def immutable_signature_snapshot(
+    signatures: dict[str, Path], expected_assets: dict[str, str]
+) -> Iterator[tuple[dict[str, Path], dict[str, str]]]:
+    if set(signatures) != set(COLLECTOR_SIGNATURE_NAMES):
+        raise v5.AttestationError("collector release signature set is incomplete")
+    with tempfile.TemporaryDirectory(prefix="pulse-secure-runtime-signatures-") as temporary:
+        snapshot_root = Path(temporary)
+        snapshot_root.chmod(0o700)
+        snapshots: dict[str, Path] = {}
+        digests: dict[str, str] = {}
+        for name in COLLECTOR_SIGNATURE_NAMES:
+            expected_filename = expected_assets[name] + ".sig"
+            source = signatures[name]
+            if source.name != expected_filename:
+                raise v5.AttestationError(
+                    f"collector release signature {name} must be named {expected_filename}"
+                )
+            snapshot = snapshot_root / expected_filename
+            digests[name] = copy_immutable_input(
+                source, snapshot, f"collector release signature {name}"
+            )
+            snapshots[name] = snapshot
+        yield snapshots, digests
+        for name, path in snapshots.items():
+            if sha256_file(path) != digests[name]:
+                raise v5.AttestationError(
+                    f"private collector release signature snapshot {name} changed during verification"
+                )
+
+
 def verify_release_build_contract(
     *,
     path: Path,
@@ -516,6 +548,7 @@ def verify_release_candidate_packet(
     receipt: dict[str, Any],
     artifacts: dict[str, Path],
     artifact_hashes: dict[str, str],
+    collector_signatures: dict[str, Path],
 ) -> dict[str, Any]:
     tag_identity = verify_release_candidate_tag_identity(checkout, qualified_commit, tag, repository)
     if not re.fullmatch(r"[1-9][0-9]*", release_id):
@@ -595,6 +628,27 @@ def verify_release_candidate_packet(
                 cwd=checkout,
                 label=f"hosted compiler provenance verification for {artifact_name}",
             )
+        run_checked(
+            [
+                "gh",
+                "attestation",
+                "verify",
+                str(build_contract_snapshot),
+                "--repo",
+                repository,
+                "--signer-workflow",
+                COMPILER_SIGNER_WORKFLOW,
+                "--source-digest",
+                qualified_commit,
+                "--deny-self-hosted-runners",
+                "--predicate-type",
+                "https://slsa.dev/provenance/v1",
+                "--bundle",
+                str(compiler_provenance_snapshot),
+            ],
+            cwd=checkout,
+            label="hosted compiler provenance verification for the build contract",
+        )
         verify_release_sidecar_snapshot_unchanged(snapshots, snapshot_digests)
         checksums = parse_checksums(checksums_snapshot)
         build_identity = verify_release_build_contract(
@@ -607,6 +661,50 @@ def verify_release_candidate_packet(
             artifact_hashes=artifact_hashes,
             checksums=checksums,
         )
+        release_assets = {
+            name: str(build_identity[name]["release_asset"])
+            for name in COLLECTOR_SIGNATURE_NAMES
+        }
+        with immutable_signature_snapshot(collector_signatures, release_assets) as (
+            signature_snapshots,
+            signature_digests,
+        ):
+            update_public_key = load_json_object(
+                build_contract_snapshot, "secure-runtime build contract"
+            )["update_public_keys"]
+            for name in COLLECTOR_SIGNATURE_NAMES:
+                signature_path = signature_snapshots[name]
+                run_checked(
+                    [
+                        "gh",
+                        "release",
+                        "verify-asset",
+                        tag,
+                        str(signature_path),
+                        "--repo",
+                        repository,
+                        "--format",
+                        "json",
+                    ],
+                    cwd=checkout,
+                    label=f"release attestation verification for {signature_path.name}",
+                )
+                run_checked(
+                    [
+                        "go",
+                        "run",
+                        "./scripts/release_update_key.go",
+                        "verify",
+                        "--public-key",
+                        str(update_public_key),
+                        "--file",
+                        str(artifacts[name]),
+                        "--signature-file",
+                        str(signature_path),
+                    ],
+                    cwd=checkout,
+                    label=f"production update signature verification for {name}",
+                )
         verify_release_sidecar_snapshot_unchanged(snapshots, snapshot_digests)
         return {
             **tag_identity,
@@ -619,6 +717,14 @@ def verify_release_candidate_packet(
             "compiler_signer_workflow": COMPILER_SIGNER_WORKFLOW,
             "compiler_runner_trust": "github-hosted-deny-self-hosted",
             "build_identity": build_identity,
+            "collector_signatures": {
+                name: {
+                    "release_asset": release_assets[name] + ".sig",
+                    "sha256": signature_digests[name],
+                    "verified_with_release_update_key": True,
+                }
+                for name in COLLECTOR_SIGNATURE_NAMES
+            },
             "update_key_fingerprint": expected_update_key_fingerprint,
         }
 
@@ -641,6 +747,7 @@ def _create_attestation_with_snapshotted_artifacts(
     release_compiler_provenance_path: Path | None = None,
     release_build_contract_path: Path | None = None,
     expected_release_update_key_fingerprint: str | None = None,
+    collector_signatures: dict[str, Path] | None = None,
 ) -> dict[str, Any]:
     checkout = checkout.resolve()
     qualified_commit = v5.resolve_commit(checkout, commit, "qualified commit")
@@ -673,6 +780,7 @@ def _create_attestation_with_snapshotted_artifacts(
         release_compiler_provenance_path,
         release_build_contract_path,
         expected_release_update_key_fingerprint,
+        collector_signatures,
     )
     release_packet: dict[str, Any] | None = None
     if release_candidate_tag is None:
@@ -683,7 +791,7 @@ def _create_attestation_with_snapshotted_artifacts(
     else:
         if any(value is None for value in release_arguments):
             raise v5.AttestationError(
-                "release-candidate classification requires repository, release id, signed checksums, hosted assembly and compiler provenance, build contract, and update-key fingerprint"
+                "release-candidate classification requires repository, release id, signed checksums, hosted assembly and compiler provenance, build contract, four collector signatures, and update-key fingerprint"
             )
         release_packet = verify_release_candidate_packet(
             checkout=checkout,
@@ -699,6 +807,7 @@ def _create_attestation_with_snapshotted_artifacts(
             receipt=receipt,
             artifacts=artifacts,
             artifact_hashes=artifact_hashes,
+            collector_signatures=dict(collector_signatures),
         )
         artifact_build_identity = release_packet["build_identity"]
         classification = "release-candidate-hosted-compiler-chain-artifact-bound-self-attested-systemd"
@@ -777,6 +886,7 @@ def create_attestation(
     release_compiler_provenance_path: Path | None = None,
     release_build_contract_path: Path | None = None,
     expected_release_update_key_fingerprint: str | None = None,
+    collector_signatures: dict[str, Path] | None = None,
 ) -> dict[str, Any]:
     # Hash, inspect, and externally verify the same private artifact bytes.
     # Caller-owned paths can otherwise be swapped between receipt hashing,
@@ -799,6 +909,7 @@ def create_attestation(
             release_compiler_provenance_path=release_compiler_provenance_path,
             release_build_contract_path=release_build_contract_path,
             expected_release_update_key_fingerprint=expected_release_update_key_fingerprint,
+            collector_signatures=collector_signatures,
         )
 
 
@@ -825,6 +936,10 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--release-compiler-provenance", type=Path)
     parser.add_argument("--release-build-contract", type=Path)
     parser.add_argument("--expected-release-update-key-fingerprint")
+    parser.add_argument("--collector-v1-signature", type=Path)
+    parser.add_argument("--collector-v2-signature", type=Path)
+    parser.add_argument("--collector-v3-signature", type=Path)
+    parser.add_argument("--collector-v4-signature", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -839,6 +954,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         "helper": args.helper,
         "runner": args.runner,
     }
+    collector_signatures = None
+    signature_arguments = (
+        args.collector_v1_signature,
+        args.collector_v2_signature,
+        args.collector_v3_signature,
+        args.collector_v4_signature,
+    )
+    if any(value is not None for value in signature_arguments):
+        if any(value is None for value in signature_arguments):
+            print(
+                "secure runtime schema-v6 attestation failed: all four collector signatures are required together",
+                file=sys.stderr,
+            )
+            return 1
+        collector_signatures = dict(zip(COLLECTOR_SIGNATURE_NAMES, signature_arguments, strict=True))
     try:
         attestation = create_attestation(
             checkout=args.checkout,
@@ -857,6 +987,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             release_compiler_provenance_path=args.release_compiler_provenance,
             release_build_contract_path=args.release_build_contract,
             expected_release_update_key_fingerprint=args.expected_release_update_key_fingerprint,
+            collector_signatures=collector_signatures,
         )
         args.output.write_text(json.dumps(attestation, indent=2) + "\n", encoding="utf-8")
     except v5.AttestationError as exc:

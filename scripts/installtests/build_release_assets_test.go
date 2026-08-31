@@ -2491,6 +2491,160 @@ func TestReleaseUpdateKeyPublicKeySSHAcceptsPublicKey(t *testing.T) {
 	}
 }
 
+func TestReleaseUpdateKeyVerifiesDetachedUpdateSignature(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate signing key: %v", err)
+	}
+	root := t.TempDir()
+	artifact := filepath.Join(root, "artifact")
+	signature := filepath.Join(root, "artifact.sig")
+	if err := os.WriteFile(artifact, []byte("release bytes"), 0o600); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	sign := exec.Command("go", "run", "./scripts/release_update_key.go", "sign", "--private-key", base64.StdEncoding.EncodeToString(privateKey), "--file", artifact)
+	sign.Dir = repoFile()
+	signatureBytes, err := sign.CombinedOutput()
+	if err != nil {
+		t.Fatalf("sign release artifact: %v\n%s", err, signatureBytes)
+	}
+	if err := os.WriteFile(signature, signatureBytes, 0o600); err != nil {
+		t.Fatalf("write detached signature: %v", err)
+	}
+
+	verify := exec.Command("go", "run", "./scripts/release_update_key.go", "verify", "--public-key", base64.StdEncoding.EncodeToString(publicKey), "--file", artifact, "--signature-file", signature)
+	verify.Dir = repoFile()
+	if output, err := verify.CombinedOutput(); err != nil {
+		t.Fatalf("verify release artifact: %v\n%s", err, output)
+	}
+	if err := os.WriteFile(artifact, []byte("tampered bytes"), 0o600); err != nil {
+		t.Fatalf("tamper artifact: %v", err)
+	}
+	verify = exec.Command("go", "run", "./scripts/release_update_key.go", "verify", "--public-key", base64.StdEncoding.EncodeToString(publicKey), "--file", artifact, "--signature-file", signature)
+	verify.Dir = repoFile()
+	if output, err := verify.CombinedOutput(); err == nil || !strings.Contains(string(output), "signature verification failed") {
+		t.Fatalf("tampered release artifact passed verification: err=%v output=%s", err, output)
+	}
+}
+
+func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
+	read := func(parts ...string) string {
+		t.Helper()
+		content, err := os.ReadFile(repoFile(parts...))
+		if err != nil {
+			t.Fatalf("read %s: %v", strings.Join(parts, "/"), err)
+		}
+		return string(content)
+	}
+
+	compilerWorkflow := read(".github", "workflows", "compile-release-payload.yml")
+	hostedJob := workflowJobBlock(t, compilerWorkflow, "compile-secure-runtime-qualification")
+	for _, required := range []string{
+		"runs-on: ubuntu-24.04",
+		"attestations: write",
+		"id-token: write",
+		"./scripts/build-secure-runtime-qualification.sh",
+		"secure-runtime-compiler-subjects.sha256",
+		"secure-runtime-compiler-provenance.sigstore.json",
+	} {
+		if !strings.Contains(hostedJob, required) {
+			t.Fatalf("hosted secure-runtime compiler job missing %q", required)
+		}
+	}
+	if strings.Contains(hostedJob, "PULSE_UPDATE_SIGNING_KEY") || strings.Contains(hostedJob, "PULSE_LICENSE_PUBLIC_KEY") {
+		t.Fatal("hosted secure-runtime compiler must not receive private signing or license material")
+	}
+
+	builder := read("scripts", "build-secure-runtime-qualification.sh")
+	for _, required := range []string{
+		"go build -buildvcs=false -trimpath",
+		"collector_v1_version=\"${predecessor_base}-0.secure.v6.1\"",
+		"collector_v3_version=\"${predecessor_base}-0.secure.v6.3\"",
+		"compiler_runner_trust\": \"github-hosted-deny-self-hosted\"",
+		"secure-runtime-build-contract-v1.json",
+	} {
+		if !strings.Contains(builder, required) {
+			t.Fatalf("secure-runtime qualification builder missing %q", required)
+		}
+	}
+
+	candidateWorkflow := read(".github", "workflows", "build-release-candidate.yml")
+	for _, required := range []string{
+		"secure_runtime_artifact_digest",
+		"Verify hosted secure-runtime compiler packet",
+		"--deny-self-hosted-runners",
+		"secure-runtime-compiler-provenance.sigstore.json",
+		"cmp secure-runtime-qualification/pulse-agent-linux-amd64 release-compiled/payload/binaries/pulse-agent-linux-amd64",
+		"PULSE_REQUIRE_SECURE_RUNTIME_QUALIFICATION: \"true\"",
+	} {
+		if !strings.Contains(candidateWorkflow, required) {
+			t.Fatalf("candidate workflow missing secure-runtime packet binding %q", required)
+		}
+	}
+
+	buildRelease := read("scripts", "build-release.sh")
+	if strings.Index(buildRelease, "Imported hosted secure-runtime qualification packet") > strings.Index(buildRelease, "pulse_release_generate_packet_sbom") {
+		t.Fatal("secure-runtime packet must be imported before SBOM and checksum generation")
+	}
+	for _, required := range []string{
+		"hosted secure-runtime collector-v4 does not reproduce the release collector",
+		"secure-runtime-build-contract-v1.json",
+		"secure-runtime-compiler-provenance.sigstore.json",
+	} {
+		if !strings.Contains(buildRelease, required) {
+			t.Fatalf("build-release.sh missing secure-runtime import guard %q", required)
+		}
+	}
+
+	assetHelper := read("scripts", "release_asset_common.sh")
+	for _, required := range []string{
+		`pulse-agent-runner-linux-*`,
+		`pulse-secure-runtime-collector-v*-linux-*`,
+		`secure-runtime-build-contract-v1.json`,
+		`secure-runtime-compiler-provenance.sigstore.json`,
+	} {
+		if !strings.Contains(assetHelper, required) {
+			t.Fatalf("release checksum inventory missing %q", required)
+		}
+	}
+
+	publicationWorkflow := read(".github", "workflows", "create-release.yml")
+	for _, required := range []string{
+		"release/secure-runtime-build-contract-v1.json",
+		"release/secure-runtime-compiler-provenance.sigstore.json",
+		"release/pulse-secure-runtime-collector-v1-linux-amd64",
+		"release/pulse-secure-runtime-collector-v3-linux-amd64",
+		"qualify-secure-runtime-release.yml/dispatches",
+		`{ref: "main", return_run_details: true, inputs: {tag: $tag}}`,
+		"Secure-runtime qualification dispatch did not return an exact workflow run.",
+		"Immutable RC publication did not retain an exact secure-runtime qualification run identity.",
+	} {
+		if !strings.Contains(publicationWorkflow, required) {
+			t.Fatalf("release publication missing secure-runtime asset %q", required)
+		}
+	}
+
+	qualificationWorkflow := read(".github", "workflows", "qualify-secure-runtime-release.yml")
+	if strings.Contains(qualificationWorkflow, "release:\n    types: [published]") {
+		t.Fatal("secure-runtime qualification must be explicitly dispatched after immutable publication, not rely on suppressed release events")
+	}
+	for _, required := range []string{
+		".immutable == true",
+		"ca-certificates curl dbus systemd systemd-sysv util-linux",
+		`for command in curl id nsenter runuser systemctl`,
+		"PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1",
+		"^TestSecureRuntimeSystemdLab$",
+		"--release-candidate-tag",
+		"--collector-v4-signature",
+		"secure_runtime_attestation_v6.py",
+	} {
+		if !strings.Contains(qualificationWorkflow, required) {
+			t.Fatalf("post-publication secure-runtime qualification missing %q", required)
+		}
+	}
+}
+
 func TestReleaseAssetCommonRunsUpdateKeyThroughModulePath(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not installed")

@@ -1163,6 +1163,14 @@ jobs:
             "${TAG}" \
             release/release-build-provenance.sigstore.json \
             --clobber
+          release_upload_with_retry \
+            "${TAG}" \
+            release/secure-runtime-build-contract-v1.json \
+            release/secure-runtime-compiler-provenance.sigstore.json \
+            release/pulse-secure-runtime-collector-v1-linux-amd64 \
+            release/pulse-secure-runtime-collector-v2-linux-amd64 \
+            release/pulse-secure-runtime-collector-v3-linux-amd64 \
+            --clobber
           for bare_agent in \
             release/pulse-agent-linux-amd64 \
             release/pulse-agent-linux-arm64 \
@@ -1628,8 +1636,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      actions: read
+      actions: write
       contents: write
+    outputs:
+      secure_runtime_qualification_run_id: ${{ steps.secure_runtime_qualification.outputs.run_id }}
+      secure_runtime_qualification_run_url: ${{ steps.secure_runtime_qualification.outputs.run_url }}
     steps:
       - name: Checkout release integrity control
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -1946,6 +1957,39 @@ jobs:
           rm -rf "$activation_marker_dir"
           echo "[OK] Immutably committed, attested, and publicly verified ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."
 
+      # A release published with GITHUB_TOKEN does not emit a workflow-triggering
+      # release event. Dispatch the qualification explicitly after the immutable
+      # packet and activation marker have both been verified.
+      - name: Dispatch exact RC secure-runtime qualification
+        id: secure_runtime_qualification
+        if: ${{ needs.prepare.outputs.is_prerelease == 'true' && contains(needs.prepare.outputs.version, '-rc.') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          dispatch="$(
+            jq -n \
+              --arg tag "${TAG}" \
+              '{ref: "main", return_run_details: true, inputs: {tag: $tag}}' | \
+              gh api \
+                --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2026-03-10" \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/qualify-secure-runtime-release.yml/dispatches" \
+                --input -
+          )"
+          run_id="$(jq -r '.workflow_run_id // empty' <<<"${dispatch}")"
+          run_url="$(jq -r '.html_url // empty' <<<"${dispatch}")"
+          if [[ ! "${run_id}" =~ ^[0-9]+$ ]] || [[ -z "${run_url}" ]]; then
+            echo "::error::Secure-runtime qualification dispatch did not return an exact workflow run."
+            exit 1
+          fi
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+          echo "run_url=${run_url}" >> "$GITHUB_OUTPUT"
+          echo "[OK] Secure-runtime qualification is durably queued as ${run_url}."
+
   release_commit_verdict:
     name: Release Activation Commit Verdict
     needs:
@@ -1991,6 +2035,8 @@ jobs:
           CONVERGENCE_DISPATCH_RESULT: ${{ needs.dispatch_release_convergence.result }}
           CONVERGENCE_RUN_ID: ${{ needs.dispatch_release_convergence.outputs.run_id }}
           CONVERGENCE_RUN_URL: ${{ needs.dispatch_release_convergence.outputs.run_url }}
+          SECURE_RUNTIME_QUALIFICATION_RUN_ID: ${{ needs.activate_release.outputs.secure_runtime_qualification_run_id }}
+          SECURE_RUNTIME_QUALIFICATION_RUN_URL: ${{ needs.activate_release.outputs.secure_runtime_qualification_run_url }}
           R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}
           SERVER_IMAGE_DIGEST: ${{ needs.publish_docker.outputs.server_digest }}
           CONTROL_PLANE_IMAGE_DIGEST: ${{ needs.publish_docker.outputs.control_plane_digest }}
@@ -2019,6 +2065,14 @@ jobs:
             require_result "Helm staging" "$HELM_RESULT" success
             require_result "immutable release readiness" "$READINESS_RESULT" success
             require_result "durable customer convergence dispatch" "$CONVERGENCE_DISPATCH_RESULT" success
+            if [[ "$VERSION" =~ -rc\.[1-9][0-9]*$ ]]; then
+              if [[ ! "$SECURE_RUNTIME_QUALIFICATION_RUN_ID" =~ ^[0-9]+$ ]] || \
+                 [[ ! "$SECURE_RUNTIME_QUALIFICATION_RUN_URL" =~ ^https://github\.com/${GITHUB_REPOSITORY}/actions/runs/[0-9]+$ ]]; then
+                echo "::error::Immutable RC publication did not retain an exact secure-runtime qualification run identity."
+                exit 1
+              fi
+              echo "[OK] Secure-runtime qualification run: ${SECURE_RUNTIME_QUALIFICATION_RUN_URL}"
+            fi
             if [[ "$VERSION" == 6.* ]]; then
               require_result "private Pro staging" "$PRIVATE_PRO_STAGE_RESULT" success
             fi

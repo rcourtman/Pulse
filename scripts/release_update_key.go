@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/x509"
@@ -21,6 +22,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  release_update_key.go openssh-private-key --private-key <base64-ed25519-key-or-seed> [--comment <comment>]")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go fingerprint (--private-key <base64-ed25519-key-or-seed> | --public-key <base64-ed25519-public-key>)")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go sign --private-key <base64-ed25519-key-or-seed> --file <path>")
+	fmt.Fprintln(os.Stderr, "  release_update_key.go verify --public-key <base64-ed25519-public-key> --file <path> --signature-file <path>")
 	os.Exit(1)
 }
 
@@ -147,6 +149,36 @@ func main() {
 			fail(err)
 		}
 		fmt.Println(signature)
+	case "verify":
+		verifyCmd := flag.NewFlagSet("verify", flag.ExitOnError)
+		publicKey := verifyCmd.String("public-key", "", "base64-encoded Ed25519 public key or PKIX public key")
+		filePath := verifyCmd.String("file", "", "path to the signed file")
+		signaturePath := verifyCmd.String("signature-file", "", "path to the base64-encoded Ed25519 signature")
+		_ = verifyCmd.Parse(os.Args[2:])
+
+		if *publicKey == "" || *filePath == "" || *signaturePath == "" {
+			usage()
+		}
+		key, err := decodePublicKey(*publicKey)
+		if err != nil {
+			fail(err)
+		}
+		data, err := os.ReadFile(*filePath)
+		if err != nil {
+			fail(fmt.Errorf("read file for verification: %w", err))
+		}
+		signatureText, err := os.ReadFile(*signaturePath)
+		if err != nil {
+			fail(fmt.Errorf("read signature for verification: %w", err))
+		}
+		signature, err := base64.StdEncoding.DecodeString(string(bytes.TrimSpace(signatureText)))
+		if err != nil {
+			fail(fmt.Errorf("invalid base64 signature: %w", err))
+		}
+		if !ed25519.Verify(key, data, signature) {
+			fail(fmt.Errorf("signature verification failed"))
+		}
+		fmt.Println("signature verified")
 	default:
 		usage()
 	}

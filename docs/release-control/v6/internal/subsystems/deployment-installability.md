@@ -225,6 +225,25 @@ Release builds and archives carry both helper and runner binaries for the five
 Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,
 Ed25519, and SSH signature sidecars. Exact archive/container-context validation
 must prove those assets rather than inferring them from collector packaging.
+Every canonical candidate also carries one Linux amd64 secure-runtime
+qualification packet compiled on a GitHub-hosted runner. That compiler emits
+three version-distinct predecessor collectors plus byte-for-byte
+reproductions of the ordinary release collector, helper, and runner, a closed
+build contract, and portable SLSA compiler provenance. Hosted candidate
+assembly rejects the packet unless those three current binaries reproduce the
+ordinary payload exactly, then publishes only the predecessor collectors next
+to the ordinary current binaries and binds the compiler provenance and build
+contract through the normal SBOM, checksum, Ed25519, SSH-signature, immutable
+manifest, and assembly-provenance path. The update signing private key remains
+absent from compilation and is used only by hosted candidate assembly.
+Published prerelease packets automatically enter the separate disposable
+Ubuntu/systemd qualification workflow. That workflow consumes the immutable
+release assets and four release signatures, runs the canonical twenty-scenario
+schema-v6 lab, and applies the release-candidate attester against the exact
+GitHub release ID, tag, source commit, checksums, compiler provenance, assembly
+provenance, and update-key fingerprint. Its retained receipt remains explicit
+self-attestation rather than external security review, and successful packet
+production or execution does not change the safe profile from opt-in.
 This packaging proof does not establish live platform qualification: helper
 update staging/activation/restart/rollback on a real systemd host, real
 Docker/Podman and Proxmox action execution, systemd migration rehearsal, and
@@ -291,6 +310,8 @@ release-latency optimization.
 16. `internal/cloudcp/docker/labels.go`
 17. `internal/cloudcp/tenant_runtime_rollout.go`
 13. `.github/workflows/build-release-candidate.yml`
+13a. `.github/workflows/compile-release-payload.yml`
+13b. `.github/workflows/qualify-secure-runtime-release.yml`
 14. `.github/workflows/build-and-test.yml`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
@@ -338,6 +359,7 @@ release-latency optimization.
 35. `go.sum`
 36. `scripts/build-release.sh`
 37. `scripts/build-release-binaries.sh`
+37a. `scripts/build-secure-runtime-qualification.sh`
 38. `scripts/release_build_targets.sh`
 39. `scripts/run-release-backend-tests.sh`
 40. `scripts/shard_go_tests.py`
@@ -374,7 +396,10 @@ release-latency optimization.
 63. `scripts/release_control/live_runtime_proof_test.py`
 64. `scripts/release_candidate_manifest.py`
 65. `scripts/release_control/validate_artifact_release_line.py`
+65a. `scripts/release_control/secure_runtime_attestation_v6.py`
+65b. `scripts/release_control/secure_runtime_source_manifest_v6.json`
 66. `scripts/release_ldflags.sh`
+66a. `scripts/release_update_key.go`
 67. `scripts/run_cloud_public_signup_smoke.sh`
 68. `scripts/run_demo_public_browser_smoke.sh`
 69. `scripts/demo_public_browser_smoke.cjs`
@@ -744,7 +769,7 @@ artifact-selection behaviour.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/verify-github-release-integrity.sh`, `scripts/verify-release-container-images.sh`, `scripts/release_control/verify_release_container_images_test.py`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/recover-release-activation.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, hosted secure-runtime qualification compilation and attestation, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/build-secure-runtime-qualification.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/release_update_key.go`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/verify-github-release-integrity.sh`, `scripts/verify-release-container-images.sh`, `scripts/release_control/secure_runtime_attestation_v6.py`, `scripts/release_control/secure_runtime_source_manifest_v6.json`, `scripts/release_control/verify_release_container_images_test.py`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/compile-release-payload.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/qualify-secure-runtime-release.yml`, `.github/workflows/recover-release-activation.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
    The governed release-build surface also includes
    `scripts/prepare-release-container-context.sh` for exact-candidate container
    assembly.

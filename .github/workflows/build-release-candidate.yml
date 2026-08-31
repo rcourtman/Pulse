@@ -89,6 +89,9 @@ jobs:
       artifact_digest: ${{ steps.wait.outputs.artifact_digest }}
       artifact_name: ${{ steps.wait.outputs.artifact_name }}
       compiler_run_id: ${{ steps.dispatch.outputs.compiler_run_id }}
+      secure_runtime_artifact_id: ${{ steps.wait.outputs.secure_runtime_artifact_id }}
+      secure_runtime_artifact_digest: ${{ steps.wait.outputs.secure_runtime_artifact_digest }}
+      secure_runtime_artifact_name: ${{ steps.wait.outputs.secure_runtime_artifact_name }}
     steps:
       - name: Dispatch exact-SHA compiler workflow
         id: dispatch
@@ -171,6 +174,17 @@ jobs:
           echo "artifact_id=${artifact_id}" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=${artifact_digest}" >> "$GITHUB_OUTPUT"
           echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+
+          secure_runtime_artifact_name="secure-runtime-qualification-${SOURCE_SHA}-${VERSION}-${REQUEST_ID}"
+          secure_runtime_artifact_json="$(jq -ce \
+            --arg artifact_name "${secure_runtime_artifact_name}" \
+            '[.artifacts[] | select(.name == $artifact_name and .expired == false and .size_in_bytes > 0)] | if length == 1 then .[0] else error("expected exactly one secure-runtime compiler artifact") end' \
+            <<<"${artifacts_json}")"
+          secure_runtime_artifact_id="$(jq -er '.id | select(type == "number")' <<<"${secure_runtime_artifact_json}")"
+          secure_runtime_artifact_digest="$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$")) | sub("^sha256:"; "")' <<<"${secure_runtime_artifact_json}")"
+          echo "secure_runtime_artifact_id=${secure_runtime_artifact_id}" >> "$GITHUB_OUTPUT"
+          echo "secure_runtime_artifact_digest=${secure_runtime_artifact_digest}" >> "$GITHUB_OUTPUT"
+          echo "secure_runtime_artifact_name=${secure_runtime_artifact_name}" >> "$GITHUB_OUTPUT"
 
   signing-configuration:
     name: Verify Native Signing Configuration
@@ -731,6 +745,65 @@ jobs:
           mkdir -p release-compiled
           unzip -q "${artifact_zip}" -d release-compiled
 
+      - name: Verify hosted secure-runtime compiler packet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_ARTIFACT_ID: ${{ needs.obtain-release-payload.outputs.secure_runtime_artifact_id }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.obtain-release-payload.outputs.secure_runtime_artifact_digest }}
+          EXPECTED_ARTIFACT_NAME: ${{ needs.obtain-release-payload.outputs.secure_runtime_artifact_name }}
+          EXPECTED_COMPILER_RUN_ID: ${{ needs.obtain-release-payload.outputs.compiler_run_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_ARTIFACT_ID}" =~ ^[0-9]+$ ]]
+          [[ "${EXPECTED_ARTIFACT_DIGEST}" =~ ^[0-9a-f]{64}$ ]]
+          artifact_json="$RUNNER_TEMP/secure-runtime-compiled-artifact.json"
+          artifact_zip="$RUNNER_TEMP/secure-runtime-compiled-artifact.zip"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${EXPECTED_ARTIFACT_ID}" > "${artifact_json}"
+          jq -e \
+            --argjson artifact_id "${EXPECTED_ARTIFACT_ID}" \
+            --arg artifact_name "${EXPECTED_ARTIFACT_NAME}" \
+            --arg artifact_digest "sha256:${EXPECTED_ARTIFACT_DIGEST}" \
+            --argjson run_id "${EXPECTED_COMPILER_RUN_ID}" \
+            --arg source_sha "${GITHUB_SHA}" \
+            '.id == $artifact_id and .name == $artifact_name and .expired == false and .size_in_bytes > 0 and .digest == $artifact_digest and .workflow_run.id == $run_id and .workflow_run.head_sha == $source_sha' \
+            "${artifact_json}" >/dev/null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${EXPECTED_ARTIFACT_ID}/zip" > "${artifact_zip}"
+          printf '%s  %s\n' "${EXPECTED_ARTIFACT_DIGEST}" "${artifact_zip}" | sha256sum --check --
+          mkdir -p secure-runtime-qualification
+          unzip -q "${artifact_zip}" -d secure-runtime-qualification
+
+          jq -e \
+            --arg version "${VERSION}" \
+            --arg tag "v${VERSION}" \
+            --arg source_sha "${GITHUB_SHA}" \
+            '.schema_version == 1 and .version == $version and .tag == $tag and .source_sha == $source_sha and .compiler_runner_trust == "github-hosted-deny-self-hosted" and (.artifacts | keys | sort) == ["collector_v1", "collector_v2", "collector_v3", "collector_v4", "helper", "runner"]' \
+            secure-runtime-qualification/secure-runtime-build-contract-v1.json >/dev/null
+          (
+            cd secure-runtime-qualification
+            sha256sum --check secure-runtime-compiler-subjects.sha256
+          )
+          for subject in \
+            pulse-secure-runtime-collector-v1-linux-amd64 \
+            pulse-secure-runtime-collector-v2-linux-amd64 \
+            pulse-secure-runtime-collector-v3-linux-amd64 \
+            pulse-agent-linux-amd64 \
+            pulse-agent-helper-linux-amd64 \
+            pulse-agent-runner-linux-amd64 \
+            secure-runtime-build-contract-v1.json; do
+            gh attestation verify \
+              "secure-runtime-qualification/${subject}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "github.com/rcourtman/Pulse/.github/workflows/compile-release-payload.yml" \
+              --source-digest "${GITHUB_SHA}" \
+              --deny-self-hosted-runners \
+              --predicate-type "https://slsa.dev/provenance/v1" \
+              --bundle secure-runtime-qualification/secure-runtime-compiler-provenance.sigstore.json
+          done
+          cmp secure-runtime-qualification/pulse-agent-linux-amd64 release-compiled/payload/binaries/pulse-agent-linux-amd64
+          cmp secure-runtime-qualification/pulse-agent-helper-linux-amd64 release-compiled/payload/binaries/pulse-agent-helper-linux-amd64
+          cmp secure-runtime-qualification/pulse-agent-runner-linux-amd64 release-compiled/payload/binaries/pulse-agent-runner-linux-amd64
+
       - name: Verify exact-SHA compiled payload
         env:
           EXPECTED_ARTIFACT_ID: ${{ needs.obtain-release-payload.outputs.artifact_id }}
@@ -789,6 +862,8 @@ jobs:
           PULSE_REQUIRE_WINDOWS_SIGNING: ${{ inputs.require_windows_signing }}
           PULSE_AGENT_NATIVE_BINARIES_DIR: ${{ (inputs.require_macos_signing || inputs.require_windows_signing) && format('{0}/native-agent-binaries', github.workspace) || '' }}
           PULSE_RELEASE_COMPILED_PAYLOAD_DIR: ${{ github.workspace }}/release-compiled/payload
+          PULSE_SECURE_RUNTIME_QUALIFICATION_DIR: ${{ github.workspace }}/secure-runtime-qualification
+          PULSE_REQUIRE_SECURE_RUNTIME_QUALIFICATION: "true"
           VERSION: ${{ inputs.version }}
 
       - name: Validate installer signing key pins
@@ -816,6 +891,7 @@ jobs:
 
       - name: Validate complete candidate locally
         env:
+          PULSE_REQUIRE_SECURE_RUNTIME_QUALIFICATION: "true"
           VERSION: ${{ inputs.version }}
         run: ./scripts/validate-release.sh "${VERSION}" --skip-docker
 

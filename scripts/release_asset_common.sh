@@ -254,6 +254,18 @@ pulse_release_collect_checksum_files() {
         if compgen -G "pulse-agent-helper-linux-*" > /dev/null; then
             checksum_files+=( pulse-agent-helper-linux-* )
         fi
+        if compgen -G "pulse-agent-runner-linux-*" > /dev/null; then
+            checksum_files+=( pulse-agent-runner-linux-* )
+        fi
+        if compgen -G "pulse-secure-runtime-collector-v*-linux-*" > /dev/null; then
+            checksum_files+=( pulse-secure-runtime-collector-v*-linux-* )
+        fi
+        if [[ -f "secure-runtime-build-contract-v1.json" ]]; then
+            checksum_files+=( secure-runtime-build-contract-v1.json )
+        fi
+        if [[ -f "secure-runtime-compiler-provenance.sigstore.json" ]]; then
+            checksum_files+=( secure-runtime-compiler-provenance.sigstore.json )
+        fi
         if compgen -G "pulse-agent-freebsd-*" > /dev/null; then
             checksum_files+=( pulse-agent-freebsd-* )
         fi

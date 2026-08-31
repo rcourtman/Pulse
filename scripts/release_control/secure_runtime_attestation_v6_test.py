@@ -75,6 +75,12 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
             path = self.root / f"artifact-{name}"
             path.write_bytes(name.encode())
             self.artifacts[name] = path
+        contract = self.build_contract()
+        self.collector_signatures = {}
+        for name in ("collector_v1", "collector_v2", "collector_v3", "collector_v4"):
+            path = self.root / f"{contract['artifacts'][name]['release_asset']}.sig"
+            path.write_text(base64.b64encode(name.encode()).decode() + "\n", encoding="utf-8")
+            self.collector_signatures[name] = path
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -453,17 +459,60 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
                 receipt=self.receipt,
                 artifacts=self.artifacts,
                 artifact_hashes=self.artifact_hashes,
+                collector_signatures=self.collector_signatures,
             )
         self.assertEqual(packet["assembly_signer_workflow"], ASSEMBLY_SIGNER_WORKFLOW)
         self.assertEqual(packet["compiler_signer_workflow"], COMPILER_SIGNER_WORKFLOW)
         self.assertEqual(packet["compiler_runner_trust"], "github-hosted-deny-self-hosted")
         self.assertTrue(any(Path(call[0]).name == "verify-github-release-integrity.sh" for call in calls))
-        self.assertEqual(sum(call[:3] == ["gh", "release", "verify-asset"] for call in calls), 4)
+        self.assertEqual(sum(call[:3] == ["gh", "release", "verify-asset"] for call in calls), 8)
         provenance_calls = [call for call in calls if call[:3] == ["gh", "attestation", "verify"]]
-        self.assertEqual(len(provenance_calls), 1 + len(v5.ARTIFACT_ARGUMENTS))
+        self.assertEqual(len(provenance_calls), 2 + len(v5.ARTIFACT_ARGUMENTS))
         self.assertTrue(all("--deny-self-hosted-runners" in call for call in provenance_calls))
         self.assertIn(ASSEMBLY_SIGNER_WORKFLOW, provenance_calls[0])
         self.assertTrue(all(COMPILER_SIGNER_WORKFLOW in call for call in provenance_calls[1:]))
+        signature_calls = [call for call in calls if call[:4] == ["go", "run", "./scripts/release_update_key.go", "verify"]]
+        self.assertEqual(len(signature_calls), 4)
+        self.assertTrue(all(self.update_public_keys in call for call in signature_calls))
+        self.assertEqual(set(packet["collector_signatures"]), {"collector_v1", "collector_v2", "collector_v3", "collector_v4"})
+
+    def test_release_packet_rejects_misnamed_collector_signature(self) -> None:
+        contract_path, checksums_path, _ = self.write_contract_and_checksums()
+        assembly_provenance_path = self.root / ASSEMBLY_PROVENANCE_NAME
+        assembly_provenance_path.write_text("{}\n", encoding="utf-8")
+        compiler_provenance_path = self.root / COMPILER_PROVENANCE_NAME
+        compiler_provenance_path.write_text("{}\n", encoding="utf-8")
+        signatures = dict(self.collector_signatures)
+        signatures["collector_v1"] = self.root / "wrong.sig"
+        signatures["collector_v1"].write_text("bad\n", encoding="utf-8")
+
+        with (
+            mock.patch(
+                "secure_runtime_attestation_v6.verify_release_candidate_tag_identity",
+                return_value={"tag": self.tag},
+            ),
+            mock.patch(
+                "secure_runtime_attestation_v6.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0, b"{}\n", b""),
+            ),
+            self.assertRaisesRegex(v5.AttestationError, "must be named"),
+        ):
+            verify_release_candidate_packet(
+                checkout=self.root,
+                qualified_commit=self.commit,
+                tag=self.tag,
+                repository=CANONICAL_REPOSITORY,
+                release_id="12345",
+                checksums_path=checksums_path,
+                assembly_provenance_path=assembly_provenance_path,
+                compiler_provenance_path=compiler_provenance_path,
+                build_contract_path=contract_path,
+                expected_update_key_fingerprint=self.fingerprint,
+                receipt=self.receipt,
+                artifacts=self.artifacts,
+                artifact_hashes=self.artifact_hashes,
+                collector_signatures=signatures,
+            )
 
     def test_release_packet_rejects_private_snapshot_swap_during_verification(self) -> None:
         contract_path, checksums_path, _ = self.write_contract_and_checksums()
@@ -501,6 +550,7 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
                 receipt=self.receipt,
                 artifacts=self.artifacts,
                 artifact_hashes=self.artifact_hashes,
+                collector_signatures=self.collector_signatures,
             )
 
     def test_cli_does_not_accept_v5_release_candidate_ref_shortcut(self) -> None:

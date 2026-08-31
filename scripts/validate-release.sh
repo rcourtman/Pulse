@@ -466,6 +466,15 @@ required_assets=(
     "pulse-agent-v${PULSE_VERSION}-freebsd-amd64.tar.gz"
     "pulse-agent-v${PULSE_VERSION}-freebsd-arm64.tar.gz"
 )
+if [[ "${PULSE_REQUIRE_SECURE_RUNTIME_QUALIFICATION:-false}" == "true" ]]; then
+    required_assets+=(
+        "pulse-secure-runtime-collector-v1-linux-amd64"
+        "pulse-secure-runtime-collector-v2-linux-amd64"
+        "pulse-secure-runtime-collector-v3-linux-amd64"
+        "secure-runtime-build-contract-v1.json"
+        "secure-runtime-compiler-provenance.sigstore.json"
+    )
+fi
 
 missing_count=0
 for asset in "${required_assets[@]}"; do
