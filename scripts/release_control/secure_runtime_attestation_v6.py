@@ -12,6 +12,7 @@ import json
 import math
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -41,6 +42,7 @@ CHECKSUMS_NAME = "checksums.txt"
 ASSEMBLY_PROVENANCE_NAME = "release-build-provenance.sigstore.json"
 COMPILER_PROVENANCE_NAME = "secure-runtime-compiler-provenance.sigstore.json"
 COLLECTOR_SIGNATURE_NAMES = ("collector_v1", "collector_v2", "collector_v3", "collector_v4")
+SUPPORTED_RELEASE_ARCHITECTURES = ("amd64", "arm64")
 
 REQUIRED_SCENARIOS = (
     "legacy_root_command_capable_install",
@@ -408,6 +410,36 @@ def immutable_signature_snapshot(
                 )
 
 
+def expected_release_asset_names(architecture: str) -> dict[str, str]:
+    if architecture not in SUPPORTED_RELEASE_ARCHITECTURES:
+        raise v5.AttestationError(
+            f"secure-runtime release architecture must be one of {', '.join(SUPPORTED_RELEASE_ARCHITECTURES)}"
+        )
+    return {
+        "collector_v1": f"pulse-secure-runtime-collector-v1-linux-{architecture}",
+        "collector_v2": f"pulse-secure-runtime-collector-v2-linux-{architecture}",
+        "collector_v3": f"pulse-secure-runtime-collector-v3-linux-{architecture}",
+        "collector_v4": f"pulse-agent-linux-{architecture}",
+        "helper": f"pulse-agent-helper-linux-{architecture}",
+        "runner": f"pulse-agent-runner-linux-{architecture}",
+    }
+
+
+def expected_release_artifact_versions(tag: str) -> dict[str, str]:
+    if not RELEASE_TAG_RE.fullmatch(tag):
+        raise v5.AttestationError("release candidate tag must be an exact vX.Y.Z-rc.N tag")
+    release_version = tag[1:]
+    predecessor_base = release_version.split("-", 1)[0]
+    return {
+        "collector_v1": f"{predecessor_base}-0.secure.v6.1",
+        "collector_v2": f"{predecessor_base}-0.secure.v6.2",
+        "collector_v3": f"{predecessor_base}-0.secure.v6.3",
+        "collector_v4": release_version,
+        "helper": release_version,
+        "runner": release_version,
+    }
+
+
 def verify_release_build_contract(
     *,
     path: Path,
@@ -458,6 +490,11 @@ def verify_release_build_contract(
     receipt_versions = receipt.get("artifact_versions")
     if not isinstance(receipt_versions, dict):
         raise v5.AttestationError("receipt artifact_versions are unavailable")
+    architecture = receipt.get("architecture")
+    if not isinstance(architecture, str):
+        raise v5.AttestationError("receipt architecture is unavailable")
+    expected_assets = expected_release_asset_names(architecture)
+    expected_versions = expected_release_artifact_versions(tag)
     verified: dict[str, Any] = {}
     seen_release_assets: set[str] = set()
     for name, expected_package in v5.EXPECTED_ARTIFACT_PACKAGES.items():
@@ -471,6 +508,10 @@ def verify_release_build_contract(
             or release_asset in seen_release_assets
         ):
             raise v5.AttestationError(f"secure-runtime build contract release asset for {name} is invalid")
+        if release_asset != expected_assets[name]:
+            raise v5.AttestationError(
+                f"secure-runtime build contract release asset for {name} does not match the canonical release name"
+            )
         seen_release_assets.add(release_asset)
         if entry.get("sha256") != artifact_hashes[name] or checksums.get(release_asset) != artifact_hashes[name]:
             raise v5.AttestationError(f"artifact {name} is not bound to the signed release checksums")
@@ -481,7 +522,7 @@ def verify_release_build_contract(
             "tool": "go build",
             "package": expected_package,
             "target_os": "linux",
-            "target_arch": receipt.get("architecture"),
+            "target_arch": architecture,
             "cgo_enabled": 0,
             "trimpath": True,
             "buildvcs": False,
@@ -497,6 +538,8 @@ def verify_release_build_contract(
         if not isinstance(artifact_version, str) or not artifact_version:
             raise v5.AttestationError(f"artifact {name} version is invalid")
         normalized_artifact_version = artifact_version.removeprefix("v")
+        if normalized_artifact_version != expected_versions[name]:
+            raise v5.AttestationError(f"artifact {name} version does not match the canonical release build")
         if name.startswith("collector_v"):
             receipt_version = receipt_versions.get(name)
             if (
@@ -531,6 +574,160 @@ def verify_release_build_contract(
             "update_key_fingerprint": expected_update_key_fingerprint,
         }
     return verified
+
+
+def verify_and_snapshot_release_candidate_packet(
+    *,
+    checkout: Path,
+    qualified_commit: str,
+    main_ref: str,
+    tag: str,
+    repository: str,
+    release_id: str,
+    checksums_path: Path,
+    assembly_provenance_path: Path,
+    compiler_provenance_path: Path,
+    build_contract_path: Path,
+    expected_update_key_fingerprint: str,
+    architecture: str,
+    artifacts: dict[str, Path],
+    collector_signatures: dict[str, Path],
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Authenticate a release packet before any candidate binary is executed.
+
+    Every caller-owned input is copied once into a private directory. All
+    release, provenance, checksum, build-contract, and update-signature checks
+    operate on those copies. The directory becomes caller-visible only after
+    verification succeeds, so the privileged lab can mount exactly the bytes
+    that crossed the trust boundary.
+    """
+
+    checkout = checkout.resolve()
+    resolved_commit = v5.resolve_commit(checkout, qualified_commit, "qualified commit")
+    if qualified_commit != resolved_commit:
+        raise v5.AttestationError("qualified commit must be the full canonical commit SHA")
+    v5.require_detached_clean_checkout(checkout, resolved_commit)
+    main_commit = verify_canonical_main_identity(checkout, main_ref)
+    v5.require_ancestor(checkout, resolved_commit, CANONICAL_MAIN_REF)
+
+    expected_assets = expected_release_asset_names(architecture)
+    expected_versions = expected_release_artifact_versions(tag)
+    if set(artifacts) != set(v5.ARTIFACT_ARGUMENTS):
+        raise v5.AttestationError("qualification artifact set is incomplete")
+    if set(collector_signatures) != set(COLLECTOR_SIGNATURE_NAMES):
+        raise v5.AttestationError("collector release signature set is incomplete")
+
+    output_dir = Path(os.path.abspath(output_dir))
+    if output_dir.exists() or output_dir.is_symlink():
+        raise v5.AttestationError("verified packet output directory must not already exist")
+    output_parent = output_dir.parent
+    try:
+        parent_stat = output_parent.lstat()
+    except OSError as exc:
+        raise v5.AttestationError(f"unable to inspect verified packet parent directory: {exc}") from exc
+    if stat.S_ISLNK(parent_stat.st_mode) or not stat.S_ISDIR(parent_stat.st_mode):
+        raise v5.AttestationError("verified packet parent must be a real directory")
+
+    staging = Path(tempfile.mkdtemp(prefix=".pulse-secure-runtime-verified-", dir=output_parent))
+    staging.chmod(0o700)
+    snapshot_digests: dict[str, str] = {}
+    snapshot_artifacts: dict[str, Path] = {}
+    snapshot_signatures: dict[str, Path] = {}
+    try:
+        sidecar_sources = {
+            CHECKSUMS_NAME: checksums_path,
+            ASSEMBLY_PROVENANCE_NAME: assembly_provenance_path,
+            COMPILER_PROVENANCE_NAME: compiler_provenance_path,
+            BUILD_CONTRACT_NAME: build_contract_path,
+        }
+        for filename, source in sidecar_sources.items():
+            destination = staging / filename
+            snapshot_digests[filename] = copy_release_sidecar(source, destination, filename)
+
+        for name in v5.ARTIFACT_ARGUMENTS:
+            source = artifacts[name]
+            expected_filename = expected_assets[name]
+            if source.name != expected_filename:
+                raise v5.AttestationError(
+                    f"qualification artifact {name} must be named {expected_filename}"
+                )
+            destination = staging / expected_filename
+            snapshot_digests[expected_filename] = copy_immutable_input(
+                source, destination, f"qualification artifact {name}"
+            )
+            snapshot_artifacts[name] = destination
+
+        for name in COLLECTOR_SIGNATURE_NAMES:
+            expected_filename = expected_assets[name] + ".sig"
+            source = collector_signatures[name]
+            if source.name != expected_filename:
+                raise v5.AttestationError(
+                    f"collector release signature {name} must be named {expected_filename}"
+                )
+            destination = staging / expected_filename
+            snapshot_digests[expected_filename] = copy_immutable_input(
+                source, destination, f"collector release signature {name}"
+            )
+            snapshot_signatures[name] = destination
+
+        preexecution_receipt = {
+            "architecture": architecture,
+            "artifact_versions": {
+                name: expected_versions[name] for name in COLLECTOR_SIGNATURE_NAMES
+            },
+        }
+        artifact_hashes = {
+            name: snapshot_digests[expected_assets[name]] for name in v5.ARTIFACT_ARGUMENTS
+        }
+        packet = verify_release_candidate_packet(
+            checkout=checkout,
+            qualified_commit=resolved_commit,
+            tag=tag,
+            repository=repository,
+            release_id=release_id,
+            checksums_path=staging / CHECKSUMS_NAME,
+            assembly_provenance_path=staging / ASSEMBLY_PROVENANCE_NAME,
+            compiler_provenance_path=staging / COMPILER_PROVENANCE_NAME,
+            build_contract_path=staging / BUILD_CONTRACT_NAME,
+            expected_update_key_fingerprint=expected_update_key_fingerprint,
+            receipt=preexecution_receipt,
+            artifacts=snapshot_artifacts,
+            artifact_hashes=artifact_hashes,
+            collector_signatures=snapshot_signatures,
+        )
+        for filename, expected_digest in snapshot_digests.items():
+            if sha256_file(staging / filename) != expected_digest:
+                raise v5.AttestationError(
+                    f"private verified packet snapshot {filename} changed during verification"
+                )
+        for path in snapshot_artifacts.values():
+            path.chmod(0o500)
+        directory_fd = os.open(staging, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        staging.rename(output_dir)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+    return {
+        "schema_version": 1,
+        "verification": "preexecution-release-packet",
+        "qualified_commit": resolved_commit,
+        "main_ref_verified": main_ref,
+        "main_ref_commit_at_verification": main_commit,
+        "release_candidate_tag": tag,
+        "release_repository": repository,
+        "release_id": release_id,
+        "architecture": architecture,
+        "verified_packet_dir": str(output_dir),
+        "snapshot_digests": snapshot_digests,
+        "release_packet": packet,
+        "safe_to_execute": True,
+    }
 
 
 def verify_release_candidate_packet(
@@ -918,16 +1115,19 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--checkout", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--main-ref", default=CANONICAL_MAIN_REF)
-    parser.add_argument("--receipt", type=Path, required=True)
-    parser.add_argument("--receipt-record-path", required=True)
-    parser.add_argument("--transcript", type=Path, required=True)
+    parser.add_argument("--verify-release-packet-only", action="store_true")
+    parser.add_argument("--verified-packet-dir", type=Path)
+    parser.add_argument("--expected-architecture")
+    parser.add_argument("--receipt", type=Path)
+    parser.add_argument("--receipt-record-path")
+    parser.add_argument("--transcript", type=Path)
     parser.add_argument("--collector-v1", type=Path, required=True)
     parser.add_argument("--collector-v2", type=Path, required=True)
     parser.add_argument("--collector-v3", type=Path, required=True)
     parser.add_argument("--collector-v4", type=Path, required=True)
     parser.add_argument("--helper", type=Path, required=True)
     parser.add_argument("--runner", type=Path, required=True)
-    parser.add_argument("--elapsed-seconds", type=float, required=True)
+    parser.add_argument("--elapsed-seconds", type=float)
     parser.add_argument("--release-candidate-tag")
     parser.add_argument("--release-repository")
     parser.add_argument("--release-id")
@@ -970,30 +1170,80 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         collector_signatures = dict(zip(COLLECTOR_SIGNATURE_NAMES, signature_arguments, strict=True))
     try:
-        attestation = create_attestation(
-            checkout=args.checkout,
-            commit=args.commit,
-            main_ref=args.main_ref,
-            receipt_path=args.receipt,
-            receipt_record_path=args.receipt_record_path,
-            transcript_path=args.transcript,
-            artifacts=artifacts,
-            elapsed_seconds=args.elapsed_seconds,
-            release_candidate_tag=args.release_candidate_tag,
-            release_repository=args.release_repository,
-            release_id=args.release_id,
-            release_checksums_path=args.release_checksums,
-            release_assembly_provenance_path=args.release_assembly_provenance,
-            release_compiler_provenance_path=args.release_compiler_provenance,
-            release_build_contract_path=args.release_build_contract,
-            expected_release_update_key_fingerprint=args.expected_release_update_key_fingerprint,
-            collector_signatures=collector_signatures,
-        )
-        args.output.write_text(json.dumps(attestation, indent=2) + "\n", encoding="utf-8")
+        if args.verify_release_packet_only:
+            required_preexecution = {
+                "verified packet directory": args.verified_packet_dir,
+                "expected architecture": args.expected_architecture,
+                "release candidate tag": args.release_candidate_tag,
+                "release repository": args.release_repository,
+                "release id": args.release_id,
+                "release checksums": args.release_checksums,
+                "release assembly provenance": args.release_assembly_provenance,
+                "release compiler provenance": args.release_compiler_provenance,
+                "release build contract": args.release_build_contract,
+                "release update-key fingerprint": args.expected_release_update_key_fingerprint,
+                "collector signatures": collector_signatures,
+            }
+            missing = [label for label, value in required_preexecution.items() if value is None]
+            if missing:
+                raise v5.AttestationError(
+                    "pre-execution release verification requires " + ", ".join(missing)
+                )
+            result = verify_and_snapshot_release_candidate_packet(
+                checkout=args.checkout,
+                qualified_commit=args.commit,
+                main_ref=args.main_ref,
+                tag=str(args.release_candidate_tag),
+                repository=str(args.release_repository),
+                release_id=str(args.release_id),
+                checksums_path=Path(args.release_checksums),
+                assembly_provenance_path=Path(args.release_assembly_provenance),
+                compiler_provenance_path=Path(args.release_compiler_provenance),
+                build_contract_path=Path(args.release_build_contract),
+                expected_update_key_fingerprint=str(
+                    args.expected_release_update_key_fingerprint
+                ),
+                architecture=str(args.expected_architecture),
+                artifacts=artifacts,
+                collector_signatures=dict(collector_signatures),
+                output_dir=Path(args.verified_packet_dir),
+            )
+            success_label = "secure runtime schema-v6 pre-execution verification passed"
+        else:
+            required_attestation = {
+                "receipt": args.receipt,
+                "receipt record path": args.receipt_record_path,
+                "transcript": args.transcript,
+                "elapsed seconds": args.elapsed_seconds,
+            }
+            missing = [label for label, value in required_attestation.items() if value is None]
+            if missing:
+                raise v5.AttestationError("attestation requires " + ", ".join(missing))
+            result = create_attestation(
+                checkout=args.checkout,
+                commit=args.commit,
+                main_ref=args.main_ref,
+                receipt_path=Path(args.receipt),
+                receipt_record_path=str(args.receipt_record_path),
+                transcript_path=Path(args.transcript),
+                artifacts=artifacts,
+                elapsed_seconds=float(args.elapsed_seconds),
+                release_candidate_tag=args.release_candidate_tag,
+                release_repository=args.release_repository,
+                release_id=args.release_id,
+                release_checksums_path=args.release_checksums,
+                release_assembly_provenance_path=args.release_assembly_provenance,
+                release_compiler_provenance_path=args.release_compiler_provenance,
+                release_build_contract_path=args.release_build_contract,
+                expected_release_update_key_fingerprint=args.expected_release_update_key_fingerprint,
+                collector_signatures=collector_signatures,
+            )
+            success_label = "secure runtime schema-v6 attestation passed"
+        args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     except v5.AttestationError as exc:
         print(f"secure runtime schema-v6 attestation failed: {exc}", file=sys.stderr)
         return 1
-    print(f"secure runtime schema-v6 attestation passed: {args.output}")
+    print(f"{success_label}: {args.output}")
     return 0
 
 

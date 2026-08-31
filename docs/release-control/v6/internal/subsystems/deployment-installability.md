@@ -838,6 +838,18 @@ artifact-selection behaviour.
    step-local environment variables across steps.
    Private signing material and publication credentials must never enter the
    PVE compilation job.
+   Post-publication secure-runtime qualification must authenticate before it
+   executes. `.github/workflows/qualify-secure-runtime-release.yml` may download
+   caller-owned release assets only into a non-executable holding directory.
+   `scripts/release_control/secure_runtime_attestation_v6.py` must copy the six
+   binaries, four collector signatures, checksum manifest, assembly and
+   compiler provenance, and build contract into one private snapshot, verify
+   the immutable release/tag/source identity, hosted compiler chain, canonical
+   build contract, production update-key signatures, and exact digests against
+   those copies, and publish the snapshot only after every check passes. The
+   privileged systemd container must mount that exact snapshot read-only and
+   must never execute directly from the download directory. The post-run
+   attester must consume the same snapshot paths.
    PVE jobs must consume their runner users' persistent local Go and npm caches
    directly; disposable-runner Actions cache restore/save phases must remain
    disabled because archiving those same caches adds network work after the

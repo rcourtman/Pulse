@@ -79,7 +79,11 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/secure-runtime-release" "$RUNNER_TEMP/secure-runtime-evidence"
+          mkdir -p \
+            "$RUNNER_TEMP/secure-runtime-downloads" \
+            "$RUNNER_TEMP/secure-runtime-evidence" \
+            "$RUNNER_TEMP/secure-runtime-harness" \
+            "$RUNNER_TEMP/secure-runtime-preexecution"
           for asset in \
             checksums.txt \
             release-build-provenance.sigstore.json \
@@ -97,21 +101,59 @@ jobs:
             pulse-agent-runner-linux-amd64; do
             gh release download "${TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
-              --dir "$RUNNER_TEMP/secure-runtime-release" \
+              --dir "$RUNNER_TEMP/secure-runtime-downloads" \
               --pattern "${asset}"
           done
-          chmod 0755 \
-            "$RUNNER_TEMP/secure-runtime-release"/pulse-secure-runtime-collector-v*-linux-amd64 \
-            "$RUNNER_TEMP/secure-runtime-release"/pulse-agent-linux-amd64 \
-            "$RUNNER_TEMP/secure-runtime-release"/pulse-agent-helper-linux-amd64 \
-            "$RUNNER_TEMP/secure-runtime-release"/pulse-agent-runner-linux-amd64
+
+      - name: Pre-authenticate exact qualification packet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          QUALIFIED_COMMIT: ${{ steps.source.outputs.commit }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          download_dir="$RUNNER_TEMP/secure-runtime-downloads"
+          verification_dir="$RUNNER_TEMP/secure-runtime-preexecution"
+          test -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"
+          update_fingerprint="$(
+            go run ./scripts/release_update_key.go fingerprint \
+              --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"
+          )"
+          python3 scripts/release_control/secure_runtime_attestation_v6.py \
+            --verify-release-packet-only \
+            --checkout "${GITHUB_WORKSPACE}" \
+            --commit "${QUALIFIED_COMMIT}" \
+            --main-ref origin/main \
+            --collector-v1 "${download_dir}/pulse-secure-runtime-collector-v1-linux-amd64" \
+            --collector-v2 "${download_dir}/pulse-secure-runtime-collector-v2-linux-amd64" \
+            --collector-v3 "${download_dir}/pulse-secure-runtime-collector-v3-linux-amd64" \
+            --collector-v4 "${download_dir}/pulse-agent-linux-amd64" \
+            --helper "${download_dir}/pulse-agent-helper-linux-amd64" \
+            --runner "${download_dir}/pulse-agent-runner-linux-amd64" \
+            --collector-v1-signature "${download_dir}/pulse-secure-runtime-collector-v1-linux-amd64.sig" \
+            --collector-v2-signature "${download_dir}/pulse-secure-runtime-collector-v2-linux-amd64.sig" \
+            --collector-v3-signature "${download_dir}/pulse-secure-runtime-collector-v3-linux-amd64.sig" \
+            --collector-v4-signature "${download_dir}/pulse-agent-linux-amd64.sig" \
+            --release-candidate-tag "${TAG}" \
+            --release-repository "${GITHUB_REPOSITORY}" \
+            --release-id "${RELEASE_ID}" \
+            --release-checksums "${download_dir}/checksums.txt" \
+            --release-assembly-provenance "${download_dir}/release-build-provenance.sigstore.json" \
+            --release-compiler-provenance "${download_dir}/secure-runtime-compiler-provenance.sigstore.json" \
+            --release-build-contract "${download_dir}/secure-runtime-build-contract-v1.json" \
+            --expected-release-update-key-fingerprint "${update_fingerprint}" \
+            --expected-architecture amd64 \
+            --verified-packet-dir "$RUNNER_TEMP/secure-runtime-verified" \
+            --output "${verification_dir}/preexecution-verification.json"
 
       - name: Build exact-source qualification harness
         run: |
           set -euo pipefail
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go test -c \
-              -o "$RUNNER_TEMP/secure-runtime-release/installtests-linux-amd64.test" \
+              -o "$RUNNER_TEMP/secure-runtime-harness/installtests-linux-amd64.test" \
               ./scripts/installtests
 
       - name: Build disposable systemd host image
@@ -151,7 +193,8 @@ jobs:
             --tmpfs /run/lock \
             --volume /sys/fs/cgroup:/sys/fs/cgroup:rw \
             --volume "${GITHUB_WORKSPACE}:/workspace:ro" \
-            --volume "$RUNNER_TEMP/secure-runtime-release:/release:ro" \
+            --volume "$RUNNER_TEMP/secure-runtime-verified:/release:ro" \
+            --volume "$RUNNER_TEMP/secure-runtime-harness:/harness:ro" \
             --volume "$RUNNER_TEMP/secure-runtime-evidence:/evidence:rw" \
             pulse-secure-runtime-systemd:ubuntu-24.04
           for attempt in $(seq 1 30); do
@@ -186,7 +229,7 @@ jobs:
             --env PULSE_SECURE_RUNTIME_TRANSCRIPT=/evidence/transcript.jsonl \
             --env "PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v6-${TAG}.jsonl" \
             "${container}" \
-            sh -c 'cd /workspace/scripts/installtests && exec /release/installtests-linux-amd64.test -test.run "^TestSecureRuntimeSystemdLab$" -test.count=1 -test.v'
+            sh -c 'cd /workspace/scripts/installtests && exec /harness/installtests-linux-amd64.test -test.run "^TestSecureRuntimeSystemdLab$" -test.count=1 -test.v'
           elapsed="$(( $(date +%s) - start_epoch ))"
           if [[ "${elapsed}" -lt 1 ]]; then elapsed=1; fi
           echo "elapsed_seconds=${elapsed}" >> "$GITHUB_OUTPUT"
@@ -194,14 +237,19 @@ jobs:
       - name: Create release-candidate secure-runtime attestation
         env:
           GH_TOKEN: ${{ github.token }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           QUALIFIED_COMMIT: ${{ steps.source.outputs.commit }}
           RELEASE_ID: ${{ steps.release.outputs.release_id }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          release_dir="$RUNNER_TEMP/secure-runtime-release"
+          release_dir="$RUNNER_TEMP/secure-runtime-verified"
           evidence_dir="$RUNNER_TEMP/secure-runtime-evidence"
-          update_fingerprint="$(jq -er '.update_key_fingerprint' "${release_dir}/secure-runtime-build-contract-v1.json")"
+          test -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"
+          update_fingerprint="$(
+            go run ./scripts/release_update_key.go fingerprint \
+              --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"
+          )"
           python3 scripts/release_control/secure_runtime_attestation_v6.py \
             --checkout "${GITHUB_WORKSPACE}" \
             --commit "${QUALIFIED_COMMIT}" \
@@ -239,7 +287,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: secure-runtime-qualification-${{ steps.release.outputs.tag }}-${{ steps.source.outputs.commit }}
-          path: ${{ runner.temp }}/secure-runtime-evidence/
+          path: |
+            ${{ runner.temp }}/secure-runtime-evidence/
+            ${{ runner.temp }}/secure-runtime-preexecution/preexecution-verification.json
           if-no-files-found: error
           retention-days: 90
           compression-level: 0

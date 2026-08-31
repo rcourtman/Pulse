@@ -213,10 +213,17 @@ candidate assembly requires its current collector, helper, and runner to match
 the ordinary release payload byte for byte, then publishes the three predecessor
 collectors, compiler provenance, and build contract through the normal signed
 release packet. A published prerelease automatically runs the twenty-scenario
-lab on a disposable systemd host and invokes this verifier with all four
-release signatures. No qualifying RC containing this wiring has been published
-yet, so current evidence remains committed-main, artifact-bound, and
-self-attested; a local tag still cannot upgrade it to RC status.
+lab on a disposable systemd host. Before any candidate byte can reach that
+privileged container, the workflow copies all six binaries, four collector
+signatures, checksum and provenance sidecars, and the build contract into a
+private snapshot and verifies the immutable release, canonical tag and source,
+hosted compiler chain, exact digests, and production update key against those
+copies. Only the verified snapshot becomes executable and is mounted read-only.
+failed or mutated packets never reach Docker. The post-run attester consumes
+the same snapshot paths and all four release signatures. No qualifying RC
+containing this wiring has been published yet, so current evidence remains
+committed-main, artifact-bound, and self-attested; a local tag still cannot
+upgrade it to RC status.
 
 Schema-v6 committed-main classification is likewise not caller-relative. The
 attester accepts only `origin/main`, requires the canonical Pulse origin URL,

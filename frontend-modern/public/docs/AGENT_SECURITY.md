@@ -230,6 +230,17 @@ provider hosts, container-runtime parity, appliance qualification, exact release
 artifacts, and external review are still required before the profile can become
 the general default.
 
+Exact-release qualification authenticates before it executes. The workflow
+copies the six candidate binaries, four collector signatures, checksum
+manifest, assembly and compiler provenance, and build contract into a private
+snapshot. It verifies the immutable release identity, canonical source and tag,
+hosted compiler chain, production update key, and every digest against those
+copies. Only then does it make the binary snapshot executable and mount it
+read-only into the privileged disposable systemd host. A failed or mutated
+packet never reaches Docker. The post-run attester re-verifies those same
+snapshot paths against the receipt. No qualifying RC containing this boundary
+has been published yet.
+
 ### Safe-profile support and qualification matrix
 
 `Qualified` below means the named evidence exercised the behavior on a real

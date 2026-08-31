@@ -37,8 +37,11 @@ from secure_runtime_attestation_v6 import (
     SOURCE_MANIFEST_PATH,
     copy_release_sidecar,
     create_attestation,
+    expected_release_asset_names,
+    expected_release_artifact_versions,
     immutable_artifact_snapshot,
     parse_args,
+    verify_and_snapshot_release_candidate_packet,
     verify_release_build_contract,
     verify_canonical_main_identity,
     verify_release_candidate_packet,
@@ -60,10 +63,9 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
         self.receipt = {
             "architecture": "arm64",
             "artifact_versions": {
-                "collector_v1": "v6.5.0-lab.1",
-                "collector_v2": "v6.5.0-lab.2",
-                "collector_v3": "v6.5.0-lab.3",
-                "collector_v4": "v6.5.0-lab.4",
+                name: version
+                for name, version in expected_release_artifact_versions(self.tag).items()
+                if name.startswith("collector_v")
             },
         }
         self.artifact_hashes = {
@@ -71,8 +73,9 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
             for name in v5.ARTIFACT_ARGUMENTS
         }
         self.artifacts = {}
+        release_assets = expected_release_asset_names("arm64")
         for name in v5.ARTIFACT_ARGUMENTS:
-            path = self.root / f"artifact-{name}"
+            path = self.root / release_assets[name]
             path.write_bytes(name.encode())
             self.artifacts[name] = path
         contract = self.build_contract()
@@ -98,7 +101,7 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
                     f"EmbeddedTrustedPublicKeys={self.update_public_keys}"
                 )
             artifacts[name] = {
-                "release_asset": f"pulse-secure-runtime-{name}-linux-arm64",
+                "release_asset": expected_release_asset_names("arm64")[name],
                 "sha256": self.artifact_hashes[name],
                 "build": {
                     "tool": "go build",
@@ -290,6 +293,158 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
                 snapshots["collector_v1"].chmod(0o600)
                 snapshots["collector_v1"].write_bytes(b"mutated")
 
+    def test_preexecution_verification_publishes_only_verified_private_snapshots(self) -> None:
+        contract_path, checksums_path, _ = self.write_contract_and_checksums()
+        assembly_provenance_path = self.root / ASSEMBLY_PROVENANCE_NAME
+        assembly_provenance_path.write_text("{}\n", encoding="utf-8")
+        compiler_provenance_path = self.root / COMPILER_PROVENANCE_NAME
+        compiler_provenance_path.write_text("{}\n", encoding="utf-8")
+        output_dir = self.root / "verified-packet"
+        observed_snapshot_paths: dict[str, Path] = {}
+
+        def verify_snapshots(**kwargs):
+            for name, snapshot in kwargs["artifacts"].items():
+                self.assertNotEqual(snapshot, self.artifacts[name])
+                self.assertEqual(snapshot.read_bytes(), name.encode())
+                observed_snapshot_paths[name] = snapshot
+                self.artifacts[name].write_bytes(b"caller-owned-input-was-swapped")
+                self.assertEqual(snapshot.read_bytes(), name.encode())
+            return {
+                "release_id": "12345",
+                "build_identity": {
+                    name: {"release_asset": expected_release_asset_names("arm64")[name]}
+                    for name in v5.ARTIFACT_ARGUMENTS
+                },
+                "update_key_fingerprint": self.fingerprint,
+            }
+
+        with (
+            mock.patch.object(v5, "resolve_commit", return_value=self.commit),
+            mock.patch.object(v5, "require_detached_clean_checkout"),
+            mock.patch.object(v5, "require_ancestor"),
+            mock.patch(
+                "secure_runtime_attestation_v6.verify_canonical_main_identity",
+                return_value=self.commit,
+            ),
+            mock.patch(
+                "secure_runtime_attestation_v6.verify_release_candidate_packet",
+                side_effect=verify_snapshots,
+            ),
+        ):
+            result = verify_and_snapshot_release_candidate_packet(
+                checkout=self.root,
+                qualified_commit=self.commit,
+                main_ref=CANONICAL_MAIN_REF,
+                tag=self.tag,
+                repository=CANONICAL_REPOSITORY,
+                release_id="12345",
+                checksums_path=checksums_path,
+                assembly_provenance_path=assembly_provenance_path,
+                compiler_provenance_path=compiler_provenance_path,
+                build_contract_path=contract_path,
+                expected_update_key_fingerprint=self.fingerprint,
+                architecture="arm64",
+                artifacts=self.artifacts,
+                collector_signatures=self.collector_signatures,
+                output_dir=output_dir,
+            )
+
+        self.assertTrue(result["safe_to_execute"])
+        self.assertEqual(set(observed_snapshot_paths), set(v5.ARTIFACT_ARGUMENTS))
+        for name, release_asset in expected_release_asset_names("arm64").items():
+            verified = output_dir / release_asset
+            self.assertEqual(verified.read_bytes(), name.encode())
+            self.assertEqual(verified.stat().st_mode & 0o777, 0o500)
+        self.assertEqual(output_dir.stat().st_mode & 0o777, 0o700)
+
+    def test_preexecution_verification_failure_never_publishes_executable_packet(self) -> None:
+        contract_path, checksums_path, _ = self.write_contract_and_checksums()
+        assembly_provenance_path = self.root / ASSEMBLY_PROVENANCE_NAME
+        assembly_provenance_path.write_text("{}\n", encoding="utf-8")
+        compiler_provenance_path = self.root / COMPILER_PROVENANCE_NAME
+        compiler_provenance_path.write_text("{}\n", encoding="utf-8")
+        output_dir = self.root / "verified-packet"
+
+        with (
+            mock.patch.object(v5, "resolve_commit", return_value=self.commit),
+            mock.patch.object(v5, "require_detached_clean_checkout"),
+            mock.patch.object(v5, "require_ancestor"),
+            mock.patch(
+                "secure_runtime_attestation_v6.verify_canonical_main_identity",
+                return_value=self.commit,
+            ),
+            mock.patch(
+                "secure_runtime_attestation_v6.verify_release_candidate_packet",
+                side_effect=v5.AttestationError("tampered signature"),
+            ),
+            self.assertRaisesRegex(v5.AttestationError, "tampered signature"),
+        ):
+            verify_and_snapshot_release_candidate_packet(
+                checkout=self.root,
+                qualified_commit=self.commit,
+                main_ref=CANONICAL_MAIN_REF,
+                tag=self.tag,
+                repository=CANONICAL_REPOSITORY,
+                release_id="12345",
+                checksums_path=checksums_path,
+                assembly_provenance_path=assembly_provenance_path,
+                compiler_provenance_path=compiler_provenance_path,
+                build_contract_path=contract_path,
+                expected_update_key_fingerprint=self.fingerprint,
+                architecture="arm64",
+                artifacts=self.artifacts,
+                collector_signatures=self.collector_signatures,
+                output_dir=output_dir,
+            )
+        self.assertFalse(output_dir.exists())
+
+    def test_preexecution_verification_rejects_verified_snapshot_mutation(self) -> None:
+        contract_path, checksums_path, _ = self.write_contract_and_checksums()
+        assembly_provenance_path = self.root / ASSEMBLY_PROVENANCE_NAME
+        assembly_provenance_path.write_text("{}\n", encoding="utf-8")
+        compiler_provenance_path = self.root / COMPILER_PROVENANCE_NAME
+        compiler_provenance_path.write_text("{}\n", encoding="utf-8")
+        output_dir = self.root / "verified-packet"
+
+        def mutate_verified_snapshot(**kwargs):
+            snapshot = kwargs["artifacts"]["collector_v1"]
+            snapshot.chmod(0o600)
+            snapshot.write_bytes(b"mutated-after-verification")
+            return {"build_identity": {}, "update_key_fingerprint": self.fingerprint}
+
+        with (
+            mock.patch.object(v5, "resolve_commit", return_value=self.commit),
+            mock.patch.object(v5, "require_detached_clean_checkout"),
+            mock.patch.object(v5, "require_ancestor"),
+            mock.patch(
+                "secure_runtime_attestation_v6.verify_canonical_main_identity",
+                return_value=self.commit,
+            ),
+            mock.patch(
+                "secure_runtime_attestation_v6.verify_release_candidate_packet",
+                side_effect=mutate_verified_snapshot,
+            ),
+            self.assertRaisesRegex(v5.AttestationError, "changed during verification"),
+        ):
+            verify_and_snapshot_release_candidate_packet(
+                checkout=self.root,
+                qualified_commit=self.commit,
+                main_ref=CANONICAL_MAIN_REF,
+                tag=self.tag,
+                repository=CANONICAL_REPOSITORY,
+                release_id="12345",
+                checksums_path=checksums_path,
+                assembly_provenance_path=assembly_provenance_path,
+                compiler_provenance_path=compiler_provenance_path,
+                build_contract_path=contract_path,
+                expected_update_key_fingerprint=self.fingerprint,
+                architecture="arm64",
+                artifacts=self.artifacts,
+                collector_signatures=self.collector_signatures,
+                output_dir=output_dir,
+            )
+        self.assertFalse(output_dir.exists())
+
     def test_rejects_head_branch_and_non_rc_release_identities(self) -> None:
         for value in ("HEAD", "main", "refs/heads/main", "refs/tags/v6.5.0-rc.1", "v6.5.0"):
             with self.subTest(value=value), self.assertRaisesRegex(v5.AttestationError, "exact vX.Y.Z-rc.N"):
@@ -403,6 +558,20 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
                 "missing ldflags",
                 lambda contract: contract["artifacts"]["helper"]["build"].__setitem__("ldflags_sha256", "0" * 64),
                 "ldflags digest",
+            ),
+            (
+                "noncanonical release asset",
+                lambda contract: contract["artifacts"]["collector_v1"].__setitem__(
+                    "release_asset", "renamed-collector"
+                ),
+                "canonical release name",
+            ),
+            (
+                "noncanonical predecessor version",
+                lambda contract: contract["artifacts"]["collector_v2"]["build"].__setitem__(
+                    "version", "6.5.0-untrusted"
+                ),
+                "canonical release build",
             ),
         ):
             contract = self.build_contract()

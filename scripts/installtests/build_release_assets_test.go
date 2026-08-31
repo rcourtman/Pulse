@@ -2654,10 +2654,22 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	if strings.Contains(qualificationWorkflow, "release:\n    types: [published]") {
 		t.Fatal("secure-runtime qualification must be explicitly dispatched after immutable publication, not rely on suppressed release events")
 	}
+	preauthenticationIndex := strings.Index(qualificationWorkflow, "Pre-authenticate exact qualification packet")
+	privilegedExecutionIndex := strings.Index(qualificationWorkflow, "docker run")
+	if preauthenticationIndex < 0 || privilegedExecutionIndex < 0 || preauthenticationIndex > privilegedExecutionIndex {
+		t.Fatal("secure-runtime release packet must be authenticated before any privileged Docker execution")
+	}
+	if strings.Contains(qualificationWorkflow, `$RUNNER_TEMP/secure-runtime-downloads:/release:ro`) {
+		t.Fatal("privileged qualification must never mount caller-owned downloaded binaries as the executable packet")
+	}
 	for _, required := range []string{
 		".immutable == true",
 		"ca-certificates curl dbus systemd systemd-sysv util-linux",
 		`for command in curl id nsenter runuser systemctl`,
+		"--verify-release-packet-only",
+		"--verified-packet-dir",
+		"$RUNNER_TEMP/secure-runtime-verified:/release:ro",
+		"$RUNNER_TEMP/secure-runtime-harness:/harness:ro",
 		"PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1",
 		"^TestSecureRuntimeSystemdLab$",
 		"--release-candidate-tag",
