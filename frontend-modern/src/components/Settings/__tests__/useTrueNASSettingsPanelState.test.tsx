@@ -183,6 +183,7 @@ describe('useTrueNASSettingsPanelState', () => {
         name: 'tower',
         host: 'truenas.local',
         apiKey: '********',
+        username: 'pulse-readonly',
         pollIntervalSeconds: 60,
         useHttps: true,
         insecureSkipVerify: false,
@@ -195,6 +196,7 @@ describe('useTrueNASSettingsPanelState', () => {
         name: 'tower',
         host: 'truenas.local',
         apiKey: '********',
+        username: 'pulse-readonly',
         pollIntervalSeconds: 60,
         useHttps: true,
         insecureSkipVerify: false,
@@ -229,6 +231,7 @@ describe('useTrueNASSettingsPanelState', () => {
         name: 'tower',
         host: 'truenas.local',
         apiKey: '********',
+        username: 'pulse-readonly',
         pollIntervalSeconds: 60,
         useHttps: true,
         insecureSkipVerify: false,
@@ -270,6 +273,7 @@ describe('useTrueNASSettingsPanelState', () => {
     result.updateForm({
       host: 'tower.local',
       apiKey: 'secret',
+      username: 'pulse-readonly',
     });
 
     await result.saveCurrentForm();
@@ -281,6 +285,22 @@ describe('useTrueNASSettingsPanelState', () => {
       }),
     );
     expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection added');
+  });
+
+  it('rejects API-key configuration without its owner username before an API call', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+
+    expect(await result.testCurrentForm()).toBe(false);
+    expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
+    expect(notificationStore.error).toHaveBeenCalledWith(
+      'TrueNAS API key owner username is required for supported authentication',
+    );
   });
 
   it('previews monitored-system impact through the canonical TrueNAS preview path', async () => {
@@ -323,6 +343,7 @@ describe('useTrueNASSettingsPanelState', () => {
     result.updateForm({
       host: 'tower.local',
       apiKey: 'secret',
+      username: 'pulse-readonly',
     });
     const preview = await result.previewCurrentForm();
 
@@ -358,6 +379,7 @@ describe('useTrueNASSettingsPanelState', () => {
     result.updateForm({
       host: 'tower.local',
       apiKey: 'secret',
+      username: 'pulse-readonly',
     });
 
     const preview = await result.previewCurrentForm();
@@ -393,6 +415,7 @@ describe('useTrueNASSettingsPanelState', () => {
     result.updateForm({
       host: 'tower.local',
       apiKey: 'secret',
+      username: 'pulse-readonly',
     });
     await result.previewCurrentForm();
     await result.saveCurrentForm();
@@ -425,6 +448,7 @@ describe('useTrueNASSettingsPanelState', () => {
     result.updateForm({
       host: 'tower.local',
       apiKey: 'secret',
+      username: 'pulse-readonly',
     });
     await result.previewCurrentForm();
     await result.saveCurrentForm();

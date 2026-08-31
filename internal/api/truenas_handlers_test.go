@@ -39,9 +39,10 @@ func TestTrueNASHandlers_HandleAdd_Success(t *testing.T) {
 	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":   "nas",
-		"host":   "nas.local",
-		"apiKey": "super-secret",
+		"name":     "nas",
+		"host":     "nas.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
@@ -82,7 +83,8 @@ func TestTrueNASHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 		handler, _, _ := newTrueNASHandlersForTest(t, nil)
 
 		body := marshalTrueNASRequest(t, map[string]any{
-			"apiKey": "token",
+			"apiKey":   "token",
+			"username": "pulse-readonly",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -93,14 +95,36 @@ func TestTrueNASHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 		}
 	})
 
-	t.Run("feature disabled", func(t *testing.T) {
-		setTrueNASFeatureForTest(t, false)
+	t.Run("API key owner username required", func(t *testing.T) {
+		setTrueNASFeatureForTest(t, true)
 		setMockModeForTest(t, false)
 		handler, _, _ := newTrueNASHandlersForTest(t, nil)
 
 		body := marshalTrueNASRequest(t, map[string]any{
 			"host":   "nas.local",
 			"apiKey": "token",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleAdd(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "API key owner username is required") {
+			t.Fatalf("expected owner username guidance, got %s", rec.Body.String())
+		}
+	})
+
+	t.Run("feature disabled", func(t *testing.T) {
+		setTrueNASFeatureForTest(t, false)
+		setMockModeForTest(t, false)
+		handler, _, _ := newTrueNASHandlersForTest(t, nil)
+
+		body := marshalTrueNASRequest(t, map[string]any{
+			"host":     "nas.local",
+			"apiKey":   "token",
+			"username": "pulse-readonly",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -150,8 +174,9 @@ func TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	}
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"host":   "nas-b.local",
-		"apiKey": "b",
+		"host":     "nas-b.local",
+		"apiKey":   "b",
+		"username": "pulse-readonly",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
@@ -194,9 +219,10 @@ func TestTrueNASHandlers_HandleAdd_ReturnsUnavailableWhenSupplementalInventoryNo
 			bindUnavailableSupplementalUsageProviderForTest(t, monitor, unifiedresources.SourceTrueNAS, tc.reason)
 
 			body := marshalTrueNASRequest(t, map[string]any{
-				"name":   "tower",
-				"host":   "tower.local",
-				"apiKey": "super-secret",
+				"name":     "tower",
+				"host":     "tower.local",
+				"apiKey":   "super-secret",
+				"username": "pulse-readonly",
 			})
 			req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
 			rec := httptest.NewRecorder()
@@ -247,10 +273,11 @@ func TestTrueNASHandlers_HandleAdd_DoesNotCountDisabledConnectionAtLimit(t *test
 	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":    "tower",
-		"host":    "tower.local",
-		"apiKey":  "super-secret",
-		"enabled": false,
+		"name":     "tower",
+		"host":     "tower.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
+		"enabled":  false,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -286,10 +313,11 @@ func TestTrueNASHandlers_HandleAdd_AllowsDisabledConnectionWhenUsageUnavailable(
 	)
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":    "tower",
-		"host":    "tower.local",
-		"apiKey":  "super-secret",
-		"enabled": false,
+		"name":     "tower",
+		"host":     "tower.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
+		"enabled":  false,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -338,9 +366,10 @@ func TestTrueNASHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
 	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":   "archive",
-		"host":   "archive.local",
-		"apiKey": "super-secret",
+		"name":     "archive",
+		"host":     "archive.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
@@ -370,6 +399,7 @@ func TestTrueNASHandlers_HandleList_RedactsSensitiveFields(t *testing.T) {
 			Name:     "api-key-auth",
 			Host:     "nas-a.local",
 			APIKey:   "key-a",
+			Username: "pulse-readonly",
 			UseHTTPS: true,
 			Enabled:  true,
 		},
@@ -589,6 +619,7 @@ func TestTrueNASHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t 
 			Host:               "old.local",
 			Port:               443,
 			APIKey:             "super-secret",
+			Username:           "pulse-readonly",
 			UseHTTPS:           true,
 			InsecureSkipVerify: false,
 			Enabled:            true,
@@ -603,6 +634,7 @@ func TestTrueNASHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t 
 		"host":               "new.local",
 		"port":               8443,
 		"apiKey":             "********",
+		"username":           "pulse-readonly",
 		"useHttps":           true,
 		"insecureSkipVerify": true,
 		"enabled":            true,
@@ -657,6 +689,7 @@ func TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit(t *test
 			Name:     "archive",
 			Host:     "archive.local",
 			APIKey:   "super-secret",
+			Username: "pulse-readonly",
 			UseHTTPS: true,
 			Enabled:  true,
 		},
@@ -709,6 +742,7 @@ func TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit(t *test
 		"name":     "archive",
 		"host":     "backup.local",
 		"apiKey":   "********",
+		"username": "pulse-readonly",
 		"useHttps": true,
 		"enabled":  true,
 	})
@@ -756,6 +790,7 @@ func TestTrueNASHandlers_HandleUpdate_ReturnsUnavailableWhenSupplementalInventor
 					Name:     "archive",
 					Host:     "archive.local",
 					APIKey:   "super-secret",
+					Username: "pulse-readonly",
 					UseHTTPS: true,
 					Enabled:  true,
 				},
@@ -767,6 +802,7 @@ func TestTrueNASHandlers_HandleUpdate_ReturnsUnavailableWhenSupplementalInventor
 				"name":     "archive",
 				"host":     "backup.local",
 				"apiKey":   "********",
+				"username": "pulse-readonly",
 				"useHttps": true,
 				"enabled":  true,
 			})
@@ -807,6 +843,7 @@ func TestTrueNASHandlers_HandleUpdate_AllowsDisablingConnectionWhenUsageUnavaila
 			Name:     "archive",
 			Host:     "archive.local",
 			APIKey:   "super-secret",
+			Username: "pulse-readonly",
 			UseHTTPS: true,
 			Enabled:  true,
 		},
@@ -818,6 +855,7 @@ func TestTrueNASHandlers_HandleUpdate_AllowsDisablingConnectionWhenUsageUnavaila
 		"name":     "archive",
 		"host":     "backup.local",
 		"apiKey":   "********",
+		"username": "pulse-readonly",
 		"useHttps": true,
 		"enabled":  false,
 	})
@@ -851,8 +889,9 @@ func TestTrueNASHandlers_HandleUpdate_UnknownID(t *testing.T) {
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"host":   "missing.local",
-		"apiKey": "secret",
+		"host":     "missing.local",
+		"apiKey":   "secret",
+		"username": "pulse-readonly",
 	})
 
 	req := httptest.NewRequest(http.MethodPut, "/api/truenas/connections/missing", bytes.NewReader(body))
@@ -879,6 +918,7 @@ func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 		"port":     80,
 		"useHttps": false,
 		"apiKey":   "key",
+		"username": "pulse-readonly",
 	})
 	successReq := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/test", bytes.NewReader(successBody))
 	successRec := httptest.NewRecorder()
@@ -896,8 +936,9 @@ func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 	handler.newClient = nil
 
 	failureBody := marshalTrueNASRequest(t, map[string]any{
-		"host":   "http://127.0.0.1:65536",
-		"apiKey": "key",
+		"host":     "http://127.0.0.1:65536",
+		"apiKey":   "key",
+		"username": "pulse-readonly",
 	})
 	failureReq := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/test", bytes.NewReader(failureBody))
 	failureRec := httptest.NewRecorder()
@@ -913,9 +954,10 @@ func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 		}, nil
 	}
 	errorBody := marshalTrueNASRequest(t, map[string]any{
-		"host":   "nas.local",
-		"port":   80,
-		"apiKey": "key",
+		"host":     "nas.local",
+		"port":     80,
+		"apiKey":   "key",
+		"username": "pulse-readonly",
 	})
 	errorReq := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/test", bytes.NewReader(errorBody))
 	errorRec := httptest.NewRecorder()
@@ -926,7 +968,7 @@ func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 	}
 }
 
-func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredSecrets(t *testing.T) {
+func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredLegacyAPIKey(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
 	connection := config.TrueNASInstance{
@@ -959,7 +1001,7 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredSecrets(t *testing.
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if gotConfig.Host != "truenas.local" || gotConfig.APIKey != "super-secret" || !gotConfig.UseHTTPS {
+	if gotConfig.Host != "truenas.local" || gotConfig.APIKey != "super-secret" || gotConfig.Username != "" || !gotConfig.UseHTTPS {
 		t.Fatalf("unexpected saved client config: %+v", gotConfig)
 	}
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
@@ -1004,9 +1046,10 @@ func TestTrueNASHandlers_HandlePreviewConnection_ReturnsCanonicalImpact(t *testi
 	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":   "tower",
-		"host":   "tower.local",
-		"apiKey": "super-secret",
+		"name":     "tower",
+		"host":     "tower.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -1059,10 +1102,11 @@ func TestTrueNASHandlers_HandlePreviewConnection_ReturnsNoChangeForDisabledConne
 	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":    "tower",
-		"host":    "tower.local",
-		"apiKey":  "super-secret",
-		"enabled": false,
+		"name":     "tower",
+		"host":     "tower.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
+		"enabled":  false,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -1095,9 +1139,10 @@ func TestTrueNASHandlers_HandlePreviewConnection_ReturnsUnavailableWhenSupplemen
 	bindTestSupplementalUsageProvider(monitor, unifiedresources.SourceTrueNAS, provider)
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":   "tower",
-		"host":   "tower.local",
-		"apiKey": "super-secret",
+		"name":     "tower",
+		"host":     "tower.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -1115,9 +1160,10 @@ func TestTrueNASHandlers_HandlePreviewConnection_ReturnsUnavailableWhenSupplemen
 	provider.settleAtWithRecords(time.Now().UTC().Add(time.Minute), nil)
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":   "tower",
-		"host":   "tower.local",
-		"apiKey": "super-secret",
+		"name":     "tower",
+		"host":     "tower.local",
+		"apiKey":   "super-secret",
+		"username": "pulse-readonly",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -1176,6 +1222,7 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_UsesReplacementProjection(
 			Name:     "archive",
 			Host:     "archive.local",
 			APIKey:   "super-secret",
+			Username: "pulse-readonly",
 			Enabled:  true,
 			UseHTTPS: true,
 		},
@@ -1184,9 +1231,10 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_UsesReplacementProjection(
 	}
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":   "backup",
-		"host":   "backup.local",
-		"apiKey": "********",
+		"name":     "backup",
+		"host":     "backup.local",
+		"apiKey":   "********",
+		"username": "pulse-readonly",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/conn-1/preview", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -1237,6 +1285,7 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsRemovalForDisabledC
 			Name:     "archive",
 			Host:     "archive.local",
 			APIKey:   "super-secret",
+			Username: "pulse-readonly",
 			Enabled:  true,
 			UseHTTPS: true,
 		},
@@ -1245,10 +1294,11 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsRemovalForDisabledC
 	}
 
 	body := marshalTrueNASRequest(t, map[string]any{
-		"name":    "archive",
-		"host":    "archive.local",
-		"apiKey":  "********",
-		"enabled": false,
+		"name":     "archive",
+		"host":     "archive.local",
+		"apiKey":   "********",
+		"username": "pulse-readonly",
+		"enabled":  false,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/conn-1/preview", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -1288,6 +1338,7 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsUnavailableWhenSupp
 			Name:     "archive",
 			Host:     "archive.local",
 			APIKey:   "super-secret",
+			Username: "pulse-readonly",
 			Enabled:  true,
 			UseHTTPS: true,
 		},
@@ -1315,6 +1366,7 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsUnavailableWhenSupp
 			Name:     "archive",
 			Host:     "archive.local",
 			APIKey:   "super-secret",
+			Username: "pulse-readonly",
 			Enabled:  true,
 			UseHTTPS: true,
 		},
@@ -1338,6 +1390,7 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UpdatesPollSummaryFailure(t *
 		Host:               "truenas.local",
 		Port:               443,
 		APIKey:             "super-secret",
+		Username:           "pulse-readonly",
 		UseHTTPS:           true,
 		InsecureSkipVerify: false,
 		Enabled:            true,
@@ -1381,6 +1434,7 @@ func TestTrueNASHandlers_HandleTestSavedConnection_MergesEditedPayloadWithStored
 			Host:               "truenas.local",
 			Port:               443,
 			APIKey:             "super-secret",
+			Username:           "pulse-readonly",
 			UseHTTPS:           true,
 			InsecureSkipVerify: false,
 			Fingerprint:        "sha256:old",
@@ -1402,6 +1456,7 @@ func TestTrueNASHandlers_HandleTestSavedConnection_MergesEditedPayloadWithStored
 		"host":                "tower-edited.local",
 		"port":                8443,
 		"apiKey":              "********",
+		"username":            "pulse-readonly",
 		"useHttps":            true,
 		"insecureSkipVerify":  true,
 		"fingerprint":         "sha256:new",
@@ -1491,6 +1546,7 @@ func trueNASInstanceFromRawURL(t *testing.T, id string, rawURL string, enabled b
 		Host:             parsed.Hostname(),
 		Port:             port,
 		APIKey:           "test-api-key",
+		Username:         "pulse-readonly",
 		UseHTTPS:         strings.EqualFold(parsed.Scheme, "https"),
 		Enabled:          enabled,
 		PollIntervalSecs: 60,

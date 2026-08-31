@@ -146,6 +146,11 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
   const name = form.name.trim();
   const host = form.host.trim();
   const fingerprint = form.fingerprint.trim();
+  const username = form.username.trim();
+
+  if (form.authMode === 'apiKey' && !username) {
+    throw new Error('TrueNAS API key owner username is required for supported authentication');
+  }
 
   const input: TrueNASConnectionInput = {
     ...(name ? { name } : {}),
@@ -166,11 +171,11 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
 
   if (form.authMode === 'apiKey') {
     input.apiKey = form.apiKey.trim() || (form.hasStoredApiKey ? REDACTED_SECRET : '');
-    input.username = form.username.trim();
+    input.username = username;
     input.password = '';
   } else {
     input.apiKey = '';
-    input.username = form.username.trim();
+    input.username = username;
     input.password = form.password.trim() || (form.hasStoredPassword ? REDACTED_SECRET : '');
   }
 

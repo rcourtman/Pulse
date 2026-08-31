@@ -75,7 +75,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     await waitFor(() => expect(result.loading()).toBe(false));
 
     result.openCreateDialog();
-    result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+    result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     const ok = await result.testCurrentForm();
 
     expect(ok).toBe(false);
@@ -102,7 +102,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     await waitFor(() => expect(result.loading()).toBe(false));
 
     result.openCreateDialog();
-    result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+    result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     await result.testCurrentForm();
 
     expect(notificationStore.error).toHaveBeenCalledWith('actionable cause from details');
@@ -116,7 +116,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     await waitFor(() => expect(result.loading()).toBe(false));
 
     result.openCreateDialog();
-    result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+    result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     await result.testCurrentForm();
 
     expect(notificationStore.error).toHaveBeenCalledWith('connection refused');
@@ -164,7 +164,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
       await waitFor(() => expect(result.loading()).toBe(false));
 
       result.openCreateDialog();
-      result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+      result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
       const ok = await result.testCurrentForm();
 
       expect(ok).toBe(false);
@@ -184,7 +184,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     await waitFor(() => expect(result.loading()).toBe(false));
 
     result.openCreateDialog();
-    result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+    result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     const preview = await result.previewCurrentForm();
 
     expect(preview).toBeNull();
@@ -234,7 +234,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     await waitFor(() => expect(result.loading()).toBe(false));
 
     result.openCreateDialog();
-    result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+    result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     const testPromise = result.testCurrentForm();
     await waitFor(() => expect(result.testing()).toBe(true));
 
@@ -260,7 +260,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     await waitFor(() => expect(result.loading()).toBe(false));
 
     result.openCreateDialog();
-    result.updateForm({ host: 'tower.local', apiKey: 'secret' });
+    result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     const savePromise = result.saveCurrentForm();
     await waitFor(() => expect(result.saving()).toBe(true));
 

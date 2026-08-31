@@ -8502,9 +8502,10 @@ func TestContract_PlatformConnectionWritesIgnoreUsageUnavailableWithCapsRetired(
 		)
 
 		body := marshalTrueNASRequest(t, map[string]any{
-			"name":   "tower",
-			"host":   "tower.local",
-			"apiKey": "super-secret",
+			"name":     "tower",
+			"host":     "tower.local",
+			"apiKey":   "super-secret",
+			"username": "pulse-readonly",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -8572,10 +8573,11 @@ func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *
 		)
 
 		body := marshalTrueNASRequest(t, map[string]any{
-			"name":    "tower",
-			"host":    "tower.local",
-			"apiKey":  "super-secret",
-			"enabled": false,
+			"name":     "tower",
+			"host":     "tower.local",
+			"apiKey":   "super-secret",
+			"username": "pulse-readonly",
+			"enabled":  false,
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -8603,6 +8605,7 @@ func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *
 			Name:     "archive",
 			Host:     "archive.local",
 			APIKey:   "super-secret",
+			Username: "pulse-readonly",
 			UseHTTPS: true,
 			Enabled:  true,
 		}}); err != nil {
@@ -8613,6 +8616,7 @@ func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *
 			"name":     "archive",
 			"host":     "archive.local",
 			"apiKey":   "********",
+			"username": "pulse-readonly",
 			"useHttps": true,
 			"enabled":  false,
 		})
@@ -8750,9 +8754,10 @@ func TestContract_PlatformConnectionPreviewPreservesCanonicalEnabledDefaults(t *
 		setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
 
 		body := marshalTrueNASRequest(t, map[string]any{
-			"name":   "tower",
-			"host":   "tower.local",
-			"apiKey": "super-secret",
+			"name":     "tower",
+			"host":     "tower.local",
+			"apiKey":   "super-secret",
+			"username": "pulse-readonly",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
 		rec := httptest.NewRecorder()

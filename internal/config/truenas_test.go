@@ -81,10 +81,19 @@ func TestTrueNASValidate(t *testing.T) {
 			wantError: "truenas credentials are required",
 		},
 		{
-			name: "api key auth",
+			name: "api key without owner username",
 			instance: &TrueNASInstance{
 				Host:   "nas.local",
 				APIKey: "key",
+			},
+			wantError: "API key owner username is required",
+		},
+		{
+			name: "api key auth",
+			instance: &TrueNASInstance{
+				Host:     "nas.local",
+				APIKey:   "key",
+				Username: "pulse-monitor",
 			},
 		},
 		{

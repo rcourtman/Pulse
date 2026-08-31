@@ -95,6 +95,9 @@ func (t *TrueNASInstance) Validate() error {
 	}
 
 	if strings.TrimSpace(t.APIKey) != "" {
+		if strings.TrimSpace(t.Username) == "" {
+			return fmt.Errorf("truenas API key owner username is required for supported authentication")
+		}
 		return nil
 	}
 
