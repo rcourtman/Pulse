@@ -470,14 +470,20 @@ func enrichK8sNodeIdentity(identity *ResourceIdentity, nodeName string, hosts []
 	// hostname. Besides being unnecessary, that could create a transitive merge
 	// between two different machines that happen to share a hostname.
 	if machineID := strings.TrimSpace(identity.MachineID); machineID != "" {
+		var matched *models.Host
 		for i := range hosts {
 			host := &hosts[i]
 			if strings.TrimSpace(host.MachineID) != machineID {
 				continue
 			}
-			_, macs := collectInterfaceIDs(host.NetworkInterfaces)
+			if matched != nil {
+				return
+			}
+			matched = host
+		}
+		if matched != nil {
+			_, macs := collectInterfaceIDs(matched.NetworkInterfaces)
 			identity.MACAddresses = uniqueStrings(append(identity.MACAddresses, macs...))
-			return
 		}
 		return
 	}
@@ -488,16 +494,23 @@ func enrichK8sNodeIdentity(identity *ResourceIdentity, nodeName string, hosts []
 		return
 	}
 
+	var exactMatch *models.Host
 	for i := range hosts {
 		host := &hosts[i]
 		if strings.EqualFold(strings.TrimSpace(host.Hostname), nodeName) {
-			if host.MachineID != "" && identity.MachineID == "" {
-				identity.MachineID = strings.TrimSpace(host.MachineID)
+			if exactMatch != nil {
+				return
 			}
-			_, macs := collectInterfaceIDs(host.NetworkInterfaces)
-			identity.MACAddresses = uniqueStrings(append(identity.MACAddresses, macs...))
-			return
+			exactMatch = host
 		}
+	}
+	if exactMatch != nil {
+		if exactMatch.MachineID != "" {
+			identity.MachineID = strings.TrimSpace(exactMatch.MachineID)
+		}
+		_, macs := collectInterfaceIDs(exactMatch.NetworkInterfaces)
+		identity.MACAddresses = uniqueStrings(append(identity.MACAddresses, macs...))
+		return
 	}
 
 	normName := NormalizeHostname(nodeName)

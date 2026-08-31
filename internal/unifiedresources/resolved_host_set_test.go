@@ -444,6 +444,19 @@ func TestEnrichK8sNodeIdentity_AmbiguousNormalizedHostnameSkipsEnrichment(t *tes
 	}
 }
 
+func TestEnrichK8sNodeIdentity_AmbiguousExactHostnameSkipsEnrichment(t *testing.T) {
+	hosts := []models.Host{
+		{ID: "h1", Hostname: "k8s-node1", MachineID: "machine-abc", NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:55"}}},
+		{ID: "h2", Hostname: "K8S-NODE1", MachineID: "machine-def", NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:66"}}},
+	}
+	identity := ResourceIdentity{Hostnames: []string{"k8s-node1"}}
+	enrichK8sNodeIdentity(&identity, "k8s-node1", hosts)
+
+	if identity.MachineID != "" || len(identity.MACAddresses) != 0 {
+		t.Fatalf("expected ambiguous exact hostname to skip enrichment, got %+v", identity)
+	}
+}
+
 func TestEnrichK8sNodeIdentity_MachineIDDoesNotTrustDuplicateHostname(t *testing.T) {
 	hosts := []models.Host{
 		{ID: "wrong", Hostname: "node1", MachineID: "machine-wrong", NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:55"}}},
@@ -454,6 +467,19 @@ func TestEnrichK8sNodeIdentity_MachineIDDoesNotTrustDuplicateHostname(t *testing
 
 	if len(identity.MACAddresses) != 1 || identity.MACAddresses[0] != "00:11:22:33:44:66" {
 		t.Fatalf("expected only the authoritative machine's MAC, got %v", identity.MACAddresses)
+	}
+}
+
+func TestEnrichK8sNodeIdentity_AmbiguousMachineIDSkipsMACEnrichment(t *testing.T) {
+	hosts := []models.Host{
+		{ID: "one", MachineID: "machine-cloned", NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:55"}}},
+		{ID: "two", MachineID: "machine-cloned", NetworkInterfaces: []models.HostNetworkInterface{{MAC: "00:11:22:33:44:66"}}},
+	}
+	identity := ResourceIdentity{MachineID: "machine-cloned"}
+	enrichK8sNodeIdentity(&identity, "node1", hosts)
+
+	if len(identity.MACAddresses) != 0 {
+		t.Fatalf("expected ambiguous machine ID to skip MAC enrichment, got %v", identity.MACAddresses)
 	}
 }
 
