@@ -2045,6 +2045,39 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 }
 
+func TestV642SecurityPacketCoversBothAdministratorBoundaryFixes(t *testing.T) {
+	notesBytes, err := os.ReadFile(repoFile("docs", "releases", "RELEASE_NOTES_v6.4.2.md"))
+	if err != nil {
+		t.Fatalf("read v6.4.2 release notes: %v", err)
+	}
+	changelogBytes, err := os.ReadFile(repoFile("docs", "releases", "V6_CHANGELOG_v6.4.2.md"))
+	if err != nil {
+		t.Fatalf("read v6.4.2 changelog: %v", err)
+	}
+	notes := string(notesBytes)
+	changelog := string(changelogBytes)
+	for _, required := range []string{
+		"Infrastructure actions honor role boundaries",
+		"SSO access no longer implies administrator access",
+		"map at least one trusted IdP group to the built-in `admin` role before upgrading",
+		"The rollback target is stable `v6.4.1`",
+	} {
+		if !strings.Contains(notes, required) {
+			t.Fatalf("v6.4.2 release notes missing %q", required)
+		}
+	}
+	for _, required := range []string{
+		"effective RBAC `admin` grant on `*`",
+		"SSO-only installation must map at least one trusted IdP group",
+		"Promotion path: emergency stable patch from `main`",
+		"Mobile decision: `no-mobile-impact`",
+	} {
+		if !strings.Contains(changelog, required) {
+			t.Fatalf("v6.4.2 changelog missing %q", required)
+		}
+	}
+}
+
 func TestHelmChartDoesNotPublishRetiredExplorePrepassMonitoring(t *testing.T) {
 	chartDir := repoFile("deploy", "helm", "pulse")
 	err := filepath.WalkDir(chartDir, func(path string, d os.DirEntry, walkErr error) error {

@@ -29,6 +29,21 @@ def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
+    def test_v642_security_packet_keeps_both_admin_boundaries_visible(self) -> None:
+        notes = (
+            _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.2.md"
+        ).read_text(encoding="utf-8")
+
+        for expected in (
+            "Infrastructure actions honor role boundaries",
+            "SSO access no longer implies administrator access",
+            "map at least one trusted IdP group to the built-in `admin` role before upgrading",
+            "The rollback target is stable `v6.4.1`",
+        ):
+            self.assertIn(expected, notes)
+        self.assertNotIn("## Fixes", notes)
+        render_release_body.validate_release_notes_shape(notes, "6.4.2")
+
     def test_v640_stable_packet_keeps_release_boundaries_visible(self) -> None:
         notes = (
             _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.0.md"

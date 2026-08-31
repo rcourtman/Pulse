@@ -329,6 +329,13 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 			"Public Unknown Publisher disclosure",
 		)
 	}
+	if version == "6.4.2" {
+		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+			"The governed branch is `main`",
+			"authenticated non-administrator organization members can reach infrastructure action control",
+			"SSO-only deployments can treat every authenticated IdP user as an instance administrator without an explicit grant",
+		)
+	}
 }
 
 func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
