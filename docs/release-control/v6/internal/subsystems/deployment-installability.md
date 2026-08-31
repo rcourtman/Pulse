@@ -4692,11 +4692,14 @@ Assistant command-help dialog behavior, and agent server-address migration
 guidance. The cutoff also explains the Preview channel's distinct beta and
 release-candidate maturity and records native systemd journal severity for the
 generated Pulse service. It also records provider-scoped Proxmox identity-pin
-recovery that keeps same-name estates distinct after restart. Release-integrity
+recovery that keeps same-name estates distinct after restart, per-node Proxmox
+cluster agent coverage that cannot hide uncovered members, and bounded Agent
+Doctor reporting for typed privilege-helper degradation. Release-integrity
 detail records authenticated Unified Agent download validation, exact-step
-candidate version binding, and separate GHCR authentication for Helm chart
-upload and OCI provenance attestation. Packet proof must retain those outcomes
-before v6.4.2 can be dispatched for publication.
+candidate version binding, separate GHCR authentication for Helm chart upload
+and OCI provenance attestation, and the protected checkout baseline across
+release automation. Packet proof must retain those outcomes before v6.4.2 can
+be dispatched for publication.
 
 ### Systemd journal output preserves Pulse severity
 

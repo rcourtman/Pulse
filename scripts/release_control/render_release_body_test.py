@@ -37,6 +37,9 @@ class RenderReleaseBodyTest(unittest.TestCase):
         for expected in (
             "Infrastructure actions honor role boundaries",
             "SSO access no longer implies administrator access",
+            "Partial Proxmox cluster coverage is visible",
+            "Agent Doctor reports privilege-helper degradation",
+            "Release workflow checkouts retain their security boundary",
             "map at least one trusted IdP group to the built-in `admin` role before upgrading",
             "The rollback target is stable `v6.4.1`",
         ):

@@ -43,6 +43,13 @@ _This changelog describes stable `v6.4.2` compared with stable `v6.4.1`._
 - Durable Proxmox identity recovery now scopes pins to qualified provider
   endpoints and refuses ambiguous short names or IP addresses, keeping
   independent same-name estates distinct during provider-first restart windows.
+- Infrastructure settings now evaluates Proxmox cluster agent coverage per
+  node, names uncovered hosts, and offers node-level installer actions so one
+  reporting member cannot make a partially instrumented cluster look complete.
+- The Unified Agent now reports typed privilege-helper operation health through
+  its bounded module status. Agent Doctor exposes a dedicated degradation reason
+  when privileged telemetry is omitted, without granting broader collector
+  authority or exposing raw helper errors.
 
 ## Release integrity
 
@@ -55,6 +62,9 @@ _This changelog describes stable `v6.4.2` compared with stable `v6.4.1`._
 - Helm OCI publication now authenticates both Helm and the provenance
   attestation client against GHCR before pushing the exact-version chart and
   its attestation.
+- Release automation now uses the protected `actions/checkout` baseline across
+  build, qualification, publication, recovery, and deployment workflows, with
+  workflow-trust checks that reject privileged fork checkout paths.
 
 ## Upgrade requirement
 

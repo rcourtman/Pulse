@@ -17,6 +17,9 @@ actions and SSO-only deployments.
 - **Preview releases now distinguish beta and RC maturity** - Update settings explain that beta builds are for user testing, while release candidates may become stable without product changes.
 - **Systemd journal severity is preserved** - Pulse service logs now carry native journal priorities so `journalctl -p` and downstream forwarding can filter by severity without changing file, terminal, or live-log output.
 - **Same-name Proxmox estates stay distinct after restart** - Durable identity recovery now uses qualified provider endpoints and fails closed on reused short names or IP addresses, preventing one estate from absorbing another during provider-first startup.
+- **Partial Proxmox cluster coverage is visible** - Infrastructure settings now names uncovered nodes, explains that each needs its own agent for host telemetry, and offers node-level install actions instead of treating partial coverage as complete.
+- **Agent Doctor reports privilege-helper degradation** - Failures in the typed local privilege helper now appear as a bounded diagnostic reason while affected telemetry is omitted without widening the collector's privileges.
+- **Release workflow checkouts retain their security boundary** - Build, qualification, publication, recovery, and deployment workflows now use the protected checkout baseline and reject privileged fork checkout paths.
 
 ## Before you upgrade
 
