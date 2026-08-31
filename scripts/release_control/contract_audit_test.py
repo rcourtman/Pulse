@@ -84,6 +84,12 @@ Cross-repo relay ownership is explicit.
         }
         return registry_payload, status_payload, contract_texts
 
+    def init_scratch_workspace_repo(self, tmpdir: str) -> Path:
+        repo_root = Path(tmpdir) / "repos" / "pulse"
+        repo_root.mkdir(parents=True)
+        self.git(repo_root, "init")
+        return repo_root
+
     def test_parse_args_accepts_staged_flag(self) -> None:
         args = parse_args(["--check", "--staged", "--repo-scope", "pulse"])
         self.assertTrue(args.check)
@@ -379,34 +385,44 @@ Canonical alert identity is live runtime truth.
         )
 
     def test_audit_contract_payload_accepts_cross_repo_contract_paths(self) -> None:
-        registry_payload, status_payload, contract_texts = self.cross_repo_contract_fixture()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = self.init_scratch_workspace_repo(tmpdir)
+            private_file = repo_root.parent / "pulse-mobile" / "src" / "relay" / "client.ts"
+            private_file.parent.mkdir(parents=True)
+            private_file.write_text("export const relayClient = true;\n", encoding="utf-8")
+            registry_payload, status_payload, contract_texts = self.cross_repo_contract_fixture()
 
-        report = audit_contract_payload(
-            registry_payload=registry_payload,
-            status_payload=status_payload,
-            contract_texts=contract_texts,
-        )
+            report = audit_contract_payload(
+                registry_payload=registry_payload,
+                status_payload=status_payload,
+                contract_texts=contract_texts,
+                repo_root=repo_root,
+            )
 
-        self.assertEqual(report["errors"], [])
+            self.assertEqual(report["errors"], [])
 
     def test_scoped_audit_defers_missing_private_paths_to_private_governance(self) -> None:
-        missing_path = "pulse-mobile:src/relay/definitely-missing.ts"
-        registry_payload, status_payload, contract_texts = self.cross_repo_contract_fixture(missing_path)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = self.init_scratch_workspace_repo(tmpdir)
+            missing_path = "pulse-mobile:src/relay/definitely-missing.ts"
+            registry_payload, status_payload, contract_texts = self.cross_repo_contract_fixture(missing_path)
 
-        full_report = audit_contract_payload(
-            registry_payload=registry_payload,
-            status_payload=status_payload,
-            contract_texts=contract_texts,
-        )
-        scoped_report = audit_contract_payload(
-            registry_payload=registry_payload,
-            status_payload=status_payload,
-            contract_texts=contract_texts,
-            audited_repo_ids={"pulse"},
-        )
+            full_report = audit_contract_payload(
+                registry_payload=registry_payload,
+                status_payload=status_payload,
+                contract_texts=contract_texts,
+                repo_root=repo_root,
+            )
+            scoped_report = audit_contract_payload(
+                registry_payload=registry_payload,
+                status_payload=status_payload,
+                contract_texts=contract_texts,
+                repo_root=repo_root,
+                audited_repo_ids={"pulse"},
+            )
 
-        self.assertIn(f"references missing path '{missing_path}'", "\n".join(full_report["errors"]))
-        self.assertEqual(scoped_report["errors"], [])
+            self.assertIn(f"references missing path '{missing_path}'", "\n".join(full_report["errors"]))
+            self.assertEqual(scoped_report["errors"], [])
 
     def test_scoped_audit_still_rejects_unclean_private_path_tokens(self) -> None:
         unclean_path = "pulse-mobile:../client.ts"
