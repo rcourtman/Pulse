@@ -22,8 +22,24 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
+
+func TestDockerReportSequenceIDsAreProcessScopedAndMonotonic(t *testing.T) {
+	agent := &Agent{reportStreamID: "docker-process-stream"}
+	first := agent.nextReportSequenceID()
+	second := agent.nextReportSequenceID()
+
+	firstStream, firstSequence, firstOK := agentshost.ParseReportSequenceID(first)
+	secondStream, secondSequence, secondOK := agentshost.ParseReportSequenceID(second)
+	if !firstOK || !secondOK || firstStream != "docker-process-stream" || secondStream != firstStream {
+		t.Fatalf("report streams = (%q, %q), parsed = (%v, %v)", firstStream, secondStream, firstOK, secondOK)
+	}
+	if firstSequence != 1 || secondSequence != 2 {
+		t.Fatalf("report sequences = (%d, %d), want (1, 2)", firstSequence, secondSequence)
+	}
+}
 
 func TestNormalizeTargets(t *testing.T) {
 	targets, err := normalizeTargets([]TargetConfig{

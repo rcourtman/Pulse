@@ -1,14 +1,20 @@
 package dockeragent
 
 import (
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
@@ -17,6 +23,126 @@ type helperInventoryStub struct {
 	result agenthelper.ContainerInventoryResult
 	err    error
 	calls  int
+}
+
+type helperOperationStatusEvent struct {
+	operation string
+	err       error
+}
+
+type helperOperationStatusRecorderStub struct {
+	events []helperOperationStatusEvent
+}
+
+func (s *helperOperationStatusRecorderStub) Record(operation string, err error) {
+	s.events = append(s.events, helperOperationStatusEvent{operation: operation, err: err})
+}
+
+func (s *helperOperationStatusRecorderStub) ModuleStatus() agentshost.ModuleStatus {
+	status := agentshost.ModuleStatus{
+		Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "running",
+		UpdatedAt: time.Now().UTC(),
+	}
+	if len(s.events) > 0 && s.events[len(s.events)-1].err != nil {
+		status.State = "degraded"
+		status.LastError = "container.inventory: helper operation failed"
+	}
+	return status
+}
+
+func TestCollectHelperFailureDeliversIncompleteDegradationStatus(t *testing.T) {
+	reports := make(chan agentsdocker.Report, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reader, err := gzip.NewReader(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer reader.Close()
+		var report agentsdocker.Report
+		if err := json.NewDecoder(reader).Decode(&report); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		reports <- report
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	status := &helperOperationStatusRecorderStub{}
+	helper := &helperInventoryStub{err: &agenthelper.RemoteError{
+		Code: agenthelper.ErrorProviderUnavailable, Message: "token=must-not-leak", RequestID: "secret-id",
+	}}
+	agent := &Agent{
+		cfg: Config{
+			AgentID: "docker-only-agent", AgentType: "unified", Interval: 30 * time.Second,
+			HelperOperationStatus: status,
+		},
+		helperInventory: helper,
+		runtimePref:     RuntimeDocker,
+		runtime:         RuntimeDocker,
+		agentVersion:    "6.4.2",
+		hostName:        "docker-only",
+		machineID:       "machine-docker-only",
+		targets: []TargetConfig{{
+			Name: "primary", URL: server.URL, Token: "token", Authoritative: true,
+		}},
+		httpClients:    map[bool]*http.Client{false: server.Client()},
+		logger:         zerolog.Nop(),
+		reportStreamID: "docker-status-test-stream",
+	}
+
+	returned, err := agent.collectOnceWithReport(context.Background())
+	if err == nil {
+		t.Fatal("helper inventory failure was hidden")
+	}
+	if returned.InventoryComplete == nil || *returned.InventoryComplete {
+		t.Fatalf("returned failure report inventoryComplete = %v", returned.InventoryComplete)
+	}
+	select {
+	case report := <-reports:
+		if report.InventoryComplete == nil || *report.InventoryComplete {
+			t.Fatalf("delivered failure report inventoryComplete = %v", report.InventoryComplete)
+		}
+		if len(report.Containers) != 0 || len(report.Agent.Modules) != 1 || report.Agent.Modules[0].State != "degraded" {
+			t.Fatalf("delivered helper failure report = %+v", report)
+		}
+		if stream, sequence, ok := agentshost.ParseReportSequenceID(report.SequenceID); !ok || stream != "docker-status-test-stream" || sequence != 1 {
+			t.Fatalf("delivered helper status sequence = %q (%q, %d, %t)", report.SequenceID, stream, sequence, ok)
+		}
+		serialized, marshalErr := json.Marshal(report.Agent.Modules)
+		if marshalErr != nil {
+			t.Fatalf("marshal delivered helper modules: %v", marshalErr)
+		}
+		for _, secret := range []string{"must-not-leak", "secret-id"} {
+			if strings.Contains(string(serialized), secret) {
+				t.Fatalf("raw helper detail %q reached Docker status report: %s", secret, serialized)
+			}
+		}
+	case <-time.After(time.Second):
+		t.Fatal("helper degradation status report was not delivered")
+	}
+}
+
+func TestIncompleteHelperStatusIsNeverBufferedForStaleReplay(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "offline", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	incomplete := false
+	agent := &Agent{
+		targets: []TargetConfig{{
+			Name: "primary", URL: server.URL, Token: "token", Authoritative: true,
+		}},
+		httpClients: map[bool]*http.Client{false: server.Client()},
+		logger:      zerolog.Nop(),
+	}
+	if err := agent.deliverReport(context.Background(), agentsdocker.Report{InventoryComplete: &incomplete}); err != nil {
+		t.Fatalf("deliver incomplete helper status: %v", err)
+	}
+	if got := agent.reportBuffers["primary"].Len(); got != 0 {
+		t.Fatalf("incomplete helper status buffered for stale replay: %d reports", got)
+	}
 }
 
 func (s *helperInventoryStub) Inventory(context.Context) (agenthelper.ContainerInventoryResult, error) {
@@ -71,6 +197,30 @@ func TestNewFallsBackToTypedHelperWithoutActionAuthority(t *testing.T) {
 	}
 }
 
+func TestNewRecordsTypedHelperProbeFailure(t *testing.T) {
+	originalConnect := connectCollectorRuntimeFn
+	t.Cleanup(func() { connectCollectorRuntimeFn = originalConnect })
+	connectCollectorRuntimeFn = func(RuntimeKind, *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+		return nil, systemtypes.Info{}, RuntimeAuto, errors.New("permission denied opening daemon socket")
+	}
+	helperErr := &agenthelper.RemoteError{
+		Code: agenthelper.ErrorProviderUnavailable, Message: "token=must-not-persist", RequestID: "secret-id",
+	}
+	helper := &helperInventoryStub{err: helperErr}
+	status := &helperOperationStatusRecorderStub{}
+	logger := zerolog.Nop()
+	agent, err := New(Config{
+		PulseURL: "http://127.0.0.1:7655", APIToken: "token", Runtime: "auto",
+		HelperInventory: helper, HelperOperationStatus: status, Logger: &logger,
+	})
+	if agent != nil || err == nil {
+		t.Fatalf("failed helper probe = agent:%T err:%v", agent, err)
+	}
+	if len(status.events) != 1 || status.events[0].operation != agenthelper.OperationContainerInventory || !errors.Is(status.events[0].err, helperErr) {
+		t.Fatalf("failed helper probe status = %+v", status.events)
+	}
+}
+
 func TestNewRejectsDirectRootfulSocketWhenTypedHelperIsConfigured(t *testing.T) {
 	originalConnect := connectCollectorRuntimeFn
 	t.Cleanup(func() { connectCollectorRuntimeFn = originalConnect })
@@ -84,10 +234,11 @@ func TestNewRejectsDirectRootfulSocketWhenTypedHelperIsConfigured(t *testing.T) 
 	helper := &helperInventoryStub{result: agenthelper.ContainerInventoryResult{
 		Runtimes: []agenthelper.ContainerRuntimeSnapshot{{Runtime: "docker", Available: true}},
 	}}
+	status := &helperOperationStatusRecorderStub{}
 	logger := zerolog.Nop()
 	agent, err := New(Config{
 		PulseURL: "http://127.0.0.1:7655", APIToken: "token", Runtime: "auto",
-		HelperInventory: helper, Logger: &logger,
+		HelperInventory: helper, HelperOperationStatus: status, Logger: &logger,
 	})
 	if err != nil {
 		t.Fatalf("New helper fallback: %v", err)
@@ -98,6 +249,59 @@ func TestNewRejectsDirectRootfulSocketWhenTypedHelperIsConfigured(t *testing.T) 
 	}
 	if agent.helperInventory != helper || agent.ContainerActionsAvailable() {
 		t.Fatalf("rootful endpoint bypassed helper boundary: helper=%T actions=%t", agent.helperInventory, agent.ContainerActionsAvailable())
+	}
+	if len(status.events) != 1 || status.events[0].operation != agenthelper.OperationContainerInventory || status.events[0].err != nil {
+		t.Fatalf("rootful rejection/helper recovery status = %+v", status.events)
+	}
+}
+
+func TestHelperInventoryStatusTracksFailureAndCompleteRecovery(t *testing.T) {
+	originalMetrics := hostmetricsCollectWithDiskFilters
+	t.Cleanup(func() { hostmetricsCollectWithDiskFilters = originalMetrics })
+	hostmetricsCollectWithDiskFilters = func(context.Context, []string, []string) (hostmetrics.Snapshot, error) {
+		return hostmetrics.Snapshot{}, nil
+	}
+	status := &helperOperationStatusRecorderStub{}
+	helper := &helperInventoryStub{result: agenthelper.ContainerInventoryResult{
+		Runtimes: []agenthelper.ContainerRuntimeSnapshot{{Runtime: "docker", Available: true}},
+	}}
+	agent := &Agent{
+		cfg:             Config{HelperOperationStatus: status},
+		helperInventory: helper,
+		runtimePref:     RuntimeDocker,
+		runtime:         RuntimeDocker,
+		logger:          zerolog.Nop(),
+	}
+
+	if _, err := agent.buildHelperInventoryReport(context.Background()); err != nil {
+		t.Fatalf("complete helper inventory: %v", err)
+	}
+	helper.err = errors.New("helper transport token=must-not-persist")
+	if _, err := agent.buildHelperInventoryReport(context.Background()); err == nil {
+		t.Fatal("helper transport failure was accepted")
+	}
+	helper.err = nil
+	helper.result = agenthelper.ContainerInventoryResult{
+		Runtimes: []agenthelper.ContainerRuntimeSnapshot{{Runtime: "docker", Available: false}},
+	}
+	if _, err := agent.buildHelperInventoryReport(context.Background()); err == nil {
+		t.Fatal("unavailable helper runtime was accepted")
+	}
+	helper.result.Runtimes[0].Available = true
+	if _, err := agent.buildHelperInventoryReport(context.Background()); err != nil {
+		t.Fatalf("recovered helper inventory: %v", err)
+	}
+
+	if len(status.events) != 4 {
+		t.Fatalf("status events = %+v, want success/failure/failure/success", status.events)
+	}
+	for _, event := range status.events {
+		if event.operation != agenthelper.OperationContainerInventory {
+			t.Fatalf("status operation = %q", event.operation)
+		}
+	}
+	if status.events[0].err != nil || status.events[1].err == nil || status.events[2].err == nil || status.events[3].err != nil {
+		t.Fatalf("status outcomes = %+v", status.events)
 	}
 }
 

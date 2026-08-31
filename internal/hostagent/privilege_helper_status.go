@@ -14,15 +14,17 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
-type privilegeHelperStatus struct {
+// PrivilegeHelperStatus aggregates source-classified health for the closed
+// typed-helper operations shared by the host and container collectors.
+type PrivilegeHelperStatus struct {
 	mu        sync.RWMutex
 	failures  map[string]string
 	updatedAt time.Time
 	now       func() time.Time
 }
 
-func newPrivilegeHelperStatus() *privilegeHelperStatus {
-	status := &privilegeHelperStatus{
+func NewPrivilegeHelperStatus() *PrivilegeHelperStatus {
+	status := &PrivilegeHelperStatus{
 		failures: make(map[string]string),
 		now:      func() time.Time { return time.Now().UTC() },
 	}
@@ -30,7 +32,7 @@ func newPrivilegeHelperStatus() *privilegeHelperStatus {
 	return status
 }
 
-func (s *privilegeHelperStatus) record(operation string, err error) {
+func (s *PrivilegeHelperStatus) Record(operation string, err error) {
 	if s == nil {
 		return
 	}
@@ -49,7 +51,7 @@ func (s *privilegeHelperStatus) record(operation string, err error) {
 	s.updatedAt = s.now().UTC()
 }
 
-func (s *privilegeHelperStatus) moduleStatus() agentshost.ModuleStatus {
+func (s *PrivilegeHelperStatus) ModuleStatus() agentshost.ModuleStatus {
 	if s == nil {
 		return agentshost.ModuleStatus{}
 	}
@@ -116,10 +118,23 @@ func (a *Agent) recordPrivilegeHelperOperation(operation string, err error) {
 	if a == nil || a.privilegeHelperHealth == nil {
 		return
 	}
-	a.privilegeHelperHealth.record(operation, err)
+	a.privilegeHelperHealth.Record(operation, err)
+}
+
+func newPrivilegeHelperStatus() *PrivilegeHelperStatus {
+	return NewPrivilegeHelperStatus()
+}
+
+func (s *PrivilegeHelperStatus) record(operation string, err error) {
+	s.Record(operation, err)
+}
+
+func (s *PrivilegeHelperStatus) moduleStatus() agentshost.ModuleStatus {
+	return s.ModuleStatus()
 }
 
 const (
 	privilegeHelperOperationSMART              = agenthelper.OperationSMARTSnapshot
 	privilegeHelperOperationProxmoxFilesystems = agenthelper.OperationProxmoxLXCFilesystems
+	privilegeHelperOperationContainerInventory = agenthelper.OperationContainerInventory
 )

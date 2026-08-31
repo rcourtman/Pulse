@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
 const helperInventoryOperationDeadline = 30 * time.Second
@@ -91,12 +92,15 @@ func (a *Agent) buildHelperInventoryReport(ctx context.Context) (agentsdocker.Re
 
 	result, err := a.helperInventory.Inventory(ctx)
 	if err != nil {
+		a.recordHelperInventoryStatus(err)
 		return agentsdocker.Report{}, fmt.Errorf("collect typed helper container inventory: %w", err)
 	}
 	snapshot, err := selectHelperRuntime(result, a.runtimePref)
 	if err != nil {
+		a.recordHelperInventoryStatus(err)
 		return agentsdocker.Report{}, err
 	}
+	a.recordHelperInventoryStatus(nil)
 	runtimeKind := RuntimeKind(strings.ToLower(strings.TrimSpace(snapshot.Runtime)))
 	if runtimeKind != a.runtime {
 		a.logger.Info().
@@ -113,13 +117,7 @@ func (a *Agent) buildHelperInventoryReport(ctx context.Context) (agentsdocker.Re
 		return agentsdocker.Report{}, fmt.Errorf("collect host metrics: %w", err)
 	}
 
-	agentID := a.cfg.AgentID
-	if agentID == "" {
-		agentID = a.machineID
-		if agentID == "" {
-			agentID = a.hostName
-		}
-	}
+	agentID := a.helperAgentID()
 	containers := make([]agentsdocker.Container, 0, len(snapshot.Containers))
 	for _, summary := range snapshot.Containers {
 		state := strings.ToLower(strings.TrimSpace(summary.State))
@@ -159,11 +157,13 @@ func (a *Agent) buildHelperInventoryReport(ctx context.Context) (agentsdocker.Re
 	if intervalSeconds <= 0 {
 		intervalSeconds = 30
 	}
+	inventoryComplete := true
 	report := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{
 			ID: agentID, Version: a.agentVersion, Type: a.cfg.AgentType,
-			IntervalSeconds: intervalSeconds,
+			IntervalSeconds: intervalSeconds, Modules: a.helperOperationModuleStatuses(),
 		},
+		InventoryComplete: &inventoryComplete,
 		Host: agentsdocker.HostInfo{
 			Hostname:         a.hostName,
 			Name:             a.hostName,
@@ -183,8 +183,55 @@ func (a *Agent) buildHelperInventoryReport(ctx context.Context) (agentsdocker.Re
 		},
 		Containers: containers,
 		Timestamp:  time.Now().UTC(),
+		SequenceID: a.nextReportSequenceID(),
 	}
 	return report, nil
+}
+
+func (a *Agent) buildHelperInventoryStatusReport() agentsdocker.Report {
+	inventoryComplete := false
+	intervalSeconds := int(a.cfg.Interval / time.Second)
+	if intervalSeconds <= 0 {
+		intervalSeconds = 30
+	}
+	return agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID: a.helperAgentID(), Version: a.agentVersion, Type: a.cfg.AgentType,
+			IntervalSeconds: intervalSeconds, Modules: a.helperOperationModuleStatuses(),
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: a.hostName, Name: a.hostName, MachineID: a.machineID,
+			Runtime: string(a.runtime), CollectionMode: agentsdocker.CollectionModeTypedHelperSummary,
+			OS: runtime.GOOS, Architecture: runtime.GOARCH,
+		},
+		InventoryComplete: &inventoryComplete,
+		Timestamp:         time.Now().UTC(),
+		SequenceID:        a.nextReportSequenceID(),
+	}
+}
+
+func (a *Agent) helperAgentID() string {
+	if agentID := strings.TrimSpace(a.cfg.AgentID); agentID != "" {
+		return agentID
+	}
+	if machineID := strings.TrimSpace(a.machineID); machineID != "" {
+		return machineID
+	}
+	return strings.TrimSpace(a.hostName)
+}
+
+func (a *Agent) helperOperationModuleStatuses() []agentshost.ModuleStatus {
+	if a == nil || a.cfg.HelperOperationStatus == nil {
+		return nil
+	}
+	return []agentshost.ModuleStatus{a.cfg.HelperOperationStatus.ModuleStatus()}
+}
+
+func (a *Agent) recordHelperInventoryStatus(err error) {
+	if a == nil || a.cfg.HelperOperationStatus == nil {
+		return
+	}
+	a.cfg.HelperOperationStatus.Record(agenthelper.OperationContainerInventory, err)
 }
 
 func shortContainerID(id string) string {

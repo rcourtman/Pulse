@@ -289,12 +289,14 @@ func TestPrivilegeHelperStatusTracksIndependentOperationsAndRecovery(t *testing.
 
 	status.record(privilegeHelperOperationProxmoxFilesystems, errors.New("inventory unavailable"))
 	status.record(privilegeHelperOperationSMART, errors.New("smart unavailable"))
+	status.Record(privilegeHelperOperationContainerInventory, errors.New("container inventory unavailable"))
 	module := status.moduleStatus()
 	if module.Name != agentshost.ModuleNameTypedPrivilegeHelper || module.State != "degraded" || !module.Enabled {
 		t.Fatalf("degraded helper module = %+v", module)
 	}
 	if !strings.Contains(module.LastError, "proxmox.lxc_filesystems: helper operation failed") ||
-		!strings.Contains(module.LastError, "smart.snapshot: helper operation failed") {
+		!strings.Contains(module.LastError, "smart.snapshot: helper operation failed") ||
+		!strings.Contains(module.LastError, "container.inventory: helper operation failed") {
 		t.Fatalf("aggregated helper failure = %q", module.LastError)
 	}
 	if module.UpdatedAt != fixed {
@@ -310,8 +312,27 @@ func TestPrivilegeHelperStatusTracksIndependentOperationsAndRecovery(t *testing.
 
 	status.record(privilegeHelperOperationProxmoxFilesystems, nil)
 	module = status.moduleStatus()
+	if module.State != "degraded" || !strings.Contains(module.LastError, privilegeHelperOperationContainerInventory) {
+		t.Fatalf("container helper failure cleared with unrelated operations = %+v", module)
+	}
+
+	status.Record(privilegeHelperOperationContainerInventory, nil)
+	module = status.ModuleStatus()
 	if module.State != "running" || module.LastError != "" {
 		t.Fatalf("complete helper recovery = %+v", module)
+	}
+}
+
+func TestSharedPrivilegeHelperStatusReportsContainerFailureWithoutHostHelperCall(t *testing.T) {
+	status := NewPrivilegeHelperStatus()
+	status.Record(privilegeHelperOperationContainerInventory, &agenthelper.RemoteError{
+		Code: agenthelper.ErrorProviderUnavailable, Message: "token=must-not-leak", RequestID: "secret-id",
+	})
+	agent := &Agent{privilegeHelperHealth: status}
+
+	module := requirePrivilegeHelperModuleStatus(t, agent.currentModuleStatus())
+	if module.State != "degraded" || module.LastError != "container.inventory: helper provider unavailable" {
+		t.Fatalf("shared container helper status = %+v", module)
 	}
 }
 
@@ -325,6 +346,11 @@ func TestPrivilegeHelperStatusNeverPersistsRawErrorDetails(t *testing.T) {
 		Code:      agenthelper.ErrorProviderUnavailable,
 		Message:   "provider failed bearer=remote-secret path=/root/private",
 		RequestID: "secret-request-id",
+	})
+	status.Record(privilegeHelperOperationContainerInventory, &agenthelper.RemoteError{
+		Code:      agenthelper.ErrorProviderUnavailable,
+		Message:   "container provider token=container-secret",
+		RequestID: "container-request-id",
 	})
 
 	module := status.moduleStatus()
@@ -342,6 +368,8 @@ func TestPrivilegeHelperStatusNeverPersistsRawErrorDetails(t *testing.T) {
 		"remote-secret",
 		"/root/private",
 		"secret-request-id",
+		"container-secret",
+		"container-request-id",
 	} {
 		if strings.Contains(string(serialized), secret) {
 			t.Fatalf("raw helper error detail %q reached serialized report state: %s", secret, serialized)

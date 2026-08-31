@@ -81,6 +81,20 @@ func TestCloneHostIsolatesAgentPrivilege(t *testing.T) {
 	}
 }
 
+func TestCloneDockerHostIsolatesAgentModuleStatus(t *testing.T) {
+	src := DockerHost{AgentModules: []AgentModuleStatus{{
+		Name: "typed-privilege-helper", State: "degraded", LastError: "container.inventory: helper provider unavailable",
+	}}}
+	clone := cloneDockerHost(src)
+	if len(clone.AgentModules) != 1 || clone.AgentModules[0].LastError != src.AgentModules[0].LastError {
+		t.Fatalf("clone dropped Docker agent module status: %+v", clone.AgentModules)
+	}
+	clone.AgentModules[0].LastError = "mutated"
+	if src.AgentModules[0].LastError != "container.inventory: helper provider unavailable" {
+		t.Fatalf("Docker host clone aliased agent module status: %+v", src.AgentModules)
+	}
+}
+
 func TestCloneDockerContainer_PreservesIndependentOOMEvidence(t *testing.T) {
 	oomKilled := false
 	src := DockerContainer{

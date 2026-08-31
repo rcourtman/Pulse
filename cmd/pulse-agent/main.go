@@ -520,7 +520,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	var privilegedUpdate agentupdate.PrivilegedUpdate
 	helperSocket := strings.TrimSpace(os.Getenv("PULSE_AGENT_HELPER_SOCKET"))
 	var helperContainerInventory dockeragent.ContainerInventory
+	var privilegeHelperStatus *hostagent.PrivilegeHelperStatus
 	if helperSocket != "" {
+		privilegeHelperStatus = hostagent.NewPrivilegeHelperStatus()
 		privilegedUpdate, err = newPrivilegeHelperUpdate(helperSocket)
 		if err != nil {
 			return fmt.Errorf("configure typed privilege-helper updates: %w", err)
@@ -616,6 +618,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AvailabilityTargets:     cfg.AvailabilityTargets,
 			AppliedConfig:           cfg.AppliedConfig,
 			ModuleStatus:            runtimeStatus.moduleStatuses,
+			PrivilegeHelperStatus:   privilegeHelperStatus,
 			Observers:               hostObserverTargets(cfg.Observers),
 			PrivilegedTelemetry:     privilegedTelemetry,
 			UpdatedFromVersion:      pendingUpdatePreviousVersion(pendingUpdate),
@@ -674,6 +677,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			DiskInclude:                cfg.DiskInclude,
 			Targets:                    dockerReportTargets(cfg),
 			HelperInventory:            helperContainerInventory,
+			HelperOperationStatus:      privilegeHelperStatus,
 		}
 
 		dockerAgent, err = newDockerAgent(dockerCfg)

@@ -2523,6 +2523,24 @@ func TestWindowsServiceRuntimeStartsHealthServer(t *testing.T) {
 	}
 }
 
+func TestRunSharesPrivilegeHelperStatusAcrossHostAndDocker(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read pulse-agent main.go: %v", err)
+	}
+	text := string(source)
+	required := []string{
+		`privilegeHelperStatus = hostagent.NewPrivilegeHelperStatus()`,
+		`PrivilegeHelperStatus:`,
+		`HelperOperationStatus:`,
+	}
+	for _, want := range required {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected unified runtime to include shared helper status wiring %q", want)
+		}
+	}
+}
+
 func TestRun_KubeRetry(t *testing.T) {
 	origKube := newKubeAgent
 	defer func() { newKubeAgent = origKube }()

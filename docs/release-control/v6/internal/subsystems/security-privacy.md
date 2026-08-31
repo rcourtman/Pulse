@@ -72,6 +72,15 @@ handoff parsing and fixed artifact cleanup prevent a collector-selected target
 or stale quarantine from widening that boundary. Configuring the helper also
 requires a successful versioned health exchange at collector startup and
 forbids privileged telemetry fallback into the collector process.
+Helper health exposed beyond the local process is a classified status boundary,
+not a copy of privileged error output. SMART, Proxmox LXC filesystem, and
+container inventory failures share one operation-aware module status, but only
+stable transport/provider categories may enter host or Docker reports. Raw
+helper messages, request payloads, bearer-shaped values, local paths, and
+provider output must be discarded before serialization. A Docker-only status
+report explicitly marks inventory incomplete, retains the last complete server
+snapshot, and cannot widen the collector into direct rootful socket access or
+create a remediation grant.
 
 Remediation credentials belong only to the separately installed
 `pulse-agent-runner`. They bind organization, canonical host identity, token

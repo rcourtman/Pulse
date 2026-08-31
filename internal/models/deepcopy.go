@@ -688,6 +688,7 @@ func cloneDockerHost(src DockerHost) DockerHost {
 	dest.LoadAverage = append([]float64(nil), src.LoadAverage...)
 	dest.Disks = append([]Disk(nil), src.Disks...)
 	dest.NetworkInterfaces = cloneHostNetworkInterfaces(src.NetworkInterfaces)
+	dest.AgentModules = cloneAgentModuleStatuses(src.AgentModules)
 	dest.Containers = cloneDockerContainers(src.Containers)
 	dest.Images = cloneDockerImages(src.Images)
 	dest.Volumes = cloneDockerVolumes(src.Volumes)

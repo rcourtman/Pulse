@@ -61,15 +61,21 @@ when the canonical agent ID matches an admitted `action-runner` session with
 the closed `typed_actions.v1` capability. Credential presence, expiry,
 connection, version, and protocol facts remain distinct, and none may be
 inferred from collector health or helper configuration.
-Configured helper posture and current SMART/Proxmox helper operation health
-are also distinct. Monitoring preserves the collector-authored
+Configured helper posture and current SMART/Proxmox/container-inventory helper
+operation health are also distinct. Monitoring preserves the collector-authored
 `typed-privilege-helper` module status and derives the stable warning
 `agent_privilege_helper_degraded` when it is not running. The reason states
 that affected privileged telemetry was omitted without local privilege
 widening, while its error evidence passes through the existing bounded
 diagnostic redaction. A later success clears only the matching operation on the
 collector; monitoring must not infer recovery from an unrelated healthy helper
-operation.
+operation. A container-inventory helper failure stops that summary report and
+remains visible through the same module until a complete helper inventory (or
+an applicable collector-owned rootless runtime) succeeds; monitoring must not
+infer recovery from the Docker module merely remaining connected. A Docker-only
+collector's explicit incomplete status report updates liveness and helper
+health while retaining its last complete inventory, including across the
+degraded interval; only a complete report may replace that inventory.
 The collector emits no Proxmox degradation for an absent inventory on an
 ordinary Linux host unless Proxmox mode or local `pct` discovery establishes
 that the operation applies.
@@ -161,6 +167,11 @@ accepted ordering watermark, reporting interval, accepted receipt time,
 transport receipt time, and observation time are durable host continuity so a
 server restart cannot let a delayed buffered report resurrect an operation
 that a newer report already stopped.
+Docker/Podman module reports follow the same source-stream ordering rule. Their
+accepted stream, sequence, observation time, transport receipt time, and
+retired streams are persisted separately from operator-managed Docker host
+metadata before telemetry state is replaced, so a server restart cannot let a
+buffered complete inventory overwrite a newer helper-degraded status report.
 Legacy reports without a sequence retain timestamp-based reconnect-burst
 protection, but a clock correction after a normal report interval must be
 admitted rather than freezing telemetry indefinitely.

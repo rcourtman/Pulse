@@ -965,6 +965,7 @@ type DockerHost struct {
 	LastSeen          time.Time                `json:"lastSeen"`
 	IntervalSeconds   int                      `json:"intervalSeconds"`
 	AgentVersion      string                   `json:"agentVersion,omitempty"`
+	AgentModules      []AgentModuleStatus      `json:"agentModules,omitempty"`
 	Containers        []DockerContainer        `json:"containers"`
 	Images            []DockerImage            `json:"images,omitempty"`
 	Volumes           []DockerVolume           `json:"volumes,omitempty"`

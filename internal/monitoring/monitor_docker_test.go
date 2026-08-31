@@ -3,6 +3,8 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -14,7 +16,301 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
+
+func TestApplyDockerReportSerializesConcurrentCompleteAndIncompleteReports(t *testing.T) {
+	monitor := newTestMonitor(t)
+	now := time.Now().UTC()
+	complete := true
+	incomplete := false
+	base := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID: "ordered-docker", Version: "6.4.2", Type: "unified", IntervalSeconds: 30,
+			Modules: []agentshost.ModuleStatus{{
+				Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "running", UpdatedAt: now,
+			}},
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "ordered-docker", MachineID: "ordered-machine", Runtime: "docker",
+			CollectionMode: agentsdocker.CollectionModeTypedHelperSummary,
+		},
+		Containers:        []agentsdocker.Container{{ID: "base", Name: "base", State: "running"}},
+		InventoryComplete: &complete,
+		Timestamp:         now,
+		SequenceID:        agentshost.FormatReportSequenceID("concurrent-docker-stream", 1),
+	}
+	if _, err := monitor.ApplyDockerReport(base, nil); err != nil {
+		t.Fatalf("apply base Docker report: %v", err)
+	}
+
+	newerComplete := base
+	newerComplete.Containers = []agentsdocker.Container{{ID: "new", Name: "new", State: "running"}}
+	newerComplete.Timestamp = now.Add(time.Second)
+	newerComplete.SequenceID = agentshost.FormatReportSequenceID("concurrent-docker-stream", 2)
+	statusOnly := base
+	statusOnly.InventoryComplete = &incomplete
+	statusOnly.Containers = []agentsdocker.Container{{ID: "contradictory", Name: "must-be-ignored"}}
+	statusOnly.Agent.Modules = []agentshost.ModuleStatus{{
+		Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "degraded",
+		LastError: "container.inventory: helper provider unavailable", UpdatedAt: now.Add(2 * time.Second),
+	}}
+	statusOnly.Timestamp = now.Add(2 * time.Second)
+	statusOnly.SequenceID = agentshost.FormatReportSequenceID("concurrent-docker-stream", 3)
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var group sync.WaitGroup
+	for _, report := range []agentsdocker.Report{newerComplete, statusOnly} {
+		report := report
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			_, err := monitor.ApplyDockerReport(report, nil)
+			errs <- err
+		}()
+	}
+	close(start)
+	group.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("apply concurrent Docker report: %v", err)
+		}
+	}
+
+	host, ok := monitor.GetDockerHost("ordered-docker")
+	if !ok {
+		t.Fatal("ordered Docker host missing")
+	}
+	if len(host.AgentModules) != 1 || host.AgentModules[0].State != "degraded" {
+		t.Fatalf("highest-sequence module state did not win: %+v", host.AgentModules)
+	}
+	if len(host.Containers) != 1 || host.Containers[0].ID == "contradictory" ||
+		(host.Containers[0].ID != "base" && host.Containers[0].ID != "new") {
+		t.Fatalf("concurrent status-only report replaced inventory: %+v", host.Containers)
+	}
+}
+
+func TestApplyDockerReportHigherSequenceRecoversFromFutureDatedDegradation(t *testing.T) {
+	monitor := newTestMonitor(t)
+	now := time.Now().UTC()
+	complete := true
+	incomplete := false
+	degraded := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID: "clock-skew-docker", Version: "6.4.2", Type: "unified", IntervalSeconds: 30,
+			Modules: []agentshost.ModuleStatus{{
+				Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "degraded",
+				LastError: "container.inventory: helper provider unavailable", UpdatedAt: now.Add(24 * time.Hour),
+			}},
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "clock-skew-docker", MachineID: "clock-skew-machine", Runtime: "docker",
+			CollectionMode: agentsdocker.CollectionModeTypedHelperSummary,
+			OS:             "linux", KernelVersion: "6.8.0", Architecture: "amd64",
+		},
+		InventoryComplete: &incomplete,
+		Timestamp:         now.Add(24 * time.Hour),
+		SequenceID:        agentshost.FormatReportSequenceID("clock-skew-stream", 1),
+	}
+	firstStatus, err := monitor.ApplyDockerReport(degraded, nil)
+	if err != nil {
+		t.Fatalf("apply future-dated degradation: %v", err)
+	}
+	if firstStatus.OS != "linux" || firstStatus.KernelVersion != "6.8.0" ||
+		firstStatus.Architecture != "amd64" || firstStatus.Runtime != "docker" ||
+		firstStatus.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary {
+		t.Fatalf("first status-only report lost current platform metadata: %+v", firstStatus)
+	}
+
+	recovered := degraded
+	recovered.InventoryComplete = &complete
+	recovered.Containers = []agentsdocker.Container{{ID: "recovered", Name: "recovered", State: "running"}}
+	recovered.Agent.Modules = []agentshost.ModuleStatus{{
+		Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "running", UpdatedAt: now,
+	}}
+	recovered.Timestamp = now
+	recovered.SequenceID = agentshost.FormatReportSequenceID("clock-skew-stream", 2)
+	if _, err := monitor.ApplyDockerReport(recovered, nil); err != nil {
+		t.Fatalf("apply lower-clock higher-sequence recovery: %v", err)
+	}
+
+	host, ok := monitor.GetDockerHost("clock-skew-docker")
+	if !ok {
+		t.Fatal("clock-skew Docker host missing")
+	}
+	if len(host.AgentModules) != 1 || host.AgentModules[0].State != "running" {
+		t.Fatalf("higher sequence did not recover future-dated module status: %+v", host.AgentModules)
+	}
+	if len(host.Containers) != 1 || host.Containers[0].ID != "recovered" {
+		t.Fatalf("higher-sequence recovery inventory missing: %+v", host.Containers)
+	}
+}
+
+func TestApplyDockerReportDurableOrderRejectsStaleReplayAfterRestart(t *testing.T) {
+	metadataDir := t.TempDir()
+	monitor := newTestMonitor(t)
+	monitor.dockerReportOrderStore = config.NewDockerReportOrderStore(metadataDir, nil)
+	now := time.Now().UTC()
+	complete := true
+	incomplete := false
+	base := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID: "restart-docker", Version: "6.4.2", Type: "unified", IntervalSeconds: 30,
+			Modules: []agentshost.ModuleStatus{{
+				Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "running", UpdatedAt: now,
+			}},
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "restart-docker", MachineID: "restart-machine", Runtime: "docker",
+			CollectionMode: agentsdocker.CollectionModeTypedHelperSummary, KernelVersion: "6.8.0",
+		},
+		Containers:        []agentsdocker.Container{{ID: "accepted", Name: "accepted", State: "running"}},
+		InventoryComplete: &complete,
+		Timestamp:         now,
+		SequenceID:        agentshost.FormatReportSequenceID("restart-stream", 1),
+	}
+	if _, err := monitor.ApplyDockerReport(base, nil); err != nil {
+		t.Fatalf("apply initial Docker report: %v", err)
+	}
+	degraded := base
+	degraded.InventoryComplete = &incomplete
+	degraded.Agent.Modules = []agentshost.ModuleStatus{{
+		Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "degraded",
+		LastError: "container.inventory: helper provider unavailable", UpdatedAt: now.Add(time.Second),
+	}}
+	degraded.Timestamp = now.Add(time.Second)
+	degraded.SequenceID = agentshost.FormatReportSequenceID("restart-stream", 2)
+	accepted, err := monitor.ApplyDockerReport(degraded, nil)
+	if err != nil {
+		t.Fatalf("apply degraded Docker report: %v", err)
+	}
+	if accepted.KernelVersion != "6.8.0" {
+		t.Fatalf("status-only report cleared kernel metadata: %q", accepted.KernelVersion)
+	}
+
+	restarted := newTestMonitor(t)
+	restarted.dockerReportOrderStore = config.NewDockerReportOrderStore(metadataDir, nil)
+	restarted.state.UpsertDockerHost(accepted)
+	stale := base
+	stale.Containers = []agentsdocker.Container{{ID: "stale", Name: "must-not-return"}}
+	result, err := restarted.ApplyDockerReport(stale, nil)
+	if err != nil {
+		t.Fatalf("apply stale replay after restart: %v", err)
+	}
+	if len(result.AgentModules) != 1 || result.AgentModules[0].State != "degraded" {
+		t.Fatalf("restart replay replaced degraded module status: %+v", result.AgentModules)
+	}
+	if len(result.Containers) != 1 || result.Containers[0].ID != "accepted" {
+		t.Fatalf("restart replay replaced accepted inventory: %+v", result.Containers)
+	}
+	order, ok := restarted.dockerReportOrderStore.Get("restart-docker")
+	if !ok || order.StreamID != "restart-stream" || order.Sequence != 2 {
+		t.Fatalf("durable Docker ordering watermark changed after stale replay: %+v", order)
+	}
+}
+
+func TestApplyDockerReportRejectedValidationDoesNotConsumeSequence(t *testing.T) {
+	monitor := newTestMonitor(t)
+	monitor.dockerReportOrderStore = config.NewDockerReportOrderStore(t.TempDir(), nil)
+	now := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent:      agentsdocker.AgentInfo{ID: "validation-retry", Version: "6.4.2", IntervalSeconds: 30},
+		Host:       agentsdocker.HostInfo{MachineID: "validation-machine"},
+		Timestamp:  now,
+		SequenceID: agentshost.FormatReportSequenceID("validation-stream", 1),
+	}
+	if _, err := monitor.ApplyDockerReport(report, nil); err == nil {
+		t.Fatal("hostname-less report was accepted")
+	}
+	if order, ok := monitor.dockerReportOrderStore.Get("validation-retry"); ok {
+		t.Fatalf("rejected report consumed durable sequence: %+v", order)
+	}
+
+	report.Host.Hostname = "validation-retry"
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("corrected exact-sequence report was not accepted: %v", err)
+	}
+	order, ok := monitor.dockerReportOrderStore.Get("validation-retry")
+	if !ok || order.Sequence != 1 {
+		t.Fatalf("corrected report watermark = %+v, ok=%v", order, ok)
+	}
+}
+
+func TestApplyDockerReportTokenConflictDoesNotConsumeSequence(t *testing.T) {
+	monitor := newTestMonitor(t)
+	monitor.dockerReportOrderStore = config.NewDockerReportOrderStore(t.TempDir(), nil)
+	now := time.Now().UTC()
+	sharedToken := &config.APITokenRecord{ID: "shared-token", Name: "Shared"}
+	first := agentsdocker.Report{
+		Agent:      agentsdocker.AgentInfo{ID: "token-host-a", Version: "6.4.2", IntervalSeconds: 30},
+		Host:       agentsdocker.HostInfo{Hostname: "token-host-a", MachineID: "token-machine-a"},
+		Timestamp:  now,
+		SequenceID: agentshost.FormatReportSequenceID("token-stream-a", 1),
+	}
+	if _, err := monitor.ApplyDockerReport(first, sharedToken); err != nil {
+		t.Fatalf("apply first token owner: %v", err)
+	}
+	conflict := first
+	conflict.Agent.ID = "token-host-b"
+	conflict.Host.Hostname = "token-host-b"
+	conflict.Host.MachineID = "token-machine-b"
+	conflict.SequenceID = agentshost.FormatReportSequenceID("token-stream-b", 1)
+	if _, err := monitor.ApplyDockerReport(conflict, sharedToken); err == nil {
+		t.Fatal("conflicting token report was accepted")
+	}
+	if order, ok := monitor.dockerReportOrderStore.Get("token-host-b"); ok {
+		t.Fatalf("token-conflicting report consumed durable sequence: %+v", order)
+	}
+
+	replacementToken := &config.APITokenRecord{ID: "replacement-token", Name: "Replacement"}
+	if _, err := monitor.ApplyDockerReport(conflict, replacementToken); err != nil {
+		t.Fatalf("same sequence with valid replacement token was not accepted: %v", err)
+	}
+	order, ok := monitor.dockerReportOrderStore.Get("token-host-b")
+	if !ok || order.Sequence != 1 {
+		t.Fatalf("replacement-token report watermark = %+v, ok=%v", order, ok)
+	}
+}
+
+func TestApplyDockerReportOrderPersistenceFailureDoesNotMutateState(t *testing.T) {
+	monitor := newTestMonitor(t)
+	blockedPath := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockedPath, []byte("blocked"), 0o600); err != nil {
+		t.Fatalf("write blocked persistence path: %v", err)
+	}
+	monitor.dockerReportOrderStore = config.NewDockerReportOrderStore(blockedPath, nil)
+	now := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent:      agentsdocker.AgentInfo{ID: "persist-failure", Version: "6.4.2", IntervalSeconds: 30},
+		Host:       agentsdocker.HostInfo{Hostname: "persist-failure", MachineID: "persist-failure-machine"},
+		Containers: []agentsdocker.Container{{ID: "must-not-apply", Name: "must-not-apply"}},
+		Timestamp:  now,
+		SequenceID: agentshost.FormatReportSequenceID("persist-failure-stream", 1),
+	}
+	if _, err := monitor.ApplyDockerReport(report, nil); err == nil {
+		t.Fatal("ApplyDockerReport succeeded despite report-order persistence failure")
+	}
+	if _, ok := monitor.GetDockerHost("persist-failure"); ok {
+		t.Fatal("report-order persistence failure mutated Docker host state")
+	}
+}
+
+func TestNewMonitorFailsClosedOnUnreadableDockerReportOrderJournal(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "docker_report_order.json"), []byte("{invalid"), 0o600); err != nil {
+		t.Fatalf("write invalid report-order journal: %v", err)
+	}
+	monitor, err := New(&config.Config{DataPath: dir})
+	if monitor != nil {
+		t.Cleanup(monitor.Stop)
+	}
+	if err == nil || !strings.Contains(err.Error(), "load Docker report order journal") {
+		t.Fatalf("New error = %v, want fail-closed report-order journal error", err)
+	}
+}
 
 func newTestMonitor(t *testing.T) *Monitor {
 	t.Helper()

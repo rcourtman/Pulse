@@ -93,6 +93,10 @@ type Config struct {
 	AppliedConfig *agentshost.ConfigFingerprint
 	UpdateStatus  func() agentupdate.Status
 	ModuleStatus  func() []agentshost.ModuleStatus
+	// PrivilegeHelperStatus is the shared typed-helper health recorder used by
+	// host and container collection. Nil creates a host-local recorder when
+	// PrivilegedTelemetry is configured.
+	PrivilegeHelperStatus *PrivilegeHelperStatus
 
 	// OnServerVersion is called with the server version carried on each
 	// authoritative report acknowledgement, so the updater can react to a
@@ -192,7 +196,7 @@ type Agent struct {
 	commandAuthorityWarningSeen bool
 	collector                   SystemCollector
 	privilegedTelemetry         PrivilegedTelemetry
-	privilegeHelperHealth       *privilegeHelperStatus
+	privilegeHelperHealth       *PrivilegeHelperStatus
 	newCommandClient            func(Config, string, string, string, string) *CommandClient
 	runCommandClient            func(*CommandClient, context.Context) error
 	packageUpdates              *packageUpdateManager
@@ -424,9 +428,9 @@ func New(cfg Config) (*Agent, error) {
 	packageUpdates, storageCleanup = configurePackageManagers(platform, packageUpdates, storageCleanup)
 	cfg.packageUpdates = packageUpdates
 	cfg.storageCleanup = storageCleanup
-	var privilegeHelperHealth *privilegeHelperStatus
-	if cfg.PrivilegedTelemetry != nil {
-		privilegeHelperHealth = newPrivilegeHelperStatus()
+	privilegeHelperHealth := cfg.PrivilegeHelperStatus
+	if privilegeHelperHealth == nil && cfg.PrivilegedTelemetry != nil {
+		privilegeHelperHealth = NewPrivilegeHelperStatus()
 	}
 
 	agent := &Agent{
@@ -735,7 +739,7 @@ func (a *Agent) currentModuleStatus() []agentshost.ModuleStatus {
 		statuses = append(statuses, a.cfg.ModuleStatus()...)
 	}
 	if a.privilegeHelperHealth != nil {
-		statuses = append(statuses, a.privilegeHelperHealth.moduleStatus())
+		statuses = append(statuses, a.privilegeHelperHealth.ModuleStatus())
 	}
 	// The probe module is owned by the host agent rather than the runtime
 	// supervisor, so it reports itself and only while it has work assigned.

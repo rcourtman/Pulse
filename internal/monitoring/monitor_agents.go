@@ -121,6 +121,27 @@ func hostReportOrderFromContinuity(entry config.HostContinuityEntry) hostReportO
 	}
 }
 
+func hostReportOrderFromDockerEntry(entry config.DockerReportOrderEntry) hostReportOrder {
+	return hostReportOrder{
+		ObservedAt:       entry.ObservedAt.UTC(),
+		LastReceivedAt:   entry.LastReceivedAt.UTC(),
+		StreamID:         strings.TrimSpace(entry.StreamID),
+		Sequence:         entry.Sequence,
+		RetiredStreamIDs: append([]string(nil), entry.RetiredStreamIDs...),
+	}
+}
+
+func dockerReportOrderEntry(hostID string, order hostReportOrder) config.DockerReportOrderEntry {
+	return config.DockerReportOrderEntry{
+		HostID:           strings.TrimSpace(hostID),
+		ObservedAt:       order.ObservedAt.UTC(),
+		LastReceivedAt:   order.LastReceivedAt.UTC(),
+		StreamID:         strings.TrimSpace(order.StreamID),
+		Sequence:         order.Sequence,
+		RetiredStreamIDs: append([]string(nil), order.RetiredStreamIDs...),
+	}
+}
+
 func containsHostReportStream(streams []string, target string) bool {
 	target = strings.TrimSpace(target)
 	for _, stream := range streams {
@@ -152,6 +173,52 @@ func legacyHostReportReorderWindow(intervalSeconds int) time.Duration {
 		return 15 * time.Second
 	}
 	return window
+}
+
+func advanceHostReportOrder(
+	order hostReportOrder,
+	sequenceID string,
+	authoredAt time.Time,
+	receivedAt time.Time,
+	intervalSeconds int,
+) (hostReportOrder, bool) {
+	streamID, sequence, sequenced := agentshost.ParseReportSequenceID(sequenceID)
+	accepted := true
+	switch {
+	case sequenced && containsHostReportStream(order.RetiredStreamIDs, streamID):
+		accepted = false
+	case sequenced && order.StreamID == streamID && sequence <= order.Sequence:
+		accepted = false
+	case sequenced && order.StreamID == streamID:
+		order.Sequence = sequence
+		order.ObservedAt = authoredAt
+	case sequenced:
+		order.RetiredStreamIDs = retireHostReportStream(order.RetiredStreamIDs, order.StreamID)
+		order.StreamID = streamID
+		order.Sequence = sequence
+		order.ObservedAt = authoredAt
+	default:
+		// Older agents have no process stream. Reject backwards timestamps only
+		// when they arrive in the reconnect burst; after a normal report
+		// interval, accept a clock epoch reset so a corrected host clock cannot
+		// freeze telemetry indefinitely.
+		if !order.ObservedAt.IsZero() &&
+			authoredAt.Before(order.ObservedAt) &&
+			!order.LastReceivedAt.IsZero() &&
+			receivedAt.Sub(order.LastReceivedAt) <= legacyHostReportReorderWindow(intervalSeconds) {
+			accepted = false
+		} else {
+			order.RetiredStreamIDs = retireHostReportStream(order.RetiredStreamIDs, order.StreamID)
+			order.StreamID = ""
+			order.Sequence = 0
+			order.ObservedAt = authoredAt
+		}
+	}
+
+	if receivedAt.After(order.LastReceivedAt) {
+		order.LastReceivedAt = receivedAt.UTC()
+	}
+	return order, accepted
 }
 
 // lockHostReportApplication serializes the complete state transition for one
@@ -209,44 +276,55 @@ func (m *Monitor) reserveHostReportOrder(hostID string, report agentshost.Report
 		}
 	}
 
-	streamID, sequence, sequenced := agentshost.ParseReportSequenceID(report.SequenceID)
-	accepted := true
-	switch {
-	case sequenced && containsHostReportStream(order.RetiredStreamIDs, streamID):
-		accepted = false
-	case sequenced && order.StreamID == streamID && sequence <= order.Sequence:
-		accepted = false
-	case sequenced && order.StreamID == streamID:
-		order.Sequence = sequence
-		order.ObservedAt = authoredAt
-	case sequenced:
-		order.RetiredStreamIDs = retireHostReportStream(order.RetiredStreamIDs, order.StreamID)
-		order.StreamID = streamID
-		order.Sequence = sequence
-		order.ObservedAt = authoredAt
-	default:
-		// Older agents have no process stream. Reject backwards timestamps only
-		// when they arrive in the reconnect burst; after a normal report
-		// interval, accept a clock epoch reset so a corrected host clock cannot
-		// freeze telemetry indefinitely.
-		if !order.ObservedAt.IsZero() &&
-			authoredAt.Before(order.ObservedAt) &&
-			!order.LastReceivedAt.IsZero() &&
-			receivedAt.Sub(order.LastReceivedAt) <= legacyHostReportReorderWindow(report.Agent.IntervalSeconds) {
-			accepted = false
-		} else {
-			order.RetiredStreamIDs = retireHostReportStream(order.RetiredStreamIDs, order.StreamID)
-			order.StreamID = ""
-			order.Sequence = 0
-			order.ObservedAt = authoredAt
-		}
+	next, accepted := advanceHostReportOrder(
+		order,
+		report.SequenceID,
+		authoredAt,
+		receivedAt,
+		report.Agent.IntervalSeconds,
+	)
+	m.hostReportOrders[hostID] = next
+	return next, accepted
+}
+
+func (m *Monitor) lockDockerReportApplication(hostID string) func() {
+	return m.lockHostReportApplication("docker:" + strings.TrimSpace(hostID))
+}
+
+func (m *Monitor) reserveDockerReportOrder(hostID string, report agentsdocker.Report, receivedAt time.Time) (hostReportOrder, bool, error) {
+	hostID = strings.TrimSpace(hostID)
+	orderKey := "docker:" + hostID
+	authoredAt := report.Timestamp.UTC()
+	if authoredAt.IsZero() {
+		authoredAt = receivedAt.UTC()
 	}
 
-	if receivedAt.After(order.LastReceivedAt) {
-		order.LastReceivedAt = receivedAt.UTC()
+	m.hostReportOrderMu.Lock()
+	defer m.hostReportOrderMu.Unlock()
+
+	if m.hostReportOrders == nil {
+		m.hostReportOrders = make(map[string]hostReportOrder)
 	}
-	m.hostReportOrders[hostID] = order
-	return order, accepted
+	order, exists := m.hostReportOrders[orderKey]
+	if !exists && m.dockerReportOrderStore != nil {
+		if persisted, ok := m.dockerReportOrderStore.Get(hostID); ok {
+			order = hostReportOrderFromDockerEntry(persisted)
+		}
+	}
+	next, accepted := advanceHostReportOrder(
+		order,
+		report.SequenceID,
+		authoredAt,
+		receivedAt,
+		report.Agent.IntervalSeconds,
+	)
+	if m.dockerReportOrderStore != nil {
+		if err := m.dockerReportOrderStore.Upsert(dockerReportOrderEntry(hostID, next)); err != nil {
+			return order, false, fmt.Errorf("persist Docker report order: %w", err)
+		}
+	}
+	m.hostReportOrders[orderKey] = next
+	return next, accepted, nil
 }
 
 func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
@@ -1791,6 +1869,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	if strings.TrimSpace(identifier) == "" {
 		return models.DockerHost{}, fmt.Errorf("docker report missing agent identifier")
 	}
+	inventoryComplete := report.InventoryComplete == nil || *report.InventoryComplete
 
 	// Check if this host was deliberately removed - reject report to prevent
 	// resurrection. Both stores must be consulted: the in-memory map resets on
@@ -1829,13 +1908,43 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		return models.DockerHost{}, fmt.Errorf("docker host %q had monitoring stopped at %v and cannot report again. Use Allow reconnect in Settings -> Infrastructure or rerun the installer with a docker:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
 	}
 
-	// Enforce token uniqueness: each token can only be bound to one Docker host identity.
+	unlockDockerReport := m.lockDockerReportApplication(identifier)
+	defer unlockDockerReport()
+	receivedAt := time.Now()
+	previousState, _ := m.GetDockerHost(identifier)
+	readState = m.snapshotBackedUnifiedReadState()
+	dockerHosts = nil
+	previous = nil
+	hasPrevious = false
+	if readState != nil {
+		dockerHosts = readState.DockerHosts()
+		for _, candidate := range dockerHosts {
+			if candidate != nil && dockerHostStableID(candidate) == identifier {
+				previous = candidate
+				hasPrevious = true
+				break
+			}
+		}
+	}
+
+	hostname := strings.TrimSpace(report.Host.Hostname)
+	if hostname == "" {
+		return models.DockerHost{}, fmt.Errorf("docker report missing hostname")
+	}
+
+	// Claim the token binding before reserving the source sequence so reports
+	// that fail hostname or token validation cannot consume a durable
+	// watermark. If watermark persistence or acceptance fails, restore the
+	// exact previous binding.
+	var rollbackTokenBinding func()
+	var newlyBoundTokenID, newlyBoundAgentID string
 	if tokenRecord != nil && tokenRecord.ID != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
 		agentID, tokenBindingAliases := resolveDockerTokenBindingIdentity(identifier, report, previous, hasPrevious)
 
 		m.mu.Lock()
-		if boundAgentID, exists := m.dockerTokenBindings[tokenID]; exists {
+		boundAgentID, existed := m.dockerTokenBindings[tokenID]
+		if existed {
 			if !dockerTokenBindingMatches(boundAgentID, tokenBindingAliases) {
 				m.mu.Unlock()
 				// Find the conflicting host to provide helpful error message
@@ -1866,27 +1975,74 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 					Msg("Rejecting Docker report: token already bound to different agent")
 				return models.DockerHost{}, fmt.Errorf("API token%s is already in use by agent %q (host: %s). Each Docker / Podman module must use a unique API token. Generate a new token for this agent", tokenHint, boundAgentID, conflictingHostname)
 			}
-			if boundAgentID != agentID {
-				m.dockerTokenBindings[tokenID] = agentID
-			}
-		} else {
-			// First time seeing this token - bind it to this agent
+		}
+		if !existed || boundAgentID != agentID {
 			m.dockerTokenBindings[tokenID] = agentID
-			log.Debug().
-				Str("tokenID", tokenID).
-				Str("agentID", agentID).
-				Str("hostname", report.Host.Hostname).
-				Msg("Bound Docker / Podman module token to host identity")
+			previousBinding := boundAgentID
+			previousBindingExisted := existed
+			rollbackTokenBinding = func() {
+				m.mu.Lock()
+				defer m.mu.Unlock()
+				if current, ok := m.dockerTokenBindings[tokenID]; !ok || current != agentID {
+					return
+				}
+				if previousBindingExisted {
+					m.dockerTokenBindings[tokenID] = previousBinding
+				} else {
+					delete(m.dockerTokenBindings, tokenID)
+				}
+			}
+			newlyBoundTokenID = tokenID
+			newlyBoundAgentID = agentID
 		}
 		m.mu.Unlock()
 	}
 
-	hostname := strings.TrimSpace(report.Host.Hostname)
-	if hostname == "" {
-		return models.DockerHost{}, fmt.Errorf("docker report missing hostname")
+	if _, accepted, err := m.reserveDockerReportOrder(identifier, report, receivedAt); err != nil {
+		if rollbackTokenBinding != nil {
+			rollbackTokenBinding()
+		}
+		return models.DockerHost{}, err
+	} else if !accepted {
+		if rollbackTokenBinding != nil {
+			rollbackTokenBinding()
+		}
+		existing, _ := m.GetDockerHost(identifier)
+		if existing.ID != "" {
+			m.state.SetConnectionHealth(dockerConnectionPrefix+existing.ID, true)
+		}
+		m.refreshUnifiedResourceStoreAfterAgentStateChange()
+		log.Debug().
+			Str("dockerHostID", identifier).
+			Str("sequenceId", report.SequenceID).
+			Time("reportTimestamp", report.Timestamp).
+			Msg("Ignored stale or duplicate Docker report state while refreshing receipt-time liveness")
+		return existing, nil
+	}
+	if newlyBoundTokenID != "" {
+		log.Debug().
+			Str("tokenID", newlyBoundTokenID).
+			Str("agentID", newlyBoundAgentID).
+			Str("hostname", hostname).
+			Msg("Bound Docker / Podman module token to host identity")
 	}
 
-	receivedAt := time.Now()
+	if !inventoryComplete {
+		// An incomplete report is liveness/module evidence only. Ignore any
+		// contradictory inventory payload before conversion or rate tracking,
+		// then restore the last complete snapshot below.
+		report.Containers = nil
+		report.Images = nil
+		report.Volumes = nil
+		report.Networks = nil
+		report.Services = nil
+		report.Tasks = nil
+		report.Nodes = nil
+		report.Secrets = nil
+		report.Configs = nil
+		report.StorageUsage = nil
+	}
+
 	observedAt := receivedAt.UTC()
 
 	agentID := strings.TrimSpace(report.Agent.ID)
@@ -2124,6 +2280,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	if agentVersion == "" && hasPrevious {
 		agentVersion = normalizeAgentVersion(previous.AgentVersion())
 	}
+	agentModules := convertAgentModuleStatuses(report.Agent.Modules)
+	if _, _, sequenced := agentshost.ParseReportSequenceID(report.SequenceID); !sequenced {
+		agentModules = mergeIncomingAgentModuleStatuses(previousState.AgentModules, agentModules)
+	}
 
 	// Detect distinct machines flapping under one identity (e.g. cloned VMs
 	// sharing /etc/machine-id, #1584) so the UI can warn instead of silently
@@ -2162,6 +2322,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		LastSeen:          observedAt,
 		IntervalSeconds:   report.Agent.IntervalSeconds,
 		AgentVersion:      agentVersion,
+		AgentModules:      agentModules,
 		Containers:        containers,
 		Images:            images,
 		Volumes:           volumes,
@@ -2177,12 +2338,17 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		IsLegacy:          isLegacyAgent(report.Agent.Type),
 		IdentityConflict:  identityConflict,
 	}
+	if !inventoryComplete && previousState.ID != "" {
+		preserveDockerInventorySnapshot(&host, previousState)
+	}
 
-	if hasPrevious {
+	if inventoryComplete && hasPrevious {
 		m.migrateDockerContainerMetadataForRenamedContainers(identifier, previous.Containers(), host.Containers)
 		m.migrateDockerContainerMetadataForRecreatedContainers(identifier, previous.Containers(), host.Containers)
 	}
-	m.migrateCurrentDockerContainerMetadataToStableIdentities(identifier, host.Containers)
+	if inventoryComplete {
+		m.migrateCurrentDockerContainerMetadataToStableIdentities(identifier, host.Containers)
+	}
 
 	if tokenRecord != nil {
 		host.TokenID = tokenRecord.ID
@@ -2231,6 +2397,14 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 
 		// Clear the pending uninstall flag since the host is clearly still active
 		m.state.SetDockerHostPendingUninstall(host.ID, false)
+	}
+	if !inventoryComplete {
+		log.Debug().
+			Str("dockerHost", host.Hostname).
+			Str("sequenceId", report.SequenceID).
+			Msg("Docker helper status processed without refreshing inventory-derived alerts or metrics")
+		m.refreshUnifiedResourceStoreAfterAgentStateChange()
+		return host, nil
 	}
 
 	if m.alertManager != nil {
@@ -2337,6 +2511,68 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	m.refreshUnifiedResourceStoreAfterAgentStateChange()
 
 	return host, nil
+}
+
+func mergeIncomingAgentModuleStatuses(previous, incoming []models.AgentModuleStatus) []models.AgentModuleStatus {
+	if len(incoming) == 0 || len(previous) == 0 {
+		return incoming
+	}
+	previousByName := make(map[string]models.AgentModuleStatus, len(previous))
+	for _, module := range previous {
+		name := strings.TrimSpace(module.Name)
+		if name != "" {
+			previousByName[name] = module
+		}
+	}
+	result := make([]models.AgentModuleStatus, len(incoming))
+	copy(result, incoming)
+	for index := range result {
+		name := strings.TrimSpace(result[index].Name)
+		older, ok := previousByName[name]
+		if ok && older.UpdatedAt.After(result[index].UpdatedAt) {
+			result[index] = older
+		}
+	}
+	return result
+}
+
+func preserveDockerInventorySnapshot(current *models.DockerHost, previous models.DockerHost) {
+	if current == nil {
+		return
+	}
+	current.DisplayName = previous.DisplayName
+	current.OS = previous.OS
+	current.KernelVersion = previous.KernelVersion
+	current.Architecture = previous.Architecture
+	current.Runtime = previous.Runtime
+	current.CollectionMode = previous.CollectionMode
+	current.RuntimeVersion = previous.RuntimeVersion
+	current.DockerVersion = previous.DockerVersion
+	current.CPUs = previous.CPUs
+	current.TotalMemoryBytes = previous.TotalMemoryBytes
+	current.UptimeSeconds = previous.UptimeSeconds
+	current.CPUUsage = previous.CPUUsage
+	current.LoadAverage = append([]float64(nil), previous.LoadAverage...)
+	current.Memory = previous.Memory
+	current.Disks = append([]models.Disk(nil), previous.Disks...)
+	current.NetworkInterfaces = append([]models.HostNetworkInterface(nil), previous.NetworkInterfaces...)
+	current.Containers = previous.Containers
+	current.Images = previous.Images
+	current.Volumes = previous.Volumes
+	current.Networks = previous.Networks
+	current.Services = previous.Services
+	current.Tasks = previous.Tasks
+	current.Nodes = previous.Nodes
+	current.Secrets = previous.Secrets
+	current.Configs = previous.Configs
+	current.StorageUsage = previous.StorageUsage
+	current.Swarm = previous.Swarm
+	current.Security = previous.Security
+	current.Temperature = previous.Temperature
+	current.NetInRate = previous.NetInRate
+	current.NetOutRate = previous.NetOutRate
+	current.DiskReadRate = previous.DiskReadRate
+	current.DiskWriteRate = previous.DiskWriteRate
 }
 
 const dockerAuthorizationPluginBlockReasonFormat = "Pulse blocks Docker daemon-mutating commands while Docker authorization plugins are configured (%s) because advisory GO-2026-4887 does not yet provide a fixed Docker Go module line."

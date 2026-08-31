@@ -877,12 +877,8 @@ func diagnoseAgentUpdate(subject agentFleetSubject, targetVersion string) []Agen
 }
 
 func diagnoseAgentModules(subject agentFleetSubject) []AgentFleetDiagnosticReason {
-	if subject.host == nil {
-		return nil
-	}
-
 	reasons := make([]AgentFleetDiagnosticReason, 0)
-	for _, module := range subject.host.AgentModules {
+	for _, module := range agentFleetModuleStatuses(subject) {
 		if !module.Enabled {
 			continue
 		}
@@ -1015,11 +1011,12 @@ func agentFleetPrivilegeForSubject(subject agentFleetSubject, inventory agentFle
 }
 
 func agentFleetModulesForSubject(subject agentFleetSubject) []AgentFleetDiagnosticModule {
-	if subject.host == nil || len(subject.host.AgentModules) == 0 {
+	statuses := agentFleetModuleStatuses(subject)
+	if len(statuses) == 0 {
 		return nil
 	}
-	modules := make([]AgentFleetDiagnosticModule, 0, len(subject.host.AgentModules))
-	for _, module := range subject.host.AgentModules {
+	modules := make([]AgentFleetDiagnosticModule, 0, len(statuses))
+	for _, module := range statuses {
 		modules = append(modules, AgentFleetDiagnosticModule{
 			Name:      strings.TrimSpace(module.Name),
 			Enabled:   module.Enabled,
@@ -1032,6 +1029,42 @@ func agentFleetModulesForSubject(subject agentFleetSubject) []AgentFleetDiagnost
 		return strings.ToLower(modules[i].Name) < strings.ToLower(modules[j].Name)
 	})
 	return modules
+}
+
+func agentFleetModuleStatuses(subject agentFleetSubject) []models.AgentModuleStatus {
+	byName := make(map[string]models.AgentModuleStatus)
+	merge := func(values []models.AgentModuleStatus) {
+		for _, module := range values {
+			name := strings.TrimSpace(module.Name)
+			if name == "" {
+				continue
+			}
+			current, ok := byName[name]
+			if !ok || module.UpdatedAt.After(current.UpdatedAt) {
+				module.Name = name
+				byName[name] = module
+			}
+		}
+	}
+	if subject.host != nil {
+		merge(subject.host.AgentModules)
+	}
+	if subject.docker != nil {
+		merge(subject.docker.AgentModules)
+	}
+	if len(byName) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	result := make([]models.AgentModuleStatus, 0, len(names))
+	for _, name := range names {
+		result = append(result, byName[name])
+	}
+	return result
 }
 
 func safeAgentUpdatePlatform(subject agentFleetSubject) (string, bool) {

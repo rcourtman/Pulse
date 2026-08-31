@@ -1096,6 +1096,7 @@ type Monitor struct {
 	tempCollector              *TemperatureCollector // SSH-based temperature collector
 	guestMetadataStore         *config.GuestMetadataStore
 	dockerMetadataStore        *config.DockerMetadataStore
+	dockerReportOrderStore     *config.DockerReportOrderStore
 	hostMetadataStore          *config.HostMetadataStore
 	hostContinuityStore        *config.HostContinuityStore
 	hostAgentLifecycleMu       sync.RWMutex
@@ -1537,6 +1538,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if err := hostContinuityStore.LoadError(); err != nil {
 		return nil, fmt.Errorf("load host continuity lifecycle journal: %w", err)
 	}
+	dockerReportOrderStore := config.NewDockerReportOrderStore(cfg.DataPath, nil)
+	if err := dockerReportOrderStore.LoadError(); err != nil {
+		return nil, fmt.Errorf("load Docker report order journal: %w", err)
+	}
 
 	// Initialize temperature collector with sensors SSH key
 	// Will use root user for now - can be made configurable later
@@ -1687,6 +1692,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		tempCollector:              tempCollector,
 		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath, nil),
 		dockerMetadataStore:        config.NewDockerMetadataStore(cfg.DataPath, nil),
+		dockerReportOrderStore:     dockerReportOrderStore,
 		hostMetadataStore:          config.NewHostMetadataStore(cfg.DataPath, nil),
 		hostContinuityStore:        hostContinuityStore,
 		startTime:                  time.Now(),

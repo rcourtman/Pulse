@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -470,7 +472,7 @@ func TestAgentFleetDiagnosticsSurfacesTypedPrivilegeHelperDegradation(t *testing
 			Name:      agentshost.ModuleNameTypedPrivilegeHelper,
 			Enabled:   true,
 			State:     "degraded",
-			LastError: "smart.snapshot: helper unavailable token=must-not-leak",
+			LastError: "container.inventory: helper provider unavailable token=must-not-leak",
 			UpdatedAt: now.Add(-time.Minute),
 		}},
 	})
@@ -486,6 +488,9 @@ func TestAgentFleetDiagnosticsSurfacesTypedPrivilegeHelperDegradation(t *testing
 	}
 	if strings.Contains(agent.AgentModules[0].LastError, "must-not-leak") {
 		t.Fatalf("helper module error was not redacted: %q", agent.AgentModules[0].LastError)
+	}
+	if !strings.Contains(agent.AgentModules[0].LastError, "container.inventory") {
+		t.Fatalf("container helper operation missing from redacted evidence: %q", agent.AgentModules[0].LastError)
 	}
 	found := false
 	for _, reason := range agent.Reasons {
@@ -504,6 +509,119 @@ func TestAgentFleetDiagnosticsSurfacesTypedPrivilegeHelperDegradation(t *testing
 	}
 	if !found {
 		t.Fatalf("helper degradation reason missing from %+v", agent.Reasons)
+	}
+}
+
+func TestAgentFleetDiagnosticsTracksDockerOnlyHelperFailureAndRecovery(t *testing.T) {
+	now := time.Now().UTC()
+	monitor := newTestMonitor(t)
+	complete := true
+	baseReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID: "docker-only-agent", Version: "6.4.2", Type: "unified", IntervalSeconds: 30,
+			Modules: []agentshost.ModuleStatus{{
+				Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "running", UpdatedAt: now,
+			}},
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "docker-only", Name: "Docker Only", MachineID: "machine-docker-only",
+			Runtime: "docker", CollectionMode: agentsdocker.CollectionModeTypedHelperSummary,
+		},
+		Containers:        []agentsdocker.Container{{ID: "container-1", Name: "app", State: "running"}},
+		InventoryComplete: &complete,
+		Timestamp:         now,
+		SequenceID:        agentshost.FormatReportSequenceID("docker-only-stream", 1),
+	}
+	if _, err := monitor.ApplyDockerReport(baseReport, nil); err != nil {
+		t.Fatalf("apply complete Docker-only report: %v", err)
+	}
+
+	incomplete := false
+	degradedReport := baseReport
+	degradedReport.InventoryComplete = &incomplete
+	degradedReport.Containers = []agentsdocker.Container{{ID: "must-be-ignored", Name: "contradictory"}}
+	degradedReport.Agent.Modules = []agentshost.ModuleStatus{{
+		Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "degraded",
+		LastError: "container.inventory: helper provider unavailable token=must-not-leak", UpdatedAt: now.Add(time.Second),
+	}}
+	degradedReport.Timestamp = now.Add(time.Second)
+	degradedReport.SequenceID = agentshost.FormatReportSequenceID("docker-only-stream", 2)
+	hostMetricCount := len(monitor.metricsHistory.GetGuestMetrics("dockerHost:docker-only-agent", "cpu", time.Hour))
+	containerMetricCount := len(monitor.metricsHistory.GetGuestMetrics("docker:container-1", "cpu", time.Hour))
+	activeAlertCount := len(monitor.alertManager.GetActiveAlerts())
+	degradedHost, err := monitor.ApplyDockerReport(degradedReport, nil)
+	if err != nil {
+		t.Fatalf("apply degraded Docker-only status report: %v", err)
+	}
+	if len(degradedHost.Containers) != 1 || degradedHost.Containers[0].ID != "container-1" {
+		t.Fatalf("incomplete helper status replaced last complete inventory: %+v", degradedHost.Containers)
+	}
+	if got := len(monitor.metricsHistory.GetGuestMetrics("dockerHost:docker-only-agent", "cpu", time.Hour)); got != hostMetricCount {
+		t.Fatalf("incomplete helper status wrote host metrics: before=%d after=%d", hostMetricCount, got)
+	}
+	if got := len(monitor.metricsHistory.GetGuestMetrics("docker:container-1", "cpu", time.Hour)); got != containerMetricCount {
+		t.Fatalf("incomplete helper status wrote container metrics: before=%d after=%d", containerMetricCount, got)
+	}
+	if got := len(monitor.alertManager.GetActiveAlerts()); got != activeAlertCount {
+		t.Fatalf("incomplete helper status advanced alert state: before=%d after=%d", activeAlertCount, got)
+	}
+
+	diagnostics := monitor.GetAgentFleetDiagnosticsForTarget("6.4.2", "6.4.2", now.Add(2*time.Second))
+	agent := requireAgentDiagnostic(t, diagnostics, "agent-docker-only-agent")
+	requireReasonCode(t, agent, AgentFleetReasonPrivilegeHelperDegraded)
+	if len(agent.AgentModules) != 1 || agent.AgentModules[0].State != "degraded" ||
+		!strings.Contains(agent.AgentModules[0].LastError, "container.inventory") ||
+		strings.Contains(agent.AgentModules[0].LastError, "must-not-leak") {
+		t.Fatalf("Docker-only helper diagnostic = %+v", agent.AgentModules)
+	}
+	if !slices.Contains(agent.Types, "docker") || slices.Contains(agent.Types, "host") {
+		t.Fatalf("Docker-only diagnostic types = %#v", agent.Types)
+	}
+
+	if staleHost, err := monitor.ApplyDockerReport(baseReport, nil); err != nil {
+		t.Fatalf("replay stale buffered complete report: %v", err)
+	} else if len(staleHost.AgentModules) != 1 || staleHost.AgentModules[0].State != "degraded" {
+		t.Fatalf("stale buffered complete report replaced degradation: %+v", staleHost.AgentModules)
+	}
+
+	degradedAgain := degradedReport
+	degradedAgain.Timestamp = now.Add(2 * time.Second)
+	degradedAgain.SequenceID = agentshost.FormatReportSequenceID("docker-only-stream", 3)
+	if _, err := monitor.ApplyDockerReport(degradedAgain, nil); err != nil {
+		t.Fatalf("apply repeated incomplete helper status: %v", err)
+	}
+	if got := len(monitor.metricsHistory.GetGuestMetrics("dockerHost:docker-only-agent", "cpu", time.Hour)); got != hostMetricCount {
+		t.Fatalf("repeated incomplete helper statuses wrote host metrics: before=%d after=%d", hostMetricCount, got)
+	}
+	if got := len(monitor.alertManager.GetActiveAlerts()); got != activeAlertCount {
+		t.Fatalf("repeated incomplete helper statuses advanced alert state: before=%d after=%d", activeAlertCount, got)
+	}
+
+	recoveredReport := baseReport
+	recoveredReport.Containers = []agentsdocker.Container{{ID: "container-2", Name: "app-v2", State: "running"}}
+	recoveredReport.Agent.Modules = []agentshost.ModuleStatus{{
+		Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "running", UpdatedAt: now.Add(4 * time.Second),
+	}}
+	recoveredReport.Timestamp = now.Add(4 * time.Second)
+	recoveredReport.SequenceID = agentshost.FormatReportSequenceID("docker-only-stream", 4)
+	if _, err := monitor.ApplyDockerReport(recoveredReport, nil); err != nil {
+		t.Fatalf("apply recovered Docker-only report: %v", err)
+	}
+	diagnostics = monitor.GetAgentFleetDiagnosticsForTarget("6.4.2", "6.4.2", now.Add(4*time.Second))
+	agent = requireAgentDiagnostic(t, diagnostics, "agent-docker-only-agent")
+	for _, reason := range agent.Reasons {
+		if reason.Code == AgentFleetReasonPrivilegeHelperDegraded {
+			t.Fatalf("helper degradation survived complete recovery: %+v", agent.Reasons)
+		}
+	}
+	if len(agent.AgentModules) != 1 || agent.AgentModules[0].State != "running" || agent.AgentModules[0].LastError != "" {
+		t.Fatalf("Docker-only helper recovery = %+v", agent.AgentModules)
+	}
+	if staleHost, err := monitor.ApplyDockerReport(baseReport, nil); err != nil {
+		t.Fatalf("replay stale complete report after recovery: %v", err)
+	} else if len(staleHost.Containers) != 1 || staleHost.Containers[0].ID != "container-2" ||
+		len(staleHost.AgentModules) != 1 || staleHost.AgentModules[0].State != "running" {
+		t.Fatalf("stale complete report replaced recovered state: containers=%+v modules=%+v", staleHost.Containers, staleHost.AgentModules)
 	}
 }
 

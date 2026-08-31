@@ -6903,6 +6903,18 @@ The collector-originated helper module carries only stable classified error
 text. Raw helper messages, bearer-shaped values, request identifiers, and local
 paths are excluded before the host report can enter connection state; Doctor
 redaction remains defense in depth rather than the first secrecy boundary.
+The closed `container.inventory` operation uses this same stable reason and
+redacted evidence contract: provider or transport failure is observable but
+does not grant Doctor, the collector, or any retry path direct rootful-runtime
+access.
+Docker reports add optional `agent.modules` and `inventoryComplete`. An absent
+`inventoryComplete` remains a legacy complete report; explicit `false` is a
+status-only report that may update liveness and module evidence but must retain
+the server's last complete Docker/Podman inventory. This additive path is the
+Doctor transport for supported Docker-only collectors. Source-authored
+`sequenceId` orders complete and status-only reports from one process; stale or
+duplicate state may refresh authenticated connection receipt evidence but must
+not replace module state, inventory, alerts, or metrics.
 Older consumers may ignore the additive fields, while the Agent Doctor client
 must tolerate absent optional fields and preserve `/api/connections` fallback
 rows. Repair objects describe whether an existing local handoff is supported

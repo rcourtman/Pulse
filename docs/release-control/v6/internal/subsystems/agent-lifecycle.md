@@ -74,16 +74,27 @@ restoring `--enable-commands` or otherwise recreating command authority.
 When that helper socket is configured, collector startup must complete a
 versioned `helper.health` request before the runtime may become ready. A
 listening or active systemd socket alone is not helper health. Once the helper
-boundary is selected, SMART and Proxmox LXC filesystem collection fail closed
-to an omitted/degraded snapshot when the helper fails; the collector must not
-silently retry the privileged read locally.
+boundary is selected, SMART, Proxmox LXC filesystem, and rootful Docker/Podman
+container inventory collection fail closed to an omitted/degraded snapshot
+when the helper fails; the collector must not silently retry the privileged
+read locally or adopt a rootful container-runtime socket.
 The collector reports that runtime truth as the shared
-`typed-privilege-helper` module. SMART and Proxmox operation failures remain
-independently active until that exact operation succeeds again, so one healthy
-helper call cannot hide another degraded capability. The module carries only a
-stable classified current error and returns to `running` after complete
-recovery; raw helper messages, payloads, credentials, and caller-selected paths
-never enter the status or persisted report.
+`typed-privilege-helper` module. SMART, Proxmox, and `container.inventory`
+operation failures remain independently active until that exact operation
+succeeds again, so one healthy helper call cannot hide another degraded
+capability. A successful complete typed-helper container inventory, or a
+collector-owned rootless runtime that makes helper fallback inapplicable,
+clears only `container.inventory`. The module carries only a stable classified
+current error and returns to `running` after complete recovery; raw helper
+messages, payloads, credentials, and caller-selected paths never enter the
+status or persisted report.
+Docker-only collectors carry the same module on an explicit status-only Docker
+report when helper inventory fails. That report marks inventory incomplete so
+the server preserves the last complete container snapshot; it must never turn
+an omitted privileged read into an authoritative empty inventory. The next
+complete helper report replaces inventory and clears only the recovered helper
+operation. Incomplete status reports are current-state evidence and are not
+buffered for later replay after recovery.
 An absent Proxmox inventory is a failure only when Proxmox mode is configured
 or the unprivileged collector can discover the local `pct` binary. Ordinary
 Linux hosts without that provider remain healthy rather than reporting a

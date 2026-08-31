@@ -12,27 +12,33 @@ type NetworkInterface = hostagent.NetworkInterface
 
 // Report represents a single heartbeat from the Docker agent to Pulse.
 type Report struct {
-	Agent        AgentInfo     `json:"agent"`
-	Host         HostInfo      `json:"host"`
-	Containers   []Container   `json:"containers"`
-	Images       []Image       `json:"images,omitempty"`
-	Volumes      []Volume      `json:"volumes,omitempty"`
-	Networks     []Network     `json:"networks,omitempty"`
-	Services     []Service     `json:"services,omitempty"`
-	Tasks        []Task        `json:"tasks,omitempty"`
-	Nodes        []Node        `json:"nodes,omitempty"`
-	Secrets      []Secret      `json:"secrets,omitempty"`
-	Configs      []Config      `json:"configs,omitempty"`
-	StorageUsage *StorageUsage `json:"storageUsage,omitempty"`
-	Timestamp    time.Time     `json:"timestamp"`
+	Agent AgentInfo `json:"agent"`
+	Host  HostInfo  `json:"host"`
+	// InventoryComplete is nil for legacy full reports, true for an explicit
+	// complete inventory, and false for a liveness/status-only helper report.
+	// Servers must preserve the last complete inventory when it is false.
+	InventoryComplete *bool         `json:"inventoryComplete,omitempty"`
+	Containers        []Container   `json:"containers"`
+	Images            []Image       `json:"images,omitempty"`
+	Volumes           []Volume      `json:"volumes,omitempty"`
+	Networks          []Network     `json:"networks,omitempty"`
+	Services          []Service     `json:"services,omitempty"`
+	Tasks             []Task        `json:"tasks,omitempty"`
+	Nodes             []Node        `json:"nodes,omitempty"`
+	Secrets           []Secret      `json:"secrets,omitempty"`
+	Configs           []Config      `json:"configs,omitempty"`
+	StorageUsage      *StorageUsage `json:"storageUsage,omitempty"`
+	Timestamp         time.Time     `json:"timestamp"`
+	SequenceID        string        `json:"sequenceId,omitempty"`
 }
 
 // AgentInfo describes the reporting agent instance.
 type AgentInfo struct {
-	ID              string `json:"id"`
-	Version         string `json:"version"`
-	Type            string `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
-	IntervalSeconds int    `json:"intervalSeconds"`
+	ID              string                   `json:"id"`
+	Version         string                   `json:"version"`
+	Type            string                   `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
+	IntervalSeconds int                      `json:"intervalSeconds"`
+	Modules         []hostagent.ModuleStatus `json:"modules,omitempty"`
 }
 
 // HostInfo contains metadata about the Docker host where the agent runs.

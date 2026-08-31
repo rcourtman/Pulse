@@ -1818,6 +1818,31 @@ func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
 	}
 }
 
+func TestStatusOnlyDockerSnapshotPreservesPlatformWithoutReplacingModuleEvidence(t *testing.T) {
+	previous := models.DockerHost{
+		ID: "helper-host", DisplayName: "Docker node", OS: "linux", KernelVersion: "6.8.0",
+		Architecture: "amd64", Runtime: "docker", CollectionMode: "typed-helper-summary",
+		Containers: []models.DockerContainer{{ID: "existing", Name: "existing"}},
+	}
+	current := models.DockerHost{
+		ID: "helper-host",
+		AgentModules: []models.AgentModuleStatus{{
+			Name: "typed-privilege-helper", State: "degraded", LastError: "container.inventory: helper provider unavailable",
+		}},
+	}
+	preserveDockerInventorySnapshot(&current, previous)
+
+	if current.KernelVersion != "6.8.0" || current.Runtime != "docker" || current.CollectionMode != "typed-helper-summary" {
+		t.Fatalf("status-only snapshot lost platform metadata: %+v", current)
+	}
+	if len(current.Containers) != 1 || current.Containers[0].ID != "existing" {
+		t.Fatalf("status-only snapshot replaced inventory: %+v", current.Containers)
+	}
+	if len(current.AgentModules) != 1 || current.AgentModules[0].State != "degraded" {
+		t.Fatalf("status-only snapshot replaced current module evidence: %+v", current.AgentModules)
+	}
+}
+
 func TestApplyDockerReportDerivesCanonicalDockerSecurityPosture(t *testing.T) {
 	t.Helper()
 

@@ -3,6 +3,8 @@ package dockeragent
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,15 +13,18 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
 	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
 
@@ -68,6 +73,16 @@ type Config struct {
 	// HelperInventory is the optional closed, summary-only fallback used when
 	// this process cannot access a container runtime socket directly.
 	HelperInventory ContainerInventory
+	// HelperOperationStatus records source-classified typed-helper health. It
+	// must classify raw operation errors before they reach report state.
+	HelperOperationStatus HelperOperationStatusRecorder
+}
+
+// HelperOperationStatusRecorder receives typed-helper operation outcomes.
+// Implementations are responsible for source classification and redaction.
+type HelperOperationStatusRecorder interface {
+	Record(operation string, err error)
+	ModuleStatus() agentshost.ModuleStatus
 }
 
 var allowedContainerStates = map[string]string{
@@ -161,6 +176,8 @@ type Agent struct {
 	asyncWG             sync.WaitGroup
 	closeOnce           sync.Once
 	closeErr            error
+	reportStreamID      string
+	reportSequence      atomic.Uint64
 }
 
 type dockerStorageUsageCache struct {
@@ -292,6 +309,12 @@ func New(cfg Config) (*Agent, error) {
 			connectErr = errors.Join(connectErr, fmt.Errorf("close rejected direct runtime client: %w", closeErr))
 		}
 	}
+	if connectErr == nil && cfg.HelperInventory != nil && cfg.HelperOperationStatus != nil {
+		// A collector-owned rootless endpoint is complete without privileged
+		// helper fallback, so stale helper inventory degradation is no longer
+		// applicable.
+		cfg.HelperOperationStatus.Record(agenthelper.OperationContainerInventory, nil)
+	}
 	if connectErr != nil && cfg.HelperInventory == nil {
 		return nil, fmt.Errorf("dockeragent.New: connect runtime: %w", connectErr)
 	}
@@ -300,6 +323,9 @@ func New(cfg Config) (*Agent, error) {
 		result, helperErr := cfg.HelperInventory.Inventory(probeCtx)
 		cancelProbe()
 		if helperErr != nil {
+			if cfg.HelperOperationStatus != nil {
+				cfg.HelperOperationStatus.Record(agenthelper.OperationContainerInventory, helperErr)
+			}
 			return nil, errors.Join(
 				fmt.Errorf("dockeragent.New: connect runtime: %w", connectErr),
 				fmt.Errorf("dockeragent.New: connect typed helper inventory: %w", helperErr),
@@ -307,7 +333,13 @@ func New(cfg Config) (*Agent, error) {
 		}
 		snapshot, helperErr := selectHelperRuntime(result, runtimePref)
 		if helperErr != nil {
+			if cfg.HelperOperationStatus != nil {
+				cfg.HelperOperationStatus.Record(agenthelper.OperationContainerInventory, helperErr)
+			}
 			return nil, errors.Join(fmt.Errorf("dockeragent.New: connect runtime: %w", connectErr), helperErr)
+		}
+		if cfg.HelperOperationStatus != nil {
+			cfg.HelperOperationStatus.Record(agenthelper.OperationContainerInventory, nil)
 		}
 		runtimeKind = RuntimeKind(snapshot.Runtime)
 		cfg.DisableUpdateChecks = true
@@ -390,6 +422,10 @@ func New(cfg Config) (*Agent, error) {
 	if agentVersion == "" {
 		agentVersion = Version
 	}
+	reportStreamID, err := newDockerReportStreamID()
+	if err != nil {
+		return nil, fmt.Errorf("create Docker report stream ID: %w", err)
+	}
 
 	const bufferCapacity = 60
 
@@ -426,6 +462,7 @@ func New(cfg Config) (*Agent, error) {
 		runtimePref:        runtimePref,
 		runtimeVer:         info.ServerVersion,
 		agentVersion:       agentVersion,
+		reportStreamID:     reportStreamID,
 		supportsSwarm:      runtimeKind == RuntimeDocker,
 		httpClients:        httpClients,
 		trustedHTTPClients: trustedHTTPClients,
@@ -450,6 +487,21 @@ func New(cfg Config) (*Agent, error) {
 	agent.ensureAsyncLifecycle()
 
 	return agent, nil
+}
+
+func newDockerReportStreamID() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw[:]), nil
+}
+
+func (a *Agent) nextReportSequenceID() string {
+	if a == nil || strings.TrimSpace(a.reportStreamID) == "" {
+		return ""
+	}
+	return agentshost.FormatReportSequenceID(a.reportStreamID, a.reportSequence.Add(1))
 }
 
 // registryCredentialSourceForConfig returns the host credential source update
@@ -1030,7 +1082,18 @@ func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report,
 		report, err = a.buildReport(ctx)
 	}
 	if err != nil {
-		return agentsdocker.Report{}, fmt.Errorf("build docker report: %w", err)
+		buildErr := fmt.Errorf("build docker report: %w", err)
+		if a.helperInventory == nil {
+			return agentsdocker.Report{}, buildErr
+		}
+		// A helper failure must remain observable even though the inventory is
+		// intentionally omitted. This status-only report explicitly tells the
+		// server to preserve the last complete container snapshot.
+		statusReport := a.buildHelperInventoryStatusReport()
+		if deliveryErr := a.deliverReport(ctx, statusReport); deliveryErr != nil {
+			return statusReport, errors.Join(buildErr, fmt.Errorf("deliver typed helper degradation status: %w", deliveryErr))
+		}
+		return statusReport, buildErr
 	}
 	a.runtimeGoneStreak = 0
 
@@ -1070,7 +1133,9 @@ func (a *Agent) deliverReport(ctx context.Context, report agentsdocker.Report) e
 			if errors.Is(err, ErrStopRequested) && target.Authoritative {
 				return nil
 			}
-			a.reportBuffers[target.Name].Push(report)
+			if report.InventoryComplete == nil || *report.InventoryComplete {
+				a.reportBuffers[target.Name].Push(report)
+			}
 			a.logger.Warn().Err(err).Str("destination", target.Name).
 				Bool("authoritative", target.Authoritative).
 				Int("buffered_reports", a.reportBuffers[target.Name].Len()).

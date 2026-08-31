@@ -162,6 +162,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			Version:         a.agentVersion,
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.cfg.Interval / time.Second),
+			Modules:         a.helperOperationModuleStatuses(),
 		},
 		Host: agentsdocker.HostInfo{
 			Hostname:         hostName,
@@ -183,7 +184,8 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			Network:          append([]agentsdocker.NetworkInterface(nil), snapshot.Network...),
 			Security:         buildHostSecurityInfo(info),
 		},
-		Timestamp: time.Now().UTC(),
+		SequenceID: a.nextReportSequenceID(),
+		Timestamp:  time.Now().UTC(),
 	}
 
 	if swarmInfo != nil {
