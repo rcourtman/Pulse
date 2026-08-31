@@ -217,10 +217,13 @@ storage, Swarm, registry update checks, and lifecycle actions remain unavailable
 A separately scoped rootless runtime socket is required for full collection.
 The profile is
 currently explicit rather than the installer default. Its inspect, apply, and
-rollback transaction is implemented for Linux systemd, but representative
-live-host migration and helper update staging/activation/rollback exercises,
-container-runtime parity, and appliance qualification are still required
-before the profile can become the general default.
+rollback transaction is implemented for Linux systemd. The guarded Ubuntu
+systemd qualification now exercises live migration plus helper-backed update
+staging, activation, authoritative-report commit, watchdog rollback, interrupted
+restart recovery, and last-known-good restoration. Representative physical and
+provider hosts, container-runtime parity, appliance qualification, exact release
+artifacts, and external review are still required before the profile can become
+the general default.
 
 ### Safe-profile support and qualification matrix
 
@@ -234,32 +237,36 @@ or generic command path.
 | Platform or capability | Preferred boundary | Safe-profile behavior | Qualification and default implication | Residual owner and removal condition |
 |---|---|---|---|---|
 | Proxmox VE/PBS/PMG inventory, status, storage, and ordinary metrics | API-only connection with a narrowly scoped token; no host agent | No collector, helper, or runner authority is required for this data | Supported independently of the safe host-agent profile; it does not prove host-local SMART, LXC filesystem, or action parity | `agent-lifecycle`: keep API permissions and returned telemetry covered by provider tests |
-| Standard Linux systemd host telemetry and collector update | Unprivileged `pulse-agent` plus the root-owned typed helper | Core `/proc`, filesystem, network, RAID, and hwmon telemetry stays in the collector; helper-backed signed update activation is implemented but its live activation/recovery transaction is not qualified | **Qualified on disposable Ubuntu 24.04.4 arm64 at committed main `defc24af837b91428fbee939d09cd31e9559fb4f`** for install, migration, explicit/automatic profile rollback, helper health, reporting continuity, and process/credential separation. The schema-v4 receipt's ordinary update ran under the downgraded root monitoring profile and does not prove `agent_update.activate.v1`, executable-digest commit, watchdog rollback, interrupted recovery, or last-known-good restoration. Remains opt-in pending those live scenarios, exact-RC reproduction, and external review | `deployment-installability` and `security-privacy`: qualify helper activation/failure/recovery from the designated release candidate and accept the external boundary review |
+| Standard Linux systemd host telemetry and collector update | Unprivileged `pulse-agent` plus the root-owned typed helper | Core `/proc`, filesystem, network, RAID, and hwmon telemetry stays in the collector; signed updates cross the fixed helper protocol and commit only after an authoritative report | **Qualified on disposable Ubuntu 24.04.4 arm64 at committed main `22fd662fb794f63efb9d3ca2158de73c4e07e1b8`** across the schema-v6 twenty-scenario run. It covers install, migration, explicit/automatic rollback, helper protocol and resource boundaries, effective-unit override rejection, reporting continuity, authoritative executable-digest commit, watchdog rollback, helper-restart recovery, and last-known-good restoration. It remains opt-in pending exact-RC reproduction, representative provider/appliance parity, and external review | `deployment-installability` and `security-privacy`: reproduce the same helper transaction from trusted release artifacts on representative hosts and accept the external boundary review |
 | Linux SMART telemetry | `smart.snapshot` through the no-network helper; no caller-selected device or arguments | Implemented, unqualified on representative physical disks. Helper failure omits/degrades SMART only; the collector does not retry as root | Does not yet justify SMART parity or a default change | `agent-lifecycle`: record live SATA, SAS/controller, USB bridge, and NVMe evidence, including standby, permission failure, timeout, and partial-data cases |
 | Proxmox node-local LXC filesystem telemetry | `proxmox.lxc_filesystems` through the no-network helper using fixed bounded `pct` operations | Implemented, unqualified on a representative PVE node. Helper failure omits/degrades this snapshot only | Does not yet justify Proxmox host-agent parity or a default change | `agent-lifecycle`: record live running/stopped LXC, mount, timeout, output-bound, and helper-loss behavior on supported PVE versions |
 | Rootful Docker or Podman inventory | No direct collector access to a root-equivalent daemon socket | Implemented as a typed-helper summary-only fallback. Migration preserves container ID/name/image/state/status/creation inventory and marks the report `typed-helper-summary`; stats, secondary inventories, update checks, and actions remain unavailable | Unit and installer regressions cover the boundary, but no representative live Docker/Podman qualification exists. Full rootful parity remains an explicit default blocker; the legacy/root profile is not safe-profile evidence | `agent-lifecycle`: record fresh install, migration, restart, helper loss/recovery, bounds, and summary parity on representative rootful Docker and Podman; decide explicitly whether reduced telemetry is sufficient |
 | Collector-owned rootless Docker or Podman | Direct access only to one usable runtime socket owned by the `pulse-agent` UID | Implemented, unqualified live. Ambiguous, root-owned, unreadable, unwritable, or unavailable sockets disable container monitoring | Does not yet justify container-runtime parity or a default change | `deployment-installability`: record fresh install, migration, restart, socket-loss, ambiguity, and telemetry parity on both rootless Docker and rootless Podman |
-| Separate runner package update and package-cache cleanup | Root-owned `pulse-agent-runner`, host-bound action credential, typed request, postcondition, and durable receipt | The schema-v4 committed-main systemd receipt records a real verified apt-cache mutation, stale-fingerprint refusal, replay, nonce-bound readiness, exact credential rotation, and self-revocation. A separate production Router regression exercises HTTPS issuance, WSS admission, encrypted token persistence, failed-rotation rollback, exact socket invalidation, two server restarts, old-secret rejection, and durable self-revoke | Qualified for the exercised systemd fixture paths and focused production Router lifecycle. Neither proof covers local runner activation failure after credential preparation, every runner operation, or an exact release candidate | `agent-lifecycle` and `api-contracts`: reproduce the combined systemd and production Router path from the RC, including failed local activation/rollback and representative package-update success/failure/cancellation evidence |
+| Separate runner package update and package-cache cleanup | Root-owned `pulse-agent-runner`, host-bound action credential, typed request, postcondition, and durable receipt | The schema-v6 committed-main systemd receipt records a real verified apt-cache mutation, stale-fingerprint refusal, replay, nonce-bound readiness, effective-unit override rejection, exact credential rotation, bodyless self-revocation, and collector/helper continuity. A separate production Router regression exercises HTTPS issuance, WSS admission, encrypted token persistence, failed-rotation rollback, exact socket invalidation, two server restarts, old-secret rejection, and durable self-revoke | Qualified for the exercised systemd fixture paths and focused production Router lifecycle. Focused installer tests also cover atomic pending cancellation and fail-closed credential retention. The evidence does not cover every runner operation, representative providers, or an exact release candidate | `agent-lifecycle` and `api-contracts`: reproduce the combined systemd and production Router path from trusted RC artifacts with representative package-update success/failure/cancellation evidence |
 | Separate runner Proxmox guest and container lifecycle/update actions | Root-owned runner with closed typed protocols; never the monitoring collector | Implemented, unqualified on representative PVE and container-runtime targets | No live-provider action-parity claim and no default change | `agent-lifecycle`: record target-bound success, stale-state refusal, cancellation, reconnect/replay, and independent postconditions on disposable real targets |
 | Appliance, non-systemd, Windows, and macOS host-agent profiles | Platform API where sufficient; otherwise an explicitly named legacy/full-trust profile | **Unavailable for safe-profile apply.** The installer fails closed instead of silently installing a root-equivalent profile | Excluded from the Linux safe-profile claim | `deployment-installability`: land a platform-specific service, filesystem, update, helper, migration, rollback, and live-proof contract before marking that platform supported |
 
-The committed-main Linux evidence is recorded in
-`docs/release-control/v6/internal/records/secure-agent-runtime-qualification-foundation-2026-08-30.md`.
-The current schema-v4 receipt qualifies exact committed main
-`defc24af837b91428fbee939d09cd31e9559fb4f`. Its attestation verifies a
-345-source production manifest, clean exact-commit identities for all four
-artifacts, twelve ordered scenario claims, and a retained secret-free JSONL
-transcript containing 81 events. The receipt, transcript, and attestation have
+The current committed-main Linux evidence qualifies exact commit
+`22fd662fb794f63efb9d3ca2158de73c4e07e1b8`. The schema-v6 attestation verifies
+437 governed source files, clean exact-commit identities for six artifacts,
+twenty ordered scenario claims, and a retained secret-free JSONL transcript
+containing 117 events, including 97 command-output events. The receipt,
+transcript, and attestation are recorded as
+`secure-agent-runtime-systemd-receipt-v6-2026-08-31.json`,
+`secure-agent-runtime-systemd-transcript-v6-2026-08-31.jsonl`, and
+`secure-agent-runtime-committed-main-attestation-v6-2026-08-31.json`, with
 SHA-256 digests
-`58da80f7d75d414c12cf6632bd895b821ce759625e7d00ae00c16d56204b1e76`,
-`616681aee38202ed922880288b730cd85f746e081f8f9d45bb2d570e48b49f8c`, and
-`a48e855fdd2dcbc0cf91717dfaed22f942320c9661dd9b9e8f8f8e97f45d654b`.
-This remains artifact-bound operator self-attestation, not an independently
-authenticated external assessment or production Router/TLS/durable-store
-exercise. A separate focused regression now covers the real Router's HTTPS,
-WSS, encrypted persistence, restart, rotation, exact session closure, and
-self-revoke lifecycle at code level. The existing v3 record remains historical.
-The safe profile therefore remains opt-in.
+`498f14580b0c63a1d9e24ddd44dd32dfad96024a187330e9ede4c777cd5ab123`,
+`29b51dbe7d393523e3b9f69284ec8b07b1ca6930e94822ce220fbd59fbcaa1e2`, and
+`bbeb11b72f983953392ddea282c0ede336f4739156d35b72188de3f07b12cae2`.
+The attester also proved that the qualified commit was reachable from the
+fresh canonical `origin/main` value at attestation time. This remains
+artifact-bound operator self-attestation, not an independently authenticated
+external assessment or exact published-release exercise. A separate focused
+regression covers the real Router's HTTPS, WSS, encrypted persistence,
+restart, rotation, exact session closure, and self-revoke lifecycle at code
+level. The foundation, v3, and v4 records remain historical. The safe profile
+therefore remains opt-in.
 
 Monitoring never implies remediation. On the supported Linux systemd profile,
 an operator may separately enroll the typed action runner:

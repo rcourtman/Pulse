@@ -169,6 +169,30 @@ plus the host-canary helper-network-namespace exercise, and binds those claims t
 `secure_runtime_source_manifest_v6.json`. It does not reinterpret schema-v4 or
 schema-v5 evidence.
 
+A fresh Ubuntu 24.04.4/systemd 255 arm64 run at committed main
+`22fd662fb794f63efb9d3ca2158de73c4e07e1b8` passed all twenty schema-v6
+scenarios in 248.13 seconds. The 437-source manifest matched the qualified
+commit, all six artifacts carried its clean Go VCS identity, and the receipt
+bound 117 retained transcript events, including 97 command-output events. It
+exercised the helper update authoritative-report commit, watchdog rollback,
+helper-restart recovery, effective collector/helper/socket/runner override
+rejection, bounded helper resources, host-interface network isolation, typed
+apt-cache mutation and replay, exact runner rotation, and self-revocation. The
+receipt, transcript, and attestation are recorded as
+`internal/records/secure-agent-runtime-systemd-receipt-v6-2026-08-31.json`,
+`internal/records/secure-agent-runtime-systemd-transcript-v6-2026-08-31.jsonl`,
+and
+`internal/records/secure-agent-runtime-committed-main-attestation-v6-2026-08-31.json`.
+Their SHA-256 digests are
+`498f14580b0c63a1d9e24ddd44dd32dfad96024a187330e9ede4c777cd5ab123`,
+`29b51dbe7d393523e3b9f69284ec8b07b1ca6930e94822ce220fbd59fbcaa1e2`, and
+`bbeb11b72f983953392ddea282c0ede336f4739156d35b72188de3f07b12cae2`.
+The committed-main attester bound the canonical Pulse origin, a fresh remote
+`origin/main` value, exact ancestry, the artifact bytes, source hashes, receipt,
+and transcript. It remains self-attested fixture evidence rather than trusted
+RC compilation provenance or an external review, and it makes no default
+change.
+
 Schema-v6 release-candidate classification does not trust a local ref or Go
 VCS stamp. Pulse release tags are workflow-created annotated tags rather than
 signed tags, so tag presence alone is not authority. RC classification
@@ -195,8 +219,7 @@ and compares the local remote-tracking commit with a fresh `refs/heads/main`
 query before proving ancestry. `HEAD`, a local branch, or an arbitrary ref can
 never receive the committed-main label.
 
-The
-repository still needs a fresh exact committed release-candidate run,
+The repository still needs a fresh exact committed release-candidate run,
 representative Proxmox, SMART, Docker and rootless Podman telemetry/action
 parity, appliance profiles, and the external security review. Until those
 proofs are recorded, the safe profile remains opt-in and provider degradation

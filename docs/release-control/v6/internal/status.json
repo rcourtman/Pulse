@@ -9793,6 +9793,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/secure-agent-runtime-committed-main-attestation-v6-2026-08-31.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/agenttokens/install.go",
           "kind": "file"
         },
