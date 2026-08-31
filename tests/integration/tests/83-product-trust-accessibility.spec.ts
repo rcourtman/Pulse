@@ -27,6 +27,54 @@ const scanForWcagViolations = async (page: Page) => {
   }));
 };
 
+const scanForUnexpectedReducedMotion = async (page: Page) =>
+  page.evaluate(() => {
+    const parseTimeList = (value: string) =>
+      value.split(",").map((entry) => {
+        const time = entry.trim();
+        if (time.endsWith("ms")) return Number.parseFloat(time) / 1000;
+        if (time.endsWith("s")) return Number.parseFloat(time);
+        return 0;
+      });
+    const describe = (element: Element) => {
+      const id = element.id ? `#${element.id}` : "";
+      const classes = Array.from(element.classList)
+        .slice(0, 3)
+        .map((name) => `.${name}`)
+        .join("");
+      return `${element.tagName.toLowerCase()}${id}${classes}`;
+    };
+
+    return Array.from(document.querySelectorAll("*")).flatMap((element) => {
+      const style = getComputedStyle(element);
+      const animationSeconds = parseTimeList(style.animationDuration);
+      const transitionSeconds = parseTimeList(style.transitionDuration);
+      const hasRepeatedAnimation = style.animationIterationCount
+        .split(",")
+        .some(
+          (count) =>
+            count.trim() === "infinite" || Number.parseFloat(count) > 1,
+        );
+      const hasVisibleMotion =
+        animationSeconds.some((seconds) => seconds > 0.001) ||
+        transitionSeconds.some((seconds) => seconds > 0.001) ||
+        hasRepeatedAnimation ||
+        style.scrollBehavior === "smooth";
+
+      return hasVisibleMotion
+        ? [
+            {
+              target: describe(element),
+              animationDuration: style.animationDuration,
+              animationIterationCount: style.animationIterationCount,
+              transitionDuration: style.transitionDuration,
+              scrollBehavior: style.scrollBehavior,
+            },
+          ]
+        : [];
+    });
+  });
+
 type WorkerFixtures = { authStorageStatePath: string };
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) =>
@@ -100,6 +148,7 @@ test("Actions remains named, directly reachable, keyboard accessible, and free o
 test("representative authenticated surfaces have no automatically detectable WCAG A/AA violations", async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   const surfaces = [
     { route: "/alerts/overview", heading: "Alerts Overview" },
     { route: "/settings/system-general", heading: "General" },
@@ -114,6 +163,10 @@ test("representative authenticated surfaces have no automatically detectable WCA
     expect(
       await scanForWcagViolations(page),
       `${surface.route} should have no automatically detectable WCAG A/AA violations`,
+    ).toEqual([]);
+    expect(
+      await scanForUnexpectedReducedMotion(page),
+      `${surface.route} should complete non-essential motion immediately when reduced motion is requested`,
     ).toEqual([]);
   }
 });
@@ -137,6 +190,7 @@ test("the logged-out entry surface has no automatically detectable WCAG A/AA vio
       "none",
     );
     expect(await scanForWcagViolations(page)).toEqual([]);
+    expect(await scanForUnexpectedReducedMotion(page)).toEqual([]);
   } finally {
     await context.close();
   }

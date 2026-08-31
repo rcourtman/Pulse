@@ -4317,7 +4317,7 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('warningGhost:');
     expect(buttonModelSource).toContain('warningOutline:');
     expect(buttonModelSource).toContain('infoGhost:');
-    expect(buttonModelSource).toContain(["'2xs'", ": 'h-5 w-5'"].join(''));
+    expect(buttonModelSource).toContain(["'2xs'", ": 'h-6 w-6'"].join(''));
     expect(buttonModelSource).toContain(['lg', ": 'h-9 w-9'"].join(''));
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('settingsAction:');
@@ -8157,6 +8157,13 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.animate-fade-in,[\s\S]*?\.animate-slide-up \{[\s\S]*?animation: none;/,
     );
+  });
+
+  it('bounds all product motion when reduced motion is requested', () => {
+    expect(frontendIndexCssSource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\*,[\s\S]*?\*::before,[\s\S]*?\*::after \{[\s\S]*?animation-duration: 0\.01ms !important;[\s\S]*?animation-iteration-count: 1 !important;[\s\S]*?transition-duration: 0\.01ms !important;/,
+    );
+    expect(frontendIndexCssSource).toMatch(/html:focus-within \{[\s\S]*?scroll-behavior: auto;/);
   });
 
   it('keeps search field on shell, runtime, and model owners', () => {

@@ -3,6 +3,30 @@
 @tailwind utilities;
 
 /*
+ * Respect the operating-system motion preference across the whole product.
+ * Keep animations technically present for components that depend on their
+ * completion state, but finish them immediately and prevent repeated motion.
+ * This also covers Tailwind animation/transition utilities and future shared
+ * primitives instead of requiring every call site to remember an override.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/*
  * Neutralize a Tailwind color/font-size collision: the dead `base` alias in
  * the color palette was making Tailwind emit `color: var(--color-bg-base)` on
  * `.text-base` / `.sm\:text-base`, painting text the same color as the

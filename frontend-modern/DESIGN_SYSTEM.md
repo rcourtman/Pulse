@@ -16,6 +16,7 @@ This document outlines the standard UI primitives, tokens, and components that c
 - Visible form labels must either use `for` with a matching control ID or wrap a native labelable control; use a heading, paragraph, or span for non-control captions.
 - Shared form controls must keep a stable accessible name as their value changes; a placeholder is input guidance, not a label.
 - Compact pointer targets must remain at least 24 by 24 CSS pixels, including icon and copy actions, per [WCAG 2.2 Target Size (Minimum)](https://www.w3.org/TR/WCAG22/#target-size-minimum).
+- Product motion must honor the operating-system `prefers-reduced-motion` setting. The global stylesheet completes animations and transitions immediately under that preference; do not override that safeguard or make motion the only indication of state.
 - Only explicit non-visual route wrappers are exempt from header primitive requirements.
 - Theme ownership policy:
   - Only `src/utils/theme.ts` and `index.html` may read/write theme keys (`pulseThemePreference`, `darkMode`, `pulse_dark_mode`) or toggle the root `dark` class.
