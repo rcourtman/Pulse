@@ -230,6 +230,8 @@ describe('Button', () => {
 
     const copyUrlButton = screen.getByRole('button', { name: 'Copy URL' });
     expect(copyUrlButton).toHaveClass('border-border');
+    expect(copyUrlButton).toHaveClass('min-h-6');
+    expect(copyUrlButton).toHaveClass('min-w-6');
     expect(copyUrlButton).toHaveClass('min-h-7');
     copyUrlButton.click();
     expect(onCopy).toHaveBeenCalledWith('https://example.test');
@@ -237,6 +239,8 @@ describe('Button', () => {
     const chipButton = screen.getByRole('button', { name: 'Copy 8443/tcp' });
     expect(chipButton).toHaveClass('bg-surface-alt');
     expect(chipButton).toHaveClass('text-[10px]');
+    expect(chipButton).toHaveClass('min-h-6');
+    expect(chipButton).toHaveClass('min-w-6');
 
     expect(screen.getByRole('button', { name: 'Copy blank' })).toBeDisabled();
 
@@ -287,7 +291,11 @@ describe('Button', () => {
     expect(button).toHaveClass('w-6');
     expect(button).toHaveClass('bg-blue-50');
 
-    expect(screen.getByRole('button', { name: 'Queued edit' })).toHaveClass('h-5');
+    const queuedEditButton = screen.getByRole('button', { name: 'Queued edit' });
+    expect(queuedEditButton).toHaveClass('h-6');
+    expect(queuedEditButton).toHaveClass('w-6');
+    expect(queuedEditButton).toHaveClass('min-h-6');
+    expect(queuedEditButton).toHaveClass('min-w-6');
     expect(screen.getByRole('button', { name: 'Open help' })).toHaveClass('border-border');
     expect(screen.getByRole('button', { name: 'Notifications enabled' })).toHaveClass(
       'bg-surface-alt',

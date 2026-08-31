@@ -23,6 +23,15 @@ import type {
 } from '@/components/shared/buttonModel';
 
 describe('buttonModel.branchcov2', () => {
+  it('keeps compact icon and copy targets at the WCAG 2.2 minimum size', () => {
+    expect(COPY_VALUE_BUTTON_BASE_CLASS).toContain('min-h-6');
+    expect(COPY_VALUE_BUTTON_BASE_CLASS).toContain('min-w-6');
+    expect(COPY_VALUE_BUTTON_SIZE_CLASSES.xs).toBe('min-h-6 min-w-6');
+    expect(ACTION_ICON_BUTTON_BASE_CLASS).toContain('min-h-6');
+    expect(ACTION_ICON_BUTTON_BASE_CLASS).toContain('min-w-6');
+    expect(ACTION_ICON_BUTTON_SIZE_CLASSES['2xs']).toBe('h-6 w-6');
+  });
+
   describe('getButtonClass', () => {
     it('uses the default parameter when called with no arguments (variant=secondary, size=md)', () => {
       // Drives the `options: ButtonClassOptions = {}` default-parameter arm

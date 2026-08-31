@@ -96,7 +96,7 @@ export type ActionIconButtonTone =
 export type ActionIconButtonSize = '2xs' | 'xs' | 'sm' | 'md' | 'lg';
 
 export const COPY_VALUE_BUTTON_BASE_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 export const COPY_VALUE_BUTTON_VARIANT_CLASSES: Record<CopyValueButtonVariant, string> = {
   neutral:
@@ -107,7 +107,7 @@ export const COPY_VALUE_BUTTON_VARIANT_CLASSES: Record<CopyValueButtonVariant, s
 };
 
 export const COPY_VALUE_BUTTON_SIZE_CLASSES: Record<CopyValueButtonSize, string> = {
-  xs: 'min-h-5 min-w-5',
+  xs: 'min-h-6 min-w-6',
   sm: 'min-h-6 min-w-6',
   md: 'min-h-7 min-w-7',
   lg: 'min-h-8 min-w-8 rounded-md',
@@ -131,7 +131,7 @@ export const getCopyValueButtonClass = (options: CopyValueButtonClassOptions = {
     .join(' ');
 
 export const ACTION_ICON_BUTTON_BASE_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
 
 export const ACTION_ICON_BUTTON_TONE_CLASSES: Record<ActionIconButtonTone, string> = {
   neutral: 'text-base-content hover:bg-surface-hover hover:text-base-content',
@@ -157,7 +157,7 @@ export const ACTION_ICON_BUTTON_TONE_CLASSES: Record<ActionIconButtonTone, strin
 };
 
 export const ACTION_ICON_BUTTON_SIZE_CLASSES: Record<ActionIconButtonSize, string> = {
-  '2xs': 'h-5 w-5',
+  '2xs': 'h-6 w-6',
   xs: 'h-6 w-6',
   sm: 'h-7 w-7',
   md: 'h-8 w-8',
