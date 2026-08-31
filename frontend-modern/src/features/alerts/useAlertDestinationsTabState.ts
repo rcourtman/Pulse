@@ -9,8 +9,6 @@ import {
   getAlertDestinationsAppriseTestFailure,
   getAlertDestinationsAppriseTestSuccess,
   getAlertDestinationsAppriseValidationError,
-  getAlertDestinationsDeliveryDismissConfirmation,
-  getAlertDestinationsDeliveryRetryConfirmation,
   getAlertDestinationsEmailTestFailure,
   getAlertDestinationsEmailTestSuccess,
   getAlertDestinationsTestPausedWarning,
@@ -37,15 +35,17 @@ export interface AlertDestinationsTabStateProps {
 export function useAlertDestinationsTabState(props: AlertDestinationsTabStateProps) {
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingApprise, setTestingApprise] = createSignal(false);
-  const [retryingTerminalFailures, setRetryingTerminalFailures] = createSignal(false);
-  const [dismissingTerminalFailures, setDismissingTerminalFailures] = createSignal(false);
   const {
     deliveryHealth,
     deliveryHealthUnavailable,
     refreshingDeliveryHealth,
     deliveryNeedsAttention,
     loadDeliveryHealth,
-  } = useNotificationDeliveryHealth();
+    retryTerminalFailures,
+    retryingTerminalFailures,
+    dismissTerminalFailures,
+    dismissingTerminalFailures,
+  } = useNotificationDeliveryHealth({ onAfterQueueAction: () => loadDeliveryLog() });
   const {
     deliveryLog,
     deliveryLogUnavailable,
@@ -154,46 +154,6 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     }
     void loadDeliveryHealth();
     void loadDeliveryLog();
-  };
-
-  const retryTerminalFailures = async () => {
-    const count = deliveryHealth()?.queue.attentionRequired ?? 0;
-    if (count <= 0 || !confirm(getAlertDestinationsDeliveryRetryConfirmation(count))) {
-      return;
-    }
-    setRetryingTerminalFailures(true);
-    try {
-      const result = await NotificationsAPI.retryTerminalFailures();
-      notificationStore.success(
-        `${result.affected} retained ${result.affected === 1 ? 'delivery' : 'deliveries'} queued for retry.`,
-      );
-      await Promise.all([loadDeliveryHealth(), loadDeliveryLog()]);
-    } catch (error) {
-      logger.error('Failed to retry retained notification deliveries', error);
-      notificationStore.error('Unable to retry retained notification deliveries.');
-    } finally {
-      setRetryingTerminalFailures(false);
-    }
-  };
-
-  const dismissTerminalFailures = async () => {
-    const count = deliveryHealth()?.queue.attentionRequired ?? 0;
-    if (count <= 0 || !confirm(getAlertDestinationsDeliveryDismissConfirmation(count))) {
-      return;
-    }
-    setDismissingTerminalFailures(true);
-    try {
-      const result = await NotificationsAPI.dismissTerminalFailures();
-      notificationStore.success(
-        `${result.affected} retained ${result.affected === 1 ? 'failure' : 'failures'} dismissed.`,
-      );
-      await Promise.all([loadDeliveryHealth(), loadDeliveryLog()]);
-    } catch (error) {
-      logger.error('Failed to dismiss retained notification failures', error);
-      notificationStore.error('Unable to dismiss retained notification failures.');
-    } finally {
-      setDismissingTerminalFailures(false);
-    }
   };
 
   onMount(() => {

@@ -84,6 +84,10 @@ export function OverviewTab(props: {
           unavailable={deliveryHealthState.deliveryHealthUnavailable()}
           refreshing={deliveryHealthState.refreshingDeliveryHealth()}
           onRefresh={() => void deliveryHealthState.loadDeliveryHealth()}
+          retryingFailures={deliveryHealthState.retryingTerminalFailures()}
+          dismissingFailures={deliveryHealthState.dismissingTerminalFailures()}
+          onRetryFailures={() => void deliveryHealthState.retryTerminalFailures()}
+          onDismissFailures={() => void deliveryHealthState.dismissTerminalFailures()}
           detailsHref="/alerts/notifications"
         />
       </Show>
