@@ -11,6 +11,8 @@ on:
       - Release Convergence
     types:
       - completed
+    branches:
+      - main
 
 permissions:
   actions: write

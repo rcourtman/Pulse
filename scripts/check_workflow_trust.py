@@ -10,11 +10,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def _yaml_key(name: str) -> str:
+    """Return a pattern for a plain or simply quoted YAML mapping key."""
+    escaped = re.escape(name)
+    return rf'(?:{escaped}|"{escaped}"|\'{escaped}\')'
+
+
 ACTION_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CONTAINER_DIGEST_RE = re.compile(r"^docker://.+@sha256:[0-9a-f]{64}$")
 HOSTED_LATEST_RE = re.compile(r"\b(?:ubuntu|windows|macos)-latest\b")
-USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
-RUN_RE = re.compile(r"^(\s*)(?:-\s*)?run:\s*(.*)$")
+USES_RE = re.compile(
+    rf"^\s*(?:-\s*)?{_yaml_key('uses')}\s*:\s*([^\s#]+)"
+)
+RUN_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('run')}\s*:\s*(.*)$")
 EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
 # Workflow-call and dispatch inputs are data, not shell source. Secrets include
 # github.token because Actions makes that credential available independently of
@@ -31,6 +39,13 @@ UNTRUSTED_GITHUB_CONTEXT_RE = re.compile(
     r"event(?:\.[A-Za-z_][A-Za-z0-9_-]*)*\."
     r"(?:body|default_branch|email|head_branch|head_ref|label|message|name|page_name|ref|title)\b"
     r")"
+)
+# A workflow_run handler executes from the default branch with privileged
+# context. It must not replace that trusted checkout with code identified by
+# the triggering run, even when the upstream workflow name looks familiar.
+WORKFLOW_RUN_CODE_REF_RE = re.compile(
+    r"(?<![\w.])github\.event\.workflow_run\."
+    r"(?:head_branch|head_repository|head_sha|pull_requests)\b"
 )
 SECRET_CONTEXT_RE = re.compile(
     r"(?<![\w.])secrets(?:"
@@ -50,11 +65,17 @@ PROTECTED_CHECKOUT_PINS = frozenset(
     {"d23441a48e516b6c34aea4fa41551a30e30af803"}
 )
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
-PERMISSIONS_RE = re.compile(r"^(\s*)permissions\s*:\s*(.*?)\s*$")
-JOBS_RE = re.compile(r"^(\s*)jobs\s*:\s*$")
-JOB_RE = re.compile(r"^(\s*)([A-Za-z0-9_-]+)\s*:\s*$")
-RUNS_ON_RE = re.compile(r"^(\s*)runs-on\s*:")
-TIMEOUT_RE = re.compile(r"^(\s*)timeout-minutes\s*:\s*(.*?)\s*$")
+PERMISSIONS_RE = re.compile(
+    rf"^(\s*){_yaml_key('permissions')}\s*:\s*(.*?)\s*$"
+)
+JOBS_RE = re.compile(rf"^(\s*){_yaml_key('jobs')}\s*:\s*$")
+JOB_RE = re.compile(
+    r'''^(\s*)(?:[A-Za-z0-9_-]+|"[A-Za-z0-9_-]+"|'[A-Za-z0-9_-]+')\s*:\s*$'''
+)
+RUNS_ON_RE = re.compile(rf"^(\s*){_yaml_key('runs-on')}\s*:")
+TIMEOUT_RE = re.compile(
+    rf"^(\s*){_yaml_key('timeout-minutes')}\s*:\s*(.*?)\s*$"
+)
 
 
 @dataclass(frozen=True)
@@ -111,7 +132,7 @@ def _has_trigger(lines: list[str], event: str) -> bool:
     event_re = re.compile(rf"(?<![\w-]){re.escape(event)}(?![\w-])")
     for index, line in enumerate(lines):
         code = line.split("#", 1)[0]
-        match = re.match(r"^on\s*:\s*(.*)$", code)
+        match = re.match(rf"^{_yaml_key('on')}\s*:\s*(.*)$", code)
         if not match:
             continue
         inline = match.group(1).strip()
@@ -123,10 +144,95 @@ def _has_trigger(lines: list[str], event: str) -> bool:
                 continue
             if _indent(trigger_code) == 0:
                 break
-            if re.match(rf"^\s+{re.escape(event)}\s*:", trigger_code):
+            if re.match(rf"^\s+{_yaml_key(event)}\s*:", trigger_code):
                 return True
         return False
     return False
+
+
+def _static_yaml_list(
+    lines: list[str], key_index: int, inline_value: str
+) -> list[str] | None:
+    """Parse the small literal YAML string-list subset used by trust policy."""
+    values: list[str] = []
+    if inline_value:
+        match = re.fullmatch(r"\[\s*(.*?)\s*\]", inline_value)
+        if not match:
+            return None
+        raw_values = [] if not match.group(1) else match.group(1).split(",")
+    else:
+        key_indent = _indent(lines[key_index])
+        raw_values = []
+        for line in lines[key_index + 1 :]:
+            code = line.split("#", 1)[0]
+            if not code.strip():
+                continue
+            if _indent(code) <= key_indent:
+                break
+            match = re.match(r"^\s*-\s*(.*?)\s*$", code)
+            if not match:
+                return None
+            raw_values.append(match.group(1))
+
+    for raw_value in raw_values:
+        value = raw_value.strip()
+        if (
+            len(value) >= 2
+            and value[0] == value[-1]
+            and value[0] in {"'", '"'}
+        ):
+            value = value[1:-1]
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", value):
+            return None
+        values.append(value)
+    return values
+
+
+def _audit_workflow_run_trigger(path: Path, lines: list[str]) -> list[Finding]:
+    """Bind privileged workflow_run handlers to canonical upstream code."""
+    if not _has_trigger(lines, "workflow_run"):
+        return []
+
+    event_index: int | None = None
+    event_indent = 0
+    for index, line in enumerate(lines):
+        code = line.split("#", 1)[0]
+        if re.match(rf"^\s+{_yaml_key('workflow_run')}\s*:", code):
+            event_index = index
+            event_indent = _indent(code)
+            break
+
+    branch_declarations: list[tuple[int, list[str] | None]] = []
+    if event_index is not None:
+        for index in range(event_index + 1, len(lines)):
+            code = lines[index].split("#", 1)[0]
+            if not code.strip():
+                continue
+            if _indent(code) <= event_indent:
+                break
+            match = re.match(
+                rf"^(\s*){_yaml_key('branches')}\s*:\s*(.*?)\s*$", code
+            )
+            if match and len(match.group(1)) == event_indent + 2:
+                branch_declarations.append(
+                    (index, _static_yaml_list(lines, index, match.group(2)))
+                )
+
+    if len(branch_declarations) != 1 or branch_declarations[0][1] != ["main"]:
+        line_number = (
+            branch_declarations[0][0] + 1
+            if branch_declarations
+            else (event_index + 1 if event_index is not None else 1)
+        )
+        return [
+            Finding(
+                path,
+                line_number,
+                "workflow_run must restrict the triggering workflow to the "
+                "literal canonical branch list branches: [main]",
+            )
+        ]
+    return []
 
 
 def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
@@ -203,6 +309,8 @@ def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
     findings = _audit_runner_job_timeouts(path, lines)
+    findings.extend(_audit_workflow_run_trigger(path, lines))
+    has_workflow_run_trigger = _has_trigger(lines, "workflow_run")
 
     if _has_trigger(lines, "pull_request_target"):
         findings.append(
@@ -352,14 +460,30 @@ def audit_workflow(path: Path) -> list[Finding]:
                 )
             )
         checkout_block = _checkout_block(lines, index)
+        if has_workflow_run_trigger and any(
+            WORKFLOW_RUN_CODE_REF_RE.search(block_line.split("#", 1)[0])
+            for _, block_line in checkout_block
+        ):
+            findings.append(
+                Finding(
+                    path,
+                    line_number,
+                    "workflow_run checkout must not select code from triggering-run metadata",
+                )
+            )
         unsafe_pr_settings = [
             (block_index, block_line)
             for block_index, block_line in checkout_block
-            if re.match(r"^\s*allow-unsafe-pr-checkout\s*:", block_line)
+            if re.match(
+                rf"^\s*{_yaml_key('allow-unsafe-pr-checkout')}\s*:",
+                block_line,
+            )
         ]
         for setting_index, setting in unsafe_pr_settings:
             if not re.match(
-                r"^\s*allow-unsafe-pr-checkout\s*:\s*false(?:\s|$)", setting
+                rf"^\s*{_yaml_key('allow-unsafe-pr-checkout')}\s*:\s*"
+                r"false(?:\s|$)",
+                setting,
             ):
                 findings.append(
                     Finding(
@@ -371,7 +495,9 @@ def audit_workflow(path: Path) -> list[Finding]:
         credential_settings = [
             (block_index, block_line)
             for block_index, block_line in checkout_block
-            if re.match(r"^\s*persist-credentials\s*:", block_line)
+            if re.match(
+                rf"^\s*{_yaml_key('persist-credentials')}\s*:", block_line
+            )
         ]
         if len(credential_settings) != 1:
             findings.append(
@@ -385,7 +511,8 @@ def audit_workflow(path: Path) -> list[Finding]:
 
         setting_index, setting = credential_settings[0]
         value_match = re.match(
-            r"^\s*persist-credentials\s*:\s*(true|false)\b", setting
+            rf"^\s*{_yaml_key('persist-credentials')}\s*:\s*(true|false)\b",
+            setting,
         )
         if not value_match:
             findings.append(

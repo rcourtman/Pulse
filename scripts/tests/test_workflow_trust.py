@@ -195,6 +195,79 @@ steps:
         )
         self.assertTrue(any("must not opt out" in finding for finding in findings))
 
+    def test_workflow_run_requires_canonical_upstream_code(self) -> None:
+        missing_branch = self.audit(
+            """on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+permissions: {}
+"""
+        )
+        self.assertTrue(
+            any("literal canonical branch list" in finding for finding in missing_branch)
+        )
+        quoted_missing_branch = self.audit(
+            '''"on":
+  "workflow_run":
+    workflows: [Build]
+permissions: {}
+'''
+        )
+        self.assertTrue(
+            any(
+                "literal canonical branch list" in finding
+                for finding in quoted_missing_branch
+            )
+        )
+
+        for branches in ("[release]", "[main, release]", "${{ fromJSON(vars.BRANCHES) }}"):
+            with self.subTest(branches=branches):
+                findings = self.audit(
+                    f"""on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+    branches: {branches}
+permissions: {{}}
+"""
+                )
+                self.assertTrue(
+                    any("literal canonical branch list" in finding for finding in findings)
+                )
+
+        trusted = self.audit(
+            f'''"on":
+  "workflow_run":
+    workflows: [Build]
+    "branches":
+      - "main"
+permissions: {{}}
+steps:
+  - "uses": actions/checkout@{CHECKOUT_PIN}
+    with:
+      "persist-credentials": false
+'''
+        )
+        self.assertEqual(trusted, [])
+
+        untrusted_checkout = self.audit(
+            f"""on:
+  workflow_run:
+    workflows: [Build]
+    branches: [main]
+permissions: {{}}
+steps:
+  - uses: actions/checkout@{CHECKOUT_PIN}
+    with:
+      persist-credentials: false
+      ref: ${{{{ github.event.workflow_run.head_sha }}}}
+"""
+        )
+        self.assertTrue(
+            any("must not select code" in finding for finding in untrusted_checkout)
+        )
+
     def test_accepts_documented_authenticated_git_write(self) -> None:
         findings = self.audit(
             f"""permissions: {{}}
