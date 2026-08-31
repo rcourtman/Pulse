@@ -4689,9 +4689,14 @@ customer-visible change that landed after the initial packet preparation:
 bounded security setup request decoding, accurate PBS running and incomplete
 backup state, Overview-level notification retry and dismissal, canonical
 Assistant command-help dialog behavior, and agent server-address migration
-guidance. Release-integrity detail also records authenticated Unified Agent
-download validation and the exact-step candidate version binding. Packet proof
-must retain those outcomes before v6.4.2 can be dispatched for publication.
+guidance. The cutoff also explains the Preview channel's distinct beta and
+release-candidate maturity and records native systemd journal severity for the
+generated Pulse service. Release-integrity detail records authenticated Unified
+Agent download validation, exact-step candidate version binding, and separate
+GHCR authentication for Helm chart upload and OCI provenance attestation.
+Packet proof must retain those outcomes before v6.4.2 can be dispatched for
+publication.
+
 ### Systemd journal output preserves Pulse severity
 
 The generated Pulse server unit keeps stdout and stderr attached to the journal,

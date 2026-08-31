@@ -14,6 +14,8 @@ actions and SSO-only deployments.
 - **Delivery warnings can be resolved from Overview** - Retained notification failures can now be retried or dismissed directly from the Alerts overview while delivery history remains available.
 - **Assistant command help behaves as a complete dialog** - Command help now traps focus, isolates the background, closes consistently, returns focus to its trigger, and uses the same responsive dialog behavior as the rest of Pulse.
 - **Agent URL migration guidance is now included** - The built-in migration guide explains how to rerun the agent installer with the new server URL after moving or renaming a Pulse server.
+- **Preview releases now distinguish beta and RC maturity** - Update settings explain that beta builds are for user testing, while release candidates may become stable without product changes.
+- **Systemd journal severity is preserved** - Pulse service logs now carry native journal priorities so `journalctl -p` and downstream forwarding can filter by severity without changing file, terminal, or live-log output.
 
 ## Before you upgrade
 

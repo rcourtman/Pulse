@@ -34,6 +34,12 @@ _This changelog describes stable `v6.4.2` compared with stable `v6.4.1`._
   dismissal, and focus return to the invoking control.
 - The shipped migration guide now documents rerunning the agent installer with
   a new URL when the Pulse server address changes.
+- Update settings now label the prerelease channel as Preview and explain beta
+  user-testing builds separately from release candidates, while retaining the
+  existing `rc` wire value for compatibility.
+- Generated systemd services now preserve Pulse log severity as native journal
+  priorities, enabling `journalctl -p` and downstream syslog filtering without
+  changing the structured message or other logging sinks.
 
 ## Release integrity
 
@@ -43,6 +49,9 @@ _This changelog describes stable `v6.4.2` compared with stable `v6.4.1`._
 - The release candidate verifier now binds the requested version explicitly in
   the exact-SHA compiled-payload step, preventing step-local environment state
   from aborting candidate assembly.
+- Helm OCI publication now authenticates both Helm and the provenance
+  attestation client against GHCR before pushing the exact-version chart and
+  its attestation.
 
 ## Upgrade requirement
 
