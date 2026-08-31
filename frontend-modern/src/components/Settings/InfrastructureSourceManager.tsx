@@ -272,7 +272,7 @@ const missingAgentCoverageLabel = (row: InfrastructureSystemRow): string => {
 const installAgentActionLabel = (row: InfrastructureSystemRow): string => {
   const count = missingAgentMembers(row).length;
   return row.isCluster
-    ? `Install agents on ${formatCount(count, 'uncovered node')} in ${row.name}`
+    ? `Install node agents on ${formatCount(count, 'uncovered node')} in ${row.name}`
     : `Install agent on ${row.name}`;
 };
 

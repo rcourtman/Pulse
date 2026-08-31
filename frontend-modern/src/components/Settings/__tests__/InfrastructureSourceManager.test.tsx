@@ -556,11 +556,10 @@ describe('InfrastructureSourceManager setup summary', () => {
 
     expect(screen.getByText('1 host has limited coverage')).toBeInTheDocument();
     expect(screen.getByText('1 node needs host telemetry')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', {
-        name: 'Install agents on 1 uncovered node in Remote cluster',
-      }),
-    ).toBeInTheDocument();
+    const clusterInstallAction = screen.getByRole('button', {
+      name: 'Install node agents on 1 uncovered node in Remote cluster',
+    });
+    expect(clusterInstallAction).toHaveTextContent('Install node agents');
 
     fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for Remote cluster' }));
     expect(screen.queryByRole('button', { name: 'Install agent on pve-a' })).toBeNull();
