@@ -84,6 +84,42 @@ func readWebSocketMessageOfType(t *testing.T, conn *gorillaws.Conn, expected str
 	}
 }
 
+func websocketContractState() models.StateFrontend {
+	return models.StateFrontend{
+		Resources: []models.ResourceFrontend{
+			{
+				ID:           "resource-1",
+				Type:         "node",
+				Name:         "node-1",
+				DisplayName:  "Node 1",
+				PlatformID:   "platform-1",
+				PlatformType: "proxmox",
+				SourceType:   "pve",
+				Status:       "online",
+				LastSeen:     1,
+			},
+		},
+		ConnectedInfrastructure: []models.ConnectedInfrastructureItemFrontend{
+			{
+				ID:     "resource-1",
+				Name:   "Node 1",
+				Status: "active",
+				Surfaces: []models.ConnectedInfrastructureSurfaceFrontend{
+					{ID: "agent:host-1", Kind: "agent", Label: "Host telemetry"},
+				},
+			},
+		},
+	}
+}
+
+func useWebSocketContractState(srv *integrationServer) models.StateFrontend {
+	state := websocketContractState()
+	srv.hub.SetStateGetter(func(string) interface{} {
+		return state
+	})
+	return state
+}
+
 func newIntegrationServer(t *testing.T) *integrationServer {
 	return newIntegrationServerWithConfig(t, nil)
 }
@@ -1553,6 +1589,7 @@ func TestRecoveryEndpointRequiresDirectLoopback(t *testing.T) {
 
 func TestWebSocketSendsInitialState(t *testing.T) {
 	srv := newIntegrationServer(t)
+	state := useWebSocketContractState(srv)
 
 	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
@@ -1580,7 +1617,6 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	}
 
 	// Broadcast an additional state update and ensure clients receive it
-	state := srv.monitor.BuildFrontendState()
 	srv.hub.BroadcastState(state)
 
 	payload = readWebSocketMessageOfType(t, conn, "rawData")
@@ -1593,6 +1629,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 
 func TestWebsocketPayloadContractShape(t *testing.T) {
 	srv := newIntegrationServer(t)
+	contractState := useWebSocketContractState(srv)
 
 	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
@@ -1604,32 +1641,6 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 
 	readWebSocketMessageOfType(t, conn, "welcome")
 	readWebSocketMessageOfType(t, conn, "initialState")
-
-	contractState := models.StateFrontend{
-		Resources: []models.ResourceFrontend{
-			{
-				ID:           "resource-1",
-				Type:         "node",
-				Name:         "node-1",
-				DisplayName:  "Node 1",
-				PlatformID:   "platform-1",
-				PlatformType: "proxmox",
-				SourceType:   "pve",
-				Status:       "online",
-				LastSeen:     1,
-			},
-		},
-		ConnectedInfrastructure: []models.ConnectedInfrastructureItemFrontend{
-			{
-				ID:     "resource-1",
-				Name:   "Node 1",
-				Status: "active",
-				Surfaces: []models.ConnectedInfrastructureSurfaceFrontend{
-					{ID: "agent:host-1", Kind: "agent", Label: "Host telemetry"},
-				},
-			},
-		},
-	}
 
 	srv.hub.BroadcastState(contractState)
 	payload := readWebSocketMessageOfType(t, conn, "rawData")
@@ -1669,6 +1680,7 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 
 func TestWebsocketPayloadUsesCanonicalStateContract(t *testing.T) {
 	srv := newIntegrationServer(t)
+	testState := useWebSocketContractState(srv)
 
 	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
@@ -1680,32 +1692,6 @@ func TestWebsocketPayloadUsesCanonicalStateContract(t *testing.T) {
 
 	readWebSocketMessageOfType(t, conn, "welcome")
 	readWebSocketMessageOfType(t, conn, "initialState")
-
-	testState := models.StateFrontend{
-		Resources: []models.ResourceFrontend{
-			{
-				ID:           "resource-1",
-				Type:         "node",
-				Name:         "node-1",
-				DisplayName:  "Node 1",
-				PlatformID:   "platform-1",
-				PlatformType: "proxmox",
-				SourceType:   "pve",
-				Status:       "online",
-				LastSeen:     1,
-			},
-		},
-		ConnectedInfrastructure: []models.ConnectedInfrastructureItemFrontend{
-			{
-				ID:     "resource-1",
-				Name:   "Node 1",
-				Status: "active",
-				Surfaces: []models.ConnectedInfrastructureSurfaceFrontend{
-					{ID: "agent:host-1", Kind: "agent", Label: "Host telemetry"},
-				},
-			},
-		},
-	}
 
 	srv.hub.BroadcastState(testState)
 	canonicalPayload := readWebSocketMessageOfType(t, conn, "rawData")
