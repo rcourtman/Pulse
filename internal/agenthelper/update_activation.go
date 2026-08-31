@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,7 +23,15 @@ const (
 	defaultUpdateRollbackWindow = 2 * time.Minute
 	minUpdateRollbackWindow     = 5 * time.Second
 	maxUpdateRollbackWindow     = 10 * time.Minute
+	initialRollbackRetryDelay   = 5 * time.Second
+	maxRollbackRetryDelay       = time.Minute
 )
+
+type UpdateRecoveryFailure struct {
+	ActivationID string
+	Error        string
+	RetryIn      time.Duration
+}
 
 type UpdateActivateRequest struct {
 	ArtifactID string `json:"artifactId"`
@@ -76,6 +85,7 @@ type UpdateActivatorConfig struct {
 	Now                     func() time.Time
 	RollbackWindow          time.Duration
 	ScheduleRollback        func(time.Duration, func()) func()
+	ReportRecoveryFailure   func(UpdateRecoveryFailure)
 }
 
 type updateActivator struct {
@@ -93,7 +103,10 @@ type updateActivator struct {
 	now                     func() time.Time
 	rollbackWindow          time.Duration
 	scheduleRollback        func(time.Duration, func()) func()
+	reportRecoveryFailure   func(UpdateRecoveryFailure)
 	cancelRollback          func()
+	rollbackRetryDelay      time.Duration
+	rollbackTimerGeneration uint64
 }
 
 type durableUpdateState struct {
@@ -139,12 +152,16 @@ func NewUpdateActivator(config UpdateActivatorConfig) (UpdateProvider, error) {
 			return func() { timer.Stop() }
 		}
 	}
+	reportRecoveryFailure := config.ReportRecoveryFailure
+	if reportRecoveryFailure == nil {
+		reportRecoveryFailure = func(UpdateRecoveryFailure) {}
+	}
 	activator := &updateActivator{
 		quarantineDir: config.QuarantineDir, stagingDir: config.StagingDir, targetPath: config.TargetPath,
 		rollbackPath: config.TargetPath + ".last-known-good", statePath: config.StatePath,
 		verifySignature: config.VerifySignature, inspectVersion: config.InspectVersion, validateCommitter: config.ValidateCommitter, validateOwner: config.ValidateOwner,
 		validateQuarantineOwner: config.ValidateQuarantineOwner, now: now,
-		rollbackWindow: rollbackWindow, scheduleRollback: scheduleRollback,
+		rollbackWindow: rollbackWindow, scheduleRollback: scheduleRollback, reportRecoveryFailure: reportRecoveryFailure,
 	}
 	if err := activator.recoverUncommittedLocked(); err != nil {
 		return nil, err
@@ -477,22 +494,71 @@ func (u *updateActivator) schedulePendingRollbackLocked(state durableUpdateState
 	if delay < 0 {
 		delay = 0
 	}
+	u.schedulePendingRollbackAttemptLocked(state, delay)
+}
+
+func (u *updateActivator) schedulePendingRollbackAttemptLocked(state durableUpdateState, delay time.Duration) {
+	u.rollbackTimerGeneration++
+	generation := u.rollbackTimerGeneration
 	u.cancelRollback = u.scheduleRollback(delay, func() {
 		u.mu.Lock()
-		defer u.mu.Unlock()
-		current, err := u.readState()
-		if err != nil || current.Action != "pending" || current.ActivationID != state.ActivationID {
-			return
+		failure := u.runPendingRollbackAttemptLocked(state, generation)
+		u.mu.Unlock()
+		if failure != nil {
+			u.reportRecoveryFailure(*failure)
 		}
-		_ = u.recoverStateLocked(current)
 	})
 }
 
+func (u *updateActivator) runPendingRollbackAttemptLocked(state durableUpdateState, generation uint64) *UpdateRecoveryFailure {
+	if generation != u.rollbackTimerGeneration {
+		return nil
+	}
+	// Consume this generation before touching durable state. A stopped timer
+	// whose callback was already queued cannot clear or replace a newer timer.
+	u.rollbackTimerGeneration++
+	u.cancelRollback = nil
+	current, err := u.readState()
+	if err != nil {
+		failure := u.schedulePendingRollbackRetryLocked(state, fmt.Errorf("read durable update state: %w", err))
+		return &failure
+	}
+	if current.Action != "pending" || current.ActivationID != state.ActivationID {
+		u.rollbackRetryDelay = 0
+		return nil
+	}
+	if err := u.recoverStateLocked(current); err != nil {
+		failure := u.schedulePendingRollbackRetryLocked(current, err)
+		return &failure
+	}
+	return nil
+}
+
+func (u *updateActivator) schedulePendingRollbackRetryLocked(state durableUpdateState, recoveryErr error) UpdateRecoveryFailure {
+	delay := initialRollbackRetryDelay
+	if u.rollbackRetryDelay > 0 {
+		delay = u.rollbackRetryDelay * 2
+		if delay > maxRollbackRetryDelay {
+			delay = maxRollbackRetryDelay
+		}
+	}
+	u.rollbackRetryDelay = delay
+	failure := UpdateRecoveryFailure{
+		ActivationID: state.ActivationID,
+		Error:        recoveryErr.Error(),
+		RetryIn:      delay,
+	}
+	u.schedulePendingRollbackAttemptLocked(state, delay)
+	return failure
+}
+
 func (u *updateActivator) cancelPendingRollbackLocked() {
+	u.rollbackTimerGeneration++
 	if u.cancelRollback != nil {
 		u.cancelRollback()
 		u.cancelRollback = nil
 	}
+	u.rollbackRetryDelay = 0
 }
 
 func updateResultFromState(state durableUpdateState) UpdateResult {
