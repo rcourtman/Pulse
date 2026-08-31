@@ -4664,3 +4664,15 @@ historical releases without a portable candidate bundle retain verification
 against their original `create-release.yml` publication provenance. Multi-asset
 download retries clear the activation marker, checksum manifest, and portable
 bundle first so a partial attempt cannot poison every later retry.
+
+### Stable v6.4.2 patch cutoff
+
+The stable v6.4.2 packet remains centered on the infrastructure-action and SSO
+administrator-boundary fixes. Its final mainline cutoff also names every
+customer-visible change that landed after the initial packet preparation:
+bounded security setup request decoding, accurate PBS running and incomplete
+backup state, Overview-level notification retry and dismissal, canonical
+Assistant command-help dialog behavior, and agent server-address migration
+guidance. Release-integrity detail also records authenticated Unified Agent
+download validation and the exact-step candidate version binding. Packet proof
+must retain those outcomes before v6.4.2 can be dispatched for publication.

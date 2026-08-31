@@ -2066,6 +2066,12 @@ func TestV642SecurityPacketCoversBothAdministratorBoundaryFixes(t *testing.T) {
 	for _, required := range []string{
 		"Infrastructure actions honor role boundaries",
 		"SSO access no longer implies administrator access",
+		"SAML allowlists fail closed",
+		"Security-sensitive setup requests are bounded",
+		"PBS backup state returns to idle reliably",
+		"Delivery warnings can be resolved from Overview",
+		"Assistant command help behaves as a complete dialog",
+		"Agent URL migration guidance is now included",
 		"map at least one trusted IdP group to the built-in `admin` role before upgrading",
 		"The rollback target is stable `v6.4.1`",
 	} {
@@ -2076,6 +2082,13 @@ func TestV642SecurityPacketCoversBothAdministratorBoundaryFixes(t *testing.T) {
 	for _, required := range []string{
 		"effective RBAC `admin` grant on `*`",
 		"SSO-only installation must map at least one trusted IdP group",
+		"request bodies now\n  have explicit size limits",
+		"completed PBS-to-PBS sync copies no longer pin a\n  guest in Backup Running",
+		"Alerts overview now exposes the same retry and dismiss actions",
+		"Assistant command help now uses the canonical responsive dialog boundary",
+		"migration guide now documents rerunning the agent installer",
+		"authenticates every Unified Agent download",
+		"release candidate verifier now binds the requested version explicitly",
 		"Promotion path: emergency stable patch from `main`",
 		"Mobile decision: `no-mobile-impact`",
 	} {

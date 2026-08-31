@@ -9,6 +9,11 @@ actions and SSO-only deployments.
 - **Infrastructure actions honor role boundaries** - Browser and proxy users must now be administrators or hold an explicit action permission before they can plan, approve, view, or execute infrastructure actions.
 - **SSO access no longer implies administrator access** - An authenticated SSO user now needs an effective RBAC `admin` grant for administrator routes. Unassigned, `operator`, and `viewer` users remain non-administrative even when no local administrator exists.
 - **SAML allowlists fail closed** - A configured domain or email allowlist now rejects a SAML assertion that omits the email claim instead of bypassing the allowlist.
+- **Security-sensitive setup requests are bounded** - Bootstrap, setup, repair, and recovery endpoints now reject oversized JSON request bodies before decoding them.
+- **PBS backup state returns to idle reliably** - Failed backups, interrupted snapshots, and completed PBS-to-PBS sync copies no longer leave guests stuck in a Backup Running state. Incomplete artifacts remain visible as failed rather than appearing recoverable.
+- **Delivery warnings can be resolved from Overview** - Retained notification failures can now be retried or dismissed directly from the Alerts overview while delivery history remains available.
+- **Assistant command help behaves as a complete dialog** - Command help now traps focus, isolates the background, closes consistently, returns focus to its trigger, and uses the same responsive dialog behavior as the rest of Pulse.
+- **Agent URL migration guidance is now included** - The built-in migration guide explains how to rerun the agent installer with the new server URL after moving or renaming a Pulse server.
 
 ## Before you upgrade
 

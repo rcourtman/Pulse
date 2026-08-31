@@ -19,6 +19,30 @@ _This changelog describes stable `v6.4.2` compared with stable `v6.4.1`._
   action routes.
 - SAML domain and email allowlists now reject assertions without an email
   claim when either allowlist is configured.
+- Security-sensitive bootstrap, setup, repair, and recovery request bodies now
+  have explicit size limits and reject oversized JSON before decoding.
+- Pulse now distinguishes actively written PBS snapshots from terminally
+  incomplete artifacts by correlating incomplete snapshots with live PBS data
+  tasks. Failed backups and completed PBS-to-PBS sync copies no longer pin a
+  guest in Backup Running, and incomplete artifacts are excluded from
+  recoverable latest-backup pointers.
+- The Alerts overview now exposes the same retry and dismiss actions as the
+  Notifications view for retained delivery failures, so operators can clear a
+  warning without deleting delivery history.
+- Assistant command help now uses the canonical responsive dialog boundary,
+  including focus containment, background isolation, Escape and backdrop
+  dismissal, and focus return to the invoking control.
+- The shipped migration guide now documents rerunning the agent installer with
+  a new URL when the Pulse server address changes.
+
+## Release integrity
+
+- Published release validation now authenticates every Unified Agent download
+  endpoint by checking its checksum and detached-signature headers against the
+  exact served bytes before activation.
+- The release candidate verifier now binds the requested version explicitly in
+  the exact-SHA compiled-payload step, preventing step-local environment state
+  from aborting candidate assembly.
 
 ## Upgrade requirement
 
