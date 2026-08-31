@@ -78,9 +78,25 @@ Authentication and authorization:
 
 - `internal/api/auth.go`
 - `internal/api/authorization.go`
+- `internal/api/router.go`
+- `internal/api/router_routes_auth_security.go`
+- `internal/api/security.go`
+- `internal/api/security_tokens.go`
+- `internal/api/session_store.go`
 - `internal/api/middleware.go`
 - `internal/api/middleware_tenant.go`
+- `internal/config/api_tokens.go`
+- `internal/api/oidc_handlers.go`
+- `internal/api/oidc_service.go`
+- `internal/api/saml_handlers.go`
+- `internal/api/saml_service.go`
+- `internal/config/sso.go`
 - `internal/api/api_token_scope_transport_integration_test.go`
+- `internal/api/oidc_legacy_callback_recovery_test.go`
+- `internal/api/router_csrf_middleware_test.go`
+- `internal/api/security_tokens_lifecycle_test.go`
+- `internal/api/session_store_test.go`
+- `internal/api/saml_service_test.go`
 - `internal/api/middleware_tenant_authorization_test.go`
 - `pkg/auth/`
 
@@ -102,9 +118,12 @@ From a clean checkout of the commit under review, run:
 ```
 
 The script prints the tested commit, records the Go toolchain version in its
-output, runs the focused package and authorization tests, and validates the
-public documentation mirrors. A passing result is regression evidence only.
-It does not prove that the implementation is free of vulnerabilities.
+output, runs the focused package and authorization tests, verifies that every
+named API security regression still exists before running it, and validates
+the public documentation mirrors. The explicit inventory prevents a renamed
+or deleted test from becoming a silent successful no-op. A passing result is
+regression evidence only. It does not prove that the implementation is free
+of vulnerabilities.
 
 ## Manual review procedure
 
