@@ -34,3 +34,32 @@ func TestGetNodesRejectsOversizedErrorBody(t *testing.T) {
 		t.Fatalf("expected size-limit error, got: %v", err)
 	}
 }
+
+func TestGetNodesRejectsOversizedSuccessBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[],"padding":"`))
+		_, _ = w.Write([]byte(strings.Repeat("x", int(maxResponseBodyBytes))))
+		_, _ = w.Write([]byte(`"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!pulse-token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.GetNodes(context.Background())
+	if err == nil {
+		t.Fatal("expected oversized body error, got nil")
+	}
+	if !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("expected size-limit error, got: %v", err)
+	}
+}

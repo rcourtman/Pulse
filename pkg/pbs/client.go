@@ -272,6 +272,9 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 		}
 		return &authHTTPError{status: resp.StatusCode, body: string(body)}
 	}
+	if err := securityutil.LimitResponseBody(resp, maxResponseBodyBytes); err != nil {
+		return err
+	}
 
 	var result struct {
 		Data struct {
@@ -423,6 +426,9 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 		return nil, &apiHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
+	if err := securityutil.LimitResponseBody(resp, maxResponseBodyBytes); err != nil {
+		return nil, err
+	}
 	return resp, nil
 }
 

@@ -34,3 +34,32 @@ func TestGetVersionRejectsOversizedErrorBody(t *testing.T) {
 		t.Fatalf("expected size-limit error, got: %v", err)
 	}
 }
+
+func TestGetVersionRejectsOversizedSuccessBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/version" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":{"version":"8.2"},"padding":"`))
+		_, _ = w.Write([]byte(strings.Repeat("x", int(maxResponseBodyBytes))))
+		_, _ = w.Write([]byte(`"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pmg!pulse-token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.GetVersion(context.Background())
+	if err == nil {
+		t.Fatal("expected oversized body error, got nil")
+	}
+	if !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("expected size-limit error, got: %v", err)
+	}
+}
