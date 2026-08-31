@@ -6,10 +6,20 @@ import (
 	"errors"
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func openFileNoFollow(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	// Quarantine files are collector-owned. O_NONBLOCK ensures a FIFO or
+	// device swap cannot wedge the privileged helper before descriptor metadata
+	// rejects the object as non-regular. The returned descriptor is the sole
+	// authority for all subsequent type, ownership, mode, and size checks.
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(fd), path), nil
 }
 
 func StrictRootOwnedFile(file *os.File) error {

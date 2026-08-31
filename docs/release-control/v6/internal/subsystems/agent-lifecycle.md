@@ -142,6 +142,12 @@ retains the previous-version update evidence from that handoff.
 Before staging or activation, the helper must establish that the signed target
 is the Pulse agent Go command, that its declared and operational version equals
 the requested target, and that the target advances the installed version.
+Every collector-owned quarantine artifact is opened exactly once with
+no-follow, close-on-exec, and nonblocking semantics. The helper derives file
+type, ownership, mode, and bounded size only from that descriptor, rejects
+FIFO, device, socket, symlink, oversized, and size-unstable inputs without
+mutating staging or activation state, and releases update admission so a
+subsequent valid stage can proceed.
 Commit is additionally bound to the activating process ID and to the digest of
 that process's `/proc/<pid>/exe`, preventing an unrelated collector process
 from finalizing a pending replacement.
