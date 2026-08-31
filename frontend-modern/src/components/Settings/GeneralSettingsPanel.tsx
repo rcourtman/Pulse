@@ -381,7 +381,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               <Show when={props.pvePollingSelection() === 'custom'}>
                 <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-border bg-surface-hover p-4 transition-all animate-in fade-in slide-in-from-top-1">
                   <div class="flex-1 min-w-0">
-                    <label class="block text-sm font-medium text-base-content truncate">
+                    <label
+                      for="pve-custom-polling-seconds"
+                      class="block text-sm font-medium text-base-content truncate"
+                    >
                       {t('settings.general.monitoringCadence.custom.title')}
                     </label>
                     <p class="text-xs text-muted mt-0.5 line-clamp-2">
@@ -392,6 +395,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     </p>
                   </div>
                   <input
+                    id="pve-custom-polling-seconds"
                     type="number"
                     min={PVE_POLLING_MIN_SECONDS}
                     max={PVE_POLLING_MAX_SECONDS}

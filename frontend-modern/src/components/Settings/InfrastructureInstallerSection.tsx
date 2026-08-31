@@ -531,11 +531,15 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               <Show when={showAdvancedOptions()}>
                 <div class="space-y-3 rounded-md border border-border bg-surface px-4 py-4">
                   <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-                    <label class="mb-1.5 block text-xs font-medium text-base-content">
+                    <label
+                      for="agent-custom-connection-url"
+                      class="mb-1.5 block text-xs font-medium text-base-content"
+                    >
                       Connection URL (Agent → Pulse)
                     </label>
                     <div class="flex gap-2">
                       <input
+                        id="agent-custom-connection-url"
                         type="text"
                         value={state.customAgentUrl()}
                         onInput={(event) => state.setCustomAgentUrl(event.currentTarget.value)}

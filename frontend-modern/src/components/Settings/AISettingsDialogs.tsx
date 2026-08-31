@@ -61,10 +61,14 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                     when={props.setupProvider() === 'ollama'}
                     fallback={
                       <div>
-                        <label class="block text-sm font-medium text-base-content mb-1.5">
+                        <label
+                          for="ai-setup-api-key"
+                          class="block text-sm font-medium text-base-content mb-1.5"
+                        >
                           {setupProviderConfig().title} API Key
                         </label>
                         <input
+                          id="ai-setup-api-key"
                           type="password"
                           value={props.setupApiKey()}
                           onInput={(event) => props.setSetupApiKey(event.currentTarget.value)}
@@ -80,10 +84,14 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                     }
                   >
                     <div>
-                      <label class="block text-sm font-medium text-base-content mb-1.5">
+                      <label
+                        for="ai-setup-ollama-url"
+                        class="block text-sm font-medium text-base-content mb-1.5"
+                      >
                         Ollama Server URL
                       </label>
                       <input
+                        id="ai-setup-ollama-url"
                         type="url"
                         value={props.setupOllamaUrl()}
                         onInput={(event) => props.setSetupOllamaUrl(event.currentTarget.value)}

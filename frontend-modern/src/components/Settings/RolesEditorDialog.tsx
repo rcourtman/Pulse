@@ -53,8 +53,11 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
         <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1">
-              <label class="block text-sm font-medium text-base-content">Role ID</label>
+              <label for="role-editor-id" class="block text-sm font-medium text-base-content">
+                Role ID
+              </label>
               <input
+                id="role-editor-id"
                 type="text"
                 value={props.formId}
                 onInput={(event) => props.onFormIdInput(event.currentTarget.value)}
@@ -64,8 +67,11 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
               />
             </div>
             <div class="space-y-1">
-              <label class="block text-sm font-medium text-base-content">Role Name</label>
+              <label for="role-editor-name" class="block text-sm font-medium text-base-content">
+                Role Name
+              </label>
               <input
+                id="role-editor-name"
                 type="text"
                 value={props.formName}
                 onInput={(event) => props.onFormNameInput(event.currentTarget.value)}
@@ -75,8 +81,14 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
             </div>
           </div>
           <div class="space-y-1">
-            <label class="block text-sm font-medium text-base-content">Description</label>
+            <label
+              for="role-editor-description"
+              class="block text-sm font-medium text-base-content"
+            >
+              Description
+            </label>
             <input
+              id="role-editor-description"
               type="text"
               value={props.formDescription}
               onInput={(event) => props.onFormDescriptionInput(event.currentTarget.value)}
@@ -87,7 +99,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
 
           <div class="space-y-3 pt-2">
             <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <label class="block text-sm font-medium text-base-content">Permissions</label>
+              <span class="block text-sm font-medium text-base-content">Permissions</span>
               <button
                 type="button"
                 onClick={props.onAddPermission}

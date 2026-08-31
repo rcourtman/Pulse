@@ -247,9 +247,9 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP}</p>
             </div>
             <div class={`${formField} sm:col-span-2`}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              <span class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                 {ALERT_DESTINATIONS_APPRISE_TLS_LABEL}
-              </label>
+              </span>
               <Show when={props.config.skipTlsVerify}>
                 <TlsVerificationWarningBanner
                   class="mb-3"

@@ -340,6 +340,7 @@ export const AgentProfilesPanel: Component = () => {
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
+                    aria-label="Close agent profile editor"
                     class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
                   >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -356,8 +357,14 @@ export const AgentProfilesPanel: Component = () => {
                 <div class="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
                   {/* Profile Name */}
                   <div class="space-y-1">
-                    <label class="block text-sm font-medium text-base-content">Profile Name</label>
+                    <label
+                      for="agent-profile-name"
+                      class="block text-sm font-medium text-base-content"
+                    >
+                      Profile Name
+                    </label>
                     <input
+                      id="agent-profile-name"
                       type="text"
                       value={formName()}
                       onInput={(e) => setFormName(e.currentTarget.value)}
@@ -384,18 +391,24 @@ export const AgentProfilesPanel: Component = () => {
 
                   {/* Settings */}
                   <div class="space-y-3">
-                    <label class="block text-sm font-medium text-base-content">Settings</label>
+                    <span class="block text-sm font-medium text-base-content">Settings</span>
 
                     <For each={KNOWN_SETTINGS}>
                       {(setting) => (
                         <div class="rounded-md border border-border p-3 space-y-1">
                           <div class="flex items-center justify-between">
-                            <label class="text-sm font-medium text-base-content">
+                            <span class="text-sm font-medium text-base-content">
                               {setting.label}
-                            </label>
+                            </span>
                             <Show when={setting.type === 'boolean'}>
                               <button
                                 type="button"
+                                aria-label={`${setting.label}: ${String(formSettings()[setting.key] ?? 'default')}`}
+                                aria-pressed={
+                                  formSettings()[setting.key] === undefined
+                                    ? 'mixed'
+                                    : formSettings()[setting.key] === true
+                                }
                                 onClick={() => {
                                   const current = formSettings()[setting.key];
                                   if (current === undefined) {
@@ -445,6 +458,7 @@ export const AgentProfilesPanel: Component = () => {
                             <Show when={setting.type === 'duration'}>
                               <input
                                 type="text"
+                                aria-label={setting.label}
                                 value={(formSettings()[setting.key] as string) || ''}
                                 onInput={(e) =>
                                   updateSetting(setting.key, e.currentTarget.value || undefined)
@@ -456,6 +470,7 @@ export const AgentProfilesPanel: Component = () => {
                             <Show when={setting.type === 'string'}>
                               <input
                                 type="text"
+                                aria-label={setting.label}
                                 value={(formSettings()[setting.key] as string) || ''}
                                 onInput={(e) =>
                                   updateSetting(setting.key, e.currentTarget.value || undefined)
@@ -480,12 +495,13 @@ export const AgentProfilesPanel: Component = () => {
                           {(key) => (
                             <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 mb-2">
                               <div class="flex items-center justify-between">
-                                <label class="text-sm font-medium text-base-content font-mono">
+                                <span class="text-sm font-medium text-base-content font-mono">
                                   {key}
-                                </label>
+                                </span>
                                 <div class="flex items-center gap-2">
                                   <input
                                     type="text"
+                                    aria-label={key}
                                     value={String(formSettings()[key] ?? '')}
                                     onInput={(e) => {
                                       const val = e.currentTarget.value;

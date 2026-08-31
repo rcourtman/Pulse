@@ -669,10 +669,14 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
           <div class="space-y-4">
             <div class="space-y-2">
-              <label class="text-xs font-semibold uppercase tracking-wide text-muted">
+              <label
+                for="api-token-name"
+                class="text-xs font-semibold uppercase tracking-wide text-muted"
+              >
                 Token name
               </label>
               <input
+                id="api-token-name"
                 type="text"
                 value={nameInput()}
                 onInput={(e) => setNameInput(e.currentTarget.value)}

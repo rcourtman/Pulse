@@ -136,11 +136,15 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 {/* Custom interval input */}
                 <Show when={props.backupIntervalSelectValue() === 'custom'}>
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-base-content">
+                    <label
+                      for="backup-custom-interval-minutes"
+                      class="text-xs font-medium text-base-content"
+                    >
                       Custom interval (minutes)
                     </label>
                     <div class="flex flex-col sm:flex-row sm:items-center gap-3">
                       <input
+                        id="backup-custom-interval-minutes"
                         type="number"
                         min="1"
                         max={BACKUP_INTERVAL_MAX_MINUTES}

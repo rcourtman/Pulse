@@ -47,7 +47,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           Public URL
         </h4>
         <div class="space-y-2">
-          <label class="text-sm font-medium text-base-content">
+          <label for="pulse-public-url" class="text-sm font-medium text-base-content">
             Pulse URL for Alerts and Agent Commands
           </label>
           <p class="text-xs text-muted">
@@ -57,6 +57,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           </p>
           <div class="relative">
             <input
+              id="pulse-public-url"
               type="text"
               value={props.publicURL()}
               onInput={(e) => {
@@ -104,12 +105,15 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           Network Settings
         </h4>
         <div class="space-y-2">
-          <label class="text-sm font-medium text-base-content">CORS Allowed Origins</label>
+          <label for="cors-allowed-origins" class="text-sm font-medium text-base-content">
+            CORS Allowed Origins
+          </label>
           <p class="text-xs text-muted">
             For reverse proxy setups (* = allow all, empty = same-origin only)
           </p>
           <div class="relative">
             <input
+              id="cors-allowed-origins"
               type="text"
               value={props.allowedOrigins()}
               onInput={(e) => {
@@ -171,7 +175,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
 
           <Show when={props.allowEmbedding()}>
             <div class="space-y-2">
-              <label class="text-xs font-medium text-base-content">
+              <label for="allowed-embed-origins" class="text-xs font-medium text-base-content">
                 Allowed Embed Origins (optional)
               </label>
               <p class="text-xs text-muted">
@@ -179,6 +183,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
                 only)
               </p>
               <input
+                id="allowed-embed-origins"
                 type="text"
                 value={props.allowedEmbedOrigins()}
                 onChange={(e) => {
@@ -217,7 +222,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
         </h3>
         <div class="space-y-3">
           <div>
-            <label class="text-sm font-medium text-base-content">
+            <label for="webhook-private-cidrs" class="text-sm font-medium text-base-content">
               Allowed Private IP Ranges for Webhooks
             </label>
             <p class="text-xs text-muted mb-2">
@@ -226,6 +231,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
               IPs).
             </p>
             <input
+              id="webhook-private-cidrs"
               type="text"
               value={props.webhookAllowedPrivateCIDRs()}
               onChange={(e) => {

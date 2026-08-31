@@ -27,10 +27,11 @@ export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps
       />
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class={formField}>
-          <label class={labelClass('flex items-center gap-2')}>
+          <label for="node-name" class={labelClass('flex items-center gap-2')}>
             Node Name <span class="text-red-500">*</span>
           </label>
           <input
+            id="node-name"
             type="text"
             value={state.formData().name}
             onInput={(event) => state.updateField('name', event.currentTarget.value)}
@@ -45,10 +46,11 @@ export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps
         </div>
 
         <div class={formField}>
-          <label class={labelClass('flex items-center gap-1')}>
+          <label for="node-endpoint-url" class={labelClass('flex items-center gap-1')}>
             Endpoint URL <span class="text-red-500">*</span>
           </label>
           <input
+            id="node-endpoint-url"
             type="text"
             value={state.formData().host}
             onInput={(event) => state.updateField('host', event.currentTarget.value)}
@@ -62,10 +64,11 @@ export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps
         </div>
 
         <div class={formField}>
-          <label class={labelClass('flex items-center gap-1')}>
+          <label for="node-guest-url" class={labelClass('flex items-center gap-1')}>
             Guest URL <span class="text-slate-500 text-xs font-normal">(Optional)</span>
           </label>
           <input
+            id="node-guest-url"
             type="text"
             value={state.formData().guestURL}
             onInput={(event) => state.updateField('guestURL', event.currentTarget.value)}

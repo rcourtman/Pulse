@@ -66,10 +66,11 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
       <Show when={state.formData().authType === 'password'}>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div class={formField}>
-            <label class={labelClass()}>
+            <label for="node-auth-username" class={labelClass()}>
               Username <span class="text-red-500">*</span>
             </label>
             <input
+              id="node-auth-username"
               type="text"
               value={state.formData().user}
               onInput={(event) => state.updateField('user', event.currentTarget.value)}
@@ -83,13 +84,14 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
           </div>
 
           <div class={formField}>
-            <label class={labelClass('flex items-center gap-2')}>
+            <label for="node-auth-password" class={labelClass('flex items-center gap-2')}>
               Password
               <Show when={!state.isEditingExistingNode()}>
                 <span class="text-red-500">*</span>
               </Show>
             </label>
             <input
+              id="node-auth-password"
               type="password"
               value={state.formData().password}
               onInput={(event) => state.updateField('password', event.currentTarget.value)}
@@ -116,10 +118,11 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div class={formField}>
-                <label class={labelClass()}>
+                <label for="node-auth-token-id" class={labelClass()}>
                   Token ID <span class="text-red-500">*</span>
                 </label>
                 <input
+                  id="node-auth-token-id"
                   type="text"
                   value={state.formData().tokenName}
                   onInput={(event) => state.updateField('tokenName', event.currentTarget.value)}
@@ -133,13 +136,14 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
               </div>
 
               <div class={formField}>
-                <label class={labelClass('flex items-center gap-2')}>
+                <label for="node-auth-token-value" class={labelClass('flex items-center gap-2')}>
                   Token Value
                   <Show when={!state.isEditingExistingNode()}>
                     <span class="text-red-500">*</span>
                   </Show>
                 </label>
                 <input
+                  id="node-auth-token-value"
                   type="password"
                   value={state.formData().tokenValue}
                   onInput={(event) => state.updateField('tokenValue', event.currentTarget.value)}

@@ -663,7 +663,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       <Show when={!schedulerOpen()}>
         <div class="flex flex-col items-stretch justify-between gap-3 border-t border-border-subtle pt-2 sm:flex-row sm:items-center">
           <div class="min-w-0 flex-1">
-            <label class="text-sm font-medium text-base-content">Maintenance window</label>
+            <span class="text-sm font-medium text-base-content">Maintenance window</span>
             <p class="text-[11px] text-muted mt-0.5 leading-tight">
               Suspend findings on this resource for a defined window. Useful for scheduled upgrades,
               planned downtime, or reboots where Pulse should stay quiet until the window closes.
@@ -874,7 +874,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <div class="space-y-3 border-t border-border-subtle pt-3" aria-label="Automatic actions">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
-              <label class="text-sm font-medium text-base-content">Automatic action limits</label>
+              <span class="text-sm font-medium text-base-content">Automatic action limits</span>
               <p class="mt-0.5 text-[11px] leading-tight text-muted">
                 This resource follows your Patrol mode by default. Turn this on only to limit
                 automatic work to selected actions or daily hours. Live safety checks and
@@ -882,6 +882,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               </p>
             </div>
             <Toggle
+              ariaLabel="Limit automatic actions for this resource"
               checked={autoRemediationEnabled()}
               onChange={(event) => setAutoRemediationEnabled(event.currentTarget.checked)}
               disabled={saving() || neverAutoRemediate()}
@@ -922,7 +923,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 )}
               </For>
 
-              <label class="flex items-center justify-between gap-3 border-t border-border-subtle pt-2">
+              <div class="flex items-center justify-between gap-3 border-t border-border-subtle pt-2">
                 <span>
                   <span class="block text-xs font-medium text-base-content">
                     Restrict to daily hours
@@ -932,11 +933,12 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                   </span>
                 </span>
                 <Toggle
+                  ariaLabel="Restrict automatic actions to daily hours"
                   checked={autoWindowEnabled()}
                   onChange={(event) => setAutoWindowEnabled(event.currentTarget.checked)}
                   disabled={saving()}
                 />
-              </label>
+              </div>
 
               <Show when={autoWindowEnabled()}>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -1025,9 +1027,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
       <div class="flex items-start justify-between gap-3 pt-2 border-t border-border-subtle">
         <div class="min-w-0 flex-1">
-          <label class="text-sm font-medium text-red-700 dark:text-red-400">
+          <span class="text-sm font-medium text-red-700 dark:text-red-400">
             Never auto-remediate
-          </label>
+          </span>
           <p class="text-[11px] text-muted mt-0.5 leading-tight">
             Refuse all automated remediation against this resource, even with a valid approval. The
             action broker logs every refused dispatch as a Failed audit record. Use for resources
@@ -1035,6 +1037,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           </p>
         </div>
         <Toggle
+          ariaLabel="Never auto-remediate this resource"
           checked={neverAutoRemediate()}
           onChange={(e) => handleNeverAutoRemediateToggle(e.currentTarget.checked)}
           disabled={saving() || lifecycleState() === 'retired'}

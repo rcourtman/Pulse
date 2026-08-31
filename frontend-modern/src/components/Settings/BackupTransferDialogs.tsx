@@ -87,7 +87,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </Show>
 
               <div class={formField}>
-                <label class={labelClass()}>
+                <label for="backup-export-passphrase" class={labelClass()}>
                   {props.securityStatus()?.hasAuthentication
                     ? props.useCustomPassphrase()
                       ? 'Custom Passphrase'
@@ -95,6 +95,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     : 'Encryption Passphrase'}
                 </label>
                 <input
+                  id="backup-export-passphrase"
                   type="password"
                   value={props.exportPassphrase()}
                   onInput={(event) => props.setExportPassphrase(event.currentTarget.value)}
@@ -192,8 +193,11 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </p>
 
               <div class={formField}>
-                <label class={labelClass()}>API Token</label>
+                <label for="backup-api-token" class={labelClass()}>
+                  API Token
+                </label>
                 <input
+                  id="backup-api-token"
                   type="password"
                   value={props.apiTokenInput()}
                   onInput={(event) => props.setApiTokenInput(event.currentTarget.value)}
@@ -243,8 +247,11 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
 
             <div class="space-y-4">
               <div class={formField}>
-                <label class={labelClass()}>Configuration File</label>
+                <label for="backup-import-file" class={labelClass()}>
+                  Configuration File
+                </label>
                 <input
+                  id="backup-import-file"
                   type="file"
                   accept=".json"
                   onChange={(event) => {
@@ -256,8 +263,11 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </div>
 
               <div class={formField}>
-                <label class={labelClass()}>Backup Password</label>
+                <label for="backup-import-passphrase" class={labelClass()}>
+                  Backup Password
+                </label>
                 <input
+                  id="backup-import-passphrase"
                   type="password"
                   value={props.importPassphrase()}
                   onInput={(event) => props.setImportPassphrase(event.currentTarget.value)}

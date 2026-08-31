@@ -80,7 +80,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
     <div class="space-y-4 text-sm">
       <div>
         <div class="flex items-center justify-between mb-4">
-          <label class="text-sm font-medium text-base-content">Service Type</label>
+          <span class="text-sm font-medium text-base-content">Service Type</span>
           <button
             type="button"
             onClick={() => props.setShowServiceDropdown((open) => !open)}
@@ -124,8 +124,11 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
 
       <div class="grid w-full grid-cols-1 gap-3 md:grid-cols-2">
         <div class={formField}>
-          <label class={labelClass()}>Name</label>
+          <label for="alert-webhook-name" class={labelClass()}>
+            Name
+          </label>
           <input
+            id="alert-webhook-name"
             type="text"
             value={props.formData().name}
             onInput={(e) => props.setFormData((prev) => ({ ...prev, name: e.currentTarget.value }))}
@@ -150,8 +153,11 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
       </div>
 
       <div class={formField}>
-        <label class={labelClass()}>Webhook URL</label>
+        <label for="alert-webhook-url" class={labelClass()}>
+          Webhook URL
+        </label>
         <input
+          id="alert-webhook-url"
           type="url"
           value={props.formData().url}
           onInput={(e) => props.setFormData((prev) => ({ ...prev, url: e.currentTarget.value }))}
@@ -219,11 +225,12 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         )}
       >
         <div class={formField}>
-          <label class={labelClass('flex items-center gap-2')}>
+          <label for="alert-webhook-mention" class={labelClass('flex items-center gap-2')}>
             Mention
             <span class="text-xs text-muted">{ALERT_WEBHOOK_MENTION_HELP_LABEL}</span>
           </label>
           <input
+            id="alert-webhook-mention"
             type="text"
             value={props.formData().mention || ''}
             onInput={(e) =>
@@ -274,7 +281,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
 
       <Show when={props.customFieldInputs().length > 0 || props.formData().service === 'pushover'}>
         <div class={formField}>
-          <label class={labelClass('flex items-center gap-2')}>
+          <span class={labelClass('flex items-center gap-2')}>
             Custom fields
             <span class="text-xs text-muted">
               {ALERT_WEBHOOK_CUSTOM_FIELDS_HELP}{' '}
@@ -283,7 +290,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
               </code>{' '}
               in templates
             </span>
-          </label>
+          </span>
           <div class="space-y-2 text-xs">
             <Index each={props.customFieldInputs()}>
               {(field, index) => (
@@ -341,10 +348,10 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
       </Show>
 
       <div class={formField}>
-        <label class={labelClass('flex items-center gap-2')}>
+        <span class={labelClass('flex items-center gap-2')}>
           Custom headers
           <span class="text-xs text-muted">{ALERT_WEBHOOK_HEADERS_HELP_LABEL}</span>
-        </label>
+        </span>
         <div class="space-y-2 text-xs">
           <Index each={props.headerInputs()}>
             {(header, index) => (

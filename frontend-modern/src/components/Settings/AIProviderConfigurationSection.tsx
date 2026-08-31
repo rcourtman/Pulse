@@ -195,13 +195,13 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                     class="px-3 py-3 bg-surface-alt border-t border-border space-y-2"
                   >
                     <Show when={config.provider === 'ollama'}>
-                      <label class="text-xs text-muted inline-flex items-center gap-1">
+                      <span class="text-xs text-muted inline-flex items-center gap-1">
                         Server URL
                         <HelpIcon contentId="ai.ollama.baseUrl" size="xs" />
-                      </label>
+                      </span>
                     </Show>
                     <Show when={config.inputLabel}>
-                      <label class="text-xs text-muted">{config.inputLabel}</label>
+                      <span class="text-xs text-muted">{config.inputLabel}</span>
                     </Show>
                     <Show
                       when={config.inputType === 'toggle'}
@@ -247,12 +247,12 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                     <For each={config.extraFields || []}>
                       {(extraField) => (
                         <div class="space-y-1">
-                          <label class="text-xs text-muted inline-flex items-center gap-1">
+                          <span class="text-xs text-muted inline-flex items-center gap-1">
                             {extraField.label}
                             <Show when={extraField.helpContentId}>
                               <HelpIcon contentId={extraField.helpContentId!} size="xs" />
                             </Show>
-                          </label>
+                          </span>
                           <input
                             type={extraField.type || 'text'}
                             value={String(props.form[extraField.inputField])}

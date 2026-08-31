@@ -820,9 +820,10 @@ describe('APITokenManager', () => {
     const renameButton = within(row).getByRole('button', { name: 'Rename' });
     fireEvent.click(renameButton);
 
-    const input = await screen.findByRole('textbox', { name: 'Token name' });
+    const dialog = await screen.findByRole('dialog', { name: 'Rename API token' });
+    const input = within(dialog).getByRole('textbox', { name: 'Token name' });
     fireEvent.input(input, { target: { value: 'PBS 01 telemetry' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
       expect(renameTokenMock).toHaveBeenCalledWith('token-pbs', 'PBS 01 telemetry');

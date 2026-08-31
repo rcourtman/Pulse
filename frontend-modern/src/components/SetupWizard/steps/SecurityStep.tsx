@@ -128,10 +128,14 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
       </div>
       <div class="p-8 space-y-6 relative z-10">
         <div>
-          <label class="block text-sm font-medium text-base-content mb-2">
+          <label
+            for="setup-security-username"
+            class="block text-sm font-medium text-base-content mb-2"
+          >
             {t('setup.security.label.username')}
           </label>
           <input
+            id="setup-security-username"
             type="text"
             value={username()}
             onInput={(e) => setUsername(e.currentTarget.value)}
@@ -141,9 +145,9 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-base-content mb-3">
+          <span class="block text-sm font-medium text-base-content mb-3">
             {t('setup.security.label.password')}
-          </label>
+          </span>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
             <button
               type="button"
@@ -173,6 +177,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
             <div class="space-y-2">
               <div class="relative">
                 <input
+                  aria-label={t('setup.security.label.password')}
                   type={showPassword() ? 'text' : 'password'}
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
@@ -190,6 +195,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 </button>
               </div>
               <input
+                aria-label={t('setup.security.label.confirmPassword')}
                 type={showPassword() ? 'text' : 'password'}
                 value={confirmPassword()}
                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}

@@ -95,11 +95,12 @@ export const AIDiscoveryControlsSection: Component<AIRuntimeControlsSectionProps
           class="px-3 py-3 bg-surface border-t border-border space-y-3"
         >
           <div class="flex items-center justify-between gap-2">
-            <label class="text-xs font-medium text-muted flex items-center gap-1.5">
+            <span class="text-xs font-medium text-muted flex items-center gap-1.5">
               Enable service context scans
               <HelpIcon inline={getAISettingsWorkloadDiscoveryHelpContent()} size="xs" />
-            </label>
+            </span>
             <Toggle
+              ariaLabel="Enable service context scans"
               checked={state.form.discoveryEnabled}
               onChange={(event) => state.setForm('discoveryEnabled', event.currentTarget.checked)}
               disabled={state.saving()}
@@ -188,10 +189,13 @@ export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectio
             d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
           />
         </svg>
-        <label class="text-xs font-medium text-base-content">30-day Budget</label>
+        <label for="ai-cost-budget" class="text-xs font-medium text-base-content">
+          30-day Budget
+        </label>
         <div class="relative flex-shrink-0">
           <span class="absolute left-2 top-1/2 -translate-y-1/2 text-muted text-xs">$</span>
           <input
+            id="ai-cost-budget"
             type="number"
             class="w-24 min-h-10 sm:min-h-9 pl-5 pr-2 py-2 text-sm border border-border rounded bg-surface"
             value={state.form.costBudgetUSD30d}
@@ -227,8 +231,11 @@ export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectio
               d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <label class="text-xs font-medium text-base-content">Request Timeout</label>
+          <label for="ai-request-timeout" class="text-xs font-medium text-base-content">
+            Request Timeout
+          </label>
           <input
+            id="ai-request-timeout"
             type="number"
             class="w-20 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
             value={state.form.requestTimeoutSeconds}
@@ -359,11 +366,15 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
 
         <Show when={state.form.controlLevel !== 'read_only'}>
           <div class="flex items-start gap-3 pt-2 border-t border-blue-200 dark:border-blue-700">
-            <label class="text-xs font-medium text-muted w-28 flex-shrink-0 pt-1">
+            <label
+              for="ai-protected-guests"
+              class="text-xs font-medium text-muted w-28 flex-shrink-0 pt-1"
+            >
               Protected guests
             </label>
             <div class="flex-1">
               <input
+                id="ai-protected-guests"
                 type="text"
                 value={state.form.protectedGuests}
                 onInput={(e) => state.setForm('protectedGuests', e.currentTarget.value)}

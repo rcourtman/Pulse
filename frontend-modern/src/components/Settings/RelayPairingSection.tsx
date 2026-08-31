@@ -30,7 +30,7 @@ interface RelayPairingSectionProps {
 
 export const RelayPairingSection: Component<RelayPairingSectionProps> = (props) => (
   <div class={formField}>
-    <label class={labelClass()}>Pair Mobile Device</label>
+    <span class={labelClass()}>Pair Mobile Device</span>
     <Card tone="muted" padding="md">
       <div class="space-y-3">
         <div class="flex flex-wrap items-center gap-2">

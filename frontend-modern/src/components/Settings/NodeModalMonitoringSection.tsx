@@ -40,8 +40,11 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           </label>
 
           <div class={formField}>
-            <label class={labelClass()}>SSL Fingerprint (optional)</label>
+            <label for="node-ssl-fingerprint" class={labelClass()}>
+              SSL Fingerprint (optional)
+            </label>
             <input
+              id="node-ssl-fingerprint"
               type="text"
               value={state.formData().fingerprint}
               onInput={(event) => state.updateField('fingerprint', event.currentTarget.value)}
@@ -174,7 +177,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             </div>
             <Show when={state.formData().monitorPhysicalDisks}>
               <div class="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                <label class="text-xs text-muted">Poll every</label>
+                <span class="text-xs text-muted">Poll every</span>
                 <FormSelect
                   label="Physical disk health polling interval"
                   labelClass="sr-only"

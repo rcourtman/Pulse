@@ -400,7 +400,7 @@ export const AIModelOverrideField: Component<{
 
   return (
     <div class={formField}>
-      <label class="block text-xs font-medium text-muted mb-0.5">{config().label}</label>
+      <span class="block text-xs font-medium text-muted mb-0.5">{config().label}</span>
       <p class="text-[11px] text-muted mb-1">{config().description}</p>
       <Show
         when={selectableModels().length > 0}
@@ -500,10 +500,10 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
     <>
       <div class={formField}>
         <div class="flex items-center justify-between mb-1">
-          <label class={labelClass()}>
+          <span class={labelClass()}>
             Shared Default Model
             {state.modelsLoading() && <span class="ml-2 text-xs text-muted">(loading...)</span>}
-          </label>
+          </span>
           <button
             type="button"
             onClick={state.loadModels}

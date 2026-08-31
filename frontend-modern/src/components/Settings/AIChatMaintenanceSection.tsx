@@ -61,7 +61,7 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
             shared provider and model defaults.
           </p>
           <div class="flex items-center justify-between">
-            <label class="text-xs font-medium text-muted">Session</label>
+            <span class="text-xs font-medium text-muted">Session</span>
             <button
               type="button"
               onClick={state.loadChatSessions}

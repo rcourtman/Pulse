@@ -95,10 +95,11 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
         <div class={formField}>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <label class={labelClass()}>Enable Remote Access</label>
+              <span class={labelClass()}>Enable Remote Access</span>
               <p class={formHelpText}>{RELAY_ENABLE_HELP_TEXT}</p>
             </div>
             <Toggle
+              ariaLabel="Enable remote access"
               checked={state.config()?.enabled ?? false}
               onChange={(e) => void state.handleToggleEnabled(e.currentTarget.checked)}
               disabled={!state.canManage() || state.saving()}
@@ -109,9 +110,12 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
 
         {/* Server URL */}
         <div class={formField}>
-          <label class={labelClass()}>Relay Server URL</label>
+          <label for="relay-server-url" class={labelClass()}>
+            Relay Server URL
+          </label>
           <div class="flex flex-col gap-2 sm:flex-row">
             <input
+              id="relay-server-url"
               type="text"
               class={controlClass()}
               value={state.serverUrl()}
@@ -137,7 +141,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
         {/* Identity Fingerprint */}
         <Show when={state.config()?.identity_fingerprint}>
           <div class={formField}>
-            <label class={labelClass()}>Instance Fingerprint</label>
+            <span class={labelClass()}>Instance Fingerprint</span>
             <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
               {state.config()!.identity_fingerprint}
             </code>

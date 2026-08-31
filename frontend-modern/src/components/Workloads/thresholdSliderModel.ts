@@ -8,6 +8,7 @@ export interface ThresholdSliderProps {
   min?: number;
   max?: number;
   disabled?: boolean;
+  ariaLabel?: string;
 }
 
 export const DEFAULT_THRESHOLD_SLIDER_MIN = 0;

@@ -219,7 +219,7 @@ Important:
 
           <div class="bg-base rounded-md p-3 space-y-3">
             <div class="flex items-center justify-between">
-              <label class={labelClass()}>Password Setup</label>
+              <span class={labelClass()}>Password Setup</span>
               <div class="flex items-center space-x-2">
                 <button
                   type="button"
@@ -249,8 +249,11 @@ Important:
             <Show when={useCustomPassword()}>
               <div class="space-y-2">
                 <div class={formField}>
-                  <label class={labelClass()}>Username</label>
+                  <label for="quick-security-username" class={labelClass()}>
+                    Username
+                  </label>
                   <input
+                    id="quick-security-username"
                     type="text"
                     value={customUsername()}
                     onInput={(e) => setCustomUsername(e.currentTarget.value)}
@@ -259,8 +262,11 @@ Important:
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass()}>Password (min 12 characters)</label>
+                  <label for="quick-security-password" class={labelClass()}>
+                    Password (min 12 characters)
+                  </label>
                   <input
+                    id="quick-security-password"
                     type="password"
                     value={customPassword()}
                     onInput={(e) => setCustomPassword(e.currentTarget.value)}
@@ -269,8 +275,11 @@ Important:
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass()}>Confirm password</label>
+                  <label for="quick-security-confirm-password" class={labelClass()}>
+                    Confirm password
+                  </label>
                   <input
+                    id="quick-security-confirm-password"
                     type="password"
                     value={confirmPassword()}
                     onInput={(e) => setConfirmPassword(e.currentTarget.value)}
@@ -382,7 +391,7 @@ Important:
 
           <div class="space-y-3">
             <div class="bg-base rounded-md p-3">
-              <label class={labelClass('text-xs')}>Username</label>
+              <span class={labelClass('text-xs')}>Username</span>
               <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded border border-border">
                   {credentials()!.username}
@@ -398,7 +407,7 @@ Important:
             </div>
 
             <div class="bg-base rounded-md p-3">
-              <label class={labelClass('text-xs')}>Password</label>
+              <span class={labelClass('text-xs')}>Password</span>
               <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded border border-border break-all">
                   {credentials()!.password}
@@ -414,7 +423,7 @@ Important:
             </div>
 
             <div class="bg-base rounded-md p-3">
-              <label class={labelClass('text-xs')}>API token</label>
+              <span class={labelClass('text-xs')}>API token</span>
               <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded border border-border break-all">
                   {credentials()!.apiToken}

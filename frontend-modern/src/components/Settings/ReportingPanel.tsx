@@ -43,8 +43,8 @@ interface FormFieldProps {
 
 function FormField(props: FormFieldProps) {
   return (
-    <div class={formField}>
-      <label class={formLabel}>{props.label}</label>
+    <div class={formField} role="group" aria-label={props.label}>
+      <span class={formLabel}>{props.label}</span>
       {props.children}
       {props.helpText && <span class={formHelpText}>{props.helpText}</span>}
     </div>
@@ -232,6 +232,7 @@ export function ReportingPanel() {
                       >
                         <input
                           id="metric-type"
+                          aria-label="Metric Type (Optional)"
                           type="text"
                           class={formControl}
                           placeholder="e.g. cpu, memory, disk, temperature (leave empty for all)"
@@ -245,6 +246,7 @@ export function ReportingPanel() {
                       <FormField label="Report Title" helpText="Custom title for the PDF report">
                         <input
                           id="report-title"
+                          aria-label="Report Title"
                           type="text"
                           class={formControl}
                           placeholder="Auto-generated if empty"
@@ -527,6 +529,7 @@ export function ReportingPanel() {
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <FormField label="Schedule name">
                       <input
+                        aria-label="Schedule name"
                         type="text"
                         class={formControl}
                         value={scheduleForm().name}
@@ -536,6 +539,7 @@ export function ReportingPanel() {
                     </FormField>
                     <FormField label="Timezone">
                       <input
+                        aria-label="Timezone"
                         type="text"
                         class={formControl}
                         value={scheduleForm().timezone}
@@ -576,6 +580,7 @@ export function ReportingPanel() {
                     >
                       <FormField label="Day of month">
                         <input
+                          aria-label="Day of month"
                           type="number"
                           min="1"
                           max="28"
@@ -589,6 +594,7 @@ export function ReportingPanel() {
                     </Show>
                     <FormField label="Time">
                       <input
+                        aria-label="Time"
                         type="time"
                         class={formControl}
                         value={scheduleForm().time}
@@ -621,6 +627,7 @@ export function ReportingPanel() {
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <FormField label="Tag filter" helpText="Comma-separated tags">
                       <input
+                        aria-label="Tag filter"
                         type="text"
                         class={formControl}
                         value={scheduleForm().tagFilter}
@@ -642,6 +649,7 @@ export function ReportingPanel() {
                     </FormSelect>
                     <FormField label="Retention">
                       <input
+                        aria-label="Retention"
                         type="number"
                         min="1"
                         max="120"
@@ -660,6 +668,7 @@ export function ReportingPanel() {
                       helpText="Blank uses the existing email notification recipients"
                     >
                       <input
+                        aria-label="Email recipients"
                         type="text"
                         class={formControl}
                         value={scheduleForm().recipients}

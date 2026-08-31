@@ -287,8 +287,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               {/* Common fields */}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class={formField}>
-                  <label class={labelClass()}>Provider Name</label>
+                  <label for="sso-provider-name" class={labelClass()}>
+                    Provider Name
+                  </label>
                   <input
+                    id="sso-provider-name"
                     type="text"
                     value={form.name}
                     onInput={(e) => setForm('name', e.currentTarget.value)}
@@ -299,8 +302,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   <p class={formHelpText}>Display name for this provider</p>
                 </div>
                 <div class={formField}>
-                  <label class={labelClass()}>Display Name (Button)</label>
+                  <label for="sso-provider-display-name" class={labelClass()}>
+                    Display Name (Button)
+                  </label>
                   <input
+                    id="sso-provider-display-name"
                     type="text"
                     value={form.displayName}
                     onInput={(e) => setForm('displayName', e.currentTarget.value)}
@@ -347,9 +353,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class={formField}>
-                      <label class={labelClass()}>Issuer URL</label>
+                      <label for="sso-oidc-issuer-url" class={labelClass()}>
+                        Issuer URL
+                      </label>
                       <div class="flex gap-2">
                         <input
+                          id="sso-oidc-issuer-url"
                           type="url"
                           value={form.oidcIssuerUrl}
                           onInput={(e) => setForm('oidcIssuerUrl', e.currentTarget.value)}
@@ -371,8 +380,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       </div>
                     </div>
                     <div class={formField}>
-                      <label class={labelClass()}>Client ID</label>
+                      <label for="sso-oidc-client-id" class={labelClass()}>
+                        Client ID
+                      </label>
                       <input
+                        id="sso-oidc-client-id"
                         type="text"
                         value={form.oidcClientId}
                         onInput={(e) => setForm('oidcClientId', e.currentTarget.value)}
@@ -382,8 +394,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                     <div class={formField}>
-                      <label class={labelClass()}>Client Secret</label>
+                      <label for="sso-oidc-client-secret" class={labelClass()}>
+                        Client Secret
+                      </label>
                       <input
+                        id="sso-oidc-client-secret"
                         type="password"
                         value={form.oidcClientSecret}
                         onInput={(e) => setForm('oidcClientSecret', e.currentTarget.value)}
@@ -394,8 +409,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                     <div class={formField}>
-                      <label class={labelClass()}>Redirect URL</label>
+                      <label for="sso-oidc-redirect-url" class={labelClass()}>
+                        Redirect URL
+                      </label>
                       <input
+                        id="sso-oidc-redirect-url"
                         type="url"
                         value={form.oidcRedirectUrl}
                         onInput={(e) => setForm('oidcRedirectUrl', e.currentTarget.value)}
@@ -406,8 +424,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   </div>
 
                   <div class={formField}>
-                    <label class={labelClass()}>Scopes</label>
+                    <label for="sso-oidc-scopes" class={labelClass()}>
+                      Scopes
+                    </label>
                     <input
+                      id="sso-oidc-scopes"
                       type="text"
                       value={form.oidcScopes}
                       onInput={(e) => setForm('oidcScopes', e.currentTarget.value)}
@@ -449,9 +470,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   </div>
 
                   <div class={formField}>
-                    <label class={labelClass()}>IdP Metadata URL</label>
+                    <label for="sso-saml-metadata-url" class={labelClass()}>
+                      IdP Metadata URL
+                    </label>
                     <div class="flex flex-col gap-2 sm:flex-row">
                       <input
+                        id="sso-saml-metadata-url"
                         type="url"
                         value={form.samlIdpMetadataUrl}
                         onInput={(e) => setForm('samlIdpMetadataUrl', e.currentTarget.value)}
@@ -491,8 +515,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class={formField}>
-                      <label class={labelClass()}>IdP SSO URL</label>
+                      <label for="sso-saml-sso-url" class={labelClass()}>
+                        IdP SSO URL
+                      </label>
                       <input
+                        id="sso-saml-sso-url"
                         type="url"
                         value={form.samlIdpSsoUrl}
                         onInput={(e) => setForm('samlIdpSsoUrl', e.currentTarget.value)}
@@ -501,8 +528,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                     <div class={formField}>
-                      <label class={labelClass()}>IdP Entity ID</label>
+                      <label for="sso-saml-entity-id" class={labelClass()}>
+                        IdP Entity ID
+                      </label>
                       <input
+                        id="sso-saml-entity-id"
                         type="text"
                         value={form.samlIdpEntityId}
                         onInput={(e) => setForm('samlIdpEntityId', e.currentTarget.value)}
@@ -523,8 +553,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class={formField}>
-                      <label class={labelClass()}>Username Attribute</label>
+                      <label for="sso-saml-username-attribute" class={labelClass()}>
+                        Username Attribute
+                      </label>
                       <input
+                        id="sso-saml-username-attribute"
                         type="text"
                         value={form.samlUsernameAttr}
                         onInput={(e) => setForm('samlUsernameAttr', e.currentTarget.value)}
@@ -533,8 +566,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                     <div class={formField}>
-                      <label class={labelClass()}>Email Attribute</label>
+                      <label for="sso-saml-email-attribute" class={labelClass()}>
+                        Email Attribute
+                      </label>
                       <input
+                        id="sso-saml-email-attribute"
                         type="text"
                         value={form.samlEmailAttr}
                         onInput={(e) => setForm('samlEmailAttr', e.currentTarget.value)}
@@ -543,8 +579,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                     <div class={formField}>
-                      <label class={labelClass()}>Groups Attribute</label>
+                      <label for="sso-saml-groups-attribute" class={labelClass()}>
+                        Groups Attribute
+                      </label>
                       <input
+                        id="sso-saml-groups-attribute"
                         type="text"
                         value={form.groupsClaim}
                         onInput={(e) => setForm('groupsClaim', e.currentTarget.value)}
@@ -683,8 +722,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   <div class="mt-4 space-y-4 p-4 bg-surface-alt rounded-md">
                     <Show when={form.type === 'oidc'}>
                       <div class={formField}>
-                        <label class={labelClass()}>Groups Claim</label>
+                        <label for="sso-oidc-groups-claim" class={labelClass()}>
+                          Groups Claim
+                        </label>
                         <input
+                          id="sso-oidc-groups-claim"
                           type="text"
                           value={form.groupsClaim}
                           onInput={(e) => setForm('groupsClaim', e.currentTarget.value)}

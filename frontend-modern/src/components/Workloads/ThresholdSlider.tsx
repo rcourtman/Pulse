@@ -26,6 +26,7 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       {/* Native range input (invisible but functional) */}
       <input
         type="range"
+        aria-label={props.ariaLabel ?? `${props.type} threshold`}
         min={props.min ?? 0}
         max={props.max ?? 100}
         value={props.value}

@@ -117,7 +117,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                 return (
                   <div class="space-y-2 pb-4 border-b border-border-subtle last:border-0">
                     <div class="flex items-center justify-between mb-2">
-                      <label class="text-sm font-medium text-base-content">{column}</label>
+                      <span class="text-sm font-medium text-base-content">{column}</span>
                       <div class="flex items-center gap-2">
                         <span class="text-xs text-slate-500 font-mono">
                           {isOff()
@@ -148,6 +148,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                         {['cpu', 'memory', 'disk', 'temperature'].includes(metric) ? (
                           <div class="pt-2 px-1">
                             <ThresholdSlider
+                              ariaLabel={`${column} threshold`}
                               type={metric as 'cpu' | 'memory' | 'disk' | 'temperature'}
                               min={bounds.min}
                               max={bounds.max}
@@ -161,6 +162,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                         ) : (
                           <input
                             type="number"
+                            aria-label={`${column} threshold`}
                             class="w-full h-9 rounded-md border border-border bg-surface px-3 py-1 text-sm shadow-sm transition-colors focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                             min={bounds.min}
                             max={bounds.max}

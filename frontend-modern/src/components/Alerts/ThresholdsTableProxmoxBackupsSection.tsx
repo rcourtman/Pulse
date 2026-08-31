@@ -141,9 +141,9 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
               />
             </div>
             <div class="mt-4">
-              <label class="text-xs font-medium uppercase tracking-wide text-muted">
+              <span class="text-xs font-medium uppercase tracking-wide text-muted">
                 {state.backupOrphanedPresentation.ignoreVmidsLabel}
-              </label>
+              </span>
               <p class="mt-1 text-xs text-muted">
                 {state.backupOrphanedPresentation.ignoreVmidsDescription}
               </p>
