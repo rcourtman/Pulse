@@ -4513,10 +4513,14 @@ Restart=always
 RestartSec=3
 StandardOutput=journal
 StandardError=journal
+SyslogLevelPrefix=true
 Environment="HOME=$INSTALL_DIR"
 Environment="PATH=$INSTALL_DIR/.local/bin:$INSTALL_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PULSE_DATA_DIR=$CONFIG_DIR"
 Environment="PULSE_DEPLOYMENT_METHOD=systemd"
+# Pulse prefixes each JSON line with its zerolog priority. systemd consumes
+# the prefix into PRIORITY and retains the original JSON as MESSAGE.
+Environment="PULSE_LOG_JOURNAL_LEVEL_PREFIX=true"
 EnvironmentFile=-$CONFIG_DIR/.env
 EOF
 

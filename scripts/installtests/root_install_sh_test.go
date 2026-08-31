@@ -641,6 +641,25 @@ func TestCanonicalServerDeploymentMethodsAreStampedForTelemetry(t *testing.T) {
 	}
 }
 
+func TestSystemdServerLogsPreservePulseSeverityInJournal(t *testing.T) {
+	rootInstall, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	unitContract := string(rootInstall)
+	for _, marker := range []string{
+		"StandardOutput=journal",
+		"StandardError=journal",
+		"SyslogLevelPrefix=true",
+		`Environment="PULSE_LOG_JOURNAL_LEVEL_PREFIX=true"`,
+	} {
+		if !strings.Contains(unitContract, marker) {
+			t.Errorf("systemd server unit must include %q", marker)
+		}
+	}
+}
+
 func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 	rootInstall, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {

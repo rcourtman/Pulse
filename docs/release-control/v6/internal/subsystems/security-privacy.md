@@ -2704,3 +2704,17 @@ selector, or mutation argument. Summary mode does not bind lifecycle or update
 bridges, and its report labels the reduced authority as
 `typed-helper-summary`; helper loss cannot trigger sudo, root execution, or a
 broader direct socket fallback.
+
+### Journald priority framing does not alter durable or live log payloads
+
+The systemd-only `PULSE_LOG_JOURNAL_LEVEL_PREFIX=true` opt-in wraps the
+process stream with zerolog-aware syslog priority framing so systemd can assign
+native journal severity. The prefix is a transport marker, not part of the
+structured event: it must be applied before the stderr branch only and systemd
+must remove it from `MESSAGE`. The owner-only rotating file sink and the
+authenticated in-memory live-log broadcaster continue receiving the original
+unprefixed record, preserving their existing payload and access boundaries.
+
+`internal/logging/logging_test.go` pins both the level-to-priority mapping and
+that sink isolation. Deployments that do not explicitly opt in—including
+containers and interactive terminals—must retain their unprefixed output.

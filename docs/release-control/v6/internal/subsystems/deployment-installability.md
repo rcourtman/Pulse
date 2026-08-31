@@ -4692,3 +4692,17 @@ Assistant command-help dialog behavior, and agent server-address migration
 guidance. Release-integrity detail also records authenticated Unified Agent
 download validation and the exact-step candidate version binding. Packet proof
 must retain those outcomes before v6.4.2 can be dispatched for publication.
+### Systemd journal output preserves Pulse severity
+
+The generated Pulse server unit keeps stdout and stderr attached to the journal,
+enables `SyslogLevelPrefix`, and opts the process into the logging package's
+level-aware stream writer. That writer maps zerolog warning, error, fatal,
+panic, info, debug, and trace records to systemd priorities before the message
+crosses the journal stream. systemd consumes the prefix, so `MESSAGE` remains
+the original structured log record and `journalctl -p` plus downstream syslog
+forwarding can use `PRIORITY` without a shell wrapper.
+
+The opt-in belongs only to the generated systemd service. Container and
+terminal output remain unprefixed, and the logger tees the unmodified record to
+the rotating file sink and authenticated live-log broadcaster. Installer and
+logging tests pin the unit directives, level mapping, and sink isolation.

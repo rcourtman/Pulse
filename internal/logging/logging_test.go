@@ -127,6 +127,103 @@ func TestInitJSONFormatSetsLevelAndComponent(t *testing.T) {
 	}
 }
 
+func TestJournalLevelWriterMapsZerologLevelsToSystemdPriorities(t *testing.T) {
+	tests := []struct {
+		name     string
+		level    zerolog.Level
+		priority string
+	}{
+		{name: "trace", level: zerolog.TraceLevel, priority: "<7>"},
+		{name: "debug", level: zerolog.DebugLevel, priority: "<7>"},
+		{name: "info", level: zerolog.InfoLevel, priority: "<6>"},
+		{name: "warn", level: zerolog.WarnLevel, priority: "<4>"},
+		{name: "error", level: zerolog.ErrorLevel, priority: "<3>"},
+		{name: "fatal", level: zerolog.FatalLevel, priority: "<2>"},
+		{name: "panic", level: zerolog.PanicLevel, priority: "<0>"},
+		{name: "no level", level: zerolog.NoLevel, priority: "<6>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			writer := journalLevelWriter{writer: &output}
+			payload := []byte(`{"message":"kept as json"}` + "\n")
+
+			n, err := writer.WriteLevel(tt.level, payload)
+			if err != nil {
+				t.Fatalf("WriteLevel error: %v", err)
+			}
+			if n != len(payload) {
+				t.Fatalf("WriteLevel n = %d, want %d", n, len(payload))
+			}
+			if got, want := output.String(), tt.priority+string(payload); got != want {
+				t.Fatalf("output = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestInitJournaldPriorityOnlyPrefixesServiceStream(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+	t.Setenv(journalLevelPrefixEnv, "true")
+
+	originalStderr := os.Stderr
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stderr pipe: %v", err)
+	}
+	os.Stderr = writePipe
+	t.Cleanup(func() {
+		os.Stderr = originalStderr
+		_ = readPipe.Close()
+		_ = writePipe.Close()
+	})
+
+	logPath := filepath.Join(t.TempDir(), "pulse.log")
+	logger := Init(Config{
+		Format:     "json",
+		Level:      "info",
+		FilePath:   logPath,
+		MaxSizeMB:  1,
+		MaxAgeDays: 1,
+	})
+	logger.Warn().Msg("journal severity check")
+
+	if err := writePipe.Close(); err != nil {
+		t.Fatalf("close stderr writer: %v", err)
+	}
+	streamOutput, err := io.ReadAll(readPipe)
+	if err != nil {
+		t.Fatalf("read stderr output: %v", err)
+	}
+	if !bytes.HasPrefix(streamOutput, []byte(`<4>{`)) {
+		t.Fatalf("journal stream output = %q, want warning prefix before JSON", streamOutput)
+	}
+
+	fileOutput, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read file log: %v", err)
+	}
+	if bytes.HasPrefix(fileOutput, []byte(`<4>`)) {
+		t.Fatalf("file log must not contain journal prefix: %q", fileOutput)
+	}
+	if !bytes.Contains(fileOutput, []byte(`"level":"warn"`)) {
+		t.Fatalf("file log lost structured level: %q", fileOutput)
+	}
+
+	history := GetBroadcaster().GetHistory()
+	if len(history) == 0 {
+		t.Fatal("expected live log history entry")
+	}
+	latest := history[len(history)-1]
+	if strings.HasPrefix(latest, "<4>") {
+		t.Fatalf("live UI log must not contain journal prefix: %q", latest)
+	}
+	if !strings.Contains(latest, `"level":"warn"`) {
+		t.Fatalf("live UI log lost structured level: %q", latest)
+	}
+}
+
 func TestInitConsoleFormatUsesConsoleWriter(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 

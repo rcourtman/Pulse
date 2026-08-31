@@ -126,6 +126,22 @@ If the Pulse server is still reachable, use its generated uninstall command so
 the agent can deregister cleanly. Otherwise, stopping the service is the safe
 first step before platform-local cleanup.
 
+#### Filter Pulse's systemd journal by severity
+
+Current systemd installs preserve Pulse's structured log level as the journal
+priority. For example, show warnings and more important records with:
+
+```bash
+sudo journalctl -u pulse -p warning
+```
+
+The stored message remains JSON (`"level":"warn"`, for example), while
+`PRIORITY` is available to `journalctl` and syslog forwarding. If a current
+Pulse warning appears only with `-p info`, inspect `systemctl cat pulse`; the
+installed service must contain `SyslogLevelPrefix=true` and
+`PULSE_LOG_JOURNAL_LEVEL_PREFIX=true`. Re-run the current signed installer to
+repair an older generated unit rather than adding a JSON-parsing wrapper.
+
 #### VMs show "-" for disk usage
 - Install **QEMU Guest Agent** in the VM.
 - Enable "QEMU Guest Agent" in Proxmox VM Options.

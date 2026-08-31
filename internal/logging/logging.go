@@ -25,6 +25,11 @@ type ctxKey string
 const (
 	requestIDKey ctxKey = "logging_request_id"
 
+	// journalLevelPrefixEnv is set only by the Pulse systemd service. It keeps
+	// container, terminal, file, and live-UI log payloads unchanged while
+	// allowing systemd to assign the JSON stream its real zerolog priority.
+	journalLevelPrefixEnv = "PULSE_LOG_JOURNAL_LEVEL_PREFIX"
+
 	bytesPerMB        int64 = 1024 * 1024
 	defaultMaxSizeMB        = 100
 	defaultMaxAgeDays       = 30
@@ -82,6 +87,63 @@ func (w *dynamicWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 	return w.writer.Write(p)
+}
+
+func (w *dynamicWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if w.writer == nil {
+		return len(p), nil
+	}
+	if levelWriter, ok := w.writer.(zerolog.LevelWriter); ok {
+		return levelWriter.WriteLevel(level, p)
+	}
+	return w.writer.Write(p)
+}
+
+// journalLevelWriter emits the syslog priority prefix understood by systemd
+// when SyslogLevelPrefix=true. systemd strips the prefix before storing the
+// message, so the retained MESSAGE remains the original JSON log record.
+type journalLevelWriter struct {
+	writer io.Writer
+}
+
+func (w journalLevelWriter) Write(p []byte) (int, error) {
+	return w.WriteLevel(zerolog.InfoLevel, p)
+}
+
+func (w journalLevelWriter) WriteLevel(level zerolog.Level, p []byte) (int, error) {
+	prefix := []byte{'<', byte('0' + journalPriority(level)), '>'}
+	message := make([]byte, 0, len(prefix)+len(p))
+	message = append(message, prefix...)
+	message = append(message, p...)
+
+	written, err := w.writer.Write(message)
+	if err != nil {
+		return 0, err
+	}
+	if written != len(message) {
+		return 0, io.ErrShortWrite
+	}
+	return len(p), nil
+}
+
+func journalPriority(level zerolog.Level) int {
+	switch level {
+	case zerolog.PanicLevel:
+		return 0 // emerg
+	case zerolog.FatalLevel:
+		return 2 // crit
+	case zerolog.ErrorLevel:
+		return 3 // err
+	case zerolog.WarnLevel:
+		return 4 // warning
+	case zerolog.DebugLevel, zerolog.TraceLevel:
+		return 7 // debug
+	default:
+		return 6 // info, nolevel, and forward-compatible unknown levels
+	}
 }
 
 type componentHook struct{}
@@ -177,15 +239,18 @@ func Init(cfg Config) zerolog.Logger {
 	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
 
 	writer := selectWriter(cfg.Format)
+	if strings.EqualFold(strings.TrimSpace(os.Getenv(journalLevelPrefixEnv)), "true") {
+		writer = journalLevelWriter{writer: writer}
+	}
 
 	// Hook in the in-memory broadcaster for live UI streaming
 	broadcaster := GetBroadcaster()
-	writer = io.MultiWriter(writer, broadcaster)
+	writer = zerolog.MultiLevelWriter(writer, broadcaster)
 
 	if fileWriter, err := newRollingFileWriter(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "logging: unable to configure file output: %v\n", err)
 	} else if fileWriter != nil {
-		writer = io.MultiWriter(writer, fileWriter)
+		writer = zerolog.MultiLevelWriter(writer, fileWriter)
 		if closer, ok := fileWriter.(io.Closer); ok {
 			fileCloser = closer
 		}
