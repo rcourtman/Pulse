@@ -373,6 +373,170 @@ func TestPreparedActionRunnerReconnectCannotDisplaceActiveDispatchAndExactPromot
 	}
 }
 
+func TestActionRunnerInboundResultsRequireExactActiveSessionAcrossPromotion(t *testing.T) {
+	active := AgentAdmission{
+		OrganizationID: "org-a", TokenID: "active-token", AgentID: "machine-a", Hostname: "node.example",
+		RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1,
+	}
+	pending := active
+	pending.TokenID = "pending-token"
+	pending.ActivationPending = true
+	admissions := map[string]AgentAdmission{active.TokenID: active, pending.TokenID: pending}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		admission, ok := admissions[token]
+		return admission, ok
+	}, func(AgentAdmission) bool { return true })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	register := func(admission AgentAdmission) *websocket.Conn {
+		t.Helper()
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+			AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID,
+			RuntimeRole: admission.RuntimeRole, ActionCapability: admission.ActionCapability,
+			OperationReceiptVersion: operationreceipt.ProtocolVersion,
+		}))
+		if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+			conn.Close()
+			t.Fatalf("registration for %s failed: %s", admission.TokenID, ack.Message)
+		}
+		return conn
+	}
+	activeConn := register(active)
+	defer activeConn.Close()
+	pendingConn := register(pending)
+	defer pendingConn.Close()
+
+	type updateOutcome struct {
+		result *HostUpdateResultPayload
+		err    error
+	}
+	dispatch := func(requestID, actionID, inventoryHash string) <-chan updateOutcome {
+		t.Helper()
+		out := make(chan updateOutcome, 1)
+		go func() {
+			ctx, cancel := context.WithTimeout(WithOrganizationID(context.Background(), active.OrganizationID), 5*time.Second)
+			defer cancel()
+			result, err := s.ExecuteHostUpdate(ctx, active.AgentID, HostUpdatePayload{
+				RequestID: requestID, ActionID: actionID, Operation: HostUpdateOperationInstall,
+				ExpectedInventoryHash: inventoryHash, Timeout: 5,
+			})
+			out <- updateOutcome{result: result, err: err}
+		}()
+		return out
+	}
+	readRequest := func(conn *websocket.Conn) HostUpdatePayload {
+		t.Helper()
+		msg, err := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if msg.Type != MsgTypeHostUpdate || msg.Payload == nil {
+			t.Fatalf("message = %#v, want typed host update", msg)
+		}
+		var req HostUpdatePayload
+		if err := json.Unmarshal(*msg.Payload, &req); err != nil {
+			t.Fatal(err)
+		}
+		return req
+	}
+	resultFor := func(req HostUpdatePayload, afterHash string) HostUpdateResultPayload {
+		now := time.Now().UTC()
+		return HostUpdateResultPayload{
+			RequestID: req.RequestID, ActionID: req.ActionID, Success: true,
+			ExecutionPhase: HostUpdatePhaseComplete,
+			Before:         HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: req.ExpectedInventoryHash, PendingCount: 1, CheckedAt: now.Add(-time.Second)},
+			After:          HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: afterHash, PendingCount: 0, CheckedAt: now},
+			HealthChecked:  true, PackageManagerHealthy: true, Verification: HostUpdateVerificationVerified,
+		}
+	}
+	requirePong := func(conn *websocket.Conn, label string) {
+		t.Helper()
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentPing, "", nil))
+		msg, err := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+		if err != nil {
+			t.Fatalf("%s ping barrier: %v", label, err)
+		}
+		if msg.Type != MsgTypePong {
+			t.Fatalf("%s ping barrier received %q, want pong", label, msg.Type)
+		}
+	}
+	assertStillPending := func(out <-chan updateOutcome, label string) {
+		t.Helper()
+		select {
+		case got := <-out:
+			t.Fatalf("%s satisfied dispatch: result=%#v err=%v", label, got.result, got.err)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	assertSuccess := func(out <-chan updateOutcome, label, expectedAfterHash string) {
+		t.Helper()
+		select {
+		case got := <-out:
+			if got.err != nil || got.result == nil || !got.result.Success || got.result.After.InventoryHash != expectedAfterHash {
+				t.Fatalf("%s result=%#v err=%v", label, got.result, got.err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s did not complete dispatch", label)
+		}
+	}
+	assertDisconnected := func(out <-chan updateOutcome, label string) {
+		t.Helper()
+		select {
+		case got := <-out:
+			if got.result != nil || got.err == nil || !strings.Contains(got.err.Error(), "disconnected") {
+				t.Fatalf("%s result=%#v err=%v, want predecessor disconnect", label, got.result, got.err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s did not terminate after predecessor cleanup", label)
+		}
+	}
+
+	before := dispatch("before-promotion", "action-before", "sha256:"+strings.Repeat("a", 64))
+	beforeReq := readRequest(activeConn)
+	pendingForgery := resultFor(beforeReq, "sha256:"+strings.Repeat("e", 64))
+	wsWriteMessage(t, pendingConn, mustNewMessage(t, MsgTypeHostUpdateResult, beforeReq.RequestID, pendingForgery))
+	requirePong(pendingConn, "prepared replacement after forged result")
+	assertStillPending(before, "prepared replacement")
+
+	failedSaveTx, begun := s.BeginActionRunnerSessionPromotion(pending)
+	if !begun {
+		t.Fatal("failed to begin promotion fence")
+	}
+	fencedForgery := resultFor(beforeReq, "sha256:"+strings.Repeat("f", 64))
+	wsWriteMessage(t, activeConn, mustNewMessage(t, MsgTypeHostUpdateResult, beforeReq.RequestID, fencedForgery))
+	requirePong(activeConn, "predecessor during promotion fence")
+	assertStillPending(before, "fenced predecessor")
+	failedSaveTx.Rollback()
+
+	beforeResult := resultFor(beforeReq, "sha256:"+strings.Repeat("b", 64))
+	wsWriteMessage(t, activeConn, mustNewMessage(t, MsgTypeHostUpdateResult, beforeReq.RequestID, beforeResult))
+	assertSuccess(before, "active predecessor after rollback", beforeResult.After.InventoryHash)
+
+	across := dispatch("across-promotion", "action-across", "sha256:"+strings.Repeat("7", 64))
+	acrossReq := readRequest(activeConn)
+	promotion, begun := s.BeginActionRunnerSessionPromotion(pending)
+	if !begun || !promotion.Commit() {
+		t.Fatal("prepared replacement was not promoted")
+	}
+	transferredForgery := resultFor(acrossReq, "sha256:"+strings.Repeat("8", 64))
+	wsWriteMessage(t, pendingConn, mustNewMessage(t, MsgTypeHostUpdateResult, acrossReq.RequestID, transferredForgery))
+	requirePong(pendingConn, "promoted replacement after predecessor-request forgery")
+	assertStillPending(across, "promoted replacement for predecessor request")
+	promotion.Cleanup()
+	assertDisconnected(across, "predecessor request across promotion")
+
+	after := dispatch("after-promotion", "action-after", "sha256:"+strings.Repeat("c", 64))
+	afterReq := readRequest(pendingConn)
+	afterResult := resultFor(afterReq, "sha256:"+strings.Repeat("d", 64))
+	wsWriteMessage(t, pendingConn, mustNewMessage(t, MsgTypeHostUpdateResult, afterReq.RequestID, afterResult))
+	assertSuccess(after, "promoted replacement", afterResult.After.InventoryHash)
+}
+
 func TestActionRunnerPromotionVersusDisconnectNeverRetainsDeadSession(t *testing.T) {
 	for attempt := 0; attempt < 20; attempt++ {
 		admission := AgentAdmission{
@@ -417,6 +581,41 @@ func TestActionRunnerPromotionVersusDisconnectNeverRetainsDeadSession(t *testing
 			return s.agents[key] == nil && s.pendingActionRunners[key] == nil
 		})
 		ts.Close()
+	}
+}
+
+func TestStaleActionRunnerPromotionCannotFailCloseLaterSessions(t *testing.T) {
+	admission := AgentAdmission{
+		OrganizationID: "org-a", TokenID: "pending-token", AgentID: "machine-a", Hostname: "node.example",
+		RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1, ActivationPending: true,
+	}
+	s := NewServerWithAdmissionValidator(func(string, string, string) (AgentAdmission, bool) {
+		return AgentAdmission{}, false
+	}, nil)
+	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
+	predecessor := &agentConn{agent: ConnectedAgent{AgentID: admission.AgentID}, sessionKey: key, authorityKey: "predecessor", done: make(chan struct{})}
+	pending := &agentConn{agent: ConnectedAgent{AgentID: admission.AgentID}, admission: admission, sessionKey: key, authorityKey: "pending", done: make(chan struct{})}
+	s.agents[key] = predecessor
+	s.pendingActionRunners[key] = pending
+
+	tx, begun := s.BeginActionRunnerSessionPromotion(admission)
+	if !begun {
+		t.Fatal("failed to begin promotion")
+	}
+	tx.Rollback()
+
+	laterActive := &agentConn{agent: ConnectedAgent{AgentID: admission.AgentID}, sessionKey: key, authorityKey: "later-active", done: make(chan struct{})}
+	laterPending := &agentConn{agent: ConnectedAgent{AgentID: admission.AgentID}, admission: admission, sessionKey: key, authorityKey: "later-pending", done: make(chan struct{})}
+	s.mu.Lock()
+	s.agents[key] = laterActive
+	s.pendingActionRunners[key] = laterPending
+	s.mu.Unlock()
+
+	tx.FailClosed()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.agents[key] != laterActive || s.pendingActionRunners[key] != laterPending {
+		t.Fatal("stale promotion transaction removed later session occupants")
 	}
 }
 

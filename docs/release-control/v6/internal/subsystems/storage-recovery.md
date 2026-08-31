@@ -49,9 +49,14 @@ delete, restore, or reclassify storage/recovery state.
 Runner credential rotation follows the shared two-phase token-inventory commit
 boundary: issuance durably prepares a bounded, non-dispatchable replacement
 without removing or disconnecting the active predecessor; activation after
-durable runner health proof requires durable token persistence and atomically
-promotes the exact registered replacement while removing only its recorded
-predecessor set. The installer may restore predecessor files only after the
+durable runner health proof fences both runner transports before credential
+persistence, atomically promotes the exact registered replacement before
+unfencing, and removes only its recorded predecessor set. In-flight typed work
+remains bound to the predecessor's immutable WebSocket generation and cannot be
+reinterpreted as replacement or storage-recovery evidence after promotion. A
+failed save restores predecessor credential/session authority only after the
+durable inventory is restored; indeterminate compensation fail-closes both
+transports. The installer may restore predecessor files only after the
 server atomically cancels and durably removes the exact still-pending bearer;
 activation-winning, persistence-failure, and indeterminate outcomes retain the
 replacement instead. Failed persistence or session promotion preserves one

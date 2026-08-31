@@ -65,6 +65,7 @@ type Server struct {
 	mu                                 sync.RWMutex
 	agents                             map[string]*agentConn                           // organizationID + agentID -> connection
 	pendingActionRunners               map[string]*agentConn                           // organizationID + agentID -> exact prepared runner transport
+	actionRunnerPromotionFences        map[string]*ActionRunnerSessionPromotion        // organizationID + agentID -> activation transaction fencing dispatch/results
 	pendingReqs                        map[string]chan CommandResultPayload            // scoped request key -> response channel
 	pendingHostStorageCleanups         map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
 	pendingHostUpdates                 map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
@@ -133,6 +134,7 @@ type agentConn struct {
 	agent            ConnectedAgent
 	admission        AgentAdmission
 	sessionKey       string
+	authorityKey     string
 	approvalGrantKey []byte
 	writeMu          sync.Mutex
 	done             chan struct{}
@@ -149,6 +151,19 @@ type pendingHostOperation struct {
 type pendingOperationQuery struct {
 	identity operationreceipt.Identity
 	ch       chan operationreceipt.QueryResult
+}
+
+// ActionRunnerSessionPromotion is a reversible in-memory activation
+// transaction. Begin fences both dispatch and inbound-result authority before
+// credential persistence; Commit swaps the exact prepared transport into the
+// active map, while Rollback restores predecessor authority after a failed
+// durable write. Socket cleanup is deliberately deferred until Cleanup runs
+// after config.Mu has been released.
+type ActionRunnerSessionPromotion struct {
+	server  *Server
+	key     string
+	pending *agentConn
+	cleanup []*agentConn
 }
 
 func (ac *agentConn) signalDone() {
@@ -200,6 +215,7 @@ func NewServerWithAdmissionValidator(admit AgentRegistrationValidator, validateS
 	return &Server{
 		agents:                             make(map[string]*agentConn),
 		pendingActionRunners:               make(map[string]*agentConn),
+		actionRunnerPromotionFences:        make(map[string]*ActionRunnerSessionPromotion),
 		actionRunnerAdmissionTombstones:    make(map[string]time.Time),
 		pendingReqs:                        make(map[string]chan CommandResultPayload),
 		pendingHostStorageCleanups:         make(map[string]chan HostStorageCleanupResultPayload),
@@ -355,6 +371,32 @@ func connectionSessionKey(ac *agentConn) string {
 	return agentSessionKey(ac.admission.OrganizationID, ac.agent.AgentID)
 }
 
+// connectionAuthorityKey identifies one admitted WebSocket generation. Host
+// identity is intentionally insufficient for request correlation: an action-
+// runner replacement must not inherit work dispatched to its predecessor.
+func connectionAuthorityKey(ac *agentConn) string {
+	if ac == nil {
+		return ""
+	}
+	sessionKey := connectionSessionKey(ac)
+	if strings.TrimSpace(ac.authorityKey) == "" {
+		return sessionKey
+	}
+	return sessionKey + "\x00" + ac.authorityKey
+}
+
+// activeConnectionLocked reports whether ac is the exact transport currently
+// authorized to satisfy inbound work for its tenant and host. The caller must
+// hold s.mu for reading or writing across this check and the corresponding
+// channel delivery so action-runner promotion cannot create a check/send race.
+func (s *Server) activeConnectionLocked(ac *agentConn) bool {
+	if s == nil || ac == nil {
+		return false
+	}
+	key := connectionSessionKey(ac)
+	return s.actionRunnerPromotionFences[key] == nil && s.agents[key] == ac
+}
+
 // SetCommandAuthorizationVerifier installs the server-owned authorization
 // consumer used for approval-gated arbitrary commands.
 func (s *Server) SetCommandAuthorizationVerifier(verifier func(CommandAuthorizationRequest) error) {
@@ -401,8 +443,8 @@ func (s *Server) isShuttingDown() bool {
 	}
 }
 
-func pendingRequestKey(agentID, requestID string) string {
-	return agentID + "\x00" + requestID
+func pendingRequestKey(authorityKey, requestID string) string {
+	return authorityKey + "\x00" + requestID
 }
 
 func (s *Server) connectionForOrganization(organizationID, agentID string) (*agentConn, bool) {
@@ -412,8 +454,9 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 	key := agentSessionKey(organizationID, agentID)
 	s.mu.RLock()
 	ac, ok := s.agents[key]
+	fenced := s.actionRunnerPromotionFences[key] != nil
 	s.mu.RUnlock()
-	if !ok {
+	if !ok || fenced {
 		return nil, false
 	}
 	// Prepared action runners live only in pendingActionRunners. Membership in
@@ -452,36 +495,134 @@ func (s *Server) HasActionRunnerSession(admission AgentAdmission) bool {
 	return ok && current != nil && admission.ActivationPending && sameActionRunnerAdmission(current.admission, admission)
 }
 
-// PromoteActionRunnerSessionForCommit performs only the bounded map mutation
-// needed by the credential transaction. Callers may invoke it while holding
-// config.Mu; they must run the returned cleanup only after releasing that lock.
-// This preserves the sole nested order config.Mu -> Server.mu and keeps socket
-// close/logging I/O outside both locks.
-func (s *Server) PromoteActionRunnerSessionForCommit(admission AgentAdmission) (func(), bool) {
+// BeginActionRunnerSessionPromotion fences the host's active map entry before
+// the credential inventory can be durably changed. The fence makes both new
+// dispatch and inbound-result delivery fail closed while persistence is in
+// progress. Callers must resolve the returned transaction with Commit,
+// Rollback, or FailClosed.
+func (s *Server) BeginActionRunnerSessionPromotion(admission AgentAdmission) (*ActionRunnerSessionPromotion, bool) {
 	if s == nil {
 		return nil, false
 	}
 	key := agentSessionKey(admission.OrganizationID, admission.AgentID)
 	s.mu.Lock()
-	pending, ok := s.pendingActionRunners[key]
-	if !ok || pending == nil || !admission.ActivationPending || !sameActionRunnerAdmission(pending.admission, admission) {
-		s.mu.Unlock()
+	defer s.mu.Unlock()
+	if s.actionRunnerPromotionFences[key] != nil {
 		return nil, false
 	}
-	delete(s.pendingActionRunners, key)
-	displaced := s.agents[key]
-	s.agents[key] = pending
+	pending, ok := s.pendingActionRunners[key]
+	if !ok || pending == nil || !admission.ActivationPending || !sameActionRunnerAdmission(pending.admission, admission) {
+		return nil, false
+	}
+	tx := &ActionRunnerSessionPromotion{server: s, key: key, pending: pending}
+	s.actionRunnerPromotionFences[key] = tx
+	return tx, true
+}
+
+// Commit atomically promotes the exact transport captured by Begin. It
+// returns false if that prepared socket disconnected or was replaced while
+// persistence was in progress; the fence remains in place until Rollback or
+// FailClosed resolves the transaction.
+func (tx *ActionRunnerSessionPromotion) Commit() bool {
+	if tx == nil || tx.server == nil {
+		return false
+	}
+	s := tx.server
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.actionRunnerPromotionFences[tx.key] != tx || s.pendingActionRunners[tx.key] != tx.pending {
+		return false
+	}
+	delete(s.pendingActionRunners, tx.key)
+	displaced := s.agents[tx.key]
+	s.agents[tx.key] = tx.pending
+	delete(s.actionRunnerPromotionFences, tx.key)
+	if displaced != nil && displaced != tx.pending {
+		tx.cleanup = append(tx.cleanup, displaced)
+	}
+	return true
+}
+
+// Rollback removes this transaction's fence without changing either session
+// map. It is valid only after the prior credential inventory is known durable.
+func (tx *ActionRunnerSessionPromotion) Rollback() {
+	if tx == nil || tx.server == nil {
+		return
+	}
+	s := tx.server
+	s.mu.Lock()
+	if s.actionRunnerPromotionFences[tx.key] != tx {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.actionRunnerPromotionFences, tx.key)
 	s.mu.Unlock()
-	var cleanup func()
-	if displaced != nil && displaced != pending {
-		cleanup = func() {
-			displaced.signalDone()
-			if displaced.conn != nil {
-				_ = displaced.conn.Close()
-			}
+}
+
+// FailClosed resolves an indeterminate durable activation by removing every
+// active or prepared transport for this host. Neither the potentially revoked
+// predecessor nor an uncommitted replacement may retain runtime authority.
+func (tx *ActionRunnerSessionPromotion) FailClosed() {
+	if tx == nil || tx.server == nil {
+		return
+	}
+	s := tx.server
+	s.mu.Lock()
+	if s.actionRunnerPromotionFences[tx.key] != tx {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.actionRunnerPromotionFences, tx.key)
+	if active := s.agents[tx.key]; active != nil {
+		delete(s.agents, tx.key)
+		tx.cleanup = append(tx.cleanup, active)
+	}
+	if pending := s.pendingActionRunners[tx.key]; pending != nil {
+		delete(s.pendingActionRunners, tx.key)
+		tx.cleanup = append(tx.cleanup, pending)
+	}
+	s.mu.Unlock()
+}
+
+// Cleanup closes transports displaced by Commit or removed by FailClosed. It
+// must run after the caller releases config.Mu so socket I/O never occurs
+// while either the credential or session-map transaction lock is held.
+func (tx *ActionRunnerSessionPromotion) Cleanup() {
+	if tx == nil {
+		return
+	}
+	seen := make(map[*agentConn]struct{}, len(tx.cleanup))
+	for _, ac := range tx.cleanup {
+		if ac == nil {
+			continue
+		}
+		if _, duplicate := seen[ac]; duplicate {
+			continue
+		}
+		seen[ac] = struct{}{}
+		ac.signalDone()
+		if ac.conn != nil {
+			_ = ac.conn.Close()
 		}
 	}
-	return cleanup, true
+}
+
+// PromoteActionRunnerSessionForCommit is the bounded compatibility wrapper
+// used by direct callers and tests. Production credential activation uses the
+// full Begin/Commit/Rollback transaction so the persistence interval is fenced.
+func (s *Server) PromoteActionRunnerSessionForCommit(admission AgentAdmission) (func(), bool) {
+	tx, ok := s.BeginActionRunnerSessionPromotion(admission)
+	if !ok {
+		return nil, false
+	}
+	if !tx.Commit() {
+		tx.Rollback()
+		return nil, false
+	}
+	if len(tx.cleanup) == 0 {
+		return nil, true
+	}
+	return tx.Cleanup, true
 }
 
 // PromoteActionRunnerSession is the non-transactional compatibility wrapper.
@@ -602,8 +743,8 @@ func (s *Server) connectionForContext(ctx context.Context, agentID string) (*age
 	return s.connectionForOrganization(organizationIDFromContext(ctx), agentID)
 }
 
-func (s *Server) claimPendingHostOperation(agentID, requestID, actionID, operation string) (string, error) {
-	key := pendingRequestKey(agentID, requestID)
+func (s *Server) claimPendingHostOperation(authorityKey, requestID, actionID, operation string) (string, error) {
+	key := pendingRequestKey(authorityKey, requestID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.pendingHostOperations[key]; exists {
@@ -616,8 +757,8 @@ func (s *Server) claimPendingHostOperation(agentID, requestID, actionID, operati
 	return key, nil
 }
 
-func (s *Server) matchesPendingHostOperation(agentID, requestID, actionID, operation string) bool {
-	key := pendingRequestKey(agentID, requestID)
+func (s *Server) matchesPendingHostOperation(authorityKey, requestID, actionID, operation string) bool {
+	key := pendingRequestKey(authorityKey, requestID)
 	s.mu.RLock()
 	expected, ok := s.pendingHostOperations[key]
 	s.mu.RUnlock()
@@ -628,12 +769,12 @@ func (s *Server) claimPendingDockerOperation(identity operationreceipt.Identity,
 	return s.claimPendingDockerOperationForSession(identity.AgentID, identity, containerID)
 }
 
-func (s *Server) claimPendingDockerOperationForSession(sessionKey string, identity operationreceipt.Identity, containerID string) (string, error) {
+func (s *Server) claimPendingDockerOperationForSession(authorityKey string, identity operationreceipt.Identity, containerID string) (string, error) {
 	identity, err := operationreceipt.NormalizeIdentity(identity)
 	if err != nil {
 		return "", err
 	}
-	key := pendingRequestKey(sessionKey, identity.AttemptID)
+	key := pendingRequestKey(authorityKey, identity.AttemptID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.pendingHostOperations[key]; exists {
@@ -647,8 +788,8 @@ func (s *Server) matchesPendingDockerOperation(agentID string, result DockerCont
 	return s.matchesPendingDockerOperationForSession(agentID, agentID, result)
 }
 
-func (s *Server) matchesPendingDockerOperationForSession(sessionKey, agentID string, result DockerContainerLifecycleResultPayload) bool {
-	key := pendingRequestKey(sessionKey, result.RequestID)
+func (s *Server) matchesPendingDockerOperationForSession(authorityKey, agentID string, result DockerContainerLifecycleResultPayload) bool {
+	key := pendingRequestKey(authorityKey, result.RequestID)
 	s.mu.RLock()
 	expected, ok := s.pendingHostOperations[key]
 	s.mu.RUnlock()
@@ -660,8 +801,8 @@ func (s *Server) matchesPendingDockerUpdateOperation(agentID string, result Dock
 	return s.matchesPendingDockerUpdateOperationForSession(agentID, agentID, result)
 }
 
-func (s *Server) matchesPendingDockerUpdateOperationForSession(sessionKey, agentID string, result DockerContainerUpdateResultPayload) bool {
-	key := pendingRequestKey(sessionKey, result.RequestID)
+func (s *Server) matchesPendingDockerUpdateOperationForSession(authorityKey, agentID string, result DockerContainerUpdateResultPayload) bool {
+	key := pendingRequestKey(authorityKey, result.RequestID)
 	s.mu.RLock()
 	expected, ok := s.pendingHostOperations[key]
 	s.mu.RUnlock()
@@ -669,8 +810,8 @@ func (s *Server) matchesPendingDockerUpdateOperationForSession(sessionKey, agent
 	return ok && expected.identity == actual && expected.subjectID == strings.ToLower(strings.TrimSpace(result.ContainerID))
 }
 
-func (s *Server) matchesPendingProxmoxGuestOperationForSession(sessionKey, agentID string, result ProxmoxGuestLifecycleResultPayload) bool {
-	key := pendingRequestKey(sessionKey, result.RequestID)
+func (s *Server) matchesPendingProxmoxGuestOperationForSession(authorityKey, agentID string, result ProxmoxGuestLifecycleResultPayload) bool {
+	key := pendingRequestKey(authorityKey, result.RequestID)
 	s.mu.RLock()
 	expected, ok := s.pendingHostOperations[key]
 	s.mu.RUnlock()
@@ -1237,6 +1378,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		},
 		admission:        admission,
 		sessionKey:       agentSessionKey(admission.OrganizationID, admission.AgentID),
+		authorityKey:     uuid.NewString(),
 		approvalGrantKey: DeriveApprovalGrantKey(reg.Token),
 		done:             make(chan struct{}),
 	}
@@ -1466,6 +1608,24 @@ func (s *Server) readLoop(ac *agentConn) {
 			continue
 		}
 
+		// A prepared action runner may prove liveness while activation is
+		// pending, but it has no authority to satisfy work dispatched to the
+		// active predecessor. Recheck exact active-map membership in each result
+		// handler as well, under the same lock as delivery, because promotion can
+		// race this early rejection boundary.
+		if msg.Type != MsgTypeAgentPing {
+			s.mu.RLock()
+			active := s.activeConnectionLocked(ac)
+			s.mu.RUnlock()
+			if !active {
+				log.Warn().
+					Str("agent_id", ac.agent.AgentID).
+					Str("message_type", string(msg.Type)).
+					Msg("Dropping inbound message from non-active agent session")
+				continue
+			}
+		}
+
 		switch msg.Type {
 		case MsgTypeAgentPing:
 			pongMsg, err := NewMessage(MsgTypePong, "", nil)
@@ -1499,10 +1659,9 @@ func (s *Server) readLoop(ac *agentConn) {
 			}
 
 			s.mu.RLock()
-			ch, ok := s.pendingReqs[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-
-			if ok {
+			ch, ok := s.pendingReqs[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			active := s.activeConnectionLocked(ac)
+			if active && ok {
 				select {
 				case ch <- result:
 					log.Debug().
@@ -1518,7 +1677,9 @@ func (s *Server) readLoop(ac *agentConn) {
 						Str("request_id", result.RequestID).
 						Msg("Result channel full, dropping")
 				}
-			} else {
+			}
+			s.mu.RUnlock()
+			if !active || !ok {
 				log.Warn().
 					Str("agent_id", ac.agent.AgentID).
 					Str("request_id", result.RequestID).
@@ -1531,20 +1692,20 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid host update result")
 				continue
 			}
-			if !s.matchesPendingHostOperation(connectionSessionKey(ac), result.RequestID, result.ActionID, HostUpdateOperationInstall) {
+			if !s.matchesPendingHostOperation(connectionAuthorityKey(ac), result.RequestID, result.ActionID, HostUpdateOperationInstall) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated host update result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingHostUpdates[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-			if ok {
+			ch, ok := s.pendingHostUpdates[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			if s.activeConnectionLocked(ac) && ok {
 				select {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Host update result channel full, dropping")
 				}
 			}
+			s.mu.RUnlock()
 
 		case MsgTypeActionPreflightResult:
 			result, decodeErr := DecodeActionPreflightResultPayload(msg.Payload)
@@ -1553,15 +1714,15 @@ func (s *Server) readLoop(ac *agentConn) {
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingActionPreflights[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-			if ok {
+			ch, ok := s.pendingActionPreflights[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			if s.activeConnectionLocked(ac) && ok {
 				select {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Action preflight result channel full, dropping")
 				}
 			}
+			s.mu.RUnlock()
 
 		case MsgTypeDockerContainerObserveResult:
 			result, decodeErr := DecodeDockerContainerObservationResultPayload(msg.Payload)
@@ -1570,15 +1731,15 @@ func (s *Server) readLoop(ac *agentConn) {
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingDockerContainerObservations[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-			if ok {
+			ch, ok := s.pendingDockerContainerObservations[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			if s.activeConnectionLocked(ac) && ok {
 				select {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Docker observation result channel full, dropping")
 				}
 			}
+			s.mu.RUnlock()
 
 		case MsgTypeHostStorageCleanupResult:
 			result, decodeErr := DecodeHostStorageCleanupResultPayload(msg.Payload)
@@ -1586,20 +1747,20 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid host storage cleanup result")
 				continue
 			}
-			if !s.matchesPendingHostOperation(connectionSessionKey(ac), result.RequestID, result.ActionID, HostStorageCleanupOperationPackageCache) {
+			if !s.matchesPendingHostOperation(connectionAuthorityKey(ac), result.RequestID, result.ActionID, HostStorageCleanupOperationPackageCache) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated host storage cleanup result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingHostStorageCleanups[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-			if ok {
+			ch, ok := s.pendingHostStorageCleanups[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			if s.activeConnectionLocked(ac) && ok {
 				select {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Host storage cleanup result channel full, dropping")
 				}
 			}
+			s.mu.RUnlock()
 
 		case MsgTypeProxmoxGuestLifecycleResult:
 			result, decodeErr := DecodeProxmoxGuestLifecycleResultPayload(msg.Payload)
@@ -1607,20 +1768,20 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid Proxmox guest lifecycle result")
 				continue
 			}
-			if !s.matchesPendingProxmoxGuestOperationForSession(connectionSessionKey(ac), ac.agent.AgentID, result) {
+			if !s.matchesPendingProxmoxGuestOperationForSession(connectionAuthorityKey(ac), ac.agent.AgentID, result) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated Proxmox guest lifecycle result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingProxmoxGuestLifecycles[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-			if ok {
+			ch, ok := s.pendingProxmoxGuestLifecycles[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			if s.activeConnectionLocked(ac) && ok {
 				select {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Proxmox guest lifecycle result channel full, dropping")
 				}
 			}
+			s.mu.RUnlock()
 
 		case MsgTypeDockerContainerLifecycleResult:
 			result, decodeErr := DecodeDockerContainerLifecycleResultPayload(msg.Payload)
@@ -1628,20 +1789,20 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid docker container lifecycle result")
 				continue
 			}
-			if !s.matchesPendingDockerOperationForSession(connectionSessionKey(ac), ac.agent.AgentID, result) {
+			if !s.matchesPendingDockerOperationForSession(connectionAuthorityKey(ac), ac.agent.AgentID, result) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated docker lifecycle result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingDockerContainerLifecycles[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-			if ok {
+			ch, ok := s.pendingDockerContainerLifecycles[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			if s.activeConnectionLocked(ac) && ok {
 				select {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Docker lifecycle result channel full, dropping")
 				}
 			}
+			s.mu.RUnlock()
 
 		case MsgTypeDockerContainerUpdateResult:
 			result, decodeErr := DecodeDockerContainerUpdateResultPayload(msg.Payload)
@@ -1649,20 +1810,20 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid docker container update result")
 				continue
 			}
-			if !s.matchesPendingDockerUpdateOperationForSession(connectionSessionKey(ac), ac.agent.AgentID, result) {
+			if !s.matchesPendingDockerUpdateOperationForSession(connectionAuthorityKey(ac), ac.agent.AgentID, result) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated docker update result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingDockerContainerUpdates[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
-			s.mu.RUnlock()
-			if ok {
+			ch, ok := s.pendingDockerContainerUpdates[pendingRequestKey(connectionAuthorityKey(ac), result.RequestID)]
+			if s.activeConnectionLocked(ac) && ok {
 				select {
 				case ch <- result:
 				default:
 					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Docker update result channel full, dropping")
 				}
 			}
+			s.mu.RUnlock()
 
 		case MsgTypeOperationQueryResult:
 			result, decodeErr := operationreceipt.DecodeQueryResult(msg.Payload)
@@ -1670,7 +1831,7 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid operation query result")
 				continue
 			}
-			key := pendingRequestKey(connectionSessionKey(ac), strings.TrimSpace(msg.ID))
+			key := pendingRequestKey(connectionAuthorityKey(ac), strings.TrimSpace(msg.ID))
 			s.mu.RLock()
 			pending, ok := s.pendingOperationQueries[key]
 			s.mu.RUnlock()
@@ -1685,10 +1846,15 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid correlated operation query result")
 				continue
 			}
-			select {
-			case pending.ch <- result:
-			default:
+			s.mu.RLock()
+			current, stillPending := s.pendingOperationQueries[key]
+			if s.activeConnectionLocked(ac) && stillPending && current.ch == pending.ch && current.identity == pending.identity {
+				select {
+				case pending.ch <- result:
+				default:
+				}
 			}
+			s.mu.RUnlock()
 		case MsgTypeDeployProgress:
 			var progress DeployProgressPayload
 			if err := msg.DecodePayload(&progress); err != nil {
@@ -1708,7 +1874,8 @@ func (s *Server) readLoop(ac *agentConn) {
 			sent := false
 			s.mu.RLock()
 			ch, ok := s.deploySubs[subKey]
-			if ok {
+			active := s.activeConnectionLocked(ac)
+			if active && ok {
 				select {
 				case ch <- progress:
 					sent = true
@@ -1719,7 +1886,7 @@ func (s *Server) readLoop(ac *agentConn) {
 
 			// Final messages must be delivered — retry with backoff if the
 			// initial non-blocking send failed (channel was full).
-			if ok && !sent && progress.Final {
+			if active && ok && !sent && progress.Final {
 				deadline := time.After(5 * time.Second)
 				ticker := time.NewTicker(50 * time.Millisecond)
 			retryLoop:
@@ -1733,7 +1900,7 @@ func (s *Server) readLoop(ac *agentConn) {
 						// Force-close the subscription so the consumer goroutine
 						// unblocks on channel close and can finalize the job.
 						s.mu.Lock()
-						if closeCh, exists := s.deploySubs[subKey]; exists {
+						if closeCh, exists := s.deploySubs[subKey]; s.activeConnectionLocked(ac) && exists {
 							delete(s.deploySubs, subKey)
 							close(closeCh)
 						}
@@ -1742,7 +1909,8 @@ func (s *Server) readLoop(ac *agentConn) {
 					case <-ticker.C:
 						s.mu.RLock()
 						ch, ok = s.deploySubs[subKey]
-						if !ok {
+						active := s.activeConnectionLocked(ac)
+						if !ok || !active {
 							s.mu.RUnlock()
 							break retryLoop // channel was closed/unsubscribed
 						}
@@ -1757,7 +1925,7 @@ func (s *Server) readLoop(ac *agentConn) {
 					}
 				}
 				ticker.Stop()
-			} else if ok && !sent {
+			} else if active && ok && !sent {
 				log.Warn().
 					Str("agent_id", ac.agent.AgentID).
 					Str("job_id", progress.JobID).
@@ -1950,7 +2118,7 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
-	reqKey := pendingRequestKey(connectionSessionKey(ac), cmd.RequestID)
+	reqKey := pendingRequestKey(connectionAuthorityKey(ac), cmd.RequestID)
 	s.mu.Lock()
 	if _, exists := s.pendingReqs[reqKey]; exists {
 		s.mu.Unlock()
@@ -2105,9 +2273,9 @@ func dispatchHostOperation[Req hostOperationPayload, Res any](ctx context.Contex
 	}
 
 	respCh := make(chan Res, 1)
-	sessionKey := connectionSessionKey(ac)
-	reqKey := pendingRequestKey(sessionKey, requestID)
-	hostOperationKey, err := s.claimPendingHostOperation(sessionKey, requestID, actionID, operation)
+	authorityKey := connectionAuthorityKey(ac)
+	reqKey := pendingRequestKey(authorityKey, requestID)
+	hostOperationKey, err := s.claimPendingHostOperation(authorityKey, requestID, actionID, operation)
 	if err != nil {
 		return nil, err
 	}
@@ -2195,7 +2363,7 @@ func (s *Server) PreflightAction(ctx context.Context, agentID string, req Action
 		return nil, fmt.Errorf("agent does not support action preflight protocol")
 	}
 	ch := make(chan ActionPreflightResultPayload, 1)
-	key := pendingRequestKey(connectionSessionKey(ac), req.RequestID)
+	key := pendingRequestKey(connectionAuthorityKey(ac), req.RequestID)
 	s.mu.Lock()
 	if _, exists := s.pendingActionPreflights[key]; exists {
 		s.mu.Unlock()
@@ -2265,7 +2433,7 @@ func (s *Server) ObserveDockerContainer(ctx context.Context, agentID string, req
 		return nil, fmt.Errorf("agent does not support docker observation protocol")
 	}
 	ch := make(chan DockerContainerObservationResultPayload, 1)
-	key := pendingRequestKey(connectionSessionKey(ac), req.RequestID)
+	key := pendingRequestKey(connectionAuthorityKey(ac), req.RequestID)
 	s.mu.Lock()
 	if _, exists := s.pendingDockerContainerObservations[key]; exists {
 		s.mu.Unlock()
@@ -2406,9 +2574,9 @@ func dispatchTypedDockerContainerOperation[Res any](
 	}
 
 	respCh := make(chan Res, 1)
-	sessionKey := connectionSessionKey(ac)
-	reqKey := pendingRequestKey(sessionKey, requestID)
-	hostOperationKey, err := s.claimPendingDockerOperationForSession(sessionKey, identity, containerID)
+	authorityKey := connectionAuthorityKey(ac)
+	reqKey := pendingRequestKey(authorityKey, requestID)
+	hostOperationKey, err := s.claimPendingDockerOperationForSession(authorityKey, identity, containerID)
 	if err != nil {
 		return nil, err
 	}
@@ -2525,7 +2693,7 @@ func (s *Server) QueryAgentOperation(ctx context.Context, agentID string, identi
 		return operationreceipt.QueryResult{}, fmt.Errorf("agent does not support durable operation receipts")
 	}
 	queryID := identity.AttemptID + ".query." + uuid.NewString()
-	key := pendingRequestKey(connectionSessionKey(ac), queryID)
+	key := pendingRequestKey(connectionAuthorityKey(ac), queryID)
 	ch := make(chan operationreceipt.QueryResult, 1)
 	s.mu.Lock()
 	if _, exists := s.pendingOperationQueries[key]; exists {
@@ -2606,7 +2774,7 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
-	reqKey := pendingRequestKey(connectionSessionKey(ac), req.RequestID)
+	reqKey := pendingRequestKey(connectionAuthorityKey(ac), req.RequestID)
 	s.mu.Lock()
 	if _, exists := s.pendingReqs[reqKey]; exists {
 		s.mu.Unlock()

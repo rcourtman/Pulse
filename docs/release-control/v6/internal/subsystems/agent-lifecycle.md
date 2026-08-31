@@ -201,14 +201,37 @@ rotation is a prepare/commit transaction. Issuance stores a ten-minute pending
 replacement beside the active predecessor; the pending transport may register
 but is staged in a separate bounded session slot and is not dispatchable.
 Pending reconnect or flood traffic may replace only that pending slot; the
-active predecessor remains connected and dispatchable until commit. The runner
+active predecessor remains connected and dispatchable until activation begins.
+Activation then installs a reversible per-host session fence before changing
+credential memory or durable storage, so neither new dispatch nor an inbound
+result from either transport is authoritative during persistence. A failed
+save removes the fence only after restoring the predecessor inventory; a
+successful save atomically promotes the exact prepared transport before the
+fence is removed. If exact promotion cannot commit, compensating persistence
+must restore the predecessor inventory before its authority is unfenced, while
+an indeterminate compensating save removes and closes both transports.
+The runner
+may exchange liveness ping/pong traffic while prepared, but pending map
+membership never authorizes inbound results, operation-query responses, or
+deployment progress. Every authority-bearing inbound delivery is bound to
+pointer-identical membership in the active session map while the server lock
+also protects the pending request/subscription lookup and channel send. Typed
+requests, durable-operation queries, and their result channels additionally
+carry an immutable per-WebSocket authority generation, so promotion cannot
+transfer predecessor work to the replacement even though both transports have
+the same canonical host identity. This same rule rejects a displaced
+predecessor immediately after the atomic map swap, even before its deferred
+socket cleanup completes; immutable admission metadata is not used as live
+transport authority.
+The runner
 first durably replaces a private pending
 health marker carrying the current installer-generated activation nonce, then
 calls the authenticated activation method. Activation atomically removes the
 exact predecessor set, removes the replacement expiry/pending state, and
 promotes the exact registered pending session while the token inventory lock
-serializes both decisions. The server persists the activated inventory before
-the bounded session-map swap and closes the displaced predecessor transport
+serializes both decisions. The server fences the session maps before persisting
+the activated inventory, completes the bounded session-map swap before
+unfencing, and closes the displaced predecessor transport
 only after both locks are released. If the exact pending transport vanished or
 was replaced, the server durably restores the prior inventory and returns
 conflict; if that compensating persistence fails, memory remains aligned with

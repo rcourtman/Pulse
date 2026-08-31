@@ -26,6 +26,26 @@ type actionRunnerFailAfterWritesFS struct {
 	allowWrites int
 }
 
+type actionRunnerPromotionTestTransaction struct {
+	commitResult    bool
+	commitCalls     int
+	rollbackCalls   int
+	failClosedCalls int
+}
+
+func (tx *actionRunnerPromotionTestTransaction) Commit() bool {
+	tx.commitCalls++
+	return tx.commitResult
+}
+
+func (tx *actionRunnerPromotionTestTransaction) Rollback() {
+	tx.rollbackCalls++
+}
+
+func (tx *actionRunnerPromotionTestTransaction) FailClosed() {
+	tx.failClosedCalls++
+}
+
 func (fs *actionRunnerFailAfterWritesFS) ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
 }
@@ -312,6 +332,59 @@ func TestActivateActionRunnerAndPersistFailureRestoresPendingAndActiveInventory(
 	}
 }
 
+func TestActivateActionRunnerPromotionFencesBeforePersistenceAndRollsBackOnSaveFailure(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	_, predecessor, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := ActivateActionRunnerAndPersist(cfg, config.NewConfigPersistence(cfg.DataPath), predecessor.ID, "machine-123", "node.example"); err != nil {
+		t.Fatal(err)
+	}
+	_, pending, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	persistence.SetFileSystem(&actionRunnerTestFS{entered: entered, release: release, writeErr: errors.New("injected activation save failure")})
+	tx := &actionRunnerPromotionTestTransaction{commitResult: true}
+	type activationOutcome struct {
+		changed bool
+		err     error
+	}
+	done := make(chan activationOutcome, 1)
+	go func() {
+		_, _, changed, err := ActivateActionRunnerAndPersistWithPromotion(cfg, persistence, pending.ID, "machine-123", "node.example", func() (ActionRunnerPromotionTransaction, bool) {
+			return tx, true
+		})
+		done <- activationOutcome{changed: changed, err: err}
+	}()
+
+	select {
+	case <-entered:
+		if tx.commitCalls != 0 || tx.rollbackCalls != 0 || tx.failClosedCalls != 0 {
+			t.Fatalf("promotion resolved before persistence outcome: commit %d rollback %d fail-closed %d", tx.commitCalls, tx.rollbackCalls, tx.failClosedCalls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("activation did not enter persistence after beginning promotion")
+	}
+	close(release)
+	select {
+	case outcome := <-done:
+		if !errors.Is(outcome.err, ErrPersist) || outcome.changed {
+			t.Fatalf("activation outcome = changed %v err %v", outcome.changed, outcome.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("activation did not return after persistence failure")
+	}
+	if tx.commitCalls != 0 || tx.rollbackCalls != 1 || tx.failClosedCalls != 0 {
+		t.Fatalf("failed-save promotion lifecycle = commit %d rollback %d fail-closed %d", tx.commitCalls, tx.rollbackCalls, tx.failClosedCalls)
+	}
+}
+
 func TestActivateActionRunnerAndPersistWithPromotionRollsBackWhenExactTransportVanished(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	_, predecessor, err := IssueActionRunnerAndPersist(cfg, nil, ActionRunnerIssueOptions{OrgID: "org-a", AgentID: "machine-123", Hostname: "node.example"})
@@ -326,16 +399,17 @@ func TestActivateActionRunnerAndPersistWithPromotionRollsBackWhenExactTransportV
 		t.Fatal(err)
 	}
 	persistence := config.NewConfigPersistence(cfg.DataPath)
-	promotionCalls := 0
-	activated, revoked, changed, err := ActivateActionRunnerAndPersistWithPromotion(cfg, persistence, pending.ID, "machine-123", "node.example", func() bool {
-		promotionCalls++
-		return false
+	tx := &actionRunnerPromotionTestTransaction{}
+	beginCalls := 0
+	activated, revoked, changed, err := ActivateActionRunnerAndPersistWithPromotion(cfg, persistence, pending.ID, "machine-123", "node.example", func() (ActionRunnerPromotionTransaction, bool) {
+		beginCalls++
+		return tx, true
 	})
 	if !errors.Is(err, ErrActionRunnerSessionUnavailable) || activated != nil || revoked != nil || changed {
 		t.Fatalf("vanished transport activation = activated %#v revoked %#v changed %v err %v", activated, revoked, changed, err)
 	}
-	if promotionCalls != 1 {
-		t.Fatalf("promotion calls = %d, want 1", promotionCalls)
+	if beginCalls != 1 || tx.commitCalls != 1 || tx.rollbackCalls != 1 || tx.failClosedCalls != 0 {
+		t.Fatalf("promotion lifecycle = begin %d commit %d rollback %d fail-closed %d", beginCalls, tx.commitCalls, tx.rollbackCalls, tx.failClosedCalls)
 	}
 	if len(cfg.APITokens) != 2 {
 		t.Fatalf("rolled-back inventory = %#v", cfg.APITokens)
@@ -379,12 +453,18 @@ func TestActivateActionRunnerPromotionRollbackPersistenceFailureKeepsLastDurable
 	// one backup plus the new token file. Permit both, then fail the compensating
 	// rollback writes.
 	persistence.SetFileSystem(&actionRunnerFailAfterWritesFS{allowWrites: 2})
-	activated, revoked, changed, err := ActivateActionRunnerAndPersistWithPromotion(cfg, persistence, pending.ID, "machine-123", "node.example", func() bool { return false })
+	tx := &actionRunnerPromotionTestTransaction{}
+	activated, revoked, changed, err := ActivateActionRunnerAndPersistWithPromotion(cfg, persistence, pending.ID, "machine-123", "node.example", func() (ActionRunnerPromotionTransaction, bool) {
+		return tx, true
+	})
 	if !errors.Is(err, ErrActionRunnerActivationIndeterminate) || activated == nil || activated.ID != pending.ID || len(revoked) != 1 || revoked[0].ID != predecessor.ID || !changed {
 		t.Fatalf("rollback persistence failure = activated %#v revoked %#v changed %v err %v", activated, revoked, changed, err)
 	}
 	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != pending.ID || cfg.APITokens[0].ExpiresAt != nil || cfg.APITokens[0].Metadata[ActionRunnerActivationPendingMetadataKey] != "" {
 		t.Fatalf("memory diverged from last durable activation: %#v", cfg.APITokens)
+	}
+	if tx.commitCalls != 1 || tx.rollbackCalls != 0 || tx.failClosedCalls != 1 {
+		t.Fatalf("indeterminate promotion lifecycle = commit %d rollback %d fail-closed %d", tx.commitCalls, tx.rollbackCalls, tx.failClosedCalls)
 	}
 	persisted, err := config.NewConfigPersistence(cfg.DataPath).LoadAPITokens()
 	if err != nil {

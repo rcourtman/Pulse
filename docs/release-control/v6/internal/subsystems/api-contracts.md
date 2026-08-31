@@ -63,12 +63,20 @@ commit. It requires the current `agent:exec` bearer, exact organization,
 canonical agent/hostname binding, and an exact registered pending transport.
 A pending transport is visible to this commit proof but unavailable to action
 dispatch and cannot evict or interrupt the active predecessor. The commit
-requires durable token persistence, clears the pending expiry, removes only the
-server-recorded predecessor IDs, and atomically promotes the exact replacement
-session while invalidating exact stale sessions without allowing a
-caller-selected token ID. Persistence or promotion failure preserves one
-coherent durable inventory/session outcome; the route never reports success for
-an in-memory-only activation or a vanished pending connection. Repeating
+requires durable token persistence and begins by installing a reversible
+per-host session fence, which temporarily rejects new dispatch plus inbound
+results from both predecessor and replacement while credential storage is in
+flight. It then clears the pending expiry, removes only the server-recorded
+predecessor IDs, and atomically promotes the exact replacement session before
+unfencing. Pending requests and durable-operation queries carry an immutable
+per-WebSocket authority generation, so promotion cannot transfer in-flight
+predecessor work to the replacement. A failed durable save restores the prior
+inventory before rolling back the fence; failed exact promotion performs a
+compensating durable save, and an indeterminate compensation fail-closes both
+session slots. Socket cleanup occurs only after the credential and session
+locks are released. The route never reports success for an in-memory-only
+activation or a vanished pending connection and never allows a caller-selected
+token ID. Repeating
 activation for an already active exact session is idempotent so a lost HTTP
 response can be reconciled safely.
 

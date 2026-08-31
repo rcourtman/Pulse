@@ -109,7 +109,16 @@ rejected before any action credential is minted. The pending credential may auth
 exact runner transport in a separate bounded pending slot but cannot become
 dispatch authority. Pending reconnects replace only that slot; they cannot
 close or displace the active predecessor, which remains the dispatch target
-until commit. After the runner
+until activation begins. Activation first fences the host's session authority
+under the execution-server lock, so neither transport can dispatch or satisfy
+inbound work while the credential inventory is being changed. Every typed
+request and durable-operation query is also bound to an immutable per-WebSocket
+authority generation; a promoted replacement cannot complete work sent to the
+predecessor even though both share the same host identity. A failed initial
+save restores the token inventory before removing the fence, successful
+persistence commits the exact pending map swap before unfencing, and an
+indeterminate compensating save removes both active and pending transports.
+After the runner
 durably records its current activation nonce as pending, its authenticated
 activation request durably activates the replacement and revokes the
 server-recorded predecessor set, then atomically promotes the exact pending
@@ -119,7 +128,8 @@ commit. If the pending transport vanished or was superseded, a compensating
 durable save restores both sides of the transition and returns conflict. If the
 compensating save itself fails, memory remains aligned with the last known
 durable activated inventory and the response is indeterminate rather than a
-false success. An initial persistence failure also restores both sides;
+false success. Session cleanup and socket I/O occur only after both locks are
+released. An initial persistence failure also restores both sides;
 an unactivated replacement expires without revoking the predecessor.
 Installer recovery stops the replacement and may restore a predecessor only
 after a bodyless self-cancellation durably removes the exact pending credential
