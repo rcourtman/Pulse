@@ -40,6 +40,9 @@ _This changelog describes stable `v6.4.2` compared with stable `v6.4.1`._
 - Generated systemd services now preserve Pulse log severity as native journal
   priorities, enabling `journalctl -p` and downstream syslog filtering without
   changing the structured message or other logging sinks.
+- Durable Proxmox identity recovery now scopes pins to qualified provider
+  endpoints and refuses ambiguous short names or IP addresses, keeping
+  independent same-name estates distinct during provider-first restart windows.
 
 ## Release integrity
 

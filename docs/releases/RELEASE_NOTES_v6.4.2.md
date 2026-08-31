@@ -16,6 +16,7 @@ actions and SSO-only deployments.
 - **Agent URL migration guidance is now included** - The built-in migration guide explains how to rerun the agent installer with the new server URL after moving or renaming a Pulse server.
 - **Preview releases now distinguish beta and RC maturity** - Update settings explain that beta builds are for user testing, while release candidates may become stable without product changes.
 - **Systemd journal severity is preserved** - Pulse service logs now carry native journal priorities so `journalctl -p` and downstream forwarding can filter by severity without changing file, terminal, or live-log output.
+- **Same-name Proxmox estates stay distinct after restart** - Durable identity recovery now uses qualified provider endpoints and fails closed on reused short names or IP addresses, preventing one estate from absorbing another during provider-first startup.
 
 ## Before you upgrade
 

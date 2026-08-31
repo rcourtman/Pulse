@@ -2074,6 +2074,7 @@ func TestV642SecurityPacketCoversBothAdministratorBoundaryFixes(t *testing.T) {
 		"Agent URL migration guidance is now included",
 		"Preview releases now distinguish beta and RC maturity",
 		"Systemd journal severity is preserved",
+		"Same-name Proxmox estates stay distinct after restart",
 		"map at least one trusted IdP group to the built-in `admin` role before upgrading",
 		"The rollback target is stable `v6.4.1`",
 	} {
@@ -2091,6 +2092,7 @@ func TestV642SecurityPacketCoversBothAdministratorBoundaryFixes(t *testing.T) {
 		"migration guide now documents rerunning the agent installer",
 		"label the prerelease channel as Preview",
 		"Generated systemd services now preserve Pulse log severity",
+		"Durable Proxmox identity recovery now scopes pins",
 		"authenticates every Unified Agent download",
 		"release candidate verifier now binds the requested version explicitly",
 		"Helm OCI publication now authenticates both Helm",
