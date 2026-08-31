@@ -21,6 +21,14 @@
 
 ## Purpose
 
+A manifestless PBS snapshot never becomes a successful recovery point and
+never advances backup age. Recovery mapping reports it as running while a live
+writer accounts for it or current-task visibility is unavailable; after a
+complete current-task observation finds no writer, it is a failed/incomplete
+artifact with no completion time and no verification verdict. Recovery tables
+keep both states inspectable while excluding them from latest-recoverable
+pointers.
+
 The shared `internal/api/` helper-binary download route is isolated from
 storage and recovery semantics. `/download/pulse-agent-helper` serves a signed
 Linux runtime artifact only; it cannot read, mutate, restore, export, or select

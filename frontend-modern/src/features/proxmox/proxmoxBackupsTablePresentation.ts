@@ -292,7 +292,10 @@ const RECOVERABLE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<RecoverableColumnId, number>>
 > = {
-  compact: { workload: 40, source: 15, location: 20, created: 15, state: 10 },
+  // Reserve enough phone-width space for complete state badges (including
+  // Failed and Running) rather than clipping the recovery answer at the
+  // scroll edge. Identity remains on the canonical 40% anchor.
+  compact: { workload: 40, source: 12, location: 17, created: 15, state: 16 },
   basic: { workload: 28, source: 14, location: 23, created: 18, state: 17 },
   operational: {
     workload: 24,

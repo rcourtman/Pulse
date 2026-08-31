@@ -539,25 +539,33 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 		verified := b.Verified
 		verifiedPtr := &verified
 		details := map[string]any{
-			"datastore":  strings.TrimSpace(b.Datastore),
-			"namespace":  strings.TrimSpace(b.Namespace),
-			"backupType": strings.TrimSpace(b.BackupType),
-			"vmid":       vmidStr,
-			"comment":    strings.TrimSpace(b.Comment),
-			"owner":      strings.TrimSpace(b.Owner),
-			"files":      append([]string(nil), b.Files...),
-			"inProgress": b.InProgress,
+			"datastore":             strings.TrimSpace(b.Datastore),
+			"namespace":             strings.TrimSpace(b.Namespace),
+			"backupType":            strings.TrimSpace(b.BackupType),
+			"vmid":                  vmidStr,
+			"comment":               strings.TrimSpace(b.Comment),
+			"owner":                 strings.TrimSpace(b.Owner),
+			"files":                 append([]string(nil), b.Files...),
+			"inProgress":            b.InProgress,
+			"writeActivityObserved": b.WriteActivityObserved,
+			"writeActive":           b.WriteActive,
 		}
 
-		// An in-flight snapshot (no manifest yet) is a running recovery
-		// point: it has no completion time and cannot be verified. Keeping
-		// it out of OutcomeSuccess also keeps posture/rollup freshness
-		// anchored to the last COMPLETED backup.
+		// A manifestless snapshot is never a successful recovery point. It is
+		// running while a live PBS task accounts for it (or task visibility is
+		// unavailable); after an authoritative task read finds no writer, it is
+		// a failed/incomplete artifact left by a terminal backup or sync task.
 		outcome := recovery.OutcomeSuccess
 		completedAt := &t
 		if b.InProgress {
-			outcome = recovery.OutcomeRunning
+			// The snapshot timestamp is its source backup identity, not the
+			// terminal task time; no completion time is available here.
 			completedAt = nil
+			if b.WriteActivityObserved && !b.WriteActive {
+				outcome = recovery.OutcomeFailed
+			} else {
+				outcome = recovery.OutcomeRunning
+			}
 			verifiedPtr = nil
 		}
 

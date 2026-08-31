@@ -1043,6 +1043,83 @@ type BackupSnapshot struct {
 	Verification interface{}   `json:"verification,omitempty"` // Can be string or object
 }
 
+// RunningDataTask describes a PBS task which may currently be writing a
+// backup snapshot. Backup tasks identify one backup group through WorkerID;
+// sync jobs can write several groups during one task.
+type RunningDataTask struct {
+	WorkerType string
+	WorkerID   string
+	StartTime  int64
+}
+
+var (
+	pbsRunningTaskPageLimit = 200
+	pbsRunningTaskMaxPages  = 3
+)
+
+// ListRunningDataTasks returns the currently running backup and sync tasks.
+// Querying each writer type separately prevents unrelated running tasks from
+// consuming the bounded result window. Reaching the page cap returns an error
+// rather than a partial set so callers retain conservative running state.
+func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, error) {
+	limit := pbsRunningTaskPageLimit
+	if limit <= 0 {
+		limit = 200
+	}
+	maxPages := pbsRunningTaskMaxPages
+	if maxPages <= 0 {
+		maxPages = 1
+	}
+
+	tasks := make([]RunningDataTask, 0)
+	for _, requestedType := range []string{pbsTaskTypeBackup, pbsTaskTypeSyncJob} {
+		for page := 0; page < maxPages; page++ {
+			params := url.Values{}
+			params.Set("limit", fmt.Sprintf("%d", limit))
+			params.Set("running", "true")
+			params.Set("typefilter", requestedType)
+			if page > 0 {
+				params.Set("start", fmt.Sprintf("%d", page*limit))
+			}
+
+			resp, err := c.get(ctx, "/nodes/localhost/tasks?"+params.Encode())
+			if err != nil {
+				return nil, err
+			}
+			var result struct {
+				Data []map[string]interface{} `json:"data"`
+			}
+			decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+			closeErr := resp.Body.Close()
+			if decodeErr != nil {
+				return nil, fmt.Errorf("failed to decode running PBS %s tasks: %w", requestedType, decodeErr)
+			}
+			if closeErr != nil {
+				return nil, fmt.Errorf("failed to close running PBS %s task response: %w", requestedType, closeErr)
+			}
+
+			for _, raw := range result.Data {
+				workerType := strings.ToLower(stringJobField(raw, "worker-type", "worker_type", "type"))
+				if workerType != requestedType {
+					continue
+				}
+				tasks = append(tasks, RunningDataTask{
+					WorkerType: workerType,
+					WorkerID:   stringJobField(raw, "worker-id", "worker_id", "id"),
+					StartTime:  int64JobField(raw, "starttime", "start-time", "start_time"),
+				})
+			}
+			if len(result.Data) < limit {
+				break
+			}
+			if page == maxPages-1 {
+				return nil, fmt.Errorf("running PBS %s task listing reached bounded cap (%d pages x %d limit)", requestedType, maxPages, limit)
+			}
+		}
+	}
+	return tasks, nil
+}
+
 // JobHealthOptions selects which PBS job families should be collected.
 type JobHealthOptions struct {
 	MonitorBackups     bool

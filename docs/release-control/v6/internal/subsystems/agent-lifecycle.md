@@ -15,6 +15,14 @@
 
 ## Purpose
 
+`models.PBSBackup` may carry monitoring-owned write-activity evidence for an
+incomplete PBS snapshot. `inProgress` means the snapshot has no completed
+manifest; `writeActivityObserved` and `writeActive` distinguish a successfully
+observed live PBS writer from absent task visibility. These shared model fields
+grant no agent enrollment, identity, profile, reporting, command, update, or
+removal authority, and an absent observation must not be interpreted as an
+agent lifecycle fact.
+
 Agent-profile assignment presents one actionable identity per connected host.
 When a PBS or PMG provider resource projects an agent ID that is not an active
 host-telemetry surface control, the provider projection is excluded so the

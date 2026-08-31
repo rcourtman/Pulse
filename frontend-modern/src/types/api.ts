@@ -777,8 +777,12 @@ export interface PBSBackup {
   size: number;
   protected: boolean;
   verified: boolean;
-  /** In-flight snapshot the backup client is still writing (no manifest yet); not a completed backup. */
+  /** Incomplete snapshot with no manifest; never a completed backup. */
   inProgress?: boolean;
+  /** Whether the collector successfully observed PBS's current running-task set. */
+  writeActivityObserved?: boolean;
+  /** Whether a running backup or sync task currently accounts for this incomplete snapshot. */
+  writeActive?: boolean;
   verificationRaw?: unknown;
   comment?: string;
   files: string[];

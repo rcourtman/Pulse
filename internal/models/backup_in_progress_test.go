@@ -72,6 +72,37 @@ func TestSyncGuestBackupTimesInProgressOnlyNeverSetsLastBackup(t *testing.T) {
 	}
 }
 
+func TestSyncGuestBackupTimesTerminalIncompletePBSSnapshotIsNotRunningOrComplete(t *testing.T) {
+	state := NewState()
+	state.UpdateVMs([]VM{
+		{VMID: 117, Name: "win11-pvepc", Instance: "pve-pc", Node: "pve-pc"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{{
+		ID:                    "failed-sync-117",
+		VMID:                  "117",
+		BackupType:            "vm",
+		BackupTime:            time.Now().Add(-time.Hour),
+		Instance:              "offsite",
+		Datastore:             "main",
+		Namespace:             "pve-pc",
+		InProgress:            true,
+		WriteActivityObserved: true,
+		WriteActive:           false,
+	}}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	vm := state.GetSnapshot().VMs[0]
+	if vm.BackupInProgress {
+		t.Error("BackupInProgress = true for an incomplete snapshot after its PBS task terminated")
+	}
+	if !vm.LastBackup.IsZero() {
+		t.Errorf("LastBackup = %v, want zero because a failed sync artifact is not complete", vm.LastBackup)
+	}
+}
+
 func TestSyncGuestBackupTimesRunningVzdumpTaskSetsBackupInProgress(t *testing.T) {
 	state := NewState()
 	now := time.Now()

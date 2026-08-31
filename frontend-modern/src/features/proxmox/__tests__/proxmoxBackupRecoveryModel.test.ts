@@ -162,6 +162,34 @@ describe('proxmoxBackupRecoveryModel', () => {
     );
   });
 
+  it('keeps a terminally incomplete PBS artifact out of latest recovery', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [
+        pbsBackup({
+          id: 'failed-offsite-sync',
+          backupTime: '2026-05-26T06:00:00Z',
+          size: 0,
+          verified: false,
+          files: ['pct.conf.blob'],
+          inProgress: true,
+          writeActivityObserved: true,
+          writeActive: false,
+        }),
+        pbsBackup({ backupTime: '2026-05-25T01:34:25Z' }),
+      ],
+      archives: [],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const failed = model.recoverableArtifacts.find((artifact) => artifact.id.includes('failed'));
+    expect(failed).toMatchObject({ failed: true, running: false, verified: undefined });
+    expect(model.coverageRows[0].latestRecovery?.createdAt).toBe('2026-05-25T01:34:25Z');
+    expect(recoverableArtifactMatchesSearch(failed!, 'failed incomplete')).toBe(true);
+  });
+
   it('uses canonical workload attention while retaining the failed task as evidence', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [workload({})],

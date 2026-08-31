@@ -793,6 +793,36 @@ func TestFromPBSBackups_InProgressMapsToRunning(t *testing.T) {
 	}
 }
 
+func TestFromPBSBackups_TerminalIncompleteMapsToFailed(t *testing.T) {
+	started := time.Date(2026, 8, 30, 23, 15, 0, 0, time.UTC)
+	result := FromPBSBackups([]models.PBSBackup{{
+		ID:                    "pbs-offsite-main-vm-117-terminal",
+		VMID:                  "117",
+		Instance:              "offsite",
+		Datastore:             "main",
+		BackupType:            "vm",
+		BackupTime:            started,
+		Files:                 []string{"qemu-server.conf.blob"},
+		InProgress:            true,
+		WriteActivityObserved: true,
+		WriteActive:           false,
+	}}, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(result))
+	}
+	p := result[0]
+	if p.Outcome != recovery.OutcomeFailed {
+		t.Errorf("Outcome = %v, want %v", p.Outcome, recovery.OutcomeFailed)
+	}
+	if p.Verified != nil {
+		t.Errorf("Verified = %v, want nil for an incomplete artifact", *p.Verified)
+	}
+	if p.CompletedAt != nil {
+		t.Errorf("CompletedAt = %v, want nil because PBS did not report a terminal time for the artifact", p.CompletedAt)
+	}
+}
+
 func TestFromPVEStorageBackups_InProgressMapsToRunning(t *testing.T) {
 	started := time.Date(2026, 8, 20, 9, 39, 1, 0, time.UTC)
 	backups := []models.StorageBackup{

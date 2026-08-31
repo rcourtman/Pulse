@@ -20,6 +20,16 @@
 
 ## Purpose
 
+Proxmox backup presentation treats every manifestless PBS artifact as
+non-recoverable. It renders the artifact as `Running` when current writer
+visibility is absent or a matching writer is active, and as danger-tone
+`Failed` when a complete current-task observation finds no live writer.
+Running and failed/incomplete artifacts remain inspectable but cannot become a
+workload's latest recoverable point; search includes `running`, `failed`, and
+`incomplete` state vocabulary. The compact recovery table reserves enough of
+its fixed phone-width layout for the complete state badge instead of clipping
+that recovery answer at the horizontal scroll edge.
+
 Own reusable frontend primitives and canonical page-shell patterns so feature
 work extends shared components instead of creating new local variants.
 Feature-owned warning cards, including notification delivery health, compose

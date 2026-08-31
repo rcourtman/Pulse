@@ -1816,6 +1816,23 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		return
 	}
 
+	// A manifestless snapshot is incomplete, but it is not necessarily still
+	// being written: failed backup and PBS-to-PBS sync tasks can leave that
+	// shape behind. Correlate incomplete artifacts with PBS's live task view
+	// before they feed guest "Backup Running" state. If task visibility is
+	// denied or transiently unavailable, keep the previous conservative
+	// inference rather than claiming that no write is active.
+	if hasIncompletePBSBackup(allBackups) {
+		runningDataTasks, runningTasksErr := client.ListRunningDataTasks(ctx)
+		if runningTasksErr != nil {
+			log.Warn().Err(runningTasksErr).
+				Str("instance", instanceName).
+				Msg("Could not correlate incomplete PBS snapshots with running tasks")
+		} else {
+			applyPBSWriteActivity(allBackups, runningDataTasks)
+		}
+	}
+
 	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
 
 	// Update state
@@ -1869,6 +1886,57 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Immediately broadcast the updated state so frontend sees new backups
 	m.broadcastStateUpdate()
+}
+
+func hasIncompletePBSBackup(backups []models.PBSBackup) bool {
+	for _, backup := range backups {
+		if backup.InProgress {
+			return true
+		}
+	}
+	return false
+}
+
+// applyPBSWriteActivity marks whether each incomplete snapshot is accounted
+// for by a task which PBS currently reports as running. Backup task worker IDs
+// normally identify "<store>:<type>/<id>". If a server version returns a less
+// specific backup ID, the task remains a conservative instance-wide writer.
+// Sync tasks can touch many groups and therefore apply instance-wide.
+func applyPBSWriteActivity(backups []models.PBSBackup, tasks []pbs.RunningDataTask) {
+	for i := range backups {
+		if !backups[i].InProgress {
+			continue
+		}
+		backups[i].WriteActivityObserved = true
+		backups[i].WriteActive = runningPBSTaskMatchesBackup(tasks, backups[i])
+	}
+}
+
+func runningPBSTaskMatchesBackup(tasks []pbs.RunningDataTask, backup models.PBSBackup) bool {
+	subject := strings.ToLower(strings.TrimSpace(backup.BackupType + "/" + backup.VMID))
+	store := strings.ToLower(strings.TrimSpace(backup.Datastore))
+	for _, task := range tasks {
+		switch strings.ToLower(strings.TrimSpace(task.WorkerType)) {
+		case "syncjob":
+			return true
+		case "backup":
+			workerID := strings.ToLower(strings.TrimSpace(task.WorkerID))
+			if workerID == "" {
+				return true
+			}
+			if !strings.Contains(workerID, "/") {
+				// Unknown legacy/new worker-ID shape: do not hide a real write.
+				return true
+			}
+			if !strings.HasSuffix(workerID, subject) {
+				continue
+			}
+			if store == "" || strings.HasPrefix(workerID, store+":") || strings.Contains(workerID, ":"+store+":") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {

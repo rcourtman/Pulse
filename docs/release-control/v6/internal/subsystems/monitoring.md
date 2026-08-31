@@ -17,6 +17,15 @@
 
 ## Purpose
 
+Direct PBS backup polling correlates manifestless snapshots with current
+writer tasks before publishing guest backup-running state. The client queries
+running `backup` and `syncjob` task families separately with bounded pagination;
+an HTTP, permission, decode, or page-cap failure leaves task visibility unknown
+and preserves the conservative running interpretation. A complete empty result
+marks the incomplete artifact observed but inactive. Backup workers match their
+datastore and `vm|ct/id` subject when that shape is available; a running sync
+job remains an instance-wide writer because it may touch multiple groups.
+
 Own polling, typed collection, runtime state assembly, and canonical monitoring
 truth for live infrastructure data.
 Monitoring supplies the live unified-resource snapshot used by the alerts-owned

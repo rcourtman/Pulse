@@ -20,6 +20,15 @@
 
 ## Purpose
 
+The public `PBSBackup` projection keeps `inProgress` as the compatibility field
+for an incomplete, manifestless snapshot. Optional
+`writeActivityObserved: true` says the collector obtained a complete bounded
+view of current PBS backup/sync writers for that poll, while optional
+`writeActive: true` says one of those writers accounts for the artifact. When
+the observation field is absent, clients must preserve the prior conservative
+running interpretation; they must not infer that no writer exists. Completed
+snapshots omit both fields.
+
 The Unified Agent helper artifact has a distinct rate-limited public download
 contract at `GET|HEAD /download/pulse-agent-helper?arch=linux-*`. The route
 rejects missing and non-Linux architectures, never substitutes the collector

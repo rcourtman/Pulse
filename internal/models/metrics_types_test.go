@@ -292,6 +292,32 @@ func TestPBSInstanceNodeNameSerializesCamelCaseAndOmitsWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestPBSBackupWriteActivityWireContract(t *testing.T) {
+	withActivity, err := json.Marshal(PBSBackup{
+		ID:                    "incomplete-vm-117",
+		InProgress:            true,
+		WriteActivityObserved: true,
+		WriteActive:           true,
+	})
+	if err != nil {
+		t.Fatalf("marshal PBS backup write activity: %v", err)
+	}
+	wire := string(withActivity)
+	for _, field := range []string{`"inProgress":true`, `"writeActivityObserved":true`, `"writeActive":true`} {
+		if !strings.Contains(wire, field) {
+			t.Fatalf("payload = %s, want %s", wire, field)
+		}
+	}
+
+	withoutActivity, err := json.Marshal(PBSBackup{ID: "completed-vm-117"})
+	if err != nil {
+		t.Fatalf("marshal completed PBS backup: %v", err)
+	}
+	if strings.Contains(string(withoutActivity), "writeActivity") || strings.Contains(string(withoutActivity), "writeActive") {
+		t.Fatalf("payload = %s, absent write-activity evidence must be omitted", withoutActivity)
+	}
+}
+
 func TestPBSGuestConfirmationEvidenceStaysOutOfSerializedState(t *testing.T) {
 	state := NewState()
 	state.UpdatePBSGuestConfirmationsForInstance("cluster-a", []PBSGuestConfirmation{

@@ -2786,14 +2786,22 @@ type PBSBackup struct {
 	Protected  bool      `json:"protected"`
 	Verified   bool      `json:"verified"`
 	// InProgress marks a snapshot the PBS API listed while the backup is
-	// still being written: the manifest (index.json.blob) does not exist yet,
-	// so the listing has no size and only the guest config blob in files. It
-	// is not a completed backup and must not advance any last-backup age.
-	InProgress      bool     `json:"inProgress,omitempty"`
-	VerificationRaw any      `json:"verificationRaw,omitempty"`
-	Comment         string   `json:"comment,omitempty"`
-	Files           []string `json:"files"`
-	Owner           string   `json:"owner,omitempty"` // User who created the backup
+	// incomplete: the manifest (index.json.blob) does not exist, so the listing
+	// has no size and only the guest config blob in files. A terminal failed
+	// backup or sync can leave the same shape behind, so write activity is
+	// tracked separately below. Incomplete snapshots never advance backup age.
+	InProgress bool `json:"inProgress,omitempty"`
+	// WriteActivityObserved says the PBS running-task query succeeded for the
+	// poll which produced this snapshot. WriteActive is true only when a live
+	// backup or sync task can account for it. InProgress remains the public
+	// incomplete-artifact contract; these fields let consumers distinguish a
+	// live write from an incomplete artifact left by a terminal task.
+	WriteActivityObserved bool     `json:"writeActivityObserved,omitempty"`
+	WriteActive           bool     `json:"writeActive,omitempty"`
+	VerificationRaw       any      `json:"verificationRaw,omitempty"`
+	Comment               string   `json:"comment,omitempty"`
+	Files                 []string `json:"files"`
+	Owner                 string   `json:"owner,omitempty"` // User who created the backup
 }
 
 func (b PBSBackup) NormalizeCollections() PBSBackup {
@@ -4525,7 +4533,14 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 		key := pbsSubjectKey{backupType: backupType, vmid: vmid}
 		if backup.InProgress {
-			pbsInProgressBySubject[key] = append(pbsInProgressBySubject[key], backup)
+			// When task visibility is unavailable, retain the conservative
+			// historical behaviour and report a manifestless snapshot as
+			// running. With an authoritative running-task read, only a live
+			// writer may drive the guest badge; failed sync artifacts remain
+			// incomplete but no longer pin "Backup Running" indefinitely.
+			if !backup.WriteActivityObserved || backup.WriteActive {
+				pbsInProgressBySubject[key] = append(pbsInProgressBySubject[key], backup)
+			}
 			continue
 		}
 		pbsBackupsBySubject[key] = append(pbsBackupsBySubject[key], backup)

@@ -68,6 +68,83 @@ func TestNewClient_TokenAuth_SetsAuthorizationHeader(t *testing.T) {
 	}
 }
 
+func TestClient_ListRunningDataTasks(t *testing.T) {
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes/localhost/tasks" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("running"); got != "true" {
+			t.Fatalf("running query = %q, want true", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "200" {
+			t.Fatalf("limit query = %q, want 200", got)
+		}
+		workerType := r.URL.Query().Get("typefilter")
+		requests = append(requests, workerType)
+		data := []map[string]any{}
+		switch workerType {
+		case "backup":
+			data = append(data,
+				map[string]any{"worker_type": "backup", "worker_id": "main:vm/117", "starttime": 1800000000},
+				map[string]any{"worker_type": "verificationjob", "worker_id": "verify-main", "starttime": 1800000200},
+			)
+		case "syncjob":
+			data = append(data, map[string]any{"worker-type": "syncjob", "worker-id": "offsite", "start-time": 1800000100})
+		default:
+			t.Fatalf("unexpected typefilter: %q", workerType)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "root@pam!token", TokenValue: "secret"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	tasks, err := client.ListRunningDataTasks(context.Background())
+	if err != nil {
+		t.Fatalf("ListRunningDataTasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("running data tasks = %#v, want backup and sync only", tasks)
+	}
+	if !slices.Equal(requests, []string{"backup", "syncjob"}) {
+		t.Fatalf("type-filtered requests = %v, want backup then syncjob", requests)
+	}
+	if tasks[0].WorkerType != "backup" || tasks[0].WorkerID != "main:vm/117" || tasks[0].StartTime != 1800000000 {
+		t.Fatalf("backup task = %#v", tasks[0])
+	}
+	if tasks[1].WorkerType != "syncjob" || tasks[1].WorkerID != "offsite" || tasks[1].StartTime != 1800000100 {
+		t.Fatalf("sync task = %#v", tasks[1])
+	}
+}
+
+func TestClient_ListRunningDataTasksRejectsTruncatedWriterSet(t *testing.T) {
+	oldLimit, oldMaxPages := pbsRunningTaskPageLimit, pbsRunningTaskMaxPages
+	pbsRunningTaskPageLimit, pbsRunningTaskMaxPages = 2, 1
+	t.Cleanup(func() {
+		pbsRunningTaskPageLimit, pbsRunningTaskMaxPages = oldLimit, oldMaxPages
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+			{"worker_type": "backup", "worker_id": "main:vm/117"},
+			{"worker_type": "backup", "worker_id": "main:vm/118"},
+		}})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "root@pam!token", TokenValue: "secret"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	tasks, err := client.ListRunningDataTasks(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "bounded cap") {
+		t.Fatalf("ListRunningDataTasks() tasks = %#v, err = %v; want bounded-cap error", tasks, err)
+	}
+}
+
 func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

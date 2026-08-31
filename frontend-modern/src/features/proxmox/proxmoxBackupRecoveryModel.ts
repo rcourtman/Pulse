@@ -51,6 +51,8 @@ export interface RecoverableArtifact {
   verified?: boolean;
   /** A still-running backup is writing this artifact; it is not recoverable yet. */
   running?: boolean;
+  /** A terminal task left an incomplete artifact which is not recoverable. */
+  failed?: boolean;
   fileCount?: number;
 }
 
@@ -523,6 +525,13 @@ export function buildProxmoxBackupRecoveryModel(
       backup.datastore,
     ]);
     const createdMs = parseTimestampMs(backup.backupTime);
+    const running =
+      backup.inProgress === true &&
+      (backup.writeActivityObserved !== true || backup.writeActive === true);
+    const failed =
+      backup.inProgress === true &&
+      backup.writeActivityObserved === true &&
+      backup.writeActive !== true;
     addArtifact({
       id: `pbs:${backup.id}`,
       nativeId: backup.id,
@@ -538,7 +547,8 @@ export function buildProxmoxBackupRecoveryModel(
       detail: pbsBackupFileDetailLabel(backup.files.length),
       protected: backup.protected,
       verified: backup.inProgress ? undefined : backup.verified,
-      running: backup.inProgress === true,
+      running,
+      failed,
       fileCount: backup.files.length,
     });
   }
@@ -612,10 +622,10 @@ export function buildProxmoxBackupRecoveryModel(
   }
 
   for (const row of rows.values()) {
-    // A running artifact cannot be restored from yet, so the "latest"
-    // pointers (which answer "what can I recover to?") skip it. The artifact
-    // itself stays listed with a Running state.
-    const completed = row.artifacts.filter((artifact) => !artifact.running);
+    // Running and terminally incomplete artifacts cannot be restored from, so
+    // the "latest" pointers (which answer "what can I recover to?") skip them.
+    // The artifacts themselves stay listed with an honest state.
+    const completed = row.artifacts.filter((artifact) => !artifact.running && !artifact.failed);
     row.latestPBS = newest(
       completed.filter((artifact) => artifact.sourceKind === 'pbs'),
       (artifact) => artifact.createdMs,
@@ -726,6 +736,7 @@ export function recoverableArtifactMatchesSearch(
         ? 'unverified'
         : undefined,
     artifact.running ? 'running' : undefined,
+    artifact.failed ? 'failed incomplete' : undefined,
     artifact.protected ? 'protected' : 'unprotected',
   ];
   return haystack.filter(Boolean).join(' ').toLowerCase().includes(normalizedTerm);

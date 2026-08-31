@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
 
@@ -447,5 +448,43 @@ func TestConvertPBSSnapshotsInProgress(t *testing.T) {
 				t.Errorf("InProgress: expected %t, got %t", tt.inProgress, result[0].InProgress)
 			}
 		})
+	}
+}
+
+func TestApplyPBSWriteActivityClearsTerminalIncompleteSnapshots(t *testing.T) {
+	backups := []models.PBSBackup{
+		{Datastore: "main", BackupType: "vm", VMID: "117", InProgress: true},
+		{Datastore: "main", BackupType: "ct", VMID: "105", InProgress: true},
+	}
+
+	applyPBSWriteActivity(backups, nil)
+
+	for i, backup := range backups {
+		if !backup.WriteActivityObserved {
+			t.Fatalf("backup %d did not record authoritative task observation", i)
+		}
+		if backup.WriteActive {
+			t.Fatalf("backup %d remained active with no running PBS task", i)
+		}
+	}
+}
+
+func TestApplyPBSWriteActivityMatchesBackupSubjectAndSync(t *testing.T) {
+	backups := []models.PBSBackup{
+		{Datastore: "main", BackupType: "vm", VMID: "117", InProgress: true},
+		{Datastore: "main", BackupType: "vm", VMID: "118", InProgress: true},
+	}
+
+	applyPBSWriteActivity(backups, []pbs.RunningDataTask{{WorkerType: "backup", WorkerID: "main:vm/117"}})
+	if !backups[0].WriteActive {
+		t.Fatal("matching backup task did not mark its incomplete snapshot active")
+	}
+	if backups[1].WriteActive {
+		t.Fatal("backup task for vm/117 incorrectly marked vm/118 active")
+	}
+
+	applyPBSWriteActivity(backups, []pbs.RunningDataTask{{WorkerType: "syncjob", WorkerID: "offsite"}})
+	if !backups[0].WriteActive || !backups[1].WriteActive {
+		t.Fatal("running sync task must account for incomplete snapshots across its PBS instance")
 	}
 }

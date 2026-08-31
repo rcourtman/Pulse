@@ -1,17 +1,22 @@
 {
   "version": 1,
-  "base_sha": "fda955627f3dd8d4c844de040e56d209864815e7",
-  "verified_at": "2026-08-31T01:58:05Z",
+  "base_sha": "bad717f16eb7620dfd9c9f3f135be95f9a2f9642",
+  "verified_at": "2026-08-31T05:57:10Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/types/api.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "30cda34c77ce5b7f92b7ef71dc5715ddccf831419f258d4419204152c718baea"
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "ba9e8a4eb3588bc7486d58f98342e9f5bf53a3f8f8247cb4c5597ebce31b41e5",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "83fb8ae7e26900368b8413bcf771b2b44d3dc32134996db2ebe058378468521a",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "254da9ce1fe77adf5c28d9c6f690cc0940d1236337e5d2f24acf810f07108eea",
+    "frontend-modern/src/types/api.ts": "e69bd7171e43f92d75e844cd138fbd2f7a11b24dea2cb3a118dfdfffa505fba1"
   },
   "routes": [
-    "/alerts/overview",
-    "/alerts/notifications"
+    "/proxmox/backups/date"
   ],
   "viewports": [
     {
@@ -24,14 +29,16 @@
     }
   ],
   "states": [
-    "active alert with a rate-limited delivery diagnosis",
-    "degraded delivery health with retained failures and 7/30-day retention",
-    "delivery activity interleaving a held notification and a delivered attempt",
-    "delivery activity after held-event refresh becomes unavailable"
+    "incomplete PBS snapshot with authoritative active writer rendered Running",
+    "terminally incomplete PBS snapshot with authoritative no-writer observation rendered Failed in danger tone",
+    "completed PBS snapshots retained Verified state below incomplete artifacts",
+    "failed/incomplete search result and restored unfiltered Running plus Failed results",
+    "full desktop and compact narrow recovery-table layouts with complete unclipped state badges"
   ],
   "interactions": [
-    "navigated from alert overview to notifications",
-    "focused and activated Refresh delivery status with the keyboard",
-    "verified retained delivered evidence remains after held-event refresh fallback"
+    "signed in to the final production build and navigated to the Proxmox By date backups route",
+    "scrolled the terminally incomplete artifact into view and inspected its Failed badge placement and clipping",
+    "entered failed incomplete in the backup search with the keyboard and verified only the failed artifact remained",
+    "selected and cleared the search with the keyboard and verified Running and Failed artifacts both returned"
   ]
 }
