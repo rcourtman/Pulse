@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
@@ -29,20 +30,21 @@ const (
 	AgentFleetStatusCritical = "critical"
 	AgentFleetStatusRemoved  = "removed"
 
-	AgentFleetReasonUpdateDisabled        = "agent_update_disabled"
-	AgentFleetReasonUpdateFailed          = "agent_update_failed"
-	AgentFleetReasonUpdateStateUnknown    = "agent_update_state_unknown"
-	AgentFleetReasonUpdatePlatformUnknown = "agent_update_platform_unknown"
-	AgentFleetReasonUpdateStateUnverified = "agent_update_installer_state_unverified"
-	AgentFleetReasonModuleFailed          = "agent_module_failed"
-	AgentFleetReasonModuleDegraded        = "agent_module_degraded"
-	AgentFleetReasonCredentialMissing     = "agent_credential_missing"
-	AgentFleetReasonCredentialExpired     = "agent_credential_expired"
-	AgentFleetReasonCredentialUnlisted    = "agent_credential_registry_stale"
-	AgentFleetReasonExecScopeMissing      = "agent_exec_scope_missing"
-	AgentFleetReasonExecScopeExcess       = "agent_exec_scope_excess"
-	AgentFleetReasonCredentialScopeExcess = "agent_credential_scope_excess"
-	AgentFleetReasonDuplicateInstallation = "duplicate_host_agent_installation"
+	AgentFleetReasonUpdateDisabled          = "agent_update_disabled"
+	AgentFleetReasonUpdateFailed            = "agent_update_failed"
+	AgentFleetReasonUpdateStateUnknown      = "agent_update_state_unknown"
+	AgentFleetReasonUpdatePlatformUnknown   = "agent_update_platform_unknown"
+	AgentFleetReasonUpdateStateUnverified   = "agent_update_installer_state_unverified"
+	AgentFleetReasonModuleFailed            = "agent_module_failed"
+	AgentFleetReasonModuleDegraded          = "agent_module_degraded"
+	AgentFleetReasonPrivilegeHelperDegraded = "agent_privilege_helper_degraded"
+	AgentFleetReasonCredentialMissing       = "agent_credential_missing"
+	AgentFleetReasonCredentialExpired       = "agent_credential_expired"
+	AgentFleetReasonCredentialUnlisted      = "agent_credential_registry_stale"
+	AgentFleetReasonExecScopeMissing        = "agent_exec_scope_missing"
+	AgentFleetReasonExecScopeExcess         = "agent_exec_scope_excess"
+	AgentFleetReasonCredentialScopeExcess   = "agent_credential_scope_excess"
+	AgentFleetReasonDuplicateInstallation   = "duplicate_host_agent_installation"
 
 	AgentFleetActionAllowReenroll        = "allow_reenroll"
 	AgentFleetActionCopyUpgradeCommand   = "copy_upgrade_command"
@@ -884,17 +886,26 @@ func diagnoseAgentModules(subject agentFleetSubject) []AgentFleetDiagnosticReaso
 		if !module.Enabled {
 			continue
 		}
+		name := strings.TrimSpace(module.Name)
 		state := strings.ToLower(strings.TrimSpace(module.State))
 		if state == "running" {
 			continue
 		}
 		severity := AgentFleetStatusWarning
 		code := AgentFleetReasonModuleDegraded
-		message := fmt.Sprintf("Enabled agent module %q is not running.", strings.TrimSpace(module.Name))
+		message := fmt.Sprintf("Enabled agent module %q is not running.", name)
+		if name == agentshost.ModuleNameTypedPrivilegeHelper {
+			code = AgentFleetReasonPrivilegeHelperDegraded
+			message = "The typed privilege helper is degraded; affected privileged telemetry was omitted without widening collector privilege."
+		}
 		if state == "error" || state == "failed" {
 			severity = AgentFleetStatusCritical
 			code = AgentFleetReasonModuleFailed
-			message = fmt.Sprintf("Enabled agent module %q failed.", strings.TrimSpace(module.Name))
+			message = fmt.Sprintf("Enabled agent module %q failed.", name)
+			if name == agentshost.ModuleNameTypedPrivilegeHelper {
+				code = AgentFleetReasonPrivilegeHelperDegraded
+				message = "The typed privilege helper failed; privileged telemetry is unavailable without widening collector privilege."
+			}
 		}
 		reasons = append(reasons, AgentFleetDiagnosticReason{
 			Code:     code,

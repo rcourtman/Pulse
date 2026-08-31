@@ -56,6 +56,18 @@ type proxmoxLXCRunningContainer struct {
 	Name string
 }
 
+// ProxmoxLXCFilesystemCollectionResult describes applicability separately from
+// collection health without changing the helper protocol-v1 response shape.
+// A degraded result may retain a partial inventory for local diagnostics, but
+// the privileged helper fails the typed operation so the collector cannot
+// mistake a partial snapshot for a complete one.
+type ProxmoxLXCFilesystemCollectionResult struct {
+	Applicable       bool
+	Inventory        *agentshost.ProxmoxLXCInventory
+	Degraded         bool
+	FailedContainers int
+}
+
 // hostFilesystemUsage carries statfs-derived usage for one path plus the
 // st_dev identity needed to tell a real mount from its parent filesystem.
 type hostFilesystemUsage struct {
@@ -82,12 +94,19 @@ type proxmoxLXCConfigMount struct {
 // the root-only typed helper, whose caller cannot supply VMIDs, paths, command
 // names, or arguments.
 func CollectProxmoxLXCFilesystemsLocal(ctx context.Context) *agentshost.ProxmoxLXCInventory {
+	return CollectProxmoxLXCFilesystemsLocalResult(ctx).Inventory
+}
+
+// CollectProxmoxLXCFilesystemsLocalResult exposes applicability and completeness
+// to the fixed local helper provider. It never accepts caller-selected VMIDs,
+// paths, executables, or command arguments.
+func CollectProxmoxLXCFilesystemsLocalResult(ctx context.Context) ProxmoxLXCFilesystemCollectionResult {
 	logger := zerolog.Nop()
 	agent := &Agent{
 		collector: NewDefaultCollector(),
 		logger:    logger,
 	}
-	return agent.collectProxmoxLXCFilesystems(ctx)
+	return agent.collectProxmoxLXCFilesystemsResult(ctx)
 }
 
 // collectProxmoxLXCFilesystems auto-detects the local Proxmox Container
@@ -104,16 +123,24 @@ func CollectProxmoxLXCFilesystemsLocal(ctx context.Context) *agentshost.ProxmoxL
 // container gets its own deadline so one slow guest cannot consume the whole
 // collection window.
 func (a *Agent) collectProxmoxLXCFilesystems(ctx context.Context) *agentshost.ProxmoxLXCInventory {
+	return a.collectProxmoxLXCFilesystemsResult(ctx).Inventory
+}
+
+func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxLXCFilesystemCollectionResult {
+	result := ProxmoxLXCFilesystemCollectionResult{}
 	if a.collector.GOOS() != "linux" {
-		return nil
+		return result
 	}
 	pctPath, err := resolvePctPath(a.collector.LookPath)
 	if err != nil {
 		if !errors.Is(err, exec.ErrNotFound) && !os.IsNotExist(err) {
 			a.logger.Debug().Err(err).Msg("Failed to locate pct for Proxmox LXC filesystems")
+			result.Applicable = true
+			result.Degraded = true
 		}
-		return nil
+		return result
 	}
+	result.Applicable = true
 
 	listCtx, cancelList := context.WithTimeout(ctx, proxmoxLXCQueryTimeout)
 	listOutput, err := collectCommandOutputLimited(
@@ -126,12 +153,14 @@ func (a *Agent) collectProxmoxLXCFilesystems(ctx context.Context) *agentshost.Pr
 	cancelList()
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to list local Proxmox LXC containers")
-		return nil
+		result.Degraded = true
+		return result
 	}
 	containers, err := parseProxmoxLXCRunningContainers(listOutput)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to parse local Proxmox LXC container list")
-		return nil
+		result.Degraded = true
+		return result
 	}
 
 	prober, _ := a.collector.(filesystemUsageProber)
@@ -145,36 +174,37 @@ func (a *Agent) collectProxmoxLXCFilesystems(ctx context.Context) *agentshost.Pr
 	collectionCtx, cancelCollection := context.WithTimeout(ctx, proxmoxLXCCollectionTimeout)
 	defer cancelCollection()
 
-	inventory := &agentshost.ProxmoxLXCInventory{
+	result.Inventory = &agentshost.ProxmoxLXCInventory{
 		Containers:  []agentshost.ProxmoxLXCContainer{},
 		CollectedAt: a.collector.Now().UTC(),
 	}
-	skipped := 0
 	for _, container := range containers {
 		if collectionCtx.Err() != nil {
-			skipped++
+			result.FailedContainers++
 			continue
 		}
 		containerCtx, cancelContainer := context.WithTimeout(collectionCtx, proxmoxLXCContainerQueryTimeout)
-		disks := a.collectProxmoxLXCContainerDisks(containerCtx, prober, lxcInfoPath, pctPath, container.VMID)
+		disks, collectionErr := a.collectProxmoxLXCContainerDisks(containerCtx, prober, lxcInfoPath, pctPath, container.VMID)
 		cancelContainer()
-		if len(disks) == 0 {
+		if collectionErr != nil {
+			result.FailedContainers++
 			continue
 		}
-		inventory.Containers = append(inventory.Containers, agentshost.ProxmoxLXCContainer{
+		result.Inventory.Containers = append(result.Inventory.Containers, agentshost.ProxmoxLXCContainer{
 			VMID:  container.VMID,
 			Name:  container.Name,
 			Disks: disks,
 		})
 	}
-	if skipped > 0 {
+	if result.FailedContainers > 0 {
+		result.Degraded = true
 		a.logger.Warn().
-			Int("collected", len(inventory.Containers)).
-			Int("skipped", skipped).
-			Msg("Proxmox LXC filesystem collection budget exhausted before all running containers were queried")
+			Int("collected", len(result.Inventory.Containers)).
+			Int("failed", result.FailedContainers).
+			Msg("Proxmox LXC filesystem collection omitted one or more running containers")
 	}
 
-	return inventory
+	return result
 }
 
 func (a *Agent) collectProxmoxLXCContainerDisks(
@@ -183,11 +213,11 @@ func (a *Agent) collectProxmoxLXCContainerDisks(
 	lxcInfoPath string,
 	pctPath string,
 	vmid int,
-) []agentshost.Disk {
+) ([]agentshost.Disk, error) {
 	if prober != nil && lxcInfoPath != "" {
 		disks, fastErr := a.collectProxmoxLXCContainerDisksFast(ctx, prober, lxcInfoPath, vmid)
 		if fastErr == nil {
-			return disks
+			return disks, nil
 		}
 		a.logger.Debug().
 			Err(fastErr).
@@ -208,7 +238,7 @@ func (a *Agent) collectProxmoxLXCContainerDisks(
 			Err(outputErr).
 			Int("vmid", vmid).
 			Msg("Failed to collect Proxmox LXC filesystem usage")
-		return nil
+		return nil, errors.New("pct df collection failed")
 	}
 	disks, parseErr := parseProxmoxLXCDF(output)
 	if parseErr != nil || len(disks) == 0 {
@@ -216,9 +246,9 @@ func (a *Agent) collectProxmoxLXCContainerDisks(
 			Err(parseErr).
 			Int("vmid", vmid).
 			Msg("Failed to parse Proxmox LXC filesystem usage")
-		return nil
+		return nil, errors.New("pct df result contained no usable filesystems")
 	}
-	return disks
+	return disks, nil
 }
 
 // collectProxmoxLXCContainerDisksFast reads the container's config-declared
@@ -270,12 +300,18 @@ func (a *Agent) collectProxmoxLXCContainerDisksFast(
 		}
 		target := path.Join(procRoot, mount.Path)
 		usage, usageErr := prober.FilesystemUsage(target)
-		if usageErr != nil || usage.TotalBytes <= 0 {
-			continue
+		if usageErr != nil {
+			return nil, fmt.Errorf("probe %s filesystem usage: %w", mount.Key, usageErr)
+		}
+		if usage.TotalBytes <= 0 {
+			return nil, fmt.Errorf("probe %s filesystem usage: invalid total bytes", mount.Key)
 		}
 		if mount.Path != "/" {
 			parent, parentErr := prober.FilesystemUsage(path.Dir(target))
-			if parentErr != nil || parent.Device == usage.Device {
+			if parentErr != nil {
+				return nil, fmt.Errorf("probe %s parent filesystem usage: %w", mount.Key, parentErr)
+			}
+			if parent.Device == usage.Device {
 				continue
 			}
 		}

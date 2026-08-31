@@ -94,6 +94,38 @@ func TestReport_JSONMarshal(t *testing.T) {
 	}
 }
 
+func TestTypedPrivilegeHelperModuleStatusRoundTrip(t *testing.T) {
+	updatedAt := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	report := Report{
+		Agent: AgentInfo{
+			Modules: []ModuleStatus{{
+				Name:      ModuleNameTypedPrivilegeHelper,
+				Enabled:   true,
+				State:     "degraded",
+				LastError: "proxmox.lxc_filesystems: helper provider unavailable",
+				UpdatedAt: updatedAt,
+			}},
+		},
+	}
+
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	var decoded Report
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	if len(decoded.Agent.Modules) != 1 {
+		t.Fatalf("modules = %+v", decoded.Agent.Modules)
+	}
+	module := decoded.Agent.Modules[0]
+	if module.Name != ModuleNameTypedPrivilegeHelper || !module.Enabled || module.State != "degraded" ||
+		module.LastError != "proxmox.lxc_filesystems: helper provider unavailable" || !module.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("typed helper module status = %+v", module)
+	}
+}
+
 func TestCustomSensorMetricJSONRoundTrip(t *testing.T) {
 	value := 7200.0
 	eventAt := time.Date(2026, 7, 30, 18, 0, 0, 0, time.UTC)

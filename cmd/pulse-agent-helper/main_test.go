@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
 type committerValidationProvider struct {
@@ -274,13 +276,59 @@ func TestFixedPrivilegedEndpointsAreNotCallerConfigurable(t *testing.T) {
 	}
 }
 
-func TestLocalProxmoxProviderAlwaysReturnsValidJSON(t *testing.T) {
-	result, err := (localProxmoxProvider{}).LXCFilesystems(t.Context())
-	if err != nil {
-		t.Fatalf("LXCFilesystems: %v", err)
+func TestLocalProxmoxProviderDistinguishesApplicabilityAndCompleteness(t *testing.T) {
+	tests := []struct {
+		name       string
+		collection hostagent.ProxmoxLXCFilesystemCollectionResult
+		wantJSON   string
+		wantError  bool
+	}{
+		{
+			name:     "not applicable",
+			wantJSON: `{"inventory":null}`,
+		},
+		{
+			name: "healthy inventory",
+			collection: hostagent.ProxmoxLXCFilesystemCollectionResult{
+				Applicable: true,
+				Inventory:  &agentshost.ProxmoxLXCInventory{},
+			},
+			wantJSON: `{"inventory":{"containers":null,"collectedAt":"0001-01-01T00:00:00Z"}}`,
+		},
+		{
+			name: "partial inventory fails closed",
+			collection: hostagent.ProxmoxLXCFilesystemCollectionResult{
+				Applicable:       true,
+				Inventory:        &agentshost.ProxmoxLXCInventory{},
+				Degraded:         true,
+				FailedContainers: 1,
+			},
+			wantError: true,
+		},
 	}
-	if !json.Valid(result) {
-		t.Fatalf("invalid provider JSON: %q", result)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := localProxmoxProvider{collect: func(context.Context) hostagent.ProxmoxLXCFilesystemCollectionResult {
+				return test.collection
+			}}
+			result, err := provider.LXCFilesystems(t.Context())
+			if test.wantError {
+				var providerErr *agenthelper.ProviderError
+				if !errors.As(err, &providerErr) || providerErr.Code != agenthelper.ErrorProviderUnavailable {
+					t.Fatalf("provider error = %v", err)
+				}
+				if result != nil {
+					t.Fatalf("degraded provider result = %q, want nil", result)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LXCFilesystems: %v", err)
+			}
+			if !json.Valid(result) || string(result) != test.wantJSON {
+				t.Fatalf("provider JSON = %q, want %q", result, test.wantJSON)
+			}
+		})
 	}
 }
 

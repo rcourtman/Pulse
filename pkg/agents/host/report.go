@@ -199,9 +199,13 @@ type PrivilegeStatus struct {
 	PctHelper bool `json:"pctHelper,omitempty"`
 }
 
+// ModuleNameTypedPrivilegeHelper is the stable report identity for the local
+// no-network helper's aggregate host-telemetry operation health.
+const ModuleNameTypedPrivilegeHelper = "typed-privilege-helper"
+
 // ModuleStatus describes whether an enabled Unified Agent module initialized
-// and is actively running. Errors are deliberately limited to the latest
-// operator-facing initialization failure.
+// and is actively running. Errors are deliberately bounded to the current
+// operator-facing initialization or operation failure.
 type ModuleStatus struct {
 	Name      string    `json:"name"`
 	Enabled   bool      `json:"enabled"`

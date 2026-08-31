@@ -6893,6 +6893,16 @@ identity plus bounded platform, network, profile, updater, module, reason, and
 repair-handoff evidence. Raw machine identity is represented only by a
 one-way fingerprint; unbounded or secret-shaped updater/module errors are
 redacted before serialization; malformed interface addresses are omitted.
+The shared `typed-privilege-helper` host-telemetry module may derive the
+additive stable reason `agent_privilege_helper_degraded`. Its message states
+that affected privileged telemetry was omitted without widening collector
+privilege, and its evidence uses the same bounded module-error redaction as
+every other diagnostic module. It is an observability reason only: no repair
+action, execution grant, or fallback authority is implied.
+The collector-originated helper module carries only stable classified error
+text. Raw helper messages, bearer-shaped values, request identifiers, and local
+paths are excluded before the host report can enter connection state; Doctor
+redaction remains defense in depth rather than the first secrecy boundary.
 Older consumers may ignore the additive fields, while the Agent Doctor client
 must tolerate absent optional fields and preserve `/api/connections` fallback
 rows. Repair objects describe whether an existing local handoff is supported

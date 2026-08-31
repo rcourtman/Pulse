@@ -165,6 +165,53 @@ describe('Agent Doctor model', () => {
     expect(report).toContain('Privilege least privilege (pulse-agent) · SMART helper active');
   });
 
+  it('surfaces fail-closed typed-helper degradation in the target and copied report', () => {
+    const connection = connectionFixture({ agentUpdateAvailable: false });
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          status: 'warning',
+          agentModules: [
+            {
+              name: 'typed-privilege-helper',
+              enabled: true,
+              state: 'degraded',
+              lastError: 'smart.snapshot: helper unavailable',
+            },
+          ],
+          reasons: [
+            {
+              code: 'agent_privilege_helper_degraded',
+              severity: 'warning',
+              message:
+                'The typed privilege helper is degraded; affected privileged telemetry was omitted without widening collector privilege.',
+              evidence: [
+                'Module: typed-privilege-helper',
+                'Module state: degraded',
+                'Last error: smart.snapshot: helper unavailable',
+              ],
+            },
+          ],
+          repairActions: [],
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target).toMatchObject({
+      source: 'diagnostics',
+      status: 'warning',
+      reasons: [expect.objectContaining({ code: 'agent_privilege_helper_degraded' })],
+    });
+    expect(target.evidence).toContain('Module state: degraded');
+    expect(formatInfrastructureAgentDoctorReport([target])).toContain(
+      'affected privileged telemetry was omitted without widening collector privilege',
+    );
+  });
+
   it('shows local command authority separately from credential execution authority', () => {
     const connection = connectionFixture();
     const [target] = collectInfrastructureAgentDoctorTargets({

@@ -61,6 +61,21 @@ when the canonical agent ID matches an admitted `action-runner` session with
 the closed `typed_actions.v1` capability. Credential presence, expiry,
 connection, version, and protocol facts remain distinct, and none may be
 inferred from collector health or helper configuration.
+Configured helper posture and current SMART/Proxmox helper operation health
+are also distinct. Monitoring preserves the collector-authored
+`typed-privilege-helper` module status and derives the stable warning
+`agent_privilege_helper_degraded` when it is not running. The reason states
+that affected privileged telemetry was omitted without local privilege
+widening, while its error evidence passes through the existing bounded
+diagnostic redaction. A later success clears only the matching operation on the
+collector; monitoring must not infer recovery from an unrelated healthy helper
+operation.
+The collector emits no Proxmox degradation for an absent inventory on an
+ordinary Linux host unless Proxmox mode or local `pct` discovery establishes
+that the operation applies.
+If any running-container filesystem query fails, the helper returns a stable
+typed operation failure and the collector omits that Proxmox snapshot; partial
+inventory must not be reported as a healthy collection.
 Monitor construction also applies the persisted alert schedule's normalized
 initial-delivery target to the tenant notification manager. This is runtime
 wiring only: monitoring does not choose destinations or own notification
@@ -3054,6 +3069,12 @@ avoids a duplicated distro allowlist, so long-tail distributions such as
 Mageia receive the same Linux repair handoff as Ubuntu or Debian. Unknown
 updater states remain explicit warnings, and unverified FreeBSD/pfSense
 installer state still fails closed for upgrade-command support.
+The `typed-privilege-helper` module is the explicit fail-closed specialization
+of that generic module derivation: a non-running state emits
+`agent_privilege_helper_degraded` and explains the omitted privileged
+telemetry. Ordinary operation degradation remains a warning; a future terminal
+`failed` state may retain critical severity under the same reason code. Neither
+form creates a remote repair action or broadens collector authority.
 Credential truth is derived from the current server token inventory, not the
 last successful heartbeat alone. A live host whose reported `TokenID` no
 longer resolves emits `agent_credential_missing`; a resolved but expired record

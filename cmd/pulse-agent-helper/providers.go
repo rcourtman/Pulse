@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
@@ -32,13 +33,26 @@ func (localSMARTProvider) Snapshot(ctx context.Context) (json.RawMessage, error)
 // localProxmoxProvider runs the existing bounded node-local inventory as one
 // typed operation. The collector cannot select a VMID, filesystem path,
 // command, or pct argument across the helper boundary.
-type localProxmoxProvider struct{}
+type localProxmoxProvider struct {
+	collect func(context.Context) hostagent.ProxmoxLXCFilesystemCollectionResult
+}
 
-func (localProxmoxProvider) LXCFilesystems(ctx context.Context) (json.RawMessage, error) {
-	inventory := hostagent.CollectProxmoxLXCFilesystemsLocal(ctx)
+func (p localProxmoxProvider) LXCFilesystems(ctx context.Context) (json.RawMessage, error) {
+	collect := p.collect
+	if collect == nil {
+		collect = hostagent.CollectProxmoxLXCFilesystemsLocalResult
+	}
+	collection := collect(ctx)
+	if collection.Degraded {
+		return nil, &agenthelper.ProviderError{
+			Code:      agenthelper.ErrorProviderUnavailable,
+			Message:   "Proxmox LXC filesystem inventory is incomplete",
+			Retryable: true,
+		}
+	}
 	result, err := json.Marshal(struct {
 		Inventory *agentshost.ProxmoxLXCInventory `json:"inventory"`
-	}{Inventory: inventory})
+	}{Inventory: collection.Inventory})
 	if err != nil {
 		return nil, fmt.Errorf("encode Proxmox LXC filesystem inventory: %w", err)
 	}

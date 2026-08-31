@@ -12,6 +12,8 @@ import (
 
 const privilegeHelperOperationDeadline = 30 * time.Second
 
+var errPrivilegeHelperProxmoxInventoryUnavailable = errors.New("helper returned no Proxmox LXC filesystem inventory")
+
 // PrivilegedTelemetry is the collector-side view of the no-network helper.
 // It intentionally exposes complete typed snapshots rather than commands,
 // executable paths, VMIDs, device paths, or caller-selected arguments.
@@ -101,7 +103,7 @@ func (c *privilegeHelperTelemetry) ProxmoxLXCFilesystems(ctx context.Context) (*
 		return nil, err
 	}
 	if response.Inventory == nil {
-		return nil, errors.New("helper returned no Proxmox LXC filesystem inventory")
+		return nil, errPrivilegeHelperProxmoxInventoryUnavailable
 	}
 	return response.Inventory, nil
 }
@@ -115,9 +117,28 @@ func (a *Agent) collectProxmoxLXCFilesystemsForReport(ctx context.Context) *agen
 		return a.collectProxmoxLXCFilesystems(ctx)
 	}
 	inventory, err := a.privilegedTelemetry.ProxmoxLXCFilesystems(ctx)
+	if errors.Is(err, errPrivilegeHelperProxmoxInventoryUnavailable) && !a.expectsProxmoxLXCFilesystems() {
+		a.recordPrivilegeHelperOperation(privilegeHelperOperationProxmoxFilesystems, nil)
+		return nil
+	}
+	a.recordPrivilegeHelperOperation(privilegeHelperOperationProxmoxFilesystems, err)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Typed helper could not collect Proxmox LXC filesystems")
 		return nil
 	}
 	return inventory
+}
+
+func (a *Agent) expectsProxmoxLXCFilesystems() bool {
+	if a == nil {
+		return false
+	}
+	if a.cfg.EnableProxmox {
+		return true
+	}
+	if a.collector == nil || a.collector.GOOS() != "linux" {
+		return false
+	}
+	_, err := resolvePctPath(a.collector.LookPath)
+	return err == nil
 }

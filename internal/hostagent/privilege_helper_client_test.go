@@ -9,6 +9,8 @@ import (
 	"net"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,12 +173,12 @@ func TestCollectSMARTDataDoesNotWidenPrivilegeAfterHelperFailure(t *testing.T) {
 			return []DiskSMART{{Device: "/dev/fallback"}}, nil
 		},
 	}
+	helper := &fakePrivilegedTelemetry{smartErr: errors.New("helper unavailable")}
 	agent := &Agent{
-		collector: collector,
-		privilegedTelemetry: &fakePrivilegedTelemetry{
-			smartErr: errors.New("helper unavailable"),
-		},
-		logger: zerolog.Nop(),
+		collector:             collector,
+		privilegedTelemetry:   helper,
+		privilegeHelperHealth: newPrivilegeHelperStatus(),
+		logger:                zerolog.Nop(),
 	}
 
 	if got := agent.collectSMARTData(context.Background(), nil, nil); got != nil {
@@ -184,6 +186,19 @@ func TestCollectSMARTDataDoesNotWidenPrivilegeAfterHelperFailure(t *testing.T) {
 	}
 	if localCalls != 0 {
 		t.Fatalf("local SMART fallback calls = %d, want 0", localCalls)
+	}
+	status := requirePrivilegeHelperModuleStatus(t, agent.currentModuleStatus())
+	if status.State != "degraded" || !strings.Contains(status.LastError, privilegeHelperOperationSMART) {
+		t.Fatalf("helper status after SMART failure = %+v", status)
+	}
+
+	helper.smartErr = nil
+	if got := agent.collectSMARTData(context.Background(), nil, nil); got != nil {
+		t.Fatalf("empty SMART recovery result = %+v, want nil", got)
+	}
+	status = requirePrivilegeHelperModuleStatus(t, agent.currentModuleStatus())
+	if status.State != "running" || status.LastError != "" {
+		t.Fatalf("helper status after SMART recovery = %+v", status)
 	}
 }
 
@@ -198,9 +213,11 @@ func TestCollectProxmoxLXCFilesystemsDoesNotWidenPrivilegeAfterHelperFailure(t *
 	}
 	helper := &fakePrivilegedTelemetry{proxmoxErr: errors.New("helper unavailable")}
 	agent := &Agent{
-		collector:           collector,
-		privilegedTelemetry: helper,
-		logger:              zerolog.Nop(),
+		cfg:                   Config{EnableProxmox: true},
+		collector:             collector,
+		privilegedTelemetry:   helper,
+		privilegeHelperHealth: newPrivilegeHelperStatus(),
+		logger:                zerolog.Nop(),
 	}
 
 	if got := agent.collectProxmoxLXCFilesystemsForReport(context.Background()); got != nil {
@@ -212,4 +229,158 @@ func TestCollectProxmoxLXCFilesystemsDoesNotWidenPrivilegeAfterHelperFailure(t *
 	if localCalls != 0 {
 		t.Fatalf("local Proxmox fallback calls = %d, want 0", localCalls)
 	}
+	status := requirePrivilegeHelperModuleStatus(t, agent.currentModuleStatus())
+	if status.State != "degraded" || !strings.Contains(status.LastError, privilegeHelperOperationProxmoxFilesystems) {
+		t.Fatalf("helper status after Proxmox failure = %+v", status)
+	}
+}
+
+func TestCollectProxmoxLXCFilesystemsDoesNotDegradeNonProxmoxHost(t *testing.T) {
+	lookups := 0
+	collector := &mockCollector{
+		goos: "linux",
+		lookPathFn: func(string) (string, error) {
+			lookups++
+			return "", exec.ErrNotFound
+		},
+	}
+	helper := &fakePrivilegedTelemetry{proxmoxErr: errPrivilegeHelperProxmoxInventoryUnavailable}
+	agent := &Agent{
+		collector:             collector,
+		privilegedTelemetry:   helper,
+		privilegeHelperHealth: newPrivilegeHelperStatus(),
+		logger:                zerolog.Nop(),
+	}
+
+	if got := agent.collectProxmoxLXCFilesystemsForReport(context.Background()); got != nil {
+		t.Fatalf("non-Proxmox inventory = %+v, want nil", got)
+	}
+	if helper.proxmoxCalls != 1 || lookups != 1 {
+		t.Fatalf("helper calls = %d lookups = %d, want 1 each", helper.proxmoxCalls, lookups)
+	}
+	status := requirePrivilegeHelperModuleStatus(t, agent.currentModuleStatus())
+	if status.State != "running" || status.LastError != "" {
+		t.Fatalf("non-Proxmox helper status = %+v", status)
+	}
+}
+
+func TestCollectProxmoxLXCFilesystemsDegradesWhenConfiguredProviderReturnsNoInventory(t *testing.T) {
+	agent := &Agent{
+		cfg:                   Config{EnableProxmox: true},
+		collector:             &mockCollector{goos: "linux"},
+		privilegedTelemetry:   &fakePrivilegedTelemetry{proxmoxErr: errPrivilegeHelperProxmoxInventoryUnavailable},
+		privilegeHelperHealth: newPrivilegeHelperStatus(),
+		logger:                zerolog.Nop(),
+	}
+
+	if got := agent.collectProxmoxLXCFilesystemsForReport(context.Background()); got != nil {
+		t.Fatalf("configured Proxmox inventory = %+v, want nil", got)
+	}
+	status := requirePrivilegeHelperModuleStatus(t, agent.currentModuleStatus())
+	if status.State != "degraded" || !strings.Contains(status.LastError, "no Proxmox LXC filesystem inventory") {
+		t.Fatalf("configured Proxmox helper status = %+v", status)
+	}
+}
+
+func TestPrivilegeHelperStatusTracksIndependentOperationsAndRecovery(t *testing.T) {
+	status := newPrivilegeHelperStatus()
+	fixed := time.Date(2026, 8, 31, 11, 30, 0, 0, time.UTC)
+	status.now = func() time.Time { return fixed }
+
+	status.record(privilegeHelperOperationProxmoxFilesystems, errors.New("inventory unavailable"))
+	status.record(privilegeHelperOperationSMART, errors.New("smart unavailable"))
+	module := status.moduleStatus()
+	if module.Name != agentshost.ModuleNameTypedPrivilegeHelper || module.State != "degraded" || !module.Enabled {
+		t.Fatalf("degraded helper module = %+v", module)
+	}
+	if !strings.Contains(module.LastError, "proxmox.lxc_filesystems: helper operation failed") ||
+		!strings.Contains(module.LastError, "smart.snapshot: helper operation failed") {
+		t.Fatalf("aggregated helper failure = %q", module.LastError)
+	}
+	if module.UpdatedAt != fixed {
+		t.Fatalf("updatedAt = %v, want %v", module.UpdatedAt, fixed)
+	}
+
+	status.record(privilegeHelperOperationSMART, nil)
+	module = status.moduleStatus()
+	if module.State != "degraded" || strings.Contains(module.LastError, privilegeHelperOperationSMART) ||
+		!strings.Contains(module.LastError, privilegeHelperOperationProxmoxFilesystems) {
+		t.Fatalf("partial helper recovery = %+v", module)
+	}
+
+	status.record(privilegeHelperOperationProxmoxFilesystems, nil)
+	module = status.moduleStatus()
+	if module.State != "running" || module.LastError != "" {
+		t.Fatalf("complete helper recovery = %+v", module)
+	}
+}
+
+func TestPrivilegeHelperStatusNeverPersistsRawErrorDetails(t *testing.T) {
+	status := newPrivilegeHelperStatus()
+	status.record(
+		privilegeHelperOperationSMART,
+		errors.New("request failed token=must-not-leak path=/private/helper.sock"),
+	)
+	status.record(privilegeHelperOperationProxmoxFilesystems, &agenthelper.RemoteError{
+		Code:      agenthelper.ErrorProviderUnavailable,
+		Message:   "provider failed bearer=remote-secret path=/root/private",
+		RequestID: "secret-request-id",
+	})
+
+	module := status.moduleStatus()
+	if module.State != "degraded" || !strings.Contains(module.LastError, "helper operation failed") {
+		t.Fatalf("classified helper status = %+v", module)
+	}
+	serialized, err := json.Marshal(module)
+	if err != nil {
+		t.Fatalf("marshal module status: %v", err)
+	}
+	for _, secret := range []string{
+		"must-not-leak",
+		"/private/helper.sock",
+		"token=",
+		"remote-secret",
+		"/root/private",
+		"secret-request-id",
+	} {
+		if strings.Contains(string(serialized), secret) {
+			t.Fatalf("raw helper error detail %q reached serialized report state: %s", secret, serialized)
+		}
+	}
+}
+
+func TestPrivilegeHelperStatusConcurrentRecordAndSnapshot(t *testing.T) {
+	status := newPrivilegeHelperStatus()
+	var group sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		group.Add(2)
+		go func(iteration int) {
+			defer group.Done()
+			if iteration%2 == 0 {
+				status.record(privilegeHelperOperationSMART, errors.New("temporary failure"))
+				return
+			}
+			status.record(privilegeHelperOperationSMART, nil)
+		}(i)
+		go func() {
+			defer group.Done()
+			_ = status.moduleStatus()
+		}()
+	}
+	group.Wait()
+	module := status.moduleStatus()
+	if module.State != "running" && module.State != "degraded" {
+		t.Fatalf("concurrent helper state = %+v", module)
+	}
+}
+
+func requirePrivilegeHelperModuleStatus(t *testing.T, statuses []agentshost.ModuleStatus) agentshost.ModuleStatus {
+	t.Helper()
+	for _, status := range statuses {
+		if status.Name == agentshost.ModuleNameTypedPrivilegeHelper {
+			return status
+		}
+	}
+	t.Fatalf("typed privilege helper module missing from %+v", statuses)
+	return agentshost.ModuleStatus{}
 }

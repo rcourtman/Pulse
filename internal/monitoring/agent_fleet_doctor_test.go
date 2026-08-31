@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -450,6 +451,59 @@ func TestAgentFleetDiagnosticsSurfacesReportedUpdateModuleAndIdentityEvidence(t 
 	}
 	if after := monitor.GetState(); !reflect.DeepEqual(before, after) {
 		t.Fatal("fleet diagnostics mutated monitor state")
+	}
+}
+
+func TestAgentFleetDiagnosticsSurfacesTypedPrivilegeHelperDegradation(t *testing.T) {
+	now := time.Date(2026, 8, 31, 11, 30, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-safe-profile",
+		Hostname:        "pve-safe",
+		DisplayName:     "PVE Safe",
+		Platform:        "linux",
+		Status:          "online",
+		LastSeen:        now.Add(-30 * time.Second),
+		IntervalSeconds: 30,
+		AgentVersion:    "6.4.2",
+		AgentModules: []models.AgentModuleStatus{{
+			Name:      agentshost.ModuleNameTypedPrivilegeHelper,
+			Enabled:   true,
+			State:     "degraded",
+			LastError: "smart.snapshot: helper unavailable token=must-not-leak",
+			UpdatedAt: now.Add(-time.Minute),
+		}},
+	})
+
+	diagnostics := monitor.GetAgentFleetDiagnosticsForTarget("6.4.2", "6.4.2", now)
+	agent := requireAgentDiagnostic(t, diagnostics, "agent-agent-safe-profile")
+	requireReasonCode(t, agent, AgentFleetReasonPrivilegeHelperDegraded)
+	if agent.Status != AgentFleetStatusWarning {
+		t.Fatalf("status = %q, want warning", agent.Status)
+	}
+	if len(agent.AgentModules) != 1 || agent.AgentModules[0].Name != agentshost.ModuleNameTypedPrivilegeHelper {
+		t.Fatalf("helper module evidence = %+v", agent.AgentModules)
+	}
+	if strings.Contains(agent.AgentModules[0].LastError, "must-not-leak") {
+		t.Fatalf("helper module error was not redacted: %q", agent.AgentModules[0].LastError)
+	}
+	found := false
+	for _, reason := range agent.Reasons {
+		if reason.Code != AgentFleetReasonPrivilegeHelperDegraded {
+			continue
+		}
+		found = true
+		if !strings.Contains(reason.Message, "omitted without widening collector privilege") {
+			t.Fatalf("helper degradation message = %q", reason.Message)
+		}
+		for _, evidence := range reason.Evidence {
+			if strings.Contains(evidence, "must-not-leak") {
+				t.Fatalf("helper reason evidence was not redacted: %#v", reason.Evidence)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("helper degradation reason missing from %+v", agent.Reasons)
 	}
 }
 

@@ -192,6 +192,7 @@ type Agent struct {
 	commandAuthorityWarningSeen bool
 	collector                   SystemCollector
 	privilegedTelemetry         PrivilegedTelemetry
+	privilegeHelperHealth       *privilegeHelperStatus
 	newCommandClient            func(Config, string, string, string, string) *CommandClient
 	runCommandClient            func(*CommandClient, context.Context) error
 	packageUpdates              *packageUpdateManager
@@ -423,6 +424,10 @@ func New(cfg Config) (*Agent, error) {
 	packageUpdates, storageCleanup = configurePackageManagers(platform, packageUpdates, storageCleanup)
 	cfg.packageUpdates = packageUpdates
 	cfg.storageCleanup = storageCleanup
+	var privilegeHelperHealth *privilegeHelperStatus
+	if cfg.PrivilegedTelemetry != nil {
+		privilegeHelperHealth = newPrivilegeHelperStatus()
+	}
 
 	agent := &Agent{
 		cfg:                     cfg,
@@ -449,6 +454,7 @@ func New(cfg Config) (*Agent, error) {
 		observerReporters:       observerReporters,
 		collector:               collector,
 		privilegedTelemetry:     cfg.PrivilegedTelemetry,
+		privilegeHelperHealth:   privilegeHelperHealth,
 		newCommandClient:        newCommandClientFn,
 		runCommandClient:        runCommandClientFn,
 		commandAuthorityProfile: commandAuthorityProfile,
@@ -727,6 +733,9 @@ func (a *Agent) currentModuleStatus() []agentshost.ModuleStatus {
 	var statuses []agentshost.ModuleStatus
 	if a.cfg.ModuleStatus != nil {
 		statuses = append(statuses, a.cfg.ModuleStatus()...)
+	}
+	if a.privilegeHelperHealth != nil {
+		statuses = append(statuses, a.privilegeHelperHealth.moduleStatus())
 	}
 	// The probe module is owned by the host agent rather than the runtime
 	// supervisor, so it reports itself and only while it has work assigned.
@@ -2222,6 +2231,7 @@ func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string, unra
 	var err error
 	if a.privilegedTelemetry != nil {
 		smartData, err = a.privilegedTelemetry.SMARTSnapshot(ctx)
+		a.recordPrivilegeHelperOperation(privilegeHelperOperationSMART, err)
 		if err == nil && len(diskExclude) > 0 {
 			filtered := smartData[:0]
 			for _, disk := range smartData {

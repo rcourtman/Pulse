@@ -66,9 +66,13 @@ mp0    tank:subvol-100-disk-0        1.0T 512.0G 512.0G 50.0 /srv/data
 	}
 	agent := &Agent{logger: zerolog.Nop(), collector: collector}
 
-	got := agent.collectProxmoxLXCFilesystems(context.Background())
+	result := agent.collectProxmoxLXCFilesystemsResult(context.Background())
+	got := result.Inventory
 	if got == nil || !got.CollectedAt.Equal(now) {
 		t.Fatalf("inventory = %+v", got)
+	}
+	if !result.Applicable || !result.Degraded || result.FailedContainers != 1 {
+		t.Fatalf("collection result = %+v, want applicable partial failure", result)
 	}
 	if len(commands) != 3 {
 		t.Fatalf("commands = %v, want list plus two running df queries", commands)
@@ -93,6 +97,34 @@ mp0    tank:subvol-100-disk-0        1.0T 512.0G 512.0G 50.0 /srv/data
 	if data.Mountpoint != "/srv/data" || data.Type != "mp0" ||
 		data.TotalBytes != 1<<40 || data.FreeBytes != 512<<30 {
 		t.Fatalf("data disk = %+v", data)
+	}
+}
+
+func TestCollectProxmoxLXCFilesystemsReportsTotalContainerFailure(t *testing.T) {
+	const pctPath = "/usr/sbin/pct"
+	listOutput := "VMID Status Lock Name\n100 running - web\n102 running - database\n"
+	collector := &mockCollector{
+		goos: "linux",
+		lookPathFn: func(file string) (string, error) {
+			if file == "pct" {
+				return pctPath, nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputLimitedFn: func(_ context.Context, _ int, _ string, args ...string) (string, error) {
+			if strings.Join(args, " ") == "list" {
+				return listOutput, nil
+			}
+			return "", errors.New("pct df unavailable")
+		},
+	}
+
+	result := (&Agent{logger: zerolog.Nop(), collector: collector}).collectProxmoxLXCFilesystemsResult(t.Context())
+	if !result.Applicable || !result.Degraded || result.FailedContainers != 2 {
+		t.Fatalf("collection result = %+v, want two failed containers", result)
+	}
+	if result.Inventory == nil || len(result.Inventory.Containers) != 0 {
+		t.Fatalf("partial inventory = %+v, want empty retained inventory", result.Inventory)
 	}
 }
 
@@ -275,6 +307,83 @@ rootfs local-lvm:vm-102-disk-0       8.0G   2.0G   6.0G 25.0 /
 	}
 	if got.Containers[0].VMID != 100 || got.Containers[1].VMID != 102 {
 		t.Fatalf("containers = %+v", got.Containers)
+	}
+}
+
+func TestCollectProxmoxLXCFilesystemsFallsBackAfterPartialStatfsFailure(t *testing.T) {
+	const pctPath = "/usr/sbin/pct"
+	const lxcInfoPath = "/usr/bin/lxc-info"
+	const listOutput = "VMID Status Lock Name\n100 running - web\n"
+	const dfOutput = `MP     Volume                         Size   Used  Avail Use% Path
+rootfs local-lvm:vm-100-disk-0       8.0G   2.0G   6.0G 25.0 /
+mp0    tank:subvol-100-disk-0        1.0T 512.0G 512.0G 50.0 /srv/data
+`
+
+	for _, test := range []struct {
+		name             string
+		fallbackError    error
+		wantDegraded     bool
+		wantContainerLen int
+	}{
+		{name: "complete fallback recovers", wantContainerLen: 1},
+		{name: "failed fallback degrades container", fallbackError: errors.New("pct df unavailable"), wantDegraded: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dfCalls := 0
+			collector := &mockCollector{
+				goos: "linux",
+				lookPathFn: func(file string) (string, error) {
+					switch file {
+					case "pct":
+						return pctPath, nil
+					case "lxc-info":
+						return lxcInfoPath, nil
+					default:
+						return "", os.ErrNotExist
+					}
+				},
+				readFileFn: func(string) ([]byte, error) {
+					return []byte("rootfs: local-lvm:vm-100-disk-0,size=8G\nmp0: tank:subvol-100-disk-0,mp=/srv/data,size=1T\n"), nil
+				},
+				filesystemUsageFn: func(target string) (hostFilesystemUsage, error) {
+					switch target {
+					case "/proc/4242/root":
+						return hostFilesystemUsage{TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11}, nil
+					case "/proc/4242/root/srv/data":
+						return hostFilesystemUsage{}, errors.New("statfs access failed")
+					default:
+						t.Fatalf("unexpected statfs path %q", target)
+						return hostFilesystemUsage{}, nil
+					}
+				},
+				commandCombinedOutputLimitedFn: func(_ context.Context, _ int, name string, args ...string) (string, error) {
+					joined := strings.Join(args, " ")
+					switch {
+					case name == pctPath && joined == "list":
+						return listOutput, nil
+					case name == lxcInfoPath && joined == "-n 100 -p":
+						return "PID: 4242\n", nil
+					case name == pctPath && joined == "df 100":
+						dfCalls++
+						return dfOutput, test.fallbackError
+					default:
+						t.Fatalf("unexpected command: %s %v", name, args)
+						return "", nil
+					}
+				},
+			}
+
+			result := (&Agent{logger: zerolog.Nop(), collector: collector}).collectProxmoxLXCFilesystemsResult(t.Context())
+			if dfCalls != 1 {
+				t.Fatalf("pct df calls = %d, want 1 after partial statfs failure", dfCalls)
+			}
+			if result.Degraded != test.wantDegraded || result.Inventory == nil || len(result.Inventory.Containers) != test.wantContainerLen {
+				t.Fatalf("collection result = %+v", result)
+			}
+			if test.wantDegraded && result.FailedContainers != 1 {
+				t.Fatalf("failed containers = %d, want 1", result.FailedContainers)
+			}
+		})
 	}
 }
 
