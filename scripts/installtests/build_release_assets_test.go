@@ -2648,7 +2648,7 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		"release/pulse-secure-runtime-collector-v1-linux-amd64",
 		"release/pulse-secure-runtime-collector-v3-linux-amd64",
 		"qualify-secure-runtime-release.yml/dispatches",
-		`{ref: "main", return_run_details: true, inputs: {tag: $tag}}`,
+		`{ref: $tag, return_run_details: true, inputs: {tag: $tag}}`,
 		"Secure-runtime qualification dispatch did not return an exact workflow run.",
 		"Immutable RC publication did not retain an exact secure-runtime qualification run identity.",
 	} {
@@ -2671,20 +2671,40 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	}
 	for _, required := range []string{
 		".immutable == true",
+		`test "${GITHUB_REF}" = "refs/tags/${TAG}"`,
+		`test "${GITHUB_SHA}" = "${commit}"`,
 		"ca-certificates curl dbus systemd systemd-sysv util-linux",
-		`for command in curl id nsenter runuser systemctl`,
+		`docker:27.5.1-dind@sha256:f649ef046008ca7f926a2571c32b0ac22e5c59eb61b959617f9acc2a4c638cf5`,
+		`for command in curl docker dockerd id nsenter runuser systemctl`,
+		`--host=unix:///var/run/docker.sock`,
+		`--storage-driver=vfs`,
+		`--bridge=none`,
+		`--iptables=false`,
+		`--network none`,
+		`pulse-secure-runtime-fixture:v7`,
 		"--verify-release-packet-only",
 		"--verified-packet-dir",
 		"$RUNNER_TEMP/secure-runtime-verified:/release:ro",
 		"$RUNNER_TEMP/secure-runtime-harness:/harness:ro",
 		"PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1",
-		"^TestSecureRuntimeSystemdLab$",
+		"^TestSecureRuntimeSystemdDockerV7Lab$",
 		"--release-candidate-tag",
 		"--collector-v4-signature",
-		"secure_runtime_attestation_v6.py",
+		"secure_runtime_attestation_v7.py",
+		"secure-agent-runtime-systemd-receipt-v7-",
+		"secure-agent-runtime-systemd-transcript-v7-",
 	} {
 		if !strings.Contains(qualificationWorkflow, required) {
 			t.Fatalf("post-publication secure-runtime qualification missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`/var/run/docker.sock:/var/run/docker.sock`,
+		`--host=tcp://`,
+		`docker pull`,
+	} {
+		if strings.Contains(qualificationWorkflow, forbidden) {
+			t.Fatalf("post-publication secure-runtime qualification contains forbidden Docker boundary %q", forbidden)
 		}
 	}
 }

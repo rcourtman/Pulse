@@ -4458,6 +4458,7 @@
         "scripts/install-mcp.sh",
         "scripts/install.ps1",
         "scripts/install.sh",
+        "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
         "scripts/lib/hot-dev-runtime.sh",
         "scripts/prepare-release-container-context.sh",
@@ -4473,7 +4474,9 @@
         "scripts/release_control/render_release_body.py",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_control/secure_runtime_attestation_v6.py",
+        "scripts/release_control/secure_runtime_attestation_v7.py",
         "scripts/release_control/secure_runtime_source_manifest_v6.json",
+        "scripts/release_control/secure_runtime_source_manifest_v7.json",
         "scripts/release_control/validate_artifact_release_line.py",
         "scripts/release_ldflags.sh",
         "scripts/release_update_key.go",
@@ -4689,11 +4692,14 @@
               "scripts/build-release-binaries.sh",
               "scripts/build-release.sh",
               "scripts/build-secure-runtime-qualification.sh",
+              "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
               "scripts/prepare-release-container-context.sh",
               "scripts/release_asset_common.sh",
               "scripts/release_build_targets.sh",
               "scripts/release_control/secure_runtime_attestation_v6.py",
+              "scripts/release_control/secure_runtime_attestation_v7.py",
               "scripts/release_control/secure_runtime_source_manifest_v6.json",
+              "scripts/release_control/secure_runtime_source_manifest_v7.json",
               "scripts/release_ldflags.sh",
               "scripts/release_update_key.go",
               "scripts/validate-release.sh"
@@ -4706,7 +4712,8 @@
             "scripts/installtests/build_release_assets_test.go",
             "scripts/installtests/release_ldflags_test.go",
             "scripts/installtests/safe_profile_migration_test.go",
-            "scripts/release_control/secure_runtime_attestation_v6_test.py"
+            "scripts/release_control/secure_runtime_attestation_v6_test.py",
+            "scripts/release_control/secure_runtime_attestation_v7_test.py"
             ]
           },
           {

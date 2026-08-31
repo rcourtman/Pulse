@@ -16,7 +16,7 @@ jobs:
   qualify-secure-runtime-release:
     name: Qualify Immutable RC on Disposable systemd
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Resolve immutable RC identity
         id: release
@@ -62,6 +62,8 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
           commit="$(git rev-parse "${TAG}^{commit}")"
+          test "${GITHUB_REF}" = "refs/tags/${TAG}"
+          test "${GITHUB_SHA}" = "${commit}"
           test "$(git branch --show-current)" = ""
           test -z "$(git status --short --untracked-files=all)"
           git merge-base --is-ancestor "${commit}" origin/main
@@ -121,7 +123,7 @@ jobs:
             go run ./scripts/release_update_key.go fingerprint \
               --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"
           )"
-          python3 scripts/release_control/secure_runtime_attestation_v6.py \
+          python3 scripts/release_control/secure_runtime_attestation_v7.py \
             --verify-release-packet-only \
             --checkout "${GITHUB_WORKSPACE}" \
             --commit "${QUALIFIED_COMMIT}" \
@@ -155,28 +157,52 @@ jobs:
             go test -c \
               -o "$RUNNER_TEMP/secure-runtime-harness/installtests-linux-amd64.test" \
               ./scripts/installtests
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath \
+              -o "$RUNNER_TEMP/secure-runtime-harness/docker-fixture-linux-amd64" \
+              ./scripts/installtests/testdata/secure_runtime_docker_fixture.go
 
       - name: Build disposable systemd host image
         run: |
           set -euo pipefail
           context="$RUNNER_TEMP/secure-runtime-systemd-image"
-          mkdir -p "${context}/empty"
+          mkdir -p "${context}"
+          tee "${context}/pulse-qualification-docker.service" >/dev/null <<'UNIT'
+          [Unit]
+          Description=Pulse secure-runtime qualification Docker daemon
+          After=network.target
+
+          [Service]
+          Type=notify
+          ExecStart=/usr/local/bin/dockerd --host=unix:///var/run/docker.sock --group=root --data-root=/var/lib/pulse-qualification-docker --exec-root=/run/pulse-qualification-docker --pidfile=/run/pulse-qualification-docker.pid --storage-driver=vfs --bridge=none --iptables=false --ip6tables=false --ip-forward=false --ip-masq=false --userland-proxy=false
+          ExecStartPost=/bin/chown root:root /var/run/docker.sock
+          ExecStartPost=/bin/chmod 0660 /var/run/docker.sock
+          Restart=on-failure
+          RestartSec=1
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
           tee "${context}/Dockerfile" >/dev/null <<'DOCKERFILE'
+          FROM docker:27.5.1-dind@sha256:f649ef046008ca7f926a2571c32b0ac22e5c59eb61b959617f9acc2a4c638cf5 AS dind
           FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
           ENV container=docker
+          COPY --from=dind /usr/local/bin/ /usr/local/bin/
+          COPY pulse-qualification-docker.service /etc/systemd/system/pulse-qualification-docker.service
           RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 ca-certificates curl dbus systemd systemd-sysv util-linux && \
               apt-get clean && \
-              systemctl mask dev-hugepages.mount sys-fs-fuse-connections.mount systemd-remount-fs.service
+              systemctl mask dev-hugepages.mount sys-fs-fuse-connections.mount systemd-remount-fs.service docker.service docker.socket && \
+              systemctl enable pulse-qualification-docker.service
           STOPSIGNAL SIGRTMIN+3
           CMD ["/sbin/init"]
           DOCKERFILE
           docker build \
             --tag pulse-secure-runtime-systemd:ubuntu-24.04 \
             --file "${context}/Dockerfile" \
-            "${context}/empty"
+            "${context}"
 
-      - name: Run schema-v6 systemd qualification
+      - name: Run schema-v7 systemd and rootful Docker qualification
         id: lab
         env:
           TAG: ${{ steps.release.outputs.tag }}
@@ -188,6 +214,7 @@ jobs:
             --detach \
             --name "${container}" \
             --privileged \
+            --network none \
             --cgroupns=host \
             --tmpfs /run \
             --tmpfs /run/lock \
@@ -208,7 +235,35 @@ jobs:
             sleep 2
           done
           docker exec "${container}" sh -c \
-            'for command in curl id nsenter runuser systemctl; do command -v "$command" >/dev/null || exit 1; done'
+            'for command in curl docker dockerd id nsenter runuser systemctl; do command -v "$command" >/dev/null || exit 1; done'
+          docker exec "${container}" systemctl start pulse-qualification-docker.service
+          for attempt in $(seq 1 60); do
+            if docker exec "${container}" docker info >/dev/null 2>&1; then
+              break
+            fi
+            if [[ "${attempt}" == 60 ]]; then
+              docker exec "${container}" systemctl status pulse-qualification-docker.service --no-pager || true
+              docker logs "${container}"
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec "${container}" sh -ceu '
+            test -S /var/run/docker.sock
+            test "$(stat -c %U:%G:%a /var/run/docker.sock)" = "root:root:660"
+            daemon_pid="$(systemctl show pulse-qualification-docker.service --property MainPID --value)"
+            test "${daemon_pid}" -gt 0
+            case "$(tr "\000" " " < "/proc/${daemon_pid}/cmdline")" in *tcp://*) exit 1;; esac
+            rootfs="$(mktemp -d)"
+            cp /harness/docker-fixture-linux-amd64 "${rootfs}/fixture"
+            chmod 0555 "${rootfs}/fixture"
+            tar -C "${rootfs}" -cf /tmp/pulse-secure-runtime-rootfs.tar .
+            docker import --change '\''ENTRYPOINT ["/fixture"]'\'' /tmp/pulse-secure-runtime-rootfs.tar pulse-secure-runtime-fixture:v7 >/dev/null
+            docker run --detach --name pulse-v7-running --network none pulse-secure-runtime-fixture:v7 >/dev/null
+            docker run --name pulse-v7-exited --network none pulse-secure-runtime-fixture:v7 --exit >/dev/null
+            test "$(docker inspect --format "{{.State.Status}}" pulse-v7-running)" = "running"
+            test "$(docker inspect --format "{{.State.Status}}" pulse-v7-exited)" = "exited"
+          '
           docker exec "${container}" sh -c \
             'printf "%s\n" "PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1" > /etc/pulse-secure-runtime-lab'
           start_epoch="$(date +%s)"
@@ -225,11 +280,11 @@ jobs:
             --env PULSE_SECURE_RUNTIME_HELPER=/release/pulse-agent-helper-linux-amd64 \
             --env PULSE_SECURE_RUNTIME_RUNNER=/release/pulse-agent-runner-linux-amd64 \
             --env PULSE_SECURE_RUNTIME_RECEIPT=/evidence/receipt.json \
-            --env "PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v6-${TAG}.json" \
+            --env "PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v7-${TAG}.json" \
             --env PULSE_SECURE_RUNTIME_TRANSCRIPT=/evidence/transcript.jsonl \
-            --env "PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v6-${TAG}.jsonl" \
+            --env "PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v7-${TAG}.jsonl" \
             "${container}" \
-            sh -c 'cd /workspace/scripts/installtests && exec /harness/installtests-linux-amd64.test -test.run "^TestSecureRuntimeSystemdLab$" -test.count=1 -test.v'
+            sh -c 'cd /workspace/scripts/installtests && exec /harness/installtests-linux-amd64.test -test.run "^TestSecureRuntimeSystemdDockerV7Lab$" -test.count=1 -test.v'
           elapsed="$(( $(date +%s) - start_epoch ))"
           if [[ "${elapsed}" -lt 1 ]]; then elapsed=1; fi
           echo "elapsed_seconds=${elapsed}" >> "$GITHUB_OUTPUT"
@@ -250,12 +305,12 @@ jobs:
             go run ./scripts/release_update_key.go fingerprint \
               --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"
           )"
-          python3 scripts/release_control/secure_runtime_attestation_v6.py \
+          python3 scripts/release_control/secure_runtime_attestation_v7.py \
             --checkout "${GITHUB_WORKSPACE}" \
             --commit "${QUALIFIED_COMMIT}" \
             --main-ref origin/main \
             --receipt "${evidence_dir}/receipt.json" \
-            --receipt-record-path "docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v6-${TAG}.json" \
+            --receipt-record-path "docs/release-control/v6/internal/records/secure-agent-runtime-systemd-receipt-v7-${TAG}.json" \
             --transcript "${evidence_dir}/transcript.jsonl" \
             --collector-v1 "${release_dir}/pulse-secure-runtime-collector-v1-linux-amd64" \
             --collector-v2 "${release_dir}/pulse-secure-runtime-collector-v2-linux-amd64" \

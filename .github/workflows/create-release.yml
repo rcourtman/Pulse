@@ -1975,7 +1975,7 @@ jobs:
           dispatch="$(
             jq -n \
               --arg tag "${TAG}" \
-              '{ref: "main", return_run_details: true, inputs: {tag: $tag}}' | \
+              '{ref: $tag, return_run_details: true, inputs: {tag: $tag}}' | \
               gh api \
                 --method POST \
                 -H "Accept: application/vnd.github+json" \

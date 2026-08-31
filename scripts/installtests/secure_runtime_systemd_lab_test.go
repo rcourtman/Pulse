@@ -81,23 +81,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionrunner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
 const (
-	secureRuntimeLabOptIn        = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB"
-	secureRuntimeLabMarkerPath   = "/etc/pulse-secure-runtime-lab"
-	secureRuntimeLabMarkerValue  = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1"
-	secureRuntimeLabToken        = "8fa728ed4cbfa7466947e747627b51e2464ed3f69966ed6394e36a82d85d7d31"
-	secureRuntimeLabAgentID      = "secure-runtime-systemd-lab"
-	secureRuntimeLabHostname     = "pulse-secure-runtime-lab"
-	secureRuntimeLabOrgID        = "secure-runtime-lab-org"
-	secureRuntimeRunnerSecretV1  = "3c896fe99e29384a293def92f23c1709fbf429773e0a20ac5d930f2aab62f839"
-	secureRuntimeRunnerSecretV2  = "d7f6f2550788213e0595f276b62b1df290f7e018ba74c03068c4afbe6efd7601"
-	secureRuntimeRunnerBindingV1 = "secure-runtime-runner-binding-v1"
-	secureRuntimeRunnerBindingV2 = "secure-runtime-runner-binding-v2"
-	secureRuntimeUpdateStatePath = "/var/lib/pulse-agent-helper/update-activation.json"
-	secureRuntimeUpdateHandoff   = "/var/lib/pulse-agent/.pulse-agent-update-pending.json"
-	secureRuntimeUpdateLKGPath   = "/usr/local/bin/pulse-agent.last-known-good"
+	secureRuntimeLabOptIn           = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB"
+	secureRuntimeLabMarkerPath      = "/etc/pulse-secure-runtime-lab"
+	secureRuntimeLabMarkerValue     = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1"
+	secureRuntimeLabToken           = "8fa728ed4cbfa7466947e747627b51e2464ed3f69966ed6394e36a82d85d7d31"
+	secureRuntimeLabAgentID         = "secure-runtime-systemd-lab"
+	secureRuntimeLabHostname        = "pulse-secure-runtime-lab"
+	secureRuntimeLabOrgID           = "secure-runtime-lab-org"
+	secureRuntimeRunnerSecretV1     = "3c896fe99e29384a293def92f23c1709fbf429773e0a20ac5d930f2aab62f839"
+	secureRuntimeRunnerSecretV2     = "d7f6f2550788213e0595f276b62b1df290f7e018ba74c03068c4afbe6efd7601"
+	secureRuntimeRunnerBindingV1    = "secure-runtime-runner-binding-v1"
+	secureRuntimeRunnerBindingV2    = "secure-runtime-runner-binding-v2"
+	secureRuntimeUpdateStatePath    = "/var/lib/pulse-agent-helper/update-activation.json"
+	secureRuntimeUpdateHandoff      = "/var/lib/pulse-agent/.pulse-agent-update-pending.json"
+	secureRuntimeUpdateLKGPath      = "/usr/local/bin/pulse-agent.last-known-good"
+	secureRuntimeDockerFixtureImage = "pulse-secure-runtime-fixture:v7"
 )
 
 var secureRuntimeInstalledPaths = []string{
@@ -142,10 +145,30 @@ var secureRuntimeScenarioClaims = map[string][]string{
 		"helper_protocol_healthy",
 		"collector_authority_reduction_observed",
 	},
+	"rootful_docker_summary_migration": {
+		"legacy_rootful_inventory_observed",
+		"collector_rootful_socket_authority_removed",
+		"typed_helper_summary_inventory_observed",
+		"summary_inventory_parity_observed",
+		"summary_only_boundary_observed",
+	},
 	"explicit_safe_profile_rollback": {"explicit_rollback_preserved_reduced_authority"},
 	"automatic_failure_rollback":     {"failed_activation_restored_prior_runtime"},
 	"ordinary_update_non_migration":  {"ordinary_update_preserved_selected_profile"},
 	"final_safe_profile_apply":       {"collector_reporting_continued_after_migration"},
+	"rootful_docker_summary_restart": {
+		"typed_helper_summary_survived_helper_restart",
+		"summary_inventory_parity_observed",
+		"new_report_sequence_accepted_after_restart",
+		"collector_remained_non_root",
+	},
+	"rootful_docker_helper_loss_recovery": {
+		"helper_loss_emitted_status_only_report",
+		"helper_health_degradation_visible",
+		"helper_recovery_restored_complete_inventory",
+		"report_order_remained_monotonic",
+		"collector_rootful_socket_fallback_denied",
+	},
 	"helper_update_authoritative_commit": {
 		"signed_helper_activation_observed",
 		"activated_process_digest_bound",
@@ -191,6 +214,11 @@ type secureRuntimeLabReport struct {
 	CommandsEnabled bool
 }
 
+type secureRuntimeDockerReport struct {
+	ReceivedAt time.Time
+	Report     agentsdocker.Report
+}
+
 type secureRuntimeLabFixture struct {
 	mu                  sync.Mutex
 	collector           []byte
@@ -200,6 +228,7 @@ type secureRuntimeLabFixture struct {
 	serverVersion       string
 	reports             []secureRuntimeLabReport
 	reportAttempts      []secureRuntimeLabReport
+	dockerReports       []secureRuntimeDockerReport
 	rejectedVersions    map[string]bool
 	lastSeen            time.Time
 	freezeLastSeen      bool
@@ -340,6 +369,52 @@ func (f *secureRuntimeLabFixture) attemptSnapshot() []secureRuntimeLabReport {
 	return append([]secureRuntimeLabReport(nil), f.reportAttempts...)
 }
 
+func (f *secureRuntimeLabFixture) dockerSnapshot() []secureRuntimeDockerReport {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]secureRuntimeDockerReport(nil), f.dockerReports...)
+}
+
+func (f *secureRuntimeLabFixture) handleDockerReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !f.authorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var reader io.Reader = http.MaxBytesReader(w, r.Body, 8<<20)
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Content-Encoding")), "gzip") {
+		compressed, err := gzip.NewReader(reader)
+		if err != nil {
+			http.Error(w, "invalid gzip report", http.StatusBadRequest)
+			return
+		}
+		defer compressed.Close()
+		reader = io.LimitReader(compressed, 8<<20)
+	}
+	var report agentsdocker.Report
+	decoder := json.NewDecoder(reader)
+	if err := decoder.Decode(&report); err != nil {
+		http.Error(w, "invalid docker report", http.StatusBadRequest)
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		http.Error(w, "docker report contains trailing data", http.StatusBadRequest)
+		return
+	}
+	if report.Agent.ID == "" || report.Host.Hostname == "" {
+		http.Error(w, "incomplete docker report", http.StatusBadRequest)
+		return
+	}
+	f.mu.Lock()
+	f.dockerReports = append(f.dockerReports, secureRuntimeDockerReport{ReceivedAt: time.Now().UTC(), Report: report})
+	f.mu.Unlock()
+	writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
 func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/api/version" || r.URL.Path == "/api/agent/version":
@@ -364,11 +439,7 @@ func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	case r.URL.Path == "/api/agents/agent/report":
 		f.handleReport(w, r)
 	case r.URL.Path == "/api/agents/docker/report":
-		if !f.authorized(r) {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"success": true})
+		f.handleDockerReport(w, r)
 	case r.URL.Path == "/api/agents/agent/lookup":
 		f.handleLookup(w, r)
 	case strings.HasPrefix(r.URL.Path, "/api/agents/agent/") && strings.HasSuffix(r.URL.Path, "/config"):
@@ -830,6 +901,8 @@ type secureRuntimeLabReceipt struct {
 	HelperProtocolHealthy                      bool                               `json:"helper_protocol_healthy"`
 	StateIdentityPreserved                     bool                               `json:"state_identity_preserved"`
 	DockerDegraded                             bool                               `json:"docker_degraded"`
+	RootfulContainerRuntime                    string                             `json:"rootful_container_runtime,omitempty"`
+	RootfulContainerSummaryQualified           bool                               `json:"rootful_container_summary_qualified,omitempty"`
 	ActionRunnerQualified                      bool                               `json:"action_runner_qualified"`
 	ActionMutationVerified                     bool                               `json:"action_mutation_verified"`
 	CollectorAuthorityReductionRequestObserved bool                               `json:"collector_authority_reduction_request_observed"`
@@ -959,10 +1032,12 @@ func TestSecureRuntimeReceiptCompletionEnclosesFinalTranscriptEvent(t *testing.T
 }
 
 func TestSecureRuntimeSourceManifestCoversTransitiveProviders(t *testing.T) {
-	_, hashes := secureRuntimeLoadSourceBoundary(t, runtime.GOARCH)
+	_, hashes := secureRuntimeLoadSourceBoundary(t, runtime.GOARCH, 7)
 	for _, required := range []string{
 		"internal/agenthelper/providers.go",
 		"internal/agenthelper/container_inventory.go",
+		"internal/config/docker_report_order.go",
+		"internal/dockeragent/helper_inventory.go",
 		"internal/agenttls/config.go",
 		"internal/hostagent/action_runner_client.go",
 		"internal/hostagent/action_runner_health_persistence_unix.go",
@@ -975,6 +1050,9 @@ func TestSecureRuntimeSourceManifestCoversTransitiveProviders(t *testing.T) {
 		"pkg/securityutil/httpurl.go",
 		"scripts/release_control/secure_runtime_attestation.py",
 		"scripts/release_control/secure_runtime_attestation_v6.py",
+		"scripts/release_control/secure_runtime_attestation_v7.py",
+		"scripts/release_control/secure_runtime_source_manifest_v7.json",
+		"scripts/installtests/testdata/secure_runtime_docker_fixture.go",
 		".github/workflows/build-release-candidate.yml",
 		".github/workflows/compile-release-payload.yml",
 		".github/workflows/create-release.yml",
@@ -1035,8 +1113,13 @@ func TestSecureRuntimeFixturePromotesPendingRunner(t *testing.T) {
 		Registered bool `json:"registered"`
 		Activated  bool `json:"activated"`
 	}
-	if err := json.Unmarshal(secureRuntimeReadFile(t, healthPath), &health); err != nil {
-		t.Fatalf("decode fixture action-runner health: %v", err)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		raw, err := os.ReadFile(healthPath)
+		if err == nil && json.Unmarshal(raw, &health) == nil && health.Registered && health.Activated {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 	if !health.Registered || !health.Activated {
 		t.Fatalf("fixture action-runner health = %+v", health)
@@ -1103,9 +1186,72 @@ func TestSecureRuntimeFixtureSelfRevokeUsesBodylessNoContentResponse(t *testing.
 	}
 }
 
+func TestSecureRuntimeFixtureCapturesBoundedGzipDockerReport(t *testing.T) {
+	fixture := newSecureRuntimeLabFixture(nil, "", nil, nil, "fixture")
+	defer fixture.actionServer.Shutdown()
+	complete := true
+	report := agentsdocker.Report{
+		Agent:             agentsdocker.AgentInfo{ID: secureRuntimeLabAgentID},
+		Host:              agentsdocker.HostInfo{Hostname: secureRuntimeLabHostname, Runtime: "docker"},
+		InventoryComplete: &complete,
+		Containers: []agentsdocker.Container{{
+			ID: "container-b", Name: "fixture", Image: "pulse-secure-runtime-fixture:v7",
+			CreatedAt: time.Unix(1_700_000_000, 0).UTC(), State: "running", Status: "Up",
+		}},
+	}
+	var body bytes.Buffer
+	compressed := gzip.NewWriter(&body)
+	if err := json.NewEncoder(compressed).Encode(report); err != nil {
+		t.Fatalf("encode Docker report: %v", err)
+	}
+	if err := compressed.Close(); err != nil {
+		t.Fatalf("close Docker report gzip stream: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/agents/docker/report", &body)
+	request.Header.Set("X-API-Token", secureRuntimeLabToken)
+	request.Header.Set("Content-Encoding", "gzip")
+	recorder := httptest.NewRecorder()
+	fixture.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("Docker report response = %d %q", recorder.Code, recorder.Body.String())
+	}
+	captured := fixture.dockerSnapshot()
+	if len(captured) != 1 || captured[0].Report.Containers[0].ID != "container-b" {
+		t.Fatalf("captured Docker reports = %+v", captured)
+	}
+}
+
+func TestSecureRuntimeDockerInventoryDigestIsOrderIndependent(t *testing.T) {
+	created := time.Unix(1_700_000_000, 0).UTC()
+	first := agentsdocker.Report{Containers: []agentsdocker.Container{
+		{ID: "b", Name: "second", Image: "fixture:v7", State: "running", Status: "volatile", CreatedAt: created},
+		{ID: "a", Name: "first", Image: "fixture:v7", State: "exited", Status: "old", CreatedAt: created},
+	}}
+	second := agentsdocker.Report{Containers: []agentsdocker.Container{
+		{ID: "a", Name: "first", Image: "fixture:v7", State: "exited", Status: "new", CreatedAt: created},
+		{ID: "b", Name: "second", Image: "fixture:v7", State: "running", Status: "changed", CreatedAt: created},
+	}}
+	firstDigest, firstCount := secureRuntimeDockerInventoryDigest(first)
+	secondDigest, secondCount := secureRuntimeDockerInventoryDigest(second)
+	if firstCount != 2 || secondCount != 2 || firstDigest != secondDigest {
+		t.Fatalf("canonical Docker inventory digest changed with order/status: first=%d/%s second=%d/%s", firstCount, firstDigest, secondCount, secondDigest)
+	}
+}
+
 func TestSecureRuntimeSystemdLab(t *testing.T) {
+	runSecureRuntimeSystemdLab(t, 6)
+}
+
+func TestSecureRuntimeSystemdDockerV7Lab(t *testing.T) {
+	runSecureRuntimeSystemdLab(t, 7)
+}
+
+func runSecureRuntimeSystemdLab(t *testing.T, schemaVersion int) {
 	if os.Getenv(secureRuntimeLabOptIn) != "1" {
 		t.Skip("set PULSE_SECURE_RUNTIME_SYSTEMD_LAB=1 only inside a disposable systemd VM")
+	}
+	if schemaVersion != 6 && schemaVersion != 7 {
+		t.Fatalf("unsupported secure-runtime schema version %d", schemaVersion)
 	}
 	secureRuntimeRequireDisposableHost(t)
 
@@ -1141,9 +1287,9 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 		t.Fatalf("PULSE_SECURE_RUNTIME_RECEIPT_RECORD_PATH must be a canonical repository-relative path: %q", recordPath)
 	}
 	startedAt := time.Now().UTC()
-	sourceManifest, sourceHashes := secureRuntimeLoadSourceBoundary(t, runtime.GOARCH)
+	sourceManifest, sourceHashes := secureRuntimeLoadSourceBoundary(t, runtime.GOARCH, schemaVersion)
 	receipt := secureRuntimeLabReceipt{
-		SchemaVersion:         6,
+		SchemaVersion:         schemaVersion,
 		RecordPath:            recordPath,
 		StartedAt:             startedAt.Format(time.RFC3339Nano),
 		SourceManifest:        sourceManifest,
@@ -1185,15 +1331,30 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 
 	initialArgs := []string{"--enable-commands", "--command-authority", "command-capable"}
 	dockerInitiallyAvailable := secureRuntimeRootfulDockerAvailable()
+	if schemaVersion == 7 && !dockerInitiallyAvailable {
+		t.Fatal("schema-v7 qualification requires a live rootful Docker daemon")
+	}
 	if dockerInitiallyAvailable {
 		initialArgs = append(initialArgs, "--enable-docker")
 	}
+	dockerInstallStartedAt := time.Now().UTC()
 	secureRuntimeRunInstaller(t, installerPath, server.URL, initialArgs...)
 	secureRuntimeWaitForReports(t, fixture, 1, 45*time.Second)
 	secureRuntimeAssertRootCommandProfile(t)
 	dockerInitiallyEnabled := secureRuntimeCollectorHasArgument("--enable-docker")
 	if dockerInitiallyAvailable && !dockerInitiallyEnabled {
 		t.Fatal("rootful Docker was available but the requested legacy profile did not enable Docker monitoring")
+	}
+	var v7LegacyDocker secureRuntimeDockerReport
+	if schemaVersion == 7 {
+		v7LegacyDocker = secureRuntimeDockerReportAfter(t, fixture, dockerInstallStartedAt, 60*time.Second, func(report agentsdocker.Report) bool {
+			return secureRuntimeDockerComplete(report) && report.Host.CollectionMode == "" && len(report.Containers) > 0
+		})
+		secureRuntimeAssertExpectedDockerFixtures(t, v7LegacyDocker.Report)
+		_, count := secureRuntimeDockerInventoryDigest(v7LegacyDocker.Report)
+		if count == 0 {
+			t.Fatal("schema-v7 legacy Docker baseline contained no deterministic fixture containers")
+		}
 	}
 	pass("legacy_root_command_capable_install", fmt.Sprintf("root collector installed; docker_enabled=%t", dockerInitiallyEnabled), map[string]any{"collector_process_uid": 0, "commands_enabled": true})
 
@@ -1244,6 +1405,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	legacyBaseline := secureRuntimeStableSnapshot(t)
 	reportsBeforeApply, preApplyLastSeen, _, _ := fixture.snapshot()
 	fixture.setCollector(collectorV2, collectorV2Signature)
+	safeApplyStartedAt := time.Now().UTC()
 	applyOutput := secureRuntimeRunInstaller(t, installerPath, server.URL, "--safe-profile-apply")
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeApply)+1, 45*time.Second)
 	_, postApplyLastSeen, _, _ := fixture.snapshot()
@@ -1262,6 +1424,39 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 		}
 	}
 	pass("safe_profile_apply", "fresh server lastSeen, least-privilege identity, typed helper health", map[string]any{"collector_service_user": "pulse-agent", "collector_authority": "monitoring-only", "helper_status": "ok"})
+
+	var v7MigratedDocker secureRuntimeDockerReport
+	if schemaVersion == 7 {
+		v7MigratedDocker = secureRuntimeDockerReportAfter(t, fixture, safeApplyStartedAt, 60*time.Second, func(report agentsdocker.Report) bool {
+			return secureRuntimeDockerComplete(report) && report.Host.CollectionMode == agentsdocker.CollectionModeTypedHelperSummary
+		})
+		secureRuntimeAssertDockerSummaryOnly(t, v7MigratedDocker.Report)
+		secureRuntimeAssertExpectedDockerFixtures(t, v7MigratedDocker.Report)
+		secureRuntimeAssertCollectorDockerSocketDenied(t)
+		groups := strings.Fields(secureRuntimeCommand(t, 10*time.Second, "id", "-nG", "pulse-agent"))
+		for _, group := range groups {
+			if group == "docker" {
+				t.Fatal("safe-profile collector retained docker-group authority")
+			}
+		}
+		legacyDigest, legacyCount := secureRuntimeDockerInventoryDigest(v7LegacyDocker.Report)
+		migratedDigest, migratedCount := secureRuntimeDockerInventoryDigest(v7MigratedDocker.Report)
+		if legacyCount == 0 || migratedCount != legacyCount || migratedDigest != legacyDigest {
+			t.Fatalf("typed-helper Docker migration inventory mismatch: legacy=%d/%s migrated=%d/%s", legacyCount, legacyDigest, migratedCount, migratedDigest)
+		}
+		pass("rootful_docker_summary_migration", "rootful Docker inventory moved from the root collector to the summary-only typed helper without granting socket authority", map[string]any{
+			"runtime": "docker", "collection_mode": agentsdocker.CollectionModeTypedHelperSummary,
+			"legacy_collection_mode": "",
+			"inventory_complete":     true, "collector_in_docker_group": false,
+			"collector_rootful_socket_access": false, "secondary_inventories_empty": true,
+			"container_actions_available": false, "update_checks_available": false,
+			"fixture_container_names": []string{"pulse-v7-exited", "pulse-v7-running"},
+			"fixture_image":           secureRuntimeDockerFixtureImage,
+			"fixture_states":          map[string]string{"pulse-v7-exited": "exited", "pulse-v7-running": "running"},
+			"legacy_container_count":  legacyCount, "migrated_container_count": migratedCount,
+			"legacy_inventory_sha256": legacyDigest, "migrated_inventory_sha256": migratedDigest,
+		})
+	}
 
 	reportsBeforeRollback, _, _, _ := fixture.snapshot()
 	secureRuntimeRunInstaller(t, installerPath, server.URL, "--safe-profile-rollback")
@@ -1293,6 +1488,7 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 
 	fixture.setServerVersion(collectorV2Version)
 	reportsBeforeFinalApply, preFinalLastSeen, _, _ := fixture.snapshot()
+	finalApplyStartedAt := time.Now().UTC()
 	secureRuntimeRunInstaller(t, installerPath, server.URL, "--safe-profile-apply")
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeFinalApply)+1, 45*time.Second)
 	_, finalLastSeen, authFailures, requestFailures := fixture.snapshot()
@@ -1307,6 +1503,78 @@ func TestSecureRuntimeSystemdLab(t *testing.T) {
 	reportsBeforeContinuity, _, _, _ := fixture.snapshot()
 	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeContinuity)+1, 20*time.Second)
 	pass("final_safe_profile_apply", "collector continued reporting after committed migration", map[string]any{"collector_service_user": "pulse-agent", "continuity_report_observed": true})
+
+	if schemaVersion == 7 {
+		finalDocker := secureRuntimeDockerReportAfter(t, fixture, finalApplyStartedAt, 60*time.Second, func(report agentsdocker.Report) bool {
+			return report.Timestamp.After(finalApplyStartedAt) && secureRuntimeDockerComplete(report) && report.Host.CollectionMode == agentsdocker.CollectionModeTypedHelperSummary
+		})
+		secureRuntimeAssertDockerSummaryOnly(t, finalDocker.Report)
+		finalDigest, finalCount := secureRuntimeDockerInventoryDigest(finalDocker.Report)
+		migrationDigest, migrationCount := secureRuntimeDockerInventoryDigest(v7MigratedDocker.Report)
+		if finalCount != migrationCount || finalDigest != migrationDigest {
+			t.Fatalf("final Docker summary differs from migration baseline: migration=%d/%s final=%d/%s", migrationCount, migrationDigest, finalCount, finalDigest)
+		}
+		helperPIDBefore := strings.TrimSpace(secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", "pulse-agent-helper.service", "--property", "MainPID", "--value"))
+		secureRuntimeCommand(t, 20*time.Second, "systemctl", "restart", "pulse-agent-helper.service")
+		restartCompletedAt := time.Now().UTC()
+		helperPIDAfter := strings.TrimSpace(secureRuntimeCommand(t, 10*time.Second, "systemctl", "show", "pulse-agent-helper.service", "--property", "MainPID", "--value"))
+		if helperPIDBefore == "" || helperPIDBefore == "0" || helperPIDAfter == "" || helperPIDAfter == "0" || helperPIDBefore == helperPIDAfter {
+			t.Fatalf("helper restart did not replace the service process: before=%q after=%q", helperPIDBefore, helperPIDAfter)
+		}
+		restartedDocker := secureRuntimeDockerReportAfter(t, fixture, restartCompletedAt, 60*time.Second, func(report agentsdocker.Report) bool {
+			return report.Timestamp.After(restartCompletedAt) && secureRuntimeDockerComplete(report) && report.Host.CollectionMode == agentsdocker.CollectionModeTypedHelperSummary
+		})
+		secureRuntimeAssertDockerSummaryOnly(t, restartedDocker.Report)
+		restartDigest, restartCount := secureRuntimeDockerInventoryDigest(restartedDocker.Report)
+		beforeStream, beforeSequence, beforeOK := agentshost.ParseReportSequenceID(finalDocker.Report.SequenceID)
+		afterStream, afterSequence, afterOK := agentshost.ParseReportSequenceID(restartedDocker.Report.SequenceID)
+		if restartCount != finalCount || restartDigest != finalDigest || !beforeOK || !afterOK || beforeStream != afterStream || afterSequence <= beforeSequence {
+			t.Fatalf("helper restart Docker continuity failed: before=%d/%s/%s after=%d/%s/%s", finalCount, finalDigest, finalDocker.Report.SequenceID, restartCount, restartDigest, restartedDocker.Report.SequenceID)
+		}
+		secureRuntimeAssertCollectorDockerSocketDenied(t)
+		pass("rootful_docker_summary_restart", "typed-helper Docker summary survived an actual helper process restart on the same collector report stream", map[string]any{
+			"runtime": "docker", "collection_mode": agentsdocker.CollectionModeTypedHelperSummary,
+			"inventory_complete": true, "collector_rootful_socket_access": false,
+			"pre_restart_helper_pid": helperPIDBefore, "post_restart_helper_pid": helperPIDAfter,
+			"pre_restart_inventory_sha256": finalDigest, "post_restart_inventory_sha256": restartDigest,
+			"pre_restart_container_count": finalCount, "post_restart_container_count": restartCount,
+			"report_stream_id": afterStream, "pre_restart_sequence": beforeSequence, "post_restart_sequence": afterSequence,
+		})
+
+		secureRuntimeCommand(t, 20*time.Second, "systemctl", "stop", "pulse-agent-helper.socket", "pulse-agent-helper.service")
+		lossStartedAt := time.Now().UTC()
+		lossDocker := secureRuntimeDockerReportAfter(t, fixture, lossStartedAt, 75*time.Second, func(report agentsdocker.Report) bool {
+			return report.Timestamp.After(lossStartedAt) && report.InventoryComplete != nil && !*report.InventoryComplete && report.Host.CollectionMode == agentsdocker.CollectionModeTypedHelperSummary && secureRuntimeDockerHelperModuleState(report) == "degraded"
+		})
+		secureRuntimeAssertCollectorDockerSocketDenied(t)
+		if len(lossDocker.Report.Containers) != 0 {
+			t.Fatal("helper-loss status report carried an authoritative replacement container inventory")
+		}
+		secureRuntimeCommand(t, 20*time.Second, "systemctl", "start", "pulse-agent-helper.socket")
+		secureRuntimeAssertHelperProtocol(t)
+		recoveryStartedAt := time.Now().UTC()
+		recoveredDocker := secureRuntimeDockerReportAfter(t, fixture, recoveryStartedAt, 75*time.Second, func(report agentsdocker.Report) bool {
+			return report.Timestamp.After(recoveryStartedAt) && secureRuntimeDockerComplete(report) && report.Host.CollectionMode == agentsdocker.CollectionModeTypedHelperSummary && secureRuntimeDockerHelperModuleState(report) == "running"
+		})
+		secureRuntimeAssertDockerSummaryOnly(t, recoveredDocker.Report)
+		recoveredDigest, recoveredCount := secureRuntimeDockerInventoryDigest(recoveredDocker.Report)
+		lossStream, lossSequence, lossOK := agentshost.ParseReportSequenceID(lossDocker.Report.SequenceID)
+		recoveryStream, recoverySequence, recoveryOK := agentshost.ParseReportSequenceID(recoveredDocker.Report.SequenceID)
+		if recoveredCount != restartCount || recoveredDigest != restartDigest || !lossOK || !recoveryOK || lossStream != recoveryStream || recoverySequence <= lossSequence {
+			t.Fatalf("helper-loss Docker recovery failed: loss=%s recovery=%s inventory=%d/%s want=%d/%s", lossDocker.Report.SequenceID, recoveredDocker.Report.SequenceID, recoveredCount, recoveredDigest, restartCount, restartDigest)
+		}
+		pass("rootful_docker_helper_loss_recovery", "helper loss emitted a degraded status-only report without rootful fallback and recovery restored the complete summary", map[string]any{
+			"runtime": "docker", "collection_mode": agentsdocker.CollectionModeTypedHelperSummary,
+			"loss_inventory_complete": false, "loss_module_state": "degraded",
+			"loss_container_count": len(lossDocker.Report.Containers), "collector_rootful_socket_access_during_loss": false,
+			"recovery_inventory_complete": true, "recovery_module_state": "running",
+			"pre_loss_inventory_sha256": restartDigest, "recovered_inventory_sha256": recoveredDigest,
+			"pre_loss_container_count": restartCount, "recovered_container_count": recoveredCount,
+			"report_stream_id": recoveryStream, "loss_sequence": lossSequence, "recovery_sequence": recoverySequence,
+		})
+		receipt.RootfulContainerRuntime = "docker"
+		receipt.RootfulContainerSummaryQualified = true
+	}
 
 	helperServiceRejection := secureRuntimeExerciseUnitOverrideDetection(t,
 		"pulse-agent-helper.service", "Service", "PrivateNetwork=false", false)
@@ -1796,19 +2064,19 @@ func secureRuntimeHash(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func secureRuntimeLoadSourceBoundary(t *testing.T, targetArch string) (secureRuntimeSourceManifestBinding, map[string]string) {
+func secureRuntimeLoadSourceBoundary(t *testing.T, targetArch string, schemaVersion int) (secureRuntimeSourceManifestBinding, map[string]string) {
 	t.Helper()
 	repoRoot, err := filepath.Abs(repoFile())
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
 	}
-	manifestRelative := "scripts/release_control/secure_runtime_source_manifest_v6.json"
+	manifestRelative := fmt.Sprintf("scripts/release_control/secure_runtime_source_manifest_v%d.json", schemaVersion)
 	manifestRaw := secureRuntimeReadFile(t, filepath.Join(repoRoot, filepath.FromSlash(manifestRelative)))
 	var manifest secureRuntimeSourceManifest
 	if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
 		t.Fatalf("decode secure-runtime source manifest: %v", err)
 	}
-	if manifest.SchemaVersion != 1 || manifest.ManifestID != "secure-runtime-linux-v6" || manifest.TargetOS != "linux" {
+	if manifest.SchemaVersion != 1 || manifest.ManifestID != fmt.Sprintf("secure-runtime-linux-v%d", schemaVersion) || manifest.TargetOS != "linux" {
 		t.Fatalf("unsupported secure-runtime source manifest: %+v", manifest)
 	}
 	sourceHashes := make(map[string]string)
@@ -2630,6 +2898,115 @@ func secureRuntimeRootfulDockerAvailable() bool {
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, 16))
 	return err == nil && response.StatusCode == http.StatusOK && strings.TrimSpace(string(body)) == "OK"
+}
+
+type secureRuntimeDockerContainerSummary struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Image     string `json:"image"`
+	State     string `json:"state"`
+	CreatedAt string `json:"created_at"`
+}
+
+func secureRuntimeDockerInventoryDigest(report agentsdocker.Report) (string, int) {
+	containers := make([]secureRuntimeDockerContainerSummary, 0, len(report.Containers))
+	for _, container := range report.Containers {
+		containers = append(containers, secureRuntimeDockerContainerSummary{
+			ID: container.ID, Name: container.Name, Image: container.Image, State: container.State,
+			CreatedAt: container.CreatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	sort.Slice(containers, func(i, j int) bool {
+		if containers[i].ID != containers[j].ID {
+			return containers[i].ID < containers[j].ID
+		}
+		return containers[i].Name < containers[j].Name
+	})
+	raw, err := json.Marshal(containers)
+	if err != nil {
+		panic(err)
+	}
+	return secureRuntimeHash(raw), len(containers)
+}
+
+func secureRuntimeAssertExpectedDockerFixtures(t *testing.T, report agentsdocker.Report) {
+	t.Helper()
+	expected := map[string]string{
+		"pulse-v7-exited":  "exited",
+		"pulse-v7-running": "running",
+	}
+	if len(report.Containers) != len(expected) {
+		t.Fatalf("Docker fixture inventory count = %d, want %d", len(report.Containers), len(expected))
+	}
+	for _, container := range report.Containers {
+		wantState, ok := expected[container.Name]
+		if !ok {
+			t.Fatalf("Docker fixture inventory contains unexpected container %q", container.Name)
+		}
+		if container.ID == "" || container.Image != secureRuntimeDockerFixtureImage || container.State != wantState || container.CreatedAt.IsZero() {
+			t.Fatalf("Docker fixture container %q identity = id:%q image:%q state:%q created:%s", container.Name, container.ID, container.Image, container.State, container.CreatedAt)
+		}
+		delete(expected, container.Name)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("Docker fixture inventory omitted containers: %v", expected)
+	}
+}
+
+func secureRuntimeDockerReportAfter(t *testing.T, fixture *secureRuntimeLabFixture, after time.Time, timeout time.Duration, predicate func(agentsdocker.Report) bool) secureRuntimeDockerReport {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		for _, candidate := range fixture.dockerSnapshot() {
+			if candidate.ReceivedAt.After(after) && predicate(candidate.Report) {
+				return candidate
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for qualifying Docker report after %s", after.Format(time.RFC3339Nano))
+	return secureRuntimeDockerReport{}
+}
+
+func secureRuntimeDockerComplete(report agentsdocker.Report) bool {
+	return report.InventoryComplete == nil || *report.InventoryComplete
+}
+
+func secureRuntimeDockerHelperModuleState(report agentsdocker.Report) string {
+	for _, module := range report.Agent.Modules {
+		if module.Name == agentshost.ModuleNameTypedPrivilegeHelper {
+			return module.State
+		}
+	}
+	return ""
+}
+
+func secureRuntimeAssertDockerSummaryOnly(t *testing.T, report agentsdocker.Report) {
+	t.Helper()
+	if report.InventoryComplete == nil || !*report.InventoryComplete {
+		t.Fatal("typed-helper Docker summary did not declare complete inventory")
+	}
+	if report.Host.Runtime != "docker" || report.Host.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary {
+		t.Fatalf("typed-helper Docker collection posture = runtime:%q mode:%q", report.Host.Runtime, report.Host.CollectionMode)
+	}
+	if len(report.Images) != 0 || len(report.Volumes) != 0 || len(report.Networks) != 0 || len(report.Services) != 0 || len(report.Tasks) != 0 || len(report.Nodes) != 0 || len(report.Secrets) != 0 || len(report.Configs) != 0 || report.StorageUsage != nil {
+		t.Fatal("typed-helper Docker summary fabricated unsupported secondary inventories")
+	}
+	for _, container := range report.Containers {
+		if container.ImageDigest != "" || container.Health != "" || len(container.HealthcheckTargets) != 0 || container.CPUPercent != 0 || container.MemoryUsageBytes != 0 || container.MemoryLimitBytes != 0 || container.MemoryPercent != 0 || container.UptimeSeconds != 0 || container.RestartCount != 0 || container.ExitCode != 0 || container.OOMKilled != nil || container.StartedAt != nil || container.FinishedAt != nil || len(container.Ports) != 0 || len(container.Labels) != 0 || len(container.Env) != 0 || len(container.Networks) != 0 || container.NetworkRXBytes != 0 || container.NetworkTXBytes != 0 || container.WritableLayerBytes != 0 || container.RootFilesystemBytes != 0 || container.BlockIO != nil || len(container.Mounts) != 0 || container.Podman != nil || container.UpdateStatus != nil {
+			t.Fatalf("typed-helper Docker container %q escaped the summary-only boundary: %+v", container.ID, container)
+		}
+	}
+}
+
+func secureRuntimeAssertCollectorDockerSocketDenied(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, "runuser", "-u", "pulse-agent", "--", "curl", "-fsS", "--max-time", "2", "--unix-socket", "/var/run/docker.sock", "http://docker/_ping")
+	if output, err := command.CombinedOutput(); err == nil {
+		t.Fatalf("unprivileged collector unexpectedly reached the rootful Docker socket: %s", strings.TrimSpace(string(output)))
+	}
 }
 
 func secureRuntimeCollectorOwnedRootlessAvailable(t *testing.T) bool {

@@ -267,7 +267,10 @@ scripts/release_control/*
 !scripts/release_control/secure_runtime_attestation_test.py
 !scripts/release_control/secure_runtime_attestation_v6.py
 !scripts/release_control/secure_runtime_attestation_v6_test.py
+!scripts/release_control/secure_runtime_attestation_v7.py
+!scripts/release_control/secure_runtime_attestation_v7_test.py
 !scripts/release_control/secure_runtime_source_manifest_v6.json
+!scripts/release_control/secure_runtime_source_manifest_v7.json
 !scripts/release_control/staged_commit_shape_guard.py
 !scripts/release_control/staged_commit_shape_guard_test.py
 !scripts/release_control/internal/

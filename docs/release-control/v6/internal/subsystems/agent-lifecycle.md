@@ -95,6 +95,15 @@ an omitted privileged read into an authoritative empty inventory. The next
 complete helper report replaces inventory and clears only the recovered helper
 operation. Incomplete status reports are current-state evidence and are not
 buffered for later replay after recovery.
+
+The schema-v7 release qualification contract exercises this Docker boundary on
+a live nested rootful daemon. It correlates a non-empty legacy inventory with
+the summary-only typed-helper inventory, proves the collector loses direct
+socket authority, replaces the helper process without changing the canonical
+summary, and observes incomplete/degraded then complete/running reports across
+forced helper loss and recovery. This is a bounded Docker summary-inventory
+claim only; it grants no qualification to unsupported metrics, update checks,
+container actions, Podman, rootless runtimes, or appliance-specific behavior.
 An absent Proxmox inventory is a failure only when Proxmox mode is configured
 or the unprivileged collector can discover the local `pct` binary. Ordinary
 Linux hosts without that provider remain healthy rather than reporting a

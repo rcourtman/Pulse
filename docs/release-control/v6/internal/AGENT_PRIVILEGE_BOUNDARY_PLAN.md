@@ -169,6 +169,19 @@ plus the host-canary helper-network-namespace exercise, and binds those claims t
 `secure_runtime_source_manifest_v6.json`. It does not reinterpret schema-v4 or
 schema-v5 evidence.
 
+Schema v7 is a separate twenty-three-scenario contract and leaves every prior
+receipt schema immutable. It adds live rootful Docker summary-inventory
+migration, helper restart continuity, and helper-loss/recovery scenarios. The
+release workflow creates its daemon inside the disposable systemd host, seeds
+an offline source-bound fixture image, exposes only the root-owned Unix socket,
+and never mounts the hosted runner's Docker socket. V7 narrows only the
+rootful-Docker summary-inventory residual; Podman, rootless-runtime parity,
+container metrics, image-update checks, typed container actions, appliance
+coverage, and external review remain open. No schema-v7 receipt exists until
+an exact immutable prerelease packet successfully completes that workflow, so
+this contract does not change the product default or upgrade the current v6
+evidence classification.
+
 A fresh Ubuntu 24.04.4/systemd 255 arm64 run at committed main
 `22fd662fb794f63efb9d3ca2158de73c4e07e1b8` passed all twenty schema-v6
 scenarios in 248.13 seconds. The 437-source manifest matched the qualified
@@ -193,7 +206,7 @@ and transcript. It remains self-attested fixture evidence rather than trusted
 RC compilation provenance or an external review, and it makes no default
 change.
 
-Schema-v6 release-candidate classification does not trust a local ref or Go
+Schema-v6 and schema-v7 release-candidate classification does not trust a local ref or Go
 VCS stamp. Pulse release tags are workflow-created annotated tags rather than
 signed tags, so tag presence alone is not authority. RC classification
 requires the exact canonical remote tag object and peeled commit, the immutable
@@ -212,7 +225,7 @@ builds and attests the six Linux amd64 subjects without signing secrets. Hosted
 candidate assembly requires its current collector, helper, and runner to match
 the ordinary release payload byte for byte, then publishes the three predecessor
 collectors, compiler provenance, and build contract through the normal signed
-release packet. A published prerelease automatically runs the twenty-scenario
+release packet. A published prerelease automatically runs the twenty-three-scenario schema-v7
 lab on a disposable systemd host. Before any candidate byte can reach that
 privileged container, the workflow copies all six binaries, four collector
 signatures, checksum and provenance sidecars, and the build contract into a
