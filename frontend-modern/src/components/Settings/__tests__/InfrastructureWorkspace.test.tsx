@@ -324,7 +324,7 @@ describe('InfrastructureWorkspace', () => {
     expect(within(readiness).getByText('Connection posture')).toBeInTheDocument();
     expect(within(readiness).getByText('1 system connected')).toBeInTheDocument();
     expect(within(readiness).getByText('All active')).toBeInTheDocument();
-    expect(within(readiness).getByText('1 system has limited coverage')).toBeInTheDocument();
+    expect(within(readiness).getByText('1 host has limited coverage')).toBeInTheDocument();
     expect(within(readiness).queryByText('Infrastructure coverage')).toBeNull();
     expect(within(readiness).queryByText('Fleet governance')).toBeNull();
     expect(within(readiness).getByRole('button', { name: /^Install agent$/i })).toBeInTheDocument();

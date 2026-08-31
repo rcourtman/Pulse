@@ -95,7 +95,10 @@ const member = (
 };
 
 describe('InfrastructureSourceManager setup summary', () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+  });
 
   it('renders manual discovery as a visible operator action', () => {
     const onRunDiscovery = vi.fn();
@@ -296,7 +299,7 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(screen.queryByText('MQTT power meter')).toBeNull();
     expect(screen.getByText('All active')).toBeInTheDocument();
     expect(screen.getByText('1 system needs attention')).toBeInTheDocument();
-    expect(screen.getByText('1 system has limited coverage')).toBeInTheDocument();
+    expect(screen.getByText('1 host has limited coverage')).toBeInTheDocument();
     expect(screen.queryByText('Fleet governance')).toBeNull();
     // The row now surfaces a single plain-English problem line under its
     // status badge instead of a chip-per-signal stack. Info-toned signals
@@ -495,6 +498,127 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(screen.getAllByText('API')).toHaveLength(1);
     expect(screen.getByText('https://10.15.5.11:8006')).toBeInTheDocument();
     expect(screen.getByText('https://10.15.5.12:8006')).toBeInTheDocument();
+  });
+
+  it('keeps onboarding visible for each uncovered member of a partly instrumented cluster', () => {
+    const onAddSourceStep = vi.fn();
+    const attachedAgent = connectionFixture({
+      id: 'agent:pve-a',
+      name: 'pve-a',
+      address: 'pve-a',
+    });
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:remote-cluster',
+            ownerType: 'pve',
+            name: 'Remote cluster',
+            subtitle: 'Cluster · 2 nodes',
+            source: 'both',
+            coverageLabels: ['Nodes', 'Guests', 'Storage'],
+            isCluster: true,
+            canEdit: true,
+            connection: connectionFixture({
+              id: 'pve:remote-cluster',
+              type: 'pve',
+              name: 'Remote cluster',
+              source: 'manual',
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            attachedConnections: [attachedAgent],
+            members: [
+              member({
+                id: 'pve-a',
+                name: 'pve-a',
+                source: 'both',
+                agentConnection: attachedAgent,
+              }),
+              member({
+                id: 'pve-b',
+                name: 'pve-b',
+                source: 'api',
+                coverageLabels: [],
+                agentConnection: undefined,
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSourceStep={onAddSourceStep}
+        onOpenConnection={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('1 host has limited coverage')).toBeInTheDocument();
+    expect(screen.getByText('1 node needs host telemetry')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'Install agents on 1 uncovered node in Remote cluster',
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for Remote cluster' }));
+    expect(screen.queryByRole('button', { name: 'Install agent on pve-a' })).toBeNull();
+    const installOnPveB = screen.getByRole('button', { name: 'Install agent on pve-b' });
+    fireEvent.click(installOnPveB);
+
+    expect(onAddSourceStep).toHaveBeenCalledWith('linux-host');
+  });
+
+  it('offers the same uncovered-node onboarding in the narrow card layout', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    const onAddSourceStep = vi.fn();
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:mobile-cluster',
+            ownerType: 'pve',
+            name: 'Mobile cluster',
+            subtitle: 'Cluster · 1 node',
+            source: 'api',
+            coverageLabels: ['Nodes', 'Guests'],
+            isCluster: true,
+            canEdit: true,
+            connection: connectionFixture({
+              id: 'pve:mobile-cluster',
+              type: 'pve',
+              name: 'Mobile cluster',
+              source: 'manual',
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            members: [
+              member({
+                id: 'pve-mobile',
+                name: 'pve-mobile',
+                source: 'api',
+                coverageLabels: [],
+                agentConnection: undefined,
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSourceStep={onAddSourceStep}
+        onOpenConnection={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 node for Mobile cluster' }));
+    const memberAction = screen.getByRole('button', { name: 'Install agent on pve-mobile' });
+    expect(memberAction).toHaveClass('min-h-11');
+    fireEvent.click(memberAction);
+
+    expect(onAddSourceStep).toHaveBeenCalledWith('linux-host');
   });
 
   it('labels vSphere member composition as hosts, not cluster nodes', () => {

@@ -239,6 +239,43 @@ const rowHasAgentCoverage = (row: InfrastructureSystemRow): boolean =>
     (member) => member.source === 'agent' || member.source === 'both' || member.agentConnection,
   );
 
+const memberHasAgentCoverage = (member: InfrastructureSystemMemberRow): boolean =>
+  member.source === 'agent' || member.source === 'both' || Boolean(member.agentConnection);
+
+const missingAgentMembers = (row: InfrastructureSystemRow): InfrastructureSystemMemberRow[] => {
+  if (row.ownerType !== 'pve' || !row.isCluster) return [];
+  return row.members.filter((member) => !memberHasAgentCoverage(member));
+};
+
+// A cluster is not fully covered when even one node lacks its local agent.
+// Checking only the parent source hides onboarding as soon as the first member
+// reports, which makes a partly instrumented cluster look complete.
+const rowNeedsAgentCoverage = (row: InfrastructureSystemRow): boolean => {
+  if (row.ownerType !== 'pve' || !rowHasApiCoverage(row)) return false;
+  if (row.isCluster) return missingAgentMembers(row).length > 0;
+  return !rowHasAgentCoverage(row);
+};
+
+const missingAgentTargetNames = (row: InfrastructureSystemRow): string[] => {
+  if (!rowNeedsAgentCoverage(row)) return [];
+  if (!row.isCluster) return [row.name];
+  return missingAgentMembers(row).map((member) => member.name);
+};
+
+const missingAgentCoverageLabel = (row: InfrastructureSystemRow): string => {
+  const count = missingAgentMembers(row).length;
+  return row.isCluster
+    ? `${formatCount(count, 'node')} ${count === 1 ? 'needs' : 'need'} host telemetry`
+    : 'Host telemetry not installed';
+};
+
+const installAgentActionLabel = (row: InfrastructureSystemRow): string => {
+  const count = missingAgentMembers(row).length;
+  return row.isCluster
+    ? `Install agents on ${formatCount(count, 'uncovered node')} in ${row.name}`
+    : `Install agent on ${row.name}`;
+};
+
 export const agentConnectionIDsForInfrastructureRow = (
   row: InfrastructureSystemRow,
   updatesOnly = false,
@@ -451,19 +488,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   // own API and don't benefit from a paired agent in the way PVE hosts do
   // (where the agent adds temps, SMART, host identity). Counting them here
   // would create "Needs agent" pressure for systems that need nothing.
-  const apiOnlySystems = createMemo(() =>
-    infrastructureRows().filter(
-      (row) => row.ownerType === 'pve' && rowHasApiCoverage(row) && !rowHasAgentCoverage(row),
-    ),
+  const uncoveredAgentTargets = createMemo(() =>
+    infrastructureRows().flatMap((row) => missingAgentTargetNames(row)),
   );
-  const apiOnlySystemCount = createMemo(() => apiOnlySystems().length);
+  const uncoveredAgentTargetCount = createMemo(() => uncoveredAgentTargets().length);
   // Names list keeps the descriptive 'Install agents' hint actionable: when
-  // there are 1 or 2 systems missing an agent, surface their names directly
-  // so the user knows exactly which boxes the install applies to.
-  const apiOnlySystemNamesText = createMemo(() => {
-    const names = apiOnlySystems()
-      .map((row) => row.name)
-      .filter(Boolean);
+  // there are 1 or 2 hosts missing an agent, surface their names directly so
+  // the user knows exactly which boxes the install applies to.
+  const uncoveredAgentTargetNamesText = createMemo(() => {
+    const names = uncoveredAgentTargets().filter(Boolean);
     if (names.length === 0) return null;
     if (names.length === 1) return names[0];
     if (names.length === 2) return `${names[0]} and ${names[1]}`;
@@ -535,13 +568,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       };
     }
 
-    if (apiOnlySystemCount() > 0 && (props.onAddSourceStep || props.onAddSource)) {
-      const namesText = apiOnlySystemNamesText();
-      const target = namesText ?? formatCount(apiOnlySystemCount(), 'API-backed system');
+    if (uncoveredAgentTargetCount() > 0 && (props.onAddSourceStep || props.onAddSource)) {
+      const namesText = uncoveredAgentTargetNamesText();
+      const target = namesText ?? formatCount(uncoveredAgentTargetCount(), 'Proxmox host');
       return {
         kind: 'agent',
-        label: apiOnlySystemCount() === 1 ? 'Install agent' : 'Install agents',
-        detail: `Install Pulse Agent on ${target} when you want node-local telemetry such as temperatures, SMART data, and host identity.`,
+        label: uncoveredAgentTargetCount() === 1 ? 'Install agent' : 'Install agents',
+        detail: `Install one Pulse Agent on each uncovered Proxmox host (${target}) to add node-local telemetry such as temperatures, SMART data, and host identity.`,
         onClick: handleInstallAgentShortcut,
       };
     }
@@ -750,12 +783,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               {formatCount(fleetAttentionSystemCount(), 'system')} needs attention
             </span>
           </Show>
-          <Show when={apiOnlySystemCount() > 0}>
+          <Show when={uncoveredAgentTargetCount() > 0}>
             <span aria-hidden="true" class="text-muted">
               ·
             </span>
             <span class="font-medium text-amber-700 dark:text-amber-300">
-              {formatCount(apiOnlySystemCount(), 'system')} has limited coverage
+              {formatCount(uncoveredAgentTargetCount(), 'host')} has limited coverage
             </span>
           </Show>
         </div>
@@ -980,15 +1013,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             {row.coverageLabels.join(', ')}
                                           </div>
                                         </Show>
-                                        <Show
-                                          when={
-                                            row.ownerType === 'pve' &&
-                                            rowHasApiCoverage(row) &&
-                                            !rowHasAgentCoverage(row)
-                                          }
-                                        >
+                                        <Show when={rowNeedsAgentCoverage(row)}>
                                           <div class="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                                            Host telemetry not installed
+                                            {missingAgentCoverageLabel(row)}
                                           </div>
                                         </Show>
                                       </TableCell>
@@ -1054,9 +1081,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             <div class="flex items-center justify-end gap-1.5">
                                               <Show
                                                 when={
-                                                  row.ownerType === 'pve' &&
-                                                  rowHasApiCoverage(row) &&
-                                                  !rowHasAgentCoverage(row) &&
+                                                  rowNeedsAgentCoverage(row) &&
                                                   Boolean(
                                                     props.onAddSourceStep || props.onAddSource,
                                                   )
@@ -1068,11 +1093,17 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   size="xs"
                                                   class="gap-1.5"
                                                   onClick={handleInstallAgentShortcut}
-                                                  aria-label="Install agent"
-                                                  title="Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity)."
+                                                  aria-label={installAgentActionLabel(row)}
+                                                  title={
+                                                    row.isCluster
+                                                      ? 'Generate an installer command to run once on each uncovered Proxmox node.'
+                                                      : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
+                                                  }
                                                 >
                                                   <Cpu class="h-3.5 w-3.5" />
-                                                  Install agent
+                                                  {row.isCluster
+                                                    ? 'Install node agents'
+                                                    : 'Install agent'}
                                                 </Button>
                                               </Show>
                                               <Button
@@ -1203,12 +1234,37 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                                                 <Show when={actionColumnVisible()}>
                                                   <TableCell class="px-3 py-1.5 align-middle text-right">
-                                                    <span
-                                                      class="text-xs text-muted"
-                                                      aria-hidden="true"
+                                                    <Show
+                                                      when={
+                                                        row.ownerType === 'pve' &&
+                                                        !memberHasAgentCoverage(member) &&
+                                                        Boolean(
+                                                          props.onAddSourceStep ||
+                                                          props.onAddSource,
+                                                        )
+                                                      }
+                                                      fallback={
+                                                        <span
+                                                          class="text-xs text-muted"
+                                                          aria-hidden="true"
+                                                        >
+                                                          —
+                                                        </span>
+                                                      }
                                                     >
-                                                      —
-                                                    </span>
+                                                      <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="xs"
+                                                        class="gap-1.5"
+                                                        onClick={handleInstallAgentShortcut}
+                                                        aria-label={`Install agent on ${member.name}`}
+                                                        title={`Generate an installer command to run on ${member.name}.`}
+                                                      >
+                                                        <Cpu class="h-3.5 w-3.5" />
+                                                        Install agent
+                                                      </Button>
+                                                    </Show>
                                                   </TableCell>
                                                 </Show>
                                               </TableRow>
@@ -1440,15 +1496,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     {row.coverageLabels.join(', ')}
                                   </div>
                                 </Show>
-                                <Show
-                                  when={
-                                    row.ownerType === 'pve' &&
-                                    rowHasApiCoverage(row) &&
-                                    !rowHasAgentCoverage(row)
-                                  }
-                                >
+                                <Show when={rowNeedsAgentCoverage(row)}>
                                   <div class="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                                    Host telemetry not installed
+                                    {missingAgentCoverageLabel(row)}
                                   </div>
                                 </Show>
 
@@ -1517,6 +1567,29 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   {member.lastActivityText}
                                                 </span>
                                               </div>
+                                              <Show
+                                                when={
+                                                  !props.readOnly &&
+                                                  row.ownerType === 'pve' &&
+                                                  !memberHasAgentCoverage(member) &&
+                                                  Boolean(
+                                                    props.onAddSourceStep || props.onAddSource,
+                                                  )
+                                                }
+                                              >
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="xs"
+                                                  class="mt-2 min-h-11 gap-1.5 lg:min-h-0"
+                                                  onClick={handleInstallAgentShortcut}
+                                                  aria-label={`Install agent on ${member.name}`}
+                                                  title={`Generate an installer command to run on ${member.name}.`}
+                                                >
+                                                  <Cpu class="h-3.5 w-3.5" />
+                                                  Install agent
+                                                </Button>
+                                              </Show>
                                               <Show when={member.problem}>
                                                 {(problem) => (
                                                   <div
@@ -1589,9 +1662,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       <div class="flex flex-wrap justify-end gap-1.5">
                                         <Show
                                           when={
-                                            row.ownerType === 'pve' &&
-                                            rowHasApiCoverage(row) &&
-                                            !rowHasAgentCoverage(row) &&
+                                            rowNeedsAgentCoverage(row) &&
                                             Boolean(props.onAddSourceStep || props.onAddSource)
                                           }
                                         >
@@ -1601,9 +1672,17 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             size="xs"
                                             class="min-h-11 gap-1.5 lg:min-h-0"
                                             onClick={handleInstallAgentShortcut}
+                                            aria-label={installAgentActionLabel(row)}
+                                            title={
+                                              row.isCluster
+                                                ? 'Generate an installer command to run once on each uncovered Proxmox node.'
+                                                : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
+                                            }
                                           >
                                             <Cpu class="h-3.5 w-3.5" />
-                                            Install agent
+                                            {row.isCluster
+                                              ? 'Install node agents'
+                                              : 'Install agent'}
                                           </Button>
                                         </Show>
                                         <Button
