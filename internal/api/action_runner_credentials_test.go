@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,12 @@ import (
 )
 
 type actionRunnerFailingPersistenceFS struct{}
+
+type actionRunnerBlockingFailingPersistenceFS struct {
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
 
 func (actionRunnerFailingPersistenceFS) ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
@@ -38,6 +45,29 @@ func (actionRunnerFailingPersistenceFS) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 func (actionRunnerFailingPersistenceFS) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
+func (fs *actionRunnerBlockingFailingPersistenceFS) ReadFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
+func (fs *actionRunnerBlockingFailingPersistenceFS) WriteFile(string, []byte, os.FileMode) error {
+	fs.once.Do(func() {
+		close(fs.entered)
+		<-fs.release
+	})
+	return errors.New("injected blocked action-runner persistence failure")
+}
+func (fs *actionRunnerBlockingFailingPersistenceFS) Rename(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
+}
+func (fs *actionRunnerBlockingFailingPersistenceFS) Remove(name string) error {
+	return os.Remove(name)
+}
+func (fs *actionRunnerBlockingFailingPersistenceFS) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
+func (fs *actionRunnerBlockingFailingPersistenceFS) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
@@ -377,6 +407,120 @@ func TestActivateActionRunnerCredentialPersistenceFailureKeepsBothCredentialsAnd
 	}
 	if router.agentExecServer.IsAgentConnectedForOrganization("default", hostID) {
 		t.Fatal("failed activation made the pending runner dispatchable")
+	}
+}
+
+func testActionRunnerCredentialFencesPredecessorResultsAcrossPersistence(t *testing.T) {
+	router, _, hostID := newActionRunnerCredentialTestRouter(t)
+	router.agentExecServer = agentexec.NewServerWithAdmissionValidator(router.admitAgentExecToken, router.validateAgentExecSession)
+	first := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	commitActionRunnerCredentialForTest(t, router, first)
+	activeConn, activeServer := connectActionRunnerCredentialForTest(t, router.agentExecServer, first)
+	defer activeConn.Close()
+	defer activeServer.Close()
+	second := issueActionRunnerCredentialForTest(t, router, hostID, "host-1.local")
+	pendingConn, pendingServer := connectActionRunnerCredentialForTest(t, router.agentExecServer, second)
+	defer pendingConn.Close()
+	defer pendingServer.Close()
+
+	type updateOutcome struct {
+		result *agentexec.HostUpdateResultPayload
+		err    error
+	}
+	updateDone := make(chan updateOutcome, 1)
+	expectedHash := "sha256:" + strings.Repeat("a", 64)
+	go func() {
+		ctx, cancel := context.WithTimeout(agentexec.WithOrganizationID(context.Background(), "default"), 5*time.Second)
+		defer cancel()
+		result, err := router.agentExecServer.ExecuteHostUpdate(ctx, hostID, agentexec.HostUpdatePayload{
+			RequestID: "persistence-fence", ActionID: "action-fence", Operation: agentexec.HostUpdateOperationInstall,
+			ExpectedInventoryHash: expectedHash, Timeout: 5,
+		})
+		updateDone <- updateOutcome{result: result, err: err}
+	}()
+	_ = activeConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var dispatch agentexec.Message
+	if err := activeConn.ReadJSON(&dispatch); err != nil {
+		t.Fatal(err)
+	}
+	_ = activeConn.SetReadDeadline(time.Time{})
+	if dispatch.Type != agentexec.MsgTypeHostUpdate {
+		t.Fatalf("dispatch type = %q, want host update", dispatch.Type)
+	}
+	var updateRequest agentexec.HostUpdatePayload
+	if err := dispatch.DecodePayload(&updateRequest); err != nil {
+		t.Fatal(err)
+	}
+	resultFor := func(afterHash string) agentexec.HostUpdateResultPayload {
+		now := time.Now().UTC()
+		return agentexec.HostUpdateResultPayload{
+			RequestID: updateRequest.RequestID, ActionID: updateRequest.ActionID, Success: true,
+			ExecutionPhase: agentexec.HostUpdatePhaseComplete,
+			Before:         agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: updateRequest.ExpectedInventoryHash, PendingCount: 1, CheckedAt: now.Add(-time.Second)},
+			After:          agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: afterHash, PendingCount: 0, CheckedAt: now},
+			HealthChecked:  true, PackageManagerHealthy: true, Verification: agentexec.HostUpdateVerificationVerified,
+		}
+	}
+	send := func(conn *websocket.Conn, messageType agentexec.MessageType, id string, payload any) {
+		t.Helper()
+		message, err := agentexec.NewMessage(messageType, id, payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.WriteJSON(message); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	router.persistence.SetFileSystem(&actionRunnerBlockingFailingPersistenceFS{entered: entered, release: release})
+	activationDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		activationDone <- requestActionRunnerActivationForTest(t, router, second)
+	}()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("activation did not enter blocked persistence")
+	}
+
+	blockedHash := "sha256:" + strings.Repeat("b", 64)
+	send(activeConn, agentexec.MsgTypeHostUpdateResult, updateRequest.RequestID, resultFor(blockedHash))
+	send(activeConn, agentexec.MsgTypeAgentPing, "", nil)
+	_ = activeConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var pong agentexec.Message
+	if err := activeConn.ReadJSON(&pong); err != nil {
+		t.Fatal(err)
+	}
+	_ = activeConn.SetReadDeadline(time.Time{})
+	if pong.Type != agentexec.MsgTypePong {
+		t.Fatalf("persistence-fence barrier = %q, want pong", pong.Type)
+	}
+	select {
+	case outcome := <-updateDone:
+		t.Fatalf("fenced predecessor satisfied request: result=%#v err=%v", outcome.result, outcome.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case rec := <-activationDone:
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("failed activation status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("activation did not return after persistence failure")
+	}
+	acceptedHash := "sha256:" + strings.Repeat("c", 64)
+	send(activeConn, agentexec.MsgTypeHostUpdateResult, updateRequest.RequestID, resultFor(acceptedHash))
+	select {
+	case outcome := <-updateDone:
+		if outcome.err != nil || outcome.result == nil || outcome.result.After.InventoryHash != acceptedHash {
+			t.Fatalf("restored predecessor result=%#v err=%v", outcome.result, outcome.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("restored predecessor did not satisfy request")
 	}
 }
 

@@ -768,6 +768,10 @@ func TestActionRunnerCredentialRotationRevokesPreviousSecretOnlyAtActivation(t *
 	}
 }
 
+func TestSecurityActionRunnerActivationFencesPredecessorResultsAcrossPersistence(t *testing.T) {
+	testActionRunnerCredentialFencesPredecessorResultsAcrossPersistence(t)
+}
+
 func TestAgentExecTokenRejectsAmbiguousMultiOrganizationAuthority(t *testing.T) {
 	rawToken := "multi-org-agent-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{

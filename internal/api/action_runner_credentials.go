@@ -175,17 +175,18 @@ func (r *Router) handleActivateActionRunnerCredential(w http.ResponseWriter, req
 		ActionCapability:  agentexec.ActionCapabilityTypedV1,
 		ActivationPending: true,
 	}
-	var promotionCleanup func()
+	var promotion *agentexec.ActionRunnerSessionPromotion
 	_, revoked, changed, err := agenttokens.ActivateActionRunnerAndPersistWithPromotion(
 		r.config, r.persistence, caller.ID, payload.AgentID, payload.Hostname,
-		func() bool {
-			cleanup, promoted := r.agentExecServer.PromoteActionRunnerSessionForCommit(admission)
-			if promoted {
-				promotionCleanup = cleanup
-			}
-			return promoted
+		func() (agenttokens.ActionRunnerPromotionTransaction, bool) {
+			var begun bool
+			promotion, begun = r.agentExecServer.BeginActionRunnerSessionPromotion(admission)
+			return promotion, begun
 		},
 	)
+	if promotion != nil {
+		promotion.Cleanup()
+	}
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, agenttokens.ErrRecord) {
@@ -197,9 +198,6 @@ func (r *Router) handleActivateActionRunnerCredential(w http.ResponseWriter, req
 		return
 	}
 	if changed {
-		if promotionCleanup != nil {
-			promotionCleanup()
-		}
 		for _, previous := range revoked {
 			r.invalidateActionRunnerRecord(previous)
 		}

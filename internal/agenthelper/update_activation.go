@@ -565,13 +565,6 @@ func (u *updateActivator) readOwnedBounded(path string, limit int64) ([]byte, er
 }
 
 func (u *updateActivator) readOwnedBoundedWith(path string, limit int64, validate func(*os.File) error) ([]byte, error) {
-	before, err := os.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return nil, errors.New("unsafe file type")
-	}
 	file, err := openFileNoFollow(path)
 	if err != nil {
 		return nil, err
@@ -580,13 +573,17 @@ func (u *updateActivator) readOwnedBoundedWith(path string, limit int64, validat
 	if err := validate(file); err != nil {
 		return nil, err
 	}
-	after, err := file.Stat()
-	if err != nil || !os.SameFile(before, after) || !after.Mode().IsRegular() || after.Mode().Perm()&0o022 != 0 {
-		return nil, errors.New("file identity or ownership changed")
+	before, err := file.Stat()
+	if err != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0o022 != 0 || before.Size() < 0 || before.Size() > limit {
+		return nil, errors.New("file descriptor is not a bounded private regular file")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil || int64(len(data)) > limit {
 		return nil, errors.New("file exceeds bounded size")
+	}
+	after, err := file.Stat()
+	if err != nil || !after.Mode().IsRegular() || after.Mode().Perm()&0o022 != 0 || after.Size() != before.Size() || int64(len(data)) != after.Size() {
+		return nil, errors.New("file descriptor changed while being read")
 	}
 	return data, nil
 }

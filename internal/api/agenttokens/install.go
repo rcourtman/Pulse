@@ -312,24 +312,30 @@ func ActivateActionRunnerAndPersist(cfg *config.Config, persistence *config.Conf
 	return activateActionRunnerAndPersist(cfg, persistence, tokenID, agentID, hostname, false, nil)
 }
 
-// ActivateActionRunnerAndPersistWithPromotion durably activates an action
-// runner credential only when the exact prepared transport can be promoted in
-// the same serialized transaction. The promotion callback must perform only a
-// bounded in-memory mutation: it runs while config.Mu is held and may acquire
-// the agent-exec server mutex, establishing the sole nested lock order
-// config.Mu -> agentexec.Server.mu. It must not close sockets, log, or wait.
-func ActivateActionRunnerAndPersistWithPromotion(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string, promote func() bool) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
-	return activateActionRunnerAndPersist(cfg, persistence, tokenID, agentID, hostname, true, promote)
+// ActionRunnerPromotionTransaction fences session authority across credential
+// persistence. Implementations must keep all methods bounded to in-memory map
+// mutation and preserve the lock order config.Mu -> session mutex.
+type ActionRunnerPromotionTransaction interface {
+	Commit() bool
+	Rollback()
+	FailClosed()
 }
 
-func activateActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string, requireDurablePromotion bool, promote func() bool) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
+// ActivateActionRunnerAndPersistWithPromotion durably activates an action
+// runner credential only when the exact prepared transport can be fenced
+// before persistence and promoted in the same serialized transaction.
+func ActivateActionRunnerAndPersistWithPromotion(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string, beginPromotion func() (ActionRunnerPromotionTransaction, bool)) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
+	return activateActionRunnerAndPersist(cfg, persistence, tokenID, agentID, hostname, true, beginPromotion)
+}
+
+func activateActionRunnerAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, tokenID, agentID, hostname string, requireDurablePromotion bool, beginPromotion func() (ActionRunnerPromotionTransaction, bool)) (*config.APITokenRecord, []config.APITokenRecord, bool, error) {
 	if cfg == nil {
 		return nil, nil, false, fmt.Errorf("%w: config is required", ErrRecord)
 	}
 	if persistence == nil {
 		return nil, nil, false, fmt.Errorf("%w: durable persistence is required", ErrPersist)
 	}
-	if requireDurablePromotion && promote == nil {
+	if requireDurablePromotion && beginPromotion == nil {
 		return nil, nil, false, fmt.Errorf("%w: prepared session promotion is required", ErrActionRunnerSessionUnavailable)
 	}
 	tokenID = strings.TrimSpace(tokenID)
@@ -362,6 +368,14 @@ func activateActionRunnerAndPersist(cfg *config.Config, persistence *config.Conf
 		clone := record.Clone()
 		return &clone, nil, false, nil
 	}
+	var promotion ActionRunnerPromotionTransaction
+	if beginPromotion != nil {
+		var ok bool
+		promotion, ok = beginPromotion()
+		if !ok || promotion == nil {
+			return nil, nil, false, ErrActionRunnerSessionUnavailable
+		}
+	}
 
 	previousTokens := cloneAPITokenRecords(cfg.APITokens)
 	replaceIDs := make(map[string]struct{})
@@ -388,17 +402,22 @@ func activateActionRunnerAndPersist(cfg *config.Config, persistence *config.Conf
 	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
 		cfg.APITokens = previousTokens
 		cfg.SortAPITokens()
+		if promotion != nil {
+			promotion.Rollback()
+		}
 		return nil, nil, false, fmt.Errorf("%w: %w", ErrPersist, err)
 	}
-	if promote != nil && !promote() {
+	if promotion != nil && !promotion.Commit() {
 		if err := persistence.SaveAPITokens(previousTokens); err != nil {
 			// The activation inventory was the last state known to reach durable
 			// storage. Keep memory aligned with that state and force repair rather
 			// than exposing pending memory against an active on-disk credential.
+			promotion.FailClosed()
 			return &activated, revoked, true, fmt.Errorf("%w: rollback persistence failed: %v", ErrActionRunnerActivationIndeterminate, err)
 		}
 		cfg.APITokens = previousTokens
 		cfg.SortAPITokens()
+		promotion.Rollback()
 		return nil, nil, false, ErrActionRunnerSessionUnavailable
 	}
 	return &activated, revoked, true, nil
