@@ -1496,6 +1496,15 @@ action_runner_health_matches_activation() {
 	[[ "$health_agent_id" == "$expected_agent_id" && "$health_activation_nonce" == "$expected_nonce" ]]
 }
 
+action_runner_reestablish_repair_fence() {
+	local runner_service="${ACTION_RUNNER_NAME}.service"
+
+	systemctl disable "$runner_service" 2>/dev/null || return 1
+	systemctl mask --runtime "$runner_service" 2>/dev/null || return 1
+	systemctl daemon-reload 2>/dev/null || return 1
+	! systemctl is-active --quiet "$runner_service" 2>/dev/null
+}
+
 # Print pending or active for the exact installed runner credential. Failure is
 # intentionally indeterminate: callers must not restore a predecessor because
 # an unreachable server may already have committed and revoked it.
@@ -1768,14 +1777,23 @@ provision_action_runner() {
 				log_error "The exact replacement credential and runtime were retained durably; repair is required."
 				replacement_action_token=""
 				rm -f "${ACTION_RUNNER_BINARY_PATH}.new" "${ACTION_RUNNER_SERVICE_UNIT}.new"
+				if systemctl unmask --runtime "${ACTION_RUNNER_NAME}.service" 2>/dev/null &&
+				   systemctl daemon-reload 2>/dev/null &&
+				   action_runner_verify_effective_target; then
+					systemctl enable --now "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
+				else
+					log_error "The retained action-runner unit did not pass effective-target validation; re-establishing the repair fence."
+					if ! action_runner_reestablish_repair_fence; then
+						ACTION_RUNNER_ACTIVATION_NONCE=""
+						fail "Action runner recovery could not re-establish the disabled runtime mask after rejecting the effective unit; every local recovery artifact was retained" "$EXIT_GENERAL"
+					fi
+					log_error "The retained action-runner unit remains stopped, disabled, and runtime-masked."
+				fi
 				rm -f \
 					"${ACTION_RUNNER_BINARY_PATH}${backup_suffix}" \
 					"${ACTION_RUNNER_SERVICE_UNIT}${backup_suffix}" \
 					"${ACTION_RUNNER_ENV_FILE}${backup_suffix}" \
 					"${ACTION_RUNNER_TOKEN_FILE}${backup_suffix}"
-				systemctl daemon-reload 2>/dev/null || true
-				systemctl unmask --runtime "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
-				systemctl enable --now "${ACTION_RUNNER_NAME}.service" 2>/dev/null || true
 				ACTION_RUNNER_ACTIVATION_NONCE=""
 				fail "Action runner activation requires repair; the new credential and runtime were retained and the previous credential was not restored" "$EXIT_GENERAL"
 			fi

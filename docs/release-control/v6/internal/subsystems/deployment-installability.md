@@ -682,6 +682,17 @@ artifact-selection behaviour.
    path must run the reusable lifecycle harness rather than stopping at a
    parser check or foreground self-test.
 8. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+   Action-runner recovery must keep the root service disabled and runtime-masked
+   when its effective systemd target fails the installer-owned FragmentPath,
+   drop-in, executable, identity, environment, network, or hardening checks.
+   An indeterminate server activation may retain the replacement credential and
+   files, but it may restart them only after a fresh daemon reload and complete
+   effective-target validation; repair-required state is never permission to
+   start a unit the same transaction rejected.
+   If re-establishing that repair fence fails after inspection temporarily
+   unmasks the unit, the installer must surface the fence failure and retain
+   predecessor repair artifacts; it must not claim the unit is masked or
+   discard the only local evidence needed for manual recovery.
    A caller-supplied `--state-dir` must remain canonical across rendered
    systemd, launchd, OpenRC, rc.d, SysV, NAS wrapper, bootstrap, and reference
    environment artifacts. Update and uninstall without a repeated custom path
