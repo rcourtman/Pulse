@@ -47,6 +47,19 @@ WORKFLOW_RUN_CODE_REF_RE = re.compile(
     r"(?<![\w.])github\.event\.workflow_run\."
     r"(?:head_branch|head_repository|head_sha|pull_requests)\b"
 )
+# A canonical checkout is not enough if a later step reacquires code or an
+# artifact from a less-trusted run. GitHub calls out artifact downloads and
+# command-line PR fetches as equivalent privileged-workflow ingress paths.
+WORKFLOW_RUN_ARTIFACT_ACTION_PREFIX = "actions/download-artifact@"
+WORKFLOW_RUN_INGRESS_COMMAND_RE = re.compile(
+    r"(?:"
+    r"\bgh\s+(?:pr\s+checkout|run\s+download)\b|"
+    r"\bgit\s+(?:clone|fetch|pull)\b|"
+    r"/actions/artifacts/[^/\s'\"]+/zip(?:[?'\"\s]|$)|"
+    r"refs/pull/"
+    r")",
+    re.IGNORECASE,
+)
 SECRET_CONTEXT_RE = re.compile(
     r"(?<![\w.])secrets(?:"
     r"\.([A-Za-z_][A-Za-z0-9_]*)\b|"
@@ -400,6 +413,17 @@ def audit_workflow(path: Path) -> list[Finding]:
 
         if RUN_RE.match(code):
             for script_index, script_line in _run_script_lines(lines, index):
+                if has_workflow_run_trigger and WORKFLOW_RUN_INGRESS_COMMAND_RE.search(
+                    script_line
+                ):
+                    findings.append(
+                        Finding(
+                            path,
+                            script_index + 1,
+                            "workflow_run scripts must not acquire upstream "
+                            "workflow artifacts or repository code",
+                        )
+                    )
                 for expression in EXPRESSION_RE.findall(script_line):
                     if SHELL_DATA_CONTEXT_RE.search(expression):
                         findings.append(
@@ -424,6 +448,16 @@ def audit_workflow(path: Path) -> list[Finding]:
         dependency = match.group(1).strip("'\"")
         if dependency.startswith("./"):
             continue
+        if has_workflow_run_trigger and dependency.lower().startswith(
+            WORKFLOW_RUN_ARTIFACT_ACTION_PREFIX
+        ):
+            findings.append(
+                Finding(
+                    path,
+                    line_number,
+                    "workflow_run must not download upstream workflow artifacts",
+                )
+            )
         if dependency.startswith("docker://"):
             if not CONTAINER_DIGEST_RE.fullmatch(dependency):
                 findings.append(

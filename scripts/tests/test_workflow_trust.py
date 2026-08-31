@@ -268,6 +268,48 @@ steps:
             any("must not select code" in finding for finding in untrusted_checkout)
         )
 
+    def test_workflow_run_rejects_artifact_and_code_ingress(self) -> None:
+        findings = self.audit(
+            f"""on:
+  workflow_run:
+    workflows: [Build]
+    branches: [main]
+permissions: {{}}
+steps:
+  - uses: actions/download-artifact@{PIN}
+  - run: gh run download "$RUN_ID"
+  - run: gh pr checkout 17
+  - run: git fetch origin refs/pull/17/head
+  - run: curl -fsS https://api.github.com/repos/o/r/actions/artifacts/17/zip
+"""
+        )
+        self.assertEqual(
+            sum(
+                "workflow artifacts or repository code" in finding
+                for finding in findings
+            ),
+            4,
+        )
+        self.assertTrue(
+            any(
+                "must not download upstream workflow artifacts" in finding
+                for finding in findings
+            )
+        )
+
+        release_data_only = self.audit(
+            """on:
+  workflow_run:
+    workflows: [Release]
+    branches: [main]
+permissions: {}
+steps:
+  - run: gh release download v1.2.3 --pattern release-activation.json
+  - run: gh api --method POST repos/o/r/actions/runs/17/rerun
+"""
+        )
+        self.assertEqual(release_data_only, [])
+
     def test_accepts_documented_authenticated_git_write(self) -> None:
         findings = self.audit(
             f"""permissions: {{}}

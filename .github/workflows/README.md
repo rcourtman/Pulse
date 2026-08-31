@@ -15,9 +15,11 @@ pull-request code rather than bypassing the upstream guard.
 
 `workflow_run` is also a privileged trigger. Every handler must filter its
 upstream workflow to the literal canonical branch `main`, and checkout steps
-must not select code through triggering-run head metadata. Upstream artifacts
-remain untrusted data and require an independently authenticated handoff before
-any privileged consumer can execute their contents.
+must not select code through triggering-run head metadata. These handlers also
+cannot download upstream workflow artifacts or reacquire repository code with
+command-line Git/GitHub clients or Actions artifact APIs. Upstream artifacts
+remain untrusted data; move any future artifact consumer behind an independently
+authenticated, non-`workflow_run` handoff before privileged use.
 
 Every `actions/checkout` step must also set `persist-credentials` explicitly.
 Use `false` unless a later command in the same job performs an authenticated
