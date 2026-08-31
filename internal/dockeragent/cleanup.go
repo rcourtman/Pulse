@@ -11,12 +11,19 @@ import (
 // cleanupOrphanedBackups searches for and removes any Pulse backup containers
 // (created during updates) that are older than 15 minutes.
 func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
+	if a.cfg.HelperInventory != nil {
+		a.logger.Debug().Msg("Skipping orphaned backup cleanup in monitoring-only collector profile")
+		return
+	}
 	if !a.tryStartCleanupTask() {
 		a.logger.Debug().Msg("Skipping orphaned backup cleanup - previous cleanup still running")
 		return
 	}
 	defer a.finishCleanupTask()
+	a.cleanupOrphanedBackupsTask(ctx)
+}
 
+func (a *Agent) cleanupOrphanedBackupsTask(ctx context.Context) {
 	a.logger.Debug().Msg("Checking for orphaned backup containers")
 
 	// List all containers (including stopped ones)

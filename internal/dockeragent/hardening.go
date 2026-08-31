@@ -51,6 +51,8 @@ const (
 	dockerRetryBaseDelay    = 200 * time.Millisecond
 )
 
+var errCollectorRuntimeBoundaryChanged = errors.New("collector rootless runtime boundary changed")
+
 // startCollectCycleWatchdog arms an independent timer that fires only if a
 // collection cycle is still running after budget. The cycle context deadline
 // should abort the cycle well before then, so the watchdog firing means
@@ -215,8 +217,13 @@ func isDockerDaemonUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
+	if errors.Is(err, errCollectorRuntimeBoundaryChanged) {
+		return true
+	}
 
 	for _, unavailableErrno := range []error{
+		syscall.EACCES,
+		syscall.EPERM,
 		syscall.ECONNREFUSED,
 		syscall.ECONNRESET,
 		syscall.EPIPE,
@@ -235,6 +242,8 @@ func isDockerDaemonUnavailable(err error) bool {
 	for _, marker := range []string{
 		"cannot connect to the docker daemon",
 		"is the docker daemon running",
+		"permission denied",
+		"operation not permitted",
 		"connection refused",
 		"connection reset by peer",
 		"broken pipe",

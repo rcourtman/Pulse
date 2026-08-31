@@ -305,6 +305,89 @@ func TestHelperInventoryStatusTracksFailureAndCompleteRecovery(t *testing.T) {
 	}
 }
 
+func TestDirectRootlessLossFallsBackToCompleteHelperInventory(t *testing.T) {
+	originalMetrics := hostmetricsCollectWithDiskFilters
+	t.Cleanup(func() { hostmetricsCollectWithDiskFilters = originalMetrics })
+	hostmetricsCollectWithDiskFilters = func(context.Context, []string, []string) (hostmetrics.Snapshot, error) {
+		return hostmetrics.Snapshot{}, nil
+	}
+
+	closed := false
+	helper := &helperInventoryStub{result: agenthelper.ContainerInventoryResult{
+		Runtimes: []agenthelper.ContainerRuntimeSnapshot{{
+			Runtime: "docker", Available: true,
+			Containers: []agenthelper.ContainerSummary{{ID: "container-1", Names: []string{"app"}, State: "running"}},
+		}},
+	}}
+	agent := &Agent{
+		cfg: Config{
+			HelperInventory: helper, IncludeServices: true, IncludeTasks: true,
+		},
+		docker:            newSwappableDockerClient(&fakeDockerClient{closeFn: func() error { closed = true; return nil }}),
+		runtime:           RuntimeDocker,
+		runtimePref:       RuntimeDocker,
+		runtimeGoneStreak: runtimeReconnectFailureThreshold,
+		registryChecker:   newRegistryCheckerWithConfig(zerolog.Nop(), true),
+		allowedStates:     map[string]struct{}{"running": {}},
+		logger:            zerolog.Nop(),
+	}
+
+	if !agent.maybeFallbackToHelperInventory(context.Background()) {
+		t.Fatal("complete helper inventory did not become the recovery source")
+	}
+	if !closed || agent.docker != nil || agent.helperInventory != helper {
+		t.Fatalf("fallback state = closed:%t docker:%T helper:%T", closed, agent.docker, agent.helperInventory)
+	}
+	if agent.cfg.IncludeServices || agent.cfg.IncludeTasks || !agent.cfg.DisableUpdateChecks || agent.registryChecker.Enabled() {
+		t.Fatalf("helper fallback retained direct-only configuration: %+v", agent.cfg)
+	}
+	report, err := agent.buildHelperInventoryReport(context.Background())
+	if err != nil {
+		t.Fatalf("build recovered helper report: %v", err)
+	}
+	if report.InventoryComplete == nil || !*report.InventoryComplete || report.Host.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary || len(report.Containers) != 1 {
+		t.Fatalf("recovered helper report = %+v", report)
+	}
+}
+
+func TestDirectRootlessLossDefersHelperFallbackWhileBackgroundTaskRuns(t *testing.T) {
+	helper := &helperInventoryStub{result: agenthelper.ContainerInventoryResult{
+		Runtimes: []agenthelper.ContainerRuntimeSnapshot{{Runtime: "docker", Available: true}},
+	}}
+	agent := &Agent{
+		cfg:                Config{HelperInventory: helper},
+		docker:             &fakeDockerClient{},
+		runtimeGoneStreak:  runtimeReconnectFailureThreshold,
+		cleanupTaskRunning: true,
+		logger:             zerolog.Nop(),
+	}
+	if agent.maybeFallbackToHelperInventory(context.Background()) {
+		t.Fatal("helper fallback raced an active direct-runtime cleanup")
+	}
+	if helper.calls != 0 || agent.helperInventory != nil || agent.docker == nil {
+		t.Fatalf("busy fallback mutated state: calls=%d helper=%T docker=%T", helper.calls, agent.helperInventory, agent.docker)
+	}
+}
+
+func TestMonitoringOnlyCollectorNeverSchedulesLegacyMutationTasks(t *testing.T) {
+	helper := &helperInventoryStub{}
+	agent := &Agent{
+		cfg:    Config{HelperInventory: helper},
+		docker: &fakeDockerClient{},
+		logger: zerolog.Nop(),
+	}
+	agent.scheduleDirectCleanup()
+	agent.scheduleDirectUpdateCheck()
+	if agent.cleanupTaskRunning || agent.updateCheckRunning {
+		t.Fatalf("monitoring-only collector scheduled legacy tasks: cleanup=%t update=%t", agent.cleanupTaskRunning, agent.updateCheckRunning)
+	}
+	agent.cleanupOrphanedBackups(context.Background())
+	agent.checkForUpdates(context.Background())
+	if agent.cleanupTaskRunning || agent.updateCheckRunning {
+		t.Fatalf("direct legacy task entrypoints bypassed profile gate: cleanup=%t update=%t", agent.cleanupTaskRunning, agent.updateCheckRunning)
+	}
+}
+
 func TestBuildHelperInventoryReportIsExplicitlySummaryOnly(t *testing.T) {
 	originalMetrics := hostmetricsCollectWithDiskFilters
 	t.Cleanup(func() { hostmetricsCollectWithDiskFilters = originalMetrics })

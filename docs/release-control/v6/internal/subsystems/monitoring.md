@@ -76,6 +76,14 @@ infer recovery from the Docker module merely remaining connected. A Docker-only
 collector's explicit incomplete status report updates liveness and helper
 health while retaining its last complete inventory, including across the
 degraded interval; only a complete report may replace that inventory.
+When the safe collector uses direct rootless Docker or Podman monitoring, every
+collection revalidates the exact socket path, ownership, mode, and fresh daemon
+rootless attestation immediately after `Info` and before any other daemon API.
+A boundary change or permission revocation is runtime unavailability: no
+post-`Info` inventory call is allowed, reconnect must repeat full admission,
+and repeated failure may recover only through a complete typed-helper summary.
+The safe collector cannot execute report-response update commands or autonomous
+cleanup/update work in either direct or helper monitoring mode.
 The collector emits no Proxmox degradation for an absent inventory on an
 ordinary Linux host unless Proxmox mode or local `pct` discovery establishes
 that the operation applies.

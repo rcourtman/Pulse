@@ -238,6 +238,21 @@ socket, the typed helper supplies summary-only container inventory and the
 report carries `collectionMode: typed-helper-summary`. Stats, secondary
 inventory, update checks, and actions remain unavailable; the safe profile
 never restores Docker by adding the collector to a root-equivalent group.
+Safe-profile rootless discovery is deferred until `pulse-agent` exists and
+selects across Docker and Podman as one set. Exactly one live socket must be
+owned and readable/writable by the collector UID before its URI and runtime
+directory enter the service environment. Root-owned, cross-user, unreadable,
+remote, and simultaneously usable Docker/Podman endpoints fail closed; the
+agent repeats this exact-one admission before the first API probe and on every
+reconnect, then requires daemon metadata to attest rootless mode. An exact pin
+is recovered only from the root-owned collector service unit when it is not
+group/world-writable, so
+updates preserve the choice while the socket is offline. The running collector
+can move between direct rootless monitoring and typed-helper summary fallback
+without a restart or collector action authority. Legacy Docker report-response
+commands and autonomous cleanup/update work remain disabled in the safe
+collector even while direct rootless monitoring is active. Legacy/root discovery retains
+its separate rootful-Docker-first behavior for compatibility.
 
 Release builds and archives carry both helper and runner binaries for the five
 Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,
@@ -2016,8 +2031,8 @@ execution, and continues to reject the moving `main` archive. Future release
 guidance may advance the pin only after the new exact-version provider asset
 and sidecars pass the same publication barrier.
 
-The shell installer's container-runtime discovery prefers a working rootful
-Docker daemon over any rootless socket (#1647).
+The shell installer's legacy/root container-runtime discovery prefers a working
+rootful Docker daemon over any rootless socket (#1647).
 `discover_rootless_container_runtime` in `scripts/install.sh` first calls
 `system_docker_runtime_is_active` — a `docker info` check with
 `DOCKER_HOST`/`CONTAINER_HOST` stripped, falling back to probing
@@ -2029,6 +2044,18 @@ the agent service environment. This applies to auto-detection and explicit
 `--enable-docker` runs alike, so a transient socket-activated rootless Podman
 API socket can no longer capture the agent unit on hosts whose real runtime is
 rootful Docker.
+
+The typed-helper safe profile deliberately does not reuse that broad
+`/run/user/*` selection. It waits until the dedicated collector account has
+been provisioned, filters sockets by exact UID ownership and collector
+read/write access, combines Docker and Podman candidates into one ambiguity
+set, and writes service environment pins only for one exact match. The runtime
+independently enforces one live collector-owned Unix endpoint before probing
+daemon metadata, requires the selected daemon to attest rootless mode, and
+repeats the check when recovering a lost socket. An exact standard-path pin
+from a root-owned existing service unit survives update-time socket downtime;
+the live process can recover direct monitoring from helper summary mode and can
+fall back to a complete helper summary after repeated direct loss.
 
 Stable and stable-dry-run callers now select SignPath as the canonical Windows
 Authenticode backend. The reusable builder fails fast on missing configuration,

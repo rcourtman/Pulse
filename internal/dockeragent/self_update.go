@@ -81,12 +81,19 @@ func (a *Agent) selfTestToken(target TargetConfig) string {
 
 // checkForUpdates checks if a newer version is available and performs self-update if needed
 func (a *Agent) checkForUpdates(ctx context.Context) {
+	if a.cfg.HelperInventory != nil {
+		a.logger.Debug().Msg("Skipping Docker module self-update in monitoring-only collector profile")
+		return
+	}
 	if !a.tryStartUpdateCheck() {
 		a.logger.Debug().Msg("Skipping update check - previous check still running")
 		return
 	}
 	defer a.finishUpdateCheck()
+	a.checkForUpdatesTask(ctx)
+}
 
+func (a *Agent) checkForUpdatesTask(ctx context.Context) {
 	// Skip updates if disabled via config
 	if a.cfg.DisableAutoUpdate {
 		a.logger.Info().Msg("Skipping update check - auto-update disabled")

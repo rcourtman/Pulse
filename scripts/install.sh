@@ -142,6 +142,7 @@ ROOTLESS_RUNTIME_KIND=""
 ROOTLESS_RUNTIME_SOCKET_PATH=""
 ROOTLESS_RUNTIME_SOCKET_URI=""
 ROOTLESS_RUNTIME_XDG_DIR=""
+SAFE_PROFILE_DOCKER_DETECTION_DEFERRED="false"
 
 # Least-privilege profile: run the service as a dedicated system user instead
 # of root, with optional exact-command sudo helpers for the two collectors
@@ -3239,7 +3240,7 @@ discover_single_socket_match() {
     local candidate=""
 
     for candidate in $pattern; do
-        [[ -S "$candidate" ]] || continue
+        [[ -S "$candidate" && ! -L "$candidate" ]] || continue
         matches+=("$candidate")
     done
 
@@ -3335,6 +3336,7 @@ discover_rootless_container_runtime() {
 safe_profile_selected_rootless_runtime_usable() {
     local collector_uid=""
     local socket_uid=""
+    local socket_mode=""
     [[ -n "$ROOTLESS_RUNTIME_KIND" && -S "$ROOTLESS_RUNTIME_SOCKET_PATH" ]] || return 1
     collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
     socket_uid=$(stat -c '%u' "$ROOTLESS_RUNTIME_SOCKET_PATH" 2>/dev/null || true)
@@ -3342,6 +3344,187 @@ safe_profile_selected_rootless_runtime_usable() {
     command -v runuser >/dev/null 2>&1 || return 1
     runuser -u "$LEAST_PRIVILEGE_USER" -- test -r "$ROOTLESS_RUNTIME_SOCKET_PATH" || return 1
     runuser -u "$LEAST_PRIVILEGE_USER" -- test -w "$ROOTLESS_RUNTIME_SOCKET_PATH" || return 1
+}
+
+discover_safe_profile_rootless_container_runtime() {
+    local rootless_root="${PULSE_ROOTLESS_RUNTIME_ROOT:-/run/user}"
+    local collector_uid=""
+    local socket_uid=""
+    local candidate=""
+    local matches=()
+
+    ROOTLESS_RUNTIME_KIND=""
+    ROOTLESS_RUNTIME_SOCKET_PATH=""
+    ROOTLESS_RUNTIME_SOCKET_URI=""
+    ROOTLESS_RUNTIME_XDG_DIR=""
+
+    [[ "$(uname -s)" == "Linux" ]] || return 1
+    collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+    [[ -n "$collector_uid" ]] || return 1
+    command -v runuser >/dev/null 2>&1 || return 1
+
+    for candidate in "${rootless_root}/${collector_uid}/docker.sock"; do
+        [[ -S "$candidate" && ! -L "$candidate" ]] || continue
+        socket_uid=$(stat -c '%u' "$candidate" 2>/dev/null || true)
+        [[ "$socket_uid" == "$collector_uid" ]] || continue
+        socket_mode=$(stat -c '%a' "$candidate" 2>/dev/null || true)
+        [[ "$socket_mode" =~ ^[0-7]+$ ]] || continue
+        (( (8#$socket_mode & 0600) == 0600 )) || continue
+        runuser -u "$LEAST_PRIVILEGE_USER" -- test -r "$candidate" || continue
+        runuser -u "$LEAST_PRIVILEGE_USER" -- test -w "$candidate" || continue
+        matches+=("docker|${candidate}")
+    done
+    for candidate in "${rootless_root}/${collector_uid}/podman/podman.sock"; do
+        [[ -S "$candidate" && ! -L "$candidate" ]] || continue
+        socket_uid=$(stat -c '%u' "$candidate" 2>/dev/null || true)
+        [[ "$socket_uid" == "$collector_uid" ]] || continue
+        socket_mode=$(stat -c '%a' "$candidate" 2>/dev/null || true)
+        [[ "$socket_mode" =~ ^[0-7]+$ ]] || continue
+        (( (8#$socket_mode & 0600) == 0600 )) || continue
+        runuser -u "$LEAST_PRIVILEGE_USER" -- test -r "$candidate" || continue
+        runuser -u "$LEAST_PRIVILEGE_USER" -- test -w "$candidate" || continue
+        matches+=("podman|${candidate}")
+    done
+
+    if [[ "${#matches[@]}" -gt 1 ]]; then
+        log_warn "Multiple collector-owned rootless container-runtime sockets are usable; stop one runtime or preserve one existing installer-owned service pin before retrying."
+        return 1
+    fi
+    [[ "${#matches[@]}" -eq 1 ]] || return 1
+
+    ROOTLESS_RUNTIME_KIND="${matches[0]%%|*}"
+    ROOTLESS_RUNTIME_SOCKET_PATH="${matches[0]#*|}"
+    ROOTLESS_RUNTIME_SOCKET_URI="unix://${ROOTLESS_RUNTIME_SOCKET_PATH}"
+    if [[ "$ROOTLESS_RUNTIME_KIND" == "docker" ]]; then
+        ROOTLESS_RUNTIME_XDG_DIR="$(dirname "$ROOTLESS_RUNTIME_SOCKET_PATH")"
+    else
+        ROOTLESS_RUNTIME_XDG_DIR="${ROOTLESS_RUNTIME_SOCKET_PATH%/podman/podman.sock}"
+    fi
+    return 0
+}
+
+safe_profile_fixed_container_runtime_socket_present() {
+    local candidate=""
+    for candidate in \
+        "${PULSE_SYSTEM_DOCKER_SOCKET:-/var/run/docker.sock}" \
+        /run/podman/podman.sock \
+        /var/run/podman/podman.sock; do
+        [[ -S "$candidate" && ! -L "$candidate" ]] && return 0
+    done
+    return 1
+}
+
+recover_safe_profile_rootless_runtime_pin() {
+    local unit_path="${PULSE_AGENT_SYSTEMD_UNIT_PATH:-/etc/systemd/system/${AGENT_NAME}.service}"
+    local unit_uid=""
+    local unit_mode=""
+    local collector_uid=""
+    local docker_uri=""
+    local podman_uri=""
+    local container_uri=""
+    local selected_uri=""
+    local expected_path=""
+
+    [[ -f "$unit_path" && ! -L "$unit_path" ]] || return 1
+    unit_uid=$(stat -c '%u' "$unit_path" 2>/dev/null || true)
+    unit_mode=$(stat -c '%a' "$unit_path" 2>/dev/null || true)
+    [[ "$unit_uid" == "0" && "$unit_mode" =~ ^[0-7]+$ ]] || return 1
+    (( (8#$unit_mode & 0022) == 0 )) || return 1
+    grep -q "^User=${LEAST_PRIVILEGE_USER}$" "$unit_path" || return 1
+
+    collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+    [[ -n "$collector_uid" ]] || return 1
+    docker_uri=$(sed -n 's/^Environment="DOCKER_HOST=\(unix:\/\/[^"[:space:]]*\)"$/\1/p' "$unit_path" | sort -u)
+    podman_uri=$(sed -n 's/^Environment="PODMAN_HOST=\(unix:\/\/[^"[:space:]]*\)"$/\1/p' "$unit_path" | sort -u)
+    container_uri=$(sed -n 's/^Environment="CONTAINER_HOST=\(unix:\/\/[^"[:space:]]*\)"$/\1/p' "$unit_path" | sort -u)
+
+    [[ "$docker_uri" != *$'\n'* && "$podman_uri" != *$'\n'* && "$container_uri" != *$'\n'* ]] || return 1
+    if [[ -n "$podman_uri" && -n "$container_uri" && "$podman_uri" != "$container_uri" ]]; then
+        return 1
+    fi
+    [[ -z "$docker_uri" || ( -z "$podman_uri" && -z "$container_uri" ) ]] || return 1
+
+    if [[ -n "$docker_uri" ]]; then
+        ROOTLESS_RUNTIME_KIND="docker"
+        selected_uri="$docker_uri"
+        expected_path="${PULSE_ROOTLESS_RUNTIME_ROOT:-/run/user}/${collector_uid}/docker.sock"
+    else
+        selected_uri="${podman_uri:-$container_uri}"
+        [[ -n "$selected_uri" ]] || return 1
+        ROOTLESS_RUNTIME_KIND="podman"
+        expected_path="${PULSE_ROOTLESS_RUNTIME_ROOT:-/run/user}/${collector_uid}/podman/podman.sock"
+    fi
+
+    ROOTLESS_RUNTIME_SOCKET_PATH="${selected_uri#unix://}"
+    [[ "$ROOTLESS_RUNTIME_SOCKET_PATH" == "$expected_path" ]] || return 1
+    ROOTLESS_RUNTIME_SOCKET_URI="$selected_uri"
+    if [[ "$ROOTLESS_RUNTIME_KIND" == "docker" ]]; then
+        ROOTLESS_RUNTIME_XDG_DIR="$(dirname "$ROOTLESS_RUNTIME_SOCKET_PATH")"
+    else
+        ROOTLESS_RUNTIME_XDG_DIR="${ROOTLESS_RUNTIME_SOCKET_PATH%/podman/podman.sock}"
+    fi
+    return 0
+}
+
+resolve_safe_profile_container_runtime() {
+    local rootless_selected="false"
+
+    if recover_safe_profile_rootless_runtime_pin; then
+        rootless_selected="true"
+        log_info "Preserving the existing collector-owned rootless ${ROOTLESS_RUNTIME_KIND} runtime pin."
+    elif discover_safe_profile_rootless_container_runtime; then
+        rootless_selected="true"
+    fi
+
+    if [[ "$SAFE_PROFILE_DOCKER_DETECTION_DEFERRED" == "true" ]]; then
+        if [[ "$rootless_selected" == "true" ]] || safe_profile_fixed_container_runtime_socket_present; then
+            ENABLE_DOCKER="true"
+            log_info "Container runtime detected without probing a privileged daemon - enabling container monitoring"
+        else
+            ENABLE_DOCKER="false"
+        fi
+    fi
+
+    if [[ "$ENABLE_DOCKER" == "true" && "$rootless_selected" == "true" ]]; then
+        configure_discovered_rootless_runtime_environment
+    fi
+    safe_profile_apply_docker_degradation
+}
+
+resolve_initial_container_monitoring_detection() {
+    [[ "$DOCKER_EXPLICIT" != "true" ]] || return 0
+    if [[ "$LEAST_PRIVILEGE" == "true" && "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+        SAFE_PROFILE_DOCKER_DETECTION_DEFERRED="true"
+        log_info "Safe-profile container detection deferred until the collector account exists; no daemon endpoint is probed as root."
+    elif detect_docker; then
+        log_info "Docker/Podman detected - enabling container monitoring"
+        log_info "  (use --disable-docker to skip)"
+        ENABLE_DOCKER="true"
+    else
+        ENABLE_DOCKER="false"
+    fi
+}
+
+configure_discovered_rootless_runtime_environment() {
+    if [[ "$ROOTLESS_RUNTIME_KIND" == "docker" ]]; then
+        if ! service_env_has_key "DOCKER_HOST"; then
+            append_service_env "DOCKER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
+            if ! service_env_has_key "XDG_RUNTIME_DIR"; then
+                append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"
+            fi
+            log_info "Using rootless Docker socket for agent service: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
+        fi
+    elif [[ "$ROOTLESS_RUNTIME_KIND" == "podman" ]]; then
+        if ! service_env_has_key "CONTAINER_HOST" && ! service_env_has_key "PODMAN_HOST"; then
+            append_service_env "PULSE_DOCKER_RUNTIME" "podman"
+            append_service_env "CONTAINER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
+            append_service_env "PODMAN_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
+            if ! service_env_has_key "XDG_RUNTIME_DIR"; then
+                append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"
+            fi
+            log_info "Using rootless Podman socket for agent service: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
+        fi
+    fi
 }
 
 safe_profile_apply_docker_degradation() {
@@ -4889,15 +5072,7 @@ fi
 # Only auto-detect if flags weren't explicitly set
 log_info "Detecting available platforms..."
 
-if [[ "$DOCKER_EXPLICIT" != "true" ]]; then
-    if detect_docker; then
-        log_info "Docker/Podman detected - enabling container monitoring"
-        log_info "  (use --disable-docker to skip)"
-        ENABLE_DOCKER="true"
-    else
-        ENABLE_DOCKER="false"
-    fi
-fi
+resolve_initial_container_monitoring_detection
 
 if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
     if detect_kubernetes; then
@@ -4941,32 +5116,18 @@ else
     log_info "    Command execution is off; enable only when Patrol actions or Proxmox LXC Docker inventory are needed."
 fi
 
-# discover_rootless_container_runtime returns non-zero when a rootful Docker
-# daemon is live, so an explicit --enable-docker with working system Docker
-# never gets the rootless podman socket pinned into the service environment.
-if [[ "$ENABLE_DOCKER" == "true" ]] && discover_rootless_container_runtime; then
-    if [[ "$ROOTLESS_RUNTIME_KIND" == "docker" ]]; then
-        if ! service_env_has_key "DOCKER_HOST"; then
-            append_service_env "DOCKER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
-            if ! service_env_has_key "XDG_RUNTIME_DIR"; then
-                append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"
-            fi
-            log_info "Using rootless Docker socket for agent service: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
-        fi
-    elif [[ "$ROOTLESS_RUNTIME_KIND" == "podman" ]]; then
-        if ! service_env_has_key "CONTAINER_HOST" && ! service_env_has_key "PODMAN_HOST"; then
-            append_service_env "PULSE_DOCKER_RUNTIME" "podman"
-            append_service_env "CONTAINER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
-            append_service_env "PODMAN_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
-            if ! service_env_has_key "XDG_RUNTIME_DIR"; then
-                append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"
-            fi
-            log_info "Using rootless Podman socket for agent service: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
-        fi
-    fi
+# Legacy/root installs retain the system-Docker-first behavior from issue
+# #1647. Typed-helper collectors defer discovery until the dedicated collector
+# account exists, then accept exactly one socket owned and usable by that UID.
+if [[ "$ENABLE_DOCKER" == "true" &&
+      ! ( "$LEAST_PRIVILEGE" == "true" && "$PRIVILEGED_HELPER_ENABLED" == "true" ) ]] &&
+   discover_rootless_container_runtime; then
+    configure_discovered_rootless_runtime_environment
 fi
 
-safe_profile_apply_docker_degradation
+if [[ "$LEAST_PRIVILEGE" != "true" || "$PRIVILEGED_HELPER_ENABLED" != "true" ]]; then
+    safe_profile_apply_docker_degradation
+fi
 
 finalize_plist_env_block
 
@@ -6596,6 +6757,7 @@ if command -v systemctl >/dev/null 2>&1; then
         SERVICE_USER="$LEAST_PRIVILEGE_USER"
         provision_least_privilege_user
         if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+            resolve_safe_profile_container_runtime
             protect_typed_profile_credentials
             provision_typed_privileged_helper
             if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then

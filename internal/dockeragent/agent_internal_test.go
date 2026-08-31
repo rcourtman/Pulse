@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1792,5 +1793,19 @@ func TestRegistryCredentialSourceForConfig(t *testing.T) {
 
 	if disabled := registryCredentialSourceForConfig(Config{DisableRegistryCredentials: true}, logger); disabled != nil {
 		t.Fatalf("expected nil credential source when disabled, got %T", disabled)
+	}
+}
+
+func TestCollectorRuntimeBoundaryLossIsDaemonUnavailable(t *testing.T) {
+	for _, err := range []error{
+		errCollectorRuntimeBoundaryChanged,
+		fmt.Errorf("cycle validation: %w", errCollectorRuntimeBoundaryChanged),
+		syscall.EACCES,
+		syscall.EPERM,
+		errors.New("dial unix /run/user/991/docker.sock: permission denied"),
+	} {
+		if !isDockerDaemonUnavailable(err) {
+			t.Fatalf("collector boundary loss %q was not classified unavailable", err)
+		}
 	}
 }
