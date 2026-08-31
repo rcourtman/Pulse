@@ -43,6 +43,64 @@ describe('Toast', () => {
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
 
+  it('pauses auto-dismiss while the pointer is over the notification', () => {
+    vi.useFakeTimers();
+    const onRemove = vi.fn();
+
+    render(() => (
+      <Toast
+        toast={{ id: 'toast-hover', type: 'info', title: 'Hover toast', duration: 1000 }}
+        onRemove={onRemove}
+      />
+    ));
+
+    vi.advanceTimersByTime(600);
+    const toast = screen.getByRole('status');
+    fireEvent.pointerEnter(toast);
+    vi.advanceTimersByTime(5000);
+    expect(onRemove).not.toHaveBeenCalled();
+
+    fireEvent.pointerLeave(toast);
+    vi.advanceTimersByTime(699);
+    expect(onRemove).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('pauses auto-dismiss while keyboard focus remains in the notification', () => {
+    vi.useFakeTimers();
+    const onRemove = vi.fn();
+
+    render(() => (
+      <Toast
+        toast={{ id: 'toast-focus', type: 'error', title: 'Focus toast', duration: 1000 }}
+        onRemove={onRemove}
+      />
+    ));
+
+    vi.advanceTimersByTime(600);
+    const dismissButton = screen.getByRole('button', { name: 'Dismiss notification' });
+    dismissButton.focus();
+    vi.advanceTimersByTime(5000);
+    expect(onRemove).not.toHaveBeenCalled();
+
+    dismissButton.blur();
+    vi.advanceTimersByTime(700);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('fits the notification stack and cards inside a 320px viewport', () => {
+    render(() => <ToastContainer />);
+    window.showToast('info', 'Narrow viewport toast');
+
+    const region = screen.getByRole('region', { name: 'Notifications' });
+    expect(region).toHaveClass('inset-x-3', 'sm:left-auto', 'sm:max-w-[500px]');
+
+    const card = screen.getByText('Narrow viewport toast').closest('.flex');
+    expect(card).toHaveClass('w-full', 'min-w-0');
+    expect(card).not.toHaveClass('min-w-[300px]');
+  });
+
   it('renders detail field in a collapsible details element', () => {
     const onRemove = vi.fn();
     render(() => (

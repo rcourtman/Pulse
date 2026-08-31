@@ -1,42 +1,34 @@
 {
   "version": 1,
-  "base_sha": "8f877bee14263289e6f18b501221f579214b89f9",
-  "verified_at": "2026-08-31T16:50:09Z",
+  "base_sha": "1e8d4ea92b2d721b6148a2f07f876f4264ea70d5",
+  "verified_at": "2026-08-31T20:31:17Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/shared/TagBadges.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Toast/Toast.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/shared/TagBadges.tsx": "ce3f8112a72a8f1c772f3cf78ebb21e7de0abf858df6b7a922762c49f6933f53"
+    "frontend-modern/src/components/Toast/Toast.tsx": "8dbabcd3c92884b8edb9320b465b48d7256bffa7bbb30bee2b275d5b023d1ecb"
   },
-  "routes": [
-    "/proxmox?cols=name:280,tags:160",
-    "/proxmox"
-  ],
+  "routes": ["/"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 320,
+      "height": 720
     }
   ],
   "states": [
-    "unselected workload tag filters rendered as named native buttons",
-    "focused tag tooltip visible with a visible focus ring and no clipping",
-    "tag filter selected and then cleared through keyboard activation",
-    "tooltip dismissed by pointer leave and Escape while focus remained on the tag button",
-    "multiple adjacent tag targets remained compact at 20px with 4px spacing",
-    "390px responsive workload layout omitted wide-only tag controls and remained within the viewport"
+    "expanded error detail remained fully visible inside a 296px-wide narrow notification card",
+    "pointer hover kept a timed informational notification visible past its original deadline",
+    "keyboard focus kept a timed error notification visible past its original deadline",
+    "desktop success notification settled at the 500px width cap with its right viewport inset"
   ],
   "interactions": [
-    "opened the Proxmox workload table with a supported shareable Name-and-Tags column layout",
-    "hovered and left a tag target to show and dismiss its tooltip",
-    "focused a tag target, dismissed its tooltip with Escape, and confirmed focus remained",
-    "pressed Enter twice to select and clear the same tag filter through aria-pressed state",
-    "inspected tag target geometry and tooltip placement in current-build Chromium",
-    "inspected the responsive Proxmox workload table at 390px and confirmed the existing wide-only tag omission without clipping"
+    "opened expandable error details and visually inspected wrapping at 320px",
+    "dismissed an expanded notification with its named close action",
+    "hovered a timed notification, moved away, and observed dismissal continue from remaining time",
+    "focused a timed notification action, moved focus away, and observed dismissal continue from remaining time",
+    "resized current-build Chromium from 320x720 to 1280x800 and measured notification geometry"
   ]
 }

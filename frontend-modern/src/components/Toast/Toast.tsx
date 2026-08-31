@@ -29,6 +29,10 @@ export const Toast: Component<ToastProps> = (props) => {
   const [show, setShow] = createSignal(true);
   let autoRemoveTimer: number | undefined;
   let closeAnimationTimer: number | undefined;
+  let autoRemoveStartedAt = 0;
+  let autoRemoveRemaining = props.toast.duration || POLLING_INTERVALS.TOAST_DURATION;
+  let pointerIsInside = false;
+  let focusIsInside = false;
 
   const icon = () => {
     const iconClass = 'h-5 w-5';
@@ -47,15 +51,35 @@ export const Toast: Component<ToastProps> = (props) => {
 
   const iconTone = () => getSemanticTonePresentation(props.toast.type);
 
+  const clearAutoRemoveTimer = (preserveRemaining: boolean) => {
+    if (autoRemoveTimer === undefined) return;
+    window.clearTimeout(autoRemoveTimer);
+    autoRemoveTimer = undefined;
+    if (preserveRemaining) {
+      autoRemoveRemaining = Math.max(0, autoRemoveRemaining - (Date.now() - autoRemoveStartedAt));
+    }
+  };
+
+  const startAutoRemoveTimer = () => {
+    if (!show() || autoRemoveTimer !== undefined || autoRemoveRemaining <= 0) return;
+    autoRemoveStartedAt = Date.now();
+    autoRemoveTimer = window.setTimeout(() => handleClose(), autoRemoveRemaining);
+  };
+
+  // Keep timed feedback available while a user is reading or operating it,
+  // then continue from the remaining duration instead of restarting the clock.
+  const pauseAutoRemove = () => clearAutoRemoveTimer(true);
+
+  const resumeAutoRemove = () => {
+    if (!pointerIsInside && !focusIsInside) startAutoRemoveTimer();
+  };
+
   const handleClose = () => {
     if (!show()) {
       return;
     }
     setShow(false);
-    if (autoRemoveTimer !== undefined) {
-      window.clearTimeout(autoRemoveTimer);
-      autoRemoveTimer = undefined;
-    }
+    clearAutoRemoveTimer(false);
     if (closeAnimationTimer !== undefined) {
       window.clearTimeout(closeAnimationTimer);
     }
@@ -63,11 +87,7 @@ export const Toast: Component<ToastProps> = (props) => {
   };
 
   onMount(() => {
-    // Auto-remove after duration.
-    autoRemoveTimer = window.setTimeout(
-      () => handleClose(),
-      props.toast.duration || POLLING_INTERVALS.TOAST_DURATION,
-    );
+    startAutoRemoveTimer();
   });
 
   onCleanup(() => {
@@ -86,6 +106,28 @@ export const Toast: Component<ToastProps> = (props) => {
       role={isAlert() ? 'alert' : 'status'}
       aria-live={isAlert() ? 'assertive' : 'polite'}
       aria-atomic="true"
+      onPointerEnter={() => {
+        pointerIsInside = true;
+        pauseAutoRemove();
+      }}
+      onPointerLeave={() => {
+        pointerIsInside = false;
+        resumeAutoRemove();
+      }}
+      onFocusIn={() => {
+        focusIsInside = true;
+        pauseAutoRemove();
+      }}
+      onFocusOut={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          event.currentTarget.contains(event.relatedTarget)
+        ) {
+          return;
+        }
+        focusIsInside = false;
+        resumeAutoRemove();
+      }}
       class={`transform transition-all duration-500 ease-out ${
         show() ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
       } animate-slide-in-card`}
@@ -95,8 +137,7 @@ export const Toast: Component<ToastProps> = (props) => {
            bg-surface
           border border-border
           px-4 py-3 sm:px-5 sm:py-4 rounded-md shadow-sm
-          flex items-center gap-3 sm:gap-4
-          min-w-[300px] max-w-[400px] sm:min-w-[320px] sm:max-w-[500px]
+          flex w-full min-w-0 items-start gap-3 sm:gap-4
         `}
       >
         <div
@@ -104,7 +145,7 @@ export const Toast: Component<ToastProps> = (props) => {
         >
           {icon()}
         </div>
-        <div class="flex-1">
+        <div class="min-w-0 flex-1">
           <h3 class="text-sm font-medium text-base-content">{props.toast.title}</h3>
           <Show when={props.toast.message}>
             <p class="mt-1 text-xs text-base-content opacity-90">{props.toast.message}</p>
@@ -176,7 +217,7 @@ export const ToastContainer: Component = () => {
       <div
         role="region"
         aria-label="Notifications"
-        class="fixed bottom-4 right-4 z-[9999] space-y-2 max-w-sm"
+        class="fixed inset-x-3 bottom-3 z-[9999] space-y-2 sm:left-auto sm:right-4 sm:bottom-4 sm:w-full sm:max-w-[500px]"
       >
         <For each={toasts()}>{(toast) => <Toast toast={toast} onRemove={removeToast} />}</For>
       </div>
