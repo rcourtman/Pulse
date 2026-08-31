@@ -61,59 +61,56 @@ jobs:
           set -euo pipefail
           mkdir -p release-continuity-evidence
           release_json=release-continuity-evidence/release.json
+
+          if ! gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${REPOSITORY}/releases/latest" > "${release_json}"; then
+            python3 scripts/release_control/release_continuity.py release \
+              --release-json "${release_json}" \
+              --diagnostic release-continuity-evidence/release-diagnostic.json \
+              --github-output "${GITHUB_OUTPUT}" || true
+            exit 1
+          fi
+
+          python3 scripts/release_control/release_continuity.py release \
+            --release-json "${release_json}" \
+            --diagnostic release-continuity-evidence/release-diagnostic.json \
+            --github-output "${GITHUB_OUTPUT}"
+
+      - name: Bind the release activation marker
+        id: activation
+        if: ${{ steps.release.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          release_json=release-continuity-evidence/release.json
           marker=release-continuity-evidence/release-activation.json
 
-          gh api \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/${REPOSITORY}/releases/latest" > "${release_json}"
-          if ! jq -e '
-              (.id | type == "number") and
-              (.tag_name | type == "string" and test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) and
-              (.target_commitish | type == "string" and test("^[0-9a-f]{40}$")) and
-              .draft == false and .prerelease == false and .immutable == true and
-              (.published_at | type == "string" and length > 0)
-            ' "${release_json}" >/dev/null; then
-            echo "::error::Advertised latest release failed the immutable stable identity contract. It must be a published, non-draft vX.Y.Z release locked immutable and bound to a 40-character source commit; inspect release.json in the continuity evidence."
+          if ! gh release download "${TAG}" \
+              --repo "${REPOSITORY}" \
+              --pattern release-activation.json \
+              --dir release-continuity-evidence; then
+            python3 scripts/release_control/release_continuity.py activation \
+              --release-json "${release_json}" \
+              --activation-json "${marker}" \
+              --diagnostic release-continuity-evidence/activation-diagnostic.json \
+              --github-output "${GITHUB_OUTPUT}" || true
             exit 1
           fi
 
-          tag="$(jq -r '.tag_name' "${release_json}")"
-          release_id="$(jq -r '.id' "${release_json}")"
-          source_sha="$(jq -r '.target_commitish' "${release_json}")"
-          gh release download "${tag}" \
-            --repo "${REPOSITORY}" \
-            --pattern release-activation.json \
-            --dir release-continuity-evidence
-
-          if ! jq -e \
-              --arg tag "${tag}" \
-              --arg release_id "${release_id}" \
-              --arg source_sha "${source_sha}" \
-              '.schema_version == 1 and .tag == $tag and
-               .release_id == $release_id and .target_commitish == $source_sha and
-               (.source_release_run_id | test("^[0-9]+$")) and
-               (.convergence_run_id | test("^[0-9]+$")) and
-               (.r2_prefix | type == "string" and length > 0) and
-               (.server_image_digest | test("^sha256:[0-9a-f]{64}$")) and
-               (.control_plane_image_digest | test("^sha256:[0-9a-f]{64}$")) and
-               (.helm_chart_digest | test("^sha256:[0-9a-f]{64}$"))' \
-              "${marker}" >/dev/null; then
-            echo "::error::release-activation.json does not bind the advertised stable tag, release, source commit, convergence runs, and published artifact digests."
-            exit 1
-          fi
-
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
-          echo "source_sha=${source_sha}" >> "${GITHUB_OUTPUT}"
-          echo "activation_sha256=$(sha256sum "${marker}" | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
-          echo "server_image_digest=$(jq -r '.server_image_digest' "${marker}")" >> "${GITHUB_OUTPUT}"
-          echo "control_plane_image_digest=$(jq -r '.control_plane_image_digest' "${marker}")" >> "${GITHUB_OUTPUT}"
-          echo "helm_chart_digest=$(jq -r '.helm_chart_digest' "${marker}")" >> "${GITHUB_OUTPUT}"
+          python3 scripts/release_control/release_continuity.py activation \
+            --release-json "${release_json}" \
+            --activation-json "${marker}" \
+            --diagnostic release-continuity-evidence/activation-diagnostic.json \
+            --github-output "${GITHUB_OUTPUT}"
 
       - name: Verify immutable release and build provenance
         id: packet
-        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -126,7 +123,7 @@ jobs:
 
       - name: Authenticate every published release asset
         id: assets
-        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           REPOSITORY: ${{ github.repository }}
@@ -135,14 +132,14 @@ jobs:
 
       - name: Verify exact-version container identities
         id: containers
-        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TAG: ${{ steps.release.outputs.tag }}
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
-          EXPECTED_SERVER_DIGEST: ${{ steps.release.outputs.server_image_digest }}
-          EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}
+          EXPECTED_SERVER_DIGEST: ${{ steps.activation.outputs.server_image_digest }}
+          EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.activation.outputs.control_plane_image_digest }}
         run: |
           set -euo pipefail
           proof="$(./scripts/verify-release-container-images.sh "${TAG}" "${SOURCE_SHA}" "${REPOSITORY}")"
@@ -157,11 +154,11 @@ jobs:
 
       - name: Verify stable container discovery aliases
         id: aliases
-        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           TAG: ${{ steps.release.outputs.tag }}
-          EXPECTED_SERVER_DIGEST: ${{ steps.release.outputs.server_image_digest }}
-          EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}
+          EXPECTED_SERVER_DIGEST: ${{ steps.activation.outputs.server_image_digest }}
+          EXPECTED_CONTROL_PLANE_DIGEST: ${{ steps.activation.outputs.control_plane_image_digest }}
           REGISTRY_OWNER: ${{ github.repository_owner }}
         run: >-
           ./scripts/verify-stable-container-aliases.sh
@@ -170,13 +167,13 @@ jobs:
 
       - name: Verify exact-version Helm identity
         id: helm
-        if: ${{ always() && steps.release.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TAG: ${{ steps.release.outputs.tag }}
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
-          EXPECTED_HELM_DIGEST: ${{ steps.release.outputs.helm_chart_digest }}
+          EXPECTED_HELM_DIGEST: ${{ steps.activation.outputs.helm_chart_digest }}
         run: >-
           ./scripts/verify-release-helm-chart.sh
           "${TAG}" "${SOURCE_SHA}" "${REPOSITORY}" "${EXPECTED_HELM_DIGEST}"
@@ -196,11 +193,12 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           RELEASE_ID: ${{ steps.release.outputs.release_id }}
           SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
-          ACTIVATION_SHA256: ${{ steps.release.outputs.activation_sha256 }}
-          SERVER_IMAGE_DIGEST: ${{ steps.release.outputs.server_image_digest }}
-          CONTROL_PLANE_IMAGE_DIGEST: ${{ steps.release.outputs.control_plane_image_digest }}
-          HELM_CHART_DIGEST: ${{ steps.release.outputs.helm_chart_digest }}
+          ACTIVATION_SHA256: ${{ steps.activation.outputs.activation_sha256 }}
+          SERVER_IMAGE_DIGEST: ${{ steps.activation.outputs.server_image_digest }}
+          CONTROL_PLANE_IMAGE_DIGEST: ${{ steps.activation.outputs.control_plane_image_digest }}
+          HELM_CHART_DIGEST: ${{ steps.activation.outputs.helm_chart_digest }}
           RELEASE_RESULT: ${{ steps.release.outcome }}
+          ACTIVATION_RESULT: ${{ steps.activation.outcome }}
           PACKET_RESULT: ${{ steps.packet.outcome }}
           ASSET_RESULT: ${{ steps.assets.outcome }}
           CONTAINER_RESULT: ${{ steps.containers.outcome }}
@@ -214,7 +212,18 @@ jobs:
           if [ "${TRIGGER_SCHEDULE}" = '17 */6 * * *' ]; then
             mode=release_lock
           fi
+          for diagnostic in release activation; do
+            path="release-continuity-evidence/${diagnostic}-diagnostic.json"
+            if [ ! -s "${path}" ]; then
+              jq -n \
+                --arg check "${diagnostic}" \
+                '{schema_version: 1, check: $check, status: "not_run", identity: {}, violations: []}' \
+                > "${path}"
+            fi
+          done
           jq -n \
+            --slurpfile release_diagnostic release-continuity-evidence/release-diagnostic.json \
+            --slurpfile activation_diagnostic release-continuity-evidence/activation-diagnostic.json \
             --arg schema_version "1" \
             --arg checked_at "${checked_at}" \
             --arg repository "${REPOSITORY}" \
@@ -235,6 +244,7 @@ jobs:
             --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
             --arg helm_chart_digest "${HELM_CHART_DIGEST}" \
             --arg release_result "${RELEASE_RESULT}" \
+            --arg activation_result "${ACTIVATION_RESULT}" \
             --arg packet_result "${PACKET_RESULT}" \
             --arg asset_result "${ASSET_RESULT}" \
             --arg container_result "${CONTAINER_RESULT}" \
@@ -265,8 +275,13 @@ jobs:
                 control_plane_image_digest: $control_plane_image_digest,
                 helm_chart_digest: $helm_chart_digest
               },
+              diagnostics: {
+                release_identity: $release_diagnostic[0],
+                activation_binding: $activation_diagnostic[0]
+              },
               checks: {
                 release_resolution: $release_result,
+                activation_binding: $activation_result,
                 immutable_packet_and_provenance: $packet_result,
                 authenticated_assets: $asset_result,
                 container_identities: $container_result,

@@ -253,6 +253,8 @@ scripts/release_control/*
 !scripts/release_control/relay_registration_reconnect_drain_proof.py
 !scripts/release_control/registry_audit.py
 !scripts/release_control/registry_audit_test.py
+!scripts/release_control/release_continuity.py
+!scripts/release_control/release_continuity_test.py
 !scripts/release_control/release_promotion_policy_support.py
 !scripts/release_control/release_promotion_policy_support_test.py
 !scripts/release_control/release_promotion_policy_test.py
