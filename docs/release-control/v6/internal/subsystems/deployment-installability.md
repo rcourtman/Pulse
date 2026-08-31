@@ -3429,6 +3429,12 @@ installers consume. macOS notarization is intentionally skipped
 for v1: the README documents the Gatekeeper bypass and the
 install-script flow downloads the same unsigned binary, with the
 audit trail of signed-manifest and SHA256 verification preserved.
+Because the shell installer is itself an executable bootstrap trust boundary,
+release assembly must include `install-mcp.sh` in the authenticated checksum
+manifest and emit its checksum and detached-signature sidecars before upload;
+validating only the binary that an unauthenticated installer chooses is not a
+complete install chain. Local and post-publication validation require every
+published installer entry exactly once in that signed manifest.
 The adapter's complete request/response tool-list projection, manifest
 projection, capability and governance metadata formatting, request/response
 tool filtering, typed input-schema projection, and API route/body call
@@ -4416,7 +4422,8 @@ release packet, and make post-publication validation authenticate
 `checksums.txt` and every listed artifact's `.sshsig` against the configured
 `PULSE_UPDATE_SIGNING_PUBLIC_KEY`, not merely test that sidecars are present.
 Validation must fail if the trust root is unavailable, if any signature is
-invalid, if any published artifact or `checksums.txt` is missing its
+invalid, if any published installer is absent from the authenticated checksum
+manifest, if any published artifact or `checksums.txt` is missing its
 `.sshsig` sidecar, if the authenticated checksum manifest contains duplicate
 asset filenames or trailing fields, or if the canonical
 release-packet SBOM is absent so published RC/stable downloads can keep the

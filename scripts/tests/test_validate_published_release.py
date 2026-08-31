@@ -47,7 +47,12 @@ class ValidatePublishedReleaseTest(unittest.TestCase):
 
         payloads = {
             SBOM: b'{"spdxVersion":"SPDX-2.3"}\n',
+            "install-docker.sh": b"#!/bin/sh\necho docker installer\n",
+            "install-mcp.sh": b"#!/bin/sh\necho mcp installer\n",
+            "install-mcp.ps1": b"Write-Output 'mcp installer'\r\n",
+            "install.ps1": b"Write-Output 'agent installer'\r\n",
             "install.sh": b"#!/bin/sh\necho pulse\n",
+            "pulse-auto-update.sh": b"#!/bin/sh\necho update\n",
         }
         checksum_lines: list[str] = []
         for name, content in payloads.items():
@@ -153,6 +158,23 @@ printf '%s\n' "${FAKE_SSH_PUBLIC_KEY}"
         result = self.run_validator()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SSH signature verification failed for install.sh", result.stderr)
+
+    def test_rejects_unsigned_published_mcp_installer(self) -> None:
+        checksums = (self.assets / "checksums.txt").read_text(encoding="utf-8")
+        filtered = "".join(
+            line
+            for line in checksums.splitlines(keepends=True)
+            if not line.endswith("  install-mcp.sh\n")
+        )
+        self.replace_signed_checksums(filtered)
+
+        result = self.run_validator()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "Authenticated checksums.txt must contain exactly one valid entry for published installer install-mcp.sh.",
+            result.stderr,
+        )
 
     def test_rejects_forged_checksum_manifest_before_using_it(self) -> None:
         with (self.assets / "checksums.txt").open("a", encoding="utf-8") as handle:

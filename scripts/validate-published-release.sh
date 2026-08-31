@@ -85,6 +85,21 @@ if ! verify_signature "$CHECKSUMS_PATH" "$CHECKSUMS_SIG_PATH" "checksums.txt for
     exit 1
 fi
 
+REQUIRED_SIGNED_INSTALLERS=(
+    install.sh
+    install-docker.sh
+    install-mcp.sh
+    install-mcp.ps1
+    install.ps1
+    pulse-auto-update.sh
+)
+for installer in "${REQUIRED_SIGNED_INSTALLERS[@]}"; do
+    if ! awk -v name="$installer" '$2 == name { found = 1 } END { exit !found }' "$CHECKSUMS_PATH"; then
+        echo "Authenticated checksums.txt must contain exactly one valid entry for published installer ${installer}." >&2
+        exit 1
+    fi
+done
+
 RELEASE_SBOM="pulse-${TAG}-release.sbom.spdx.json"
 if ! awk '{print $2}' "$CHECKSUMS_PATH" | grep -Fx "$RELEASE_SBOM" >/dev/null 2>&1; then
     echo "checksums.txt does not list ${RELEASE_SBOM} for ${TAG}" >&2
@@ -190,5 +205,12 @@ if [[ "$status" -ne 0 ]]; then
     echo "Published release validation failed for ${TAG} (${status} error(s))." >&2
     exit 1
 fi
+
+for installer in "${REQUIRED_SIGNED_INSTALLERS[@]}"; do
+    if ! grep -Fxq -- "$installer" "$SEEN_FILENAMES_PATH"; then
+        echo "Authenticated checksums.txt must contain exactly one valid entry for published installer ${installer}." >&2
+        exit 1
+    fi
+done
 
 echo "Published release assets for ${TAG} match authenticated checksums.txt, *.sha256 files, and verified *.sshsig sidecars."

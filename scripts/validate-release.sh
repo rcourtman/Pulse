@@ -449,6 +449,11 @@ info "Checking required release assets..."
 # They are only included in Docker images for /download/ endpoints
 required_assets=(
     "install.sh"
+    "install-docker.sh"
+    "install-mcp.sh"
+    "install-mcp.ps1"
+    "install.ps1"
+    "pulse-auto-update.sh"
     "checksums.txt"
     "pulse-v${PULSE_VERSION}-release.sbom.spdx.json"
     "pulse-v${PULSE_VERSION}.tar.gz"
@@ -489,6 +494,15 @@ if [ $missing_count -gt 0 ]; then
     exit 1
 fi
 success "All ${#required_assets[@]} required release assets present"
+
+for installer in install.sh install-docker.sh install-mcp.sh install-mcp.ps1 install.ps1 pulse-auto-update.sh; do
+    manifest_matches="$(awk -v name="${installer}" '$2 == name && NF == 2 { count++ } END { print count + 0 }' checksums.txt)"
+    if [ "${manifest_matches}" -ne 1 ]; then
+        error "checksums.txt must contain exactly one entry for release installer ${installer}"
+        exit 1
+    fi
+done
+success "All published release installers are uniquely listed in checksums.txt"
 
 # Validate published install.sh is the Pulse SERVER installer.
 # Across v6 rc.1 → rc.5 the rendered AGENT installer was published here by

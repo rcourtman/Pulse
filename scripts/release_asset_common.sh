@@ -287,6 +287,9 @@ pulse_release_collect_checksum_files() {
         if [[ -f "install-docker.sh" ]]; then
             checksum_files+=( install-docker.sh )
         fi
+        if [[ -f "install-mcp.sh" ]]; then
+            checksum_files+=( install-mcp.sh )
+        fi
         if [[ -f "pulse-auto-update.sh" ]]; then
             checksum_files+=( pulse-auto-update.sh )
         fi

@@ -1363,6 +1363,9 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 	localValidator := string(localValidatorBytes)
 	localRequired := []string{
+		`"install-mcp.sh"`,
+		`for installer in install.sh install-docker.sh install-mcp.sh install-mcp.ps1 install.ps1 pulse-auto-update.sh; do`,
+		`checksums.txt must contain exactly one entry for release installer ${installer}`,
 		`"pulse-v${PULSE_VERSION}-release.sbom.spdx.json"`,
 		`release_sbom="pulse-${PULSE_TAG}-release.sbom.spdx.json"`,
 		`error "checksums.txt is missing ${release_sbom}"`,
@@ -1460,6 +1463,9 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 	publishedValidator := string(publishedValidatorBytes)
 	publishedRequired := []string{
+		`REQUIRED_SIGNED_INSTALLERS=(`,
+		`install-mcp.sh`,
+		`Authenticated checksums.txt must contain exactly one valid entry for published installer ${installer}.`,
 		`RELEASE_SBOM="pulse-${TAG}-release.sbom.spdx.json"`,
 		`PULSE_UPDATE_SIGNING_PUBLIC_KEY is required to authenticate published release assets.`,
 		`go -C "$REPO_ROOT" run ./scripts/release_update_key.go public-key-ssh`,
@@ -1503,6 +1509,7 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		"make post-publication validation authenticate",
 		"every listed artifact's `.sshsig` against the configured",
 		"Validation must fail if the trust root is unavailable",
+		"any published installer is absent from the authenticated checksum",
 		"release-packet SBOM is absent",
 		"download endpoints must return checksum and signature headers",
 		"must disable Go's automatic VCS stamping",
@@ -2805,6 +2812,7 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 		`checksum_files+=( pulse-mcp-linux-* )`,
 		`checksum_files+=( pulse-mcp-darwin-* )`,
 		`checksum_files+=( pulse-mcp-freebsd-* )`,
+		`checksum_files+=( install-mcp.sh )`,
 	} {
 		if !strings.Contains(string(commonContent), needle) {
 			t.Fatalf("release checksum collection missing bare MCP assets: %s", needle)
@@ -2816,6 +2824,7 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 		"pulse-mcp-linux-amd64",
 		"pulse-mcp-darwin-arm64",
 		"pulse-mcp-freebsd-amd64",
+		"install-mcp.sh",
 	} {
 		if err := os.WriteFile(filepath.Join(releaseDir, asset), []byte(asset), 0o755); err != nil {
 			t.Fatalf("write MCP checksum fixture: %v", err)
@@ -2826,7 +2835,7 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect MCP release checksum files: %v\n%s", err, checksumOutput)
 	}
-	for _, asset := range []string{"pulse-mcp-linux-amd64", "pulse-mcp-darwin-arm64", "pulse-mcp-freebsd-amd64"} {
+	for _, asset := range []string{"pulse-mcp-linux-amd64", "pulse-mcp-darwin-arm64", "pulse-mcp-freebsd-amd64", "install-mcp.sh"} {
 		if !strings.Contains(string(checksumOutput), asset) {
 			t.Fatalf("bare MCP release asset %s missing from checksum/signature input:\n%s", asset, checksumOutput)
 		}
