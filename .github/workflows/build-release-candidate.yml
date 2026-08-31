@@ -810,6 +810,7 @@ jobs:
           EXPECTED_ARTIFACT_DIGEST: ${{ needs.obtain-release-payload.outputs.artifact_digest }}
           EXPECTED_ARTIFACT_NAME: ${{ needs.obtain-release-payload.outputs.artifact_name }}
           EXPECTED_COMPILER_RUN_ID: ${{ needs.obtain-release-payload.outputs.compiler_run_id }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           python3 scripts/release_candidate_manifest.py verify-local \

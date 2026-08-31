@@ -831,6 +831,11 @@ artifact-selection behaviour.
    before applying required native binaries, packaging, update-signing, SBOM
    generation, validation, or upload. It must record that verification beside
    the final candidate manifest and must not rebuild the verified payload.
+   Every candidate step that reads the requested version under `set -u` must
+   bind `inputs.version` explicitly in that step's environment. In particular,
+   the exact-SHA compiled-payload verifier must not depend on a version binding
+   from an earlier sibling step, because GitHub Actions does not preserve
+   step-local environment variables across steps.
    Private signing material and publication credentials must never enter the
    PVE compilation job.
    PVE jobs must consume their runner users' persistent local Go and npm caches

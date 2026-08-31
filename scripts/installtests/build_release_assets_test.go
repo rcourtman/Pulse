@@ -3063,6 +3063,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	compileJob := workflowJobBlock(t, compilerWorkflow, "compile-release-payload")
 	obtainPayloadJob := workflowJobBlock(t, candidateWorkflow, "obtain-release-payload")
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
+	compiledPayloadVerificationStep := workflowStepBlock(t, candidateBuildJob, "Verify exact-SHA compiled payload")
 
 	for _, needle := range []string{
 		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
@@ -3115,6 +3116,9 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 	if strings.Contains(compileJob, "PULSE_UPDATE_SIGNING_KEY") {
 		t.Fatal("release compilation job must not receive private update-signing material")
+	}
+	if !strings.Contains(compiledPayloadVerificationStep, `VERSION: ${{ inputs.version }}`) {
+		t.Fatal("exact-SHA compiled payload verification must bind the requested release version")
 	}
 	if strings.Contains(candidateWorkflow, `runs-on: ${{ fromJSON('["self-hosted"`) {
 		t.Fatal("SignPath release workflow must not contain a self-hosted runner job")
