@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"log"
+	"net"
 	"strings"
 )
 
@@ -115,6 +116,61 @@ func (index *identityPinIndex) find(identity ResourceIdentity) (ResourceIdentity
 	return ResourceIdentityPin{}, false
 }
 
+// findProxmoxNode resolves a weak provider node only inside identity evidence
+// owned by that provider. A standalone node name is not an estate-wide key:
+// pve in one DNS zone may coexist with pve in another. Falling through to the
+// generic short-hostname buckets lets the first site's durable agent pin lend
+// its machine ID to every same-named provider during the boot window before
+// agents check in, collapsing those provider rows into one canonical resource.
+//
+// A full configured endpoint is provider-scoped evidence and is safe when the
+// durable pin recorded that exact endpoint. Named clusters may retain their
+// historical cluster+native-name lookup; duplicate cluster labels are already
+// marked provider-scoped by the adapter and arrive without ClusterName.
+func (index *identityPinIndex) findProxmoxNode(resource Resource, identity ResourceIdentity) (ResourceIdentityPin, bool) {
+	if index == nil || resource.Proxmox == nil {
+		return ResourceIdentityPin{}, false
+	}
+	machineID := strings.TrimSpace(identity.MachineID)
+	dmiUUID := strings.TrimSpace(identity.DMIUUID)
+	if machineID != "" {
+		if pin, ok := index.byMachineID[machineID]; ok {
+			return pin, true
+		}
+	}
+	if dmiUUID != "" {
+		if pin, ok := index.byDMIUUID[dmiUUID]; ok && pinCompatible(pin, machineID, "") {
+			return pin, true
+		}
+	}
+
+	clusterName := strings.TrimSpace(identity.ClusterName)
+	endpoint := NormalizeFullHostname(extractHostname(resource.Proxmox.HostURL))
+	if endpoint != "" && net.ParseIP(endpoint) == nil {
+		if clusterName != "" {
+			if pin, ok := resolvePinBucket(index.byClusterHost[clusterHostPinKey(clusterName, endpoint)], endpoint, machineID, dmiUUID); ok {
+				return pin, true
+			}
+		}
+		if pin, ok := resolvePinBucket(index.byHostname[endpoint], endpoint, machineID, dmiUUID); ok {
+			return pin, true
+		}
+	}
+
+	if clusterName != "" {
+		for _, hostname := range identity.Hostnames {
+			hostname = NormalizeFullHostname(hostname)
+			if hostname == "" {
+				continue
+			}
+			if pin, ok := resolvePinBucket(index.byClusterHost[clusterHostPinKey(clusterName, hostname)], hostname, machineID, dmiUUID); ok {
+				return pin, true
+			}
+		}
+	}
+	return ResourceIdentityPin{}, false
+}
+
 // resolvePinBucket resolves a hostname bucket lookup. The bucket must be
 // unambiguous (exactly one pin), the pinned hostname must be the incoming one
 // or its short/FQDN equivalent (two distinct FQDNs sharing a short name never
@@ -166,14 +222,20 @@ func (rr *ResourceRegistry) loadIdentityPins() {
 // knows cluster+hostname) still derives the same canonical ID as a steady
 // state rebuild that knows the machine ID. Only missing fields are filled; an
 // incoming identity that already carries a machine ID is never overridden.
-func (rr *ResourceRegistry) completeIdentityFromPins(resourceType ResourceType, identity ResourceIdentity) ResourceIdentity {
-	if CanonicalResourceType(resourceType) != ResourceTypeAgent {
+func (rr *ResourceRegistry) completeIdentityFromPins(source DataSource, resource Resource, identity ResourceIdentity) ResourceIdentity {
+	if CanonicalResourceType(resource.Type) != ResourceTypeAgent {
 		return identity
 	}
 	if strings.TrimSpace(identity.MachineID) != "" && strings.TrimSpace(identity.DMIUUID) != "" {
 		return identity
 	}
-	pin, ok := rr.identityPins.find(identity)
+	var pin ResourceIdentityPin
+	var ok bool
+	if source == SourceProxmox && resource.Proxmox != nil {
+		pin, ok = rr.identityPins.findProxmoxNode(resource, identity)
+	} else {
+		pin, ok = rr.identityPins.find(identity)
+	}
 	if !ok {
 		return identity
 	}

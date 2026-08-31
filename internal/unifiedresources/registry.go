@@ -2663,7 +2663,7 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	// pulse-agent's pin on a same-named host) completing the identity would
 	// re-merge systems the connection scoping keeps apart.
 	if source != SourceTrueNAS {
-		identity = rr.completeIdentityFromPins(resource.Type, identity)
+		identity = rr.completeIdentityFromPins(source, resource, identity)
 	}
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}

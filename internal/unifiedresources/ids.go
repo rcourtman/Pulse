@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 )
@@ -170,13 +171,23 @@ func identityPinForResource(resource *Resource) (ResourceIdentityPin, bool) {
 	if resource == nil || CanonicalResourceType(resource.Type) != ResourceTypeAgent {
 		return ResourceIdentityPin{}, false
 	}
+	hostname := firstIdentityHostname(resource.Identity)
+	// Proxmox native node names are commonly short and repeat across
+	// independent estates. When the merged provider view has a full endpoint,
+	// pin that provider-scoped hostname so a provider-only boot can recover the
+	// machine identity without making the short name globally authoritative.
+	if resource.Proxmox != nil {
+		if endpoint := NormalizeFullHostname(extractHostname(resource.Proxmox.HostURL)); endpoint != "" && net.ParseIP(endpoint) == nil {
+			hostname = endpoint
+		}
+	}
 	pin := ResourceIdentityPin{
 		CanonicalID:  resource.ID,
 		ResourceType: ResourceTypeAgent,
 		MachineID:    resource.Identity.MachineID,
 		DMIUUID:      resource.Identity.DMIUUID,
 		ClusterName:  resource.Identity.ClusterName,
-		Hostname:     firstIdentityHostname(resource.Identity),
+		Hostname:     hostname,
 	}.normalized()
 	if pin.CanonicalID == "" || !pin.hasStrongKey() {
 		return ResourceIdentityPin{}, false
