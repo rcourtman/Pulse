@@ -39,6 +39,13 @@ GO_TMP_DIR="${RUN_DIR}/go-tmp"
 TIMINGS_FILE="${RUN_DIR}/timings.tsv"
 TEST_DATA_DIR="${WORKER_ROOT}/test-data/${PROFILE}"
 
+# The worker is invoked over a non-login ssh shell, so /etc/profile.d is not
+# sourced and an infra-managed mise toolchain (Node 24, Go) would be shadowed by
+# any stale system binary on PATH. Activate mise shims when they are installed.
+if [ -x "$HOME/.local/bin/mise" ]; then
+  eval "$("$HOME/.local/bin/mise" activate bash --shims)"
+fi
+
 for command_name in git go node npm docker curl flock timeout python3; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Error: required worker command is missing: ${command_name}" >&2
