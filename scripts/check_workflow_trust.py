@@ -40,6 +40,13 @@ WITH_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('with')}\s*:\s*(.*)$")
 RUN_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('run')}\s*:\s*(.*)$")
 ENV_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('env')}\s*:\s*$")
 ENV_ENTRY_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*?)\s*$")
+SEQUENCE_ITEM_RE = re.compile(r"^\s*-(?:\s|$)")
+# A block scalar may carry a chomping indicator, an explicit indentation
+# indicator, and a trailing YAML comment. All of those forms still introduce
+# source lines that need generated-program auditing.
+BLOCK_SCALAR_HEADER_RE = re.compile(
+    r"^[|>](?:(?:[1-9][+-]?)|(?:[+-][1-9]?))?(?:\s+#.*)?$"
+)
 EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
 GITHUB_COMMAND_FILE_RE = re.compile(r"\bGITHUB_(?:ENV|OUTPUT|PATH|STATE)\b")
 SHELL_ASSIGNMENT_RE = re.compile(
@@ -310,13 +317,13 @@ def _action_block(lines: list[str], uses_index: int) -> list[tuple[int, str]]:
     uses_indent = _indent(lines[uses_index])
     step_start = uses_index
     step_indent = uses_indent
-    if not lines[uses_index].lstrip().startswith("- "):
+    if not SEQUENCE_ITEM_RE.match(lines[uses_index]):
         for index in range(uses_index - 1, -1, -1):
             line = lines[index]
             if (
                 line.strip()
                 and _indent(line) < uses_indent
-                and line.lstrip().startswith("- ")
+                and SEQUENCE_ITEM_RE.match(line)
             ):
                 step_start = index
                 step_indent = _indent(line)
@@ -328,7 +335,7 @@ def _action_block(lines: list[str], uses_index: int) -> list[tuple[int, str]]:
         stripped = line.strip()
         if index != step_start and stripped and (
             _indent(line) < step_indent
-            or (_indent(line) == step_indent and stripped.startswith("- "))
+            or (_indent(line) == step_indent and SEQUENCE_ITEM_RE.match(line))
         ):
             break
         block.append((index, line))
@@ -342,7 +349,7 @@ def _action_generated_code_lines(
     uses_indent = _indent(lines[uses_index])
     field_indent = (
         uses_indent + 2
-        if lines[uses_index].lstrip().startswith("- ")
+        if SEQUENCE_ITEM_RE.match(lines[uses_index])
         else uses_indent
     )
     block = _action_block(lines, uses_index)
@@ -357,7 +364,7 @@ def _action_generated_code_lines(
         if not with_match:
             continue
         with_field_indent = len(with_match.group(1)) + (
-            2 if code.lstrip().startswith("- ") else 0
+            2 if SEQUENCE_ITEM_RE.match(code) else 0
         )
         if with_field_indent != field_indent:
             continue
@@ -375,7 +382,7 @@ def _action_generated_code_lines(
             if not input_match or len(input_match.group(1)) != input_indent:
                 continue
             value = input_match.group(2).strip()
-            if value not in {"|", "|-", "|+", ">", ">-", ">+"}:
+            if not BLOCK_SCALAR_HEADER_RE.fullmatch(value):
                 generated_lines.append((input_index, input_match.group(2)))
                 continue
             for script_index in range(input_index + 1, with_end):
@@ -431,7 +438,7 @@ def _run_script_lines(lines: list[str], run_index: int) -> list[tuple[int, str]]
         return []
     run_indent = len(match.group(1))
     value = match.group(2).strip()
-    if value not in {"|", "|-", "|+", ">", ">-", ">+"}:
+    if not BLOCK_SCALAR_HEADER_RE.fullmatch(value):
         return [(run_index, match.group(2))]
 
     script: list[tuple[int, str]] = []
@@ -557,7 +564,7 @@ def _step_env_bindings(lines: list[str], run_index: int) -> dict[str, str]:
         if (
             line.strip()
             and _indent(line) == field_indent - 2
-            and line.lstrip().startswith("- ")
+            and SEQUENCE_ITEM_RE.match(line)
         ):
             step_start = index
             break
@@ -568,7 +575,7 @@ def _step_env_bindings(lines: list[str], run_index: int) -> dict[str, str]:
         if (
             line.strip()
             and _indent(line) == field_indent - 2
-            and line.lstrip().startswith("- ")
+            and SEQUENCE_ITEM_RE.match(line)
         ):
             step_end = index
             break

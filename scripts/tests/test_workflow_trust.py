@@ -765,6 +765,9 @@ jobs:
       - run: |
           echo "${{ secrets.ACCESS_TOKEN }}"
           echo "${{ github.token }}"
+      -
+        run: |2- # explicit indentation remains generated shell source
+          echo "${{ github.event.issue.title }}"
       - env:
           NAME: ${{ inputs.name }}
           TOKEN: ${{ github.token }}
@@ -773,7 +776,7 @@ jobs:
         )
         self.assertEqual(
             sum("must enter run scripts through env" in finding for finding in findings),
-            5,
+            6,
         )
 
     def test_rejects_template_data_in_executable_action_inputs(self) -> None:
@@ -796,11 +799,16 @@ jobs:
         with:
           inlineScript: |
             Write-Output '${{{{ steps.prepare.outputs.command }}}}'
+      -
+        with:
+          script: |2- # explicit indentation remains generated source
+            const body = '${{{{ github.event.comment.body }}}}';
+        uses: actions/github-script@{PIN}
 """
         )
         self.assertEqual(
             sum("executable action inputs" in finding for finding in findings),
-            4,
+            5,
         )
 
         safe = self.audit(
@@ -863,11 +871,15 @@ jobs:
       - run: |
           EVENT_TAG=$(jq -r '.release.tag_name' "$GITHUB_EVENT_PATH")
           echo "tag=$EVENT_TAG" >> "$GITHUB_OUTPUT"
+      -
+        env:
+          BARE_RELEASE: ${{ inputs.bare_release }}
+        run: echo "bare=$BARE_RELEASE" >> "$GITHUB_OUTPUT"
 """
         )
         self.assertEqual(
             sum("validated or encoded" in finding for finding in findings),
-            4,
+            5,
         )
 
     def test_rejects_aliased_workflow_data_in_github_command_files(self) -> None:
