@@ -158,6 +158,66 @@ def _indent(line: str) -> int:
     return len(line) - len(line.lstrip())
 
 
+def _direct_mapping_indent(
+    lines: list[str], parent_index: int, end_index: int | None = None
+) -> int | None:
+    """Return the indentation of a block mapping's direct children."""
+    parent_indent = _indent(lines[parent_index])
+    limit = len(lines) if end_index is None else end_index
+    for line in lines[parent_index + 1 : limit]:
+        code = line.split("#", 1)[0]
+        if not code.strip():
+            continue
+        indent = _indent(code)
+        if indent <= parent_indent:
+            return None
+        # YAML permits any consistent indentation width. The first content in
+        # a block mapping establishes its direct-child indentation; assuming
+        # two spaces here lets a valid, more deeply indented workflow evade
+        # job-scoped trust checks.
+        return indent
+    return None
+
+
+def _mapping_end_index(lines: list[str], parent_index: int) -> int:
+    """Return the first line after a YAML block mapping."""
+    parent_indent = _indent(lines[parent_index])
+    for index in range(parent_index + 1, len(lines)):
+        code = lines[index].split("#", 1)[0]
+        if code.strip() and _indent(code) <= parent_indent:
+            return index
+    return len(lines)
+
+
+def _permission_mapping_has_write(
+    lines: list[str], permissions_index: int, end_index: int | None = None
+) -> bool:
+    """Return whether a permissions block grants any literal write scope."""
+    match = PERMISSIONS_RE.match(lines[permissions_index].split("#", 1)[0])
+    if not match:
+        return False
+    inline = match.group(2).strip().strip("'\"").lower()
+    if inline:
+        # Broad inline grants are rejected separately, but classify them as
+        # privileged too so cache isolation remains fail-closed in one run.
+        return inline == "write-all"
+
+    child_indent = _direct_mapping_indent(lines, permissions_index, end_index)
+    if child_indent is None:
+        return False
+    limit = len(lines) if end_index is None else end_index
+    for line in lines[permissions_index + 1 : limit]:
+        code = line.split("#", 1)[0]
+        if not code.strip():
+            continue
+        indent = _indent(code)
+        if indent <= _indent(lines[permissions_index]):
+            break
+        if indent == child_indent and WRITE_PERMISSION_RE.match(code):
+            return True
+    return False
+
+
 def _checkout_block(lines: list[str], uses_index: int) -> list[tuple[int, str]]:
     """Return lines belonging to the checkout step after its uses declaration."""
     uses_indent = _indent(lines[uses_index])
@@ -187,14 +247,16 @@ def _runner_job_ranges(lines: list[str]) -> list[tuple[int, int, int]]:
     if jobs_index is None:
         return []
 
-    jobs_indent = _indent(lines[jobs_index])
+    jobs_end = _mapping_end_index(lines, jobs_index)
+
+    job_indent = _direct_mapping_indent(lines, jobs_index, jobs_end)
+    if job_indent is None:
+        return []
     job_starts: list[tuple[int, int]] = []
-    for index in range(jobs_index + 1, len(lines)):
+    for index in range(jobs_index + 1, jobs_end):
         code = lines[index].split("#", 1)[0]
-        if code.strip() and _indent(code) <= jobs_indent:
-            break
         match = JOB_RE.match(code)
-        if match and len(match.group(1)) == jobs_indent + 2:
+        if match and len(match.group(1)) == job_indent:
             job_starts.append((index, len(match.group(1))))
 
     return [
@@ -202,7 +264,7 @@ def _runner_job_ranges(lines: list[str]) -> list[tuple[int, int, int]]:
             job_index,
             job_starts[position + 1][0]
             if position + 1 < len(job_starts)
-            else len(lines),
+            else jobs_end,
             job_indent,
         )
         for position, (job_index, job_indent) in enumerate(job_starts)
@@ -587,8 +649,10 @@ def _audit_workflow_run_trigger(path: Path, lines: list[str]) -> list[Finding]:
 def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
     """Require each locally executed job to declare one bounded time budget."""
     findings: list[Finding] = []
-    for job_index, end_index, job_indent in _runner_job_ranges(lines):
-        direct_indent = job_indent + 2
+    for job_index, end_index, _ in _runner_job_ranges(lines):
+        direct_indent = _direct_mapping_indent(lines, job_index, end_index)
+        if direct_indent is None:
+            continue
         runner_lines: list[int] = []
         timeout_declarations: list[tuple[int, str]] = []
         for index in range(job_index + 1, end_index):
@@ -640,24 +704,43 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
         ),
         len(lines),
     )
+    jobs_end = (
+        _mapping_end_index(lines, jobs_index)
+        if jobs_index < len(lines)
+        else len(lines)
+    )
     top_level_write = any(
-        WRITE_PERMISSION_RE.match(line.split("#", 1)[0]) and _indent(line) == 2
-        for line in lines
+        not match.group(1)
+        and _permission_mapping_has_write(lines, index)
+        for index, line in enumerate(lines)
+        if (match := PERMISSIONS_RE.match(line.split("#", 1)[0]))
     )
     top_level_confidential_secret = _has_confidential_secret_reference(
-        lines[:jobs_index]
+        lines[:jobs_index] + lines[jobs_end:]
     )
 
     for job_index, end_index, _ in _runner_job_ranges(lines):
         job_lines = lines[job_index:end_index]
+        direct_indent = _direct_mapping_indent(lines, job_index, end_index)
+        job_write = (
+            any(
+                len(match.group(1)) == direct_indent
+                and _permission_mapping_has_write(lines, index, end_index)
+                for index in range(job_index + 1, end_index)
+                if (
+                    match := PERMISSIONS_RE.match(
+                        lines[index].split("#", 1)[0]
+                    )
+                )
+            )
+            if direct_indent is not None
+            else False
+        )
         privileged = (
             top_level_write
             or top_level_confidential_secret
             or _has_confidential_secret_reference(job_lines)
-            or any(
-                WRITE_PERMISSION_RE.match(line.split("#", 1)[0])
-                for line in job_lines
-            )
+            or job_write
         )
         if not privileged:
             continue

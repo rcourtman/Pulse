@@ -491,6 +491,100 @@ jobs:
             )
         )
 
+    def test_job_trust_structure_accepts_any_consistent_yaml_indent(self) -> None:
+        indented_privileged_job = self.audit(
+            f"""permissions:
+    contents: read
+jobs:
+    publisher:
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/cache@{PIN}
+"""
+        )
+        self.assertTrue(
+            any("explicit timeout-minutes" in finding for finding in indented_privileged_job)
+        )
+        self.assertTrue(
+            any(
+                "must not restore or save unsigned caches" in finding
+                for finding in indented_privileged_job
+            )
+        )
+
+        indented_top_level_grant = self.audit(
+            f"""permissions:
+    contents: write
+jobs:
+    publisher:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - uses: actions/cache@{PIN}
+"""
+        )
+        self.assertTrue(
+            any(
+                "must not restore or save unsigned caches" in finding
+                for finding in indented_top_level_grant
+            )
+        )
+
+        trailing_top_level_grant = self.audit(
+            f"""jobs:
+    publisher:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - uses: actions/cache@{PIN}
+permissions:
+    contents: write
+"""
+        )
+        self.assertTrue(
+            any(
+                "must not restore or save unsigned caches" in finding
+                for finding in trailing_top_level_grant
+            )
+        )
+
+        trailing_top_level_secret = self.audit(
+            f"""permissions:
+    contents: read
+jobs:
+    publisher:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - uses: actions/cache@{PIN}
+env:
+    SIGNING_TOKEN: ${{{{ secrets.SIGNING_TOKEN }}}}
+"""
+        )
+        self.assertTrue(
+            any(
+                "must not restore or save unsigned caches" in finding
+                for finding in trailing_top_level_secret
+            )
+        )
+
+        read_only_env_value = self.audit(
+            f"""permissions:
+    contents: read
+jobs:
+    validation:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        env:
+            ACCESS_MODE: write
+        steps:
+            - uses: actions/cache@{PIN}
+"""
+        )
+        self.assertEqual(read_only_env_value, [])
+
     def test_rejects_shell_template_data_but_accepts_env_data(self) -> None:
         findings = self.audit(
             """permissions: {}
