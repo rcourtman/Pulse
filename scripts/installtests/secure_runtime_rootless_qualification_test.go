@@ -158,6 +158,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	defer fixture.actionServer.Shutdown()
 	server := httptest.NewServer(fixture)
 	defer server.Close()
+	collectorCredential := secureRuntimeLabToken
 
 	daemon := rootlessQualPrepareDaemons(t, runtimeKind)
 	defer rootlessQualBestEffortStop(daemon.rootlessUnit, daemon.rootfulUnit, rootlessQualOtherUnit(runtimeKind), fmt.Sprintf("user@%d.service", daemon.uid))
@@ -207,11 +208,16 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	daemonIDBefore := rootlessQualDaemonID(t, daemon, true)
 	appendScenario("fresh_install", freshStarted, &freshReport.Report,
 		rootlessQualDirectEvidence(daemon, identity, freshPID, daemonIDBefore, daemonRootlessObserved, freshDigest))
-	rootlessQualUninstallPulse(t, installerPath, server.URL)
+	rootlessQualUninstallPulse(t, installerPath, server.URL, collectorCredential)
 	rootlessQualAssertPulseRemoved(t)
+	if registered, revoked, uninstalls := fixture.collectorLifecycleSnapshot(); registered || !revoked || uninstalls != 1 {
+		t.Fatalf("fresh collector uninstall was not durably modeled: registered=%t revoked=%t uninstalls=%d", registered, revoked, uninstalls)
+	}
+	fixture.replaceCollectorCredential(secureRuntimeLabTokenV2, secureRuntimeCollectorBindingV2)
+	collectorCredential = secureRuntimeLabTokenV2
 
 	migrationStarted := time.Now().UTC()
-	secureRuntimeRunInstaller(t, installerPath, server.URL,
+	secureRuntimeRunInstallerWithCollectorCredential(t, installerPath, server.URL, collectorCredential,
 		"--enable-commands", "--command-authority", "command-capable", "--enable-docker")
 	legacyReport := rootlessQualWaitReport(t, fixture, migrationStarted, 75*time.Second, func(report agentsdocker.Report) bool {
 		return rootlessQualComplete(report) && report.Host.CollectionMode == "" && report.Host.Runtime == runtimeKind
@@ -223,7 +229,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 		t.Fatalf("legacy root report differs from the separate rootful runtime baseline: report=%s baseline=%s", legacyDigest, rootfulBaseline.SemanticDigest)
 	}
 	applyStarted := time.Now().UTC()
-	secureRuntimeRunInstaller(t, installerPath, server.URL, "--safe-profile-apply")
+	secureRuntimeRunInstallerWithCollectorCredential(t, installerPath, server.URL, collectorCredential, "--safe-profile-apply")
 	migratedReport := rootlessQualWaitDirect(t, fixture, applyStarted, runtimeKind, 75*time.Second)
 	secureRuntimeAssertSafeProfile(t)
 	secureRuntimeAssertHelperProtocol(t)
@@ -313,7 +319,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	if _, err := os.Lstat(otherSocket); err != nil {
 		t.Fatalf("second live rootless socket missing: %v", err)
 	}
-	ambiguityOutput := rootlessQualRunUnpinnedCollector(t, server.URL, 6*time.Second)
+	ambiguityOutput := rootlessQualRunUnpinnedCollector(t, server.URL, collectorCredential, 6*time.Second)
 	if !strings.Contains(strings.ToLower(ambiguityOutput), "ambiguous collector-owned rootless runtime endpoints") {
 		t.Fatalf("unpinned collector did not fail closed on dual sockets:\n%s", ambiguityOutput)
 	}
@@ -334,7 +340,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	})
 	previousUpdateStream, _, _ := agentshost.ParseReportSequenceID(pinFallback.Report.SequenceID)
 	updateStarted := time.Now().UTC()
-	secureRuntimeRunInstaller(t, installerPath, server.URL, "--update")
+	secureRuntimeRunInstallerWithCollectorCredential(t, installerPath, server.URL, collectorCredential, "--update")
 	unitWhileAbsent := rootlessQualServicePin(t, runtimeKind)
 	if unitBefore != daemon.rootlessSock || unitWhileAbsent != unitBefore {
 		t.Fatalf("offline update lost exact rootless pin: before=%q after=%q", unitBefore, unitWhileAbsent)
@@ -411,7 +417,10 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	})
 
 	cleanupStarted := time.Now().UTC()
-	rootlessQualUninstallPulse(t, installerPath, server.URL)
+	rootlessQualUninstallPulse(t, installerPath, server.URL, collectorCredential)
+	if registered, revoked, uninstalls := fixture.collectorLifecycleSnapshot(); registered || !revoked || uninstalls != 2 {
+		t.Fatalf("final collector uninstall was not durably modeled: registered=%t revoked=%t uninstalls=%d", registered, revoked, uninstalls)
+	}
 	rootlessQualStopUnit(t, daemon.rootlessUnit)
 	rootlessQualStopUnit(t, daemon.rootfulUnit)
 	rootlessQualStopUserManager(t, daemon)
@@ -835,7 +844,7 @@ func rootlessQualUnitIdentity(t *testing.T, unit string) (int, string) {
 	return pid, invocation
 }
 
-func rootlessQualRunUnpinnedCollector(t *testing.T, serverURL string, duration time.Duration) string {
+func rootlessQualRunUnpinnedCollector(t *testing.T, serverURL, collectorCredential string, duration time.Duration) string {
 	t.Helper()
 	protectedPID := secureRuntimeCollectorMainPID(t)
 	stateDir, err := os.MkdirTemp("/tmp", "pulse-unpinned-probe-")
@@ -854,7 +863,7 @@ func rootlessQualRunUnpinnedCollector(t *testing.T, serverURL string, duration t
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "runuser", "-u", "pulse-agent", "--", "env", "-u", "DOCKER_HOST", "-u", "PODMAN_HOST", "-u", "CONTAINER_HOST",
-		"PULSE_URL="+serverURL, "PULSE_TOKEN="+secureRuntimeLabToken, "PULSE_INTERVAL=1s", "PULSE_AGENT_ID="+secureRuntimeLabAgentID,
+		"PULSE_URL="+serverURL, "PULSE_TOKEN="+collectorCredential, "PULSE_INTERVAL=1s", "PULSE_AGENT_ID="+secureRuntimeLabAgentID,
 		"PULSE_HOSTNAME="+secureRuntimeLabHostname, "PULSE_ENABLE_HOST=false", "PULSE_ENABLE_DOCKER=true", "PULSE_ENABLE_COMMANDS=false",
 		"PULSE_AGENT_ALLOW_PLAINTEXT_HTTP=true", "/usr/local/bin/pulse-agent", "--state-dir", stateDir, "--health-addr", "")
 	out, err := cmd.CombinedOutput()
@@ -1016,9 +1025,9 @@ func rootlessQualSourceHashes(t *testing.T) map[string]string {
 	return hashes
 }
 
-func rootlessQualUninstallPulse(t *testing.T, installerPath, serverURL string) {
+func rootlessQualUninstallPulse(t *testing.T, installerPath, serverURL, collectorCredential string) {
 	t.Helper()
-	secureRuntimeRunInstaller(t, installerPath, serverURL, "--uninstall")
+	secureRuntimeRunInstallerWithCollectorCredential(t, installerPath, serverURL, collectorCredential, "--uninstall")
 }
 
 func rootlessQualAssertPulseRemoved(t *testing.T) {

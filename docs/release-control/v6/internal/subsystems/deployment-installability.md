@@ -268,6 +268,12 @@ an outer default route invalidates the proof. The disposable host uses a
 private cgroup namespace without a host cgroup bind mount, creates an active
 delegated systemd user manager for the dedicated runtime identity, and removes
 that manager's linger state during cleanup.
+The qualification control plane must honor the installer's fail-closed
+teardown contract: it authenticates the exact collector binding, records the
+removal before returning the matching agent ID, rejects the removed bearer,
+and provisions a distinct replacement credential for the subsequent legacy
+migration. The final uninstall must independently remove that replacement
+binding before local files or services disappear.
 Its standalone `secure-runtime-rootless-v1` receipt must bind the exact
 qualification, collector, helper, installer, source-manifest, socket,
 fresh-install, legacy-migration, restart, fallback, recovery, ambiguity,

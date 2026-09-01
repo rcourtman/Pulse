@@ -7317,8 +7317,14 @@ or granting an outer default route is invalid qualification. The outer host
 uses a private cgroup namespace with no host cgroup bind mount. Each dedicated
 runtime identity must have an active delegated systemd user manager before its
 daemon starts, and cleanup must stop that manager and remove its linger state.
-The wrapper
-exercises each runtime in an isolated state root and emits the
+The in-container control-plane fixture must implement the same authenticated
+collector-uninstall response contract as the production lifecycle client. A
+teardown succeeds only after the fixture records the exact registered binding
+as removed, rejects that bearer thereafter, and returns the matching agent ID;
+the following legacy-migration phase uses a distinct replacement enrollment
+credential rather than resurrecting the removed one. Final cleanup must commit
+and verify the replacement binding's removal too.
+The wrapper exercises each runtime in an isolated state root and emits the
 standalone `secure-runtime-rootless-v1` receipt only after exact socket
 ownership, daemon rootless attestation, installer pinning, direct telemetry,
 same-family typed-helper fallback, recovery without collector restart,

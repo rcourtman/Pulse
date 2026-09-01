@@ -90,9 +90,12 @@ const (
 	secureRuntimeLabMarkerPath      = "/etc/pulse-secure-runtime-lab"
 	secureRuntimeLabMarkerValue     = "PULSE_SECURE_RUNTIME_SYSTEMD_LAB=disposable-v1"
 	secureRuntimeLabToken           = "8fa728ed4cbfa7466947e747627b51e2464ed3f69966ed6394e36a82d85d7d31"
+	secureRuntimeLabTokenV2         = "c6314d7664a58129f96576673631cad51fb69d83b577dab7ad9178f73c91cdca"
 	secureRuntimeLabAgentID         = "secure-runtime-systemd-lab"
 	secureRuntimeLabHostname        = "pulse-secure-runtime-lab"
 	secureRuntimeLabOrgID           = "secure-runtime-lab-org"
+	secureRuntimeCollectorBindingV1 = "secure-runtime-collector-binding-v1"
+	secureRuntimeCollectorBindingV2 = "secure-runtime-collector-binding-v2"
 	secureRuntimeRunnerSecretV1     = "3c896fe99e29384a293def92f23c1709fbf429773e0a20ac5d930f2aab62f839"
 	secureRuntimeRunnerSecretV2     = "d7f6f2550788213e0595f276b62b1df290f7e018ba74c03068c4afbe6efd7601"
 	secureRuntimeRunnerBindingV1    = "secure-runtime-runner-binding-v1"
@@ -242,6 +245,11 @@ type secureRuntimeLabFixture struct {
 	actionRevokes       int
 	actionActivations   int
 	authorityReductions int
+	collectorSecret     string
+	collectorBindingID  string
+	collectorRegistered bool
+	collectorRevoked    bool
+	collectorUninstalls int
 }
 
 func newSecureRuntimeLabFixture(collector []byte, collectorSignature string, helper, runner []byte, version string) *secureRuntimeLabFixture {
@@ -249,6 +257,7 @@ func newSecureRuntimeLabFixture(collector []byte, collectorSignature string, hel
 		collector: collector, collectorSignature: collectorSignature, helper: helper, runner: runner, serverVersion: version,
 		rejectedVersions: make(map[string]bool),
 		actionSecret:     secureRuntimeRunnerSecretV1, actionBindingID: secureRuntimeRunnerBindingV1, actionPending: true,
+		collectorSecret: secureRuntimeLabToken, collectorBindingID: secureRuntimeCollectorBindingV1,
 	}
 	fixture.actionServer = agentexec.NewServerWithAdmissionValidator(fixture.admitCommandSession, fixture.validateCommandSession)
 	return fixture
@@ -260,7 +269,7 @@ func (f *secureRuntimeLabFixture) admitCommandSession(secret, agentID, hostname 
 	if strings.TrimSpace(agentID) != secureRuntimeLabAgentID || !strings.EqualFold(strings.TrimSpace(hostname), secureRuntimeLabHostname) {
 		return agentexec.AgentAdmission{}, false
 	}
-	if secret == secureRuntimeLabToken {
+	if !f.collectorRevoked && secret == f.collectorSecret {
 		return f.collectorAdmissionLocked(), true
 	}
 	if f.actionRevoked || secret != f.actionSecret {
@@ -273,7 +282,7 @@ func (f *secureRuntimeLabFixture) validateCommandSession(admission agentexec.Age
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if admission.RuntimeRole != agentexec.RuntimeRoleActionRunner {
-		return admission == f.collectorAdmissionLocked()
+		return !f.collectorRevoked && admission == f.collectorAdmissionLocked()
 	}
 	expected := f.actionAdmissionLocked()
 	return !f.actionRevoked &&
@@ -288,10 +297,27 @@ func (f *secureRuntimeLabFixture) validateCommandSession(admission agentexec.Age
 func (f *secureRuntimeLabFixture) collectorAdmissionLocked() agentexec.AgentAdmission {
 	return agentexec.AgentAdmission{
 		OrganizationID: secureRuntimeLabOrgID,
-		TokenID:        "secure-runtime-collector-binding-v1",
+		TokenID:        f.collectorBindingID,
 		AgentID:        secureRuntimeLabAgentID,
 		Hostname:       secureRuntimeLabHostname,
 	}
+}
+
+func (f *secureRuntimeLabFixture) replaceCollectorCredential(secret, bindingID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.collectorRevoked || f.collectorRegistered {
+		panic("qualification fixture collector credential replaced before durable uninstall")
+	}
+	f.collectorSecret = secret
+	f.collectorBindingID = bindingID
+	f.collectorRevoked = false
+}
+
+func (f *secureRuntimeLabFixture) collectorLifecycleSnapshot() (registered, revoked bool, uninstalls int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.collectorRegistered, f.collectorRevoked, f.collectorUninstalls
 }
 
 func (f *secureRuntimeLabFixture) actionAdmissionLocked() agentexec.AgentAdmission {
@@ -409,8 +435,18 @@ func (f *secureRuntimeLabFixture) handleDockerReport(w http.ResponseWriter, r *h
 		http.Error(w, "incomplete docker report", http.StatusBadRequest)
 		return
 	}
+	if strings.TrimSpace(report.Agent.ID) != secureRuntimeLabAgentID || !strings.EqualFold(strings.TrimSpace(report.Host.Hostname), secureRuntimeLabHostname) {
+		http.Error(w, "collector identity mismatch", http.StatusForbidden)
+		return
+	}
 	f.mu.Lock()
+	if f.collectorRevoked || r.Header.Get("X-API-Token") != f.collectorSecret {
+		f.mu.Unlock()
+		http.Error(w, "collector credential was revoked", http.StatusUnauthorized)
+		return
+	}
 	f.dockerReports = append(f.dockerReports, secureRuntimeDockerReport{ReceivedAt: time.Now().UTC(), Report: report})
+	f.collectorRegistered = true
 	f.mu.Unlock()
 	writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
@@ -434,6 +470,8 @@ func (f *secureRuntimeLabFixture) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		f.handleActionRunnerCredential(w, r)
 	case r.URL.Path == "/api/agents/collector/reduce-authority":
 		f.handleCollectorAuthorityReduction(w, r)
+	case r.URL.Path == "/api/agents/agent/uninstall":
+		f.handleCollectorUninstall(w, r)
 	case r.URL.Path == "/api/health":
 		writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	case r.URL.Path == "/api/agents/agent/report":
@@ -470,7 +508,11 @@ func (f *secureRuntimeLabFixture) handleCollectorAuthorityReduction(w http.Respo
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
-	valid := strings.TrimSpace(r.Header.Get("Authorization")) == "Bearer "+secureRuntimeLabToken &&
+	f.mu.Lock()
+	collectorSecret := f.collectorSecret
+	collectorRevoked := f.collectorRevoked
+	f.mu.Unlock()
+	valid := !collectorRevoked && strings.TrimSpace(r.Header.Get("Authorization")) == "Bearer "+collectorSecret &&
 		strings.TrimSpace(request.AgentID) == secureRuntimeLabAgentID &&
 		strings.EqualFold(strings.TrimSpace(request.Hostname), secureRuntimeLabHostname)
 	if !valid {
@@ -483,10 +525,61 @@ func (f *secureRuntimeLabFixture) handleCollectorAuthorityReduction(w http.Respo
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (f *secureRuntimeLabFixture) handleCollectorUninstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !f.collectorLifecycleAuthorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var request struct {
+		AgentID string `json:"agentId"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	if err := decoder.Decode(&request); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		http.Error(w, "request contains trailing data", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(request.AgentID) != secureRuntimeLabAgentID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	f.mu.Lock()
+	if !f.collectorRegistered || f.collectorRevoked {
+		f.mu.Unlock()
+		http.Error(w, "collector is not registered", http.StatusNotFound)
+		return
+	}
+	admission := f.collectorAdmissionLocked()
+	f.collectorRegistered = false
+	f.collectorRevoked = true
+	f.collectorUninstalls++
+	f.lastSeen = time.Time{}
+	f.mu.Unlock()
+	f.actionServer.InvalidateAgentSession(admission)
+
+	writeSecureRuntimeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"agentId": secureRuntimeLabAgentID,
+	})
+}
+
 func (f *secureRuntimeLabFixture) authorized(r *http.Request) bool {
+	f.mu.Lock()
+	collectorSecret := f.collectorSecret
+	collectorRevoked := f.collectorRevoked
+	f.mu.Unlock()
 	bearer := r.Header.Get("Authorization")
-	valid := r.Header.Get("X-API-Token") == secureRuntimeLabToken &&
-		(bearer == "" || bearer == "Bearer "+secureRuntimeLabToken) &&
+	valid := !collectorRevoked && r.Header.Get("X-API-Token") == collectorSecret &&
+		(bearer == "" || bearer == "Bearer "+collectorSecret) &&
 		r.URL.Query().Get("token") == ""
 	if !valid {
 		f.mu.Lock()
@@ -498,10 +591,14 @@ func (f *secureRuntimeLabFixture) authorized(r *http.Request) bool {
 }
 
 func (f *secureRuntimeLabFixture) collectorLifecycleAuthorized(r *http.Request) bool {
+	f.mu.Lock()
+	collectorSecret := f.collectorSecret
+	collectorRevoked := f.collectorRevoked
+	f.mu.Unlock()
 	bearer := strings.TrimSpace(r.Header.Get("Authorization"))
 	legacyHeader := strings.TrimSpace(r.Header.Get("X-API-Token"))
-	valid := bearer == "Bearer "+secureRuntimeLabToken &&
-		(legacyHeader == "" || legacyHeader == secureRuntimeLabToken) &&
+	valid := !collectorRevoked && bearer == "Bearer "+collectorSecret &&
+		(legacyHeader == "" || legacyHeader == collectorSecret) &&
 		r.URL.Query().Get("token") == ""
 	if !valid {
 		f.mu.Lock()
@@ -681,7 +778,16 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 		report.Authority = payload.Agent.Privilege.Authority
 		report.TypedHelper = payload.Agent.Privilege.TypedHelper
 	}
+	if report.AgentID != secureRuntimeLabAgentID || !strings.EqualFold(report.Hostname, secureRuntimeLabHostname) {
+		http.Error(w, "collector identity mismatch", http.StatusForbidden)
+		return
+	}
 	f.mu.Lock()
+	if f.collectorRevoked || r.Header.Get("X-API-Token") != f.collectorSecret {
+		f.mu.Unlock()
+		http.Error(w, "collector credential was revoked", http.StatusUnauthorized)
+		return
+	}
 	f.reportAttempts = append(f.reportAttempts, report)
 	rejected := f.rejectedVersions[report.AgentVersion]
 	serverVersion := f.serverVersion
@@ -691,6 +797,7 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 		return
 	}
 	f.reports = append(f.reports, report)
+	f.collectorRegistered = true
 	if !f.freezeLastSeen {
 		f.lastSeen = report.ReceivedAt
 	}
@@ -709,8 +816,19 @@ func (f *secureRuntimeLabFixture) handleLookup(w http.ResponseWriter, r *http.Re
 	}
 	f.mu.Lock()
 	lastSeen := f.lastSeen
+	registered := f.collectorRegistered
 	f.mu.Unlock()
-	if lastSeen.IsZero() {
+	requestedAgentID := strings.TrimSpace(r.URL.Query().Get("agentId"))
+	requestedHostname := strings.TrimSpace(r.URL.Query().Get("hostname"))
+	if requestedAgentID != "" && requestedAgentID != secureRuntimeLabAgentID {
+		writeSecureRuntimeJSON(w, http.StatusNotFound, map[string]any{"success": false})
+		return
+	}
+	if requestedHostname != "" && !strings.EqualFold(requestedHostname, secureRuntimeLabHostname) {
+		writeSecureRuntimeJSON(w, http.StatusNotFound, map[string]any{"success": false})
+		return
+	}
+	if !registered || lastSeen.IsZero() {
 		writeSecureRuntimeJSON(w, http.StatusNotFound, map[string]any{"success": false})
 		return
 	}
@@ -1151,6 +1269,7 @@ func TestSecureRuntimeFixtureAcceptsBearerOnlyCollectorLifecycleLookup(t *testin
 	defer fixture.actionServer.Shutdown()
 	fixture.mu.Lock()
 	fixture.lastSeen = time.Now().UTC()
+	fixture.collectorRegistered = true
 	fixture.mu.Unlock()
 
 	request := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?agentId="+secureRuntimeLabAgentID, nil)
@@ -1166,6 +1285,75 @@ func TestSecureRuntimeFixtureAcceptsBearerOnlyCollectorLifecycleLookup(t *testin
 	fixture.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated lifecycle lookup status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSecureRuntimeFixtureDurablyRemovesExactCollectorAndRejectsRevokedBearer(t *testing.T) {
+	fixture := newSecureRuntimeLabFixture(nil, "", nil, nil, "fixture")
+	defer fixture.actionServer.Shutdown()
+	predecessorAdmission, admitted := fixture.admitCommandSession(secureRuntimeLabToken, secureRuntimeLabAgentID, secureRuntimeLabHostname)
+	if !admitted {
+		t.Fatal("fixture did not admit the predecessor collector credential")
+	}
+	fixture.mu.Lock()
+	fixture.lastSeen = time.Now().UTC()
+	fixture.collectorRegistered = true
+	fixture.mu.Unlock()
+
+	uninstall := func(token, agentID string) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(map[string]string{"agentId": agentID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
+		request.Header.Set("Authorization", "Bearer "+token)
+		recorder := httptest.NewRecorder()
+		fixture.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	if recorder := uninstall(secureRuntimeLabToken, "another-agent"); recorder.Code != http.StatusForbidden {
+		t.Fatalf("wrong-identity uninstall status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+	if registered, revoked, count := fixture.collectorLifecycleSnapshot(); !registered || revoked || count != 0 {
+		t.Fatalf("wrong-identity uninstall mutated fixture: registered=%t revoked=%t count=%d", registered, revoked, count)
+	}
+
+	recorder := uninstall(secureRuntimeLabToken, secureRuntimeLabAgentID)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("exact uninstall status = %d, body=%s", recorder.Code, recorder.Body.String())
+	}
+	var confirmation struct {
+		Success bool   `json:"success"`
+		AgentID string `json:"agentId"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &confirmation); err != nil || !confirmation.Success || confirmation.AgentID != secureRuntimeLabAgentID {
+		t.Fatalf("exact uninstall confirmation = %+v, err=%v", confirmation, err)
+	}
+	if registered, revoked, count := fixture.collectorLifecycleSnapshot(); registered || !revoked || count != 1 {
+		t.Fatalf("exact uninstall state: registered=%t revoked=%t count=%d", registered, revoked, count)
+	}
+	if fixture.validateCommandSession(predecessorAdmission) {
+		t.Fatal("revoked collector admission remained valid after uninstall")
+	}
+	if recorder := uninstall(secureRuntimeLabToken, secureRuntimeLabAgentID); recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked bearer uninstall status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+
+	fixture.replaceCollectorCredential(secureRuntimeLabTokenV2, secureRuntimeCollectorBindingV2)
+	fixture.mu.Lock()
+	fixture.lastSeen = time.Now().UTC()
+	fixture.collectorRegistered = true
+	fixture.mu.Unlock()
+	if recorder := uninstall(secureRuntimeLabToken, secureRuntimeLabAgentID); recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("predecessor bearer after re-enrollment status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	if recorder := uninstall(secureRuntimeLabTokenV2, secureRuntimeLabAgentID); recorder.Code != http.StatusOK {
+		t.Fatalf("replacement bearer uninstall status = %d, body=%s", recorder.Code, recorder.Body.String())
+	}
+	if registered, revoked, count := fixture.collectorLifecycleSnapshot(); registered || !revoked || count != 2 {
+		t.Fatalf("replacement uninstall state: registered=%t revoked=%t count=%d", registered, revoked, count)
 	}
 }
 
@@ -2157,12 +2345,26 @@ func secureRuntimeRunInstallerWithActionCredential(t *testing.T, installerPath, 
 	return out
 }
 
+func secureRuntimeRunInstallerWithCollectorCredential(t *testing.T, installerPath, fixtureURL, collectorCredential string, scenarioArgs ...string) string {
+	t.Helper()
+	out, err := secureRuntimeRunInstallerErrorWithCredentials(t, installerPath, fixtureURL, collectorCredential, "", scenarioArgs...)
+	if err != nil {
+		t.Fatalf("installer %s failed: %v\n%s", strings.Join(scenarioArgs, " "), err, out)
+	}
+	return out
+}
+
 func secureRuntimeRunInstallerError(t *testing.T, installerPath, fixtureURL string, scenarioArgs ...string) (string, error) {
 	t.Helper()
 	return secureRuntimeRunInstallerErrorWithActionCredential(t, installerPath, fixtureURL, "", scenarioArgs...)
 }
 
 func secureRuntimeRunInstallerErrorWithActionCredential(t *testing.T, installerPath, fixtureURL, actionCredential string, scenarioArgs ...string) (string, error) {
+	t.Helper()
+	return secureRuntimeRunInstallerErrorWithCredentials(t, installerPath, fixtureURL, secureRuntimeLabToken, actionCredential, scenarioArgs...)
+}
+
+func secureRuntimeRunInstallerErrorWithCredentials(t *testing.T, installerPath, fixtureURL, collectorCredential, actionCredential string, scenarioArgs ...string) (string, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -2174,7 +2376,7 @@ func secureRuntimeRunInstallerErrorWithActionCredential(t *testing.T, installerP
 		args = append(args, scenarioArgs...)
 	default:
 		tokenFile := filepath.Join(t.TempDir(), "monitoring-token")
-		if err := os.WriteFile(tokenFile, []byte(secureRuntimeLabToken+"\n"), 0o600); err != nil {
+		if err := os.WriteFile(tokenFile, []byte(collectorCredential+"\n"), 0o600); err != nil {
 			t.Fatalf("write private fixture token: %v", err)
 		}
 		args = append(args,
@@ -2227,7 +2429,7 @@ func secureRuntimeRunStandaloneInstaller(t *testing.T, installerPath string, sce
 
 func secureRuntimeAssertNoCredentialExposure(t *testing.T, output []byte) {
 	t.Helper()
-	for _, credential := range []string{secureRuntimeLabToken, secureRuntimeRunnerSecretV1, secureRuntimeRunnerSecretV2} {
+	for _, credential := range []string{secureRuntimeLabToken, secureRuntimeLabTokenV2, secureRuntimeRunnerSecretV1, secureRuntimeRunnerSecretV2} {
 		if bytes.Contains(output, []byte(credential)) {
 			t.Fatal("installer output exposed a runtime credential")
 		}
