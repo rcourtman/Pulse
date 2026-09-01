@@ -503,6 +503,7 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 				STATE_DIR="` + stateDir + `"
 				STATE_DIR_REMOVAL_AUTHORITY="$STATE_DIR"
 				log_warn() { :; }
+` + extractInstallShellFunction(t, "remove_authorized_runtime_dir") + `
 ` + extractInstallShellFunction(t, "remove_agent_state_dir") + `
 				remove_agent_state_dir "$STATE_DIR"
 			`
