@@ -262,6 +262,57 @@ def _shell_variable_reference(line: str, name: str) -> bool:
     )
 
 
+def _bash_assignment_persists(line: str, assignment: re.Match[str]) -> bool:
+    """Return whether a Bash assignment changes the current shell."""
+    declaration = line[: assignment.start(1)].strip()
+    if declaration:
+        return True
+
+    quote = ""
+    escaped = False
+    parentheses = 0
+    braces = 0
+    value = line[assignment.end() :]
+    for index, character in enumerate(value):
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote:
+            if character == quote:
+                quote = ""
+            continue
+        if character in "'\"`":
+            quote = character
+            continue
+        if character == "(":
+            parentheses += 1
+            continue
+        if character == ")" and parentheses:
+            parentheses -= 1
+            continue
+        if character == "{" and (braces or (index and value[index - 1] == "$")):
+            braces += 1
+            continue
+        if character == "}" and braces:
+            braces -= 1
+            continue
+        if not parentheses and not braces:
+            if character == ";":
+                return True
+            if character in "|&":
+                return False
+            if character.isspace():
+                remainder = value[index:].strip()
+                return not remainder or remainder.startswith("#")
+
+    # A bare assignment persists. On an incomplete quoted or nested value,
+    # retain taint rather than treating malformed shell as validation.
+    return not quote and not parentheses and not braces and not escaped
+
+
 def _is_untrusted_expression(value: str) -> bool:
     return any(
         SHELL_DATA_CONTEXT_RE.search(expression)
@@ -286,8 +337,10 @@ def _audit_command_file_data(
 
     for script_index, script_line in _run_script_lines(lines, run_index):
         assignment = SHELL_ASSIGNMENT_RE.match(script_line)
+        powershell_assignment = False
         if assignment is None:
             assignment = POWERSHELL_ASSIGNMENT_RE.match(script_line)
+            powershell_assignment = assignment is not None
         if assignment:
             assigned_name = assignment.group(1)
             assignment_value = script_line[assignment.end() :]
@@ -303,7 +356,14 @@ def _audit_command_file_data(
                 # A later literal or trusted assignment replaces the prior
                 # value. Keeping stale taint would hide real findings in noise
                 # and encourage suppressions around the policy.
-                unsafe_names.discard(assigned_name)
+                if powershell_assignment:
+                    unsafe_names = {
+                        name
+                        for name in unsafe_names
+                        if name.casefold() != assigned_name.casefold()
+                    }
+                elif _bash_assignment_persists(script_line, assignment):
+                    unsafe_names.discard(assigned_name)
 
         if not GITHUB_COMMAND_FILE_RE.search(script_line):
             continue

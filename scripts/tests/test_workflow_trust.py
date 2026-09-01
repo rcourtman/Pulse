@@ -470,6 +470,45 @@ jobs:
             4,
         )
 
+    def test_temporary_bash_environment_does_not_clear_taint(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          RELEASE_NAME="safe value" true
+          RELEASE_NAME=safe{ true }
+          printf 'release=%s\\n' "$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+"""
+        )
+        self.assertEqual(
+            sum("validated or encoded" in finding for finding in findings),
+            1,
+        )
+
+    def test_powershell_trusted_reassignment_is_case_insensitive(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  safe:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - shell: pwsh
+        env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          $release_name = 'safe'
+          "release=$RELEASE_NAME" >> $env:GITHUB_OUTPUT
+"""
+        )
+        self.assertEqual(findings, [])
+
     def test_accepts_safe_command_file_writer_for_validated_values(self) -> None:
         findings = self.audit(
             """permissions: {}
