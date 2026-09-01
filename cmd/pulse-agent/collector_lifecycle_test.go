@@ -95,6 +95,50 @@ func TestCollectorLifecycleCommandSafelyReadsAgentIdentity(t *testing.T) {
 	}
 }
 
+func TestCollectorLifecycleCommandSafelyReadsCollectorToken(t *testing.T) {
+	tokenFile := writeCollectorLifecycleToken(t, "collector-file-bound")
+	var stdout, stderr bytes.Buffer
+	err := runCollectorLifecycleCommand(context.Background(), collectorReadTokenCommand, []string{
+		"--token-file", tokenFile,
+		"--token-owner-uid", collectorLifecycleTestOwnerUID(),
+	}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("runCollectorLifecycleCommand: %v (stderr %q)", err, stderr.String())
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "collector-file-bound" {
+		t.Fatalf("stdout = %q", got)
+	}
+}
+
+func TestCollectorLifecycleCommandDownloadsInstallerThroughPublicTransport(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/install.sh" || request.Header.Get("Authorization") != "" {
+			t.Errorf("request path=%q authorization=%q", request.URL.Path, request.Header.Get("Authorization"))
+		}
+		w.Header().Set("X-Signature-SSHSIG", "installer-signature")
+		_, _ = w.Write([]byte("#!/usr/bin/env bash\necho secure\n"))
+	}))
+	defer server.Close()
+	outputPath := filepath.Join(t.TempDir(), "installer.tmp")
+	if err := os.WriteFile(outputPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := runCollectorLifecycleCommand(context.Background(), collectorDownloadInstallerCommand, []string{
+		"--url", server.URL,
+		"--output", outputPath,
+	}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("runCollectorLifecycleCommand: %v (stderr %q)", err, stderr.String())
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "installer-signature" {
+		t.Fatalf("signature stdout = %q", got)
+	}
+	if body, err := os.ReadFile(outputPath); err != nil || string(body) != "#!/usr/bin/env bash\necho secure\n" {
+		t.Fatalf("installer body=%q err=%v", body, err)
+	}
+}
+
 func TestCollectorLifecycleCommandExitCodeDistinguishesRejectedCredential(t *testing.T) {
 	if got := collectorLifecycleExitCode(nil); got != 0 {
 		t.Fatalf("nil exit code = %d", got)

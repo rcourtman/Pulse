@@ -954,15 +954,22 @@ update, profile rollout, command reachability, or fleet-control authority.
     restart or OS reboot persistence, and complete uninstall cleanup through
     the reusable lifecycle harness under `scripts/installtests/`.
 31. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
-    `--state-dir` is a whole-lifecycle ownership boundary, not only a runtime
-    flag. The resolved directory owns the protected bootstrap token,
-    enrollment runtime token, server-acknowledged `agent-id`, buffered and
-    command-receipt state, `connection.env`, and the saved offline installer.
-    Generated service definitions must carry that same directory and its token
-    file through install, process restart, server restart, update,
-    re-enrollment, and uninstall. Explicit state wins over discovered service
-    state, which wins over platform defaults; a custom instance must never
-    borrow token or identity files from the default instance. A changed
+    `--state-dir` is the canonical runtime-state boundary, not an authority for
+    later root lifecycle work. The resolved directory owns the bootstrap and
+    enrollment runtime token, server-acknowledged `agent-id`, buffered state,
+    and command receipts. On a least-privilege install, root-owned
+    `connection.env`, the saved offline installer, and its SHA-256 integrity
+    record live separately under the installer lifecycle directory; the
+    collector-owned runtime directory must not contain executable or
+    root-trusted recovery artifacts. Generated service definitions must carry
+    the canonical runtime directory and token file through install, process
+    restart, server restart, update, and re-enrollment. Explicit state wins
+    over protected lifecycle recovery, which wins over discovered service state
+    and platform defaults; a custom instance must never borrow token or
+    identity files from the default instance. Recursive uninstall cleanup is
+    authorized only by an exact explicit/default/platform path or a protected
+    lifecycle record, never by process arguments or a collector-writable file.
+    A changed
     bootstrap token may clear the old enrollment runtime token to express
     re-enrollment, while an unchanged token and tokenless update must preserve
     it. Default platform paths remain valid migration inputs for installations
@@ -5989,6 +5996,35 @@ installer-owned helper path: `scripts/install.sh` may not write the state file
 one way and then recover it through a separate field-by-field inline parser,
 because lifecycle ownership requires one canonical reader/writer for persisted
 install identity and trust metadata.
+On least-privilege profiles, that canonical path is a root-owned private file
+under the installer lifecycle directory, alongside a root-owned mode-0700
+offline installer and mode-0600 checksum record. Recovery must reject a
+symlink, a file not owned by the lifecycle process, an over-permissive file, or
+a group/other-writable parent. Executing the saved installer must verify its
+checksum before accepting any persisted lifecycle state. Runtime `agent-id`
+recovery must use the descriptor-bound, no-follow, bounded lifecycle reader so
+collector-controlled symlinks, FIFOs, devices, and oversized files cannot make
+the root installer disclose a file or block. Safe-profile migration rollback
+must snapshot and restore all three root lifecycle artifacts with the local
+profile transaction.
+When an install was streamed on stdin, the offline copy may be persisted only
+after the installed root-owned lifecycle binary downloads it over the canonical
+system-CA/custom-CA/exact-leaf-pin transport with proxies and redirects denied,
+and the shell installer verifies the returned SSH signature against its
+embedded release key. Generic insecure curl plus a locally generated checksum
+is not source authentication; when authenticated bytes are unavailable the
+installer omits the offline copy and tells the operator to fetch a fresh one.
+Collector token and identity recovery from mutable state must use the bounded
+descriptor reader through a root-trusted lifecycle binary. A legacy
+least-privilege binary that is collector-owned is never executed as root; an
+early tokenless migration without a trusted reader fails closed and requires a
+fresh scoped credential rather than falling back to `cat`.
+Generated Unix token-file commands must create their bootstrap credential only
+after root or sudo elevation, inside a root-owned mode-0700 directory with a
+mode-0600 token file. Frontend host commands and backend Proxmox commands must
+preserve that shape and remove the complete bootstrap directory on every exit;
+an invoking-user-owned `mktemp` file is not a trusted input to the root
+installer on a fresh host.
 When persisted state is absent or partial during update, legacy running-process
 or service-unit recovery is a fallback into that same lifecycle continuity
 model, not a separate source of truth: it may only seed the installer-owned
@@ -6009,6 +6045,33 @@ That same rule applies to teardown: uninstall and reinstall cleanup may not
 rebuild disable/remove flows inline per platform. Shared installer helpers
 must own service stop/disable/remove semantics for systemd, OpenRC, SysV, and
 service-command runtimes so lifecycle cleanup stays canonical.
+The shared state-directory remover must additionally require the requested
+path to match the exact removal authority established by an explicit option,
+platform selection, or protected lifecycle record. Indeterminate or untrusted
+recovery retains the runtime directory for manual repair rather than invoking
+recursive removal on an attacker-selected path.
+When a local collector credential exists, uninstall must first resolve and
+durably remove the exact bearer-bound server record through the same
+CA/fingerprint, no-proxy, redirect-denying lifecycle client. TLS failure,
+invalid confirmation, or server unavailability retains the local service,
+credential, and recovery state; curl `-k` lookup/unregister is never rollback
+or deletion authority.
+Server confirmation requires the exact host/token transaction to persist both
+the host-removal tombstone and any dedicated token revocation before live
+teardown. Either persistence failure returns non-success with the live host and
+retry bearer retained; after success, restart must preserve the removed host
+state and reject the old bearer.
+The server also refuses teardown-authorizing success when a legacy collector
+token still belongs to another live host; that credential must first be split
+or rotated. A crash or response loss after both durable writes is fail-closed
+in the other direction: the server remains removed and the old bearer remains
+rejected, while the installer keeps local service and recovery state because
+it never observed confirmation. Recovery is therefore an operator-verified
+local-only cleanup: confirm the exact agent ID is absent through an
+administrator session, stop the retained service, quarantine its collector
+credential files out of the installer discovery paths, and rerun the protected
+saved installer for local removal. A rejected old bearer alone is never
+automatic deletion authority.
 The same lifecycle rule applies to TrueNAS bootstrap too: boot-time recovery
 for SCALE and CORE may only vary at the service-manager adapter, while binary
 sync, service-link recreation, and startup sequencing stay on one

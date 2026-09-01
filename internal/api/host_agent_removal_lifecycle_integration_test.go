@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -331,6 +332,174 @@ func TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart(t *testin
 	}
 	if oldConfigBody.AgentID != keeperID {
 		t.Fatalf("shared token resolved config for %q, want active keeper %q", oldConfigBody.AgentID, keeperID)
+	}
+}
+
+func TestCollectorUninstallTransactionFailsClosedAndRetriesAfterRestart(t *testing.T) {
+	standardScopes := []string{config.ScopeAgentReport, config.ScopeAgentConfigRead}
+	for _, failure := range []struct {
+		name        string
+		blockedPath func(string) string
+	}{
+		{name: "continuity persistence", blockedPath: func(dataPath string) string {
+			return filepath.Join(dataPath, "host_continuity.json.tmp")
+		}},
+		{name: "credential persistence", blockedPath: func(dataPath string) string {
+			return filepath.Join(dataPath, "api_tokens.json.tmp")
+		}},
+	} {
+		credentialShapes := []struct {
+			name   string
+			scopes []string
+		}{{name: "collector", scopes: standardScopes}}
+		if failure.name == "credential persistence" {
+			credentialShapes = append(credentialShapes,
+				struct {
+					name   string
+					scopes []string
+				}{name: "legacy-settings-write", scopes: []string{config.ScopeAgentReport, config.ScopeSettingsWrite}},
+				struct {
+					name   string
+					scopes []string
+				}{name: "legacy-wildcard", scopes: []string{config.ScopeWildcard}},
+			)
+		}
+		for _, credentialShape := range credentialShapes {
+			t.Run(failure.name+"/"+credentialShape.name, func(t *testing.T) {
+				dataPath := t.TempDir()
+				rawToken := "collector-uninstall-" + strings.ReplaceAll(failure.name, " ", "-") + "-" + credentialShape.name + "-123.12345678"
+				record := newTokenRecord(t, rawToken, credentialShape.scopes, nil)
+				if err := config.NewConfigPersistence(dataPath).SaveAPITokens([]config.APITokenRecord{record}); err != nil {
+					t.Fatalf("SaveAPITokens: %v", err)
+				}
+
+				report := agentshost.Report{
+					Host: agentshost.HostInfo{
+						ID:        "collector-uninstall-machine",
+						MachineID: "collector-uninstall-machine",
+						Hostname:  "collector-uninstall.local",
+						Platform:  "linux",
+					},
+					Agent:     agentshost.AgentInfo{ID: "collector-uninstall-agent", Version: "6.1.1", Type: "unified"},
+					Timestamp: time.Now().UTC(),
+				}
+				runtime := newHostRemovalLifecycleHTTPRuntime(t, dataPath, []config.APITokenRecord{record})
+				status, hostID, body := postHostRemovalLifecycleReport(t, runtime, rawToken, report)
+				if status != http.StatusOK {
+					runtime.stop()
+					t.Fatalf("initial report status = %d: %s", status, body)
+				}
+
+				blocker := failure.blockedPath(dataPath)
+				if err := os.Mkdir(blocker, 0o700); err != nil {
+					runtime.stop()
+					t.Fatalf("create persistence blocker: %v", err)
+				}
+				uninstallBody, err := json.Marshal(map[string]string{"agentId": hostID})
+				if err != nil {
+					runtime.stop()
+					t.Fatal(err)
+				}
+				failed := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/agent/uninstall", rawToken, uninstallBody)
+				if failed.Code == http.StatusOK {
+					runtime.stop()
+					t.Fatalf("persistence failure authorized teardown: %s", failed.Body.String())
+				}
+				if hosts := runtime.monitor.GetLiveHostsSnapshot(); len(hosts) != 1 || hosts[0].ID != hostID {
+					runtime.stop()
+					t.Fatalf("failed uninstall changed live host state: %+v", hosts)
+				}
+				if _, ok := runtime.config.ValidateAPIToken(rawToken); !ok {
+					runtime.stop()
+					t.Fatal("failed uninstall revoked the retry credential")
+				}
+
+				if err := os.Remove(blocker); err != nil {
+					runtime.stop()
+					t.Fatalf("remove persistence blocker: %v", err)
+				}
+				runtime.stop()
+				reloaded, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
+				if err != nil {
+					t.Fatalf("LoadAPITokens after failed transaction: %v", err)
+				}
+				runtime = newHostRemovalLifecycleHTTPRuntime(t, dataPath, reloaded)
+				t.Cleanup(runtime.stop)
+
+				retry := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/agent/uninstall", rawToken, uninstallBody)
+				if retry.Code != http.StatusOK {
+					t.Fatalf("retry status = %d: %s", retry.Code, retry.Body.String())
+				}
+				if hosts := runtime.monitor.GetLiveHostsSnapshot(); len(hosts) != 0 {
+					t.Fatalf("successful retry retained host: %+v", hosts)
+				}
+				if _, ok := runtime.config.ValidateAPIToken(rawToken); ok {
+					t.Fatal("successful retry retained collector credential")
+				}
+				persisted, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
+				if err != nil {
+					t.Fatalf("LoadAPITokens after successful retry: %v", err)
+				}
+				if tokenRecordByID(persisted, record.ID) != nil {
+					t.Fatalf("revoked collector credential survived restart state: %+v", persisted)
+				}
+
+				runtime.stop()
+				runtime = newHostRemovalLifecycleHTTPRuntime(t, dataPath, persisted)
+				if hosts := runtime.monitor.GetLiveHostsSnapshot(); len(hosts) != 0 {
+					t.Fatalf("restart resurrected removed collector: %+v", hosts)
+				}
+				report.Timestamp = report.Timestamp.Add(time.Minute)
+				if status, _, body := postHostRemovalLifecycleReport(t, runtime, rawToken, report); status != http.StatusUnauthorized {
+					t.Fatalf("restart accepted revoked collector credential: status=%d body=%s", status, body)
+				}
+			})
+		}
+	}
+}
+
+func TestCollectorUninstallRejectsCredentialStillUsedByAnotherHost(t *testing.T) {
+	dataPath := t.TempDir()
+	const rawToken = "collector-uninstall-shared-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport, config.ScopeAgentConfigRead}, nil)
+	if err := config.NewConfigPersistence(dataPath).SaveAPITokens([]config.APITokenRecord{record}); err != nil {
+		t.Fatalf("SaveAPITokens: %v", err)
+	}
+	runtime := newHostRemovalLifecycleHTTPRuntime(t, dataPath, []config.APITokenRecord{record})
+	t.Cleanup(runtime.stop)
+
+	report := func(machineID, hostname string) agentshost.Report {
+		return agentshost.Report{
+			Host:      agentshost.HostInfo{ID: machineID, MachineID: machineID, Hostname: hostname, Platform: "linux"},
+			Agent:     agentshost.AgentInfo{ID: machineID + "-agent", Version: "6.1.1", Type: "unified"},
+			Timestamp: time.Now().UTC(),
+		}
+	}
+	status, targetID, body := postHostRemovalLifecycleReport(t, runtime, rawToken, report("shared-target", "shared-target.local"))
+	if status != http.StatusOK {
+		t.Fatalf("target report status = %d: %s", status, body)
+	}
+	status, keeperID, body := postHostRemovalLifecycleReport(t, runtime, rawToken, report("shared-keeper", "shared-keeper.local"))
+	if status != http.StatusOK {
+		t.Fatalf("keeper report status = %d: %s", status, body)
+	}
+	uninstallBody, err := json.Marshal(map[string]string{"agentId": targetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/agent/uninstall", rawToken, uninstallBody)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("shared credential uninstall status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	hosts := runtime.monitor.GetLiveHostsSnapshot()
+	if len(hosts) != 2 {
+		t.Fatalf("shared credential failure changed live hosts: %+v", hosts)
+	}
+	if _, ok := runtime.config.ValidateAPIToken(rawToken); !ok {
+		t.Fatal("shared credential failure revoked the keeper credential")
+	}
+	if targetID == keeperID {
+		t.Fatalf("test setup did not create distinct hosts: %q", targetID)
 	}
 }
 

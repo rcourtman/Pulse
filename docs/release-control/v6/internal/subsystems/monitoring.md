@@ -3565,6 +3565,23 @@ fails, but the token stays consistently active instead of disappearing only
 from the live process and silently returning after restart. Success and
 forced-write-failure coverage lives in
 `internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`.
+Collector self-uninstall is stricter than operator removal: while holding the
+host lifecycle write lock it verifies the exact live host/token binding,
+persists the removal tombstone, and durably revokes a dedicated credential
+before changing live resource state. Failure to load or write continuity, an
+unavailable credential persister, or failure to persist the reduced token
+inventory returns an error and retains the live host and retry credential; a
+shared legacy token remains active only for its other live resources. The
+production Router regression in
+`internal/api/host_agent_removal_lifecycle_integration_test.go` forces both
+continuity-journal and credential-inventory writes to fail, restarts the
+server, retries with the exact bearer, and then proves removal plus old-secret
+rejection survive a second restart.
+Collector self-uninstall refuses a token that is still referenced by another
+live host. That legacy shared authority must be rotated or separated before
+the server can return teardown-authorizing success; preserving the bearer for
+the other host is not equivalent to revoking the uninstalling collector's
+credential.
 
 ### Escalation callbacks preserve exact routing intent
 

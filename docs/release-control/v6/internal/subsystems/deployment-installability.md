@@ -713,9 +713,19 @@ artifact-selection behaviour.
    must discover it from the active process or managed service before looking
    at default-path state; explicit custom-path operations must not fall back
    to another default instance. `connection.env` records the canonical state
-   and token-file paths without storing the token value, update rewrites the
-   same secure service shape, and uninstall removes the discovered canonical
-   directory rather than only `/var/lib/pulse-agent`.
+   and token-file paths without storing the token value. On least-privilege
+   installs that file, the saved offline installer, and its integrity record
+   live under a separate root-owned installer lifecycle directory rather than
+   the collector-writable runtime state directory. Update rewrites the same
+   secure service shape, and uninstall removes the discovered canonical
+   directory rather than only `/var/lib/pulse-agent`, but recursive removal is
+   permitted only when an explicit/default/platform selection or protected
+   lifecycle record grants exact authority for that path.
+   Token-bearing generated Unix commands must create the ephemeral token file
+   after root or sudo elevation under a root-owned mode-0700 bootstrap
+   directory, set the token file to mode 0600, and remove the directory on
+   every exit. A fresh install must not depend on executing an already-installed
+   lifecycle binary to trust an invoking-user-owned temporary token file.
    Post-install verification must not declare server registration
    unconfirmed from a single lookup: the local `/readyz` gate flips before the
    agent's first report cycle completes, so the installer polls the server
@@ -4339,6 +4349,25 @@ writer/reader path: `scripts/install.sh` may not keep a heredoc writer plus a
 second inline field parser for the same `connection.env` contract, because
 offline uninstall must consume the same persisted install-state artifact the
 installer wrote instead of reconstructing it ad hoc.
+For a least-privilege service, installer ownership is physical as well as
+logical: `connection.env`, the mode-0700 saved installer, and its mode-0600
+SHA-256 record must be atomic root-owned files outside the collector-writable
+state tree. The saved installer verifies that integrity record before loading
+state. Connection recovery rejects symlinks, unexpected owners or modes, and
+group/other-writable parents. Canonical `agent-id` recovery from mutable runtime
+state must use the single-open, no-follow, nonblocking, bounded lifecycle
+reader and reject FIFOs, devices, symlinks, and oversized content. Safe-profile
+rollback snapshots and restores the root lifecycle artifacts, while successful
+migration removes their stale collector-state copies.
+For stdin installs, the saved installer source must come through the
+root-trusted lifecycle binary's system-CA/custom-CA/exact-fingerprint transport
+with proxies and redirects disabled, then pass the embedded-key SSH signature
+check before it is installed. A curl `-k` response and a checksum generated from
+that same response do not authenticate source bytes; absent authenticated bytes
+means no offline copy is saved. Mutable-state token recovery uses the same
+descriptor-safe reader. If only a collector-owned legacy binary exists, a
+tokenless least-privilege upgrade fails closed and requests a fresh credential
+instead of executing that binary as root.
 That same shell-agent update recovery path must fail closed on partial
 legacy process or service-unit state: a recovered URL without a recovered token
 is not usable connection state and must not be logged or treated as recovered.
@@ -4361,6 +4390,16 @@ re-author stop, disable, remove, and daemon-reload sequences inline.
 `scripts/install.sh` must route service teardown through shared installer
 helpers so removal semantics stay consistent across systemd, OpenRC, SysV,
 and service-command runtimes.
+The shared recursive state remover must fail closed unless its target exactly
+matches the path authorized by explicit input, platform selection, or protected
+lifecycle recovery. A process-derived or collector-writable path may help find
+a running service but cannot authorize root deletion; uncertain state is
+retained with a repair warning.
+When a collector credential remains locally, uninstall must also receive an
+authenticated exact-agent success response from the canonical no-proxy,
+redirect-denying CA/fingerprint lifecycle client before deleting services,
+credentials, or recovery state. An unreachable or untrusted server is a
+repair-required uninstall, not permission for local-only credential loss.
 TrueNAS boot recovery must follow the same rule: SCALE and CORE bootstrap
 scripts may differ only in their service-manager adapter, while binary sync,
 service-link recreation, and boot-time start flow stay on one installer-owned

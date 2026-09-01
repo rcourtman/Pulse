@@ -222,6 +222,98 @@ func TestRedirectIsRejectedWithoutAuthorizingDestination(t *testing.T) {
 	}
 }
 
+func TestDownloadInstallerUsesPinnedNoProxyTransportAndReturnsSignature(t *testing.T) {
+	var proxyRequests atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		proxyRequests.Add(1)
+		http.Error(w, "proxy must not be used", http.StatusBadGateway)
+	}))
+	defer proxy.Close()
+	t.Setenv("HTTP_PROXY", proxy.URL)
+	t.Setenv("HTTPS_PROXY", proxy.URL)
+
+	server := newTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/install.sh" || request.Header.Get("Authorization") != "" {
+			t.Errorf("installer request path=%q authorization=%q", request.URL.Path, request.Header.Get("Authorization"))
+		}
+		w.Header().Set("X-Signature-SSHSIG", "signed-installer-header")
+		_, _ = w.Write([]byte("#!/usr/bin/env bash\necho secure\n"))
+	}))
+	fingerprint := sha256.Sum256(server.Certificate().Raw)
+	body, signature, err := DownloadInstaller(context.Background(), PublicConfig{
+		PulseURL: server.URL, ServerFingerprint: hex.EncodeToString(fingerprint[:]),
+	})
+	if err != nil {
+		t.Fatalf("DownloadInstaller: %v", err)
+	}
+	if string(body) != "#!/usr/bin/env bash\necho secure\n" || signature != "signed-installer-header" {
+		t.Fatalf("download body=%q signature=%q", body, signature)
+	}
+	if proxyRequests.Load() != 0 {
+		t.Fatalf("proxy received %d installer requests", proxyRequests.Load())
+	}
+}
+
+func TestDownloadInstallerRejectsFingerprintMismatchAndRedirect(t *testing.T) {
+	t.Run("fingerprint mismatch", func(t *testing.T) {
+		var reached atomic.Bool
+		server := newTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reached.Store(true)
+			_, _ = w.Write([]byte("forged"))
+		}))
+		_, _, err := DownloadInstaller(context.Background(), PublicConfig{
+			PulseURL: server.URL, ServerFingerprint: strings.Repeat("00", sha256.Size),
+		})
+		if err == nil || !strings.Contains(err.Error(), "fingerprint mismatch") {
+			t.Fatalf("error = %v, want fingerprint mismatch", err)
+		}
+		if reached.Load() {
+			t.Fatal("mismatched TLS handler received installer request")
+		}
+	})
+	t.Run("redirect", func(t *testing.T) {
+		destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			t.Fatal("redirect destination received installer request")
+		}))
+		defer destination.Close()
+		source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			http.Redirect(w, request, destination.URL+"/install.sh", http.StatusTemporaryRedirect)
+		}))
+		defer source.Close()
+		_, _, err := DownloadInstaller(context.Background(), PublicConfig{PulseURL: source.URL})
+		if err == nil || !strings.Contains(err.Error(), "returned redirect") {
+			t.Fatalf("error = %v, want redirect rejection", err)
+		}
+	})
+}
+
+func TestUninstallResolvesAndConfirmsExactBearerBoundAgent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+testBearer {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		switch request.URL.Path {
+		case "/api/agents/agent/lookup":
+			_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-1","hostname":"host.local","lastSeen":"2026-09-01T12:00:00Z"}}`))
+		case "/api/agents/agent/uninstall":
+			_, _ = w.Write([]byte(`{"success":true,"agentId":"agent-1"}`))
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+	client, err := New(Config{PulseURL: server.URL, TokenFile: writeToken(t), TokenOwnerUID: testTokenOwnerUID()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	removed, err := client.Uninstall(context.Background(), "", "host.local")
+	if err != nil || removed != "agent-1" {
+		t.Fatalf("Uninstall removed=%q err=%v", removed, err)
+	}
+}
+
 func TestVerifyRegistrationRequiresFreshAuthenticatedEvidence(t *testing.T) {
 	prior := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {

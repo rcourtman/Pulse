@@ -91,7 +91,9 @@ func TestBuildProxmoxAgentInstallCommand(t *testing.T) {
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/install.sh"))
 	require.Contains(t, command, "printf %s "+posixShellQuote("token-123")+` > "$token_file"`)
 	require.Contains(t, command, `--token-file "$token_file"`)
-	require.Contains(t, command, `rm -f "$token_file"`)
+	require.Contains(t, command, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`)
+	require.Contains(t, command, `token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`)
+	require.Contains(t, command, `rm -rf -- "$token_dir"`)
 	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pbs"))
 	require.NotContains(t, command, "--enable-commands")
 }
@@ -131,10 +133,11 @@ func TestBuildProxmoxAgentInstallCommand_UsesPrivilegeEscalationWrapper(t *testi
 		IncludeInstallType: true,
 	})
 
-	require.Contains(t, command, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`)
-	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo bash -s --`)
-	require.Contains(t, command, `else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`)
-	require.NotContains(t, command, "| bash -s -- --url")
+	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then`)
+	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then`)
+	require.Contains(t, command, `printf %s 'token-123' | sudo tee "$token_file" >/dev/null`)
+	require.Contains(t, command, `curl -fsSL 'https://pulse.example.com/install.sh' | sudo bash -s --`)
+	require.Contains(t, command, `echo "Root privileges required. Run as root (su -) and retry." >&2`)
 }
 
 func TestBuildProxmoxAgentInstallCommand_OmitsTokenWhenNotProvided(t *testing.T) {
@@ -194,8 +197,8 @@ func TestBuildProxmoxAgentInstallCommand_IncludesCommandsWhenRequested(t *testin
 	require.Contains(t, command, "--enable-proxmox")
 	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pve"))
 	require.Contains(t, command, "--enable-commands")
-	require.Contains(t, command, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`)
-	require.Contains(t, command, `rm -f "$token_file"`)
+	require.Contains(t, command, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`)
+	require.Contains(t, command, `rm -rf -- "$token_dir"`)
 }
 
 func TestBuildContainerRuntimeAgentInstallCommand_UsesLifecycleTransport(t *testing.T) {

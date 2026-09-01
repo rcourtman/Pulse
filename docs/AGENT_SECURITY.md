@@ -230,6 +230,22 @@ provider hosts, container-runtime parity, appliance qualification, exact release
 artifacts, and external review are still required before the profile can become
 the general default.
 
+Least-privilege installs keep mutable telemetry state under the collector
+account, but keep installer lifecycle authority separate under
+`/etc/pulse-agent`: the saved connection record is root-owned and private, and
+the offline installer is root-owned, non-writable by the collector, and checked
+against its adjacent root-owned SHA-256 record before it can recover uninstall
+state. Collector-owned `agent-id` input is read through a bounded no-follow
+descriptor path. Uninstall only recursively removes a state directory when an
+explicit, platform-selected, or protected lifecycle record authorizes that
+exact path; otherwise it leaves the directory for manual repair.
+For a streamed install, the offline copy is downloaded only by the root-trusted
+lifecycle client using the configured CA or exact certificate fingerprint,
+with environment proxies and redirects disabled, and is persisted only after
+its SSH signature passes the embedded release-key check. Credential-bearing
+uninstall uses that same authenticated transport and keeps the local service,
+credential, and recovery state when the server cannot durably confirm removal.
+
 Exact-release qualification authenticates before it executes. The workflow
 copies the six candidate binaries, four collector signatures, checksum
 manifest, assembly and compiler provenance, and build contract into a private

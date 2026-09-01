@@ -150,6 +150,9 @@ rm -f "$STATE_DIR/proxmox-registered" "$STATE_DIR/proxmox-pve-registered" "$STAT
 rm -f "$STATE_DIR/proxmox-pve-registration-blocked" "$STATE_DIR/proxmox-pbs-registration-blocked" "$STATE_DIR/proxmox-detected-types"
 printf 'changed-agent-id\n' > "$STATE_DIR/agent-id"
 printf 'changed-connection\n' > "$STATE_DIR/connection.env"
+printf 'changed-lifecycle-connection\n' > "$INSTALLER_LIFECYCLE_DIR/connection.env"
+printf 'changed-lifecycle-installer\n' > "$INSTALLER_LIFECYCLE_DIR/install.sh"
+printf 'changed-lifecycle-checksum\n' > "$INSTALLER_LIFECYCLE_DIR/install.sh.sha256"
 chmod 0777 "$STATE_DIR" "$STATE_DIR/cache" "$STATE_DIR/cache/sample"
 printf 'outside-state\n' > "$EXPECTED_DIR/outside-target"
 chmod 0600 "$EXPECTED_DIR/outside-target"
@@ -166,6 +169,9 @@ cmp "$STATE_DIR/token" "$EXPECTED_DIR/state-token"
 cmp "$STATE_DIR/runtime.token" "$EXPECTED_DIR/runtime-token"
 cmp "$STATE_DIR/agent-id" "$EXPECTED_DIR/agent-id"
 cmp "$STATE_DIR/connection.env" "$EXPECTED_DIR/connection-env"
+cmp "$INSTALLER_LIFECYCLE_DIR/connection.env" "$EXPECTED_DIR/lifecycle-connection-env"
+cmp "$INSTALLER_LIFECYCLE_DIR/install.sh" "$EXPECTED_DIR/lifecycle-install-script"
+cmp "$INSTALLER_LIFECYCLE_DIR/install.sh.sha256" "$EXPECTED_DIR/lifecycle-install-checksum"
 grep -q '^legacy-generic$' "$STATE_DIR/proxmox-registered"
 grep -q '^legacy-pve$' "$STATE_DIR/proxmox-pve-registered"
 grep -q '^legacy-pbs$' "$STATE_DIR/proxmox-pbs-registered"
@@ -592,6 +598,9 @@ func safeProfileHarness(t *testing.T, root string, dockerMember bool) string {
 		filepath.Join(stateDir, "proxmox-pve-registration-blocked"): "legacy-pve-blocked\n",
 		filepath.Join(stateDir, "proxmox-pbs-registration-blocked"): "legacy-pbs-blocked\n",
 		filepath.Join(stateDir, "proxmox-detected-types"):           "pve,pbs\n",
+		filepath.Join(credentialDir, "connection.env"):              "PULSE_STATE_DIR='" + stateDir + "'\n",
+		filepath.Join(credentialDir, "install.sh"):                  "#!/usr/bin/env bash\necho legacy-installer\n",
+		filepath.Join(credentialDir, "install.sh.sha256"):           "legacy-checksum\n",
 	}
 	for path, body := range files {
 		mustMkdirAll(t, filepath.Dir(path))
@@ -607,12 +616,15 @@ func safeProfileHarness(t *testing.T, root string, dockerMember bool) string {
 		t.Fatal(err)
 	}
 	for source, name := range map[string]string{
-		filepath.Join(binDir, "pulse-agent"):          "collector-binary",
-		filepath.Join(unitDir, "pulse-agent.service"): "collector-unit",
-		filepath.Join(stateDir, "token"):              "state-token",
-		filepath.Join(stateDir, "runtime.token"):      "runtime-token",
-		filepath.Join(stateDir, "agent-id"):           "agent-id",
-		filepath.Join(stateDir, "connection.env"):     "connection-env",
+		filepath.Join(binDir, "pulse-agent"):              "collector-binary",
+		filepath.Join(unitDir, "pulse-agent.service"):     "collector-unit",
+		filepath.Join(stateDir, "token"):                  "state-token",
+		filepath.Join(stateDir, "runtime.token"):          "runtime-token",
+		filepath.Join(stateDir, "agent-id"):               "agent-id",
+		filepath.Join(stateDir, "connection.env"):         "connection-env",
+		filepath.Join(credentialDir, "connection.env"):    "lifecycle-connection-env",
+		filepath.Join(credentialDir, "install.sh"):        "lifecycle-install-script",
+		filepath.Join(credentialDir, "install.sh.sha256"): "lifecycle-install-checksum",
 	} {
 		body, err := os.ReadFile(source)
 		if err != nil {
@@ -638,6 +650,7 @@ PRIVILEGED_HELPER_SOCKET_UNIT="` + filepath.Join(unitDir, "pulse-agent-helper.so
 PRIVILEGED_HELPER_SOCKET_PATH="` + filepath.Join(root, "run", "helper.sock") + `"
 PRIVILEGED_HELPER_NAME=pulse-agent-helper
 PRIVILEGED_HELPER_CREDENTIAL_DIR="` + credentialDir + `"
+INSTALLER_LIFECYCLE_DIR="$PRIVILEGED_HELPER_CREDENTIAL_DIR"
 SAFE_PROFILE_COLLECTOR_UNIT="` + filepath.Join(unitDir, "pulse-agent.service") + `"
 SAFE_PROFILE_STATE_DIR="` + filepath.Join(root, "profile") + `"
 SAFE_PROFILE_CURRENT_FILE="${SAFE_PROFILE_STATE_DIR}/current.env"

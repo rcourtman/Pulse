@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -758,16 +759,29 @@ func (h *UnifiedAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Re
 
 	log.Info().Str("agentId", agentID).Msg("Received unregistration request from agent uninstaller")
 
-	// Ensure the token can manage this specific agent.
-	if !h.ensureAgentTokenMatch(w, r, agentID) {
-		return
+	monitor := h.getMonitor(r.Context())
+	record := getAPITokenRecordFromRequest(r)
+	var err error
+	if record != nil {
+		_, err = monitor.UninstallHostAgent(agentID, record.ID)
+	} else {
+		// Preserve the existing administrative/session removal surface. Collector
+		// self-uninstall always takes the exact-token durable path above.
+		_, err = monitor.RemoveHostAgent(agentID)
 	}
-
-	// Remove the agent from state.
-	_, err := h.getMonitor(r.Context()).RemoveHostAgent(agentID)
 	if err != nil {
-		// If the agent is not found, we still return success because the goal is reached.
-		log.Warn().Err(err).Str("agentId", agentID).Msg("Agent not found during unregistration request")
+		switch {
+		case errors.Is(err, monitoring.ErrHostAgentTokenMismatch):
+			writeErrorResponse(w, http.StatusForbidden, "agent_lookup_forbidden", "Agent does not belong to this API token", nil)
+		case errors.Is(err, monitoring.ErrHostAgentTokenShared):
+			writeErrorResponse(w, http.StatusConflict, "agent_token_shared", "Collector credential is still used by another agent and must be rotated before uninstall", nil)
+		case errors.Is(err, monitoring.ErrHostAgentNotFound):
+			writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Agent has not registered with Pulse yet", nil)
+		default:
+			log.Error().Err(err).Str("agentId", agentID).Msg("Collector uninstall transaction failed")
+			writeErrorResponse(w, http.StatusInternalServerError, "agent_uninstall_failed", "Pulse could not durably remove the agent", nil)
+		}
+		return
 	}
 
 	h.broadcastState(r.Context())
