@@ -27,6 +27,8 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 	trustedHostIDs := make(map[string]struct{})
 	hostClusterByID := make(map[string]string)
 	hostClusterAmbiguous := make(map[string]struct{})
+	hostProviderNodeByID := make(map[string]models.Node)
+	hostProviderNodeAmbiguous := make(map[string]struct{})
 	recordHostCluster := func(hostID string, node models.Node) {
 		hostID = strings.TrimSpace(hostID)
 		cluster := strings.TrimSpace(strings.ToLower(node.ClusterName))
@@ -54,6 +56,38 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		}
 		nodeCluster := strings.TrimSpace(strings.ToLower(node.ClusterName))
 		return nodeCluster != "" && nodeCluster != hostCluster
+	}
+	recordHostProviderNode := func(hostID string, node models.Node) {
+		hostID = strings.TrimSpace(hostID)
+		if hostID == "" {
+			return
+		}
+		if _, ambiguous := hostProviderNodeAmbiguous[hostID]; ambiguous {
+			return
+		}
+		if existing, ok := hostProviderNodeByID[hostID]; ok &&
+			!proxmoxProviderNodesProveSameMachine(existing, node, hostByID[hostID]) {
+			delete(hostProviderNodeByID, hostID)
+			hostProviderNodeAmbiguous[hostID] = struct{}{}
+			return
+		}
+		hostProviderNodeByID[hostID] = node
+	}
+	hostProviderConflicts := func(hostID string, node models.Node) bool {
+		hostID = strings.TrimSpace(hostID)
+		if _, ambiguous := hostProviderNodeAmbiguous[hostID]; ambiguous {
+			return true
+		}
+		existing, ok := hostProviderNodeByID[strings.TrimSpace(hostID)]
+		if !ok {
+			return false
+		}
+		existingInstance := strings.TrimSpace(strings.ToLower(existing.Instance))
+		candidateInstance := strings.TrimSpace(strings.ToLower(node.Instance))
+		if existingInstance == "" || candidateInstance == "" || existingInstance == candidateInstance {
+			return false
+		}
+		return !proxmoxProviderNodesProveSameMachine(existing, node, hostByID[hostID])
 	}
 	register := func(key, hostID string) {
 		key = strings.TrimSpace(key)
@@ -99,6 +133,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		}
 		trustedHostIDs[hostID] = struct{}{}
 		recordHostCluster(hostID, node)
+		recordHostProviderNode(hostID, node)
 		for _, key := range proxmoxNodeLinkKeys(node) {
 			register(key, hostID)
 		}
@@ -118,6 +153,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		}
 		trustedHostIDs[hostID] = struct{}{}
 		recordHostCluster(hostID, *node)
+		recordHostProviderNode(hostID, *node)
 		registerNode(nodeID, hostID)
 		for _, key := range proxmoxNodeLinkKeys(*node) {
 			register(key, hostID)
@@ -153,7 +189,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 				continue
 			}
 			hostID := strings.TrimSpace(keyToHostID[key])
-			if hostID == "" || hostClusterConflicts(hostID, node) {
+			if hostID == "" || hostClusterConflicts(hostID, node) || hostProviderConflicts(hostID, node) {
 				continue
 			}
 			if inferredHostID != "" && inferredHostID != hostID {
@@ -173,6 +209,9 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 				if hostClusterConflicts(hostID, node) {
 					continue
 				}
+				if hostProviderConflicts(hostID, node) {
+					continue
+				}
 				if inferredHostID != "" && inferredHostID != hostID {
 					inferredHostID = ""
 					break
@@ -189,6 +228,77 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 	}
 
 	return out
+}
+
+// proxmoxProviderNodesProveSameMachine is the provider-scope boundary for
+// lending one trusted host-agent identity to another node view. Native PVE
+// names are commonly short and repeat across independent standalone sites, so
+// a shared name is deliberately absent here. Distinct configured instances
+// may share a host only when provider-owned evidence says they are the same
+// (the same node identity, named cluster, or exact configured endpoint), or
+// when both views independently match the trusted host's full endpoint/IP.
+func proxmoxProviderNodesProveSameMachine(left, right models.Node, host *models.Host) bool {
+	if leftID, rightID := strings.TrimSpace(left.ID), strings.TrimSpace(right.ID); leftID != "" && leftID == rightID {
+		return true
+	}
+	if leftIdentity, rightIdentity := strings.TrimSpace(left.NodeIdentity), strings.TrimSpace(right.NodeIdentity); leftIdentity != "" && leftIdentity == rightIdentity {
+		return true
+	}
+	leftInstance := strings.TrimSpace(strings.ToLower(left.Instance))
+	rightInstance := strings.TrimSpace(strings.ToLower(right.Instance))
+	if leftInstance != "" && leftInstance == rightInstance {
+		return true
+	}
+	leftCluster := strings.TrimSpace(strings.ToLower(left.ClusterName))
+	rightCluster := strings.TrimSpace(strings.ToLower(right.ClusterName))
+	if leftCluster != "" && leftCluster == rightCluster {
+		return true
+	}
+	leftEndpoint := strings.TrimSpace(strings.ToLower(extractHostname(left.Host)))
+	rightEndpoint := strings.TrimSpace(strings.ToLower(extractHostname(right.Host)))
+	if leftEndpoint != "" && leftEndpoint == rightEndpoint {
+		return true
+	}
+	return host != nil &&
+		proxmoxNodeStronglyCorroboratesHost(left, *host) &&
+		proxmoxNodeStronglyCorroboratesHost(right, *host)
+}
+
+func proxmoxNodeStronglyCorroboratesHost(node models.Node, host models.Host) bool {
+	hostIPs := make(map[string]struct{})
+	if ip := NormalizeIP(host.ReportIP); ip != "" {
+		hostIPs[ip] = struct{}{}
+	}
+	for _, network := range host.NetworkInterfaces {
+		for _, address := range network.Addresses {
+			if ip := NormalizeIP(address); ip != "" {
+				hostIPs[ip] = struct{}{}
+			}
+		}
+	}
+
+	endpoint := strings.TrimSpace(strings.ToLower(extractHostname(node.Host)))
+	if endpointIP := NormalizeIP(endpoint); endpointIP != "" {
+		_, ok := hostIPs[endpointIP]
+		return ok
+	}
+	hostname := NormalizeFullHostname(host.Hostname)
+	if strings.Contains(endpoint, ".") && endpoint == hostname {
+		return true
+	}
+	if nodeName := NormalizeFullHostname(node.Name); strings.Contains(nodeName, ".") && nodeName == hostname {
+		return true
+	}
+	for _, network := range node.NetworkInterfaces {
+		for _, address := range network.Addresses {
+			if ip := NormalizeIP(address); ip != "" {
+				if _, ok := hostIPs[ip]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func proxmoxNodeLinkKeys(node models.Node) []string {
