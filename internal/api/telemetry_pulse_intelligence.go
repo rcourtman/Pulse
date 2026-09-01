@@ -49,6 +49,21 @@ func pulseIntelligencePatrolBlockedCauseForTelemetry(status ai.PatrolStatus) str
 	return cause
 }
 
+// pulseIntelligencePatrolAutonomyLevel returns the effective Patrol autonomy
+// level for the default tenant after licence and Autopilot acknowledgement
+// gating, bounded to the four released modes. An install without an AI
+// service reports monitor, which is what the runtime enforces in that state.
+func (r *Router) pulseIntelligencePatrolAutonomyLevel() string {
+	if r == nil || r.aiSettingsHandler == nil {
+		return telemetry.NormalizePatrolAutonomyLevelForTelemetry("")
+	}
+	svc := r.aiSettingsHandler.GetAIService(context.Background())
+	if svc == nil {
+		return telemetry.NormalizePatrolAutonomyLevelForTelemetry("")
+	}
+	return telemetry.NormalizePatrolAutonomyLevelForTelemetry(svc.GetEffectivePatrolAutonomyLevel())
+}
+
 // ApplyUpdateTelemetrySnapshot adds router-owned, content-free update funnel
 // counters to the outbound usage telemetry snapshot.
 func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Time) {
@@ -67,6 +82,7 @@ func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.
 		return snapshot
 	}
 	snapshot.PatrolBlockedCause = r.pulseIntelligencePatrolBlockedCause()
+	snapshot.PatrolAutonomyLevel = r.pulseIntelligencePatrolAutonomyLevel()
 	if r.resourceHandlers == nil {
 		return snapshot
 	}

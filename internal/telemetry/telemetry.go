@@ -196,7 +196,15 @@ const (
 	// Schema v16 adds four content-free workload-history adoption counters.
 	// Each browser reports each closed milestone at most once per session to a
 	// bounded local daily tally; no event stream or browser identity is sent.
-	TelemetrySchemaVersion = 16
+	// Schema v17 adds the closed Patrol provider class (local, cloud_byok,
+	// cloud_subscription, hosted_quickstart, none), the effective Patrol
+	// autonomy level, coarse 30-day Patrol input and output token buckets, and
+	// per-outcome investigation counts. The 2026-09-01 Patrol assessment could
+	// not tell local from cloud installs, estimate what Patrol costs an
+	// install, or see how the investigations that produced no plan ended. No
+	// provider ID, model name, endpoint, account identity, exact token count,
+	// finding ID, or resource ID is exported.
+	TelemetrySchemaVersion = 17
 )
 
 type installIDRecord struct {
@@ -302,12 +310,16 @@ type Ping struct {
 	NotificationsEnabled bool `json:"notifications_enabled"`
 	AIActionsEnabled     bool `json:"ai_actions_enabled"`
 	AlertAIEnabled       bool `json:"alert_ai_enabled"`
-	ActiveAlerts         int  `json:"active_alerts"`
-	RelayEnabled         bool `json:"relay_enabled"`
-	SSOEnabled           bool `json:"sso_enabled"`
-	MultiTenant          bool `json:"multi_tenant"`
-	PaidLicense          bool `json:"paid_license"`
-	HasAPITokens         bool `json:"has_api_tokens"`
+	// AIProviderClass is the closed route class of the Patrol (or default)
+	// model: none, local, cloud_byok, cloud_subscription, hosted_quickstart,
+	// or unknown. Never a provider ID, model name, endpoint, or account.
+	AIProviderClass string `json:"ai_provider_class"`
+	ActiveAlerts    int    `json:"active_alerts"`
+	RelayEnabled    bool   `json:"relay_enabled"`
+	SSOEnabled      bool   `json:"sso_enabled"`
+	MultiTenant     bool   `json:"multi_tenant"`
+	PaidLicense     bool   `json:"paid_license"`
+	HasAPITokens    bool   `json:"has_api_tokens"`
 
 	// Licensed-feature adoption. Counts only: no role names, schedule names,
 	// profile names, recipients, report contents, or audit event detail.
@@ -446,27 +458,50 @@ type Ping struct {
 	PulseIntelligencePatrolInvestigations30d                       int    `json:"pulse_intelligence_patrol_investigations_30d"`
 	PulseIntelligencePatrolResolvedFindings30d                     int    `json:"pulse_intelligence_patrol_resolved_findings_30d"`
 	PulseIntelligencePatrolBlockedCause                            string `json:"pulse_intelligence_patrol_blocked_cause,omitempty"`
-	PulseIntelligenceExternalAgentEnabled                          bool   `json:"pulse_intelligence_external_agent_enabled"`
-	PulseIntelligenceExternalAgentUsed30d                          bool   `json:"pulse_intelligence_external_agent_used_30d"`
-	PulseIntelligenceMCPAdapterUsed30d                             bool   `json:"pulse_intelligence_mcp_adapter_used_30d"`
-	PulseIntelligenceExternalAgentContextRequests30d               int    `json:"pulse_intelligence_external_agent_context_requests_30d"`
-	PulseIntelligenceExternalAgentEventStreamRequests30d           int    `json:"pulse_intelligence_external_agent_event_stream_requests_30d"`
-	PulseIntelligenceExternalAgentProvisioningRequests30d          int    `json:"pulse_intelligence_external_agent_provisioning_requests_30d"`
-	PulseIntelligenceExternalAgentOperatorStateRequests30d         int    `json:"pulse_intelligence_external_agent_operator_state_requests_30d"`
-	PulseIntelligenceExternalAgentFindingRequests30d               int    `json:"pulse_intelligence_external_agent_finding_requests_30d"`
-	PulseIntelligenceExternalAgentActionRequests30d                int    `json:"pulse_intelligence_external_agent_action_requests_30d"`
-	PulseIntelligenceActionPlans30d                                int    `json:"pulse_intelligence_action_plans_30d"`
-	PulseIntelligenceApprovalRequests30d                           int    `json:"pulse_intelligence_approval_requests_30d"`
-	PulseIntelligenceRejectedActionDecisions30d                    int    `json:"pulse_intelligence_rejected_action_decisions_30d"`
-	PulseIntelligenceApprovedActionDecisions30d                    int    `json:"pulse_intelligence_approved_action_decisions_30d"`
-	PulseIntelligenceApprovedActionAttempts30d                     int    `json:"pulse_intelligence_approved_action_attempts_30d"`
-	PulseIntelligenceApprovedActionSuccesses30d                    int    `json:"pulse_intelligence_approved_action_successes_30d"`
-	PulseIntelligencePatrolActionPlans30d                          int    `json:"pulse_intelligence_patrol_action_plans_30d"`
-	PulseIntelligencePatrolApprovalRequests30d                     int    `json:"pulse_intelligence_patrol_approval_requests_30d"`
-	PulseIntelligencePatrolRejectedActionDecisions30d              int    `json:"pulse_intelligence_patrol_rejected_action_decisions_30d"`
-	PulseIntelligencePatrolApprovedActionDecisions30d              int    `json:"pulse_intelligence_patrol_approved_action_decisions_30d"`
-	PulseIntelligencePatrolApprovedActionAttempts30d               int    `json:"pulse_intelligence_patrol_approved_action_attempts_30d"`
-	PulseIntelligencePatrolApprovedActionSuccesses30d              int    `json:"pulse_intelligence_patrol_approved_action_successes_30d"`
+	// Effective Patrol autonomy level after licence and Autopilot
+	// acknowledgement gating: monitor, approval, assisted, or full.
+	PulseIntelligencePatrolAutonomyLevel string `json:"pulse_intelligence_patrol_autonomy_level"`
+	// Coarse 30-day Patrol token volume from the local usage ledger. Closed
+	// buckets only; exact totals, prices, providers, and models stay local.
+	PulseIntelligencePatrolInputTokensBucket30d  string `json:"pulse_intelligence_patrol_input_tokens_bucket_30d"`
+	PulseIntelligencePatrolOutputTokensBucket30d string `json:"pulse_intelligence_patrol_output_tokens_bucket_30d"`
+	// Investigation outcome partition of the findings counted by
+	// pulse_intelligence_patrol_investigations_30d. Each investigated finding
+	// is in exactly one bucket; the buckets sum to the investigation count.
+	PulseIntelligencePatrolInvestigationOutcomeFixVerified30d            int  `json:"pulse_intelligence_patrol_investigation_outcome_fix_verified_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeFixQueued30d              int  `json:"pulse_intelligence_patrol_investigation_outcome_fix_queued_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeFixExecuted30d            int  `json:"pulse_intelligence_patrol_investigation_outcome_fix_executed_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeFixRejected30d            int  `json:"pulse_intelligence_patrol_investigation_outcome_fix_rejected_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeFixFailed30d              int  `json:"pulse_intelligence_patrol_investigation_outcome_fix_failed_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeFixVerificationUnknown30d int  `json:"pulse_intelligence_patrol_investigation_outcome_fix_verification_unknown_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeResolved30d               int  `json:"pulse_intelligence_patrol_investigation_outcome_resolved_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeNeedsAttention30d         int  `json:"pulse_intelligence_patrol_investigation_outcome_needs_attention_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeCannotFix30d              int  `json:"pulse_intelligence_patrol_investigation_outcome_cannot_fix_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeTimedOut30d               int  `json:"pulse_intelligence_patrol_investigation_outcome_timed_out_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeInProgress30d             int  `json:"pulse_intelligence_patrol_investigation_outcome_in_progress_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeFailed30d                 int  `json:"pulse_intelligence_patrol_investigation_outcome_failed_30d"`
+	PulseIntelligencePatrolInvestigationOutcomeOther30d                  int  `json:"pulse_intelligence_patrol_investigation_outcome_other_30d"`
+	PulseIntelligenceExternalAgentEnabled                                bool `json:"pulse_intelligence_external_agent_enabled"`
+	PulseIntelligenceExternalAgentUsed30d                                bool `json:"pulse_intelligence_external_agent_used_30d"`
+	PulseIntelligenceMCPAdapterUsed30d                                   bool `json:"pulse_intelligence_mcp_adapter_used_30d"`
+	PulseIntelligenceExternalAgentContextRequests30d                     int  `json:"pulse_intelligence_external_agent_context_requests_30d"`
+	PulseIntelligenceExternalAgentEventStreamRequests30d                 int  `json:"pulse_intelligence_external_agent_event_stream_requests_30d"`
+	PulseIntelligenceExternalAgentProvisioningRequests30d                int  `json:"pulse_intelligence_external_agent_provisioning_requests_30d"`
+	PulseIntelligenceExternalAgentOperatorStateRequests30d               int  `json:"pulse_intelligence_external_agent_operator_state_requests_30d"`
+	PulseIntelligenceExternalAgentFindingRequests30d                     int  `json:"pulse_intelligence_external_agent_finding_requests_30d"`
+	PulseIntelligenceExternalAgentActionRequests30d                      int  `json:"pulse_intelligence_external_agent_action_requests_30d"`
+	PulseIntelligenceActionPlans30d                                      int  `json:"pulse_intelligence_action_plans_30d"`
+	PulseIntelligenceApprovalRequests30d                                 int  `json:"pulse_intelligence_approval_requests_30d"`
+	PulseIntelligenceRejectedActionDecisions30d                          int  `json:"pulse_intelligence_rejected_action_decisions_30d"`
+	PulseIntelligenceApprovedActionDecisions30d                          int  `json:"pulse_intelligence_approved_action_decisions_30d"`
+	PulseIntelligenceApprovedActionAttempts30d                           int  `json:"pulse_intelligence_approved_action_attempts_30d"`
+	PulseIntelligenceApprovedActionSuccesses30d                          int  `json:"pulse_intelligence_approved_action_successes_30d"`
+	PulseIntelligencePatrolActionPlans30d                                int  `json:"pulse_intelligence_patrol_action_plans_30d"`
+	PulseIntelligencePatrolApprovalRequests30d                           int  `json:"pulse_intelligence_patrol_approval_requests_30d"`
+	PulseIntelligencePatrolRejectedActionDecisions30d                    int  `json:"pulse_intelligence_patrol_rejected_action_decisions_30d"`
+	PulseIntelligencePatrolApprovedActionDecisions30d                    int  `json:"pulse_intelligence_patrol_approved_action_decisions_30d"`
+	PulseIntelligencePatrolApprovedActionAttempts30d                     int  `json:"pulse_intelligence_patrol_approved_action_attempts_30d"`
+	PulseIntelligencePatrolApprovedActionSuccesses30d                    int  `json:"pulse_intelligence_patrol_approved_action_successes_30d"`
 
 	// Cause-coded approved-action failure counters. Together with successes
 	// and still-in-flight attempts these partition the attempt count, so the
@@ -493,183 +528,200 @@ type Ping struct {
 // The telemetry package calls a user-provided SnapshotFunc to populate this,
 // keeping the package decoupled from monitor/config internals.
 type Snapshot struct {
-	PVENodes                                                       int
-	PBSInstances                                                   int
-	PMGInstances                                                   int
-	VMs                                                            int
-	Containers                                                     int
-	AgentHosts                                                     int
-	DockerHosts                                                    int
-	DockerContainers                                               int
-	KubernetesClusters                                             int
-	KubernetesNodes                                                int
-	KubernetesPods                                                 int
-	KubernetesDeployments                                          int
-	StoragePools                                                   int
-	PhysicalDisks                                                  int
-	CephClusters                                                   int
-	NetworkShares                                                  int
-	TrueNASSystems                                                 int
-	TrueNASVMs                                                     int
-	TrueNASApps                                                    int
-	VMwareHosts                                                    int
-	VMwareVMs                                                      int
-	VMwareDatastores                                               int
-	AvailabilityTargets                                            int
-	AvailabilityProbeTargets                                       int
-	AvailabilityProbeAgents                                        int
-	AIEnabled                                                      bool
-	PatrolEnabled                                                  bool
-	DiscoveryEnabled                                               bool
-	NotificationsEnabled                                           bool
-	AIActionsEnabled                                               bool
-	AlertAIEnabled                                                 bool
-	ActiveAlerts                                                   int
-	RelayEnabled                                                   bool
-	SSOEnabled                                                     bool
-	MultiTenant                                                    bool
-	PaidLicense                                                    bool
-	HasAPITokens                                                   bool
-	RBACCustomRoles                                                int
-	RBACUserAssignments                                            int
-	AuditReads30d                                                  int
-	ReportSchedules                                                int
-	ReportSchedulesEnabled                                         int
-	ReportSchedulesRun30d                                          int
-	AgentProfiles                                                  int
-	UpdateAttempts30d                                              int
-	UpdateSuccesses30d                                             int
-	UpdateFailures30d                                              int
-	UpdateLastFailureCategory                                      string
-	NodeTestAttempts30d                                            int
-	NodeTestFailures30d                                            int
-	WorkloadHistoryPreviewSessions30d                              int
-	WorkloadHistoryScrubSessions30d                                int
-	WorkloadHistoryRangeChangeSessions30d                          int
-	WorkloadHistoryDetailsSelectionSessions30d                     int
-	AuthConfigured                                                 bool
-	ConfiguredConnections                                          int
-	AlertsFired30d                                                 int
-	AlertsAcknowledged30d                                          int
-	AlertsResolved30d                                              int
-	ActiveAlertsInfo                                               int
-	ActiveAlertsWarning                                            int
-	ActiveAlertsCritical                                           int
-	ActiveAlertsAgeUnder1h                                         int
-	ActiveAlertsAge1h24h                                           int
-	ActiveAlertsAge1d7d                                            int
-	ActiveAlertsAge7dPlus                                          int
-	AlertsFiredInfo30d                                             int
-	AlertsFiredWarning30d                                          int
-	AlertsFiredCritical30d                                         int
-	AlertsResolvedInfo30d                                          int
-	AlertsResolvedWarning30d                                       int
-	AlertsResolvedCritical30d                                      int
-	AlertsResolutionUnder15m30d                                    int
-	AlertsResolution15m1h30d                                       int
-	AlertsResolution1h24h30d                                       int
-	AlertsResolution1d7d30d                                        int
-	AlertsResolution7dPlus30d                                      int
-	AlertsRepeatOccurrences30d                                     int
-	AlertsSnoozedOccurrences30d                                    int
-	AlertsResolvedWhileSnoozed30d                                  int
-	AlertManagerTenants                                            int
-	AlertDeliveryActiveTenants                                     int
-	AlertFlappingEnabledTenants                                    int
-	AlertIntentPolicyConfiguredTenants                             int
-	AlertEventHistoryAuthoritativeTenants                          int
-	AlertActiveStateAuthoritativeTenants                           int
-	AlertActiveStatePersistenceDegradedTenants                     int
-	NotificationAttempts7d                                         int
-	NotificationDeliveries7d                                       int
-	NotificationFailures7d                                         int
-	NotificationFailuresAuthentication7d                           int
-	NotificationFailuresRateLimited7d                              int
-	NotificationFailuresConnectivity7d                             int
-	NotificationFailuresTLS7d                                      int
-	NotificationFailuresConfiguration7d                            int
-	NotificationFailuresRejected7d                                 int
-	NotificationFailuresServerError7d                              int
-	NotificationFailuresUnknown7d                                  int
-	PulseIntelligenceLoopConfigured                                bool
-	PulseIntelligenceLoopActive30d                                 bool
-	PulseIntelligenceCompleteOperationsLoop30d                     bool
-	PulseIntelligenceApprovedExecutionLoop30d                      bool
-	PulseIntelligenceResolvedOperationsLoop30d                     bool
-	PulseIntelligencePatrolControlCompletedOperationsLoop30d       bool
-	PulseIntelligencePatrolControlResolvedOperationsLoop30d        bool
-	PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d   bool
-	PulseIntelligencePatrolControlPaidResolvedOperationsLoop30d    bool
-	PulseIntelligenceProActivationCompletedOperationsLoop30d       bool
-	PulseIntelligenceProActivationResolvedOperationsLoop30d        bool
-	PulseIntelligenceProActivationPaidCompletedOperationsLoop30d   bool
-	PulseIntelligenceProActivationPaidResolvedOperationsLoop30d    bool
-	PulseIntelligenceGovernedActionActive30d                       bool
-	PulseIntelligenceAssistantOperationsLoop30d                    bool
-	PulseIntelligenceAssistantApprovedExecutionLoop30d             bool
-	PulseIntelligenceAssistantApprovedActionSuccessLoop30d         bool
-	PulseIntelligenceAssistantResolvedOperationsLoop30d            bool
-	PulseIntelligenceExternalAgentOperationsLoop30d                bool
-	PulseIntelligenceExternalAgentApprovedExecutionLoop30d         bool
-	PulseIntelligenceExternalAgentApprovedActionSuccessLoop30d     bool
-	PulseIntelligenceExternalAgentResolvedOperationsLoop30d        bool
-	PulseIntelligenceMCPAdapterOperationsLoop30d                   bool
-	PulseIntelligenceMCPAdapterApprovedExecutionLoop30d            bool
-	PulseIntelligenceMCPAdapterApprovedActionSuccessLoop30d        bool
-	PulseIntelligenceMCPAdapterResolvedOperationsLoop30d           bool
-	PulseIntelligenceOperationsLoopStarterRequests30d              int
-	PulseIntelligenceAssistantOperationsLoopStarterRequests30d     int
-	PulseIntelligencePatrolOperationsLoopStarterRequests30d        int
-	PulseIntelligencePatrolControlOperationsLoopStarterRequests30d int
-	PulseIntelligenceProActivationOperationsLoopStarterRequests30d int
-	PulseIntelligenceMCPOperationsLoopStarterRequests30d           int
-	PulseIntelligenceAssistantAICalls30d                           int
-	PulseIntelligenceAssistantContextAICalls30d                    int
-	PulseIntelligenceAssistantToolCalls30d                         int
-	PulseIntelligencePatrolAICalls30d                              int
-	PulseIntelligencePatrolRuns30d                                 int
-	PulseIntelligencePatrolNewFindings30d                          int
-	PulseIntelligencePatrolInvestigations30d                       int
-	PulseIntelligencePatrolResolvedFindings30d                     int
-	PulseIntelligencePatrolBlockedCause                            string
-	PulseIntelligenceExternalAgentEnabled                          bool
-	PulseIntelligenceExternalAgentOperationsLoopReady              bool
-	PulseIntelligenceExternalAgentUsed30d                          bool
-	PulseIntelligenceMCPAdapterUsed30d                             bool
-	PulseIntelligenceExternalAgentContextRequests30d               int
-	PulseIntelligenceExternalAgentEventStreamRequests30d           int
-	PulseIntelligenceExternalAgentProvisioningRequests30d          int
-	PulseIntelligenceExternalAgentOperatorStateRequests30d         int
-	PulseIntelligenceExternalAgentFindingRequests30d               int
-	PulseIntelligenceExternalAgentActionRequests30d                int
-	PulseIntelligenceActionPlans30d                                int
-	PulseIntelligenceApprovalRequests30d                           int
-	PulseIntelligenceRejectedActionDecisions30d                    int
-	PulseIntelligenceApprovedActionDecisions30d                    int
-	PulseIntelligenceApprovedActionAttempts30d                     int
-	PulseIntelligenceApprovedActionSuccesses30d                    int
-	PulseIntelligencePatrolActionPlans30d                          int
-	PulseIntelligencePatrolApprovalRequests30d                     int
-	PulseIntelligencePatrolRejectedActionDecisions30d              int
-	PulseIntelligencePatrolApprovedActionDecisions30d              int
-	PulseIntelligencePatrolApprovedActionAttempts30d               int
-	PulseIntelligencePatrolApprovedActionSuccesses30d              int
-	PulseIntelligenceApprovedActionFailuresPreDispatch30d          int
-	PulseIntelligenceApprovedActionFailuresExecution30d            int
-	PulseIntelligenceApprovedActionFailuresUnverified30d           int
-	PulseIntelligenceApprovedActionStuckExecuting30d               int
-	PulseIntelligenceApprovedActionInFlight30d                     int
-	PulseIntelligenceApprovedActionUnclassified30d                 int
-	PulseIntelligenceApprovedActionRefusalsPlanStale30d            int
-	PulseIntelligenceApprovedActionRefusalsPolicy30d               int
-	PulseIntelligenceApprovedActionRefusalsCapability30d           int
-	PulseIntelligenceApprovedActionRefusalsTargetChanged30d        int
-	PulseIntelligenceApprovedActionRefusalsPrerequisite30d         int
-	PulseIntelligenceApprovedActionRefusalsContract30d             int
-	PulseIntelligenceApprovedActionRefusalsUncoded30d              int
-	PulseIntelligenceApprovedActionRefusalsOther30d                int
-	PulseIntelligenceVerifiedFindingResolutions30d                 int
-	PulseIntelligenceApprovedActionLastFailureReason30d            string
+	PVENodes                                                             int
+	PBSInstances                                                         int
+	PMGInstances                                                         int
+	VMs                                                                  int
+	Containers                                                           int
+	AgentHosts                                                           int
+	DockerHosts                                                          int
+	DockerContainers                                                     int
+	KubernetesClusters                                                   int
+	KubernetesNodes                                                      int
+	KubernetesPods                                                       int
+	KubernetesDeployments                                                int
+	StoragePools                                                         int
+	PhysicalDisks                                                        int
+	CephClusters                                                         int
+	NetworkShares                                                        int
+	TrueNASSystems                                                       int
+	TrueNASVMs                                                           int
+	TrueNASApps                                                          int
+	VMwareHosts                                                          int
+	VMwareVMs                                                            int
+	VMwareDatastores                                                     int
+	AvailabilityTargets                                                  int
+	AvailabilityProbeTargets                                             int
+	AvailabilityProbeAgents                                              int
+	AIEnabled                                                            bool
+	PatrolEnabled                                                        bool
+	DiscoveryEnabled                                                     bool
+	NotificationsEnabled                                                 bool
+	AIActionsEnabled                                                     bool
+	AlertAIEnabled                                                       bool
+	AIProviderClass                                                      string
+	ActiveAlerts                                                         int
+	RelayEnabled                                                         bool
+	SSOEnabled                                                           bool
+	MultiTenant                                                          bool
+	PaidLicense                                                          bool
+	HasAPITokens                                                         bool
+	RBACCustomRoles                                                      int
+	RBACUserAssignments                                                  int
+	AuditReads30d                                                        int
+	ReportSchedules                                                      int
+	ReportSchedulesEnabled                                               int
+	ReportSchedulesRun30d                                                int
+	AgentProfiles                                                        int
+	UpdateAttempts30d                                                    int
+	UpdateSuccesses30d                                                   int
+	UpdateFailures30d                                                    int
+	UpdateLastFailureCategory                                            string
+	NodeTestAttempts30d                                                  int
+	NodeTestFailures30d                                                  int
+	WorkloadHistoryPreviewSessions30d                                    int
+	WorkloadHistoryScrubSessions30d                                      int
+	WorkloadHistoryRangeChangeSessions30d                                int
+	WorkloadHistoryDetailsSelectionSessions30d                           int
+	AuthConfigured                                                       bool
+	ConfiguredConnections                                                int
+	AlertsFired30d                                                       int
+	AlertsAcknowledged30d                                                int
+	AlertsResolved30d                                                    int
+	ActiveAlertsInfo                                                     int
+	ActiveAlertsWarning                                                  int
+	ActiveAlertsCritical                                                 int
+	ActiveAlertsAgeUnder1h                                               int
+	ActiveAlertsAge1h24h                                                 int
+	ActiveAlertsAge1d7d                                                  int
+	ActiveAlertsAge7dPlus                                                int
+	AlertsFiredInfo30d                                                   int
+	AlertsFiredWarning30d                                                int
+	AlertsFiredCritical30d                                               int
+	AlertsResolvedInfo30d                                                int
+	AlertsResolvedWarning30d                                             int
+	AlertsResolvedCritical30d                                            int
+	AlertsResolutionUnder15m30d                                          int
+	AlertsResolution15m1h30d                                             int
+	AlertsResolution1h24h30d                                             int
+	AlertsResolution1d7d30d                                              int
+	AlertsResolution7dPlus30d                                            int
+	AlertsRepeatOccurrences30d                                           int
+	AlertsSnoozedOccurrences30d                                          int
+	AlertsResolvedWhileSnoozed30d                                        int
+	AlertManagerTenants                                                  int
+	AlertDeliveryActiveTenants                                           int
+	AlertFlappingEnabledTenants                                          int
+	AlertIntentPolicyConfiguredTenants                                   int
+	AlertEventHistoryAuthoritativeTenants                                int
+	AlertActiveStateAuthoritativeTenants                                 int
+	AlertActiveStatePersistenceDegradedTenants                           int
+	NotificationAttempts7d                                               int
+	NotificationDeliveries7d                                             int
+	NotificationFailures7d                                               int
+	NotificationFailuresAuthentication7d                                 int
+	NotificationFailuresRateLimited7d                                    int
+	NotificationFailuresConnectivity7d                                   int
+	NotificationFailuresTLS7d                                            int
+	NotificationFailuresConfiguration7d                                  int
+	NotificationFailuresRejected7d                                       int
+	NotificationFailuresServerError7d                                    int
+	NotificationFailuresUnknown7d                                        int
+	PulseIntelligenceLoopConfigured                                      bool
+	PulseIntelligenceLoopActive30d                                       bool
+	PulseIntelligenceCompleteOperationsLoop30d                           bool
+	PulseIntelligenceApprovedExecutionLoop30d                            bool
+	PulseIntelligenceResolvedOperationsLoop30d                           bool
+	PulseIntelligencePatrolControlCompletedOperationsLoop30d             bool
+	PulseIntelligencePatrolControlResolvedOperationsLoop30d              bool
+	PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d         bool
+	PulseIntelligencePatrolControlPaidResolvedOperationsLoop30d          bool
+	PulseIntelligenceProActivationCompletedOperationsLoop30d             bool
+	PulseIntelligenceProActivationResolvedOperationsLoop30d              bool
+	PulseIntelligenceProActivationPaidCompletedOperationsLoop30d         bool
+	PulseIntelligenceProActivationPaidResolvedOperationsLoop30d          bool
+	PulseIntelligenceGovernedActionActive30d                             bool
+	PulseIntelligenceAssistantOperationsLoop30d                          bool
+	PulseIntelligenceAssistantApprovedExecutionLoop30d                   bool
+	PulseIntelligenceAssistantApprovedActionSuccessLoop30d               bool
+	PulseIntelligenceAssistantResolvedOperationsLoop30d                  bool
+	PulseIntelligenceExternalAgentOperationsLoop30d                      bool
+	PulseIntelligenceExternalAgentApprovedExecutionLoop30d               bool
+	PulseIntelligenceExternalAgentApprovedActionSuccessLoop30d           bool
+	PulseIntelligenceExternalAgentResolvedOperationsLoop30d              bool
+	PulseIntelligenceMCPAdapterOperationsLoop30d                         bool
+	PulseIntelligenceMCPAdapterApprovedExecutionLoop30d                  bool
+	PulseIntelligenceMCPAdapterApprovedActionSuccessLoop30d              bool
+	PulseIntelligenceMCPAdapterResolvedOperationsLoop30d                 bool
+	PulseIntelligenceOperationsLoopStarterRequests30d                    int
+	PulseIntelligenceAssistantOperationsLoopStarterRequests30d           int
+	PulseIntelligencePatrolOperationsLoopStarterRequests30d              int
+	PulseIntelligencePatrolControlOperationsLoopStarterRequests30d       int
+	PulseIntelligenceProActivationOperationsLoopStarterRequests30d       int
+	PulseIntelligenceMCPOperationsLoopStarterRequests30d                 int
+	PulseIntelligenceAssistantAICalls30d                                 int
+	PulseIntelligenceAssistantContextAICalls30d                          int
+	PulseIntelligenceAssistantToolCalls30d                               int
+	PulseIntelligencePatrolAICalls30d                                    int
+	PulseIntelligencePatrolRuns30d                                       int
+	PulseIntelligencePatrolNewFindings30d                                int
+	PulseIntelligencePatrolInvestigations30d                             int
+	PulseIntelligencePatrolResolvedFindings30d                           int
+	PulseIntelligencePatrolBlockedCause                                  string
+	PulseIntelligencePatrolAutonomyLevel                                 string
+	PulseIntelligencePatrolInputTokensBucket30d                          string
+	PulseIntelligencePatrolOutputTokensBucket30d                         string
+	PulseIntelligencePatrolInvestigationOutcomeFixVerified30d            int
+	PulseIntelligencePatrolInvestigationOutcomeFixQueued30d              int
+	PulseIntelligencePatrolInvestigationOutcomeFixExecuted30d            int
+	PulseIntelligencePatrolInvestigationOutcomeFixRejected30d            int
+	PulseIntelligencePatrolInvestigationOutcomeFixFailed30d              int
+	PulseIntelligencePatrolInvestigationOutcomeFixVerificationUnknown30d int
+	PulseIntelligencePatrolInvestigationOutcomeResolved30d               int
+	PulseIntelligencePatrolInvestigationOutcomeNeedsAttention30d         int
+	PulseIntelligencePatrolInvestigationOutcomeCannotFix30d              int
+	PulseIntelligencePatrolInvestigationOutcomeTimedOut30d               int
+	PulseIntelligencePatrolInvestigationOutcomeInProgress30d             int
+	PulseIntelligencePatrolInvestigationOutcomeFailed30d                 int
+	PulseIntelligencePatrolInvestigationOutcomeOther30d                  int
+	PulseIntelligenceExternalAgentEnabled                                bool
+	PulseIntelligenceExternalAgentOperationsLoopReady                    bool
+	PulseIntelligenceExternalAgentUsed30d                                bool
+	PulseIntelligenceMCPAdapterUsed30d                                   bool
+	PulseIntelligenceExternalAgentContextRequests30d                     int
+	PulseIntelligenceExternalAgentEventStreamRequests30d                 int
+	PulseIntelligenceExternalAgentProvisioningRequests30d                int
+	PulseIntelligenceExternalAgentOperatorStateRequests30d               int
+	PulseIntelligenceExternalAgentFindingRequests30d                     int
+	PulseIntelligenceExternalAgentActionRequests30d                      int
+	PulseIntelligenceActionPlans30d                                      int
+	PulseIntelligenceApprovalRequests30d                                 int
+	PulseIntelligenceRejectedActionDecisions30d                          int
+	PulseIntelligenceApprovedActionDecisions30d                          int
+	PulseIntelligenceApprovedActionAttempts30d                           int
+	PulseIntelligenceApprovedActionSuccesses30d                          int
+	PulseIntelligencePatrolActionPlans30d                                int
+	PulseIntelligencePatrolApprovalRequests30d                           int
+	PulseIntelligencePatrolRejectedActionDecisions30d                    int
+	PulseIntelligencePatrolApprovedActionDecisions30d                    int
+	PulseIntelligencePatrolApprovedActionAttempts30d                     int
+	PulseIntelligencePatrolApprovedActionSuccesses30d                    int
+	PulseIntelligenceApprovedActionFailuresPreDispatch30d                int
+	PulseIntelligenceApprovedActionFailuresExecution30d                  int
+	PulseIntelligenceApprovedActionFailuresUnverified30d                 int
+	PulseIntelligenceApprovedActionStuckExecuting30d                     int
+	PulseIntelligenceApprovedActionInFlight30d                           int
+	PulseIntelligenceApprovedActionUnclassified30d                       int
+	PulseIntelligenceApprovedActionRefusalsPlanStale30d                  int
+	PulseIntelligenceApprovedActionRefusalsPolicy30d                     int
+	PulseIntelligenceApprovedActionRefusalsCapability30d                 int
+	PulseIntelligenceApprovedActionRefusalsTargetChanged30d              int
+	PulseIntelligenceApprovedActionRefusalsPrerequisite30d               int
+	PulseIntelligenceApprovedActionRefusalsContract30d                   int
+	PulseIntelligenceApprovedActionRefusalsUncoded30d                    int
+	PulseIntelligenceApprovedActionRefusalsOther30d                      int
+	PulseIntelligenceVerifiedFindingResolutions30d                       int
+	PulseIntelligenceApprovedActionLastFailureReason30d                  string
 }
 
 // PulseIntelligenceActionSnapshot is the action-governance portion of the
@@ -735,6 +787,11 @@ type PulseIntelligenceActionSnapshot struct {
 	// provider endpoints, model names, and configuration never leave the
 	// runtime.
 	PatrolBlockedCause string
+	// PatrolAutonomyLevel is the effective Patrol autonomy level after
+	// licence and Autopilot acknowledgement gating: monitor, approval,
+	// assisted, or full. Empty means the AI service was unavailable and the
+	// sender reports monitor.
+	PatrolAutonomyLevel string
 }
 
 // ApplyUpdateTelemetrySnapshot adds content-free update funnel counters from
@@ -1195,6 +1252,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.NotificationsEnabled = s.NotificationsEnabled
 	ping.AIActionsEnabled = s.AIActionsEnabled
 	ping.AlertAIEnabled = s.AlertAIEnabled
+	ping.AIProviderClass = s.AIProviderClass
 	ping.ActiveAlerts = s.ActiveAlerts
 	ping.RelayEnabled = s.RelayEnabled
 	ping.SSOEnabled = s.SSOEnabled
@@ -1303,6 +1361,22 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligencePatrolInvestigations30d = s.PulseIntelligencePatrolInvestigations30d
 	ping.PulseIntelligencePatrolResolvedFindings30d = s.PulseIntelligencePatrolResolvedFindings30d
 	ping.PulseIntelligencePatrolBlockedCause = s.PulseIntelligencePatrolBlockedCause
+	ping.PulseIntelligencePatrolAutonomyLevel = s.PulseIntelligencePatrolAutonomyLevel
+	ping.PulseIntelligencePatrolInputTokensBucket30d = s.PulseIntelligencePatrolInputTokensBucket30d
+	ping.PulseIntelligencePatrolOutputTokensBucket30d = s.PulseIntelligencePatrolOutputTokensBucket30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeFixVerified30d = s.PulseIntelligencePatrolInvestigationOutcomeFixVerified30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeFixQueued30d = s.PulseIntelligencePatrolInvestigationOutcomeFixQueued30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeFixExecuted30d = s.PulseIntelligencePatrolInvestigationOutcomeFixExecuted30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeFixRejected30d = s.PulseIntelligencePatrolInvestigationOutcomeFixRejected30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeFixFailed30d = s.PulseIntelligencePatrolInvestigationOutcomeFixFailed30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeFixVerificationUnknown30d = s.PulseIntelligencePatrolInvestigationOutcomeFixVerificationUnknown30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeResolved30d = s.PulseIntelligencePatrolInvestigationOutcomeResolved30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeNeedsAttention30d = s.PulseIntelligencePatrolInvestigationOutcomeNeedsAttention30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeCannotFix30d = s.PulseIntelligencePatrolInvestigationOutcomeCannotFix30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeTimedOut30d = s.PulseIntelligencePatrolInvestigationOutcomeTimedOut30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeInProgress30d = s.PulseIntelligencePatrolInvestigationOutcomeInProgress30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeFailed30d = s.PulseIntelligencePatrolInvestigationOutcomeFailed30d
+	ping.PulseIntelligencePatrolInvestigationOutcomeOther30d = s.PulseIntelligencePatrolInvestigationOutcomeOther30d
 	ping.PulseIntelligenceExternalAgentEnabled = s.PulseIntelligenceExternalAgentEnabled
 	ping.PulseIntelligenceExternalAgentUsed30d = s.PulseIntelligenceExternalAgentUsed30d
 	ping.PulseIntelligenceMCPAdapterUsed30d = s.PulseIntelligenceMCPAdapterUsed30d
