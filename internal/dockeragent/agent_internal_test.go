@@ -1,6 +1,7 @@
 package dockeragent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,11 +22,41 @@ import (
 	containertypes "github.com/moby/moby/api/types/container"
 	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
+
+func TestNewLogsDirectAdmissionRefusalBeforeTypedHelperFallback(t *testing.T) {
+	originalConnect := connectCollectorRuntimeFn
+	t.Cleanup(func() { connectCollectorRuntimeFn = originalConnect })
+	connectCollectorRuntimeFn = func(RuntimeKind, *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+		return nil, systemtypes.Info{}, RuntimeAuto, errors.New("ambiguous collector-owned rootless runtime endpoints")
+	}
+	helper := &helperInventoryStub{result: agenthelper.ContainerInventoryResult{
+		Runtimes: []agenthelper.ContainerRuntimeSnapshot{{Runtime: "docker", Available: true}},
+	}}
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs)
+	agent, err := New(Config{
+		PulseURL: "http://127.0.0.1:7655", APIToken: "token", Runtime: "auto",
+		HelperInventory: helper, Logger: &logger,
+	})
+	if err != nil {
+		t.Fatalf("New helper fallback: %v", err)
+	}
+	defer agent.Close()
+	for _, expected := range []string{
+		"Direct collector-owned rootless runtime unavailable; using typed helper inventory",
+		"ambiguous collector-owned rootless runtime endpoints",
+	} {
+		if !strings.Contains(logs.String(), expected) {
+			t.Fatalf("helper fallback log omitted %q: %s", expected, logs.String())
+		}
+	}
+}
 
 func TestDockerReportSequenceIDsAreProcessScopedAndMonotonic(t *testing.T) {
 	agent := &Agent{reportStreamID: "docker-process-stream"}
