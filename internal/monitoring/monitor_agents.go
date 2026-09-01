@@ -346,13 +346,49 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		}
 	}
 
-	// Revoke the API token associated with this Docker host
+	// Revoke the API token associated with this Docker host - unless a sibling
+	// record still authenticates with it: a unified install shares one token
+	// between the machine's host record and its Docker record, and two sites
+	// reusing one pasted install token hold separate records on one credential
+	// (the Docker analog of #1753). Revoking here would reject every surviving
+	// agent's next report with 401.
 	if host.TokenID != "" {
-		tokenRemoved, err := m.revokeAPIToken(host.TokenID)
-		if err != nil {
-			log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("API token revocation rolled back after Docker host removal")
-		} else if tokenRemoved != nil {
-			log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed Docker host")
+		tokenID := strings.TrimSpace(host.TokenID)
+		tokenStillUsed := false
+		if readState := m.snapshotBackedUnifiedReadState(); readState != nil {
+			for _, other := range readState.Hosts() {
+				if other != nil && strings.TrimSpace(other.TokenID()) == tokenID {
+					tokenStillUsed = true
+					break
+				}
+			}
+			if !tokenStillUsed {
+				for _, other := range readState.DockerHosts() {
+					if other == nil {
+						continue
+					}
+					if dockerHostStableID(other) == hostID || strings.TrimSpace(other.ID()) == hostID {
+						continue
+					}
+					if strings.TrimSpace(other.TokenID()) == tokenID {
+						tokenStillUsed = true
+						break
+					}
+				}
+			}
+		}
+		if !tokenStillUsed {
+			tokenRemoved, err := m.revokeAPIToken(tokenID)
+			if err != nil {
+				log.Warn().Err(err).Str("tokenID", tokenID).Msg("API token revocation rolled back after Docker host removal")
+			} else if tokenRemoved != nil {
+				log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed Docker host")
+			}
+		} else {
+			log.Info().
+				Str("tokenID", tokenID).
+				Str("dockerHostID", hostID).
+				Msg("API token still used by other agents; skipping revocation during Docker host removal")
 		}
 	}
 
@@ -1932,7 +1968,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	if readState != nil {
 		dockerHosts = readState.DockerHosts()
 	}
-	identifier, legacyIDs, previous, hasPrevious := resolveDockerHostIdentifier(report, tokenRecord, dockerHosts)
+	machineRevisit := func(identifier, machineID string) bool {
+		return m.dockerMachineIDRevisit(identifier, machineID, time.Now())
+	}
+	identifier, legacyIDs, previous, hasPrevious := resolveDockerHostIdentifier(report, tokenRecord, dockerHosts, machineRevisit)
 	if strings.TrimSpace(identifier) == "" {
 		return models.DockerHost{}, fmt.Errorf("docker report missing agent identifier")
 	}

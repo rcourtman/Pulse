@@ -31,8 +31,11 @@ func tokenHintFromRecord(record *config.APITokenRecord) string {
 
 // resolveDockerHostIdentifier determines a unique identifier for a Docker host
 // based on its report and existing hosts. Returns the identifier, fallback identifiers,
-// the existing host (if matched), and whether a match was found.
-func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config.APITokenRecord, hosts []*unifiedresources.DockerHostView) (string, []string, *unifiedresources.DockerHostView, bool) {
+// the existing host (if matched), and whether a match was found. machineRevisit
+// (optional) reports whether folding the report's machine ID into a candidate
+// identity would alternate back to a machine already seen behind it; see
+// findMatchingDockerHost.
+func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config.APITokenRecord, hosts []*unifiedresources.DockerHostView, machineRevisit func(identifier, machineID string) bool) (string, []string, *unifiedresources.DockerHostView, bool) {
 	base := strings.TrimSpace(report.AgentKey())
 	fallbacks := uniqueNonEmptyStrings(
 		base,
@@ -41,7 +44,7 @@ func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config
 		strings.TrimSpace(report.Host.Hostname),
 	)
 
-	if existing, ok := findMatchingDockerHost(hosts, report, tokenRecord); ok {
+	if existing, ok := findMatchingDockerHost(hosts, report, tokenRecord, machineRevisit); ok {
 		return dockerHostStableID(existing), fallbacks, existing, true
 	}
 
@@ -70,7 +73,18 @@ func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config
 }
 
 // findMatchingDockerHost searches for an existing host that matches the report.
-func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report agentsdocker.Report, tokenRecord *config.APITokenRecord) (*unifiedresources.DockerHostView, bool) {
+//
+// The hostname-based fallbacks deliberately fold a report whose machine ID
+// disagrees with the candidate record: containerized agents regenerate
+// /etc/machine-id on recreation and must keep their identity. But two live
+// machines reusing one short hostname and one shared install token also land
+// in those fallbacks, and folding them collapses two sites into one
+// flip-flopping record (the Docker analog of #1753). machineRevisit is the
+// discriminator: a recreated container transitions to its new machine ID
+// exactly once, while two live machines alternate, so a report whose machine
+// ID *returns* to a value already seen behind the candidate identity is proof
+// of a second machine and must not be folded.
+func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report agentsdocker.Report, tokenRecord *config.APITokenRecord, machineRevisit func(identifier, machineID string) bool) (*unifiedresources.DockerHostView, bool) {
 	agentID := strings.TrimSpace(report.Agent.ID)
 	tokenID := ""
 	if tokenRecord != nil {
@@ -119,6 +133,9 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 			}
 			if unifiedresources.HostnamesEquivalent(host.Hostname(), hostname) &&
 				strings.TrimSpace(host.TokenID()) == tokenID {
+				if dockerHostMachineIDRevisits(host, agentID, machineID, machineRevisit) {
+					continue
+				}
 				return host, true
 			}
 		}
@@ -142,12 +159,40 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 			}
 			if unifiedresources.HostnamesEquivalent(host.Hostname(), hostname) &&
 				strings.TrimSpace(host.TokenID()) == "" {
+				if dockerHostMachineIDRevisits(host, agentID, machineID, machineRevisit) {
+					continue
+				}
 				return host, true
 			}
 		}
 	}
 
 	return nil, false
+}
+
+// dockerHostMachineIDRevisits reports whether folding a report with the given
+// machine ID into the candidate host would return the record to a machine
+// identity it has already alternated away from - two live machines behind one
+// hostname, not one recreated container. See findMatchingDockerHost.
+//
+// A record whose stable ID is derived from the report's own machine or agent
+// ID belongs to the reporting machine: the returning owner reclaims it, and
+// the *other* machine is the one that splits off to its own identity. This
+// keeps each site on the record its identifiers minted, so removing one
+// site's record never blocks the sibling through a shared alias.
+func dockerHostMachineIDRevisits(host *unifiedresources.DockerHostView, agentID, machineID string, machineRevisit func(identifier, machineID string) bool) bool {
+	if machineRevisit == nil || host == nil || machineID == "" {
+		return false
+	}
+	existingMachineID := strings.TrimSpace(host.MachineID())
+	if existingMachineID == "" || existingMachineID == machineID {
+		return false
+	}
+	stableID := dockerHostStableID(host)
+	if stableID != "" && (stableID == machineID || (agentID != "" && stableID == agentID)) {
+		return false
+	}
+	return machineRevisit(stableID, machineID)
 }
 
 // dockerHostIdentityConflicts reports whether an incoming report is clearly from

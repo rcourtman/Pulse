@@ -673,7 +673,7 @@ func TestFindMatchingDockerHost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result, found := findMatchingDockerHost(dockerHostViewsForTest(tt.hosts), tt.report, tt.tokenRecord)
+			result, found := findMatchingDockerHost(dockerHostViewsForTest(tt.hosts), tt.report, tt.tokenRecord, nil)
 			if found != tt.expectMatch {
 				t.Errorf("found mismatch: got %v, want %v", found, tt.expectMatch)
 			}
@@ -902,7 +902,7 @@ func TestResolveDockerHostIdentifier(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			id, fallbacks, existing, found := resolveDockerHostIdentifier(tt.report, tt.tokenRecord, dockerHostViewsForTest(tt.hosts))
+			id, fallbacks, existing, found := resolveDockerHostIdentifier(tt.report, tt.tokenRecord, dockerHostViewsForTest(tt.hosts), nil)
 			if found != tt.expectMatch {
 				t.Errorf("found mismatch: got %v, want %v", found, tt.expectMatch)
 			}
@@ -973,7 +973,7 @@ func TestFindMatchingDockerHost_RejectsConflictingPhysicalIdentity(t *testing.T)
 		Host:  agentsdocker.HostInfo{MachineID: "machine-2", Hostname: "hostname-2"},
 	}
 
-	if _, ok := findMatchingDockerHost(dockerHostViewsForTest(hosts), report, &config.APITokenRecord{ID: "token-1"}); ok {
+	if _, ok := findMatchingDockerHost(dockerHostViewsForTest(hosts), report, &config.APITokenRecord{ID: "token-1"}, nil); ok {
 		t.Fatal("expected no match when the report's physical identity conflicts with the existing host")
 	}
 }
