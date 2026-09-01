@@ -26,8 +26,8 @@ RELEASE_REFERENCE_VIOLATIONS = frozenset(
     }
 )
 IMMUTABLE_REPLACEMENT_ACTION = (
-    "Do not edit the immutable release; restore the last known-good stable target if "
-    "needed, then publish a corrected replacement through convergence."
+    "Do not edit or repair the advertised release in place; restore the last known-good "
+    "stable target if needed, then publish a corrected replacement through convergence."
 )
 
 
@@ -87,6 +87,18 @@ RELEASE_RULES = {
 
 
 ACTIVATION_RULES = {
+    "activation_asset_invalid": (
+        "The release does not list one uploaded, digest-bound activation marker.",
+        IMMUTABLE_REPLACEMENT_ACTION,
+    ),
+    "activation_asset_size_mismatch": (
+        "The downloaded activation marker size differs from its release metadata.",
+        IMMUTABLE_REPLACEMENT_ACTION,
+    ),
+    "activation_asset_digest_mismatch": (
+        "The downloaded activation marker digest differs from its release metadata.",
+        IMMUTABLE_REPLACEMENT_ACTION,
+    ),
     "activation_payload_invalid": (
         "The activation marker is not one JSON object.",
         IMMUTABLE_REPLACEMENT_ACTION,
@@ -144,7 +156,14 @@ def diagnostic_value(value: Any) -> Any:
 
 def read_json(path: Path) -> Any:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return parse_json(path.read_bytes(), path)
+    except OSError as exc:
+        raise ValueError(f"cannot read JSON from {path}: {exc}") from exc
+
+
+def parse_json(content: bytes, path: Path) -> Any:
+    try:
+        return json.loads(content)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"cannot read JSON from {path}: {exc}") from exc
 
@@ -252,10 +271,76 @@ def release_is_referenceable(payload: Any, failures: list[Violation]) -> bool:
 
 
 def activation_violations(
-    payload: Any, expected_release: dict[str, Any]
+    payload: Any, expected_release: dict[str, Any], activation_bytes: bytes
 ) -> list[Violation]:
+    failures: list[Violation] = []
+    assets = expected_release.get("assets")
+    activation_assets = (
+        [
+            asset
+            for asset in assets
+            if isinstance(asset, dict) and asset.get("name") == "release-activation.json"
+        ]
+        if isinstance(assets, list)
+        else []
+    )
+    if len(activation_assets) != 1:
+        failures.append(
+            violation(
+                "activation_asset_invalid",
+                "assets.release-activation.json",
+                "one uploaded non-empty asset with a SHA-256 digest",
+                assets,
+                ACTIVATION_RULES,
+            )
+        )
+    else:
+        asset = activation_assets[0]
+        asset_size = asset.get("size")
+        asset_digest = asset.get("digest")
+        if (
+            asset.get("state") != "uploaded"
+            or not isinstance(asset_size, int)
+            or isinstance(asset_size, bool)
+            or asset_size <= 0
+            or not isinstance(asset_digest, str)
+            or SHA256.fullmatch(asset_digest) is None
+        ):
+            failures.append(
+                violation(
+                    "activation_asset_invalid",
+                    "assets.release-activation.json",
+                    "one uploaded non-empty asset with a SHA-256 digest",
+                    asset,
+                    ACTIVATION_RULES,
+                )
+            )
+        else:
+            actual_size = len(activation_bytes)
+            actual_digest = "sha256:" + hashlib.sha256(activation_bytes).hexdigest()
+            if actual_size != asset_size:
+                failures.append(
+                    violation(
+                        "activation_asset_size_mismatch",
+                        "assets.release-activation.json.size",
+                        str(asset_size),
+                        actual_size,
+                        ACTIVATION_RULES,
+                    )
+                )
+            if actual_digest != asset_digest:
+                failures.append(
+                    violation(
+                        "activation_asset_digest_mismatch",
+                        "assets.release-activation.json.digest",
+                        asset_digest,
+                        actual_digest,
+                        ACTIVATION_RULES,
+                    )
+                )
+
     if not isinstance(payload, dict):
-        return [
+        failures.append(
             violation(
                 "activation_payload_invalid",
                 "$",
@@ -263,9 +348,9 @@ def activation_violations(
                 payload,
                 ACTIVATION_RULES,
             )
-        ]
+        )
+        return failures
 
-    failures: list[Violation] = []
     checks = (
         ("activation_schema_invalid", "schema_version", 1, "integer 1"),
         (
@@ -410,15 +495,16 @@ def validate_activation(args: argparse.Namespace) -> int:
         release_failures = release_violations(release)
         if not release_is_referenceable(release, release_failures):
             raise ValueError("release identity is not safe to reference")
-        activation = read_json(args.activation_json)
-    except ValueError as exc:
+        activation_bytes = args.activation_json.read_bytes()
+        activation = parse_json(activation_bytes, args.activation_json)
+    except (OSError, ValueError) as exc:
         activation = None
         failures = [
             violation("activation_payload_invalid", "$", "object", str(exc), ACTIVATION_RULES)
         ]
         identity: dict[str, Any] = {}
     else:
-        failures = activation_violations(activation, release)
+        failures = activation_violations(activation, release, activation_bytes)
         identity = (
             {
                 key: activation.get(key)
@@ -446,7 +532,7 @@ def validate_activation(args: argparse.Namespace) -> int:
     append_outputs(
         args.github_output,
         {
-            "activation_sha256": hashlib.sha256(args.activation_json.read_bytes()).hexdigest(),
+            "activation_sha256": hashlib.sha256(activation_bytes).hexdigest(),
             "server_image_digest": activation["server_image_digest"],
             "control_plane_image_digest": activation["control_plane_image_digest"],
             "helm_chart_digest": activation["helm_chart_digest"],

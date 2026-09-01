@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -16,7 +17,23 @@ SOURCE_SHA = "a" * 40
 DIGEST = "sha256:" + "b" * 64
 
 
-def valid_release() -> dict[str, object]:
+def encoded(payload: object) -> bytes:
+    return json.dumps(payload).encode("utf-8")
+
+
+def activation_asset(payload: object) -> dict[str, object]:
+    content = encoded(payload)
+    return {
+        "name": "release-activation.json",
+        "state": "uploaded",
+        "size": len(content),
+        "digest": "sha256:" + hashlib.sha256(content).hexdigest(),
+    }
+
+
+def valid_release(activation: object | None = None) -> dict[str, object]:
+    if activation is None:
+        activation = valid_activation()
     return {
         "id": 12345,
         "tag_name": "v6.4.2",
@@ -25,6 +42,7 @@ def valid_release() -> dict[str, object]:
         "prerelease": False,
         "immutable": True,
         "published_at": "2026-08-31T17:00:00Z",
+        "assets": [activation_asset(activation)],
     }
 
 
@@ -70,7 +88,7 @@ class ReleaseContinuityTest(unittest.TestCase):
             ]
             if command == "activation":
                 activation_path = root / "activation.json"
-                activation_path.write_text(json.dumps(activation), encoding="utf-8")
+                activation_path.write_bytes(encoded(activation))
                 args.extend(["--activation-json", str(activation_path)])
             result = subprocess.run(
                 args,
@@ -142,8 +160,9 @@ class ReleaseContinuityTest(unittest.TestCase):
         self.assertNotIn("forged", result.stderr)
 
     def test_accepts_exact_activation_binding_and_emits_digests(self) -> None:
+        activation = valid_activation()
         result, diagnostic, output = self.run_command(
-            "activation", valid_release(), valid_activation()
+            "activation", valid_release(activation), activation
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(diagnostic["status"], "success")
@@ -169,7 +188,7 @@ class ReleaseContinuityTest(unittest.TestCase):
             }
         )
         result, diagnostic, output = self.run_command(
-            "activation", valid_release(), activation
+            "activation", valid_release(activation), activation
         )
         self.assertEqual(result.returncode, 1)
         self.assertEqual(output, "")
@@ -196,12 +215,12 @@ class ReleaseContinuityTest(unittest.TestCase):
         )
 
     def test_mutable_release_does_not_hide_activation_damage(self) -> None:
-        release = valid_release()
-        release["immutable"] = False
         activation = valid_activation()
         del activation["server_image_digest"]
         del activation["control_plane_image_digest"]
         del activation["helm_chart_digest"]
+        release = valid_release(activation)
+        release["immutable"] = False
 
         result, diagnostic, output = self.run_command(
             "activation", release, activation
@@ -215,6 +234,41 @@ class ReleaseContinuityTest(unittest.TestCase):
                 "server_digest_invalid",
                 "control_plane_digest_invalid",
                 "helm_digest_invalid",
+            ],
+        )
+
+    def test_activation_requires_one_digest_bound_release_asset(self) -> None:
+        activation = valid_activation()
+        release = valid_release(activation)
+        release["assets"] = []
+
+        result, diagnostic, output = self.run_command(
+            "activation", release, activation
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(output, "")
+        self.assertEqual(
+            [item["code"] for item in diagnostic["violations"]],
+            ["activation_asset_invalid"],
+        )
+
+    def test_activation_rejects_download_that_differs_from_release_metadata(self) -> None:
+        expected = valid_activation()
+        downloaded = valid_activation()
+        downloaded["r2_prefix"] = "releases/v6.4.2-corrupted"
+
+        result, diagnostic, output = self.run_command(
+            "activation", valid_release(expected), downloaded
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(output, "")
+        self.assertEqual(
+            [item["code"] for item in diagnostic["violations"]],
+            [
+                "activation_asset_size_mismatch",
+                "activation_asset_digest_mismatch",
             ],
         )
 
