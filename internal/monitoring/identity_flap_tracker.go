@@ -102,6 +102,39 @@ func (t *identityFlapTracker) observe(hostname, secondary string, now time.Time)
 	return conflict
 }
 
+// secondaryRevisit reports whether observing the given secondary value now
+// would be a revisit: the value was already seen inside the window and the
+// stream has since moved to a different value. This is the read-only
+// counterpart of observe for callers that must decide identity adoption
+// before the report is recorded.
+func (t *identityFlapTracker) secondaryRevisit(secondary string, now time.Time) bool {
+	secondary = strings.TrimSpace(secondary)
+	if secondary == "" || t.lastSecondary == "" || t.lastSecondary == secondary {
+		return false
+	}
+	seenAt, seen := t.secondaries[secondary]
+	return seen && !seenAt.Before(now.Add(-t.window))
+}
+
+// dockerMachineIDRevisit reports whether folding a report with this machine ID
+// into the given Docker host identity would alternate back to a machine the
+// identity has already been seen on: proof that two live machines are behind
+// one record (the Docker analog of #1753), as opposed to one recreated
+// container whose machine ID changed exactly once and never returns. Callers
+// must not hold m.mu.
+func (m *Monitor) dockerMachineIDRevisit(identifier, machineID string, now time.Time) bool {
+	if strings.TrimSpace(identifier) == "" {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	tracker, ok := m.dockerIdentityFlaps[identifier]
+	if !ok {
+		return false
+	}
+	return tracker.secondaryRevisit(machineID, now)
+}
+
 // observeIdentityFlap feeds one report's identity fields into the flap
 // tracker for the resolved identifier, lazily creating the tracker map and
 // entry, and returns the active conflict, if any. Callers must not hold m.mu.
