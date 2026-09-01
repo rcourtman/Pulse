@@ -209,6 +209,14 @@ EOF
 docker build --pull --no-cache --network default -t "${IMAGE_TAG}" -f "${PACKET_DIR}/Dockerfile" "${PACKET_DIR}" | tee "${OUTPUT_DIR}/image-build.log"
 docker image inspect "${IMAGE_TAG}" >"${OUTPUT_DIR}/qualification-image-inspect.json"
 
+capture_qualification_container_diagnostics() {
+  local runtime_name="$1"
+  local container_id="$2"
+  docker logs "${container_id}" >"${OUTPUT_DIR}/${runtime_name}-container.log" 2>&1 || true
+  docker exec "${container_id}" journalctl --no-pager -n 2000 >"${OUTPUT_DIR}/${runtime_name}-journal.log" 2>&1 || true
+  chmod 0600 "${OUTPUT_DIR}/${runtime_name}-container.log" "${OUTPUT_DIR}/${runtime_name}-journal.log"
+}
+
 run_runtime() {
   local runtime_name="$1"
   local container_name="pulse-rootless-qual-${runtime_name}-${SOURCE_COMMIT:0:8}-$$"
@@ -227,7 +235,7 @@ run_runtime() {
   local deadline=$((SECONDS + 60))
   until docker exec "${container_id}" systemctl is-system-running --wait >/dev/null 2>&1; do
     if (( SECONDS >= deadline )); then
-      docker logs "${container_id}" >"${OUTPUT_DIR}/${runtime_name}-container.log" 2>&1 || true
+      capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
       echo "ERROR: ${runtime_name} disposable systemd container did not become ready" >&2
       return 1
     fi
@@ -242,23 +250,27 @@ run_runtime() {
     return 1
   fi
 
-  docker exec \
-    -e PULSE_SECURE_RUNTIME_ROOTLESS_QUALIFICATION=disposable-v1 \
-    -e "PULSE_ROOTLESS_RUNTIME=${runtime_name}" \
-    -e PULSE_ROOTLESS_RECEIPT=/run/rootless-receipt.json \
-		-e PULSE_ROOTLESS_SOURCE_HASHES=/opt/pulse/packet/source-hashes.json \
-		-e "PULSE_ROOTLESS_SOURCE_COMMIT=${SOURCE_COMMIT}" \
-    -e PULSE_SECURE_RUNTIME_COLLECTOR=/opt/pulse/packet/pulse-agent \
-    -e PULSE_SECURE_RUNTIME_COLLECTOR_SIGNATURE=/opt/pulse/packet/pulse-agent.sig \
-    -e PULSE_SECURE_RUNTIME_HELPER=/opt/pulse/packet/pulse-agent-helper \
-    -e PULSE_SECURE_RUNTIME_INSTALLER=/opt/pulse/packet/install.sh \
-    "${container_id}" /opt/pulse/packet/dockeragent.test \
-      -test.run '^TestSecureRuntimeRootlessQualification$' -test.count=1 -test.v -test.timeout=45m \
-      | tee "${OUTPUT_DIR}/${runtime_name}-test.log"
+  if ! docker exec \
+      -e PULSE_SECURE_RUNTIME_ROOTLESS_QUALIFICATION=disposable-v1 \
+      -e "PULSE_ROOTLESS_RUNTIME=${runtime_name}" \
+      -e PULSE_ROOTLESS_RECEIPT=/run/rootless-receipt.json \
+      -e PULSE_ROOTLESS_SOURCE_HASHES=/opt/pulse/packet/source-hashes.json \
+      -e "PULSE_ROOTLESS_SOURCE_COMMIT=${SOURCE_COMMIT}" \
+      -e PULSE_SECURE_RUNTIME_COLLECTOR=/opt/pulse/packet/pulse-agent \
+      -e PULSE_SECURE_RUNTIME_COLLECTOR_SIGNATURE=/opt/pulse/packet/pulse-agent.sig \
+      -e PULSE_SECURE_RUNTIME_HELPER=/opt/pulse/packet/pulse-agent-helper \
+      -e PULSE_SECURE_RUNTIME_INSTALLER=/opt/pulse/packet/install.sh \
+      "${container_id}" /opt/pulse/packet/dockeragent.test \
+        -test.run '^TestSecureRuntimeRootlessQualification$' -test.count=1 -test.v -test.timeout=45m \
+        | tee "${OUTPUT_DIR}/${runtime_name}-test.log"; then
+    capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
+    chmod 0600 "${OUTPUT_DIR}/${runtime_name}-test.log"
+    return 1
+  fi
 
   docker cp "${container_id}:/run/rootless-receipt.json" "${local_receipt}"
-  docker logs "${container_id}" >"${OUTPUT_DIR}/${runtime_name}-container.log" 2>&1 || true
-  chmod 0600 "${local_receipt}" "${OUTPUT_DIR}/${runtime_name}-test.log" "${OUTPUT_DIR}/${runtime_name}-container.log"
+  capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
+  chmod 0600 "${local_receipt}" "${OUTPUT_DIR}/${runtime_name}-test.log"
   remove_qualification_container_strict "${container_id}"
 }
 

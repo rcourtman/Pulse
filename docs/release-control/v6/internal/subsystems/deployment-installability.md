@@ -262,6 +262,9 @@ never mounts a host daemon socket, and records each host identity separately.
 The exact qualification packet remains outside the image layers; the image
 must pre-create its root-owned, mode-`0700` packet destination before the
 wrapper injects artifacts into each stopped disposable container.
+Rootless Docker uses its supported `slirp4netns` driver inside the outer
+`--network none` container only; an unsupported `host` RootlessKit driver or
+an outer default route invalidates the proof.
 Its standalone `secure-runtime-rootless-v1` receipt must bind the exact
 qualification, collector, helper, installer, source-manifest, socket,
 fresh-install, legacy-migration, restart, fallback, recovery, ambiguity,
@@ -270,6 +273,9 @@ local artifact-bound self-attestation. Checking in the harness or passing its
 ordinary contract tests is not live qualification. Until a complete
 secret-free receipt and attestation are retained, this surface remains
 implemented-but-unqualified and cannot change the opt-in safe-profile default.
+Failed runtime tests must retain the disposable systemd journal and container
+log before nonce-bound cleanup; absence of a receipt is not a replacement for
+the causal failure record.
 
 Release builds and archives carry both helper and runner binaries for the five
 Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,
