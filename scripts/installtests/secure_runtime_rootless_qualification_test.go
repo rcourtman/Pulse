@@ -1362,6 +1362,7 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 		`run_runtime docker`, `run_runtime podman`, `PULSE_ROOTLESS_RUNTIME=${runtime_name}`, `--privileged`,
 		`pulse-secure-runtime-rootless-qualification`, `qualification result != \"passed\"`,
 		`openssl pkeyutl -sign -rawin -inkey`, `qualification output directory must have exact mode 0700`,
+		`install -d -m 0700 /opt/pulse/packet`,
 		`302a300506032b6570032100`, `len(spki) != len(prefix) + 32`,
 	} {
 		if !strings.Contains(script, required) {
@@ -1380,6 +1381,11 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 	trackIndex := strings.Index(script, `CONTAINER_IDS+=("${container_id}")`)
 	if createIndex < 0 || trackIndex < 0 || trackIndex < createIndex {
 		t.Fatal("rootless wrapper must track the exact container ID only after docker create succeeds")
+	}
+	packetDirectoryIndex := strings.Index(script, `install -d -m 0700 /opt/pulse/packet`)
+	packetCopyIndex := strings.Index(script, `docker cp "${PACKET_DIR}/." "${container_id}:/opt/pulse/packet"`)
+	if packetDirectoryIndex < 0 || packetCopyIndex < 0 || packetCopyIndex < packetDirectoryIndex {
+		t.Fatal("rootless wrapper must create the private packet destination in the image before artifact injection")
 	}
 }
 

@@ -198,6 +198,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ln -sf /dev/null /etc/systemd/system/docker.socket && \
     ln -sf /dev/null /etc/systemd/system/podman.service && \
     ln -sf /dev/null /etc/systemd/system/podman.socket && \
+    install -d -m 0700 /opt/pulse/packet && \
     printf '%s\n' disposable-v1 >/etc/pulse-secure-runtime-rootless-qualification && \
     rm -f /etc/machine-id && touch /etc/machine-id && \
     systemctl set-default multi-user.target
