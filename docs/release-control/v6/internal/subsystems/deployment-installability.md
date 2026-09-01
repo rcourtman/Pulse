@@ -3265,6 +3265,11 @@ with build evidence; and `mobile-candidate-required` must fail closed until the
 mobile candidate exists. This gate does not auto-submit App Store/TestFlight or
 Play builds, but it prevents release packets from silently ignoring the mobile
 track.
+The compiler handoff in `.github/workflows/build-release-candidate.yml` must
+likewise request `return_run_details: true` when it dispatches
+`.github/workflows/compile-release-payload.yml`, then bind artifact retrieval
+to the returned `workflow_run_id`. Exact-run qualification must not depend on
+an API-version default that may return an empty dispatch response.
 That same release-trust boundary owns the distinction between source proof,
 release-artifact proof, and post-install live-runtime proof. Publication or
 successful installation may establish `release-validated`; neither may be
