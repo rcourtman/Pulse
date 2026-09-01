@@ -278,7 +278,9 @@ Its standalone `secure-runtime-rootless-v1` receipt must bind the exact
 qualification, collector, helper, installer, source-manifest, socket,
 fresh-install, legacy-migration, restart, fallback, recovery, ambiguity,
 authority, and cleanup evidence before the independent validator can emit a
-local artifact-bound self-attestation. Checking in the harness or passing its
+local artifact-bound self-attestation. All three Go artifacts require explicit
+VCS stamping at build time; unavailable revision or clean-worktree metadata is
+a build failure rather than an attestable omission. Checking in the harness or passing its
 ordinary contract tests is not live qualification. Until a complete
 secret-free receipt and attestation are retained, this surface remains
 implemented-but-unqualified and cannot change the opt-in safe-profile default.

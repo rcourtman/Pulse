@@ -152,9 +152,9 @@ helper_ldflags="$(cd "${REPO_ROOT}" && ./scripts/release_ldflags.sh agent --vers
 
 (
   cd "${REPO_ROOT}"
-  CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" GOFLAGS= GOWORK=off go build -trimpath -ldflags "${agent_ldflags}" -o "${PACKET_DIR}/pulse-agent" ./cmd/pulse-agent
-  CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" GOFLAGS= GOWORK=off go build -trimpath -ldflags "${helper_ldflags}" -o "${PACKET_DIR}/pulse-agent-helper" ./cmd/pulse-agent-helper
-  CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" GOFLAGS= GOWORK=off go test -c -trimpath -o "${PACKET_DIR}/dockeragent.test" ./scripts/installtests
+  CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" GOFLAGS= GOWORK=off go build -trimpath -buildvcs=true -ldflags "${agent_ldflags}" -o "${PACKET_DIR}/pulse-agent" ./cmd/pulse-agent
+  CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" GOFLAGS= GOWORK=off go build -trimpath -buildvcs=true -ldflags "${helper_ldflags}" -o "${PACKET_DIR}/pulse-agent-helper" ./cmd/pulse-agent-helper
+  CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" GOFLAGS= GOWORK=off go test -c -trimpath -buildvcs=true -o "${PACKET_DIR}/dockeragent.test" ./scripts/installtests
 )
 openssl pkeyutl -sign -rawin -inkey "${PACKET_DIR}/update-private.pem" -in "${PACKET_DIR}/pulse-agent" | openssl base64 -A >"${PACKET_DIR}/pulse-agent.sig"
 printf '\n' >>"${PACKET_DIR}/pulse-agent.sig"

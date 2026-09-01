@@ -1605,6 +1605,9 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 			t.Fatalf("rootless qualification wrapper missing %q", required)
 		}
 	}
+	if count := strings.Count(script, `-buildvcs=true`); count != 3 {
+		t.Fatalf("rootless qualification wrapper must require VCS metadata for all three Go artifacts: got %d", count)
+	}
 	for _, forbidden := range []string{"/var/run/docker.sock:", "/run/podman/podman.sock:", "/sys/fs/cgroup:/sys/fs/cgroup", "--cgroupns=host", "-v $", "--volume"} {
 		if strings.Contains(script, forbidden) {
 			t.Fatalf("rootless qualification wrapper contains forbidden host-runtime mount marker %q", forbidden)
