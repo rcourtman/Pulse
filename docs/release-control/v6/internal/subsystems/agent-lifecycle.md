@@ -7338,6 +7338,10 @@ standalone `secure-runtime-rootless-v1` receipt only after exact socket
 ownership, daemon rootless attestation, installer pinning, direct telemetry,
 same-family typed-helper fallback, recovery without collector restart,
 ambiguity refusal, authority isolation, and cleanup are recorded.
+The wrapper must compile every Go artifact with mandatory VCS stamping so a
+missing revision or unavailable clean-worktree proof fails before live evidence
+can be emitted; the receipt and validator retain the exact artifact hashes and
+source commit.
 Any failed runtime test must retain the disposable host's systemd journal and
 container log before strict nonce-bound cleanup; a missing receipt never
 silently substitutes for causal failure evidence.
