@@ -19,6 +19,25 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	controlPlaneReadHeaderTimeout = 15 * time.Second
+	controlPlaneReadTimeout       = 30 * time.Second
+	controlPlaneIdleTimeout       = 120 * time.Second
+)
+
+func newControlPlaneHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: controlPlaneReadHeaderTimeout,
+		// The control plane has no streaming request bodies. Bound the complete
+		// request read so a client cannot retain a handler indefinitely after
+		// sending valid headers and then stalling a small JSON body.
+		ReadTimeout: controlPlaneReadTimeout,
+		IdleTimeout: controlPlaneIdleTimeout,
+	}
+}
+
 // Run starts the control plane HTTP server with graceful shutdown.
 func Run(ctx context.Context, version string) error {
 	logging.Init(logging.Config{
@@ -141,12 +160,7 @@ func Run(ctx context.Context, version string) error {
 	RegisterRoutes(mux, deps)
 
 	addr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.Port)
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           CPSecurityHeaders(mux),
-		ReadHeaderTimeout: 15 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
+	srv := newControlPlaneHTTPServer(addr, CPSecurityHeaders(mux))
 
 	// Create derived context for background goroutines
 	ctx, cancel := context.WithCancel(ctx)

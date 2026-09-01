@@ -2,11 +2,36 @@ package cloudcp
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestNewControlPlaneHTTPServerBoundsRequestReads(t *testing.T) {
+	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	server := newControlPlaneHTTPServer("127.0.0.1:7656", handler)
+
+	if server.Addr != "127.0.0.1:7656" {
+		t.Fatalf("Addr = %q, want %q", server.Addr, "127.0.0.1:7656")
+	}
+	if server.Handler == nil {
+		t.Fatal("Handler = nil, want configured handler")
+	}
+	if server.ReadHeaderTimeout != controlPlaneReadHeaderTimeout {
+		t.Fatalf("ReadHeaderTimeout = %s, want %s", server.ReadHeaderTimeout, controlPlaneReadHeaderTimeout)
+	}
+	if server.ReadTimeout != controlPlaneReadTimeout {
+		t.Fatalf("ReadTimeout = %s, want %s", server.ReadTimeout, controlPlaneReadTimeout)
+	}
+	if server.ReadTimeout <= server.ReadHeaderTimeout {
+		t.Fatalf("ReadTimeout = %s, want longer than header timeout %s", server.ReadTimeout, server.ReadHeaderTimeout)
+	}
+	if server.IdleTimeout != controlPlaneIdleTimeout {
+		t.Fatalf("IdleTimeout = %s, want %s", server.IdleTimeout, controlPlaneIdleTimeout)
+	}
+}
 
 func TestBaseDomainFromURL(t *testing.T) {
 	tests := []struct {
