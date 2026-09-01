@@ -143,8 +143,10 @@ Credentials used by the E2E suite can be overridden:
 - `PULSE_E2E_ALLOW_NODE_MUTATION=1` to enable the optional "Add Proxmox node" test (disabled by default for safety)
 - `PULSE_E2E_PERF=1` to enable navigation performance budget checks
 - `PULSE_E2E_PERF_ITERATIONS` (default `3`)
-- `PULSE_E2E_PERF_INFRA_TO_WORKLOADS_BUDGET_MS` (default `2200`)
-- `PULSE_E2E_PERF_WORKLOADS_TO_INFRA_BUDGET_MS` (default `2200`)
+- `PULSE_E2E_PERF_PROXMOX_TO_DOCKER_BUDGET_MS` (default `2200`)
+- `PULSE_E2E_PERF_DOCKER_TO_PROXMOX_BUDGET_MS` (default `2200`)
+- `PULSE_E2E_PERF_PROXMOX_OVERVIEW_TO_STORAGE_BUDGET_MS` (default `2200`)
+- `PULSE_E2E_PERF_PROXMOX_STORAGE_TO_OVERVIEW_BUDGET_MS` (default `2200`)
 
 ### Run Against An Existing Pulse Instance
 ```bash
