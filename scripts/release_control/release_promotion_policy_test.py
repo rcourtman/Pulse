@@ -1626,10 +1626,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Validate installer signing key pins", candidate_workflow)
         self.assertIn("timeout-minutes: 60", candidate_workflow)
         self.assertNotRegex(candidate_workflow, r"(?m)^\s+runs-on:.*self-hosted")
-        self.assertIn(
-            'runs-on: ${{ fromJSON(\'["self-hosted","Linux","X64","pulse-pve-compile"]\') }}',
-            compiler_workflow,
-        )
+        self.assertIn("Compile Exact-SHA Release Payload on Ephemeral VM", compiler_workflow)
+        self.assertIn("runs-on: ubuntu-24.04", compiler_workflow)
+        self.assertNotRegex(compiler_workflow, r"(?m)^\s+runs-on:.*self-hosted")
+        self.assertNotIn("pulse-pve-", compiler_workflow)
         self.assertIn("GITHUB_WORKFLOW_SHA", compiler_workflow)
         self.assertIn("ref: ${{ inputs.source_sha }}", compiler_workflow)
         self.assertIn("PULSE_RELEASE_BUILD_JOBS: \"2\"", compiler_workflow)
@@ -1652,7 +1652,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(".workflow_run.head_sha == $source_sha", candidate_workflow)
         self.assertIn("sha256sum --check --", candidate_workflow)
         self.assertIn("compiled-payload-verification.json", candidate_workflow)
-        self.assertIn("separate-trusted-self-hosted-compiler-workflow", candidate_workflow)
+        self.assertIn("separate-ephemeral-github-hosted-compiler-workflow", candidate_workflow)
         self.assertIn("Verify Native Signing Configuration", candidate_workflow)
         self.assertEqual(candidate_workflow.count("needs: signing-configuration"), 2)
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)

@@ -3169,7 +3169,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 
 	for _, needle := range []string{
-		`fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]')`,
+		`runs-on: ubuntu-24.04`,
+		`Compile Exact-SHA Release Payload on Ephemeral VM`,
 		`GITHUB_WORKFLOW_SHA`,
 		`ref: ${{ inputs.source_sha }}`,
 		`PULSE_RELEASE_BUILD_JOBS: "2"`,
@@ -3180,6 +3181,9 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		if !strings.Contains(compileJob, needle) {
 			t.Fatalf("compiled release payload job missing exact-SHA contract: %s", needle)
 		}
+	}
+	if strings.Contains(compileJob, "self-hosted") || strings.Contains(compileJob, "pulse-pve-") {
+		t.Fatal("release payload compilation must stay on an ephemeral GitHub-hosted runner")
 	}
 	if strings.Contains(compileJob, "PULSE_UPDATE_SIGNING_KEY") {
 		t.Fatal("release compilation job must not receive private update-signing material")
@@ -3217,7 +3221,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		}
 	}
 	if !strings.Contains(compileJob, "cache: false") || strings.Contains(compileJob, "cache: 'npm'") {
-		t.Fatal("release compilation must avoid Actions cache archival on both hosted and PVE runners")
+		t.Fatal("release compilation must avoid Actions cache archival")
 	}
 	if strings.Contains(frontendBundleJob, "cache: 'npm'") {
 		t.Fatal("PVE frontend bundle must use its persistent runner-local npm cache")
@@ -3245,7 +3249,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		`sha256sum --check --`,
 		`scripts/release_candidate_manifest.py verify-local`,
 		`compiled-payload-verification.json`,
-		`separate-trusted-self-hosted-compiler-workflow`,
+		`separate-ephemeral-github-hosted-compiler-workflow`,
 		`PULSE_RELEASE_COMPILED_PAYLOAD_DIR`,
 	} {
 		if !strings.Contains(candidateBuildJob, needle) {

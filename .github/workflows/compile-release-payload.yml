@@ -1,4 +1,4 @@
-name: Compile Release Payload on Trusted PC
+name: Compile Release Payload on Hosted Runner
 run-name: Compile v${{ inputs.version }} payload for request ${{ inputs.request_id }}
 
 on:
@@ -22,8 +22,11 @@ permissions:
 
 jobs:
   compile-release-payload:
-    name: Compile Exact-SHA Release Payload
-    runs-on: ${{ fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
+    name: Compile Exact-SHA Release Payload on Ephemeral VM
+    # Release binaries are a production trust boundary. Keep this job on a
+    # fresh GitHub-hosted VM rather than a persistent public-repository runner,
+    # whose state can survive earlier jobs and influence later compilation.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Validate isolated compiler request

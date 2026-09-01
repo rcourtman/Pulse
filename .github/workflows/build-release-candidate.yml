@@ -75,10 +75,10 @@ permissions:
 
 jobs:
   obtain-release-payload:
-    name: Obtain Isolated PC Release Payload
-    # The self-hosted compiler runs in a separate workflow run. This release
-    # and SignPath workflow therefore contains only GitHub-hosted jobs, while
-    # the expensive payload still compiles once on the trusted PC.
+    name: Obtain Isolated Hosted Release Payload
+    # Compilation runs in a separate GitHub-hosted workflow so the expensive
+    # payload is built once on a fresh VM, then consumed by artifact id and
+    # digest without joining signing credentials to the compilation job.
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -829,7 +829,7 @@ jobs:
             --argjson release_workflow_run_id "${GITHUB_RUN_ID}" \
             --arg version "${VERSION}" \
             --arg source_sha "${GITHUB_SHA}" \
-            '{schema_version: 2, trust_boundary: "separate-trusted-self-hosted-compiler-workflow", verified_on: "github-hosted", artifact_id: $artifact_id, artifact_name: $artifact_name, artifact_sha256: $artifact_sha256, payload_manifest_sha256: $payload_manifest_sha256, compiler_workflow_run_id: $compiler_workflow_run_id, release_workflow_run_id: $release_workflow_run_id, version: $version, source_sha: $source_sha}' \
+            '{schema_version: 2, trust_boundary: "separate-ephemeral-github-hosted-compiler-workflow", verified_on: "github-hosted", artifact_id: $artifact_id, artifact_name: $artifact_name, artifact_sha256: $artifact_sha256, payload_manifest_sha256: $payload_manifest_sha256, compiler_workflow_run_id: $compiler_workflow_run_id, release_workflow_run_id: $release_workflow_run_id, version: $version, source_sha: $source_sha}' \
             > release-candidate-manifest/compiled-payload-verification.json
 
       - name: Download signed macOS binaries
