@@ -201,6 +201,11 @@ func TestValidateTrustedExecutableRequiresControlledExecutableFile(t *testing.T)
 	if err := os.WriteFile(writable, []byte("binary"), 0o720); err != nil {
 		t.Fatal(err)
 	}
+	// WriteFile filters mode through the process umask, which strips the
+	// group-write bit under the common 022 umask; force the mode we assert on.
+	if err := os.Chmod(writable, 0o720); err != nil {
+		t.Fatal(err)
+	}
 	if err := validateTrustedExecutable(writable, uint32(os.Geteuid())); err == nil {
 		t.Fatal("group-writable executable was trusted")
 	}

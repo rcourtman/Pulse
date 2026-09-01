@@ -186,7 +186,10 @@ func TestProxmoxGuestActionExecutorUsesIndependentControlPlaneVerification(t *te
 	}}
 	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
 		proxmoxGuestActionObservation(now.Add(-time.Second), "running", 3600, "proxmox-control-plane:default:homelab"),
-		proxmoxGuestActionObservation(now.Add(time.Second), "stopped", 0, "proxmox-control-plane:default:homelab"),
+		// The after observation must postdate actionStartedAt, which is stamped
+		// inside ExecuteAction after handler setup; a one-second offset loses
+		// that race on a loaded runner, so use a generous margin.
+		proxmoxGuestActionObservation(now.Add(time.Minute), "stopped", 0, "proxmox-control-plane:default:homelab"),
 	}}
 	executor := newProxmoxGuestActionExecutor(h, agents, observer)
 
@@ -215,7 +218,7 @@ func TestProxmoxGuestActionExecutorRequiresUptimeResetToVerifyReboot(t *testing.
 	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{{RequestID: "act_vm", Success: true, ExitCode: 0, Stdout: "reboot requested"}}}
 	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
 		proxmoxGuestActionObservation(now.Add(-time.Second), "running", 7200, "proxmox-control-plane:default:homelab"),
-		proxmoxGuestActionObservation(now.Add(time.Second), "running", 4, "proxmox-control-plane:default:homelab"),
+		proxmoxGuestActionObservation(now.Add(time.Minute), "running", 4, "proxmox-control-plane:default:homelab"),
 	}}
 	executor := newProxmoxGuestActionExecutor(h, agents, observer)
 
@@ -239,7 +242,7 @@ func TestProxmoxGuestActionExecutorKeepsIndependentContradictionSeparateFromExec
 	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{{RequestID: "act_vm", Success: true, ExitCode: 0, Stdout: "reboot requested"}}}
 	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
 		proxmoxGuestActionObservation(now.Add(-time.Second), "running", 7200, "proxmox-control-plane:default:homelab"),
-		proxmoxGuestActionObservation(now.Add(time.Second), "running", 7201, "proxmox-control-plane:default:homelab"),
+		proxmoxGuestActionObservation(now.Add(time.Minute), "running", 7201, "proxmox-control-plane:default:homelab"),
 	}}
 	executor := newProxmoxGuestActionExecutor(h, agents, observer)
 	ctx, cancel := context.WithTimeout(actionDispatchTestContext(t, "act_vm"), 100*time.Millisecond)
