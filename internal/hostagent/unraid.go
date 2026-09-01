@@ -522,10 +522,10 @@ func isUnraidEmptySlot(disk agentshost.UnraidDisk) bool {
 	// Unraid names every configured slot (for example disk6 or parity2), even
 	// when it has never been assigned. A slot label is therefore topology, not
 	// membership evidence. Preserve DISK_NP members only when native identity,
-	// device, filesystem, or size evidence shows that a disk was assigned.
+	// device, a concrete filesystem, or size evidence shows that a disk was assigned.
 	return strings.TrimSpace(disk.Device) == "" &&
 		!unraidstatus.HasMeaningfulIdentity(disk.Model, disk.Serial) &&
-		strings.TrimSpace(disk.Filesystem) == "" &&
+		!unraidstatus.HasMeaningfulFilesystem(disk.Filesystem) &&
 		disk.SizeBytes == 0
 }
 

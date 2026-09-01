@@ -35,3 +35,18 @@ func TestIsExplicitMissingMember(t *testing.T) {
 		}
 	}
 }
+
+func TestHasMeaningfulFilesystem(t *testing.T) {
+	t.Parallel()
+
+	for _, filesystem := range []string{"", "auto", " AUTO "} {
+		if HasMeaningfulFilesystem(filesystem) {
+			t.Errorf("%q must not establish Unraid disk assignment", filesystem)
+		}
+	}
+	for _, filesystem := range []string{"xfs", "btrfs", "luks:xfs"} {
+		if !HasMeaningfulFilesystem(filesystem) {
+			t.Errorf("%q must establish Unraid disk assignment", filesystem)
+		}
+	}
+}
