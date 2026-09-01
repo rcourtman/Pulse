@@ -321,6 +321,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 		t.Fatalf("second live rootless socket missing: %v", err)
 	}
 	liveSockets := rootlessQualDualSocketEvidence(t, daemon.uid)
+	secureRuntimeAssertHelperProtocol(t)
 	ambiguityOutput := rootlessQualRunUnpinnedCollector(t, server.URL, collectorCredential, 6*time.Second)
 	if !strings.Contains(strings.ToLower(ambiguityOutput), "ambiguous collector-owned rootless runtime endpoints") {
 		t.Fatalf("unpinned collector did not fail closed on dual sockets:\n%s", ambiguityOutput)
@@ -900,6 +901,7 @@ func rootlessQualUnpinnedCollectorArgs(serverURL, collectorCredential, stateDir 
 		"HOME=/var/lib/pulse-rootless",
 		"XDG_RUNTIME_DIR=" + filepath.Join("/run/user", strconv.Itoa(collectorUID)),
 		"PULSE_DOCKER_RUNTIME=auto",
+		"PULSE_AGENT_HELPER_SOCKET=/run/pulse-agent/helper.sock",
 		"PULSE_URL=" + serverURL,
 		"PULSE_TOKEN=" + collectorCredential,
 		"PULSE_INTERVAL=1s",
@@ -969,6 +971,9 @@ func TestRootlessQualificationUnpinnedProbeUsesCleanAutomaticRuntimeEnvironment(
 	}
 	if !slices.Contains(args, "PULSE_DOCKER_RUNTIME=auto") {
 		t.Fatalf("unpinned probe does not force automatic runtime selection: %q", args)
+	}
+	if !slices.Contains(args, "PULSE_AGENT_HELPER_SOCKET=/run/pulse-agent/helper.sock") {
+		t.Fatalf("unpinned probe does not exercise the installed typed-helper boundary: %q", args)
 	}
 	for _, arg := range args {
 		for _, forbidden := range []string{"DOCKER_HOST=", "PODMAN_HOST=", "CONTAINER_HOST="} {
