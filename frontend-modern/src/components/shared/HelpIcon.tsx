@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createUniqueId } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import CircleHelp from 'lucide-solid/icons/circle-help';
 import ExternalLink from 'lucide-solid/icons/external-link';
@@ -11,6 +11,8 @@ export type { HelpIconProps } from './helpIconModel';
 export const HelpIcon: Component<HelpIconProps> = (props) => {
   const state = useHelpIconState(props);
   const helpContent = state.helpContent();
+  const popoverId = `help-popover-${createUniqueId()}`;
+  const titleId = `${popoverId}-title`;
 
   // Don't render if no content available
   if (!helpContent) {
@@ -27,6 +29,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
         aria-label={`Help: ${helpContent.title}`}
         aria-expanded={state.isOpen()}
         aria-haspopup="dialog"
+        aria-controls={state.isOpen() ? popoverId : undefined}
       >
         <CircleHelp class={helpIconSizeClasses[state.size()]} strokeWidth={2} />
       </button>
@@ -35,8 +38,9 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
         <Portal mount={document.body}>
           <div
             ref={state.setPopoverRef}
+            id={popoverId}
             role="dialog"
-            aria-labelledby="help-popover-title"
+            aria-labelledby={titleId}
             class="fixed z-[9999] bg-surface rounded-md shadow-sm border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
             style={{
               top: `${state.popoverPosition().top}px`,
@@ -47,13 +51,14 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
           >
             {/* Header */}
             <div class="px-3 py-2 bg-surface-alt border-b border-border flex items-center justify-between gap-2">
-              <span id="help-popover-title" class="text-sm font-medium text-base-content">
+              <span id={titleId} class="text-sm font-medium text-base-content">
                 {helpContent.title}
               </span>
               <button
+                ref={state.setCloseButtonRef}
                 type="button"
-                class="p-0.5 text-slate-400 hover:text-muted rounded transition-colors"
-                onClick={() => state.setIsOpen(false)}
+                class="inline-flex min-h-11 min-w-11 items-center justify-center rounded text-slate-400 transition-colors hover:text-muted sm:min-h-8 sm:min-w-8"
+                onClick={state.closeAndRestoreFocus}
                 aria-label="Close help"
               >
                 <X class="w-3.5 h-3.5" strokeWidth={2} />

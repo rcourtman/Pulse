@@ -13,12 +13,17 @@ export function useHelpIconState(props: HelpIconProps) {
   const [isOpen, setIsOpen] = createSignal(false);
   const [popoverPosition, setPopoverPosition] = createSignal({ top: 0, left: 0 });
   const [buttonRef, setButtonRef] = createSignal<HTMLButtonElement>();
+  const [closeButtonRef, setCloseButtonRef] = createSignal<HTMLButtonElement>();
   const [popoverRef, setPopoverRef] = createSignal<HTMLDivElement>();
 
   const helpContent = createMemo(() => resolveHelpContent(props));
   const size = createMemo(() => getHelpIconSize(props.size));
   const maxWidth = createMemo(() => getHelpPopoverMaxWidth(props.maxWidth));
   const preferredPosition = createMemo(() => getHelpPopoverPreferredPosition(props.position));
+  const closeAndRestoreFocus = () => {
+    setIsOpen(false);
+    buttonRef()?.focus({ preventScroll: true });
+  };
 
   createEffect(() => {
     if (!isOpen() || !buttonRef()) return;
@@ -37,6 +42,7 @@ export function useHelpIconState(props: HelpIconProps) {
           viewportHeight: window.innerHeight,
         }),
       );
+      closeButtonRef()?.focus({ preventScroll: true });
     });
   });
 
@@ -54,8 +60,7 @@ export function useHelpIconState(props: HelpIconProps) {
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsOpen(false);
-        button?.focus();
+        closeAndRestoreFocus();
       }
     };
 
@@ -83,6 +88,7 @@ export function useHelpIconState(props: HelpIconProps) {
 
   return {
     buttonRef,
+    closeAndRestoreFocus,
     helpContent,
     isOpen,
     maxWidth,
@@ -90,6 +96,7 @@ export function useHelpIconState(props: HelpIconProps) {
     popoverRef,
     preferredPosition,
     setButtonRef,
+    setCloseButtonRef,
     setIsOpen,
     setPopoverRef,
     size,
