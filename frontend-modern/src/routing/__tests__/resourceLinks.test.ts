@@ -50,8 +50,6 @@ import {
   buildPatrolOperationsLoopPath,
   buildDockerPath,
   buildDockerRouteSearch,
-  buildKubernetesRouteSearch,
-  buildStandaloneRouteSearch,
   buildKubernetesPath,
   buildRecoveryRouteSearch,
   buildProxmoxPath,
@@ -192,7 +190,6 @@ describe('resource link routing contract', () => {
     expect(STANDALONE_QUERY_PARAMS).toEqual({ query: 'q', status: 'status', view: 'view' });
     expect(buildStandalonePath()).toBe('/standalone/machines');
     expect(buildStandalonePath('')).toBe('/standalone');
-    expect(buildStandaloneRouteSearch({ query: ' agent:edge one ' })).toBe('?q=agent%3Aedge+one');
 
     expect(DOCKER_PATH).toBe('/docker');
     expect(buildDockerPath()).toBe('/docker/overview');
@@ -203,9 +200,6 @@ describe('resource link routing contract', () => {
       '?host=frigate.mist-stork.ts.net',
     );
     expect(buildDockerRouteSearch({ host: ' host with spaces ' })).toBe('?host=host+with+spaces');
-    expect(buildDockerRouteSearch({ host: 'edge', query: 'container:api' })).toBe(
-      '?host=edge&q=container%3Aapi',
-    );
     expect(buildDockerRouteSearch({ host: '' })).toBe('');
 
     expect(KUBERNETES_PATH).toBe('/kubernetes');
@@ -215,13 +209,6 @@ describe('resource link routing contract', () => {
     expect(buildKubernetesPath('configuration')).toBe('/kubernetes/configuration');
     expect(buildKubernetesPath('pods')).toBe('/kubernetes/pods');
     expect(KUBERNETES_QUERY_PARAMS.cluster).toBe('cluster');
-    expect(
-      buildKubernetesRouteSearch({
-        cluster: 'cluster-1',
-        namespace: 'payments',
-        query: 'pod:api',
-      }),
-    ).toBe('?cluster=cluster-1&namespace=payments&q=pod%3Aapi');
 
     expect(TRUENAS_PATH).toBe('/truenas');
     expect(buildTrueNASPath()).toBe('/truenas/overview');

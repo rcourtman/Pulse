@@ -7,7 +7,7 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/dashboard')).toBeNull();
     expect(getActiveTabForPath('/dashboard/explore')).toBeNull();
     expect(getActiveTabForPath('/explore')).toBeNull();
-    expect(getActiveTabForPath('/home')).toBe('home');
+    expect(getActiveTabForPath('/home')).toBeNull();
     expect(getActiveTabForPath('/standalone')).toBe('standalone');
     expect(getActiveTabForPath('/standalone/machines')).toBe('standalone');
     expect(getActiveTabForPath('/agents')).toBeNull();

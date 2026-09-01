@@ -429,6 +429,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	rootlessQualRemoveFixtures(t, daemon)
 	rootlessQualStopUnit(t, daemon.rootlessUnit)
 	rootlessQualStopUnit(t, daemon.rootfulUnit)
+	rootlessQualResetRuntimeStorage(t, daemon)
 	rootlessQualStopUserManager(t, daemon)
 	rootlessQualWaitRuntimeMountsReleased(t, daemon, 30*time.Second)
 	rootlessQualRemoveRuntimeState(t, daemon)
@@ -1263,6 +1264,27 @@ func rootlessQualRemoveFixtures(t *testing.T, d rootlessQualDaemon) {
 	rootlessQualRemoveFixtureSet(t, rootlessQualCLI(d, false))
 }
 
+func rootlessQualResetRuntimeStorage(t *testing.T, d rootlessQualDaemon) {
+	t.Helper()
+	for _, command := range rootlessQualRuntimeResetCommands(d) {
+		if len(command) == 0 {
+			t.Fatal("empty runtime storage reset command")
+		}
+		rootlessQualCommand(t, 60*time.Second, command[0], command[1:]...)
+	}
+}
+
+func rootlessQualRuntimeResetCommands(d rootlessQualDaemon) [][]string {
+	if d.runtime != "podman" {
+		return nil
+	}
+	const cleanPath = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	return [][]string{
+		{"runuser", "-u", "pulse-agent", "--", "env", "-i", "HOME=" + d.home, "XDG_RUNTIME_DIR=" + filepath.Join("/run/user", strconv.Itoa(d.uid)), cleanPath, "/usr/bin/podman", "system", "reset", "--force"},
+		{"/usr/bin/env", "-i", cleanPath, "/usr/bin/podman", "system", "reset", "--force"},
+	}
+}
+
 func rootlessQualRemoveFixtureSet(t *testing.T, cli []string) {
 	t.Helper()
 	if len(cli) == 0 {
@@ -1622,6 +1644,21 @@ func TestRootlessQualificationMountReleaseUsesExactKernelPaths(t *testing.T) {
 	}
 	if _, err := rootlessQualMountPointsBelow("1 2 3 4 /bad\\09x 6", []string{"/bad"}); err == nil {
 		t.Fatal("malformed mountinfo escape was accepted")
+	}
+}
+
+func TestRootlessQualificationPodmanResetsBothStorageIdentitiesLocally(t *testing.T) {
+	d := rootlessQualDaemon{runtime: "podman", uid: 996, home: "/var/lib/pulse-rootless"}
+	got := rootlessQualRuntimeResetCommands(d)
+	want := [][]string{
+		{"runuser", "-u", "pulse-agent", "--", "env", "-i", "HOME=/var/lib/pulse-rootless", "XDG_RUNTIME_DIR=/run/user/996", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "/usr/bin/podman", "system", "reset", "--force"},
+		{"/usr/bin/env", "-i", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "/usr/bin/podman", "system", "reset", "--force"},
+	}
+	if !slices.EqualFunc(got, want, slices.Equal[[]string]) {
+		t.Fatalf("Podman reset commands = %q, want %q", got, want)
+	}
+	if commands := rootlessQualRuntimeResetCommands(rootlessQualDaemon{runtime: "docker"}); len(commands) != 0 {
+		t.Fatalf("Docker cleanup unexpectedly gained Podman reset commands: %q", commands)
 	}
 }
 

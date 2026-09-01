@@ -48,7 +48,6 @@ export type MobileNavBarLayout = {
 };
 
 const MOBILE_NAV_PRIMARY_PRIORITY = [
-  'home',
   'proxmox',
   'docker',
   'kubernetes',

@@ -291,7 +291,7 @@ describe('AppLayout navigation icons', () => {
       within(infrastructureGroup as HTMLElement)
         .getAllByRole('link')
         .map((tab) => tab.getAttribute('aria-label')),
-    ).toEqual(['Home', 'Proxmox', 'Docker', 'vSphere', 'Machines']);
+    ).toEqual(['Proxmox', 'Docker', 'vSphere', 'Machines']);
     expect(
       within(infrastructureGroup as HTMLElement).getByRole('link', { name: 'Machines' }),
     ).toBeTruthy();
@@ -313,14 +313,14 @@ describe('AppLayout navigation icons', () => {
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     fireEvent.click(
-      within(mobileNav).getByRole('button', { name: 'Switch platform, current Home' }),
+      within(mobileNav).getByRole('button', { name: 'Switch platform, current Proxmox' }),
     );
     const platformMenu = screen.getByRole('menu', { name: 'Switch platform' });
     expect(
       within(platformMenu)
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('data-tab-id')),
-    ).toEqual(['home', 'proxmox', 'docker', 'vmware', 'standalone']);
+    ).toEqual(['proxmox', 'docker', 'vmware', 'standalone']);
   });
 
   it('does not expose cached platform evidence before navigation admission resolves', () => {
@@ -340,10 +340,7 @@ describe('AppLayout navigation icons', () => {
     const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
     expect(infrastructureGroup).toBeTruthy();
-    expect(
-      within(infrastructureGroup as HTMLElement).getByRole('link', { name: 'Home' }),
-    ).toHaveAttribute('href', '/home');
-    expect(within(infrastructureGroup as HTMLElement).getAllByRole('link')).toHaveLength(1);
+    expect(within(infrastructureGroup as HTMLElement).queryByRole('link')).toBeNull();
   });
 
   it('restores the previous Proxmox route state when returning from another platform tab', async () => {

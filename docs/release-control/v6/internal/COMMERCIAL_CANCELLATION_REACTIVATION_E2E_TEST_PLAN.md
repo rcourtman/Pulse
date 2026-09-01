@@ -1,5 +1,7 @@
 # Pulse v6 Commercial Cancellation/Reactivation E2E Test Plan
 
+Status: ACTIVE drill asset (companion for the passed release gate `commercial-cancellation-reactivation`; a test plan, not a demand signal). Last reviewed 2026-09-01.
+
 Use this plan for the trust-critical commercial boundary between:
 
 1. grandfathered v5 recurring subscription continuity while the subscription is still active

@@ -11,7 +11,6 @@ export interface AssistantPageContextPresentation {
 }
 
 const VIEW_LABELS: Record<Exclude<ActiveAppTabId, null>, string> = {
-  home: 'Home',
   alerts: 'Alerts',
   actions: 'Actions',
   ai: 'Patrol',

@@ -269,7 +269,9 @@ Direct recovery is complete only after the full stable telemetry digest is
 observed; the first semantic-only report cannot satisfy the qualification wait.
 Final cleanup removes the exact rootless and rootful fixture containers while
 both runtime APIs are live, then stops the services and delegated user manager.
-It deletes runtime state only after the kernel mount table proves that no mount
+After the services stop, Podman cleanup uses the local runtime CLI to reset each
+rootless and rootful storage identity before stopping the user manager. It
+deletes runtime state only after the kernel mount table proves that no mount
 remains at or below any dedicated runtime root; container inventory and unit
 state alone cannot authorize storage deletion.
 The outer wrapper forgets a tracked container only after strict labeled removal
