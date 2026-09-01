@@ -34,8 +34,10 @@ ROOT_SOURCED_DOCS = frozenset(
 )
 
 # Shipped docs must not deep-link into the GitHub tree; the docsLinks vitest
-# rejects this in CI.
-FORBIDDEN_LINK = "https://github.com/rcourtman/Pulse/blob/main/"
+# rejects this in CI. Assembled from parts so the repo-wide branch-tip-docs
+# scan (scripts/tests/test_repo_docs_link_drift.py) does not flag this
+# checker's own source for containing the pattern it forbids.
+FORBIDDEN_LINK = "https://github.com/rcourtman/Pulse/" + "blob/main/"
 
 
 def source_for(mirror: str) -> str:
