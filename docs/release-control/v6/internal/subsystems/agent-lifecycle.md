@@ -6061,6 +6061,11 @@ the host-removal tombstone and any dedicated token revocation before live
 teardown. Either persistence failure returns non-success with the live host and
 retry bearer retained; after success, restart must preserve the removed host
 state and reject the old bearer.
+After that confirmation, full shell uninstall must remove the fixed root-owned
+privileged-helper activation/staging state as well as collector state, units,
+binaries, sockets, and credentials. Recursive helper-state deletion is allowed
+only when the requested path exactly matches the installer-established helper
+lifecycle authority; an indeterminate path is retained for repair.
 The server also refuses teardown-authorizing success when a legacy collector
 token still belongs to another live host; that credential must first be split
 or rotated. A crash or response loss after both durable writes is fail-closed
@@ -7323,7 +7328,8 @@ teardown succeeds only after the fixture records the exact registered binding
 as removed, rejects that bearer thereafter, and returns the matching agent ID;
 the following legacy-migration phase uses a distinct replacement enrollment
 credential rather than resurrecting the removed one. Final cleanup must commit
-and verify the replacement binding's removal too.
+and verify the replacement binding's removal too, then remove the fixed
+root-owned helper state boundary.
 The wrapper exercises each runtime in an isolated state root and emits the
 standalone `secure-runtime-rootless-v1` receipt only after exact socket
 ownership, daemon rootless attestation, installer pinning, direct telemetry,

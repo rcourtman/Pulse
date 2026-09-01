@@ -167,6 +167,7 @@ PRIVILEGED_HELPER_SOCKET_PATH="${PRIVILEGED_HELPER_SOCKET_DIR}/helper.sock"
 INSTALLER_LIFECYCLE_DIR="/etc/pulse-agent"
 PRIVILEGED_HELPER_CREDENTIAL_DIR="$INSTALLER_LIFECYCLE_DIR"
 PRIVILEGED_HELPER_STATE_DIR="/var/lib/pulse-agent-helper"
+PRIVILEGED_HELPER_STATE_DIR_REMOVAL_AUTHORITY="$PRIVILEGED_HELPER_STATE_DIR"
 PRIVILEGED_HELPER_UPDATE_STAGING_DIR="${PRIVILEGED_HELPER_STATE_DIR}/update-staging"
 PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR="/var/lib/pulse-agent/update-quarantine"
 TMP_HELPER_BIN=""
@@ -3179,19 +3180,30 @@ discover_state_dir_from_saved_installer() {
     return 1
 }
 
-remove_agent_state_dir() {
-    local state_dir="${1:-$STATE_DIR}"
+remove_authorized_runtime_dir() {
+    local label="$1"
+    local state_dir="$2"
+    local removal_authority="$3"
 
     if [[ -z "$state_dir" || "$state_dir" != /* || "$state_dir" == "/" ||
           "$state_dir" == *$'\r'* || "$state_dir" == *$'\n'* ]]; then
-        log_warn "Refusing to remove invalid agent state directory: ${state_dir:-<empty>}"
+        log_warn "Refusing to remove invalid ${label} directory: ${state_dir:-<empty>}"
         return 1
     fi
-    if [[ -z "${STATE_DIR_REMOVAL_AUTHORITY:-}" || "$state_dir" != "$STATE_DIR_REMOVAL_AUTHORITY" ]]; then
-        log_warn "Refusing to remove agent state directory without exact trusted lifecycle authority: $state_dir"
+    if [[ -z "$removal_authority" || "$state_dir" != "$removal_authority" ]]; then
+        log_warn "Refusing to remove ${label} directory without exact trusted lifecycle authority: $state_dir"
         return 1
     fi
     rm -rf -- "$state_dir"
+}
+
+remove_agent_state_dir() {
+    local state_dir="${1:-$STATE_DIR}"
+    remove_authorized_runtime_dir "agent state" "$state_dir" "${STATE_DIR_REMOVAL_AUTHORITY:-}"
+}
+
+remove_privileged_helper_state_dir() {
+    remove_authorized_runtime_dir "privileged helper state" "$PRIVILEGED_HELPER_STATE_DIR" "${PRIVILEGED_HELPER_STATE_DIR_REMOVAL_AUTHORITY:-}"
 }
 
 detect_qnap_data_volume() {
@@ -5526,6 +5538,9 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Remove agent state directory (contains agent ID, proxmox registration state, etc.)
     if ! remove_agent_state_dir "$STATE_DIR"; then
         log_warn "Retained agent state at ${STATE_DIR}; its path was not authorized by explicit or protected lifecycle state."
+    fi
+    if ! remove_privileged_helper_state_dir; then
+        log_warn "Retained privileged helper state at ${PRIVILEGED_HELPER_STATE_DIR}; its path was not authorized by the fixed helper lifecycle boundary."
     fi
 
     # Remove least-privilege helper artifacts. The pulse-agent system user is

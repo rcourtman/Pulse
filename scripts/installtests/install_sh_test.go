@@ -3576,6 +3576,7 @@ ExecStart=/usr/local/bin/pulse-agent --url https://custom.example --token-file `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 ` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_systemd_unit") + `
+` + extractInstallShellFunction(t, "remove_authorized_runtime_dir") + `
 ` + extractInstallShellFunction(t, "remove_agent_state_dir") + `
 				recover_connection_state_from_systemd_unit
 				printf 'state=%s source=%s url=%s token=%s commands=%s\n' \
@@ -3994,6 +3995,7 @@ func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) 
 ` + extractLifecycleTrustShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "read_connection_state_value") + `
 ` + extractInstallShellFunction(t, "discover_state_dir_from_saved_installer") + `
+` + extractInstallShellFunction(t, "remove_authorized_runtime_dir") + `
 ` + extractInstallShellFunction(t, "remove_agent_state_dir") + `
 		discover_state_dir_from_saved_installer "` + attackerInstaller + `" || true
 		STATE_DIR="` + sentinelDir + `"
@@ -4004,6 +4006,68 @@ func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) 
 	}
 	if _, err := os.Stat(filepath.Join(sentinelDir, "sentinel")); err != nil {
 		t.Fatalf("untrusted lifecycle state authorized recursive deletion: %v", err)
+	}
+}
+
+func TestInstallSHPrivilegedHelperStateRemovalRequiresExactLifecycleAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		authority  func(string) string
+		wantRemove bool
+	}{
+		{name: "exact fixed boundary", authority: func(path string) string { return path }, wantRemove: true},
+		{name: "mismatched boundary", authority: func(path string) string { return path + "-other" }, wantRemove: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			helperState := filepath.Join(t.TempDir(), "pulse-agent-helper")
+			if err := os.MkdirAll(helperState, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(helperState, "activation-state"), []byte("retain-or-remove"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			script := `
+				set -u
+				PRIVILEGED_HELPER_STATE_DIR="` + helperState + `"
+				PRIVILEGED_HELPER_STATE_DIR_REMOVAL_AUTHORITY="` + tc.authority(helperState) + `"
+				log_warn() { :; }
+` + extractInstallShellFunction(t, "remove_authorized_runtime_dir") + `
+` + extractInstallShellFunction(t, "remove_privileged_helper_state_dir") + `
+				if remove_privileged_helper_state_dir; then
+					printf 'removed\n'
+				else
+					printf 'retained\n'
+				fi
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("helper-state cleanup harness: %v\n%s", err, out)
+			}
+			_, statErr := os.Stat(helperState)
+			if tc.wantRemove {
+				if !os.IsNotExist(statErr) || string(out) != "removed\n" {
+					t.Fatalf("authorized helper state survived: stat=%v output=%q", statErr, out)
+				}
+			} else if statErr != nil || string(out) != "retained\n" {
+				t.Fatalf("unauthorized helper state changed: stat=%v output=%q", statErr, out)
+			}
+		})
+	}
+}
+
+func TestInstallSHFullUninstallRemovesPrivilegedHelperStateOnlyAfterServerConfirmation(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+	confirmation := strings.LastIndex(script, `if ! uninstall_collector_registration; then`)
+	helperCleanup := strings.LastIndex(script, `if ! remove_privileged_helper_state_dir; then`)
+	if confirmation < 0 || helperCleanup < 0 {
+		t.Fatalf("full uninstall lifecycle is missing server confirmation or helper-state cleanup: confirmation=%d cleanup=%d", confirmation, helperCleanup)
+	}
+	if helperCleanup <= confirmation {
+		t.Fatal("privileged helper state cleanup can run before authenticated server removal")
 	}
 }
 

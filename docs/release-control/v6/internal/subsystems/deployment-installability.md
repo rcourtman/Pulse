@@ -273,7 +273,7 @@ teardown contract: it authenticates the exact collector binding, records the
 removal before returning the matching agent ID, rejects the removed bearer,
 and provisions a distinct replacement credential for the subsequent legacy
 migration. The final uninstall must independently remove that replacement
-binding before local files or services disappear.
+binding before local files, services, or fixed helper state disappear.
 Its standalone `secure-runtime-rootless-v1` receipt must bind the exact
 qualification, collector, helper, installer, source-manifest, socket,
 fresh-install, legacy-migration, restart, fallback, recovery, ambiguity,
@@ -4425,6 +4425,10 @@ authenticated exact-agent success response from the canonical no-proxy,
 redirect-denying CA/fingerprint lifecycle client before deleting services,
 credentials, or recovery state. An unreachable or untrusted server is a
 repair-required uninstall, not permission for local-only credential loss.
+Once server removal is confirmed, full shell uninstall must also remove the
+fixed root-owned privileged-helper activation/staging state. That recursive
+cleanup requires an exact installer-established helper lifecycle authority;
+uncertain or mismatched paths remain intact for explicit repair.
 TrueNAS boot recovery must follow the same rule: SCALE and CORE bootstrap
 scripts may differ only in their service-manager adapter, while binary sync,
 service-link recreation, and boot-time start flow stay on one installer-owned
