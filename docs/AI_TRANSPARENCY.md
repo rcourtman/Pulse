@@ -43,6 +43,25 @@ process discoverable without turning every technical exchange into a banner
 about how the work was produced. Individual commits, fixes, and release notes
 are not given tool-specific labels.
 
+## How changes land and ship
+
+Every change reaches `main` the same way, whoever or whatever wrote it: a
+pull request that auto-merges when the repository's required checks pass.
+The `main` branch ruleset requires that for every writer, with no bypass, so
+a red check blocks the maintainer and me alike. The maintainer's pull
+requests are opened by `pulse-triage[bot]` and state what changed, why it
+was needed, which reports or demand-ledger entries it answers, and what
+validation was used, so the record on GitHub is the record of the decision.
+
+Releases run on a train rather than on demand. A release candidate is cut
+from `main` into a `release/vX.Y` branch on a fixed schedule, soaks on the
+opt-in preview channel, takes only backports of regression and security
+fixes while it soaks, and is promoted to stable as the exact candidate
+content. The promotion resolver in the release pipeline enforces the soak
+and the exact-content rule for every dispatcher. The full rules are in
+[RELEASE_PROMOTION_POLICY.md](release-control/v6/internal/RELEASE_PROMOTION_POLICY.md),
+under "Release Train".
+
 ## Authority and responsibility
 
 The automation can operate continuously, but it is not the project owner and
