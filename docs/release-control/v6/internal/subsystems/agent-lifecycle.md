@@ -7313,7 +7313,11 @@ must pre-create their root-owned, mode-`0700` destination before the wrapper
 injects the exact packet into a stopped disposable container. The wrapper
 uses the supported `slirp4netns` rootless Docker driver only inside that outer
 `--network none` boundary; selecting the unsupported `host` RootlessKit driver
-or granting an outer default route is invalid qualification. The wrapper
+or granting an outer default route is invalid qualification. The outer host
+uses a private cgroup namespace with no host cgroup bind mount. Each dedicated
+runtime identity must have an active delegated systemd user manager before its
+daemon starts, and cleanup must stop that manager and remove its linger state.
+The wrapper
 exercises each runtime in an isolated state root and emits the
 standalone `secure-runtime-rootless-v1` receipt only after exact socket
 ownership, daemon rootless attestation, installer pinning, direct telemetry,

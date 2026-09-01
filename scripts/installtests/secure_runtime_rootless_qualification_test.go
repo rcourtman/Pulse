@@ -160,7 +160,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	defer server.Close()
 
 	daemon := rootlessQualPrepareDaemons(t, runtimeKind)
-	defer rootlessQualBestEffortStop(daemon.rootlessUnit, daemon.rootfulUnit, rootlessQualOtherUnit(runtimeKind))
+	defer rootlessQualBestEffortStop(daemon.rootlessUnit, daemon.rootfulUnit, rootlessQualOtherUnit(runtimeKind), fmt.Sprintf("user@%d.service", daemon.uid))
 	rootlessQualStartRootful(t, daemon)
 	rootlessQualStartRootless(t, daemon)
 	identity := rootlessQualReadIdentityRecord(t, daemon)
@@ -414,6 +414,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	rootlessQualUninstallPulse(t, installerPath, server.URL)
 	rootlessQualStopUnit(t, daemon.rootlessUnit)
 	rootlessQualStopUnit(t, daemon.rootfulUnit)
+	rootlessQualStopUserManager(t, daemon)
 	rootlessQualRemoveRuntimeState(t, daemon)
 	rootlessQualAssertPulseRemoved(t)
 	for _, socket := range []string{daemon.rootlessSock, daemon.rootfulSock} {
@@ -538,6 +539,16 @@ func rootlessQualPrepareDaemons(t *testing.T, runtimeKind string) rootlessQualDa
 	paths := []string{filepath.Join("/run/user", strconv.Itoa(uid)), filepath.Join(home, "fixture"), filepath.Join(home, "docker"), filepath.Join(home, "podman")}
 	for _, path := range paths {
 		rootlessQualCommand(t, 10*time.Second, "install", "-d", "-o", "pulse-agent", "-g", "pulse-agent", "-m", "0700", path)
+	}
+	rootlessQualCommand(t, 10*time.Second, "loginctl", "enable-linger", "pulse-agent")
+	userUnit := fmt.Sprintf("user@%d.service", uid)
+	rootlessQualCommand(t, 20*time.Second, "systemctl", "start", userUnit)
+	active := rootlessQualCommand(t, 10*time.Second, "systemctl", "show", userUnit, "--property=ActiveState", "--value")
+	delegated := rootlessQualCommand(t, 10*time.Second, "systemctl", "show", userUnit, "--property=Delegate", "--value")
+	controlGroup := rootlessQualCommand(t, 10*time.Second, "systemctl", "show", userUnit, "--property=ControlGroup", "--value")
+	expectedControlGroup := fmt.Sprintf("/user.slice/user-%d.slice/user@%d.service", uid, uid)
+	if active != "active" || delegated != "yes" || controlGroup != expectedControlGroup {
+		t.Fatalf("rootless user manager is not exactly delegated: active=%q delegate=%q control_group=%q", active, delegated, controlGroup)
 	}
 	containerfile := "FROM scratch\nCOPY busybox /busybox\nENTRYPOINT [\"/busybox\"]\n"
 	if err := os.WriteFile(filepath.Join(home, "fixture", "Containerfile"), []byte(containerfile), 0o600); err != nil {
@@ -1030,8 +1041,14 @@ func rootlessQualRemoveRuntimeState(t *testing.T, d rootlessQualDaemon) {
 	}
 }
 
+func rootlessQualStopUserManager(t *testing.T, d rootlessQualDaemon) {
+	t.Helper()
+	rootlessQualCommand(t, 10*time.Second, "loginctl", "disable-linger", "pulse-agent")
+	rootlessQualStopUnit(t, fmt.Sprintf("user@%d.service", d.uid))
+}
+
 func rootlessQualUserStateClean(d rootlessQualDaemon) bool {
-	for _, path := range []string{d.home, filepath.Join("/run/user", strconv.Itoa(d.uid)), "/var/lib/pulse-rootful-docker", "/var/lib/containers/storage"} {
+	for _, path := range []string{d.home, filepath.Join("/run/user", strconv.Itoa(d.uid)), "/var/lib/pulse-rootful-docker", "/var/lib/containers/storage", "/var/lib/systemd/linger/pulse-agent"} {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return false
 		}
@@ -1360,7 +1377,7 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 	}
 	script := string(raw)
 	for _, required := range []string{
-		`PULSE_ROOTLESS_UBUNTU_IMAGE`, `^ubuntu@sha256:`, `--network none`, `--tmpfs /run`,
+		`PULSE_ROOTLESS_UBUNTU_IMAGE`, `^ubuntu@sha256:`, `--network none`, `--cgroupns=private`, `--tmpfs /run`,
 		`PULSE_SECURE_RUNTIME_ROOTLESS_QUALIFICATION=disposable-v1`, `dockeragent.test`,
 		`run_runtime docker`, `run_runtime podman`, `PULSE_ROOTLESS_RUNTIME=${runtime_name}`, `--privileged`,
 		`pulse-secure-runtime-rootless-qualification`, `qualification result != \"passed\"`,
@@ -1373,7 +1390,7 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 			t.Fatalf("rootless qualification wrapper missing %q", required)
 		}
 	}
-	for _, forbidden := range []string{"/var/run/docker.sock:", "/run/podman/podman.sock:", "-v $", "--volume"} {
+	for _, forbidden := range []string{"/var/run/docker.sock:", "/run/podman/podman.sock:", "/sys/fs/cgroup:/sys/fs/cgroup", "--cgroupns=host", "-v $", "--volume"} {
 		if strings.Contains(script, forbidden) {
 			t.Fatalf("rootless qualification wrapper contains forbidden host-runtime mount marker %q", forbidden)
 		}

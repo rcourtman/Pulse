@@ -264,7 +264,10 @@ must pre-create its root-owned, mode-`0700` packet destination before the
 wrapper injects artifacts into each stopped disposable container.
 Rootless Docker uses its supported `slirp4netns` driver inside the outer
 `--network none` container only; an unsupported `host` RootlessKit driver or
-an outer default route invalidates the proof.
+an outer default route invalidates the proof. The disposable host uses a
+private cgroup namespace without a host cgroup bind mount, creates an active
+delegated systemd user manager for the dedicated runtime identity, and removes
+that manager's linger state during cleanup.
 Its standalone `secure-runtime-rootless-v1` receipt must bind the exact
 qualification, collector, helper, installer, source-manifest, socket,
 fresh-install, legacy-migration, restart, fallback, recovery, ambiguity,
