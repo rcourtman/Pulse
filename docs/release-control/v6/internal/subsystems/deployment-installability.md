@@ -265,6 +265,8 @@ wrapper injects artifacts into each stopped disposable container. The image
 must also pre-create the separate root-owned, mode-`0700` `/opt/pulse/result`
 output boundary; receipts are written there instead of volatile `/run` state so
 systemd user-manager cleanup cannot erase completed qualification evidence.
+Direct recovery is complete only after the full stable telemetry digest is
+observed; the first semantic-only report cannot satisfy the qualification wait.
 Rootless Docker uses its supported `slirp4netns` driver inside the outer
 `--network none` container only; an unsupported `host` RootlessKit driver or
 an outer default route invalidates the proof. The disposable host uses a

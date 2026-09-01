@@ -307,7 +307,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 
 	recoveryStarted := time.Now().UTC()
 	rootlessQualStartRootless(t, daemon)
-	recoveryReport := rootlessQualWaitDirect(t, fixture, recoveryStarted, runtimeKind, rootlessBaseline.SemanticDigest, 90*time.Second)
+	recoveryReport := rootlessQualWaitStableDirect(t, fixture, recoveryStarted, runtimeKind, rootlessBaseline.SemanticDigest, daemonRestartDigest, 90*time.Second)
 	recoveryDigest := rootlessQualDigestReport(recoveryReport.Report)
 	daemonRootlessAfterRecovery := rootlessQualDaemonRootless(t, daemon)
 	if !rootlessQualStableDigestEqual(recoveryDigest, daemonRestartDigest) || secureRuntimeCollectorMainPID(t) != collectorPIDAfter || rootlessQualDaemonID(t, daemon, true) != daemonIDBefore {
@@ -356,7 +356,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 		return ok && stream != previousUpdateStream && rootlessQualComplete(report) && report.Host.CollectionMode == agentsdocker.CollectionModeTypedHelperSummary && report.Host.Runtime == runtimeKind
 	})
 	rootlessQualStartRootless(t, daemon)
-	pinReport := rootlessQualWaitDirect(t, fixture, postUpdateFallback.ReceivedAt, runtimeKind, rootlessBaseline.SemanticDigest, 90*time.Second)
+	pinReport := rootlessQualWaitStableDirect(t, fixture, postUpdateFallback.ReceivedAt, runtimeKind, rootlessBaseline.SemanticDigest, recoveryDigest, 90*time.Second)
 	pinDigest := rootlessQualDigestReport(pinReport.Report)
 	daemonRootlessAfterPinRecovery := rootlessQualDaemonRootless(t, daemon)
 	if !rootlessQualStableDigestEqual(pinDigest, recoveryDigest) || rootlessQualServicePin(t, runtimeKind) != daemon.rootlessSock {
@@ -725,9 +725,21 @@ func rootlessQualBaselineFromPSOutput(out string) rootlessQualBaseline {
 func rootlessQualWaitDirect(t *testing.T, fixture *secureRuntimeLabFixture, after time.Time, runtimeKind, semanticDigest string, timeout time.Duration) secureRuntimeDockerReport {
 	t.Helper()
 	return rootlessQualWaitReport(t, fixture, after, timeout, func(report agentsdocker.Report) bool {
-		return rootlessQualComplete(report) && report.Host.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary &&
-			report.Host.Runtime == runtimeKind && len(report.Containers) == 2 && rootlessQualSemanticDigest(report) == semanticDigest
+		return rootlessQualDirectReportMatches(report, runtimeKind, semanticDigest)
 	})
+}
+
+func rootlessQualWaitStableDirect(t *testing.T, fixture *secureRuntimeLabFixture, after time.Time, runtimeKind, semanticDigest string, stableDigest rootlessQualReportDigest, timeout time.Duration) secureRuntimeDockerReport {
+	t.Helper()
+	return rootlessQualWaitReport(t, fixture, after, timeout, func(report agentsdocker.Report) bool {
+		return rootlessQualDirectReportMatches(report, runtimeKind, semanticDigest) &&
+			rootlessQualStableDigestEqual(rootlessQualDigestReport(report), stableDigest)
+	})
+}
+
+func rootlessQualDirectReportMatches(report agentsdocker.Report, runtimeKind, semanticDigest string) bool {
+	return rootlessQualComplete(report) && report.Host.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary &&
+		report.Host.Runtime == runtimeKind && len(report.Containers) == 2 && rootlessQualSemanticDigest(report) == semanticDigest
 }
 
 func rootlessQualWaitReport(t *testing.T, fixture *secureRuntimeLabFixture, after time.Time, timeout time.Duration, predicate func(agentsdocker.Report) bool) secureRuntimeDockerReport {
@@ -1415,6 +1427,38 @@ func TestRootlessQualificationBaselineUsesReportSemanticShape(t *testing.T) {
 	digest := rootlessQualDigestReport(report)
 	if baseline.Count != digest.Count || baseline.SemanticDigest != digest.SemanticDigest {
 		t.Fatalf("runtime baseline and report semantics diverged: baseline=%+v report=%+v", baseline, digest)
+	}
+}
+
+func TestRootlessQualificationStableDirectMatchWaitsForFullTelemetry(t *testing.T) {
+	now := time.Now().UTC()
+	oomKilled := false
+	complete := true
+	full := agentsdocker.Report{
+		Host:              agentsdocker.HostInfo{Runtime: "docker"},
+		InventoryComplete: &complete,
+		Containers: []agentsdocker.Container{
+			{Name: "pulse-rootless-running", Image: rootlessQualFixture, State: "running", Status: "Up", CreatedAt: now, StartedAt: &now, OOMKilled: &oomKilled, MemoryLimitBytes: 1024},
+			{Name: "pulse-rootless-exited", Image: rootlessQualFixture, State: "exited", Status: "Exited", CreatedAt: now, FinishedAt: &now, OOMKilled: &oomKilled},
+		},
+		Images:   []agentsdocker.Image{{RepoTags: []string{rootlessQualFixture}}},
+		Networks: []agentsdocker.Network{{Name: "bridge"}},
+	}
+	semanticDigest := rootlessQualSemanticDigest(full)
+	stableDigest := rootlessQualDigestReport(full)
+	semanticOnly := full
+	semanticOnly.Containers = slices.Clone(full.Containers)
+	semanticOnly.Containers[0].MemoryLimitBytes = 0
+	semanticOnly.Images = nil
+	semanticOnly.Networks = nil
+	if !rootlessQualDirectReportMatches(semanticOnly, "docker", semanticDigest) {
+		t.Fatal("semantic-only direct report no longer matches the base recovery condition")
+	}
+	if rootlessQualStableDigestEqual(rootlessQualDigestReport(semanticOnly), stableDigest) {
+		t.Fatal("semantic-only direct report satisfied evidence-grade telemetry parity")
+	}
+	if !rootlessQualStableDigestEqual(rootlessQualDigestReport(full), stableDigest) {
+		t.Fatal("full direct report did not satisfy evidence-grade telemetry parity")
 	}
 }
 

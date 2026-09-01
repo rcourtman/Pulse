@@ -7341,6 +7341,9 @@ ambiguity refusal, authority isolation, and cleanup are recorded.
 Receipt output uses a dedicated root-owned, mode-`0700` `/opt/pulse/result`
 boundary instead of volatile `/run` state, so systemd user-manager teardown
 cannot erase a passing result before the wrapper retains it.
+Recovery qualification must wait for the complete stable telemetry digest,
+including stats and secondary inventory, rather than accepting an earlier
+semantic-only report and racing the evidence assertion.
 The wrapper must compile every Go artifact with mandatory VCS stamping so a
 missing revision or unavailable clean-worktree proof fails before live evidence
 can be emitted; the receipt and validator retain the exact artifact hashes and
