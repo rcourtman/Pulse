@@ -184,6 +184,9 @@ func TestCollectDiskIOFiltersAndError(t *testing.T) {
 			"sda1":      {ReadBytes: 2},
 			"nvme0n1":   {ReadBytes: 3},
 			"nvme0n1p1": {ReadBytes: 4},
+			"mmcblk0":   {ReadBytes: 17},
+			"mmcblk0p1": {ReadBytes: 18},
+			"md0p1":     {ReadBytes: 19},
 			"xvda10":    {ReadBytes: 5},
 			"loop0":     {ReadBytes: 6},
 			"ram0":      {ReadBytes: 7},
@@ -205,15 +208,15 @@ func TestCollectDiskIOFiltersAndError(t *testing.T) {
 	}
 
 	disks := collectDiskIO(context.Background(), []string{"sdb"})
-	if len(disks) != 5 {
-		t.Fatalf("expected 5 disk I/O entries after filtering, got %d: %+v", len(disks), disks)
+	if len(disks) != 6 {
+		t.Fatalf("expected 6 disk I/O entries after filtering, got %d: %+v", len(disks), disks)
 	}
 
 	gotDevices := make([]string, 0, len(disks))
 	for _, disk := range disks {
 		gotDevices = append(gotDevices, disk.Device)
 	}
-	wantDevices := []string{"md0", "nvme0n1", "sda", "vda", "xvda"}
+	wantDevices := []string{"md0", "mmcblk0", "nvme0n1", "sda", "vda", "xvda"}
 	if !reflect.DeepEqual(gotDevices, wantDevices) {
 		t.Fatalf("unexpected disk I/O devices: got %v, want %v", gotDevices, wantDevices)
 	}
@@ -237,8 +240,13 @@ func TestIsPartitionPatterns(t *testing.T) {
 		{name: "virtio partition", device: "vda2", want: true},
 		{name: "xen partition", device: "xvda12", want: true},
 		{name: "nvme partition", device: "nvme0n1p1", want: true},
+		{name: "mmc partition", device: "mmcblk0p1", want: true},
+		{name: "md partition", device: "md0p1", want: true},
+		{name: "persistent memory partition", device: "pmem0p2", want: true},
 		{name: "zfs zd partition", device: "zd16p1", want: true},
 		{name: "md whole device", device: "md0", want: false},
+		{name: "mmc whole device", device: "mmcblk0", want: false},
+		{name: "persistent memory whole device", device: "pmem0", want: false},
 		{name: "loop device", device: "loop0", want: false},
 		{name: "nvme whole device", device: "nvme0n1", want: false},
 		{name: "traditional whole disk", device: "sda", want: false},

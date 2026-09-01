@@ -519,17 +519,24 @@ func collectDiskIO(ctx context.Context, diskExclude []string) []agentshost.DiskI
 }
 
 // isPartition returns true if the device name looks like a partition
-// e.g., sda1, nvme0n1p1, vda2
+// e.g., sda1, nvme0n1p1, mmcblk0p1, vda2. Devices whose whole-disk name
+// already ends in a digit use a p<partition-number> suffix; treating only
+// NVMe that way lets the parent and partitions of MMC, MD, and persistent
+// memory devices through and double-counts their kernel I/O counters.
 func isPartition(name string) bool {
-	// NVMe partitions: nvme0n1p1, nvme0n1p2
-	if strings.Contains(name, "n") && strings.Contains(name, "p") {
-		// Check if it ends with pN where N is a digit
-		idx := strings.LastIndex(name, "p")
-		if idx > 0 && idx < len(name)-1 {
-			rest := name[idx+1:]
-			if len(rest) > 0 && rest[0] >= '0' && rest[0] <= '9' {
-				return true
+	// Whole-device names ending in a digit separate their partition number
+	// with "p": nvme0n1p1, mmcblk0p1, md0p1, pmem0p1, and zd0p1.
+	if idx := strings.LastIndexByte(name, 'p'); idx > 0 && idx < len(name)-1 && name[idx-1] >= '0' && name[idx-1] <= '9' {
+		partitionNumber := name[idx+1:]
+		allDigits := true
+		for i := 0; i < len(partitionNumber); i++ {
+			if partitionNumber[i] < '0' || partitionNumber[i] > '9' {
+				allDigits = false
+				break
 			}
+		}
+		if allDigits {
+			return true
 		}
 	}
 	// Traditional partitions: sda1, vda2, hda1
@@ -546,10 +553,6 @@ func isPartition(name string) bool {
 				}
 			}
 		}
-	}
-	// ZFS devices: zd0p1, zd16p1
-	if strings.HasPrefix(name, "zd") && strings.Contains(name, "p") {
-		return true
 	}
 	return false
 }
