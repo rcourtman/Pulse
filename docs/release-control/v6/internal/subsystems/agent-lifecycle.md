@@ -7347,10 +7347,12 @@ semantic-only report and racing the evidence assertion.
 Cleanup removes the exact fixture containers through both still-live runtime
 APIs before stopping their services or deleting storage, so Podman namespace
 and shared-memory mounts cannot outlive the state they protect. After both
-runtime services and the delegated user manager stop, cleanup waits until the
-kernel mount table contains no mount at or below any dedicated runtime state
-root before deleting that state; an empty runtime inventory or a successful
-systemd stop alone is not mount-release evidence.
+runtime services stop, Podman cleanup resets each rootless and rootful storage
+identity through the local runtime CLI before the delegated user manager is
+stopped. Cleanup then waits until the kernel mount table contains no mount at
+or below any dedicated runtime state root before deleting that state; an empty
+runtime inventory or a successful systemd stop alone is not mount-release
+evidence.
 The wrapper must compile every Go artifact with mandatory VCS stamping so a
 missing revision or unavailable clean-worktree proof fails before live evidence
 can be emitted; the receipt and validator retain the exact artifact hashes and
