@@ -6,7 +6,8 @@ Pulse v6 includes first-class monitoring for **TrueNAS SCALE** and **TrueNAS COR
 
 1. Go to **Settings → TrueNAS**.
 2. Click **Add Connection**.
-3. Enter the TrueNAS URL (e.g., `https://truenas.local`) and an API key.
+3. Enter the TrueNAS URL (e.g., `https://truenas.local`), the API key, and the
+   username that owns the key.
 4. Click **Test Connection** → **Save**.
 5. Data appears within one polling cycle (~30 seconds).
 
@@ -19,10 +20,11 @@ On your TrueNAS system:
 3. Copy the key value and paste it into Pulse.
 
 > **Tip**: Pulse uses the supported JSON-RPC WebSocket API on TrueNAS 25.04
-> and later. API keys inherit the linked user's roles, so the user must be able
-> to read the methods Pulse polls. Native app control actions require the
-> corresponding TrueNAS app permissions. Legacy releases continue to use the
-> version-gated REST compatibility path.
+> and later. TrueNAS 26 removes the former REST API entirely. API keys inherit
+> the linked user's roles, so enter the key owner's username and ensure that
+> user can read the methods Pulse polls. Native app control actions require the
+> corresponding TrueNAS app permissions. Recognized legacy SCALE and CORE
+> releases continue to use the version-gated REST compatibility path.
 
 ## What Gets Monitored
 
@@ -93,7 +95,7 @@ All endpoints require admin authentication.
 curl -X POST http://localhost:7655/api/truenas/connections \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"nas-1","host":"https://truenas.local","api_key":"your-api-key"}'
+  -d '{"name":"nas-1","host":"https://truenas.local","username":"key-owner","apiKey":"your-api-key"}'
 ```
 
 ### Testing a connection (API)
@@ -102,18 +104,21 @@ curl -X POST http://localhost:7655/api/truenas/connections \
 curl -X POST http://localhost:7655/api/truenas/connections/test \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"nas-1","host":"https://truenas.local","api_key":"your-api-key"}'
+  -d '{"name":"nas-1","host":"https://truenas.local","username":"key-owner","apiKey":"your-api-key"}'
 ```
 
 ## Troubleshooting
 
 ### "TrueNAS service unavailable"
+
 - Check that the TrueNAS system is reachable from the Pulse server.
-- Verify the URL includes the protocol (`https://`).
-- Test connectivity manually:
-  ```bash
-  curl -sk -H "Authorization: Bearer <api-key>" https://<truenas-ip>/api/v2.0/system/info
-  ```
+- Verify the URL uses `https://`. Current TrueNAS releases require TLS for
+  remote API-key authentication.
+- Verify that the configured username owns the API key and has permission to
+  read the monitored methods.
+- Use **Test Connection** in Pulse. The connection's transport diagnostics
+  should report `jsonrpc-websocket` for TrueNAS 25.04 and later; do not test a
+  current appliance through the removed `/api/v2.0` REST endpoints.
 
 ### No data appearing after adding connection
 - Wait at least 30 seconds for the first poll cycle.
@@ -138,6 +143,8 @@ Set `PULSE_ENABLE_TRUENAS=false` and restart Pulse. Existing connection data is 
 
 ## See Also
 
+- [TrueNAS API Reference](https://www.truenas.com/docs/scale/api/) — current
+  JSON-RPC transport, API-key, and TLS requirements
 - [Configuration Guide](CONFIGURATION.md#truenas) — environment variables and setup
 - [ZFS Monitoring](ZFS_MONITORING.md) — Proxmox-native ZFS pool monitoring
 - [Recovery](RECOVERY.md) — TrueNAS snapshots in the recovery view

@@ -8,7 +8,7 @@ frontend.
 
 ## 🏗 High-Level Overview
 
-The system runs as a single binary that serves both the API and the embedded frontend assets. It connects to infrastructure via platform-specific REST APIs and lightweight push-based agents, normalises everything into a **Unified Resource model**, and delivers real-time updates to clients over WebSocket.
+The system runs as a single binary that serves both the API and the embedded frontend assets. It connects to infrastructure via platform-supported HTTP and WebSocket APIs and lightweight push-based agents, normalises everything into a **Unified Resource model**, and delivers real-time updates to clients over WebSocket.
 
 ```mermaid
 flowchart TD
@@ -66,7 +66,10 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 3. **Monitoring Engine (`internal/monitoring`)**
    - **Polymorphic monitors**: Each Proxmox VE/PBS/PMG node runs in its own goroutine, polling via the platform REST API.
    - **Agent receivers** (`internal/api`): Docker, Host, and Kubernetes agents push metrics via HTTP POST to `/api/agents/{type}/report`.
-   - **TrueNAS provider** (`internal/truenas`): Polls TrueNAS REST API for system info, pools, datasets, disks, alerts, ZFS snapshots, and replication tasks.
+   - **TrueNAS provider** (`internal/truenas`): Uses the versioned JSON-RPC 2.0
+     WebSocket API on supported SCALE releases for system info, pools,
+     datasets, disks, alerts, ZFS snapshots, and replication tasks. A
+     version-gated REST path remains only for legacy SCALE and CORE systems.
    - Enterprise/internal multi-org aware: when `PULSE_MULTI_TENANT_ENABLED=true`, each organisation gets a separate shared-process monitor namespace with its own configuration.
 
 4. **WebSocket Hub (`internal/websocket`)**
@@ -127,7 +130,9 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 1. **Collection**:
    - **Proxmox VE / PBS / PMG**: Monitoring engine polls platform REST APIs (configurable interval, default 2 s for PVE).
    - **Docker / Host / Kubernetes**: Lightweight agents push metrics via HTTP POST on their configured interval.
-   - **TrueNAS**: Provider polls the TrueNAS REST API for system, pool, dataset, disk, alert, and replication data.
+   - **TrueNAS**: Provider polls the versioned JSON-RPC WebSocket API on
+     supported SCALE releases, with REST compatibility limited to recognized
+     legacy SCALE and CORE systems.
 2. **Normalisation**: Platform-specific responses are mapped into `unifiedresources.Resource` structs by adapters in `internal/unifiedresources/adapters.go`.
 3. **Registration**: Resources are inserted into the in-memory registry, which handles deduplication, identity matching, and status computation.
 4. **Broadcast**: The latest state snapshot is serialised to JSON and pushed to all connected WebSocket clients by the Hub.

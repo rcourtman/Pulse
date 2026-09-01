@@ -37,6 +37,10 @@ MISLEADING_PUBLIC_CLAIMS = {
         "dead-man direction is reversed; Pulse sends its own health signal to an "
         "external watchdog"
     ),
+    r"api/v2\.0/system/info": (
+        "TrueNAS 26 removed the legacy REST system-info endpoint; current "
+        "troubleshooting must use Pulse's JSON-RPC connection test"
+    ),
 }
 
 

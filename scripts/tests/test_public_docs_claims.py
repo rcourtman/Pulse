@@ -54,6 +54,20 @@ class PublicDocsClaimsTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
 
+    def test_rejects_removed_truenas_rest_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            note = root / "note.md"
+            note.write_text(
+                "Test with https://nas.local/api/v2.0/system/info.\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(public_docs, "ROOT", root):
+                errors = public_docs.check_public_claims([note])
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("TrueNAS 26 removed", errors[0])
+
 
 if __name__ == "__main__":
     unittest.main()

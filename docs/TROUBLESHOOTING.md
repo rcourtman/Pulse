@@ -193,12 +193,13 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 ### TrueNAS
 
 #### "TrueNAS service unavailable"
-- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid URL and API key.
-- Check that the TrueNAS system is reachable from the Pulse server (default HTTPS port).
-- Verify the API key has read access. Test with:
-  ```bash
-  curl -sk -H "Authorization: Bearer <api-key>" https://<truenas-ip>/api/v2.0/system/info
-  ```
+- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid HTTPS URL,
+  API key, and the username that owns the key.
+- Check that the TrueNAS system is reachable from the Pulse server (default
+  HTTPS port).
+- Verify the API-key owner has read access, then use **Test Connection** in
+  Pulse. TrueNAS 25.04 and later should report the `jsonrpc-websocket`
+  transport; TrueNAS 26 removed the former `/api/v2.0` REST endpoints.
 
 #### TrueNAS pools/datasets not appearing
 - TrueNAS data appears in the unified resource model and may take one polling cycle (30s) to appear.
