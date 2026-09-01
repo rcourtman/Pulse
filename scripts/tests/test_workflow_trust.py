@@ -216,6 +216,75 @@ jobs:
         )
         self.assertEqual(findings, [])
 
+    def test_yaml_escaped_keys_cannot_bypass_trust_policy(self) -> None:
+        findings = self.audit(
+            r'''"o\x6e":
+  "pull_request_targ\u0065t":
+permissions: {}
+"jo\u0062s":
+  attest:
+    "runs-\U0000006fn": self-hosted
+    "timeout-\x6dinutes": 10
+    "permi\x73sions":
+      "id-\u0074oken": write
+    steps:
+      - "u\x73es": owner/action@main
+      - "\U00000072un": echo "${{ inputs.name }}"
+'''
+        )
+        self.assertTrue(
+            any("pull_request_target is prohibited" in finding for finding in findings)
+        )
+        self.assertTrue(
+            any("trusted delivery identity" in finding for finding in findings)
+        )
+        self.assertTrue(any("full commit SHA" in finding for finding in findings))
+        self.assertTrue(
+            any("must enter run scripts through env" in finding for finding in findings)
+        )
+
+    def test_yaml_expansion_and_flow_forms_cannot_hide_trust_fields(self) -> None:
+        explicit = self.audit(
+            '''permissions: {}
+jobs:
+  attest:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    ? "permissions"
+    :
+      id-token: write
+    steps:
+      - run: echo attest
+'''
+        )
+        self.assertTrue(any("explicit YAML mapping keys" in item for item in explicit))
+
+        anchored = self.audit(
+            '''permissions: {}
+jobs:
+  attest: &shared_job
+    runs-on: self-hosted
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - run: echo attest
+  copied: *shared_job
+'''
+        )
+        self.assertTrue(any("YAML anchors" in item for item in anchored))
+
+        flow = self.audit(
+            '''permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps: [{uses: owner/action@main}]
+'''
+        )
+        self.assertTrue(any("block mappings and sequences" in item for item in flow))
+
     def test_rejects_implicit_or_unjustified_checkout_credentials(self) -> None:
         omitted = self.audit(
             f"""permissions: {{}}

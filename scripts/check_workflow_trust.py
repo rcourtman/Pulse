@@ -11,9 +11,23 @@ from pathlib import Path
 
 
 def _yaml_key(name: str) -> str:
-    """Return a pattern for a plain or simply quoted YAML mapping key."""
+    """Return a pattern for equivalent plain, single-, or double-quoted keys."""
     escaped = re.escape(name)
-    return rf'(?:{escaped}|"{escaped}"|\'{escaped}\')'
+    # YAML double-quoted scalars can spell any ASCII character through \x, \u,
+    # or \U escapes. GitHub decodes those spellings before interpreting the
+    # workflow, so the trust audit must do the same lexical matching. Without
+    # this, e.g. "permi\x73sions" or "u\u0073es" bypasses the corresponding
+    # permissions and dependency checks while remaining an ordinary Actions
+    # key. The security-relevant key vocabulary is ASCII, so matching each
+    # character's three exact escaped forms is sufficient and avoids a YAML
+    # parser dependency in this early validation script.
+    double_quoted = "".join(
+        rf"(?:{re.escape(character)}|"
+        rf"(?i:\\(?:x{ord(character):02x}|u{ord(character):04x}|"
+        rf"U{ord(character):08x})))"
+        for character in name
+    )
+    return rf'(?:{escaped}|"{double_quoted}"|\'{escaped}\')'
 
 
 ACTION_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -141,6 +155,21 @@ JOB_RE = re.compile(
 RUNS_ON_RE = re.compile(rf"^(\s*){_yaml_key('runs-on')}\s*:")
 TIMEOUT_RE = re.compile(
     rf"^(\s*){_yaml_key('timeout-minutes')}\s*:\s*(.*?)\s*$"
+)
+EXPLICIT_MAPPING_KEY_RE = re.compile(r"^\s*(?:-\s*)?\?\s")
+ESCAPED_MAPPING_KEY_RE = re.compile(
+    r'''^\s*(?:-\s*)?"(?:[^"\\]|\\.)*\\(?:[^"\\]|\\.)*"\s*:'''
+)
+LEADING_YAML_PROPERTY_RE = re.compile(
+    r"^\s*(?:-\s*)?(?:[&*][A-Za-z0-9_-]+|![^\s,\]}]+)(?:\s|$)"
+)
+YAML_VALUE_PROPERTY_RE = re.compile(
+    r'''^\s*(?:-\s*)?(?:[A-Za-z0-9_.-]+|"[^"]+"|'[^']+')'''
+    r"\s*:\s*(?:[&*][A-Za-z0-9_-]+|![^\s,\]}]+)(?:\s|$)"
+)
+NONEMPTY_FLOW_MAPPING_RE = re.compile(
+    r'''^\s*(?:-\s*)?(?:[A-Za-z0-9_.-]+|"[^"]+"|'[^']+')'''
+    r"\s*:\s*\{(?!\s*\}\s*$)"
 )
 # OIDC-backed delivery identity is only trusted when GitHub owns the runner
 # lifecycle. Keep the accepted image labels explicit and reviewable so a job
@@ -328,6 +357,103 @@ def _run_script_lines(lines: list[str], run_index: int) -> list[tuple[int, str]]
             break
         script.append((index, line))
     return script
+
+
+def _audit_yaml_trust_shape(path: Path, lines: list[str]) -> list[Finding]:
+    """Reject YAML forms whose expansion can hide workflow trust structure."""
+    findings: list[Finding] = []
+    script_indexes = {
+        script_index
+        for index, line in enumerate(lines)
+        if RUN_RE.match(line.split("#", 1)[0])
+        for script_index, _ in _run_script_lines(lines, index)
+        if script_index != index
+    }
+    structural_block_re = re.compile(
+        rf"^\s*(?:{_yaml_key('jobs')}|{_yaml_key('steps')})\s*:\s*(.*?)\s*$"
+    )
+
+    for index, line in enumerate(lines):
+        if index in script_indexes:
+            continue
+        code = line.split("#", 1)[0]
+        if not code.strip():
+            continue
+        if EXPLICIT_MAPPING_KEY_RE.match(code):
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "explicit YAML mapping keys are prohibited because they can "
+                    "hide workflow trust fields",
+                )
+            )
+        if ESCAPED_MAPPING_KEY_RE.match(code):
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "escaped YAML mapping keys are prohibited; use the canonical "
+                    "literal key spelling",
+                )
+            )
+        if LEADING_YAML_PROPERTY_RE.match(code) or YAML_VALUE_PROPERTY_RE.search(code):
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "YAML anchors, aliases, and tags are prohibited because expanded "
+                    "nodes can bypass lexical workflow trust checks",
+                )
+            )
+        structural_match = structural_block_re.match(code)
+        if structural_match and structural_match.group(1):
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "jobs and steps must use block mappings and sequences so every "
+                    "trust-bearing field is directly auditable",
+                )
+            )
+        if NONEMPTY_FLOW_MAPPING_RE.match(code) or re.match(r"^\s*-\s*\{", code):
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "non-empty flow mappings are prohibited because they can hide "
+                    "workflow trust fields on one line",
+                )
+            )
+
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if JOBS_RE.match(line.split("#", 1)[0])
+        ),
+        None,
+    )
+    if jobs_index is not None:
+        jobs_end = _mapping_end_index(lines, jobs_index)
+        job_indent = _direct_mapping_indent(lines, jobs_index, jobs_end)
+        if job_indent is not None:
+            for index in range(jobs_index + 1, jobs_end):
+                code = lines[index].split("#", 1)[0]
+                if (
+                    code.strip()
+                    and _indent(code) == job_indent
+                    and not JOB_RE.match(code)
+                ):
+                    findings.append(
+                        Finding(
+                            path,
+                            index + 1,
+                            "each job must use a canonical literal ID and block mapping",
+                        )
+                    )
+
+    return findings
 
 
 def _step_env_bindings(lines: list[str], run_index: int) -> dict[str, str]:
@@ -953,7 +1079,8 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
 
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
-    findings = _audit_runner_job_timeouts(path, lines)
+    findings = _audit_yaml_trust_shape(path, lines)
+    findings.extend(_audit_runner_job_timeouts(path, lines))
     findings.extend(_audit_oidc_runner_trust(path, lines))
     findings.extend(_audit_privileged_job_caches(path, lines))
     findings.extend(_audit_workflow_run_trigger(path, lines))

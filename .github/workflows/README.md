@@ -7,6 +7,13 @@ smoke suite. Remote actions and reusable workflows must use full commit SHAs,
 container actions must use SHA-256 digests, and GitHub-hosted runners must use
 dated image labels rather than moving `-latest` aliases.
 
+The audit also requires trust-bearing workflow structure to remain directly
+visible in canonical block YAML. Escaped or explicit mapping keys,
+anchors/aliases/tags, non-empty flow mappings, inline `jobs` or `steps`, and
+noncanonical job declarations are rejected because YAML expansion can
+otherwise hide permissions, runner identity, dependencies, or executable
+steps from lexical policy checks.
+
 Checkout pins additionally belong to a reviewed allowlist whose current floor
 includes GitHub's fail-closed fork-PR protection for privileged events. The
 audit prohibits `pull_request_target` entirely and rejects checkout's
