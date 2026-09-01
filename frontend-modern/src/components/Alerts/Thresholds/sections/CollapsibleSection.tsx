@@ -47,6 +47,7 @@ export interface CollapsibleSectionProps {
 export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) => {
   // Local collapsed state if not controlled externally
   const [localCollapsed, setLocalCollapsed] = createSignal(props.collapsed ?? false);
+  let contentElement: HTMLDivElement | undefined;
 
   // Sync with external collapsed state
   createEffect(() => {
@@ -58,6 +59,13 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
   const isCollapsed = () => {
     return props.collapsed !== undefined ? props.collapsed : localCollapsed();
   };
+
+  // Solid treats `inert` as a DOM property, but older DOM implementations do
+  // not expose that property. Toggle the attribute directly so the browser's
+  // native focus and accessibility-tree behavior is used consistently.
+  createEffect(() => {
+    contentElement?.toggleAttribute('inert', isCollapsed());
+  });
 
   const handleToggle = () => {
     const newState = !isCollapsed();
@@ -73,64 +81,66 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
       class={`rounded-md border transition-all duration-200 ${props.isGloballyDisabled ? ' bg-surface-alt opacity-60' : 'border-border bg-surface '} ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
       data-testid={props.testId || `section-${props.id}`}
     >
-      {/* Section Header */}
-      <button
-        type="button"
-        onClick={handleToggle}
-        class={`w-full flex items-center justify-between gap-3 px-4 py-3
- text-left cursor-pointer select-none
- hover:bg-surface-hover
- transition-colors duration-150
- ${isCollapsed() ? 'rounded-md' : 'rounded-t-lg border-b border-border'}`}
-        aria-expanded={!isCollapsed()}
-        aria-controls={`section-content-${props.id}`}
+      {/*
+        Keep actions beside the disclosure button rather than inside it. Apart
+        from being invalid HTML, nested buttons produce an ambiguous focus
+        order for keyboard and assistive-technology users.
+      */}
+      <div
+        class={`flex w-full items-stretch transition-colors duration-150 hover:bg-surface-hover ${
+          isCollapsed() ? 'rounded-md' : 'rounded-t-lg border-b border-border'
+        }`}
       >
-        {/* Left side: Chevron + Icon + Title + Count */}
-        <div class="flex items-center gap-3 min-w-0">
-          {/* Expand/Collapse chevron */}
-          <div class="flex-shrink-0 text-muted transition-transform duration-200">
-            <Show when={isCollapsed()} fallback={<ChevronDown class="w-5 h-5" />}>
-              <ChevronRight class="w-5 h-5" />
+        <h3 class="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={handleToggle}
+            class="flex min-h-11 w-full min-w-0 items-center gap-3 px-4 py-3 text-left cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
+            aria-expanded={!isCollapsed()}
+            aria-controls={`section-content-${props.id}`}
+          >
+            {/* Left side: Chevron + Icon + Title + Count */}
+            <span class="flex-shrink-0 text-muted transition-transform duration-200">
+              <Show when={isCollapsed()} fallback={<ChevronDown class="w-5 h-5" />}>
+                <ChevronRight class="w-5 h-5" />
+              </Show>
+            </span>
+
+            <Show when={props.icon}>
+              <span class="flex-shrink-0 text-muted">{props.icon}</span>
             </Show>
-          </div>
 
-          {/* Optional icon */}
-          <Show when={props.icon}>
-            <div class="flex-shrink-0 text-muted">{props.icon}</div>
-          </Show>
+            <span class="min-w-0">
+              <span class="flex items-center gap-2">
+                <span class="truncate font-semibold text-base-content">{props.title}</span>
+                <Show when={props.resourceCount !== undefined}>
+                  <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt text-muted">
+                    {props.resourceCount}
+                  </span>
+                </Show>
+                <Show when={props.isGloballyDisabled}>
+                  <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400">
+                    {getAlertThresholdsSectionDisabledLabel()}
+                  </span>
+                </Show>
+                <Show when={props.hasChanges}>
+                  <span
+                    class="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500"
+                    title={getAlertThresholdsSectionUnsavedChangesTitle()}
+                  />
+                </Show>
+              </span>
+              <Show when={props.subtitle}>
+                <span class="block truncate text-sm font-normal text-muted">{props.subtitle}</span>
+              </Show>
+            </span>
+          </button>
+        </h3>
 
-          {/* Title and count */}
-          <div class="min-w-0">
-            <div class="flex items-center gap-2">
-              <h3 class="font-semibold text-base-content truncate">{props.title}</h3>
-              <Show when={props.resourceCount !== undefined}>
-                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt text-muted">
-                  {props.resourceCount}
-                </span>
-              </Show>
-              <Show when={props.isGloballyDisabled}>
-                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400">
-                  {getAlertThresholdsSectionDisabledLabel()}
-                </span>
-              </Show>
-              <Show when={props.hasChanges}>
-                <span
-                  class="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500"
-                  title={getAlertThresholdsSectionUnsavedChangesTitle()}
-                />
-              </Show>
-            </div>
-            <Show when={props.subtitle}>
-              <p class="text-sm text-muted truncate">{props.subtitle}</p>
-            </Show>
-          </div>
-        </div>
-
-        {/* Right side: Header actions */}
-        <div class="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {props.headerActions}
-        </div>
-      </button>
+        <Show when={props.headerActions}>
+          <div class="flex flex-shrink-0 items-center gap-2 pr-4">{props.headerActions}</div>
+        </Show>
+      </div>
 
       {/* Section Content */}
       {/*
@@ -152,7 +162,9 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
         clips its content.
       */}
       <div
+        ref={contentElement}
         id={`section-content-${props.id}`}
+        aria-hidden={isCollapsed() ? 'true' : undefined}
         class={`grid transition-opacity duration-200 ease-in-out
  ${isCollapsed() ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
       >

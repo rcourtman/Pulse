@@ -99,6 +99,22 @@ describe('CollapsibleSection', () => {
 
     const button = screen.getByRole('button');
     expect(button).toHaveAttribute('aria-expanded', 'false');
+
+    const panel = document.getElementById('section-content-test');
+    expect(panel).toHaveAttribute('inert');
+    expect(panel).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('keeps expanded content exposed to keyboard and assistive technology users', () => {
+    render(() => (
+      <CollapsibleSection id="test" title="Title">
+        <button type="button">Child action</button>
+      </CollapsibleSection>
+    ));
+
+    const panel = document.getElementById('section-content-test');
+    expect(panel).not.toHaveAttribute('inert');
+    expect(panel).not.toHaveAttribute('aria-hidden');
   });
 
   it('sets aria-controls to match content element id', () => {
@@ -128,11 +144,13 @@ describe('CollapsibleSection', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
     expect(onToggle).toHaveBeenNthCalledWith(1, true); // now collapsed
     expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById('section-content-test')).toHaveAttribute('inert');
 
     fireEvent.click(button);
     expect(onToggle).toHaveBeenCalledTimes(2);
     expect(onToggle).toHaveBeenNthCalledWith(2, false); // now expanded again
     expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById('section-content-test')).not.toHaveAttribute('inert');
   });
 
   it('respects controlled collapsed prop over local state', () => {
@@ -290,12 +308,25 @@ describe('CollapsibleSection', () => {
       </CollapsibleSection>
     ));
 
-    const editButton = screen.getByText('Edit');
+    const toggleButton = screen.getByRole('button', { name: 'Title' });
+    const editButton = screen.getByRole('button', { name: 'Edit' });
+    expect(toggleButton).not.toContainElement(editButton);
+
     fireEvent.click(editButton);
 
     expect(actionClick).toHaveBeenCalledTimes(1);
     // onToggle should NOT fire because the actions container uses stopPropagation
     expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('uses the title as a semantic section heading', () => {
+    render(() => (
+      <CollapsibleSection id="test" title="Node thresholds">
+        <span />
+      </CollapsibleSection>
+    ));
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Node thresholds' })).toBeInTheDocument();
   });
 
   it('applies globally disabled styling', () => {
