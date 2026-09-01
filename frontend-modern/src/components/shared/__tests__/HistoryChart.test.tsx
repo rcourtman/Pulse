@@ -132,6 +132,32 @@ describe('HistoryChart', () => {
     render(() => <HistoryChart resourceType="agent" resourceId="node-1" metric="cpu" />);
 
     expect(screen.getByText('History')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'History chart' })).toHaveAttribute('aria-describedby');
+  });
+
+  it('provides a text equivalent for a populated history chart', () => {
+    render(() => (
+      <HistoryChart
+        resourceType="agent"
+        resourceId="node-1"
+        metric="cpu"
+        label="CPU usage"
+        unit="%"
+        range="24h"
+        data={[
+          { timestamp: 1_000, value: 10, min: 8, max: 12 },
+          { timestamp: 2_000, value: 30, min: 25, max: 35 },
+        ]}
+      />
+    ));
+
+    const chart = screen.getByRole('img', { name: 'CPU usage chart' });
+    const description = document.getElementById(chart.getAttribute('aria-describedby')!);
+
+    expect(description).toHaveClass('sr-only');
+    expect(description).toHaveTextContent('24-hour history contains 2 data points');
+    expect(description).toHaveTextContent('Values increased from 10.0% to 30.0%.');
+    expect(description).toHaveTextContent('Minimum 8.0%; maximum 35.0%.');
   });
 
   it('synchronizes the hovered timestamp across charts in the same group', () => {

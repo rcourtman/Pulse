@@ -1,5 +1,9 @@
-import { Component } from 'solid-js';
-import type { HistoryChartProps } from './historyChartModel';
+import { Component, createMemo, createUniqueId } from 'solid-js';
+import {
+  getHistoryChartAccessibleDescription,
+  getHistoryChartAccessibleLabel,
+  type HistoryChartProps,
+} from './historyChartModel';
 import { HistoryChartHeader } from './HistoryChartHeader';
 import { HistoryChartHoverGroup, useHistoryChartHoverGroup } from './HistoryChartHoverGroup';
 import { HistoryChartOverlay } from './HistoryChartOverlay';
@@ -12,6 +16,7 @@ export { HistoryChartHoverGroup };
 export const HistoryChart: Component<HistoryChartProps> = (props) => {
   let canvasRef: HTMLCanvasElement | undefined;
   let containerRef: HTMLDivElement | undefined;
+  const descriptionId = `history-chart-description-${createUniqueId()}`;
   const hoverGroup = useHistoryChartHoverGroup();
 
   const chart = useHistoryChartState(
@@ -21,6 +26,16 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
       getContainer: () => containerRef,
     },
     hoverGroup,
+  );
+  const accessibleDescription = createMemo(() =>
+    getHistoryChartAccessibleDescription({
+      data: chart.data(),
+      error: chart.error(),
+      isLocked: chart.isLocked(),
+      loading: chart.loading(),
+      range: chart.range(),
+      unit: props.unit,
+    }),
   );
 
   return (
@@ -42,9 +57,15 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         <canvas
           ref={canvasRef}
           class="block w-full h-full cursor-crosshair"
+          role="img"
+          aria-label={getHistoryChartAccessibleLabel(props.label)}
+          aria-describedby={descriptionId}
           onMouseMove={chart.handleMouseMove}
           onMouseLeave={chart.handleMouseLeave}
         />
+        <p id={descriptionId} class="sr-only">
+          {accessibleDescription()}
+        </p>
         <HistoryChartOverlay chart={chart} hideLock={props.hideLock} />
         <HistoryChartTooltip
           hoveredPoint={chart.hoveredPoint()}

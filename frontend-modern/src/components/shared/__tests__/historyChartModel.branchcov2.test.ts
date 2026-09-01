@@ -5,6 +5,8 @@ import {
   findHistoryChartClosestPoint,
   formatHistoryChartTimeLabel,
   formatHistoryChartTooltipValue,
+  getHistoryChartAccessibleDescription,
+  getHistoryChartAccessibleLabel,
   getHistoryChartDataMax,
   getHistoryChartDataMin,
   getHistoryChartDefaultColor,
@@ -21,6 +23,76 @@ const pt = (timestamp: number, value: number, min: number, max: number): Aggrega
   value,
   min,
   max,
+});
+
+describe('history chart text alternatives', () => {
+  it('uses the visible metric label as the chart name', () => {
+    expect(getHistoryChartAccessibleLabel(' CPU usage ')).toBe('CPU usage chart');
+    expect(getHistoryChartAccessibleLabel()).toBe('History chart');
+  });
+
+  it.each([
+    [{ loading: true, error: null, isLocked: false }, 'Loading 24-hour history data.'],
+    [
+      { loading: false, error: 'request failed', isLocked: false },
+      '24-hour history data could not be loaded.',
+    ],
+    [
+      { loading: false, error: null, isLocked: true },
+      '24-hour history data is unavailable on the current plan.',
+    ],
+    [{ loading: false, error: null, isLocked: false }, 'No 24-hour history data is available.'],
+  ])('describes an unavailable chart state', (state, expected) => {
+    expect(
+      getHistoryChartAccessibleDescription({
+        data: [],
+        range: '24h',
+        ...state,
+      }),
+    ).toBe(expected);
+  });
+
+  it('describes a single sample without inventing a trend', () => {
+    const description = getHistoryChartAccessibleDescription({
+      data: [pt(1_000, 23.6, 20, 25)],
+      error: null,
+      isLocked: false,
+      loading: false,
+      range: '30m',
+      unit: 'C',
+    });
+
+    expect(description).toContain('30-minute history contains 1 data point at');
+    expect(description).toContain(': 24°C.');
+  });
+
+  it('describes a stable multi-point series and its extrema', () => {
+    const description = getHistoryChartAccessibleDescription({
+      data: [pt(1_000, 10, 8, 12), pt(2_000, 10, 7, 14)],
+      error: null,
+      isLocked: false,
+      loading: false,
+      range: '7d',
+      unit: 'rpm',
+    });
+
+    expect(description).toContain('7-day history contains 2 data points');
+    expect(description).toContain('Values remained unchanged at 10 rpm.');
+    expect(description).toContain('Minimum 7 rpm; maximum 14 rpm.');
+  });
+
+  it('describes a decreasing multi-point series', () => {
+    const description = getHistoryChartAccessibleDescription({
+      data: [pt(1_000, 30, 25, 35), pt(2_000, 10, 8, 12)],
+      error: null,
+      isLocked: false,
+      loading: false,
+      range: '6h',
+      unit: '%',
+    });
+
+    expect(description).toContain('Values decreased from 30.0% to 10.0%.');
+  });
 });
 
 describe('formatHistoryChartTooltipValue', () => {

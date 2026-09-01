@@ -44,12 +44,76 @@ export const HISTORY_CHART_RANGES: HistoryTimeRange[] = [
 
 export const HISTORY_CHART_MIN_LEFT_INSET = 40;
 
+const HISTORY_CHART_RANGE_LABELS: Record<HistoryTimeRange, string> = {
+  '30m': '30-minute',
+  '1h': '1-hour',
+  '6h': '6-hour',
+  '12h': '12-hour',
+  '24h': '24-hour',
+  '7d': '7-day',
+  '14d': '14-day',
+  '30d': '30-day',
+  '90d': '90-day',
+};
+
+export interface HistoryChartAccessibleDescriptionInput {
+  data: AggregatedMetricPoint[];
+  error: string | null;
+  isLocked: boolean;
+  loading: boolean;
+  range: HistoryTimeRange;
+  unit?: string;
+}
+
 export function formatHistoryChartTooltipValue(value: number, unit?: string): string {
   if (unit === '%') return `${value.toFixed(1)}%`;
   if (unit === 'B/s') return `${formatBytes(value)}/s`;
   if (unit === 'C') return `${Math.round(value)}°C`;
   if (!unit) return formatBytes(value);
   return `${Number.isInteger(value) ? value : value.toFixed(1)} ${unit}`;
+}
+
+export function getHistoryChartAccessibleLabel(label?: string): string {
+  return `${label?.trim() || 'History'} chart`;
+}
+
+export function getHistoryChartAccessibleDescription({
+  data,
+  error,
+  isLocked,
+  loading,
+  range,
+  unit,
+}: HistoryChartAccessibleDescriptionInput): string {
+  const rangeLabel = HISTORY_CHART_RANGE_LABELS[range] ?? `${range} history`;
+  if (loading) return `Loading ${rangeLabel} history data.`;
+  if (error) return `${rangeLabel} history data could not be loaded.`;
+  if (isLocked) return `${rangeLabel} history data is unavailable on the current plan.`;
+  if (data.length === 0) return `No ${rangeLabel} history data is available.`;
+
+  const first = data[0];
+  const latest = data[data.length - 1];
+  const minimum = getHistoryChartDataMin(data)!;
+  const maximum = getHistoryChartDataMax(data)!;
+  const formatTimestamp = (timestamp: number) => new Date(timestamp).toLocaleString();
+  const formatValue = (value: number) => formatHistoryChartTooltipValue(value, unit);
+
+  if (data.length === 1) {
+    return `${rangeLabel} history contains 1 data point at ${formatTimestamp(latest.timestamp)}: ${formatValue(latest.value)}.`;
+  }
+
+  const direction =
+    latest.value > first.value
+      ? 'increased'
+      : latest.value < first.value
+        ? 'decreased'
+        : 'remained unchanged';
+  const changeSummary =
+    direction === 'remained unchanged'
+      ? `Values remained unchanged at ${formatValue(latest.value)}.`
+      : `Values ${direction} from ${formatValue(first.value)} to ${formatValue(latest.value)}.`;
+
+  return `${rangeLabel} history contains ${data.length} data points from ${formatTimestamp(first.timestamp)} to ${formatTimestamp(latest.timestamp)}. ${changeSummary} Minimum ${formatValue(minimum)}; maximum ${formatValue(maximum)}.`;
 }
 
 export function getHistoryChartRefreshIntervalMs(range: HistoryTimeRange) {
