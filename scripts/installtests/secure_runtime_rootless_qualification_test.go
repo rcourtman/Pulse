@@ -320,13 +320,14 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	if _, err := os.Lstat(otherSocket); err != nil {
 		t.Fatalf("second live rootless socket missing: %v", err)
 	}
+	liveSockets := rootlessQualDualSocketEvidence(t, daemon.uid)
 	ambiguityOutput := rootlessQualRunUnpinnedCollector(t, server.URL, collectorCredential, 6*time.Second)
 	if !strings.Contains(strings.ToLower(ambiguityOutput), "ambiguous collector-owned rootless runtime endpoints") {
 		t.Fatalf("unpinned collector did not fail closed on dual sockets:\n%s", ambiguityOutput)
 	}
 	appendScenario("dual_socket_ambiguity_refusal", ambiguityStarted, nil, map[string]any{
 		"protected_collector_pid": collectorPIDAfter,
-		"live_sockets":            rootlessQualDualSocketEvidence(t, daemon.uid),
+		"live_sockets":            liveSockets,
 		"probe_kind":              "separate-unpinned-collector",
 		"admission_refused":       true, "fail_closed": true, "daemon_probe_count": 0,
 		"container_actions_enabled": false, "collector_restart_count": 0,
@@ -881,10 +882,7 @@ func rootlessQualRunUnpinnedCollector(t *testing.T, serverURL, collectorCredenti
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
-	cmd := rootlessQualProcessGroupCommand(ctx, "runuser", "-u", "pulse-agent", "--", "env", "-u", "DOCKER_HOST", "-u", "PODMAN_HOST", "-u", "CONTAINER_HOST",
-		"PULSE_URL="+serverURL, "PULSE_TOKEN="+collectorCredential, "PULSE_INTERVAL=1s", "PULSE_AGENT_ID="+secureRuntimeLabAgentID,
-		"PULSE_HOSTNAME="+secureRuntimeLabHostname, "PULSE_ENABLE_HOST=false", "PULSE_ENABLE_DOCKER=true", "PULSE_ENABLE_COMMANDS=false",
-		"PULSE_AGENT_ALLOW_PLAINTEXT_HTTP=true", "/usr/local/bin/pulse-agent", "--state-dir", stateDir, "--health-addr", "")
+	cmd := rootlessQualProcessGroupCommand(ctx, "runuser", rootlessQualUnpinnedCollectorArgs(serverURL, collectorCredential, stateDir, collectorUID)...)
 	out, err := cmd.CombinedOutput()
 	if err == nil || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		t.Fatalf("unpinned ambiguity probe did not remain alive until bounded cancellation: err=%v\n%s", err, out)
@@ -893,6 +891,26 @@ func rootlessQualRunUnpinnedCollector(t *testing.T, serverURL, collectorCredenti
 		t.Fatalf("separate ambiguity probe disturbed protected collector: before=%d after=%d", protectedPID, afterPID)
 	}
 	return string(out)
+}
+
+func rootlessQualUnpinnedCollectorArgs(serverURL, collectorCredential, stateDir string, collectorUID int) []string {
+	return []string{
+		"-u", "pulse-agent", "--", "env", "-i",
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"HOME=/var/lib/pulse-rootless",
+		"XDG_RUNTIME_DIR=" + filepath.Join("/run/user", strconv.Itoa(collectorUID)),
+		"PULSE_DOCKER_RUNTIME=auto",
+		"PULSE_URL=" + serverURL,
+		"PULSE_TOKEN=" + collectorCredential,
+		"PULSE_INTERVAL=1s",
+		"PULSE_AGENT_ID=" + secureRuntimeLabAgentID,
+		"PULSE_HOSTNAME=" + secureRuntimeLabHostname,
+		"PULSE_ENABLE_HOST=false",
+		"PULSE_ENABLE_DOCKER=true",
+		"PULSE_ENABLE_COMMANDS=false",
+		"PULSE_AGENT_ALLOW_PLAINTEXT_HTTP=true",
+		"/usr/local/bin/pulse-agent", "--state-dir", stateDir, "--health-addr", "",
+	}
 }
 
 func rootlessQualProcessGroupCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
@@ -944,6 +962,23 @@ func TestRootlessQualificationCancellationKillsProbeProcessGroup(t *testing.T) {
 	}
 }
 
+func TestRootlessQualificationUnpinnedProbeUsesCleanAutomaticRuntimeEnvironment(t *testing.T) {
+	args := rootlessQualUnpinnedCollectorArgs("http://127.0.0.1:8080", "test-token", "/tmp/test-state", 996)
+	if len(args) < 5 || !slices.Equal(args[:5], []string{"-u", "pulse-agent", "--", "env", "-i"}) {
+		t.Fatalf("unpinned probe does not start with a clean runuser environment: %q", args)
+	}
+	if !slices.Contains(args, "PULSE_DOCKER_RUNTIME=auto") {
+		t.Fatalf("unpinned probe does not force automatic runtime selection: %q", args)
+	}
+	for _, arg := range args {
+		for _, forbidden := range []string{"DOCKER_HOST=", "PODMAN_HOST=", "CONTAINER_HOST="} {
+			if strings.HasPrefix(arg, forbidden) {
+				t.Fatalf("unpinned probe retained endpoint selector %q", arg)
+			}
+		}
+	}
+}
+
 func rootlessQualServicePin(t *testing.T, runtimeKind string) string {
 	t.Helper()
 	environment := secureRuntimeSystemdProperty(t, "Environment")
@@ -977,6 +1012,9 @@ func rootlessQualDualSocketEvidence(t *testing.T, uid int) []map[string]any {
 		{"podman", filepath.Join("/run/user", strconv.Itoa(uid), "podman", "podman.sock")},
 	} {
 		socketUID, socketGID, mode := rootlessQualSocketIdentity(t, item.path)
+		if socketUID != uid {
+			t.Fatalf("rootless %s socket is owned by UID %d, want collector UID %d", item.runtime, socketUID, uid)
+		}
 		result = append(result, map[string]any{
 			"runtime": item.runtime, "path": item.path, "uid": socketUID, "gid": socketGID,
 			"mode": mode, "type": "unix", "symlink": false,
