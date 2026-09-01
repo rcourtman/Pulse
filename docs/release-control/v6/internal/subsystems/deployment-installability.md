@@ -302,6 +302,9 @@ a build failure rather than an attestable omission. Checking in the harness or p
 ordinary contract tests is not live qualification. Until a complete
 secret-free receipt and attestation are retained, this surface remains
 implemented-but-unqualified and cannot change the opt-in safe-profile default.
+When both runtime sockets are present for ambiguity refusal, the validator
+checks each entry against that runtime's own recorded GID and mode while using
+the current disposable host's collector UID and canonical socket path.
 Failed runtime tests must retain the disposable systemd journal and container
 log before nonce-bound cleanup; absence of a receipt is not a replacement for
 the causal failure record.

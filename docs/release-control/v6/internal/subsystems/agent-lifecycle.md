@@ -7371,7 +7371,10 @@ exact qualification artifact. It treats rootless and rootful helper
 inventories as separate daemon identities, requires direct recovery to restore
 the original rootless identity and rich telemetry, and understands that a
 collector restart creates a new report stream while daemon restart preserves
-the durable daemon identity. Its classification is local, opt-in,
+the durable daemon identity. Dual-socket ambiguity evidence validates Docker
+and Podman against their respective recorded socket ownership and modes; it
+must not project the selected runtime's permissions onto the other socket.
+Its classification is local, opt-in,
 artifact-bound self-attestation only. No receipt exists merely because the
 harness is checked in, so rootless Docker and Podman remain live-unqualified
 and cannot change the product default.

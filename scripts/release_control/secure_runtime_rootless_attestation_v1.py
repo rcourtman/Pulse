@@ -536,10 +536,19 @@ def validate_receipt(receipt: Any) -> dict[str, Any]:
     docker_stream = validated[0]["scenarios"][REQUIRED_SCENARIOS.index("collector_restart")]["report_stream_id"]
     podman_stream = validated[1]["scenarios"][REQUIRED_SCENARIOS.index("collector_restart")]["report_stream_id"]
     require(docker_stream != podman_stream, "Docker and Podman report streams must differ")
+    socket_profiles = {current["runtime"]["runtime"]: current["runtime"] for current in validated}
     for current in validated:
         uid = current["runtime"]["collector_uid"]
         expected_live_sockets = [
-            {"runtime": runtime, "path": expected_socket_path(runtime, uid), "uid": uid, "gid": current["runtime"]["socket_gid"], "mode": current["runtime"]["socket_mode"], "type": "unix", "symlink": False}
+            {
+                "runtime": runtime,
+                "path": expected_socket_path(runtime, uid),
+                "uid": uid,
+                "gid": socket_profiles[runtime]["socket_gid"],
+                "mode": socket_profiles[runtime]["socket_mode"],
+                "type": "unix",
+                "symlink": False,
+            }
             for runtime in REQUIRED_RUNTIMES
         ]
         ambiguity = current["scenarios"][REQUIRED_SCENARIOS.index("dual_socket_ambiguity_refusal")]["evidence"]
