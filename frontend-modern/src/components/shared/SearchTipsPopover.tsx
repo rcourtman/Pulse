@@ -37,10 +37,10 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
         type="button"
         class={triggerClass()}
         onClick={state.handleClick}
-        onFocus={state.handleMouseEnter}
         onBlur={state.handleBlur}
         aria-expanded={state.isOpen()}
         aria-controls={popoverId()}
+        aria-haspopup="dialog"
         aria-label={buttonLabel()}
       >
         {triggerVariant() === 'icon' ? (
@@ -67,14 +67,16 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           role="dialog"
           aria-label={title()}
           style={state.popoverStyle()}
+          onFocusOut={state.handlePopoverBlur}
           class={`!fixed ${positionClass()} z-50 w-auto overflow-y-auto rounded-md border bg-surface text-left shadow-sm xl:!absolute xl:mt-2 xl:w-72`}
         >
           <div class="flex items-center justify-between border-b border-border-subtle px-3 py-2">
             <span class="text-sm font-semibold text-base-content">{title()}</span>
             <button
+              ref={state.setCloseButtonRef}
               type="button"
-              class="rounded p-1 transition-colors hover:text-muted"
-              onClick={state.close}
+              class="inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors hover:text-muted sm:min-h-8 sm:min-w-8"
+              onClick={state.closeAndRestoreFocus}
               aria-label="Close search tips"
             >
               <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

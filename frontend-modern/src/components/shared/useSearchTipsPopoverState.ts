@@ -4,12 +4,15 @@ import type { Accessor } from 'solid-js';
 interface SearchTipsPopoverState {
   buttonLabel: Accessor<string>;
   close: () => void;
-  handleBlur: () => void;
+  closeAndRestoreFocus: () => void;
+  handleBlur: (event: FocusEvent) => void;
   handleClick: () => void;
   handleMouseEnter: () => void;
   handleMouseLeave: () => void;
+  handlePopoverBlur: (event: FocusEvent) => void;
   isOpen: Accessor<boolean>;
   popoverStyle: Accessor<string | undefined>;
+  setCloseButtonRef: (el: HTMLButtonElement) => void;
   setPopoverRef: (el: HTMLDivElement) => void;
   setTriggerRef: (el: HTMLButtonElement) => void;
 }
@@ -26,9 +29,20 @@ export function useSearchTipsPopoverState(
   const [popoverStyle, setPopoverStyle] = createSignal<string>();
   let popoverRef: HTMLDivElement | undefined;
   let triggerRef: HTMLButtonElement | undefined;
+  let closeButtonRef: HTMLButtonElement | undefined;
   let pointerInside = false;
 
   const close = () => setOpen(false);
+  const closeAndRestoreFocus = () => {
+    close();
+    triggerRef?.focus({ preventScroll: true });
+  };
+  const containsFocus = (target: EventTarget | null = document.activeElement) =>
+    target instanceof Node &&
+    ((popoverRef?.contains(target) ?? false) || (triggerRef?.contains(target) ?? false));
+  const focusCloseButton = () => {
+    queueMicrotask(() => closeButtonRef?.focus({ preventScroll: true }));
+  };
   const updatePopoverPosition = () => {
     if (!triggerRef || !popoverRef || (window.innerWidth >= 1280 && window.innerHeight >= 768)) {
       setPopoverStyle(undefined);
@@ -81,7 +95,11 @@ export function useSearchTipsPopoverState(
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        close();
+        if (containsFocus()) {
+          closeAndRestoreFocus();
+        } else {
+          close();
+        }
       }
     };
 
@@ -102,17 +120,22 @@ export function useSearchTipsPopoverState(
   return {
     buttonLabel: options.buttonLabel,
     close,
-    handleBlur: () => {
-      if (!pointerInside) {
+    closeAndRestoreFocus,
+    handleBlur: (event) => {
+      if (!pointerInside && !containsFocus(event.relatedTarget)) {
         setOpen(false);
       }
     },
     handleClick: () => {
       if (options.openOnHover()) {
         setOpen(true);
+        focusCloseButton();
         return;
       }
-      setOpen((value) => !value);
+      setOpen((value) => {
+        if (!value) focusCloseButton();
+        return !value;
+      });
     },
     handleMouseEnter: () => {
       pointerInside = true;
@@ -120,10 +143,20 @@ export function useSearchTipsPopoverState(
     },
     handleMouseLeave: () => {
       pointerInside = false;
-      setOpen(false);
+      if (!containsFocus()) {
+        setOpen(false);
+      }
+    },
+    handlePopoverBlur: (event) => {
+      if (!pointerInside && !containsFocus(event.relatedTarget)) {
+        setOpen(false);
+      }
     },
     isOpen: open,
     popoverStyle,
+    setCloseButtonRef: (el) => {
+      closeButtonRef = el;
+    },
     setPopoverRef: (el) => {
       popoverRef = el;
       queueMicrotask(updatePopoverPosition);
