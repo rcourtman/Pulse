@@ -20,8 +20,14 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
+)
+
+const (
+	maxVersionProbeResponseBodyBytes int64 = 64 << 10 // 64 KiB
+	maxNodesProbeResponseBodyBytes   int64 = 1 << 20  // 1 MiB
 )
 
 // DiscoveredServer represents a discovered Proxmox/PBS/PMG server
@@ -1240,6 +1246,9 @@ func (s *Scanner) fetchNodeHostname(ctx context.Context, ip string, port int) st
 		return ""
 	}
 	defer resp.Body.Close()
+	if err := securityutil.LimitResponseBody(resp, maxNodesProbeResponseBodyBytes); err != nil {
+		return ""
+	}
 
 	var nodesResp struct {
 		Data []struct {
@@ -1311,6 +1320,10 @@ func (s *Scanner) probeVersionEndpoint(ctx context.Context, httpClient *http.Cli
 	)
 
 	if resp.StatusCode != http.StatusOK {
+		return finding, "", ""
+	}
+	if err := securityutil.LimitResponseBody(resp, maxVersionProbeResponseBodyBytes); err != nil {
+		finding.Error = err
 		return finding, "", ""
 	}
 

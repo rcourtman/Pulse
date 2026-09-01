@@ -249,6 +249,61 @@ func TestCheckServerRetrievesVersion(t *testing.T) {
 	}
 }
 
+func TestProbeVersionEndpointRejectsOversizedChunkedResponse(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush() // Keep Content-Length unknown so the streaming limit is exercised.
+		}
+		_, _ = w.Write([]byte(`{"data":{"version":"`))
+		_, _ = w.Write([]byte(strings.Repeat("x", int(maxVersionProbeResponseBodyBytes))))
+		_, _ = w.Write([]byte(`"}}`))
+	}))
+	defer ts.Close()
+
+	scanner := newTestScanner(ts.Client())
+	finding, version, release := scanner.probeVersionEndpoint(
+		context.Background(),
+		ts.Client(),
+		strings.TrimPrefix(ts.URL, "https://"),
+	)
+
+	if finding.Error == nil || !strings.Contains(finding.Error.Error(), "response body exceeds 65536 bytes") {
+		t.Fatalf("expected bounded response error, got %+v", finding.Error)
+	}
+	if version != "" || release != "" {
+		t.Fatalf("oversized response returned version=%q release=%q", version, release)
+	}
+}
+
+func TestFetchNodeHostnameRejectsOversizedDeclaredResponse(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.FormatInt(maxNodesProbeResponseBodyBytes+1, 10))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	host, portText, err := net.SplitHostPort(ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("SplitHostPort: %v", err)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatalf("Atoi: %v", err)
+	}
+
+	scanner := newTestScanner(ts.Client())
+	if got := scanner.fetchNodeHostname(context.Background(), host, port); got != "" {
+		t.Fatalf("fetchNodeHostname returned %q for oversized response", got)
+	}
+}
+
 func TestNewScannerWithProfileAcceptsSelfSignedProxmoxProbe(t *testing.T) {
 	t.Parallel()
 
