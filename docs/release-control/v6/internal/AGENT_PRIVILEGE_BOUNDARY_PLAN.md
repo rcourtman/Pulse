@@ -269,6 +269,17 @@ profile is configured. This is implementation proof only; the live fresh-install
 ambiguity, loss, bidirectional recovery, and telemetry-parity matrix remains
 the qualification residual.
 
+The standalone `secure-runtime-rootless-v1` packet now owns that residual
+without changing the immutable schema-v7 systemd contract. Its opt-in wrapper
+runs only inside disposable nested Ubuntu/systemd hosts and requires real
+collector-owned rootless Docker and Podman daemons, separate same-family
+rootful helper baselines, exact installer pins, runtime loss and recovery, and
+cleanup before its independent validator can emit a local artifact-bound
+self-attestation. A checked-in harness or locally passing ordinary tests are
+not qualification. Until a complete secret-free receipt and attestation are
+retained, the matrix row remains implemented-but-unqualified and the safe
+profile remains opt-in.
+
 ## Target Architecture
 
 ### 1. API-Only Monitoring

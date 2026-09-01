@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "manifest_id": "secure-runtime-rootless-v1",
+  "target_os": "linux",
+  "description": "Production source boundary for collector-owned rootless Docker and Podman discovery, direct collection, typed-helper fallback, recovery, installer pinning, and the standalone rootless qualification packet.",
+  "exact_paths": [
+    "VERSION",
+    "go.mod",
+    "go.sum",
+    "pkg/agents/docker/report.go",
+    "pkg/agents/docker/report_limits.go",
+    "scripts/install.sh",
+    "scripts/release_ldflags.sh",
+    "scripts/installtests/secure_runtime_rootless_qualification_test.go",
+    "scripts/installtests/secure_runtime_systemd_lab_test.go",
+    "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
+    "scripts/release_control/secure_runtime_rootless_attestation_v1.py",
+    "scripts/release_control/secure_runtime_rootless_source_manifest_v1.json",
+    "scripts/run-secure-runtime-rootless-qualification.sh"
+  ],
+  "recursive_roots": [
+    "cmd/pulse-agent",
+    "cmd/pulse-agent-helper",
+    "internal/actionrunner",
+    "internal/agentexec",
+    "internal/agenthelper",
+    "internal/agenttls",
+    "internal/agentupdate",
+    "internal/api",
+    "internal/collectorlifecycle",
+    "internal/config",
+    "internal/dockeragent",
+    "internal/hostagent",
+    "internal/operationreceipt",
+    "internal/securityutil",
+    "internal/updatesignature",
+    "pkg/auth",
+    "pkg/agents/host",
+    "pkg/securityutil",
+    "pkg/tlsutil"
+  ],
+  "include_suffixes": [
+    ".go",
+    ".tmpl"
+  ],
+  "exclude_suffixes": [
+    "_test.go"
+  ]
+}
