@@ -259,6 +259,9 @@ the immutable schema-v7 systemd packet. The opt-in
 `scripts/run-secure-runtime-rootless-qualification.sh` wrapper creates fresh,
 network-isolated Ubuntu/systemd hosts for real rootless Docker and Podman,
 never mounts a host daemon socket, and records each host identity separately.
+It installs a fresh valid machine ID into each stopped container before first
+systemd boot, and the combined validator rejects duplicate Docker and Podman
+machine identities rather than accepting a shared image-derived fallback.
 The exact qualification packet remains outside the image layers; the image
 must pre-create its root-owned, mode-`0700` packet destination before the
 wrapper injects artifacts into each stopped disposable container. The image

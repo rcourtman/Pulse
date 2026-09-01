@@ -1856,6 +1856,7 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 		`docker cp "${container_id}:/opt/pulse/result/rootless-receipt.json"`,
 		`capture_qualification_container_diagnostics`, `journalctl --no-pager -n 2000`,
 		`302a300506032b6570032100`, `len(spki) != len(prefix) + 32`,
+		`machine_id="$(openssl rand -hex 16)"`, `docker cp "${machine_id_file}" "${container_id}:/etc/machine-id"`,
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("rootless qualification wrapper missing %q", required)
@@ -1881,6 +1882,11 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 	packetCopyIndex := strings.Index(script, `docker cp "${PACKET_DIR}/." "${container_id}:/opt/pulse/packet"`)
 	if packetDirectoryIndex < 0 || packetCopyIndex < 0 || packetCopyIndex < packetDirectoryIndex {
 		t.Fatal("rootless wrapper must create the private packet destination in the image before artifact injection")
+	}
+	machineIDCopyIndex := strings.Index(script, `docker cp "${machine_id_file}" "${container_id}:/etc/machine-id"`)
+	containerStartIndex := strings.Index(script, `docker start "${container_id}"`)
+	if machineIDCopyIndex < 0 || containerStartIndex < 0 || machineIDCopyIndex > packetCopyIndex || machineIDCopyIndex > containerStartIndex {
+		t.Fatal("rootless wrapper must install a per-host machine ID before packet injection and first systemd boot")
 	}
 }
 

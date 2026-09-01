@@ -7324,6 +7324,10 @@ or granting an outer default route is invalid qualification. The outer host
 uses a private cgroup namespace with no host cgroup bind mount. Each dedicated
 runtime identity must have an active delegated systemd user manager before its
 daemon starts, and cleanup must stop that manager and remove its linger state.
+Before each disposable host's first systemd boot, the wrapper installs a fresh
+valid machine ID into that stopped container. The combined receipt validator
+rejects a Docker and Podman pair that reports the same machine identity; a
+shared image fallback identity cannot stand in for two independent hosts.
 The in-container control-plane fixture must implement the same authenticated
 collector-uninstall response contract as the production lifecycle client. A
 teardown succeeds only after the fixture records the exact registered binding
