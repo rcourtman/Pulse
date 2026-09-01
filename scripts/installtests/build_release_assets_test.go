@@ -973,7 +973,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`--rawfile body "$NOTES_FILE"`,
 		`--input "$RELEASE_PAYLOAD"`,
 		`--expected-body-file "$NOTES_FILE"`,
-		`historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}`,
+		`write_github_output.py historical_asset_backfill_only "${HISTORICAL_ASSET_BACKFILL_ONLY}"`,
 		`if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
 		`candidate_manifest_artifact: ${{ needs.build_release_candidate.outputs.manifest_artifact_name }}`,
 		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}`,
@@ -3571,7 +3571,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		!strings.Contains(createJob, `Resuming quarantined draft release for ${TAG}`) {
 		t.Fatal("release creation must explicitly support resuming a quarantined draft")
 	}
-	if !strings.Contains(createJob, `release_activation_committed=${RELEASE_ACTIVATION_COMMITTED}`) ||
+	if !strings.Contains(createJob, `write_github_output.py release_activation_committed "${RELEASE_ACTIVATION_COMMITTED}"`) ||
 		!strings.Contains(createJob, `[ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]`) ||
 		!strings.Contains(createJob, `[ "$ACTIVATION_COMMITTED" != "true" ]`) {
 		t.Fatal("release creation must refuse to retarget a draft whose irreversible activation marker exists")
@@ -3757,7 +3757,7 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches`,
 		`build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"`,
 		`wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build"`,
-		`echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"`,
+		`write_github_output.py r2_prefix "${r2_prefix}"`,
 	} {
 		if !strings.Contains(stageJob, needle) {
 			t.Fatalf("stage_private_pro_runtime missing required contract: %s", needle)

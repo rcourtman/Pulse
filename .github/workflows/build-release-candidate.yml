@@ -93,6 +93,11 @@ jobs:
       secure_runtime_artifact_digest: ${{ steps.wait.outputs.secure_runtime_artifact_digest }}
       secure_runtime_artifact_name: ${{ steps.wait.outputs.secure_runtime_artifact_name }}
     steps:
+      - name: Checkout payload coordination control
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Dispatch exact-SHA compiler workflow
         id: dispatch
         env:
@@ -177,7 +182,7 @@ jobs:
           artifact_digest="$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$")) | sub("^sha256:"; "")' <<<"${artifact_json}")"
           echo "artifact_id=${artifact_id}" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=${artifact_digest}" >> "$GITHUB_OUTPUT"
-          echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py artifact_name "${artifact_name}"
 
           secure_runtime_artifact_name="secure-runtime-qualification-${SOURCE_SHA}-${VERSION}-${REQUEST_ID}"
           secure_runtime_artifact_json="$(jq -ce \
@@ -188,7 +193,7 @@ jobs:
           secure_runtime_artifact_digest="$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$")) | sub("^sha256:"; "")' <<<"${secure_runtime_artifact_json}")"
           echo "secure_runtime_artifact_id=${secure_runtime_artifact_id}" >> "$GITHUB_OUTPUT"
           echo "secure_runtime_artifact_digest=${secure_runtime_artifact_digest}" >> "$GITHUB_OUTPUT"
-          echo "secure_runtime_artifact_name=${secure_runtime_artifact_name}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py secure_runtime_artifact_name "${secure_runtime_artifact_name}"
 
   signing-configuration:
     name: Verify Native Signing Configuration
@@ -515,6 +520,11 @@ jobs:
     outputs:
       signing_backend: ${{ steps.evidence.outputs.signing_backend }}
     steps:
+      - name: Checkout signing collection control
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Download legacy signed binaries
         if: ${{ inputs.windows_signing_backend == 'legacy-pfx' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -627,7 +637,7 @@ jobs:
           $evidence | ConvertTo-Json -Depth 6 | Set-Content windows-signing-evidence.json -Encoding utf8NoBOM
           if ($env:WINDOWS_SIGNING_BACKEND -notin @('signpath', 'legacy-pfx')) { throw "Invalid Windows signing backend." }
           $validatedBackend = $env:WINDOWS_SIGNING_BACKEND
-          "signing_backend=$validatedBackend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          python scripts/write_github_output.py signing_backend $validatedBackend
 
       - name: Upload signed Windows binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -662,6 +672,12 @@ jobs:
       manifest_artifact_name: ${{ steps.identity.outputs.manifest_artifact_name }}
       container_artifact_name: ${{ steps.identity.outputs.container_artifact_name }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
       - name: Resolve candidate identity
         id: identity
         env:
@@ -673,15 +689,9 @@ jobs:
             exit 1
           fi
           validated_version="${VERSION}"
-          echo "artifact_name=release-candidate-${GITHUB_SHA}-${validated_version}" >> "$GITHUB_OUTPUT"
-          echo "manifest_artifact_name=release-candidate-manifest-${GITHUB_SHA}-${validated_version}" >> "$GITHUB_OUTPUT"
-          echo "container_artifact_name=release-container-payload-${GITHUB_SHA}-${validated_version}" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
+          python3 scripts/write_github_output.py artifact_name "release-candidate-${GITHUB_SHA}-${validated_version}"
+          python3 scripts/write_github_output.py manifest_artifact_name "release-candidate-manifest-${GITHUB_SHA}-${validated_version}"
+          python3 scripts/write_github_output.py container_artifact_name "release-container-payload-${GITHUB_SHA}-${validated_version}"
 
       - name: Validate candidate identity
         env:

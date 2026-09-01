@@ -103,8 +103,8 @@ jobs:
           fi
 
           validated_version="${VERSION}"
-          echo "version=${validated_version}" >> "$GITHUB_OUTPUT"
-          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py version "${validated_version}"
+          python3 scripts/write_github_output.py release_tag "${release_tag}"
 
       - name: Download immutable qualified chart
         env:

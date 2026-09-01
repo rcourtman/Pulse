@@ -138,11 +138,11 @@ jobs:
               exit 1
               ;;
           esac
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          echo "asset_source=$asset_source" >> "$GITHUB_OUTPUT"
-          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py tag "$tag"
+          python3 scripts/write_github_output.py version "$version"
+          python3 scripts/write_github_output.py repo "$repo"
+          python3 scripts/write_github_output.py asset_source "$asset_source"
+          python3 scripts/write_github_output.py release_id "$release_id"
           echo "Resolved: tag=$tag version=$version repo=$repo asset_source=$asset_source release_id=${release_id:-none}"
 
       - name: Download install.sh + sshsig + linux-amd64 tarball

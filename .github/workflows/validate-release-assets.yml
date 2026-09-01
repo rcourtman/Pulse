@@ -304,7 +304,7 @@ jobs:
             if docker pull "$IMAGE" 2>/dev/null; then
               echo "✓ Docker image available: $IMAGE"
               echo "image_available=true" >> $GITHUB_OUTPUT
-              echo "image=$IMAGE" >> $GITHUB_OUTPUT
+              python3 scripts/write_github_output.py image "$IMAGE"
               exit 0
             fi
 

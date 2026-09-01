@@ -108,6 +108,12 @@ jobs:
       visual_capture_count: ${{ steps.visual_plan.outputs.capture_count }}
       visual_comparison_tag: ${{ steps.visual_plan.outputs.comparison_tag }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
       - name: Extract version
         id: extract
         env:
@@ -140,18 +146,12 @@ jobs:
 
           SOURCE_BRANCH="${GITHUB_REF_NAME}"
           HISTORICAL_ASSET_BACKFILL_ONLY="${HISTORICAL_ASSET_BACKFILL_INPUT}"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          python3 scripts/write_github_output.py tag "${TAG}"
+          python3 scripts/write_github_output.py version "${VERSION}"
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "source_branch=${SOURCE_BRANCH}" >> $GITHUB_OUTPUT
-          echo "historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}" >> $GITHUB_OUTPUT
+          python3 scripts/write_github_output.py historical_asset_backfill_only "${HISTORICAL_ASSET_BACKFILL_ONLY}"
           echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}, Branch: ${SOURCE_BRANCH}, HistoricalBackfillOnly: ${HISTORICAL_ASSET_BACKFILL_ONLY}"
-
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
 
       - name: Resolve required release branch
         id: branch_policy
@@ -164,7 +164,7 @@ jobs:
             echo "::error::Invalid release line. Version ${WORKFLOW_OUTPUT_1} must run from ${REQUIRED_BRANCH}, but workflow ref is ${WORKFLOW_OUTPUT_2}."
             exit 1
           fi
-          echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py required_branch "${REQUIRED_BRANCH}"
           echo "[OK] Governed release branch for ${WORKFLOW_OUTPUT_1} is ${REQUIRED_BRANCH}"
 
       - name: Validate release-note visual plan
@@ -956,11 +956,11 @@ jobs:
           RELEASE_PUBLISHED_AT=$(echo "$EXISTING_RELEASE" | jq -r '.published_at // empty')
           RELEASE_ACTIVATION_COMMITTED=$(echo "$EXISTING_RELEASE" | jq -r 'any(.assets[]?; .name == "release-activation.json")')
 
-          echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
-          echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
-          echo "release_is_draft=${RELEASE_IS_DRAFT}" >> $GITHUB_OUTPUT
-          echo "release_published_at=${RELEASE_PUBLISHED_AT}" >> $GITHUB_OUTPUT
-          echo "release_activation_committed=${RELEASE_ACTIVATION_COMMITTED}" >> $GITHUB_OUTPUT
+          python3 scripts/write_github_output.py release_id "${RELEASE_ID}"
+          python3 scripts/write_github_output.py release_url "${RELEASE_URL}"
+          python3 scripts/write_github_output.py release_is_draft "${RELEASE_IS_DRAFT}"
+          python3 scripts/write_github_output.py release_published_at "${RELEASE_PUBLISHED_AT}"
+          python3 scripts/write_github_output.py release_activation_committed "${RELEASE_ACTIVATION_COMMITTED}"
 
       - name: Create tag
         env:
@@ -1507,6 +1507,11 @@ jobs:
     outputs:
       r2_prefix: ${{ steps.publish.outputs.r2_prefix }}
     steps:
+      - name: Checkout private-runtime staging control
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Dispatch and verify private Pro runtime staging
         id: publish
         env:
@@ -1584,7 +1589,7 @@ jobs:
             exit 1
           fi
           r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"
-          echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py r2_prefix "${r2_prefix}"
           echo "Dispatching private Pro build for ${TAG} with R2 prefix ${r2_prefix}."
           build_dispatch="$(
             jq -n \

@@ -45,6 +45,13 @@ jobs:
       packages: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Extract tag from trigger
         id: extract
         env:
@@ -59,16 +66,9 @@ jobs:
             exit 1
           fi
 
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
+          python3 scripts/write_github_output.py tag "${TAG}"
+          python3 scripts/write_github_output.py prerelease "${PRERELEASE}"
           echo "Promoting floating tags for ${TAG} (prerelease: ${PRERELEASE})"
-
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Validate release line policy
         env:

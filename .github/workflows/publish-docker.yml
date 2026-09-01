@@ -75,8 +75,8 @@ jobs:
             echo "Detected prerelease version"
           fi
 
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          python3 scripts/write_github_output.py tag "${TAG}"
+          python3 scripts/write_github_output.py version "${VERSION}"
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Publishing Docker images for ${TAG} (prerelease: ${IS_PRERELEASE})"
 

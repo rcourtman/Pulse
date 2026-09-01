@@ -439,7 +439,38 @@ jobs:
             4,
         )
 
-    def test_accepts_validated_command_file_values(self) -> None:
+    def test_rejects_aliased_workflow_data_in_github_command_files(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          alias="$RELEASE_NAME"
+          copied="prefix-${alias}"
+          printf 'release=%s\\n' "$copied" >> "$GITHUB_OUTPUT"
+          trimmed="${RELEASE_NAME#v}"
+          printf 'trimmed=%s\\n' "${trimmed}" >> "$GITHUB_OUTPUT"
+      - shell: pwsh
+        env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          $alias = $env:RELEASE_NAME
+          "release=$alias" >> $env:GITHUB_OUTPUT
+          [string] $braced = "${env:RELEASE_NAME}"
+          "braced=$braced" >> $env:GITHUB_OUTPUT
+"""
+        )
+        self.assertEqual(
+            sum("validated or encoded" in finding for finding in findings),
+            4,
+        )
+
+    def test_accepts_safe_command_file_writer_for_validated_values(self) -> None:
         findings = self.audit(
             """permissions: {}
 jobs:
@@ -452,7 +483,7 @@ jobs:
         run: |
           [[ "$RELEASE_INPUT" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]
           validated_release="$RELEASE_INPUT"
-          printf 'release=%s\\n' "$validated_release" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py release "$validated_release"
 """
         )
         self.assertEqual(findings, [])

@@ -180,7 +180,9 @@ jobs:
           TAG="${WORKFLOW_OUTPUT_1}"
           TAG_REF="refs/tags/${TAG}"
           PROFILE_OUTPUT="$(bash .github/scripts/resolve-demo-runtime-profile.sh "${TAG_REF}")"
-          printf '%s\n' "$PROFILE_OUTPUT" >> "$GITHUB_OUTPUT"
+          while IFS='=' read -r output_name output_value; do
+            python3 scripts/write_github_output.py "$output_name" "$output_value"
+          done <<< "$PROFILE_OUTPUT"
           printf 'Resolved target-compatible demo runtime profile for %s:\n%s\n' "$TAG" "$PROFILE_OUTPUT"
 
   update-demo:

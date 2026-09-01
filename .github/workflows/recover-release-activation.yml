@@ -134,12 +134,12 @@ jobs:
 
           run_created_date=$(jq -r '.created_at | fromdateiso8601 | strftime("%Y%m%d")' "${source_run}")
           r2_prefix="${TAG}-pro-${run_created_date}-${SOURCE_RELEASE_RUN_ID}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py version "${version}"
           echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
           echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=${is_prerelease}" >> "$GITHUB_OUTPUT"
-          echo "manifest_artifact=${manifest_artifact}" >> "$GITHUB_OUTPUT"
-          echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py manifest_artifact "${manifest_artifact}"
+          python3 scripts/write_github_output.py r2_prefix "${r2_prefix}"
           echo "[OK] ${TAG} is eligible for activation-only recovery from run ${SOURCE_RELEASE_RUN_ID}."
 
       - name: Revalidate the immutable staged candidate

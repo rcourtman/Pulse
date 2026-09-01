@@ -64,7 +64,9 @@ jobs:
           set -euo pipefail
           TAG="${WORKFLOW_OUTPUT_1}"
           PROFILE_OUTPUT="$(bash .github/scripts/resolve-demo-runtime-profile.sh "refs/tags/${TAG}")"
-          printf '%s\n' "$PROFILE_OUTPUT" >> "$GITHUB_OUTPUT"
+          while IFS='=' read -r output_name output_value; do
+            python3 scripts/write_github_output.py "$output_name" "$output_value"
+          done <<< "$PROFILE_OUTPUT"
           printf 'Resolved stable demo recovery profile for %s:\n%s\n' "$TAG" "$PROFILE_OUTPUT"
 
       - name: Connect to the governed demo network

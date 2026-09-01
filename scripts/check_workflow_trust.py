@@ -28,7 +28,11 @@ ENV_ENTRY_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*?)\s*$")
 EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
 GITHUB_COMMAND_FILE_RE = re.compile(r"\bGITHUB_(?:ENV|OUTPUT|PATH|STATE)\b")
 SHELL_ASSIGNMENT_RE = re.compile(
-    r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*="
+    r"^\s*(?:(?:export|local|readonly)\s+|declare(?:\s+-[A-Za-z]+)?\s+)?"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*="
+)
+POWERSHELL_ASSIGNMENT_RE = re.compile(
+    r"^\s*(?:\[[^\]\r\n]+\]\s*)?\$([A-Za-z_][A-Za-z0-9_]*)\s*="
 )
 # Workflow-call and dispatch inputs are data, not shell source. The legacy
 # github.event.inputs alias is identical data, and repository_dispatch callers
@@ -250,7 +254,8 @@ def _shell_variable_reference(line: str, name: str) -> bool:
     escaped = re.escape(name)
     return bool(
         re.search(
-            rf"(?:\$\{{{escaped}(?::?[-+?=][^}}]*)?\}}|\${escaped}\b|\$env:{escaped}\b)",
+            rf"(?:\$\{{{escaped}(?=[^A-Za-z0-9_])|\${escaped}\b|"
+            rf"\$env:{escaped}\b|\$\{{env:{escaped}\}})",
             line,
             re.IGNORECASE,
         )
@@ -277,28 +282,44 @@ def _audit_command_file_data(
         for name, value in _step_env_bindings(lines, run_index).items()
         if _is_untrusted_expression(value)
     }
-    event_payload_variables: set[str] = set()
+    unsafe_names = set(bindings)
 
     for script_index, script_line in _run_script_lines(lines, run_index):
         assignment = SHELL_ASSIGNMENT_RE.match(script_line)
-        if assignment and "GITHUB_EVENT_PATH" in script_line:
-            event_payload_variables.add(assignment.group(1))
+        if assignment is None:
+            assignment = POWERSHELL_ASSIGNMENT_RE.match(script_line)
+        if assignment:
+            assigned_name = assignment.group(1)
+            assignment_value = script_line[assignment.end() :]
+            if (
+                "GITHUB_EVENT_PATH" in assignment_value
+                or any(
+                    _shell_variable_reference(assignment_value, name)
+                    for name in unsafe_names
+                )
+            ):
+                unsafe_names.add(assigned_name)
+            else:
+                # A later literal or trusted assignment replaces the prior
+                # value. Keeping stale taint would hide real findings in noise
+                # and encourage suppressions around the policy.
+                unsafe_names.discard(assigned_name)
 
         if not GITHUB_COMMAND_FILE_RE.search(script_line):
             continue
-        unsafe_names = sorted(
+        referenced_unsafe_names = sorted(
             name
-            for name in (*bindings, *event_payload_variables)
+            for name in unsafe_names
             if _shell_variable_reference(script_line, name)
         )
-        if unsafe_names:
+        if referenced_unsafe_names:
             findings.append(
                 Finding(
                     path,
                     script_index + 1,
                     "untrusted workflow data must be validated or encoded "
                     "before writing to GitHub command files "
-                    f"({', '.join(unsafe_names)})",
+                    f"({', '.join(referenced_unsafe_names)})",
                 )
             )
     return findings

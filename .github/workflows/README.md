@@ -44,10 +44,13 @@ would turn their value back into shell source.
 
 Passing data through `env` does not make it safe to append to the runner's
 `GITHUB_OUTPUT`, `GITHUB_ENV`, `GITHUB_PATH`, or `GITHUB_STATE` command files.
-The audit rejects direct writes of workflow data and values read from the event
-payload; a step must first constrain the value to its exact one-line grammar or
-encode it with the command-file multiline protocol. This prevents embedded
-newlines from creating additional outputs or environment entries.
+The audit follows workflow data and values read from the event payload through
+local Bash and PowerShell assignments before rejecting command-file writes, so
+renaming a value is not mistaken for validation. Use
+`scripts/write_github_output.py` for output data: it validates the output name
+and chooses a random multiline delimiter that cannot collide with the value.
+This prevents embedded newlines from creating additional outputs or
+environment entries.
 
 Workflows triggered by `pull_request` cannot reference confidential repository
 secrets. Canonical governance therefore keeps its pull-request checks local to
