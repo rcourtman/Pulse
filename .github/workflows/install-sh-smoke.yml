@@ -260,6 +260,9 @@ jobs:
 
           # jrei/systemd-debian:12 is a community systemd-in-Docker image used
           # for Ansible / Molecule testing — small, no Pulse-specific assumptions.
+          # Keep the privileged test environment bound to an immutable index.
+          # A floating image here would let a registry retag replace code in a
+          # release-gating job that needs contents:write to read draft assets.
           # GHA ubuntu-24.04 runners use cgroup v2 unified hierarchy; without
           # --cgroupns=host the container gets its own cgroup namespace and
           # systemd PID 1 exits before it can mount the cgroup tree, causing
@@ -274,7 +277,7 @@ jobs:
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             -v "$(pwd)/smoke-workspace:/smoke" \
             -p 7655:7655 \
-            jrei/systemd-debian:12
+            jrei/systemd-debian:12@sha256:61d70dc3e574337bd9df794674a60ae73113460fff16ab41a2d234b4a11dcd98
 
           echo "Waiting for systemd to be ready inside the container..."
           for i in $(seq 1 30); do

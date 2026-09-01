@@ -79,6 +79,14 @@ the downloaded byte count and SHA-256 value with GitHub's release-asset
 metadata, so a valid-looking JSON response cannot silently replace or truncate
 the packet that the release advertises.
 
+`stable-install-continuity.yml` complements those byte-identity checks with a
+weekly reinstall of the advertised stable release from its public assets. It
+admits only the immutable stable identity accepted by the same continuity
+validator, calls the release install-and-boot smoke under a read-only token,
+and verifies the live service health and exact version. The privileged systemd
+smoke environment is digest-pinned because a floating container image would
+otherwise be an unreviewed code path inside the release gate.
+
 Future release candidates also carry
 `release-build-provenance.sigstore.json`, produced by the hosted
 `build-release-candidate.yml` job after complete candidate validation. The

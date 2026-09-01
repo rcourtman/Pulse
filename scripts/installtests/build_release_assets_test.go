@@ -3009,7 +3009,7 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 		`grep -q 'Pulse Unified Agent Installer' install.sh`,
 		`grep -qE '^[[:space:]]*--version\)' install.sh`,
 		// End-to-end install in a privileged systemd container.
-		`jrei/systemd-debian:12`,
+		`jrei/systemd-debian:12@sha256:61d70dc3e574337bd9df794674a60ae73113460fff16ab41a2d234b4a11dcd98`,
 		`bash install.sh --archive /smoke/${tarball} --disable-auto-updates`,
 		`systemctl is-active pulse`,
 		// curl --retry handles its own poll loop instead of a bash for-loop.
@@ -3027,6 +3027,39 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 	if !strings.Contains(smokeJob, "contents: write") {
 		t.Fatal("install-sh-smoke.yml smoke job must grant contents: write to read unpublished draft release assets")
 	}
+}
+
+func TestStableInstallContinuityReinstallsLatestReleaseReadOnly(t *testing.T) {
+	workflowPath := repoFile(".github", "workflows", "stable-install-continuity.yml")
+	assertFileContainsAll(t, workflowPath,
+		`name: Stable Install Continuity`,
+		`schedule:`,
+		`cron: '47 4 * * 3'`,
+		`workflow_dispatch:`,
+		`contents: read`,
+		`"repos/${REPOSITORY}/releases/latest"`,
+		`scripts/release_control/release_continuity.py release`,
+		`version=${tag#v}`,
+		`uses: ./.github/workflows/install-sh-smoke.yml`,
+		`tag: ${{ needs.resolve.outputs.tag }}`,
+		`version: ${{ needs.resolve.outputs.version }}`,
+		`asset_source: published`,
+	)
+
+	workflowBytes, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read stable install continuity workflow: %v", err)
+	}
+	workflow := string(workflowBytes)
+	if strings.Contains(workflow, "contents: write") {
+		t.Fatal("stable install continuity must remain read-only")
+	}
+	assertFileContainsAll(t, repoFile(".github", "workflows", "README.md"),
+		`stable-install-continuity.yml`,
+		`weekly reinstall of the advertised stable release`,
+		`read-only token`,
+		`digest-pinned`,
+	)
 }
 
 func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {

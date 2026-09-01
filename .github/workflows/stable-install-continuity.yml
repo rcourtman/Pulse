@@ -1,0 +1,72 @@
+name: Stable Install Continuity
+
+# Release publication proves the staged systemd installer once. Re-run the
+# same public download and boot path weekly so hosting, package-repository,
+# runner, and smoke-environment drift cannot leave an authenticated but no
+# longer installable stable release advertised indefinitely.
+on:
+  schedule:
+    - cron: '47 4 * * 3'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-install-continuity
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve trusted stable release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Checkout release verification controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve immutable advertised stable release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release_json="$(mktemp)"
+          diagnostic="$(mktemp)"
+          cleanup() {
+            if [ -s "${diagnostic}" ]; then
+              cat "${diagnostic}" >> "${GITHUB_STEP_SUMMARY}"
+            fi
+            rm -f "${release_json}" "${diagnostic}"
+          }
+          trap cleanup EXIT
+
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${REPOSITORY}/releases/latest" > "${release_json}"
+          python3 scripts/release_control/release_continuity.py release \
+            --release-json "${release_json}" \
+            --diagnostic "${diagnostic}" \
+            --github-output "${GITHUB_OUTPUT}"
+
+          tag="$(jq -er '.tag_name' "${release_json}")"
+          echo "version=${tag#v}" >> "${GITHUB_OUTPUT}"
+
+  smoke:
+    name: Reinstall advertised stable release
+    needs: resolve
+    permissions:
+      contents: read
+    uses: ./.github/workflows/install-sh-smoke.yml
+    with:
+      tag: ${{ needs.resolve.outputs.tag }}
+      version: ${{ needs.resolve.outputs.version }}
+      repository: ${{ github.repository }}
+      asset_source: published
