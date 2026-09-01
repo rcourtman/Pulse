@@ -39,7 +39,7 @@ class RenderReleaseBodyTest(unittest.TestCase):
             "SSO access no longer implies administrator access",
             "Partial Proxmox cluster coverage is visible",
             "Agent Doctor reports privilege-helper degradation",
-            "Release workflow checkouts retain their security boundary",
+            "Privileged workflows stay bound to canonical code",
             "map at least one trusted IdP group to the built-in `admin` role before upgrading",
             "The rollback target is stable `v6.4.1`",
         ):
