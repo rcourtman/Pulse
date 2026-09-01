@@ -708,11 +708,11 @@ describe('PatrolAttentionWorkbench', () => {
       }),
     );
 
-    expect(await screen.findByText(/Need a lasting Patrol finding outcome/i)).toHaveTextContent(
-      /remember expected behavior/i,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Open finding options' }));
-    expect(onOpenFindings).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText(/Need a lasting outcome for a Patrol finding on this resource/i),
+    ).toHaveTextContent(/remember expected behavior/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Find lasting options for this resource' }));
+    expect(onOpenFindings).toHaveBeenCalledWith(active);
 
     fireEvent.click(screen.getByText('More ways to manage this issue'));
     expect(screen.getByText(/Mark reviewed removes this occurrence/i)).toHaveTextContent(

@@ -137,7 +137,7 @@ export function PatrolAttentionWorkbench(
     autonomyLevel?: PatrolAutonomyLevel;
     autonomyLocked?: boolean;
     pendingActionCount?: number;
-    onOpenFindings?: () => void;
+    onOpenFindings?: (item: AttentionItem) => void;
   } = {},
 ) {
   const location = useLocation();
@@ -808,7 +808,7 @@ function AttentionDetail(props: {
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string) => Promise<void>;
-  onOpenFindings?: () => void;
+  onOpenFindings?: (item: AttentionItem) => void;
 }) {
   const [copiedResourceId, setCopiedResourceId] = createSignal('');
   const detail = () => props.detail;
@@ -1246,7 +1246,7 @@ function AttentionLifecycleControls(props: {
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string) => Promise<void>;
-  onOpenFindings?: () => void;
+  onOpenFindings?: (item: AttentionItem) => void;
 }) {
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
@@ -1346,16 +1346,16 @@ function AttentionLifecycleControls(props: {
         <Show when={props.onOpenFindings}>
           <div class="mt-3 flex flex-col gap-3 rounded-md border border-border-subtle bg-surface px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p class="text-xs leading-5 text-muted">
-              Need a lasting Patrol finding outcome? Resolve it, dismiss it as not an issue,
-              remember expected behavior, or create a suppression rule.
+              Need a lasting outcome for a Patrol finding on this resource? Resolve it, dismiss it
+              as not an issue, remember expected behavior, or create a suppression rule.
             </p>
             <Button
               variant="secondary"
               size="sm"
               class="min-h-11 shrink-0 sm:min-h-0"
-              onClick={() => props.onOpenFindings?.()}
+              onClick={() => props.onOpenFindings?.(props.detail.item)}
             >
-              Open finding options
+              Find lasting options for this resource
             </Button>
           </div>
         </Show>

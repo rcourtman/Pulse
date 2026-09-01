@@ -43,7 +43,10 @@ import {
   presentationPolicyHidesUpgradePrompts,
 } from '@/stores/sessionPresentationPolicy';
 
-export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceState }) {
+export function PatrolIntelligenceWorkspace(props: {
+  state: PatrolIntelligenceState;
+  findingResourceId?: string;
+}) {
   const state = props.state;
   const queueDisplayGroups = createMemo(() =>
     buildPatrolFindingDisplayGroups(state.findingsTabBadgeFindings()),
@@ -249,6 +252,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           when={isSetupOnly()}
           fallback={
             <FindingsPanel
+              resourceId={props.findingResourceId}
               filterOverride={state.selectedRun() ? 'all' : state.findingsFilterOverride()}
               filterFindingIds={state.selectedRunFindingIds()}
               scopeResourceIds={state.selectedRunScopeResourceIds()}

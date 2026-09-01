@@ -12,14 +12,21 @@ import { PatrolIntelligenceWorkspace } from './PatrolIntelligenceWorkspace';
 import { PatrolAttentionWorkbench } from './PatrolAttentionWorkbench';
 import { PatrolObjectivesPanel } from './PatrolObjectivesPanel';
 import { PatrolRecentWorkPanel } from './PatrolRecentWorkPanel';
+import type { AttentionItem } from '@/api/patrolAttention';
 
 type PatrolWorkspaceView = 'inbox' | 'protection' | 'activity';
 const PATROL_WORKSPACE_VIEWS: readonly PatrolWorkspaceView[] = ['inbox', 'protection', 'activity'];
+
+interface FindingResourceScope {
+  id: string;
+  name: string;
+}
 
 export function PatrolIntelligenceSurface() {
   const state = usePatrolIntelligenceState();
   const [activeView, setActiveView] = createSignal<PatrolWorkspaceView>('inbox');
   const [findingsOpen, setFindingsOpen] = createSignal(false);
+  const [findingResourceScope, setFindingResourceScope] = createSignal<FindingResourceScope>();
   const workspaceTabs: Partial<Record<PatrolWorkspaceView, HTMLButtonElement>> = {};
   let findingsPanel: HTMLDetailsElement | undefined;
   const activateView = (view: PatrolWorkspaceView, focus = false) => {
@@ -42,7 +49,14 @@ export function PatrolIntelligenceSurface() {
     event.preventDefault();
     activateView(PATROL_WORKSPACE_VIEWS[requestedIndex], true);
   };
-  const openFindings = () => {
+  const openFindings = (item: AttentionItem) => {
+    state.setActiveTab('findings');
+    state.setSelectedRun(null);
+    state.setFindingsFilterOverride('active');
+    setFindingResourceScope({
+      id: item.subjectResourceId,
+      name: item.subjectResourceName || item.subjectResourceId,
+    });
     activateView('activity');
     setFindingsOpen(true);
     queueMicrotask(() => {
@@ -170,7 +184,10 @@ export function PatrolIntelligenceSurface() {
                 class="group flex min-h-20 w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5"
                 aria-expanded={findingsOpen()}
                 aria-controls="patrol-operational-records"
-                onClick={() => setFindingsOpen((open) => !open)}
+                onClick={() => {
+                  setFindingResourceScope(undefined);
+                  setFindingsOpen((open) => !open);
+                }}
               >
                 <span class="flex min-w-0 items-start gap-3">
                   <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-alt text-muted">
@@ -206,12 +223,41 @@ export function PatrolIntelligenceSurface() {
             <div
               class={`space-y-4 border-t border-border p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
             >
-              <p class="text-xs leading-5 text-muted">
-                Choose Finding options on an active finding to resolve it, dismiss it, remember it
-                as expected, or create a suppression rule. Check history remains available here for
-                the forensic trail.
-              </p>
-              <PatrolIntelligenceWorkspace state={state} />
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-xs leading-5 text-muted">
+                  <Show
+                    when={findingResourceScope()}
+                    fallback={
+                      <>
+                        Choose Finding options on an active finding to resolve it, dismiss it,
+                        remember it as expected, or create a suppression rule. Check history remains
+                        available here for the forensic trail.
+                      </>
+                    }
+                  >
+                    {(scope) => (
+                      <>
+                        Showing Patrol findings for {scope().name}. Choose Finding options for a
+                        lasting outcome. Alert lifecycle controls remain separate from finding
+                        outcomes.
+                      </>
+                    )}
+                  </Show>
+                </p>
+                <Show when={findingResourceScope()}>
+                  <button
+                    type="button"
+                    class="min-h-11 shrink-0 self-start text-xs font-medium text-blue-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 sm:min-h-0 sm:self-auto"
+                    onClick={() => setFindingResourceScope(undefined)}
+                  >
+                    Show all finding options
+                  </button>
+                </Show>
+              </div>
+              <PatrolIntelligenceWorkspace
+                state={state}
+                findingResourceId={findingResourceScope()?.id}
+              />
             </div>
           </details>
         </div>
