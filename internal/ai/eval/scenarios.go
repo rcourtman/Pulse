@@ -1650,3 +1650,55 @@ func NonInteractiveGuardrailScenario() Scenario {
 		},
 	}
 }
+
+// ProxmoxBulkLifecycleActionScenario pins GitHub issue #1782: an operator asks
+// the Assistant to reboot every Proxmox VM matching a name pattern. The
+// Assistant must resolve the targets and then submit one governed
+// pulse_control plan per target (approval stays in Pulse), never end with a
+// report that invents a prerequisite (QEMU guest agent, "discovery binding",
+// "session state") or redirects the operator to manual qm/pct commands.
+//
+// Targets: EVAL_LIFECYCLE_PATTERN (default "win") selects the VM name pattern;
+// EVAL_LIFECYCLE_TARGET_COUNT (default 1) is the minimum number of plans the
+// step must produce. Approvals raised in chat are denied so the eval never
+// executes a reboot; canonical action plans wait for approval in Pulse and
+// are left unapproved.
+func ProxmoxBulkLifecycleActionScenario() Scenario {
+	pattern := envOrDefault("EVAL_LIFECYCLE_PATTERN", "win")
+	minTargets := 1
+	if raw := strings.TrimSpace(os.Getenv("EVAL_LIFECYCLE_TARGET_COUNT")); raw != "" {
+		if _, err := fmt.Sscanf(raw, "%d", &minTargets); err != nil || minTargets < 1 {
+			minTargets = 1
+		}
+	}
+	prompt := fmt.Sprintf("Reboot every Proxmox VM whose name contains %q. Do it through Pulse so I can approve each action; do not tell me to run commands myself.", pattern)
+
+	return Scenario{
+		Name:        "Proxmox Bulk Lifecycle Action",
+		Description: "Bulk reboot request ends in one pulse_control plan per resolved VM, not a report with invented prerequisites (issue #1782)",
+		Steps: []Step{
+			{
+				Name:             "Reboot VMs by name pattern",
+				Prompt:           prompt,
+				ApprovalDecision: ApprovalDeny,
+				ApprovalReason:   "eval deny (lifecycle plans stay unapproved)",
+				Assertions: []Assertion{
+					AssertNoError(),
+					AssertHasContent(),
+					AssertToolUsed("pulse_query"),
+					AssertToolUsed("pulse_control"),
+					AssertToolSequence([]string{"pulse_query", "pulse_control"}),
+					AssertToolCallCountAtLeast("pulse_control", minTargets),
+					AssertAnyToolInputContainsAny("pulse_control", "\"reboot\"", "\"restart\""),
+					AssertToolOutputContainsAny("pulse_control", "\"planned\":true", "\"planned\": true"),
+					AssertContentOmitsAll(
+						"qm reboot", "qm start", "qm stop", "pct reboot", "pct start", "pct stop",
+						"guest agent", "guest-agent", "qemu-guest-agent",
+						"discovery binding", "discovery session", "session binding", "session state",
+					),
+					AssertNoResourceIdentityQuestion(),
+				},
+			},
+		},
+	}
+}

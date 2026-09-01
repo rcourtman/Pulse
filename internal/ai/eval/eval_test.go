@@ -118,6 +118,7 @@ func TestAllScenarios(t *testing.T) {
 		RoutingValidationScenario(),
 		LogTailingScenario(),
 		DiscoveryScenario(),
+		ProxmoxBulkLifecycleActionScenario(),
 	}
 
 	allPassed := true
@@ -210,5 +211,25 @@ func TestAllPatrolScenarios(t *testing.T) {
 
 	if !allPassed {
 		t.Fatal("One or more patrol scenarios failed")
+	}
+}
+
+// TestProxmoxBulkLifecycleAction runs the issue #1782 regression: a bulk VM
+// reboot request must end in governed pulse_control plans, not a report.
+// Run with: go test -v ./internal/ai/eval -run TestProxmoxBulkLifecycleAction -live
+// Set EVAL_LIFECYCLE_PATTERN and EVAL_LIFECYCLE_TARGET_COUNT for the estate.
+func TestProxmoxBulkLifecycleAction(t *testing.T) {
+	if !*runLiveEval {
+		t.Skip("Skipping live eval test. Use -live flag to run against live Pulse API")
+	}
+
+	runner := NewRunner(DefaultConfig())
+	scenario := ProxmoxBulkLifecycleActionScenario()
+
+	result := runner.RunScenario(scenario)
+	runner.PrintSummary(result)
+
+	if !result.Passed {
+		t.Fatalf("Scenario '%s' failed", scenario.Name)
 	}
 }
