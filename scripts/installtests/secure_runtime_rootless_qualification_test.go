@@ -1081,7 +1081,15 @@ func rootlessQualUserStateClean(d rootlessQualDaemon) bool {
 func rootlessQualStopUnit(t *testing.T, unit string) {
 	t.Helper()
 	rootlessQualCommand(t, 30*time.Second, "systemctl", "stop", unit)
-	rootlessQualCommand(t, 30*time.Second, "systemctl", "reset-failed", unit)
+	resetOutput, resetErr := rootlessQualCommandError(30*time.Second, "systemctl", "reset-failed", unit)
+	if resetErr == nil {
+		return
+	}
+	loadState, stateErr := rootlessQualCommandError(30*time.Second, "systemctl", "show", "--property=LoadState", "--value", unit)
+	if stateErr == nil && strings.TrimSpace(loadState) == "not-found" {
+		return
+	}
+	t.Fatalf("systemctl reset-failed %s: %v\n%s", unit, resetErr, resetOutput)
 }
 
 func rootlessQualBestEffortStop(units ...string) {
@@ -1265,6 +1273,37 @@ func TestRootlessQualificationBaselineUsesReportSemanticShape(t *testing.T) {
 	digest := rootlessQualDigestReport(report)
 	if baseline.Count != digest.Count || baseline.SemanticDigest != digest.SemanticDigest {
 		t.Fatalf("runtime baseline and report semantics diverged: baseline=%+v report=%+v", baseline, digest)
+	}
+}
+
+func TestRootlessQualificationStopAcceptsCollectedTransientUnit(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "systemctl.log")
+	systemctlPath := filepath.Join(tempDir, "systemctl")
+	script := `#!/bin/sh
+printf '%s\n' "$*" >>"$ROOTLESS_QUAL_SYSTEMCTL_LOG"
+case "$1" in
+  stop) exit 0 ;;
+  reset-failed) echo 'Unit is not loaded.' >&2; exit 1 ;;
+  show) echo 'not-found'; exit 0 ;;
+esac
+exit 2
+`
+	if err := os.WriteFile(systemctlPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ROOTLESS_QUAL_SYSTEMCTL_LOG", logPath)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	rootlessQualStopUnit(t, "pulse-rootless-docker")
+	logText := string(rootlessQualReadFile(t, logPath))
+	for _, command := range []string{
+		"stop pulse-rootless-docker",
+		"reset-failed pulse-rootless-docker",
+		"show --property=LoadState --value pulse-rootless-docker",
+	} {
+		if !strings.Contains(logText, command) {
+			t.Fatalf("systemctl lifecycle did not execute %q: %s", command, logText)
+		}
 	}
 }
 
