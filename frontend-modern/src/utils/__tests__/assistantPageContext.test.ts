@@ -41,33 +41,6 @@ describe('assistantPageContext', () => {
     expect(presentation.context.briefing?.title).toBe('Patrol attached');
   });
 
-  it('attaches the fleet-wide Home context to Assistant launches', () => {
-    const presentation = getAssistantPageContext('/home');
-
-    expect(presentation).toMatchObject({
-      ariaLabel: 'Ask Pulse Assistant about Home',
-      commandDescription: 'Use the current Home view as context',
-      commandLabel: 'Ask about Home',
-      label: 'Home',
-      title: 'Ask Pulse Assistant about Home',
-    });
-    expect(presentation.context).toMatchObject({
-      targetType: 'pulse-view',
-      targetId: '/home',
-      context: {
-        name: 'Home',
-        route: '/home',
-        surface: 'home',
-      },
-      briefing: {
-        sourceLabel: 'Current view',
-        title: 'Home attached',
-        subject: 'Home view',
-        statusLabel: 'Context only',
-      },
-    });
-  });
-
   it('falls back to current-view context for unowned routes', () => {
     const presentation = getAssistantPageContext('custom/report');
 
@@ -82,7 +55,7 @@ describe('assistantPageContext', () => {
   });
 
   it('does not revive retired dashboard or Explore surfaces as Assistant context', () => {
-    const retiredRoutes = ['/dashboard', '/dashboard/explore', '/explore'];
+    const retiredRoutes = ['/dashboard', '/dashboard/explore', '/explore', '/home'];
 
     for (const route of retiredRoutes) {
       const presentation = getAssistantPageContext(route);

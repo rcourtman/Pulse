@@ -1,7 +1,7 @@
 # Home Status Wall Spec
 
 Last updated: 2026-09-01 (review appended)
-Status: IMPLEMENTED, REVISION REQUIRED (tab-reachable; default-route gate stays closed until R1 to R5 below land and are re-exercised in a browser)
+Status: PARKED (not a current signal; reactivate only through a FEATURE_REQUESTS.md ledger entry). Last reviewed 2026-09-01. The tab, route, and page were removed from `main` on 2026-09-01 before any stable release carried them; the server-side verdict engine and the `/api/state/summary` extension from Workstream A stay. R1 to R6 below are the design record if this is ever revived.
 Owner of record: Richard (product decisions), implementing agent (execution)
 Related evidence: GitHub issues #1478, #1433, #1460
 

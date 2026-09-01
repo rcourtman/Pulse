@@ -8,7 +8,6 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
-import HouseIcon from 'lucide-solid/icons/house';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import {
   MobileNavBar,
@@ -43,7 +42,6 @@ import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
   DOCKER_PATH,
-  HOME_PATH,
   KUBERNETES_PATH,
   PROXMOX_PATH,
   STANDALONE_PATH,
@@ -68,7 +66,6 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import { getAssistantPageContext } from '@/utils/assistantPageContext';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
-import { t } from '@/i18n';
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
@@ -113,11 +110,9 @@ function resolvePrimaryNavigationRoute(tab: PrimaryTab, routeMemory: PrimaryRout
   if (!tab.enabled) {
     return tab.settingsRoute;
   }
-  if (isPrimaryPlatformNavId(tab.id)) {
-    const remembered = routeMemory[tab.id];
-    if (remembered && routeBelongsToPrimaryTab(remembered, tab.id)) {
-      return remembered;
-    }
+  const remembered = routeMemory[tab.id as PrimaryPlatformNavId];
+  if (remembered && routeBelongsToPrimaryTab(remembered, tab.id as PrimaryPlatformNavId)) {
+    return remembered;
   }
   return tab.route;
 }
@@ -302,7 +297,6 @@ export function AppLayout(props: AppLayoutProps) {
   // identify the current Pulse surface instead of every page reading
   // as the bare app name.
   const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
-    home: 'Home',
     proxmox: 'Proxmox',
     docker: 'Docker',
     kubernetes: 'Kubernetes',
@@ -505,17 +499,6 @@ export function AppLayout(props: AppLayoutProps) {
     const isVisible = (id: PrimaryTab['id']) =>
       primaryPlatformNavigationIsVisible(visible, id as PrimaryPlatformNavId);
     const allPrimaryTabs: PrimaryTab[] = [
-      {
-        id: 'home',
-        label: t('home.title'),
-        route: HOME_PATH,
-        settingsRoute: HOME_PATH,
-        tooltip: t('home.nav.tooltip'),
-        enabled: true,
-        live: true,
-        icon: HouseIcon,
-        alwaysShow: true,
-      },
       {
         id: 'proxmox',
         label: 'Proxmox',
@@ -959,7 +942,7 @@ export function AppLayout(props: AppLayoutProps) {
                                   </span>
                                 )}
                                 {tab.breakdown && tab.breakdown.warning > 0 && (
-                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900/100 dark:text-amber-950/100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
                                     {tab.breakdown.warning}
                                   </span>
                                 )}
@@ -967,7 +950,7 @@ export function AppLayout(props: AppLayoutProps) {
                             );
                           }
                           return (
-                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900/100 dark:text-amber-950/100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
                               {total}
                             </span>
                           );
