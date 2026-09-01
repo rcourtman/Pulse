@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -465,5 +466,51 @@ func TestCommandClientActionRunnerMessageCatalogRejectsGenericAuthority(t *testi
 		if !allowedActionRunnerMessage(message) {
 			t.Fatalf("action runner rejected typed message %q", message)
 		}
+	}
+}
+
+func TestCommandClient_ReplayedRequestWaitsForInFlightHandlerInsteadOfDropping(t *testing.T) {
+	c := &CommandClient{logger: zerolog.Nop()}
+	conn := &websocket.Conn{}
+	const requestID = "typed-replay"
+
+	release := make(chan struct{})
+	firstRunning := make(chan struct{})
+	secondRan := make(chan struct{})
+	c.launchCancellableRequest(conn, requestID, "typed", func() {
+		close(firstRunning)
+		<-release
+	})
+	select {
+	case <-firstRunning:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first handler did not start")
+	}
+
+	// The replay arrives while the first handler still owns the slot. It must
+	// not be dropped; it runs once the first handler releases the slot, so it
+	// can answer from the durable receipt.
+	c.launchCancellableRequest(conn, requestID, "typed", func() { close(secondRan) })
+	select {
+	case <-secondRan:
+		t.Fatal("replay ran while the first handler still owned the slot")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if c.inflightCancellableRequest(conn, requestID) == nil {
+		t.Fatal("first handler lost its slot before finishing")
+	}
+
+	close(release)
+	select {
+	case <-secondRan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("replay was dropped instead of running after the first handler finished")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for c.inflightCancellableRequest(conn, requestID) != nil && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if c.inflightCancellableRequest(conn, requestID) != nil {
+		t.Fatal("replay handler did not release the slot")
 	}
 }

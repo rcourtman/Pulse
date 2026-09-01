@@ -7443,6 +7443,11 @@ kept running on the Proxmox host). Three coupled guarantees:
    connection-generation-scoped state table. Cancellation or connection
    teardown before handler registration leaves a tombstone that registration
    consumes atomically, so provider handoff cannot start after abandonment.
+   A replay of a request ID that arrives while the previous handler still
+   owns its slot waits for that slot to be released and then runs, so it
+   answers from the durable receipt; it is never dropped as a duplicate,
+   because the server replays exact request IDs to recover receipts and a
+   dropped replay would leave the server waiting out the full timeout.
 3. The unified agent's command client tracks in-flight
    `execute_command`/`read_file` executions and durable host update,
    storage-cleanup, Proxmox guest lifecycle, and container lifecycle/update
@@ -7473,7 +7478,8 @@ Proofs: `internal/agentexec/server_websocket_test.go`
 (`TestCommandClient_handleCancelCommand_CancelsRegisteredRequest`,
 `TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp`,
 `TestCommandClient_CancellationBeforeRegistrationIsConsumedAndConnectionScoped`,
-`TestCommandClient_StaleCleanupCannotEraseReusedRequestCancellation`),
+`TestCommandClient_StaleCleanupCannotEraseReusedRequestCancellation`,
+`TestCommandClient_ReplayedRequestWaitsForInFlightHandlerInsteadOfDropping`),
 `internal/hostagent/proxmox_guest_lifecycle_test.go`
 (`TestProxmoxGuestLifecycleCancellationBeforeHandlerRegistrationSkipsProviderAndPersistsReceipt`), and
 `internal/hostagent/commands_execute_unix_test.go` (timeout and cancel
