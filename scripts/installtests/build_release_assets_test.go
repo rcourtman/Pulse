@@ -3335,6 +3335,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	for _, needle := range []string{
 		`runs-on: ubuntu-24.04`,
 		`actions: write`,
+		`return_run_details: true`,
 		`actions/workflows/compile-release-payload.yml/dispatches`,
 		`X-GitHub-Api-Version: 2026-03-10`,
 		`compiler_run_id: ${{ steps.dispatch.outputs.compiler_run_id }}`,

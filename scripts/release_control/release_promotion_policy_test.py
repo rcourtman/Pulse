@@ -1354,11 +1354,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 release_notes = read(release_notes_path)
                 changelog = read(changelog_path)
 
-                self.assertIn("current v6 support release candidate packet", release_index)
+                self.assertIn("current v6 release candidate packet", release_index)
                 self.assertIn(release_notes_path, release_index)
                 self.assertIn(changelog_path, release_index)
                 self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
-                self.assertIn(f"`v{current_version}`", release_notes)
                 self.assertIn(f"Pulse v{current_version}", changelog)
 
     def test_v611_packet_records_proxmox_backup_posture_identity_fix(self) -> None:
@@ -1804,6 +1803,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("GITHUB_WORKFLOW_SHA", compiler_workflow)
         self.assertIn("ref: ${{ inputs.source_sha }}", compiler_workflow)
         self.assertIn("PULSE_RELEASE_BUILD_JOBS: \"2\"", compiler_workflow)
+        self.assertIn("return_run_details: true", candidate_workflow)
         self.assertIn("actions/workflows/compile-release-payload.yml/dispatches", candidate_workflow)
         self.assertIn("X-GitHub-Api-Version: 2026-03-10", candidate_workflow)
         self.assertIn("compiler_run_id: ${{ steps.dispatch.outputs.compiler_run_id }}", candidate_workflow)

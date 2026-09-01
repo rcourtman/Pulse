@@ -118,7 +118,7 @@ jobs:
             --arg version "${VERSION}" \
             --arg source_sha "${SOURCE_SHA}" \
             --arg request_id "${REQUEST_ID}" \
-            '{ref: $ref, inputs: {version: $version, source_sha: $source_sha, request_id: $request_id}}')"
+            '{ref: $ref, return_run_details: true, inputs: {version: $version, source_sha: $source_sha, request_id: $request_id}}')"
           dispatch_json="$(gh api \
             --method POST \
             -H 'Accept: application/vnd.github+json' \
