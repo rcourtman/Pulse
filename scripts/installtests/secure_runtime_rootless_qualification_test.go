@@ -566,10 +566,7 @@ func rootlessQualStartRootless(t *testing.T, d rootlessQualDaemon) {
 	t.Helper()
 	rootlessQualBestEffortStop(d.rootlessUnit)
 	if d.runtime == "docker" {
-		args := []string{"--quiet", "--collect", "--unit", d.rootlessUnit, "--property=Type=exec", "--property=User=pulse-agent", "--property=Group=pulse-agent", "--",
-			"/usr/bin/env", "HOME=" + d.home, "XDG_RUNTIME_DIR=" + filepath.Dir(d.rootlessSock), "DOCKERD_ROOTLESS_ROOTLESSKIT_NET=host", "DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=none",
-			"/usr/bin/dockerd-rootless.sh", "--host=unix://" + d.rootlessSock, "--data-root=" + filepath.Join(d.home, "docker", "data"), "--exec-root=" + filepath.Join(d.home, "docker", "exec"), "--pidfile=" + filepath.Join(d.home, "docker", "dockerd.pid"), "--storage-driver=vfs", "--iptables=false", "--bridge=none"}
-		rootlessQualCommand(t, 20*time.Second, "systemd-run", args...)
+		rootlessQualCommand(t, 20*time.Second, "systemd-run", rootlessQualDockerStartArgs(d)...)
 	} else {
 		rootlessQualCommand(t, 20*time.Second, "install", "-d", "-o", "pulse-agent", "-g", "pulse-agent", "-m", "0700", filepath.Dir(d.rootlessSock))
 		rootlessQualCommand(t, 20*time.Second, "systemd-run", "--quiet", "--collect", "--unit", d.rootlessUnit, "--property=Type=exec", "--property=User=pulse-agent", "--property=Group=pulse-agent", "--",
@@ -579,6 +576,12 @@ func rootlessQualStartRootless(t *testing.T, d rootlessQualDaemon) {
 	rootlessQualWaitSocket(t, d.rootlessSock)
 	rootlessQualRuntimePing(t, d, true)
 	rootlessQualCaptureIdentity(t, d)
+}
+
+func rootlessQualDockerStartArgs(d rootlessQualDaemon) []string {
+	return []string{"--quiet", "--collect", "--unit", d.rootlessUnit, "--property=Type=exec", "--property=User=pulse-agent", "--property=Group=pulse-agent", "--",
+		"/usr/bin/env", "HOME=" + d.home, "XDG_RUNTIME_DIR=" + filepath.Dir(d.rootlessSock), "DOCKERD_ROOTLESS_ROOTLESSKIT_NET=slirp4netns", "DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=none",
+		"/usr/bin/dockerd-rootless.sh", "--host=unix://" + d.rootlessSock, "--data-root=" + filepath.Join(d.home, "docker", "data"), "--exec-root=" + filepath.Join(d.home, "docker", "exec"), "--pidfile=" + filepath.Join(d.home, "docker", "dockerd.pid"), "--storage-driver=vfs", "--iptables=false", "--bridge=none"}
 }
 
 func rootlessQualStartRootful(t *testing.T, d rootlessQualDaemon) {
@@ -1362,6 +1365,8 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 		`run_runtime docker`, `run_runtime podman`, `PULSE_ROOTLESS_RUNTIME=${runtime_name}`, `--privileged`,
 		`pulse-secure-runtime-rootless-qualification`, `qualification result != \"passed\"`,
 		`openssl pkeyutl -sign -rawin -inkey`, `qualification output directory must have exact mode 0700`,
+		`install -d -m 0700 /opt/pulse/packet`,
+		`capture_qualification_container_diagnostics`, `journalctl --no-pager -n 2000`,
 		`302a300506032b6570032100`, `len(spki) != len(prefix) + 32`,
 	} {
 		if !strings.Contains(script, required) {
@@ -1380,6 +1385,26 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 	trackIndex := strings.Index(script, `CONTAINER_IDS+=("${container_id}")`)
 	if createIndex < 0 || trackIndex < 0 || trackIndex < createIndex {
 		t.Fatal("rootless wrapper must track the exact container ID only after docker create succeeds")
+	}
+	packetDirectoryIndex := strings.Index(script, `install -d -m 0700 /opt/pulse/packet`)
+	packetCopyIndex := strings.Index(script, `docker cp "${PACKET_DIR}/." "${container_id}:/opt/pulse/packet"`)
+	if packetDirectoryIndex < 0 || packetCopyIndex < 0 || packetCopyIndex < packetDirectoryIndex {
+		t.Fatal("rootless wrapper must create the private packet destination in the image before artifact injection")
+	}
+}
+
+func TestRootlessQualificationDockerCommandUsesSupportedNetworkDriver(t *testing.T) {
+	d := rootlessQualDaemon{
+		rootlessUnit: "pulse-rootless-docker",
+		rootlessSock: "/run/user/996/docker.sock",
+		home:         "/var/lib/pulse-rootless",
+	}
+	command := strings.Join(rootlessQualDockerStartArgs(d), "\x00")
+	if !strings.Contains(command, "DOCKERD_ROOTLESS_ROOTLESSKIT_NET=slirp4netns") || !strings.Contains(command, "DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=none") {
+		t.Fatalf("rootless Docker command does not select the supported contained drivers: %q", command)
+	}
+	if strings.Contains(command, "DOCKERD_ROOTLESS_ROOTLESSKIT_NET=host") {
+		t.Fatalf("rootless Docker command selected the unsupported host network driver: %q", command)
 	}
 }
 

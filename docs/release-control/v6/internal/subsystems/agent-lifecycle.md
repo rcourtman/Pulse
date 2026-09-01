@@ -7308,11 +7308,20 @@ action sessions. Unsupported platforms continue to fail closed on migration.
 for collector-owned rootless Docker and Podman proof. It does not extend or
 reinterpret the schema-v7 systemd receipt. The wrapper confines destructive
 runtime setup to disposable nested Ubuntu/systemd hosts with no mounted host
-daemon socket, exercises each runtime in an isolated state root, and emits the
+daemon socket. Qualification artifacts stay out of image layers: the image
+must pre-create their root-owned, mode-`0700` destination before the wrapper
+injects the exact packet into a stopped disposable container. The wrapper
+uses the supported `slirp4netns` rootless Docker driver only inside that outer
+`--network none` boundary; selecting the unsupported `host` RootlessKit driver
+or granting an outer default route is invalid qualification. The wrapper
+exercises each runtime in an isolated state root and emits the
 standalone `secure-runtime-rootless-v1` receipt only after exact socket
 ownership, daemon rootless attestation, installer pinning, direct telemetry,
 same-family typed-helper fallback, recovery without collector restart,
 ambiguity refusal, authority isolation, and cleanup are recorded.
+Any failed runtime test must retain the disposable host's systemd journal and
+container log before strict nonce-bound cleanup; a missing receipt never
+silently substitutes for causal failure evidence.
 
 `scripts/release_control/secure_runtime_rootless_attestation_v1.py` validates
 the secret-free receipt against the governed rootless source manifest and the
