@@ -366,6 +366,92 @@ jobs:
         )
         self.assertEqual(findings, [])
 
+    def test_privileged_jobs_cannot_consume_unsigned_caches(self) -> None:
+        findings = self.audit(
+            f"""permissions:
+  contents: read
+jobs:
+  secret_job:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-go@{PIN}
+        with:
+          cache: true
+      - uses: actions/cache/restore@{PIN}
+        with:
+          path: ~/.cache
+          key: privileged
+      - env:
+          SIGNING_TOKEN: ${{{{ secrets.SIGNING_TOKEN }}}}
+        run: echo signed
+  publisher:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - uses: docker/build-push-action@{PIN}
+        with:
+          cache-from: type=registry,ref=example.invalid/cache
+          cache-to: type=registry,ref=example.invalid/cache
+"""
+        )
+        self.assertEqual(
+            sum("credential- or write-capable jobs" in finding for finding in findings),
+            4,
+        )
+
+    def test_read_only_jobs_can_cache_and_privileged_jobs_can_disable_cache(self) -> None:
+        findings = self.audit(
+            f"""permissions:
+  contents: read
+jobs:
+  read_only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/cache@{PIN}
+        with:
+          path: ~/.cache
+          key: read-only
+  privileged:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-go@{PIN}
+        with:
+          cache: false
+      - uses: actions/setup-node@{PIN}
+        with:
+          package-manager-cache: false
+      - env:
+          SIGNING_TOKEN: ${{{{ secrets.SIGNING_TOKEN }}}}
+        run: echo signed
+"""
+        )
+        self.assertEqual(findings, [])
+
+    def test_privileged_setup_actions_must_disable_automatic_caching(self) -> None:
+        findings = self.audit(
+            f"""permissions: {{}}
+jobs:
+  privileged:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-go@{PIN}
+      - uses: actions/setup-node@{PIN}
+      - env:
+          SIGNING_TOKEN: ${{{{ secrets.SIGNING_TOKEN }}}}
+        run: echo signed
+"""
+        )
+        self.assertEqual(
+            sum("explicitly disable setup-action caches" in finding for finding in findings),
+            2,
+        )
+
     def test_rejects_shell_template_data_but_accepts_env_data(self) -> None:
         findings = self.audit(
             """permissions: {}

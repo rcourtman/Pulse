@@ -42,6 +42,14 @@ be interpolated into the generated shell program. Outputs remain data even
 when an intermediate step parsed or validated them, because later substitution
 would turn their value back into shell source.
 
+Jobs that receive confidential repository secrets or a write-capable
+`GITHUB_TOKEN` do not restore or save caches. This includes setup-action
+dependency caches, direct Actions caches, and external BuildKit cache imports:
+cache contents are unsigned mutable build input, while provenance only records
+what the workflow produced. Read-only jobs may still cache locked dependencies;
+the intentionally public legacy license key is not treated as a confidential
+credential.
+
 Passing data through `env` does not make it safe to append to the runner's
 `GITHUB_OUTPUT`, `GITHUB_ENV`, `GITHUB_PATH`, or `GITHUB_STATE` command files.
 The audit follows workflow data and values read from the event payload through

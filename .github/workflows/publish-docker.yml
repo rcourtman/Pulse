@@ -149,7 +149,6 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           tags: |
             rcourtman/pulse:${{ steps.version.outputs.tag }}
             rcourtman/pulse:${{ steps.version.outputs.version }}
@@ -188,7 +187,6 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-control-plane:buildcache
           tags: |
             rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}
             rcourtman/pulse-control-plane:${{ steps.version.outputs.version }}

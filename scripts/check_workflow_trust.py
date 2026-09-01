@@ -97,6 +97,26 @@ SECRET_CONTEXT_RE = re.compile(
     r")"
 )
 SECRET_CONTEXT_TOKEN_RE = re.compile(r"(?<![\w.])secrets\b")
+CACHE_ACTION_PREFIXES = ("actions/cache@", "actions/cache/")
+SETUP_CACHE_ACTION_PREFIXES = (
+    "actions/setup-go@",
+    "actions/setup-node@",
+    "actions/setup-python@",
+    "gradle/actions/setup-gradle@",
+    "ruby/setup-ruby@",
+)
+AUTO_CACHE_DISABLE_INPUTS = {
+    "actions/setup-go@": "cache",
+    "actions/setup-node@": "package-manager-cache",
+}
+CACHE_INPUT_RE = re.compile(
+    rf"^\s*{_yaml_key('cache')}\s*:\s*(.*?)\s*$", re.IGNORECASE
+)
+EXTERNAL_CACHE_INPUT_RE = re.compile(
+    rf"^\s*(?:{_yaml_key('cache-from')}|{_yaml_key('cache-to')})\s*:",
+    re.IGNORECASE,
+)
+WRITE_PERMISSION_RE = re.compile(r"^\s+[A-Za-z-]+\s*:\s*write\s*$")
 # This value is intentionally public and only uses secret storage as a legacy
 # configuration mechanism. Confidential credentials have no PR exception.
 NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
@@ -149,6 +169,41 @@ def _checkout_block(lines: list[str], uses_index: int) -> list[tuple[int, str]]:
             break
         block.append((index, line))
     return block
+
+
+def _runner_job_ranges(lines: list[str]) -> list[tuple[int, int, int]]:
+    """Return (start, end, indent) for each locally executed workflow job."""
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if JOBS_RE.match(line.split("#", 1)[0])
+        ),
+        None,
+    )
+    if jobs_index is None:
+        return []
+
+    jobs_indent = _indent(lines[jobs_index])
+    job_starts: list[tuple[int, int]] = []
+    for index in range(jobs_index + 1, len(lines)):
+        code = lines[index].split("#", 1)[0]
+        if code.strip() and _indent(code) <= jobs_indent:
+            break
+        match = JOB_RE.match(code)
+        if match and len(match.group(1)) == jobs_indent + 2:
+            job_starts.append((index, len(match.group(1))))
+
+    return [
+        (
+            job_index,
+            job_starts[position + 1][0]
+            if position + 1 < len(job_starts)
+            else len(lines),
+            job_indent,
+        )
+        for position, (job_index, job_indent) in enumerate(job_starts)
+    ]
 
 
 def _run_script_lines(lines: list[str], run_index: int) -> list[tuple[int, str]]:
@@ -326,6 +381,23 @@ def _is_untrusted_expression(value: str) -> bool:
         or UNTRUSTED_GITHUB_CONTEXT_RE.search(expression)
         for expression in EXPRESSION_RE.findall(value)
     )
+
+
+def _has_confidential_secret_reference(lines: list[str]) -> bool:
+    """Return whether workflow lines can resolve a confidential secret."""
+    for line in lines:
+        for expression in EXPRESSION_RE.findall(line.split("#", 1)[0]):
+            static_references = list(SECRET_CONTEXT_RE.finditer(expression))
+            secret_names = {
+                match.group(1) or match.group(3) for match in static_references
+            }
+            if secret_names - NON_CONFIDENTIAL_PULL_REQUEST_SECRETS:
+                return True
+            if len(SECRET_CONTEXT_TOKEN_RE.findall(expression)) != len(
+                static_references
+            ):
+                return True
+    return False
 
 
 def _audit_command_file_data(
@@ -512,33 +584,7 @@ def _audit_workflow_run_trigger(path: Path, lines: list[str]) -> list[Finding]:
 def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
     """Require each locally executed job to declare one bounded time budget."""
     findings: list[Finding] = []
-    jobs_index = next(
-        (
-            index
-            for index, line in enumerate(lines)
-            if JOBS_RE.match(line.split("#", 1)[0])
-        ),
-        None,
-    )
-    if jobs_index is None:
-        return findings
-
-    jobs_indent = _indent(lines[jobs_index])
-    job_starts: list[tuple[int, int]] = []
-    for index in range(jobs_index + 1, len(lines)):
-        code = lines[index].split("#", 1)[0]
-        if code.strip() and _indent(code) <= jobs_indent:
-            break
-        match = JOB_RE.match(code)
-        if match and len(match.group(1)) == jobs_indent + 2:
-            job_starts.append((index, len(match.group(1))))
-
-    for position, (job_index, job_indent) in enumerate(job_starts):
-        end_index = (
-            job_starts[position + 1][0]
-            if position + 1 < len(job_starts)
-            else len(lines)
-        )
+    for job_index, end_index, job_indent in _runner_job_ranges(lines):
         direct_indent = job_indent + 2
         runner_lines: list[int] = []
         timeout_declarations: list[tuple[int, str]] = []
@@ -580,9 +626,116 @@ def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
     return findings
 
 
+def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
+    """Keep unsigned cache state out of credential- and write-capable jobs."""
+    findings: list[Finding] = []
+    top_level_write = any(
+        WRITE_PERMISSION_RE.match(line.split("#", 1)[0]) and _indent(line) == 2
+        for line in lines
+    )
+
+    for job_index, end_index, _ in _runner_job_ranges(lines):
+        job_lines = lines[job_index:end_index]
+        privileged = top_level_write or _has_confidential_secret_reference(
+            job_lines
+        ) or any(
+            WRITE_PERMISSION_RE.match(line.split("#", 1)[0])
+            for line in job_lines
+        )
+        if not privileged:
+            continue
+
+        for relative_index, line in enumerate(job_lines):
+            index = job_index + relative_index
+            code = line.split("#", 1)[0]
+            dependency_match = USES_RE.search(code)
+            if dependency_match:
+                dependency = dependency_match.group(1).strip("'\"").lower()
+                if dependency.startswith(CACHE_ACTION_PREFIXES):
+                    findings.append(
+                        Finding(
+                            path,
+                            index + 1,
+                            "credential- or write-capable jobs must not restore "
+                            "or save unsigned caches",
+                        )
+                    )
+                elif dependency.startswith(SETUP_CACHE_ACTION_PREFIXES):
+                    action_block = _checkout_block(lines, index)
+                    unsafe_cache_lines: list[int] = []
+                    for cache_index, cache_line in action_block:
+                        cache_match = CACHE_INPUT_RE.match(cache_line.split("#", 1)[0])
+                        if not cache_match:
+                            continue
+                        value = cache_match.group(1).strip().strip("'\"").lower()
+                        if value != "false":
+                            unsafe_cache_lines.append(cache_index)
+
+                    required_disable_input = next(
+                        (
+                            input_name
+                            for prefix, input_name in AUTO_CACHE_DISABLE_INPUTS.items()
+                            if dependency.startswith(prefix)
+                        ),
+                        None,
+                    )
+                    disable_declarations: list[tuple[int, str]] = []
+                    if required_disable_input:
+                        disable_re = re.compile(
+                            rf"^\s*{_yaml_key(required_disable_input)}\s*:\s*(.*?)\s*$",
+                            re.IGNORECASE,
+                        )
+                        for block_index, block_line in action_block:
+                            disable_match = disable_re.match(
+                                block_line.split("#", 1)[0]
+                            )
+                            if disable_match:
+                                disable_declarations.append(
+                                    (block_index, disable_match.group(1))
+                                )
+                    explicitly_disabled = (
+                        required_disable_input is None
+                        or (
+                            len(disable_declarations) == 1
+                            and disable_declarations[0][1]
+                            .strip()
+                            .strip("'\"")
+                            .lower()
+                            == "false"
+                        )
+                    )
+                    if unsafe_cache_lines or not explicitly_disabled:
+                        finding_index = (
+                            unsafe_cache_lines[0]
+                            if unsafe_cache_lines
+                            else index
+                        )
+                        findings.append(
+                            Finding(
+                                path,
+                                finding_index + 1,
+                                "credential- or write-capable jobs must explicitly "
+                                "disable setup-action caches",
+                            )
+                        )
+
+            if EXTERNAL_CACHE_INPUT_RE.match(code):
+                findings.append(
+                    Finding(
+                        path,
+                        index + 1,
+                        "credential- or write-capable jobs must not import or "
+                        "export external build caches",
+                    )
+                )
+
+    return findings
+
+
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
     findings = _audit_runner_job_timeouts(path, lines)
+    findings.extend(_audit_privileged_job_caches(path, lines))
     findings.extend(_audit_workflow_run_trigger(path, lines))
     has_workflow_run_trigger = _has_trigger(lines, "workflow_run")
 
@@ -598,26 +751,7 @@ def audit_workflow(path: Path) -> list[Finding]:
 
     if _has_trigger(lines, "pull_request"):
         for index, line in enumerate(lines):
-            code = line.split("#", 1)[0]
-            expressions = EXPRESSION_RE.findall(code)
-            secret_names: set[str] = set()
-            has_unresolved_secret_reference = False
-            for expression in expressions:
-                static_references = list(SECRET_CONTEXT_RE.finditer(expression))
-                secret_names.update(
-                    match.group(1) or match.group(3) for match in static_references
-                )
-                if len(SECRET_CONTEXT_TOKEN_RE.findall(expression)) != len(
-                    static_references
-                ):
-                    # Whole-context and dynamic references can expose any
-                    # repository secret, so they cannot use the public-key
-                    # exception reserved for a statically named value.
-                    has_unresolved_secret_reference = True
-            if (
-                secret_names - NON_CONFIDENTIAL_PULL_REQUEST_SECRETS
-                or has_unresolved_secret_reference
-            ):
+            if _has_confidential_secret_reference([line]):
                 findings.append(
                     Finding(
                         path,
