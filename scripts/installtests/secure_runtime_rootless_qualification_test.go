@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -200,7 +201,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	freshStarted := time.Now().UTC()
 	secureRuntimeRunInstaller(t, installerPath, server.URL,
 		"--least-privilege", "--enable-privileged-helper", "--enable-docker")
-	freshReport := rootlessQualWaitDirect(t, fixture, freshStarted, runtimeKind, 75*time.Second)
+	freshReport := rootlessQualWaitDirect(t, fixture, freshStarted, runtimeKind, rootlessBaseline.SemanticDigest, 75*time.Second)
 	secureRuntimeAssertSafeProfile(t)
 	secureRuntimeAssertHelperProtocol(t)
 	freshDigest := rootlessQualDigestReport(freshReport.Report)
@@ -230,7 +231,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	}
 	applyStarted := time.Now().UTC()
 	secureRuntimeRunInstallerWithCollectorCredential(t, installerPath, server.URL, collectorCredential, "--safe-profile-apply")
-	migratedReport := rootlessQualWaitDirect(t, fixture, applyStarted, runtimeKind, 75*time.Second)
+	migratedReport := rootlessQualWaitDirect(t, fixture, applyStarted, runtimeKind, rootlessBaseline.SemanticDigest, 75*time.Second)
 	secureRuntimeAssertSafeProfile(t)
 	secureRuntimeAssertHelperProtocol(t)
 	migratedDigest := rootlessQualDigestReport(migratedReport.Report)
@@ -253,7 +254,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	streamBefore, _, _ := agentshost.ParseReportSequenceID(migratedReport.Report.SequenceID)
 	secureRuntimeCommand(t, 20*time.Second, "systemctl", "restart", "pulse-agent.service")
 	collectorPIDAfter := secureRuntimeCollectorMainPID(t)
-	restartedCollectorReport := rootlessQualWaitDirect(t, fixture, restartStarted, runtimeKind, 75*time.Second)
+	restartedCollectorReport := rootlessQualWaitDirect(t, fixture, restartStarted, runtimeKind, rootlessBaseline.SemanticDigest, 75*time.Second)
 	streamAfter, _, _ := agentshost.ParseReportSequenceID(restartedCollectorReport.Report.SequenceID)
 	restartedCollectorDigest := rootlessQualDigestReport(restartedCollectorReport.Report)
 	if collectorPIDAfter == collectorPIDBefore || streamAfter == streamBefore || restartedCollectorDigest.SemanticDigest != rootlessBaseline.SemanticDigest {
@@ -271,7 +272,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	daemonPIDAfter, invocationAfter := rootlessQualUnitIdentity(t, daemon.rootlessUnit)
 	daemonIDAfter := rootlessQualDaemonID(t, daemon, true)
 	daemonRootlessAfterRestart := rootlessQualDaemonRootless(t, daemon)
-	daemonRestartReport := rootlessQualWaitDirect(t, fixture, daemonRestartStarted, runtimeKind, 75*time.Second)
+	daemonRestartReport := rootlessQualWaitDirect(t, fixture, daemonRestartStarted, runtimeKind, rootlessBaseline.SemanticDigest, 75*time.Second)
 	daemonRestartDigest := rootlessQualDigestReport(daemonRestartReport.Report)
 	if daemonPIDBefore == daemonPIDAfter || invocationBefore == invocationAfter || daemonIDBefore != daemonIDAfter || daemonRestartDigest.SemanticDigest != rootlessBaseline.SemanticDigest {
 		t.Fatalf("daemon restart identity/parity mismatch: pid=%d/%d invocation=%s/%s daemon=%s/%s", daemonPIDBefore, daemonPIDAfter, invocationBefore, invocationAfter, daemonIDBefore, daemonIDAfter)
@@ -304,7 +305,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 
 	recoveryStarted := time.Now().UTC()
 	rootlessQualStartRootless(t, daemon)
-	recoveryReport := rootlessQualWaitDirect(t, fixture, recoveryStarted, runtimeKind, 90*time.Second)
+	recoveryReport := rootlessQualWaitDirect(t, fixture, recoveryStarted, runtimeKind, rootlessBaseline.SemanticDigest, 90*time.Second)
 	recoveryDigest := rootlessQualDigestReport(recoveryReport.Report)
 	daemonRootlessAfterRecovery := rootlessQualDaemonRootless(t, daemon)
 	if !rootlessQualStableDigestEqual(recoveryDigest, daemonRestartDigest) || secureRuntimeCollectorMainPID(t) != collectorPIDAfter || rootlessQualDaemonID(t, daemon, true) != daemonIDBefore {
@@ -351,7 +352,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 		return ok && stream != previousUpdateStream && rootlessQualComplete(report) && report.Host.CollectionMode == agentsdocker.CollectionModeTypedHelperSummary && report.Host.Runtime == runtimeKind
 	})
 	rootlessQualStartRootless(t, daemon)
-	pinReport := rootlessQualWaitDirect(t, fixture, postUpdateFallback.ReceivedAt, runtimeKind, 90*time.Second)
+	pinReport := rootlessQualWaitDirect(t, fixture, postUpdateFallback.ReceivedAt, runtimeKind, rootlessBaseline.SemanticDigest, 90*time.Second)
 	pinDigest := rootlessQualDigestReport(pinReport.Report)
 	daemonRootlessAfterPinRecovery := rootlessQualDaemonRootless(t, daemon)
 	if !rootlessQualStableDigestEqual(pinDigest, recoveryDigest) || rootlessQualServicePin(t, runtimeKind) != daemon.rootlessSock {
@@ -380,7 +381,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	appendScenario("exact_pin_recovery", pinStarted, &pinReport.Report, pinEvidence)
 
 	parityStarted := time.Now().UTC()
-	parityReport := rootlessQualWaitDirect(t, fixture, parityStarted, runtimeKind, 75*time.Second)
+	parityReport := rootlessQualWaitDirect(t, fixture, parityStarted, runtimeKind, rootlessBaseline.SemanticDigest, 75*time.Second)
 	parityDigest := rootlessQualDigestReport(parityReport.Report)
 	appendScenario("telemetry_parity", parityStarted, &parityReport.Report, map[string]any{
 		"collector_pid": collectorPIDAfterUpdate, "baseline_kind": "root-client-same-rootless-daemon",
@@ -651,10 +652,14 @@ func rootlessQualCreateFixture(t *testing.T, d rootlessQualDaemon, rootless bool
 	t.Helper()
 	cli := rootlessQualCLI(d, rootless)
 	rootlessQualCommand(t, 2*time.Minute, cli[0], append(cli[1:], "build", "--network=none", "-t", rootlessQualFixture, "-f", filepath.Join(d.home, "fixture", "Containerfile"), filepath.Join(d.home, "fixture"))...)
-	rootlessQualCommand(t, 30*time.Second, cli[0], append(cli[1:], "run", "-d", "--name", rootlessQualRunningName, rootlessQualFixture, "sleep", "3600")...)
+	rootlessQualCommand(t, 30*time.Second, cli[0], append(cli[1:], rootlessQualRunningFixtureArgs()...)...)
 	if out, err := rootlessQualCommandError(30*time.Second, cli[0], append(cli[1:], "run", "--name", rootlessQualExitedName, rootlessQualFixture, "true")...); err != nil {
 		t.Fatalf("create exited fixture: %v\n%s", err, out)
 	}
+}
+
+func rootlessQualRunningFixtureArgs() []string {
+	return []string{"run", "-d", "--restart=always", "--name", rootlessQualRunningName, rootlessQualFixture, "sleep", "3600"}
 }
 
 func rootlessQualCLI(d rootlessQualDaemon, rootless bool) []string {
@@ -705,10 +710,11 @@ func rootlessQualBaselineFromPSOutput(out string) rootlessQualBaseline {
 	return rootlessQualBaseline{Count: len(normalized), SemanticDigest: rootlessQualHashJSON(normalized)}
 }
 
-func rootlessQualWaitDirect(t *testing.T, fixture *secureRuntimeLabFixture, after time.Time, runtimeKind string, timeout time.Duration) secureRuntimeDockerReport {
+func rootlessQualWaitDirect(t *testing.T, fixture *secureRuntimeLabFixture, after time.Time, runtimeKind, semanticDigest string, timeout time.Duration) secureRuntimeDockerReport {
 	t.Helper()
 	return rootlessQualWaitReport(t, fixture, after, timeout, func(report agentsdocker.Report) bool {
-		return rootlessQualComplete(report) && report.Host.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary && report.Host.Runtime == runtimeKind && len(report.Containers) == 2
+		return rootlessQualComplete(report) && report.Host.CollectionMode != agentsdocker.CollectionModeTypedHelperSummary &&
+			report.Host.Runtime == runtimeKind && len(report.Containers) == 2 && rootlessQualSemanticDigest(report) == semanticDigest
 	})
 }
 
@@ -1304,6 +1310,13 @@ exit 2
 		if !strings.Contains(logText, command) {
 			t.Fatalf("systemctl lifecycle did not execute %q: %s", command, logText)
 		}
+	}
+}
+
+func TestRootlessQualificationRunningFixtureRestartsWithDaemon(t *testing.T) {
+	args := rootlessQualRunningFixtureArgs()
+	if !slices.Contains(args, "--restart=always") {
+		t.Fatalf("running qualification fixture lacks daemon-restart policy: %q", args)
 	}
 }
 
