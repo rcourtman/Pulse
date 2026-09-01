@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -114,6 +115,10 @@ func TestDecompressBodyIfGzipped_UnsupportedEncoding(t *testing.T) {
 	if !strings.Contains(err.Error(), "unsupported Content-Encoding") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	var encodingErr *UnsupportedContentEncodingError
+	if !errors.As(err, &encodingErr) || encodingErr.Encoding != "deflate" {
+		t.Fatalf("expected typed unsupported encoding error, got %T: %v", err, err)
+	}
 }
 
 func TestDecompressBodyIfGzipped_BombProtection(t *testing.T) {
@@ -135,11 +140,18 @@ func TestDecompressBodyIfGzipped_BombProtection(t *testing.T) {
 	}
 	defer body.Close()
 
-	_, readErr := io.ReadAll(body)
+	data, readErr := io.ReadAll(body)
 	if readErr == nil {
 		t.Fatal("expected error when decompressed size exceeds limit")
 	}
 	if !strings.Contains(readErr.Error(), "exceeds") {
 		t.Fatalf("unexpected error: %v", readErr)
+	}
+	var sizeErr *DecompressedBodyTooLargeError
+	if !errors.As(readErr, &sizeErr) || sizeErr.Limit != 1024 {
+		t.Fatalf("expected typed decoded-size error, got %T: %v", readErr, readErr)
+	}
+	if len(data) > 1024 {
+		t.Fatalf("reader exposed %d decoded bytes past the 1024-byte limit", len(data))
 	}
 }

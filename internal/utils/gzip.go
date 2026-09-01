@@ -9,6 +9,28 @@ import (
 	"strings"
 )
 
+// UnsupportedContentEncodingError reports a Content-Encoding value that the
+// server does not know how to decode. Callers can distinguish this from a
+// malformed payload that claims to use a supported encoding.
+type UnsupportedContentEncodingError struct {
+	Encoding string
+}
+
+func (e *UnsupportedContentEncodingError) Error() string {
+	return fmt.Sprintf("unsupported Content-Encoding: %s", e.Encoding)
+}
+
+// DecompressedBodyTooLargeError reports that a compressed body expanded past
+// the decoded payload limit. It is intentionally typed so HTTP handlers do not
+// misclassify the read failure as malformed JSON.
+type DecompressedBodyTooLargeError struct {
+	Limit int64
+}
+
+func (e *DecompressedBodyTooLargeError) Error() string {
+	return fmt.Sprintf("decompressed payload exceeds %d byte limit", e.Limit)
+}
+
 // CompressJSON compresses a JSON payload using gzip BestSpeed.
 // Returns the compressed bytes suitable for use as an HTTP request body.
 func CompressJSON(payload []byte) ([]byte, error) {
@@ -44,7 +66,7 @@ func DecompressBodyIfGzipped(r *http.Request, maxDecompressed int64) (io.ReadClo
 		limited := io.LimitReader(gz, maxDecompressed+1)
 		return &cappedGzipReader{gz: gz, lr: limited, max: maxDecompressed}, nil
 	default:
-		return nil, fmt.Errorf("unsupported Content-Encoding: %s", encoding)
+		return nil, &UnsupportedContentEncodingError{Encoding: encoding}
 	}
 }
 
@@ -54,15 +76,30 @@ type cappedGzipReader struct {
 	lr  io.Reader
 	max int64
 	n   int64
+	err error
 }
 
 func (c *cappedGzipReader) Read(p []byte) (int, error) {
-	n, err := c.lr.Read(p)
-	c.n += int64(n)
-	if c.n > c.max {
-		return n, fmt.Errorf("decompressed payload exceeds %d byte limit", c.max)
+	if c.err != nil {
+		return 0, c.err
 	}
-	return n, err
+	n, err := c.lr.Read(p)
+	if c.n+int64(n) <= c.max {
+		c.n += int64(n)
+		return n, err
+	}
+
+	// LimitReader intentionally permits one byte beyond max so an exact-limit
+	// payload remains distinguishable from an oversized one. Do not expose that
+	// proof byte to callers: decoders are allowed to accept a complete value
+	// even when Read returns data and an error together.
+	allowed := c.max - c.n
+	if allowed < 0 {
+		allowed = 0
+	}
+	c.n = c.max
+	c.err = &DecompressedBodyTooLargeError{Limit: c.max}
+	return int(allowed), c.err
 }
 
 func (c *cappedGzipReader) Close() error {

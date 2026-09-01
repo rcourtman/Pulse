@@ -72,22 +72,10 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Limit request body to 256KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
-	defer r.Body.Close()
-
-	// Support gzip-compressed reports from agents (backward compatible with uncompressed).
-	// Cap decompressed size at 1.5MB (6x compressed limit — generous for legitimate payloads).
-	body, err := utils.DecompressBodyIfGzipped(r, 1536*1024)
-	if err != nil {
-		writeErrorResponse(w, http.StatusUnsupportedMediaType, "unsupported_encoding", err.Error(), nil)
-		return
-	}
-	defer body.Close()
-
 	var report agentshost.Report
-	if err := json.NewDecoder(body).Decode(&report); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+	// Support gzip-compressed reports from agents (backward compatible with
+	// uncompressed), with independent encoded and decoded size limits.
+	if !decodeCompressedAgentReport(w, r, 256*1024, 1536*1024, &report) {
 		return
 	}
 
