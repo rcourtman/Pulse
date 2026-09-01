@@ -308,6 +308,17 @@ func TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfter
 		case <-time.After(3 * time.Second):
 			t.Fatal("action runner did not stop")
 		}
+		// The client has exited, but the server observes the socket close on
+		// its own reader goroutine. Reconnecting before that lands would let
+		// startRunner see the stale session as "connected" and dispatch the
+		// replay to a dead socket.
+		deadline := time.Now().Add(3 * time.Second)
+		for server.IsAgentConnected(admission.AgentID) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if server.IsAgentConnected(admission.AgentID) {
+			t.Fatal("server did not observe the action runner disconnect")
+		}
 	}
 
 	request := agentexec.ProxmoxGuestLifecyclePayload{
