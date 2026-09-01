@@ -1,5 +1,6 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import HomePageSurface from '../HomePageSurface';
@@ -65,6 +66,40 @@ describe('HomePageSurface', () => {
     expect(
       screen.getByRole('link', { name: 'Healthy Host: Healthy. Healthy' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Healthy Host: Healthy. Healthy' })).toHaveTextContent(
+      'Healthy',
+    );
+  });
+
+  it('warns when a refresh fails while retaining the last loaded resource state', async () => {
+    const [error, setError] = createSignal<unknown>();
+    const refetch = vi.fn(async () => {
+      const failure = new Error('refresh failed');
+      setError(failure);
+      throw failure;
+    });
+    resourcesMock.mockReturnValue({
+      resources: () => [resource({})],
+      loading: () => false,
+      error,
+      refetch,
+    });
+    window.history.replaceState({}, '', '/home');
+    render(() => (
+      <Router>
+        <Route path="/home" component={HomePageSurface} />
+      </Router>
+    ));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh fleet health' }));
+
+    await waitFor(() => expect(refetch).toHaveBeenCalledOnce());
+    expect(screen.getByRole('alert')).toHaveTextContent('Fleet health could not be refreshed');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Showing the last loaded data. Resource statuses may be out of date.',
+    );
+    expect(screen.getByRole('link', { name: 'Host One: Healthy. Healthy' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('offers infrastructure onboarding rather than an unexplained blank page', () => {

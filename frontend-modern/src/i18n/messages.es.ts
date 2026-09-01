@@ -9,6 +9,9 @@ export const ES_MESSAGE_OVERRIDES = {
   'home.loading': 'Cargando estado de la flota...',
   'home.error.title': 'El estado de la flota no esta disponible',
   'home.error.description': 'Pulse no pudo cargar el estado actual de los recursos.',
+  'home.error.cached.title': 'No se pudo actualizar el estado de la flota',
+  'home.error.cached.description':
+    'Se muestran los ultimos datos cargados. Los estados de los recursos pueden estar desactualizados.',
   'home.error.retry': 'Intentar de nuevo',
   'home.empty.title': 'Conecta tu primer sistema monitorizado',
   'home.empty.description':
@@ -16,11 +19,11 @@ export const ES_MESSAGE_OVERRIDES = {
   'home.empty.action': 'Agregar infraestructura',
   'home.updated.unknown': 'desconocido',
   'home.posture.allHealthy':
-    'Los {total} recursos tienen un estado saludable verificado · actualizado {updated}',
+    'Los {total} recursos tienen un estado saludable verificado · telemetria mas reciente {updated}',
   'home.posture.summary.singular':
-    '1 necesita atencion · {healthy} de {total} con estado saludable verificado · {stale} obsoleto · {unknown} desconocido · actualizado {updated}',
+    '1 necesita atencion · {healthy} de {total} con estado saludable verificado · {stale} obsoleto · {unknown} desconocido · telemetria mas reciente {updated}',
   'home.posture.summary.plural':
-    '{attention} necesitan atencion · {healthy} de {total} con estado saludable verificado · {stale} obsoletos · {unknown} desconocidos · actualizado {updated}',
+    '{attention} necesitan atencion · {healthy} de {total} con estado saludable verificado · {stale} obsoletos · {unknown} desconocidos · telemetria mas reciente {updated}',
   'home.attention.title': 'Necesita atencion',
   'home.attention.description':
     'Los recursos criticos aparecen primero. Abre un recurso para investigarlo.',

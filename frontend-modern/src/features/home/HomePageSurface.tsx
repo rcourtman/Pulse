@@ -118,9 +118,7 @@ function ResourceTile(props: { tile: HomeResourceTile }) {
         />
         <span class="min-w-0 break-words text-sm font-semibold leading-5">{props.tile.name}</span>
       </div>
-      <Show when={props.tile.verdict !== 'ok'}>
-        <span class="mt-2 pl-[18px] text-xs font-medium opacity-80">{reason()}</span>
-      </Show>
+      <span class="mt-2 pl-[18px] text-xs font-medium opacity-80">{reason()}</span>
     </A>
   );
 }
@@ -131,7 +129,8 @@ export default function HomePageSurface() {
   const posture = createMemo(() => buildHomePosture(resources.resources()));
   const attentionTiles = createMemo(() => buildHomeAttentionTiles(resources.resources()));
   const groups = createMemo(() => buildHomeResourceGroups(resources.resources(), expandedGroups()));
-  const lastUpdated = createMemo(() => {
+  const refetch = () => resources.refetch().catch(() => undefined);
+  const newestTelemetry = createMemo(() => {
     const timestamp = resources
       .resources()
       .reduce((latest, resource) => Math.max(latest, resource.lastSeen || 0), 0);
@@ -144,7 +143,7 @@ export default function HomePageSurface() {
   const postureText = createMemo(() => {
     const value = posture();
     if (value.total > 0 && value.ok === value.total) {
-      return t('home.posture.allHealthy', { total: value.total, updated: lastUpdated() });
+      return t('home.posture.allHealthy', { total: value.total, updated: newestTelemetry() });
     }
     return t(
       value.needsAttention === 1 ? 'home.posture.summary.singular' : 'home.posture.summary.plural',
@@ -154,7 +153,7 @@ export default function HomePageSurface() {
         total: value.total,
         stale: value.stale,
         unknown: value.unknown,
-        updated: lastUpdated(),
+        updated: newestTelemetry(),
       },
     );
   });
@@ -179,7 +178,7 @@ export default function HomePageSurface() {
             size="sm"
             aria-label={t('home.refresh.ariaLabel')}
             isLoading={resources.loading()}
-            onClick={() => void resources.refetch()}
+            onClick={() => void refetch()}
           >
             <RefreshCwIcon class="mr-2 h-4 w-4" aria-hidden="true" />
             {t('home.refresh.label')}
@@ -204,7 +203,27 @@ export default function HomePageSurface() {
         >
           <p class="font-semibold">{t('home.error.title')}</p>
           <p class="mt-1 text-sm">{t('home.error.description')}</p>
-          <Button class="mt-3" size="sm" onClick={() => void resources.refetch()}>
+          <Button class="mt-3" size="sm" onClick={() => void refetch()}>
+            {t('home.error.retry')}
+          </Button>
+        </div>
+      </Show>
+
+      <Show when={resources.error() && resources.resources().length > 0}>
+        <div
+          class="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-base-content sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:bg-amber-950/40"
+          role="alert"
+        >
+          <div>
+            <p class="font-semibold">{t('home.error.cached.title')}</p>
+            <p class="mt-1 text-sm">{t('home.error.cached.description')}</p>
+          </div>
+          <Button
+            class="shrink-0 self-start sm:self-auto"
+            size="sm"
+            isLoading={resources.loading()}
+            onClick={() => void refetch()}
+          >
             {t('home.error.retry')}
           </Button>
         </div>

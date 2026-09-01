@@ -9,17 +9,20 @@ export const EN_MESSAGES = {
   'home.loading': 'Loading fleet health...',
   'home.error.title': 'Fleet health is unavailable',
   'home.error.description': 'Pulse could not load the current resource state.',
+  'home.error.cached.title': 'Fleet health could not be refreshed',
+  'home.error.cached.description':
+    'Showing the last loaded data. Resource statuses may be out of date.',
   'home.error.retry': 'Try again',
   'home.empty.title': 'Connect your first monitored system',
   'home.empty.description':
     'Add a platform API, Pulse Agent, or availability check to start verifying resource health.',
   'home.empty.action': 'Add infrastructure',
   'home.updated.unknown': 'unknown',
-  'home.posture.allHealthy': 'All {total} resources verified healthy · updated {updated}',
+  'home.posture.allHealthy': 'All {total} resources verified healthy · newest telemetry {updated}',
   'home.posture.summary.singular':
-    '1 needs attention · {healthy} of {total} verified healthy · {stale} stale · {unknown} unknown · updated {updated}',
+    '1 needs attention · {healthy} of {total} verified healthy · {stale} stale · {unknown} unknown · newest telemetry {updated}',
   'home.posture.summary.plural':
-    '{attention} need attention · {healthy} of {total} verified healthy · {stale} stale · {unknown} unknown · updated {updated}',
+    '{attention} need attention · {healthy} of {total} verified healthy · {stale} stale · {unknown} unknown · newest telemetry {updated}',
   'home.attention.title': 'Needs attention',
   'home.attention.description': 'Critical resources appear first. Open a resource to investigate.',
   'home.platform.proxmox': 'Proxmox',

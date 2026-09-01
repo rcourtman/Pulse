@@ -9,6 +9,9 @@ export const DE_MESSAGE_OVERRIDES = {
   'home.loading': 'Flottenzustand wird geladen...',
   'home.error.title': 'Flottenzustand ist nicht verfuegbar',
   'home.error.description': 'Pulse konnte den aktuellen Ressourcenzustand nicht laden.',
+  'home.error.cached.title': 'Flottenzustand konnte nicht aktualisiert werden',
+  'home.error.cached.description':
+    'Zuletzt geladene Daten werden angezeigt. Ressourcenstatus koennen veraltet sein.',
   'home.error.retry': 'Erneut versuchen',
   'home.empty.title': 'Erstes ueberwachtes System verbinden',
   'home.empty.description':
@@ -16,11 +19,11 @@ export const DE_MESSAGE_OVERRIDES = {
   'home.empty.action': 'Infrastruktur hinzufuegen',
   'home.updated.unknown': 'unbekannt',
   'home.posture.allHealthy':
-    'Alle {total} Ressourcen als fehlerfrei bestaetigt · aktualisiert {updated}',
+    'Alle {total} Ressourcen als fehlerfrei bestaetigt · neueste Telemetrie {updated}',
   'home.posture.summary.singular':
-    '1 Ressource erfordert Aufmerksamkeit · {healthy} von {total} als fehlerfrei bestaetigt · {stale} veraltet · {unknown} unbekannt · aktualisiert {updated}',
+    '1 Ressource erfordert Aufmerksamkeit · {healthy} von {total} als fehlerfrei bestaetigt · {stale} veraltet · {unknown} unbekannt · neueste Telemetrie {updated}',
   'home.posture.summary.plural':
-    '{attention} Ressourcen erfordern Aufmerksamkeit · {healthy} von {total} als fehlerfrei bestaetigt · {stale} veraltet · {unknown} unbekannt · aktualisiert {updated}',
+    '{attention} Ressourcen erfordern Aufmerksamkeit · {healthy} von {total} als fehlerfrei bestaetigt · {stale} veraltet · {unknown} unbekannt · neueste Telemetrie {updated}',
   'home.attention.title': 'Aufmerksamkeit erforderlich',
   'home.attention.description':
     'Kritische Ressourcen stehen zuerst. Oeffnen Sie eine Ressource zur Untersuchung.',

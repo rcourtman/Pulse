@@ -210,8 +210,16 @@ test("Home status wall is readable and motionless across desktop and phone width
       ),
     ),
   ];
-  await page.route("**/api/resources?*", (route) =>
-    route.fulfill({
+  let resourceRequestsFail = false;
+  await page.route("**/api/resources?*", (route) => {
+    if (resourceRequestsFail) {
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "resource refresh unavailable" }),
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
@@ -219,8 +227,8 @@ test("Home status wall is readable and motionless across desktop and phone width
         meta: { totalPages: 1 },
         aggregations: { total: resources.length },
       }),
-    }),
-  );
+    });
+  });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/home", { waitUntil: "domcontentloaded" });
   await expect(
@@ -232,10 +240,25 @@ test("Home status wall is readable and motionless across desktop and phone width
   await expect(
     page.getByRole("link", { name: /PVE node down: Critical/ }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: "Healthy VM 1: Healthy. Healthy",
+      exact: true,
+    }),
+  ).toContainText("Healthy");
   const showAll = page.getByRole("button", { name: "Show all (5)" });
   await expect(showAll).toBeVisible();
   await showAll.click();
   await expect(page.getByRole("button", { name: "Show less" })).toBeVisible();
+
+  resourceRequestsFail = true;
+  await page.getByRole("button", { name: "Refresh fleet health" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Fleet health could not be refreshed",
+  );
+  await expect(
+    page.getByRole("link", { name: /PVE node down: Critical/ }),
+  ).toBeVisible();
 
   expect(await scanForWcagViolations(page)).toEqual([]);
   expect(await scanForUnexpectedReducedMotion(page)).toEqual([]);
