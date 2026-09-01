@@ -536,3 +536,100 @@ func TestCoalescePresentationHostResourcesKeepsSameShortNameEstatesApart(t *test
 		}
 	})
 }
+
+// Two hand-added standalone Proxmox connections whose native node name is the
+// same short hostname (both machines are called "pve") must keep separate
+// host rows once their agents connect. The provider node rows carry no
+// machine identity of their own, so before the provider-scope veto existed
+// the first node row absorbed an agent row and then the other site's node row
+// folded in on bare short-hostname compatibility, collapsing the estate into
+// one flip-flopping row (#1753, v6.4.1 retest).
+func TestCoalescePresentationHostResourcesKeepsStandaloneProviderScopesApart(t *testing.T) {
+	nodeRow := func(id, instance, host, displayName, linkedAgentID string) Resource {
+		return Resource{
+			ID:       id,
+			Type:     ResourceTypeAgent,
+			Name:     displayName,
+			Status:   StatusOnline,
+			Sources:  []DataSource{SourceProxmox},
+			Identity: ResourceIdentity{Hostnames: []string{"pve"}},
+			Proxmox: &ProxmoxData{
+				SourceID:      id,
+				NodeIdentity:  id,
+				NodeName:      "pve",
+				Instance:      instance,
+				HostURL:       host,
+				LinkedAgentID: linkedAgentID,
+			},
+		}
+	}
+	agentRow := func(id, machineID string) Resource {
+		return Resource{
+			ID:       "agent-" + id,
+			Type:     ResourceTypeAgent,
+			Name:     "pve",
+			Status:   StatusOnline,
+			Sources:  []DataSource{SourceAgent},
+			Identity: ResourceIdentity{Hostnames: []string{"pve"}, MachineID: machineID},
+			Agent:    &AgentData{AgentID: id, Hostname: "pve", MachineID: machineID, OSName: "Proxmox VE"},
+		}
+	}
+
+	t.Run("linked agents keep both sites separate and attached", func(t *testing.T) {
+		resources := []Resource{
+			nodeRow("staging-pve", "hema-staging", "https://pve.hemastaging.hot:8006", "hema-staging", "host-staging"),
+			agentRow("host-staging", "machine-staging"),
+			nodeRow("production-pve", "hema-production", "https://pve.hemaproduction.hot:8006", "hema-production", "host-production"),
+			agentRow("host-production", "machine-production"),
+		}
+		got := CoalescePresentationHostResources(resources)
+		if len(got) != 2 {
+			t.Fatalf("expected two merged site rows, got %d rows: %#v", len(got), got)
+		}
+		for _, resource := range got {
+			if resource.Proxmox == nil || resource.Agent == nil {
+				t.Fatalf("expected each site row to keep its node and agent facets, got %#v", resource)
+			}
+			want := "host-staging"
+			if resource.Proxmox.Instance == "hema-production" {
+				want = "host-production"
+			}
+			if resource.Agent.AgentID != want {
+				t.Fatalf("agent %q attached to instance %q", resource.Agent.AgentID, resource.Proxmox.Instance)
+			}
+		}
+	})
+
+	t.Run("unlinked agents fail closed instead of collapsing the sites", func(t *testing.T) {
+		resources := []Resource{
+			nodeRow("staging-pve", "hema-staging", "https://192.168.1.10:8006", "hema-staging", ""),
+			agentRow("host-staging", "machine-staging"),
+			nodeRow("production-pve", "hema-production", "https://192.168.2.10:8006", "hema-production", ""),
+			agentRow("host-production", "machine-production"),
+		}
+		got := CoalescePresentationHostResources(resources)
+		nodeRows := 0
+		for _, resource := range got {
+			if resource.Proxmox != nil {
+				nodeRows++
+			}
+		}
+		if nodeRows != 2 {
+			t.Fatalf("expected both provider node rows to survive, got %d in %d rows: %#v", nodeRows, len(got), got)
+		}
+	})
+
+	t.Run("single site still merges its node and agent rows", func(t *testing.T) {
+		resources := []Resource{
+			nodeRow("home-pve", "home", "https://pve.home.lan:8006", "home", ""),
+			agentRow("host-home", "machine-home"),
+		}
+		got := CoalescePresentationHostResources(resources)
+		if len(got) != 1 || got[0].Proxmox == nil || got[0].Agent == nil {
+			t.Fatalf("expected single-site node and agent to merge, got %#v", got)
+		}
+		if got[0].Name != "home" {
+			t.Fatalf("expected merged row to keep the configured node name, got %q", got[0].Name)
+		}
+	})
+}
