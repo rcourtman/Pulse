@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Every commit that can reach main states what changed in a subject a reader
+# can scan and why in a body (delivery contract, rule 3). The maintainer's
+# candidate preflight enforces the same standard for its own commits; this
+# hook enforces it for human and interactive-agent commits made here.
+set -eu
+
+msg_file="$1"
+# Strip comment lines and the scissors block so only the message is judged.
+message=$(sed -e '/^#/d' -e '/^------------------------ >8 ------------------------$/,$d' "$msg_file")
+subject=$(printf '%s\n' "$message" | sed -n '1p')
+
+case "$subject" in
+  ""|"Merge "*|"fixup! "*|"squash! "*|"Revert \""*) exit 0 ;;
+esac
+
+if [ "${#subject}" -gt 72 ]; then
+  echo "commit-msg: the subject is ${#subject} characters; keep it at 72 or fewer." >&2
+  exit 1
+fi
+
+body_lines=$(printf '%s\n' "$message" | sed '1d' \
+  | grep -v -E '^(Change-source|Contract-Neutral|Signed-off-by|Co-authored-by|Fixes|Closes|Resolves|Refs|Reviewed-by|Cc|See-also): ' \
+  | grep -c '[^[:space:]]' || true)
+if [ "$body_lines" -eq 0 ]; then
+  echo "commit-msg: add a body that says why the change is needed, not only what it does." >&2
+  echo "commit-msg: git commit -m \"<subject>\" -m \"<why>\" is enough." >&2
+  exit 1
+fi
