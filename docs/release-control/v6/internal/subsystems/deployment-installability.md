@@ -267,6 +267,11 @@ output boundary; receipts are written there instead of volatile `/run` state so
 systemd user-manager cleanup cannot erase completed qualification evidence.
 Direct recovery is complete only after the full stable telemetry digest is
 observed; the first semantic-only report cannot satisfy the qualification wait.
+Final cleanup removes the exact rootless and rootful fixture containers while
+both runtime APIs are live, then stops the services and removes runtime state.
+The outer wrapper forgets a tracked container only after strict labeled removal
+succeeds, preventing already-removed hosts from producing false manual-cleanup
+warnings when a later runtime fails.
 Rootless Docker uses its supported `slirp4netns` driver inside the outer
 `--network none` container only; an unsupported `host` RootlessKit driver or
 an outer default route invalidates the proof. The disposable host uses a

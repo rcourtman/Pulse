@@ -426,6 +426,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	if registered, revoked, uninstalls := fixture.collectorLifecycleSnapshot(); registered || !revoked || uninstalls != 2 {
 		t.Fatalf("final collector uninstall was not durably modeled: registered=%t revoked=%t uninstalls=%d", registered, revoked, uninstalls)
 	}
+	rootlessQualRemoveFixtures(t, daemon)
 	rootlessQualStopUnit(t, daemon.rootlessUnit)
 	rootlessQualStopUnit(t, daemon.rootfulUnit)
 	rootlessQualStopUserManager(t, daemon)
@@ -1179,6 +1180,29 @@ func rootlessQualRemoveRuntimeState(t *testing.T, d rootlessQualDaemon) {
 	}
 }
 
+func rootlessQualRemoveFixtures(t *testing.T, d rootlessQualDaemon) {
+	t.Helper()
+	rootlessQualRemoveFixtureSet(t, rootlessQualCLI(d, true))
+	rootlessQualRemoveFixtureSet(t, rootlessQualCLI(d, false))
+}
+
+func rootlessQualRemoveFixtureSet(t *testing.T, cli []string) {
+	t.Helper()
+	if len(cli) == 0 {
+		t.Fatal("empty runtime CLI for fixture cleanup")
+	}
+	if out, err := rootlessQualCommandError(30*time.Second, cli[0], append(cli[1:], "rm", "-f", rootlessQualRunningName, rootlessQualExitedName)...); err != nil {
+		t.Fatalf("remove runtime fixtures: %v\n%s", err, out)
+	}
+	remaining := rootlessQualCommand(t, 30*time.Second, cli[0], append(cli[1:], "ps", "-a", "--format", "{{.Names}}")...)
+	for _, name := range strings.Fields(remaining) {
+		name = strings.TrimPrefix(name, "/")
+		if name == rootlessQualRunningName || name == rootlessQualExitedName {
+			t.Fatalf("runtime fixture %s remains after removal", name)
+		}
+	}
+}
+
 func rootlessQualStopUserManager(t *testing.T, d rootlessQualDaemon) {
 	t.Helper()
 	rootlessQualCommand(t, 10*time.Second, "loginctl", "disable-linger", "pulse-agent")
@@ -1459,6 +1483,34 @@ func TestRootlessQualificationStableDirectMatchWaitsForFullTelemetry(t *testing.
 	}
 	if !rootlessQualStableDigestEqual(rootlessQualDigestReport(full), stableDigest) {
 		t.Fatal("full direct report did not satisfy evidence-grade telemetry parity")
+	}
+}
+
+func TestRootlessQualificationFixtureRemovalPrecedesStateDeletion(t *testing.T) {
+	temporary := t.TempDir()
+	logPath := filepath.Join(temporary, "runtime.log")
+	runtimePath := filepath.Join(temporary, "runtime")
+	script := `#!/bin/sh
+printf '%s\n' "$*" >>"$ROOTLESS_QUAL_RUNTIME_LOG"
+for arg in "$@"; do
+  case "$arg" in
+    rm|ps) exit 0 ;;
+  esac
+done
+exit 2
+`
+	if err := os.WriteFile(runtimePath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ROOTLESS_QUAL_RUNTIME_LOG", logPath)
+	rootlessQualRemoveFixtureSet(t, []string{runtimePath, "--url", "unix:///run/test.sock"})
+	commands := strings.Split(strings.TrimSpace(string(rootlessQualReadFile(t, logPath))), "\n")
+	want := []string{
+		"--url unix:///run/test.sock rm -f " + rootlessQualRunningName + " " + rootlessQualExitedName,
+		"--url unix:///run/test.sock ps -a --format {{.Names}}",
+	}
+	if !slices.Equal(commands, want) {
+		t.Fatalf("fixture cleanup command order = %q, want %q", commands, want)
 	}
 }
 

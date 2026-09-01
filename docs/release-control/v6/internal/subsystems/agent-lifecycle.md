@@ -7344,6 +7344,9 @@ cannot erase a passing result before the wrapper retains it.
 Recovery qualification must wait for the complete stable telemetry digest,
 including stats and secondary inventory, rather than accepting an earlier
 semantic-only report and racing the evidence assertion.
+Cleanup removes the exact fixture containers through both still-live runtime
+APIs before stopping their services or deleting storage, so Podman namespace
+and shared-memory mounts cannot outlive the state they protect.
 The wrapper must compile every Go artifact with mandatory VCS stamping so a
 missing revision or unavailable clean-worktree proof fails before live evidence
 can be emitted; the receipt and validator retain the exact artifact hashes and

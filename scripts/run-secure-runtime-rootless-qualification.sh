@@ -78,6 +78,18 @@ remove_qualification_container_strict() {
   fi
 }
 
+forget_qualification_container() {
+  local removed_id="$1"
+  local candidate
+  local retained=()
+  for candidate in "${CONTAINER_IDS[@]}"; do
+    if [[ "${candidate}" != "${removed_id}" ]]; then
+      retained+=("${candidate}")
+    fi
+  done
+  CONTAINER_IDS=("${retained[@]}")
+}
+
 remove_qualification_container_best_effort() {
   local container_id="$1"
   local observed_nonce
@@ -277,6 +289,7 @@ run_runtime() {
   capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
   chmod 0600 "${local_receipt}" "${OUTPUT_DIR}/${runtime_name}-test.log"
   remove_qualification_container_strict "${container_id}"
+  forget_qualification_container "${container_id}"
 }
 
 run_runtime docker
