@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/collectorlifecycle"
+	internalsecurity "github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 const (
@@ -84,7 +85,13 @@ func runCollectorLifecycleCommand(ctx context.Context, command string, args []st
 			return errors.New("collector-download-installer requires --url and an absolute --output path")
 		}
 		info, err := os.Lstat(*outputPath)
-		if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
+		if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("collector-download-installer output must be a pre-created private regular file")
+		}
+		// Unix privacy is expressed by owner-only mode bits. Windows ignores
+		// those bits, so apply the same protected-DACL validation used for
+		// lifecycle credentials instead of rejecting every Windows output.
+		if err := internalsecurity.ValidatePrivatePath(*outputPath, info); err != nil {
 			return errors.New("collector-download-installer output must be a pre-created private regular file")
 		}
 		requestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)

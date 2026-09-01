@@ -123,6 +123,9 @@ func TestCollectorLifecycleCommandDownloadsInstallerThroughPublicTransport(t *te
 	if err := os.WriteFile(outputPath, nil, 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err := internalsecurity.HardenPrivatePath(outputPath, 0600); err != nil {
+		t.Fatalf("harden installer output: %v", err)
+	}
 	var stdout, stderr bytes.Buffer
 	err := runCollectorLifecycleCommand(context.Background(), collectorDownloadInstallerCommand, []string{
 		"--url", server.URL,
