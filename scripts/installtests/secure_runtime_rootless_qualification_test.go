@@ -483,6 +483,12 @@ type rootlessQualReportDigest struct {
 	SecondaryInventoryPresent bool
 }
 
+type rootlessQualContainerSemantic struct {
+	Name  string
+	Image string
+	State string
+}
+
 type rootlessQualIdentity struct {
 	RuntimeVersion string `json:"runtime_version"`
 	SocketUID      int    `json:"socket_uid"`
@@ -679,15 +685,23 @@ func rootlessQualRuntimeBaseline(t *testing.T, d rootlessQualDaemon, rootless bo
 	cli := rootlessQualCLI(d, rootless)
 	format := "{{.Names}}|{{.Image}}|{{.State}}"
 	out := rootlessQualCommand(t, 30*time.Second, cli[0], append(cli[1:], "ps", "-a", "--format", format)...)
+	return rootlessQualBaselineFromPSOutput(out)
+}
+
+func rootlessQualBaselineFromPSOutput(out string) rootlessQualBaseline {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	var normalized []string
+	var normalized []rootlessQualContainerSemantic
 	for _, line := range lines {
-		line = strings.TrimSpace(strings.TrimPrefix(line, "/"))
-		if line != "" {
-			normalized = append(normalized, line)
+		parts := strings.SplitN(strings.TrimSpace(line), "|", 3)
+		if len(parts) == 3 {
+			normalized = append(normalized, rootlessQualContainerSemantic{
+				Name:  strings.TrimSpace(strings.TrimPrefix(parts[0], "/")),
+				Image: strings.TrimSpace(parts[1]),
+				State: strings.TrimSpace(parts[2]),
+			})
 		}
 	}
-	sort.Strings(normalized)
+	sort.Slice(normalized, func(i, j int) bool { return normalized[i].Name < normalized[j].Name })
 	return rootlessQualBaseline{Count: len(normalized), SemanticDigest: rootlessQualHashJSON(normalized)}
 }
 
@@ -736,19 +750,18 @@ func rootlessQualAssertHelperSummaryOnly(t *testing.T, report agentsdocker.Repor
 }
 
 func rootlessQualDigestReport(report agentsdocker.Report) rootlessQualReportDigest {
-	type semantic struct{ Name, Image, State string }
 	type stats struct {
 		Name           string
 		MemoryLimited  bool
 		OOMKnown       bool
 		RuntimeDetails bool
 	}
-	semanticRows := make([]semantic, 0, len(report.Containers))
+	semanticRows := make([]rootlessQualContainerSemantic, 0, len(report.Containers))
 	statsRows := make([]stats, 0, len(report.Containers))
 	fullFieldsPresent := len(report.Containers) > 0
 	runningStatsPresent := false
 	for _, item := range report.Containers {
-		semanticRows = append(semanticRows, semantic{Name: item.Name, Image: item.Image, State: item.State})
+		semanticRows = append(semanticRows, rootlessQualContainerSemantic{Name: item.Name, Image: item.Image, State: item.State})
 		statsRows = append(statsRows, stats{Name: item.Name, MemoryLimited: item.MemoryLimitBytes > 0, OOMKnown: item.OOMKilled != nil, RuntimeDetails: item.StartedAt != nil || item.FinishedAt != nil})
 		if item.CreatedAt.IsZero() || item.Status == "" || item.OOMKilled == nil || (item.StartedAt == nil && item.FinishedAt == nil) {
 			fullFieldsPresent = false
@@ -1237,6 +1250,21 @@ func TestRootlessQualificationReceiptContract(t *testing.T) {
 	receipt.Runs[0].Scenarios[3].ReportSequence = nil
 	if err := rootlessQualValidateReceipt(receipt, 1); err == nil {
 		t.Fatal("receipt validator accepted a report-producing scenario without a sequence")
+	}
+}
+
+func TestRootlessQualificationBaselineUsesReportSemanticShape(t *testing.T) {
+	baseline := rootlessQualBaselineFromPSOutput(strings.Join([]string{
+		"/pulse-rootless-running|pulse-rootless-qualification:v1|running",
+		"pulse-rootless-exited|pulse-rootless-qualification:v1|exited",
+	}, "\n"))
+	report := agentsdocker.Report{Containers: []agentsdocker.Container{
+		{Name: "pulse-rootless-exited", Image: "pulse-rootless-qualification:v1", State: "exited"},
+		{Name: "pulse-rootless-running", Image: "pulse-rootless-qualification:v1", State: "running"},
+	}}
+	digest := rootlessQualDigestReport(report)
+	if baseline.Count != digest.Count || baseline.SemanticDigest != digest.SemanticDigest {
+		t.Fatalf("runtime baseline and report semantics diverged: baseline=%+v report=%+v", baseline, digest)
 	}
 }
 
