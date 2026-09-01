@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "jsdom": "^24.1.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.6"

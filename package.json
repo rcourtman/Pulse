@@ -41,7 +41,7 @@
   },
   "homepage": "https://github.com/rcourtman/Pulse#readme",
   "devDependencies": {
-    "@playwright/test": "1.56.1",
+    "@playwright/test": "1.62.1",
     "husky": "^9.1.7"
   }
 }
