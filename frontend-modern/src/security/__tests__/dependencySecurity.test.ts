@@ -84,4 +84,12 @@ describe('frontend dependency security floors', () => {
       expect(nanoidIsPatched(version), `nanoid ${version} is vulnerable`).toBe(true);
     }
   });
+
+  it('keeps browserslist above the unbounded-cache and custom-stats floors', () => {
+    const versions = lockedVersions('browserslist');
+    expect(versions).not.toHaveLength(0);
+    for (const version of versions) {
+      expect(atLeast(version, [4, 28, 7]), `browserslist ${version} is vulnerable`).toBe(true);
+    }
+  });
 });
