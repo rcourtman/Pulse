@@ -390,6 +390,28 @@ jobs:
             5,
         )
 
+    def test_rejects_step_and_job_outputs_in_generated_shell(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - run: echo "${{ steps.parse.outputs.version }}"
+      - run: echo "${{ needs.prepare.outputs.release_tag }}"
+      - run: echo "${{ steps['parse']['outputs']['version'] }}"
+      - env:
+          VERSION: ${{ steps.parse.outputs.version }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: printf '%s %s\\n' "$VERSION" "$RELEASE_TAG"
+"""
+        )
+        self.assertEqual(
+            sum("must enter run scripts through env" in finding for finding in findings),
+            3,
+        )
+
     def test_rejects_untrusted_github_metadata_in_generated_shell(self) -> None:
         findings = self.audit(
             """on: [pull_request]

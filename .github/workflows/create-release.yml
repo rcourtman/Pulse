@@ -146,17 +146,23 @@ jobs:
 
       - name: Resolve required release branch
         id: branch_policy
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.extract.outputs.version }}
+          WORKFLOW_OUTPUT_2: ${{ steps.extract.outputs.source_branch }}
         run: |
-          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${{ steps.extract.outputs.version }}")"
-          if [ "${{ steps.extract.outputs.source_branch }}" != "$REQUIRED_BRANCH" ]; then
-            echo "::error::Invalid release line. Version ${{ steps.extract.outputs.version }} must run from ${REQUIRED_BRANCH}, but workflow ref is ${{ steps.extract.outputs.source_branch }}."
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${WORKFLOW_OUTPUT_1}")"
+          if [ "${WORKFLOW_OUTPUT_2}" != "$REQUIRED_BRANCH" ]; then
+            echo "::error::Invalid release line. Version ${WORKFLOW_OUTPUT_1} must run from ${REQUIRED_BRANCH}, but workflow ref is ${WORKFLOW_OUTPUT_2}."
             exit 1
           fi
           echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "[OK] Governed release branch for ${{ steps.extract.outputs.version }} is ${REQUIRED_BRANCH}"
+          echo "[OK] Governed release branch for ${WORKFLOW_OUTPUT_1} is ${REQUIRED_BRANCH}"
 
       - name: Validate release-note visual plan
         id: visual_plan
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.extract.outputs.historical_asset_backfill_only }}
+          WORKFLOW_OUTPUT_2: ${{ steps.extract.outputs.version }}
         run: |
           set -euo pipefail
           PLAN_FILE=$(mktemp)
@@ -171,9 +177,9 @@ jobs:
             count --plan "$PLAN_FILE")
           COMPARISON_TAG=""
           if [ "$CAPTURE_COUNT" -gt 0 ] && \
-             [ "${{ steps.extract.outputs.historical_asset_backfill_only }}" != "true" ]; then
+             [ "${WORKFLOW_OUTPUT_1}" != "true" ]; then
             COMPARISON_TAG=$(./scripts/generate-release-notes.sh \
-              --resolve-base "${{ steps.extract.outputs.version }}")
+              --resolve-base "${WORKFLOW_OUTPUT_2}")
           fi
           echo "capture_count=${CAPTURE_COUNT}" >> "$GITHUB_OUTPUT"
           echo "comparison_tag=${COMPARISON_TAG}" >> "$GITHUB_OUTPUT"
@@ -181,9 +187,11 @@ jobs:
 
       - name: Validate VERSION file
         if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' }}
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.extract.outputs.version }}
         run: |
           FILE_VERSION=$(cat VERSION | tr -d '\n')
-          REQUESTED_VERSION="${{ steps.extract.outputs.version }}"
+          REQUESTED_VERSION="${WORKFLOW_OUTPUT_1}"
           if [ "$FILE_VERSION" != "$REQUESTED_VERSION" ]; then
             echo "::error::VERSION file ($FILE_VERSION) does not match requested version ($REQUESTED_VERSION)."
             echo "The VERSION file must be updated and committed before running release."
@@ -196,10 +204,11 @@ jobs:
         env:
           MOBILE_RELEASE_DECISION: ${{ github.event.inputs.mobile_release_decision }}
           MOBILE_RELEASE_EVIDENCE: ${{ github.event.inputs.mobile_release_evidence }}
+          WORKFLOW_OUTPUT_1: ${{ steps.extract.outputs.version }}
         run: |
           set -euo pipefail
           python3 scripts/release_control/mobile_release_gate.py \
-            --version "${{ steps.extract.outputs.version }}" \
+            --version "${WORKFLOW_OUTPUT_1}" \
             --decision "${MOBILE_RELEASE_DECISION}" \
             --evidence "${MOBILE_RELEASE_EVIDENCE}" \
             --github-annotations
@@ -778,13 +787,15 @@ jobs:
 
       - name: Capture comparison and candidate views
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
+        env:
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.visual_comparison_tag }}
         run: |
           set -euo pipefail
           PLAN_FILE=$(mktemp)
           jq -er '.inputs.release_screenshot_plan' "$GITHUB_EVENT_PATH" > "$PLAN_FILE"
           bash scripts/capture-release-note-visuals.sh \
             "$PLAN_FILE" \
-            "${{ needs.prepare.outputs.visual_comparison_tag }}" \
+            "${WORKFLOW_OUTPUT_1}" \
             release-note-visuals
 
       - name: Upload release-note visual artifact
@@ -840,18 +851,34 @@ jobs:
           path: release-note-visuals
 
       - name: Verify immutable release candidate
+        env:
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.version }}
         run: |
           python3 scripts/release_candidate_manifest.py verify-local \
             --release-dir release \
             --manifest release-candidate-manifest/release-candidate.json \
-            --version "${{ needs.prepare.outputs.version }}" \
+            --version "${WORKFLOW_OUTPUT_1}" \
             --source-sha "${GITHUB_SHA}"
 
       - name: Prepare release notes
         id: generate_notes
+        env:
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.version }}
+          WORKFLOW_OUTPUT_2: ${{ needs.prepare.outputs.tag }}
+          WORKFLOW_OUTPUT_3: ${{ needs.prepare.outputs.release_stage }}
+          WORKFLOW_OUTPUT_4: ${{ needs.prepare.outputs.promoted_from_tag }}
+          WORKFLOW_OUTPUT_5: ${{ needs.prepare.outputs.rollback_tag }}
+          WORKFLOW_OUTPUT_6: ${{ needs.prepare.outputs.rollback_command }}
+          WORKFLOW_OUTPUT_7: ${{ needs.prepare.outputs.ga_date }}
+          WORKFLOW_OUTPUT_8: ${{ needs.prepare.outputs.v5_eos_date }}
+          WORKFLOW_OUTPUT_9: ${{ needs.prepare.outputs.hotfix_exception }}
+          WORKFLOW_OUTPUT_10: ${{ needs.prepare.outputs.hotfix_reason }}
+          WORKFLOW_OUTPUT_11: ${{ needs.prepare.outputs.require_windows_signing }}
+          WORKFLOW_OUTPUT_12: ${{ needs.prepare.outputs.unsigned_windows_exception }}
+          WORKFLOW_OUTPUT_13: ${{ needs.prepare.outputs.unsigned_windows_reason }}
         run: |
           set -euo pipefail
-          VERSION="${{ needs.prepare.outputs.version }}"
+          VERSION="${WORKFLOW_OUTPUT_1}"
           NOTES_FILE=$(mktemp)
           if ! jq -er '.inputs.release_notes | select(type == "string" and length > 0)' \
             "$GITHUB_EVENT_PATH" > "$NOTES_FILE"; then
@@ -870,25 +897,25 @@ jobs:
           python3 scripts/release_control/release_note_visuals.py render \
             --plan "$VISUAL_PLAN_FILE" \
             --repository "${{ github.repository }}" \
-            --tag "${{ needs.prepare.outputs.tag }}" \
+            --tag "${WORKFLOW_OUTPUT_2}" \
             --output "$VISUAL_MARKDOWN_FILE"
           python3 scripts/release_control/render_release_body.py \
             --version "$VERSION" \
             --release-notes-file "$NOTES_FILE" \
             --release-visuals-file "$VISUAL_MARKDOWN_FILE" \
             --output "$RENDERED_NOTES_FILE" \
-            --promotion-channel "${{ needs.prepare.outputs.release_stage }}" \
-            --candidate-tag "${{ needs.prepare.outputs.tag }}" \
-            --promoted-prerelease-tag "${{ needs.prepare.outputs.promoted_from_tag }}" \
-            --rollback-target "${{ needs.prepare.outputs.rollback_tag }}" \
-            --rollback-command "${{ needs.prepare.outputs.rollback_command }}" \
-            --planned-ga-date "${{ needs.prepare.outputs.ga_date }}" \
-            --planned-v5-eos-date "${{ needs.prepare.outputs.v5_eos_date }}" \
-            --hotfix-exception "${{ needs.prepare.outputs.hotfix_exception }}" \
-            --hotfix-reason "${{ needs.prepare.outputs.hotfix_reason }}" \
-            --require-windows-signing "${{ needs.prepare.outputs.require_windows_signing }}" \
-            --unsigned-windows-exception "${{ needs.prepare.outputs.unsigned_windows_exception }}" \
-            --unsigned-windows-reason "${{ needs.prepare.outputs.unsigned_windows_reason }}"
+            --promotion-channel "${WORKFLOW_OUTPUT_3}" \
+            --candidate-tag "${WORKFLOW_OUTPUT_2}" \
+            --promoted-prerelease-tag "${WORKFLOW_OUTPUT_4}" \
+            --rollback-target "${WORKFLOW_OUTPUT_5}" \
+            --rollback-command "${WORKFLOW_OUTPUT_6}" \
+            --planned-ga-date "${WORKFLOW_OUTPUT_7}" \
+            --planned-v5-eos-date "${WORKFLOW_OUTPUT_8}" \
+            --hotfix-exception "${WORKFLOW_OUTPUT_9}" \
+            --hotfix-reason "${WORKFLOW_OUTPUT_10}" \
+            --require-windows-signing "${WORKFLOW_OUTPUT_11}" \
+            --unsigned-windows-exception "${WORKFLOW_OUTPUT_12}" \
+            --unsigned-windows-reason "${WORKFLOW_OUTPUT_13}"
 
           # Customer-facing improvements provide the compact pre-update preview.
           # Historical Highlights sections remain supported for older packets.
@@ -910,8 +937,9 @@ jobs:
         id: existing_release
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           EXISTING_RELEASE=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate | jq -sc --arg tag "$TAG" 'add | map(select(.tag_name == $tag)) | first // empty')
           RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
           RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url // empty')
@@ -928,13 +956,18 @@ jobs:
       - name: Create tag
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
+          WORKFLOW_OUTPUT_2: ${{ steps.existing_release.outputs.release_id }}
+          WORKFLOW_OUTPUT_3: ${{ steps.existing_release.outputs.release_is_draft }}
+          WORKFLOW_OUTPUT_4: ${{ steps.existing_release.outputs.release_published_at }}
+          WORKFLOW_OUTPUT_5: ${{ steps.existing_release.outputs.release_activation_committed }}
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           HEAD_SHA=$(git rev-parse HEAD)
-          EXISTING_RELEASE_ID="${{ steps.existing_release.outputs.release_id }}"
-          EXISTING_RELEASE_DRAFT="${{ steps.existing_release.outputs.release_is_draft }}"
-          EXISTING_RELEASE_PUBLISHED_AT="${{ steps.existing_release.outputs.release_published_at }}"
-          EXISTING_RELEASE_ACTIVATION_COMMITTED="${{ steps.existing_release.outputs.release_activation_committed }}"
+          EXISTING_RELEASE_ID="${WORKFLOW_OUTPUT_2}"
+          EXISTING_RELEASE_DRAFT="${WORKFLOW_OUTPUT_3}"
+          EXISTING_RELEASE_PUBLISHED_AT="${WORKFLOW_OUTPUT_4}"
+          EXISTING_RELEASE_ACTIVATION_COMMITTED="${WORKFLOW_OUTPUT_5}"
 
           REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
 
@@ -969,18 +1002,27 @@ jobs:
         id: create_release
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
+          WORKFLOW_OUTPUT_2: ${{ steps.generate_notes.outputs.notes_file }}
+          WORKFLOW_OUTPUT_3: ${{ needs.prepare.outputs.is_prerelease }}
+          WORKFLOW_OUTPUT_4: ${{ steps.existing_release.outputs.release_id }}
+          WORKFLOW_OUTPUT_5: ${{ steps.existing_release.outputs.release_url }}
+          WORKFLOW_OUTPUT_6: ${{ steps.existing_release.outputs.release_is_draft }}
+          WORKFLOW_OUTPUT_7: ${{ steps.existing_release.outputs.release_published_at }}
+          WORKFLOW_OUTPUT_8: ${{ steps.existing_release.outputs.release_activation_committed }}
+          WORKFLOW_OUTPUT_9: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          TAG="${{ needs.prepare.outputs.tag }}"
-          NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
-          IS_PRERELEASE="${{ needs.prepare.outputs.is_prerelease }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
+          NOTES_FILE="${WORKFLOW_OUTPUT_2}"
+          IS_PRERELEASE="${WORKFLOW_OUTPUT_3}"
           HEAD_SHA=$(git rev-parse HEAD)
 
-          RELEASE_ID="${{ steps.existing_release.outputs.release_id }}"
-          RELEASE_URL="${{ steps.existing_release.outputs.release_url }}"
-          IS_DRAFT="${{ steps.existing_release.outputs.release_is_draft }}"
-          PUBLISHED_AT="${{ steps.existing_release.outputs.release_published_at }}"
-          ACTIVATION_COMMITTED="${{ steps.existing_release.outputs.release_activation_committed }}"
+          RELEASE_ID="${WORKFLOW_OUTPUT_4}"
+          RELEASE_URL="${WORKFLOW_OUTPUT_5}"
+          IS_DRAFT="${WORKFLOW_OUTPUT_6}"
+          PUBLISHED_AT="${WORKFLOW_OUTPUT_7}"
+          ACTIVATION_COMMITTED="${WORKFLOW_OUTPUT_8}"
           RELEASE_PAYLOAD=$(mktemp)
           RELEASE_JSON_FILE=$(mktemp)
           ACTUAL_BODY_FILE=$(mktemp)
@@ -1041,7 +1083,7 @@ jobs:
           fi
 
           python3 scripts/release_control/render_release_body.py \
-            --version "${{ needs.prepare.outputs.version }}" \
+            --version "${WORKFLOW_OUTPUT_9}" \
             --validate-body-file "$ACTUAL_BODY_FILE" \
             --expected-body-file "$NOTES_FILE"
 
@@ -1054,8 +1096,9 @@ jobs:
       - name: Upload checksums
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           release_upload_with_retry() {
             local attempt=1
             local max_attempts=5
@@ -1096,9 +1139,10 @@ jobs:
         if: ${{ needs.prepare.outputs.visual_capture_count != '0' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ needs.prepare.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           PLAN_FILE=$(mktemp)
           jq -er '.inputs.release_screenshot_plan' "$GITHUB_EVENT_PATH" > "$PLAN_FILE"
           release_upload_with_retry() {
@@ -1130,8 +1174,9 @@ jobs:
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           release_upload_with_retry() {
             local attempt=1
             local max_attempts=5
@@ -1236,13 +1281,18 @@ jobs:
 
       - name: Stop after staging (draft only)
         if: ${{ github.event.inputs.draft_only == 'true' }}
-        run: 'echo "Draft-only mode: ${{ steps.create_release.outputs.release_url }}"'
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.create_release.outputs.release_url }}
+        run: 'echo "Draft-only mode: ${WORKFLOW_OUTPUT_1}"'
 
       - name: Summary
+        env:
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
+          WORKFLOW_OUTPUT_2: ${{ steps.create_release.outputs.release_url }}
         run: |
           echo "[SUCCESS] Release assets staged behind an unpublished draft."
-          echo "Release: ${{ needs.prepare.outputs.tag }}"
-          echo "URL: ${{ steps.create_release.outputs.release_url }}"
+          echo "Release: ${WORKFLOW_OUTPUT_1}"
+          echo "URL: ${WORKFLOW_OUTPUT_2}"
 
   backfill_release_assets:
     needs:
@@ -1288,19 +1338,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
-          ./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"
+          ./scripts/backfill-release-assets.sh --tag "${WORKFLOW_OUTPUT_1}" --repo "${{ github.repository }}"
 
       - name: Validate published release packet
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
-          ./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"
+          ./scripts/validate-published-release.sh "${WORKFLOW_OUTPUT_1}" "${{ github.repository }}"
 
       - name: Summary
+        env:
+          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
         run: |
           echo "[SUCCESS] Historical release assets repaired"
-          echo "Release: ${{ needs.prepare.outputs.tag }}"
+          echo "Release: ${WORKFLOW_OUTPUT_1}"
 
   publish_docker:
     needs:

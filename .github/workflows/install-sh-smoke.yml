@@ -356,5 +356,7 @@ jobs:
           echo "✓ Installed version matches ${VERSION}"
 
       - name: Smoke result
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.inputs.outputs.tag }}
         run: |
-          echo "::notice::install.sh smoke passed for tag ${{ steps.inputs.outputs.tag }}"
+          echo "::notice::install.sh smoke passed for tag ${WORKFLOW_OUTPUT_1}"

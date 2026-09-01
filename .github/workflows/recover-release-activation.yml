@@ -188,10 +188,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          WORKFLOW_OUTPUT_1: ${{ steps.qualify.outputs.source_sha }}
         run: |
           set -euo pipefail
           ./scripts/verify-release-helm-chart.sh \
-            "${TAG}" "${{ steps.qualify.outputs.source_sha }}" \
+            "${TAG}" "${WORKFLOW_OUTPUT_1}" \
             "${GITHUB_REPOSITORY}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -215,10 +216,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          WORKFLOW_OUTPUT_1: ${{ steps.qualify.outputs.source_sha }}
         run: |
           set -euo pipefail
           ./scripts/verify-release-container-images.sh \
-            "${TAG}" "${{ steps.qualify.outputs.source_sha }}" \
+            "${TAG}" "${WORKFLOW_OUTPUT_1}" \
             "${{ github.repository }}" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch a fresh durable convergence owner

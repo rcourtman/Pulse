@@ -145,9 +145,11 @@ jobs:
           fetch-tags: true
 
       - name: Validate governed release line for selected tag
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.target.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.target.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           VERSION="${TAG#v}"
 
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
@@ -171,9 +173,11 @@ jobs:
 
       - name: Resolve target-compatible demo runtime profile
         id: runtime_profile
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.target.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.target.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           TAG_REF="refs/tags/${TAG}"
           PROFILE_OUTPUT="$(bash .github/scripts/resolve-demo-runtime-profile.sh "${TAG_REF}")"
           printf '%s\n' "$PROFILE_OUTPUT" >> "$GITHUB_OUTPUT"
@@ -197,10 +201,13 @@ jobs:
       - name: Check release type
         env:
           VERIFY_ONLY: ${{ inputs.verify_only }}
+          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
+          WORKFLOW_OUTPUT_2: ${{ needs.resolve.outputs.target }}
+          WORKFLOW_OUTPUT_3: ${{ needs.resolve.outputs.environment_name }}
         run: |
-          echo "Tag: ${{ needs.resolve.outputs.tag }}"
-          echo "Target: ${{ needs.resolve.outputs.target }}"
-          echo "Environment: ${{ needs.resolve.outputs.environment_name }}"
+          echo "Tag: ${WORKFLOW_OUTPUT_1}"
+          echo "Target: ${WORKFLOW_OUTPUT_2}"
+          echo "Environment: ${WORKFLOW_OUTPUT_3}"
           echo "Verification only: ${VERIFY_ONLY}"
 
       - name: Validate demo environment configuration
@@ -298,9 +305,11 @@ jobs:
 
       - name: Wait for release assets
         if: inputs.verify_only != true
+        env:
+          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ needs.resolve.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           echo "Waiting for activated release assets to be available..."
 
           MAX_ATTEMPTS=30
@@ -335,9 +344,10 @@ jobs:
         if: inputs.verify_only != true
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ needs.resolve.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           TRUSTED_SSH_PUBLIC_KEY="$(
             go run ./scripts/release_update_key.go public-key-ssh \
               --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
@@ -396,9 +406,11 @@ jobs:
 
       - name: Resolve demo service identity
         id: config
+        env:
+          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.target }}
         run: |
           set -euo pipefail
-          TARGET="${{ needs.resolve.outputs.target }}"
+          TARGET="${WORKFLOW_OUTPUT_1}"
           SERVICE_NAME="${DEMO_SERVICE_NAME:-}"
           if [ -z "$SERVICE_NAME" ]; then
             SERVICE_NAME="pulse"
@@ -414,9 +426,10 @@ jobs:
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
-          TARGET="${{ needs.resolve.outputs.tag }}"
+          TARGET="${WORKFLOW_OUTPUT_1}"
           TARGET_STRIPPED="${TARGET#v}"
           CURRENT=$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
             "curl -fsS ${DEMO_LOCAL_BASE_URL}/api/version | jq -r .version")
@@ -439,9 +452,10 @@ jobs:
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          WORKFLOW_OUTPUT_1: ${{ steps.config.outputs.service_name }}
         run: |
           set -euo pipefail
-          SERVICE_NAME="${{ steps.config.outputs.service_name }}"
+          SERVICE_NAME="${WORKFLOW_OUTPUT_1}"
           REMOTE_SCRIPT=$(cat <<'EOF'
           set -euo pipefail
           SERVICE_NAME="$1"
@@ -542,10 +556,12 @@ jobs:
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
+          WORKFLOW_OUTPUT_2: ${{ steps.config.outputs.service_name }}
         run: |
           set -euo pipefail
-          TAG="${{ needs.resolve.outputs.tag }}"
-          SERVICE_NAME="${{ steps.config.outputs.service_name }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
+          SERVICE_NAME="${WORKFLOW_OUTPUT_2}"
           REMOTE_SCRIPT=$(cat <<'EOF'
           set -euo pipefail
           TAG="$1"
@@ -566,22 +582,36 @@ jobs:
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          WORKFLOW_OUTPUT_1: ${{ steps.config.outputs.service_name }}
+          WORKFLOW_OUTPUT_2: ${{ needs.resolve.outputs.mock_nodes }}
+          WORKFLOW_OUTPUT_3: ${{ needs.resolve.outputs.mock_vms_per_node }}
+          WORKFLOW_OUTPUT_4: ${{ needs.resolve.outputs.mock_lxcs_per_node }}
+          WORKFLOW_OUTPUT_5: ${{ needs.resolve.outputs.mock_docker_hosts }}
+          WORKFLOW_OUTPUT_6: ${{ needs.resolve.outputs.mock_docker_containers }}
+          WORKFLOW_OUTPUT_7: ${{ needs.resolve.outputs.mock_generic_hosts }}
+          WORKFLOW_OUTPUT_8: ${{ needs.resolve.outputs.mock_k8s_clusters }}
+          WORKFLOW_OUTPUT_9: ${{ needs.resolve.outputs.mock_k8s_nodes }}
+          WORKFLOW_OUTPUT_10: ${{ needs.resolve.outputs.mock_k8s_pods }}
+          WORKFLOW_OUTPUT_11: ${{ needs.resolve.outputs.mock_k8s_deployments }}
+          WORKFLOW_OUTPUT_12: ${{ needs.resolve.outputs.mock_seed_duration }}
+          WORKFLOW_OUTPUT_13: ${{ needs.resolve.outputs.mock_sample_interval }}
+          WORKFLOW_OUTPUT_14: ${{ needs.resolve.outputs.mock_update_interval }}
         run: |
           set -euo pipefail
-          SERVICE_NAME="${{ steps.config.outputs.service_name }}"
-          MOCK_NODES="${{ needs.resolve.outputs.mock_nodes }}"
-          MOCK_VMS_PER_NODE="${{ needs.resolve.outputs.mock_vms_per_node }}"
-          MOCK_LXCS_PER_NODE="${{ needs.resolve.outputs.mock_lxcs_per_node }}"
-          MOCK_DOCKER_HOSTS="${{ needs.resolve.outputs.mock_docker_hosts }}"
-          MOCK_DOCKER_CONTAINERS="${{ needs.resolve.outputs.mock_docker_containers }}"
-          MOCK_GENERIC_HOSTS="${{ needs.resolve.outputs.mock_generic_hosts }}"
-          MOCK_K8S_CLUSTERS="${{ needs.resolve.outputs.mock_k8s_clusters }}"
-          MOCK_K8S_NODES="${{ needs.resolve.outputs.mock_k8s_nodes }}"
-          MOCK_K8S_PODS="${{ needs.resolve.outputs.mock_k8s_pods }}"
-          MOCK_K8S_DEPLOYMENTS="${{ needs.resolve.outputs.mock_k8s_deployments }}"
-          MOCK_SEED_DURATION="${{ needs.resolve.outputs.mock_seed_duration }}"
-          MOCK_SAMPLE_INTERVAL="${{ needs.resolve.outputs.mock_sample_interval }}"
-          MOCK_UPDATE_INTERVAL="${{ needs.resolve.outputs.mock_update_interval }}"
+          SERVICE_NAME="${WORKFLOW_OUTPUT_1}"
+          MOCK_NODES="${WORKFLOW_OUTPUT_2}"
+          MOCK_VMS_PER_NODE="${WORKFLOW_OUTPUT_3}"
+          MOCK_LXCS_PER_NODE="${WORKFLOW_OUTPUT_4}"
+          MOCK_DOCKER_HOSTS="${WORKFLOW_OUTPUT_5}"
+          MOCK_DOCKER_CONTAINERS="${WORKFLOW_OUTPUT_6}"
+          MOCK_GENERIC_HOSTS="${WORKFLOW_OUTPUT_7}"
+          MOCK_K8S_CLUSTERS="${WORKFLOW_OUTPUT_8}"
+          MOCK_K8S_NODES="${WORKFLOW_OUTPUT_9}"
+          MOCK_K8S_PODS="${WORKFLOW_OUTPUT_10}"
+          MOCK_K8S_DEPLOYMENTS="${WORKFLOW_OUTPUT_11}"
+          MOCK_SEED_DURATION="${WORKFLOW_OUTPUT_12}"
+          MOCK_SAMPLE_INTERVAL="${WORKFLOW_OUTPUT_13}"
+          MOCK_UPDATE_INTERVAL="${WORKFLOW_OUTPUT_14}"
           REMOTE_SCRIPT=$(cat <<'EOF'
           set -euo pipefail
           SERVICE_NAME="${1:-pulse}"
@@ -725,6 +755,7 @@ jobs:
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
           sleep 5
@@ -734,7 +765,7 @@ jobs:
 
           echo "Demo server is now running version: $VERSION"
 
-          TAG="${{ needs.resolve.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           TAG_STRIPPED="${TAG#v}"
           if [ "$VERSION" != "$TAG" ] && [ "$VERSION" != "$TAG_STRIPPED" ]; then
             echo "::error::Version mismatch! Expected $TAG but got $VERSION"

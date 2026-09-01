@@ -129,21 +129,26 @@ jobs:
           git checkout --detach "refs/tags/${RELEASE_TAG}"
 
       - name: Align chart metadata links
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.versions.outputs.chart_version }}
         run: |
           python3 scripts/sync_chart_release_metadata.py \
             --chart deploy/helm/pulse/Chart.yaml \
-            --version "${{ steps.versions.outputs.chart_version }}" \
+            --version "${WORKFLOW_OUTPUT_1}" \
             --repo "${{ github.repository }}"
 
       - name: Helm lint (strict)
         run: helm lint deploy/helm/pulse --strict
 
       - name: Package chart
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.versions.outputs.chart_version }}
+          WORKFLOW_OUTPUT_2: ${{ steps.versions.outputs.app_version }}
         run: |
           mkdir -p dist
           helm package deploy/helm/pulse \
-            --version "${{ steps.versions.outputs.chart_version }}" \
-            --app-version "${{ steps.versions.outputs.app_version }}" \
+            --version "${WORKFLOW_OUTPUT_1}" \
+            --app-version "${WORKFLOW_OUTPUT_2}" \
             --destination dist
 
       - name: Upload packaged chart artifact
@@ -215,7 +220,9 @@ jobs:
         if: github.event_name == 'release'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          WORKFLOW_OUTPUT_1: ${{ steps.versions.outputs.release_tag }}
+          WORKFLOW_OUTPUT_2: ${{ steps.versions.outputs.chart_version }}
         run: |
-          gh release upload "${{ steps.versions.outputs.release_tag }}" \
-            dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz \
+          gh release upload "${WORKFLOW_OUTPUT_1}" \
+            "dist/pulse-${WORKFLOW_OUTPUT_2}.tgz" \
             --clobber

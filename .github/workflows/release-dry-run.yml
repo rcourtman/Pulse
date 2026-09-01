@@ -152,6 +152,7 @@ jobs:
           HOTFIX_REASON_INPUT: ${{ inputs.hotfix_reason }}
           UNSIGNED_WINDOWS_EXCEPTION_INPUT: ${{ inputs.unsigned_windows_exception }}
           UNSIGNED_WINDOWS_REASON_INPUT: ${{ inputs.unsigned_windows_reason }}
+          WORKFLOW_OUTPUT_1: ${{ steps.branch_policy.outputs.required_branch }}
         run: |
           set -euo pipefail
 
@@ -166,7 +167,7 @@ jobs:
             IS_PRERELEASE="true"
           fi
 
-          REQUIRED_BRANCH="${{ steps.branch_policy.outputs.required_branch }}"
+          REQUIRED_BRANCH="${WORKFLOW_OUTPUT_1}"
 
           if [ "${GITHUB_REF_NAME}" != "$REQUIRED_BRANCH" ]; then
             echo "::error::Rehearsal version ${VERSION} requires branch ${REQUIRED_BRANCH}, but workflow ran on ${GITHUB_REF_NAME}."
@@ -226,6 +227,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           MOBILE_RELEASE_DECISION: ${{ inputs.mobile_release_decision }}
           MOBILE_RELEASE_EVIDENCE: ${{ inputs.mobile_release_evidence }}
+          WORKFLOW_OUTPUT_1: ${{ steps.rehearsal.outputs.version }}
         run: |
           set -euo pipefail
           DECISION="${MOBILE_RELEASE_DECISION:-}"
@@ -235,7 +237,7 @@ jobs:
             EVIDENCE="Scheduled release dry-run watchdog; no mobile release packet is being dispatched."
           fi
           python3 scripts/release_control/mobile_release_gate.py \
-            --version "${{ steps.rehearsal.outputs.version }}" \
+            --version "${WORKFLOW_OUTPUT_1}" \
             --decision "${DECISION}" \
             --evidence "${EVIDENCE}" \
             --github-annotations
@@ -372,6 +374,20 @@ jobs:
           NOTE: ${{ inputs.note }}
           REHEARSAL_CONCLUSION: ${{ steps.rehearsal.conclusion }}
           JOB_CONCLUSION: ${{ job.status }}
+          WORKFLOW_OUTPUT_1: ${{ steps.rehearsal.outputs.version }}
+          WORKFLOW_OUTPUT_2: ${{ steps.rehearsal.outputs.tag }}
+          WORKFLOW_OUTPUT_3: ${{ steps.rehearsal.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}
+          WORKFLOW_OUTPUT_4: ${{ steps.rehearsal.outputs.promoted_from_tag }}
+          WORKFLOW_OUTPUT_5: ${{ steps.rehearsal.outputs.rollback_tag }}
+          WORKFLOW_OUTPUT_6: ${{ steps.rehearsal.outputs.rollback_command }}
+          WORKFLOW_OUTPUT_7: ${{ steps.rehearsal.outputs.soak_hours }}
+          WORKFLOW_OUTPUT_8: ${{ steps.rehearsal.outputs.ga_date }}
+          WORKFLOW_OUTPUT_9: ${{ steps.rehearsal.outputs.v5_eos_date }}
+          WORKFLOW_OUTPUT_10: ${{ steps.rehearsal.outputs.hotfix_exception }}
+          WORKFLOW_OUTPUT_11: ${{ steps.rehearsal.outputs.hotfix_reason }}
+          WORKFLOW_OUTPUT_12: ${{ steps.rehearsal.outputs.require_windows_signing }}
+          WORKFLOW_OUTPUT_13: ${{ steps.rehearsal.outputs.unsigned_windows_exception }}
+          WORKFLOW_OUTPUT_14: ${{ steps.rehearsal.outputs.unsigned_windows_reason }}
         run: |
           mkdir -p release-dry-run
           SUMMARY_FILE="release-dry-run/rc-to-ga-rehearsal-summary.md"
@@ -399,35 +415,35 @@ jobs:
               echo ""
               echo "- Workflow run: ${RUN_URL}"
               echo "- Branch: ${GITHUB_REF_NAME}"
-              echo "- Version: ${{ steps.rehearsal.outputs.version }}"
-              echo "- Candidate stable tag: ${{ steps.rehearsal.outputs.tag }}"
-              echo "- Promotion channel: ${{ steps.rehearsal.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}"
-              if [ -n "${{ steps.rehearsal.outputs.promoted_from_tag }}" ]; then
-                echo "- Promoted prerelease tag: ${{ steps.rehearsal.outputs.promoted_from_tag }}"
+              echo "- Version: ${WORKFLOW_OUTPUT_1}"
+              echo "- Candidate stable tag: ${WORKFLOW_OUTPUT_2}"
+              echo "- Promotion channel: ${WORKFLOW_OUTPUT_3}"
+              if [ -n "${WORKFLOW_OUTPUT_4}" ]; then
+                echo "- Promoted prerelease tag: ${WORKFLOW_OUTPUT_4}"
               fi
-              if [ -n "${{ steps.rehearsal.outputs.rollback_tag }}" ]; then
-                echo "- Rollback target: ${{ steps.rehearsal.outputs.rollback_tag }}"
+              if [ -n "${WORKFLOW_OUTPUT_5}" ]; then
+                echo "- Rollback target: ${WORKFLOW_OUTPUT_5}"
               fi
-              if [ -n "${{ steps.rehearsal.outputs.rollback_command }}" ]; then
-                echo "- Rollback command: \`${{ steps.rehearsal.outputs.rollback_command }}\`"
+              if [ -n "${WORKFLOW_OUTPUT_6}" ]; then
+                echo "- Rollback command: \`${WORKFLOW_OUTPUT_6}\`"
               fi
-              if [ -n "${{ steps.rehearsal.outputs.soak_hours }}" ]; then
-                echo "- Prerelease soak hours at rehearsal time: ${{ steps.rehearsal.outputs.soak_hours }}"
+              if [ -n "${WORKFLOW_OUTPUT_7}" ]; then
+                echo "- Prerelease soak hours at rehearsal time: ${WORKFLOW_OUTPUT_7}"
               fi
-              if [ -n "${{ steps.rehearsal.outputs.ga_date }}" ]; then
-                echo "- Planned GA date: ${{ steps.rehearsal.outputs.ga_date }}"
+              if [ -n "${WORKFLOW_OUTPUT_8}" ]; then
+                echo "- Planned GA date: ${WORKFLOW_OUTPUT_8}"
               fi
-              if [ -n "${{ steps.rehearsal.outputs.v5_eos_date }}" ]; then
-                echo "- Planned v5 end-of-support date: ${{ steps.rehearsal.outputs.v5_eos_date }}"
+              if [ -n "${WORKFLOW_OUTPUT_9}" ]; then
+                echo "- Planned v5 end-of-support date: ${WORKFLOW_OUTPUT_9}"
               fi
-              echo "- Hotfix exception: ${{ steps.rehearsal.outputs.hotfix_exception }}"
-              if [ -n "${{ steps.rehearsal.outputs.hotfix_reason }}" ]; then
-                echo "- Hotfix reason: ${{ steps.rehearsal.outputs.hotfix_reason }}"
+              echo "- Hotfix exception: ${WORKFLOW_OUTPUT_10}"
+              if [ -n "${WORKFLOW_OUTPUT_11}" ]; then
+                echo "- Hotfix reason: ${WORKFLOW_OUTPUT_11}"
               fi
-              echo "- Windows Authenticode required: ${{ steps.rehearsal.outputs.require_windows_signing }}"
-              echo "- Unsigned Windows exception: ${{ steps.rehearsal.outputs.unsigned_windows_exception }}"
-              if [ -n "${{ steps.rehearsal.outputs.unsigned_windows_reason }}" ]; then
-                echo "- Unsigned Windows reason: ${{ steps.rehearsal.outputs.unsigned_windows_reason }}"
+              echo "- Windows Authenticode required: ${WORKFLOW_OUTPUT_12}"
+              echo "- Unsigned Windows exception: ${WORKFLOW_OUTPUT_13}"
+              if [ -n "${WORKFLOW_OUTPUT_14}" ]; then
+                echo "- Unsigned Windows reason: ${WORKFLOW_OUTPUT_14}"
               fi
               if [ -n "${NOTE}" ]; then
                 echo "- Operator note: ${NOTE}"

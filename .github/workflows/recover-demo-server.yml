@@ -58,9 +58,11 @@ jobs:
 
       - name: Resolve target-compatible recovery profile
         id: runtime_profile
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.stable.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.stable.outputs.tag }}"
+          TAG="${WORKFLOW_OUTPUT_1}"
           PROFILE_OUTPUT="$(bash .github/scripts/resolve-demo-runtime-profile.sh "refs/tags/${TAG}")"
           printf '%s\n' "$PROFILE_OUTPUT" >> "$GITHUB_OUTPUT"
           printf 'Resolved stable demo recovery profile for %s:\n%s\n' "$TAG" "$PROFILE_OUTPUT"

@@ -296,6 +296,7 @@ jobs:
           QUALIFIED_COMMIT: ${{ steps.source.outputs.commit }}
           RELEASE_ID: ${{ steps.release.outputs.release_id }}
           TAG: ${{ steps.release.outputs.tag }}
+          WORKFLOW_OUTPUT_1: ${{ steps.lab.outputs.elapsed_seconds }}
         run: |
           set -euo pipefail
           release_dir="$RUNNER_TEMP/secure-runtime-verified"
@@ -322,7 +323,7 @@ jobs:
             --collector-v2-signature "${release_dir}/pulse-secure-runtime-collector-v2-linux-amd64.sig" \
             --collector-v3-signature "${release_dir}/pulse-secure-runtime-collector-v3-linux-amd64.sig" \
             --collector-v4-signature "${release_dir}/pulse-agent-linux-amd64.sig" \
-            --elapsed-seconds "${{ steps.lab.outputs.elapsed_seconds }}" \
+            --elapsed-seconds "${WORKFLOW_OUTPUT_1}" \
             --release-candidate-tag "${TAG}" \
             --release-repository "${GITHUB_REPOSITORY}" \
             --release-id "${RELEASE_ID}" \
@@ -335,7 +336,9 @@ jobs:
 
       - name: Stop disposable systemd host
         if: ${{ always() && steps.lab.outputs.container != '' }}
-        run: docker rm --force "${{ steps.lab.outputs.container }}"
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.lab.outputs.container }}
+        run: docker rm --force "${WORKFLOW_OUTPUT_1}"
 
       - name: Upload immutable RC qualification evidence
         if: ${{ success() }}

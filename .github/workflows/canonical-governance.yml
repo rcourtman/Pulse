@@ -71,9 +71,11 @@ jobs:
 
       - name: Run canonical completion guard against changed commits
         shell: bash
+        env:
+          WORKFLOW_OUTPUT_1: ${{ steps.diff.outputs.range }}
         run: |
           set -euo pipefail
-          range="${{ steps.diff.outputs.range }}"
+          range="${WORKFLOW_OUTPUT_1}"
           if [ -z "${range}" ]; then
             printf '' | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
             exit 0

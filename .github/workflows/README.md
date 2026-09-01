@@ -36,9 +36,11 @@ six-hour default.
 Each workflow declares its default `GITHUB_TOKEN` permissions explicitly, and
 both workflow defaults and job-level overrides enumerate scopes instead of
 using `read-all`, `write-all`, or dynamic grants. Workflow inputs, secrets,
-`github.token`, and attacker-controlled GitHub event metadata are passed to
-`run` steps through `env`; they are data and must never be interpolated into
-the generated shell program.
+`github.token`, step and job outputs, and attacker-controlled GitHub event
+metadata are passed to `run` steps through `env`; they are data and must never
+be interpolated into the generated shell program. Outputs remain data even
+when an intermediate step parsed or validated them, because later substitution
+would turn their value back into shell source.
 
 Workflows triggered by `pull_request` cannot reference confidential repository
 secrets. Canonical governance therefore keeps its pull-request checks local to

@@ -24,11 +24,16 @@ USES_RE = re.compile(
 )
 RUN_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('run')}\s*:\s*(.*)$")
 EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
-# Workflow-call and dispatch inputs are data, not shell source. Secrets include
-# github.token because Actions makes that credential available independently of
-# an explicit secrets.GITHUB_TOKEN reference.
+# Workflow-call and dispatch inputs are data, not shell source. Step and job
+# outputs are data too: they can carry event or input values across an
+# otherwise-safe intermediate step. Secrets include github.token because
+# Actions makes that credential available independently of an explicit
+# secrets.GITHUB_TOKEN reference.
 SHELL_DATA_CONTEXT_RE = re.compile(
-    r"(?<![\w.])(?:inputs|secrets)\b|(?<![\w.])github\.token\b"
+    r"(?<![\w.])(?:inputs|secrets)\b|"
+    r"(?<![\w.])github\.token\b|"
+    r"(?<![\w.])(?:steps|needs)\b"
+    r"(?=[^}\n]*(?:\.outputs\b|\[\s*['\"]outputs['\"]\s*\]))"
 )
 # GitHub documents these event fields as attacker-controlled strings. They may
 # be passed through env, but interpolating them into a generated shell program
@@ -430,7 +435,8 @@ def audit_workflow(path: Path) -> list[Finding]:
                             Finding(
                                 path,
                                 script_index + 1,
-                                "workflow inputs and secrets must enter run scripts through env",
+                                "workflow inputs, secrets, and step/job outputs "
+                                "must enter run scripts through env",
                             )
                         )
                     elif UNTRUSTED_GITHUB_CONTEXT_RE.search(expression):

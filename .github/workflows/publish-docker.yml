@@ -216,18 +216,20 @@ jobs:
       - name: Output image information
         env:
           IMAGE_KIND: ${{ matrix.image }}
+          WORKFLOW_OUTPUT_1: ${{ steps.version.outputs.tag }}
+          WORKFLOW_OUTPUT_2: ${{ steps.version.outputs.version }}
         run: |
           echo "✅ Exact-version ${IMAGE_KIND} Docker image staged successfully!"
           if [[ "${IMAGE_KIND}" == "server" ]]; then
             echo "Server images (linux/amd64, linux/arm64):"
-            echo "  - rcourtman/pulse:${{ steps.version.outputs.tag }}"
-            echo "  - rcourtman/pulse:${{ steps.version.outputs.version }}"
+            echo "  - rcourtman/pulse:${WORKFLOW_OUTPUT_1}"
+            echo "  - rcourtman/pulse:${WORKFLOW_OUTPUT_2}"
             echo "Pulse Agent binaries ship as release assets, not as a Docker image."
             echo "See the GitHub release page for pulse-agent-{darwin,freebsd,linux,windows}-{amd64,arm64,...}."
           else
             echo "Control-plane images (linux/amd64, linux/arm64):"
-            echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}"
-            echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.version }}"
+            echo "  - rcourtman/pulse-control-plane:${WORKFLOW_OUTPUT_1}"
+            echo "  - rcourtman/pulse-control-plane:${WORKFLOW_OUTPUT_2}"
           fi
           echo "Floating aliases are promoted separately at the activation barrier."
 
