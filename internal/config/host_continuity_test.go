@@ -79,6 +79,18 @@ func TestHostContinuityStoreRoundTripAndMatch(t *testing.T) {
 	if _, ok := reloaded.Match("", "", "", "host-1.local", "token-2", now.Add(-time.Minute)); ok {
 		t.Fatal("expected token mismatch not to match")
 	}
+
+	// #1753: hostname+token alone must not fold a different machine into this
+	// entry. Two standalone sites reusing one short hostname and one shared
+	// install token report distinct machine IDs.
+	if _, ok := reloaded.Match("", "machine-other-site", "", "host-1.local", "token-1", now.Add(-time.Minute)); ok {
+		t.Fatal("expected hostname+token match to be rejected for a conflicting machine ID")
+	}
+	if entry, ok := reloaded.Match("", "machine-1", "", "host-1.local", "token-1", now.Add(-time.Minute)); !ok {
+		t.Fatal("expected hostname+token match to survive an agreeing machine ID")
+	} else if entry.HostID != "host-1" {
+		t.Fatalf("matched host ID = %q, want %q", entry.HostID, "host-1")
+	}
 }
 
 func TestHostContinuityStoreRecentEntriesFiltersStaleState(t *testing.T) {

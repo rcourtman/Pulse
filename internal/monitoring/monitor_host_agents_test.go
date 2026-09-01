@@ -4931,11 +4931,73 @@ func TestIssue1654FreshInstallReusesStalePhysicalHostIdentity(t *testing.T) {
 	if got := len(monitor.state.GetHosts()); got != 1 {
 		t.Fatalf("host count = %d, want 1", got)
 	}
-	if got := monitor.hostTokenBindings["fresh-token:disk-host.local"]; got != "original-host-id" {
+	if got := monitor.hostTokenBindings[hostTokenMachineBindingKey("fresh-token", "disk-host.local", "machine-stable")]; got != "original-host-id" {
 		t.Fatalf("fresh token binding = %q, want original-host-id", got)
 	}
 	if _, ok := monitor.hostTokenBindings["old-token:disk-host.local"]; ok {
 		t.Fatal("pre-install token binding survived stable-ID re-enrollment")
+	}
+}
+
+// TestIssue1753SharedTokenSameHostnameKeepsMachinesDistinct models two
+// standalone Proxmox sites that reuse one short node name and were installed
+// with the same pasted install token. The token+hostname binding must not fold
+// the second machine into the first one's identity: pre-fix, the two records
+// collapsed into a single flip-flopping host, and removing that host revoked
+// the shared token, which surfaced as 401 "Unauthorized access attempt" on
+// /api/agents/agent/report for the surviving site.
+func TestIssue1753SharedTokenSameHostnameKeepsMachinesDistinct(t *testing.T) {
+	monitor := issue1654Monitor()
+	createdAt := time.Now().UTC().Add(-time.Hour)
+	sharedToken := issue1654InstallToken("shared-token", createdAt)
+
+	siteReport := func(machineID string, timestamp time.Time) agentshost.Report {
+		return agentshost.Report{
+			Agent: agentshost.AgentInfo{
+				Version:         "6.4.2",
+				IntervalSeconds: 30,
+			},
+			Host: agentshost.HostInfo{
+				MachineID: machineID,
+				Hostname:  "pve01",
+				Platform:  "proxmox",
+			},
+			Timestamp: timestamp,
+		}
+	}
+
+	now := time.Now().UTC()
+	var siteAID, siteBID string
+	for round := 0; round < 3; round++ {
+		hostA, err := monitor.ApplyHostReport(siteReport("machine-site-a", now.Add(time.Duration(round)*time.Minute)), sharedToken)
+		if err != nil {
+			t.Fatalf("round %d site A ApplyHostReport() error = %v", round, err)
+		}
+		hostB, err := monitor.ApplyHostReport(siteReport("machine-site-b", now.Add(time.Duration(round)*time.Minute+30*time.Second)), sharedToken)
+		if err != nil {
+			t.Fatalf("round %d site B ApplyHostReport() error = %v", round, err)
+		}
+		if round == 0 {
+			siteAID, siteBID = hostA.ID, hostB.ID
+			if siteAID == siteBID {
+				t.Fatalf("both sites resolved to one identity %q", siteAID)
+			}
+			continue
+		}
+		if hostA.ID != siteAID || hostB.ID != siteBID {
+			t.Fatalf("round %d identities flapped: site A %q (want %q), site B %q (want %q)",
+				round, hostA.ID, siteAID, hostB.ID, siteBID)
+		}
+	}
+
+	hosts := monitor.state.GetHosts()
+	if len(hosts) != 2 {
+		t.Fatalf("host count = %d, want 2 (one per site)", len(hosts))
+	}
+	for _, host := range hosts {
+		if host.TokenID != "shared-token" {
+			t.Fatalf("host %q token = %q, want shared-token", host.ID, host.TokenID)
+		}
 	}
 }
 

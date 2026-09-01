@@ -316,6 +316,7 @@ func (s *HostContinuityStore) Match(
 	candidates := uniqueTrimmedStrings(reportHostID, machineID, agentID)
 	hostname = strings.TrimSpace(hostname)
 	tokenID = strings.TrimSpace(tokenID)
+	machineID = strings.TrimSpace(machineID)
 
 	var best HostContinuityEntry
 	matched := false
@@ -350,6 +351,14 @@ func (s *HostContinuityStore) Match(
 			continue
 		}
 		if tokenID != "" && (entry.TokenID == "" || entry.TokenID != tokenID) {
+			continue
+		}
+		// Hostname+token alone must not adopt another machine's identity: two
+		// standalone sites reusing one short hostname and one shared install
+		// token are distinct machines, and folding them here is what collapsed
+		// the reporter's estate in #1753. A recorded machine ID that disagrees
+		// with the report's machine ID is proof of a different machine.
+		if machineID != "" && strings.TrimSpace(entry.MachineID) != "" && !strings.EqualFold(strings.TrimSpace(entry.MachineID), machineID) {
 			continue
 		}
 		if !matched || entry.LastSeen.After(best.LastSeen) {
