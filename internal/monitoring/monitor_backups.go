@@ -1823,6 +1823,13 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	// denied or transiently unavailable, keep the previous conservative
 	// inference rather than claiming that no write is active.
 	if hasIncompletePBSBackup(allBackups) {
+		// Write-activity evidence belongs to this poll, not to the snapshot
+		// cache. A failed snapshot refresh may have reused an incomplete
+		// artifact whose previous poll authoritatively found no writer. Clear
+		// that old observation before asking for the current task view so a
+		// task-query failure leaves visibility unknown instead of publishing a
+		// stale terminal-failure conclusion.
+		clearPBSWriteActivityObservation(allBackups)
 		runningDataTasks, runningTasksErr := client.ListRunningDataTasks(ctx)
 		if runningTasksErr != nil {
 			log.Warn().Err(runningTasksErr).
@@ -1895,6 +1902,13 @@ func hasIncompletePBSBackup(backups []models.PBSBackup) bool {
 		}
 	}
 	return false
+}
+
+func clearPBSWriteActivityObservation(backups []models.PBSBackup) {
+	for i := range backups {
+		backups[i].WriteActivityObserved = false
+		backups[i].WriteActive = false
+	}
 }
 
 // applyPBSWriteActivity marks whether each incomplete snapshot is accounted

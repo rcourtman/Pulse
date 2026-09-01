@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1048,5 +1049,88 @@ func TestMonitor_EvaluateAgents(t *testing.T) {
 		if h.ID == "h1" && h.Status != "online" {
 			t.Errorf("Host should be online, got %s", h.Status)
 		}
+	}
+}
+
+func TestClearPBSWriteActivityObservationIsPollScoped(t *testing.T) {
+	backups := []models.PBSBackup{
+		{InProgress: true, WriteActivityObserved: true, WriteActive: true},
+		{InProgress: true, WriteActivityObserved: true},
+		{WriteActivityObserved: true, WriteActive: true},
+	}
+
+	clearPBSWriteActivityObservation(backups)
+
+	for i, backup := range backups {
+		if backup.WriteActivityObserved || backup.WriteActive {
+			t.Fatalf("backup %d retained stale write activity: %+v", i, backup)
+		}
+	}
+}
+
+// A snapshot-list failure falls back to the cached artifact. If the separate
+// running-task read also fails, the previous poll's authoritative no-writer
+// result must not survive as current evidence.
+func TestPollPBSBackupsCachedIncompleteSnapshotLosesStaleTaskObservation(t *testing.T) {
+	t.Parallel()
+
+	var snapshotRequests atomic.Int64
+	var taskRequests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/admin/datastore/archive/groups"):
+			_, _ = w.Write([]byte(`{"data":[{"backup-type":"vm","backup-id":"117","last-backup":1800000000,"backup-count":1}]}`))
+		case strings.Contains(r.URL.Path, "/admin/datastore/archive/snapshots"):
+			snapshotRequests.Add(1)
+			http.Error(w, `{"errors":"temporary snapshot failure"}`, http.StatusInternalServerError)
+		case r.URL.Path == "/api2/json/nodes/localhost/tasks":
+			taskRequests.Add(1)
+			http.Error(w, `{"errors":"temporary task failure"}`, http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := pbs.NewClient(pbs.ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!token",
+		TokenValue: "test-token",
+	})
+	if err != nil {
+		t.Fatalf("create PBS client: %v", err)
+	}
+
+	m := &Monitor{state: models.NewState()}
+	m.state.UpdatePBSBackups("pbs1", []models.PBSBackup{{
+		ID:                    "pbs-pbs1-archive--vm-117-1800000000",
+		Instance:              "pbs1",
+		Datastore:             "archive",
+		BackupType:            "vm",
+		VMID:                  "117",
+		BackupTime:            time.Unix(1800000000, 0),
+		InProgress:            true,
+		WriteActivityObserved: true,
+		WriteActive:           false,
+	}})
+
+	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+
+	if snapshotRequests.Load() != 1 {
+		t.Fatalf("snapshot requests = %d, want 1 cached fallback attempt", snapshotRequests.Load())
+	}
+	if taskRequests.Load() != 1 {
+		t.Fatalf("task requests = %d, want 1 failed current-task attempt", taskRequests.Load())
+	}
+
+	backups := m.state.GetSnapshot().PBSBackups
+	if len(backups) != 1 {
+		t.Fatalf("PBS backups = %d, want cached incomplete snapshot", len(backups))
+	}
+	if !backups[0].InProgress {
+		t.Fatalf("cached snapshot lost incomplete state: %+v", backups[0])
+	}
+	if backups[0].WriteActivityObserved || backups[0].WriteActive {
+		t.Fatalf("cached snapshot retained stale task observation: %+v", backups[0])
 	}
 }
