@@ -30,7 +30,7 @@
 6. Confirmed the replayed production checkout now provisions the tenant successfully:
    - new tenant ID: `t-YSK1GQDZS2`
    - account: `a_S3N3VSKK7A`
-   - email: `alfons@fonsie.eu`
+   - email: redacted (customer PII; resolve via the Stripe customer id below)
    - state: `active`
    - `stripe_customer_id=cus_U8Xy7ujZlLnTha`
    - `stripe_subscription_id=sub_1TAGsrBrHBocJIGHHwpjRMHg`
