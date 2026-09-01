@@ -1751,6 +1751,8 @@ lifecycle conditions, but compact empty-state spacing, icon treatment, and text
 hierarchy must compose frontend-primitives' `EmptyState` `variant="panel"`
 instead of lifecycle-local centered icon/text shells.
 
+32. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `deployment-installability`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
+
 ## Extension Points
 
 Safe-profile installation and migration invoke the private lifecycle commands
@@ -7236,6 +7238,29 @@ secure collector profile stays explicit until representative real Linux hosts
 qualify migration and failure rollback, typed-helper update activation,
 provider parity and documented degradation, and separately credentialed live
 action sessions. Unsupported platforms continue to fail closed on migration.
+
+### Rootless container qualification is a separate immutable packet
+
+`scripts/run-secure-runtime-rootless-qualification.sh` is the opt-in entrypoint
+for collector-owned rootless Docker and Podman proof. It does not extend or
+reinterpret the schema-v7 systemd receipt. The wrapper confines destructive
+runtime setup to disposable nested Ubuntu/systemd hosts with no mounted host
+daemon socket, exercises each runtime in an isolated state root, and emits the
+standalone `secure-runtime-rootless-v1` receipt only after exact socket
+ownership, daemon rootless attestation, installer pinning, direct telemetry,
+same-family typed-helper fallback, recovery without collector restart,
+ambiguity refusal, authority isolation, and cleanup are recorded.
+
+`scripts/release_control/secure_runtime_rootless_attestation_v1.py` validates
+the secret-free receipt against the governed rootless source manifest and the
+exact qualification artifact. It treats rootless and rootful helper
+inventories as separate daemon identities, requires direct recovery to restore
+the original rootless identity and rich telemetry, and understands that a
+collector restart creates a new report stream while daemon restart preserves
+the durable daemon identity. Its classification is local, opt-in,
+artifact-bound self-attestation only. No receipt exists merely because the
+harness is checked in, so rootless Docker and Podman remain live-unqualified
+and cannot change the product default.
 
 ### Command and durable typed dispatch are context-honest and canceled when abandoned
 

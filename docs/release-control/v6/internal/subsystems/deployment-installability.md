@@ -254,6 +254,20 @@ commands and autonomous cleanup/update work remain disabled in the safe
 collector even while direct rootless monitoring is active. Legacy/root discovery retains
 its separate rootful-Docker-first behavior for compatibility.
 
+Live collector-owned rootless-runtime proof is deliberately separated from
+the immutable schema-v7 systemd packet. The opt-in
+`scripts/run-secure-runtime-rootless-qualification.sh` wrapper creates fresh,
+network-isolated Ubuntu/systemd hosts for real rootless Docker and Podman,
+never mounts a host daemon socket, and records each host identity separately.
+Its standalone `secure-runtime-rootless-v1` receipt must bind the exact
+qualification, collector, helper, installer, source-manifest, socket,
+fresh-install, legacy-migration, restart, fallback, recovery, ambiguity,
+authority, and cleanup evidence before the independent validator can emit a
+local artifact-bound self-attestation. Checking in the harness or passing its
+ordinary contract tests is not live qualification. Until a complete
+secret-free receipt and attestation are retained, this surface remains
+implemented-but-unqualified and cannot change the opt-in safe-profile default.
+
 Release builds and archives carry both helper and runner binaries for the five
 Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,
 Ed25519, and SSH signature sidecars. Exact archive/container-context validation
@@ -820,6 +834,8 @@ artifact-selection behaviour.
    Proxmox page. The grant is deliberately narrower than the
    `NoNewPrivileges=false` exception above: it restores only the privilege
    `lxc-attach` needs and leaves the rest of the sandbox intact.
+
+9. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `agent-lifecycle`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
 
 ## Extension Points
 
