@@ -113,7 +113,7 @@ export function getHistoryChartAccessibleDescription({
       ? `Values remained unchanged at ${formatValue(latest.value)}.`
       : `Values ${direction} from ${formatValue(first.value)} to ${formatValue(latest.value)}.`;
 
-  return `${rangeLabel} history contains ${data.length} data points from ${formatTimestamp(first.timestamp)} to ${formatTimestamp(latest.timestamp)}. ${changeSummary} Minimum ${formatValue(minimum)}; maximum ${formatValue(maximum)}.`;
+  return `${rangeLabel} history contains ${data.length} data points from ${formatTimestamp(first.timestamp)} to ${formatTimestamp(latest.timestamp)}. ${changeSummary} Minimum ${formatValue(minimum)}. Maximum ${formatValue(maximum)}.`;
 }
 
 export function getHistoryChartRefreshIntervalMs(range: HistoryTimeRange) {

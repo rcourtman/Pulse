@@ -157,7 +157,7 @@ describe('HistoryChart', () => {
     expect(description).toHaveClass('sr-only');
     expect(description).toHaveTextContent('24-hour history contains 2 data points');
     expect(description).toHaveTextContent('Values increased from 10.0% to 30.0%.');
-    expect(description).toHaveTextContent('Minimum 8.0%; maximum 35.0%.');
+    expect(description).toHaveTextContent('Minimum 8.0%. Maximum 35.0%.');
   });
 
   it('synchronizes the hovered timestamp across charts in the same group', () => {

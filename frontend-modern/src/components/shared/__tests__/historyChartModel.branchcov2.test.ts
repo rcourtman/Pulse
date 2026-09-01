@@ -78,7 +78,7 @@ describe('history chart text alternatives', () => {
 
     expect(description).toContain('7-day history contains 2 data points');
     expect(description).toContain('Values remained unchanged at 10 rpm.');
-    expect(description).toContain('Minimum 7 rpm; maximum 14 rpm.');
+    expect(description).toContain('Minimum 7 rpm. Maximum 14 rpm.');
   });
 
   it('describes a decreasing multi-point series', () => {
