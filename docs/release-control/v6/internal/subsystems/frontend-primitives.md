@@ -430,6 +430,8 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 127. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
 128. `frontend-modern/scripts/shared-template-audit.mjs`
 129. `frontend-modern/scripts/shared-template-registry.json`
+     129a. `frontend-modern/scripts/planning-doc-status-audit.mjs`
+     129b. `frontend-modern/scripts/__tests__/planning-doc-status-audit.test.mjs`
 130. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
      131a. `frontend-modern/src/features/platformPage/platformSearchSuggestions.ts`
      131b. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
@@ -1015,6 +1017,14 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
     rather than an installed agent or provider API.
 
 ## Extension Points
+
+The planning-document status audit is a repository-governance support boundary
+owned here because it runs through the frontend lint entrypoint. It must derive
+its input set from Git-tracked `docs/` files, skip separately governed subsystem
+contracts, and ignore untracked or ignored workspace notes. Local scratch
+documents cannot become mainline demand signals or block an otherwise valid
+push merely because their names end in `_SPEC.md`, `_PLAN.md`, or
+`_CONTRACT.md`.
 
 Global Actions review uses the canonical shared `Dialog`, `Button`, `Subtabs`,
 `Card`, `MetadataBadge`, and mobile navigation primitives. The Open/History
