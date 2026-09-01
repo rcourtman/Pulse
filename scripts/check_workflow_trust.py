@@ -71,11 +71,11 @@ SECRET_CONTEXT_TOKEN_RE = re.compile(r"(?<![\w.])secrets\b")
 # configuration mechanism. Confidential credentials have no PR exception.
 NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
-# v6.1.0 backports checkout's fail-closed fork-PR protection for privileged
+# v7.0.1 includes checkout's fail-closed fork-PR protection for privileged
 # pull_request_target and workflow_run events. Keep this exact-pin allowlist
 # reviewable: a dependency refresh must not silently discard that boundary.
 PROTECTED_CHECKOUT_PINS = frozenset(
-    {"d23441a48e516b6c34aea4fa41551a30e30af803"}
+    {"3d3c42e5aac5ba805825da76410c181273ba90b1"}
 )
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
 PERMISSIONS_RE = re.compile(

@@ -4789,7 +4789,7 @@ logging tests pin the unit directives, level mapping, and sink isolation.
 
 Every repository checkout in build, packaging, publication, qualification,
 recovery, and deployment automation uses the reviewed immutable
-`actions/checkout` v6.1.0 pin. That baseline refuses fork pull-request checkout
+`actions/checkout` v7.0.1 pin. That baseline refuses fork pull-request checkout
 on privileged events unless a workflow explicitly opts out; Pulse prohibits
 that opt-out and the `pull_request_target` trigger. Dependency refreshes must
 update the central workflow-trust allowlist and its regression proof together,

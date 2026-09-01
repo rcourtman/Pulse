@@ -58,7 +58,7 @@ jobs:
       helm_chart_digest: ${{ steps.marker.outputs.helm_chart_digest }}
     steps:
       - name: Checkout release integrity control
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -214,7 +214,7 @@ jobs:
       helm_chart_digest: ${{ needs.await_activation_commit.outputs.helm_chart_digest }}
     steps:
       - name: Checkout release control
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           persist-credentials: true  # required: authenticated git writes
@@ -472,7 +472,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout release control
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           persist-credentials: true  # required: authenticated git writes

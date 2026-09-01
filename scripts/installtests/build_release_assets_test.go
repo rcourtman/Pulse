@@ -1341,7 +1341,7 @@ func TestBackfillReleaseWorkflowRepairsPublishedAssetsWithoutRebuilds(t *testing
 		`workflow_dispatch:`,
 		`contents: write`,
 		`runs-on: ubuntu-24.04`,
-		`uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0`,
+		`uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`,
 		`uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0`,
 		`SYFT_VERSION="1.42.4"`,
 		`SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"`,

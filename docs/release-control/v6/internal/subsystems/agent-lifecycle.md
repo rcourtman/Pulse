@@ -7406,7 +7406,7 @@ polling states are pinned independently in
 ### Native agent lifecycle proof preserves protected checkout semantics
 
 The native Linux and Windows agent lifecycle jobs obtain their source through
-the reviewed immutable `actions/checkout` v6.1.0 pin. That baseline refuses
+the reviewed immutable `actions/checkout` v7.0.1 pin. That baseline refuses
 fork pull-request checkout on privileged events unless a workflow explicitly
 opts out; Pulse prohibits that opt-out and the `pull_request_target` trigger.
 A dependency refresh must update the central workflow-trust allowlist and the
