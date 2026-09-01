@@ -92,7 +92,9 @@ direct admission while using helper summary inventory and falls back to a
 complete helper snapshot after repeated direct-runtime loss, without exposing
 container actions in either safe-profile mode. Static profile gates also reject
 legacy Docker report-response update commands and suppress registry scans and
-orphan-backup cleanup in the collector.
+orphan-backup cleanup in the collector. Before initial helper fallback, local
+runtime diagnostics record the exact direct-admission refusal so ambiguity and
+other boundary failures remain distinguishable without weakening the fallback.
 The collector reports that runtime truth as the shared
 `typed-privilege-helper` module. SMART, Proxmox, and `container.inventory`
 operation failures remain independently active until that exact operation

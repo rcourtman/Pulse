@@ -328,6 +328,9 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("dockeragent.New: connect runtime: %w", connectErr)
 	}
 	if connectErr != nil {
+		logger.Warn().
+			Err(connectErr).
+			Msg("Direct collector-owned rootless runtime unavailable; using typed helper inventory")
 		probeCtx, cancelProbe := context.WithTimeout(context.Background(), helperInventoryOperationDeadline)
 		result, helperErr := cfg.HelperInventory.Inventory(probeCtx)
 		cancelProbe()
