@@ -7,8 +7,8 @@
 
 set -euo pipefail
 
-if [ "$#" -ne 4 ]; then
-    echo "Usage: $0 <tag> <owner/repo> <expected-release-id> <expected-source-sha>" >&2
+if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
+    echo "Usage: $0 <tag> <owner/repo> <expected-release-id> <expected-source-sha> [activation-asset]" >&2
     exit 1
 fi
 
@@ -16,6 +16,7 @@ TAG="$1"
 REPO="$2"
 EXPECTED_RELEASE_ID="$3"
 EXPECTED_SOURCE_SHA="$4"
+SUPPLIED_ACTIVATION_ASSET="${5:-}"
 ATTESTATION_ATTEMPTS="${PULSE_RELEASE_ATTESTATION_ATTEMPTS:-12}"
 ATTESTATION_RETRY_DELAY="${PULSE_RELEASE_ATTESTATION_RETRY_DELAY:-5}"
 
@@ -67,6 +68,19 @@ cleanup() {
     rm -rf "$activation_dir"
 }
 trap cleanup EXIT
+
+# A promotion workflow must verify the exact marker it will parse, not a
+# second download that merely has the same release filename. Copy supplied
+# bytes under the canonical asset name because `gh release verify-asset`
+# resolves the attested subject by the local basename. Callers that do not
+# consume a marker retain the historical download-and-verify behavior.
+if [ -n "$SUPPLIED_ACTIVATION_ASSET" ]; then
+    if [ ! -f "$SUPPLIED_ACTIVATION_ASSET" ] || [ ! -s "$SUPPLIED_ACTIVATION_ASSET" ]; then
+        echo "Supplied release activation asset is not a non-empty regular file: ${SUPPLIED_ACTIVATION_ASSET}" >&2
+        exit 1
+    fi
+    cp -- "$SUPPLIED_ACTIVATION_ASSET" "$activation_asset"
+fi
 
 gh api \
     -H 'Accept: application/vnd.github+json' \
@@ -153,14 +167,19 @@ for attempt in $(seq 1 "$ATTESTATION_ATTEMPTS"); do
     # A previous attempt can leave any asset behind after a partial
     # download. Clear them because gh release download refuses to overwrite
     # existing files unless explicitly told to do so.
-    rm -f "$activation_asset" "$checksums_asset" "$provenance_asset"
+    rm -f "$checksums_asset" "$provenance_asset"
+    if [ -z "$SUPPLIED_ACTIVATION_ASSET" ]; then
+        rm -f "$activation_asset"
+    fi
     download_args=(
         "$TAG"
         --repo "$REPO"
-        --pattern release-activation.json
         --pattern checksums.txt
         --dir "$activation_dir"
     )
+    if [ -z "$SUPPLIED_ACTIVATION_ASSET" ]; then
+        download_args+=(--pattern release-activation.json)
+    fi
     if [ "$provenance_asset_count" = 1 ]; then
         download_args+=(--pattern release-build-provenance.sigstore.json)
     fi

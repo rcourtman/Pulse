@@ -1870,7 +1870,8 @@ jobs:
              [ "$actual_prerelease" = "$IS_PRERELEASE" ]; then
             validate_existing_activation_commit
             ./scripts/verify-github-release-integrity.sh \
-              "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT"
+              "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT" \
+              "${verified_marker}"
             rm -f "$release_json" "$publish_payload" "$quarantine_payload" \
               "$verified_marker"
             rm -rf "$activation_marker_dir"
@@ -1997,10 +1998,11 @@ jobs:
           fi
           rm -f "$visual_plan"
 
-          ./scripts/verify-github-release-integrity.sh \
-            "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT"
           curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
             -o "${verified_marker}" "${base}/release-activation.json"
+          ./scripts/verify-github-release-integrity.sh \
+            "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT" \
+            "${verified_marker}"
           jq -e \
             --arg tag "${TAG}" \
             --arg target_commitish "${EXPECTED_COMMIT}" \

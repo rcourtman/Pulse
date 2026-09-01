@@ -463,10 +463,11 @@ jobs:
               -o /dev/null "${base}/${asset_name}"
           done
 
-          ./scripts/verify-github-release-integrity.sh \
-            "${TAG}" "${GITHUB_REPOSITORY}" "${RELEASE_ID}" "${EXPECTED_COMMIT}"
           curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
             -o "${verified_marker}" "${base}/release-activation.json"
+          ./scripts/verify-github-release-integrity.sh \
+            "${TAG}" "${GITHUB_REPOSITORY}" "${RELEASE_ID}" "${EXPECTED_COMMIT}" \
+            "${verified_marker}"
           jq -e \
             --arg tag "${TAG}" \
             --arg target_commitish "${EXPECTED_COMMIT}" \

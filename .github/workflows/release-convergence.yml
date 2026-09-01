@@ -106,6 +106,16 @@ jobs:
               marker_downloaded=true
             fi
             if [ "${marker_downloaded}" = "true" ]; then
+              # Verify the exact bytes this job will parse. The integrity
+              # helper must not reacquire a parallel copy and then let this
+              # unverified download drive customer-facing image pointers.
+              if ! ./scripts/verify-github-release-integrity.sh \
+                  "${TAG}" "${GITHUB_REPOSITORY}" \
+                  "${EXPECTED_RELEASE_ID}" "${EXPECTED_COMMIT}" "${marker}"; then
+                rm -f "${marker}"
+                echo "::error::Immutable release attestation verification failed for ${TAG}; customer convergence is blocked."
+                exit 1
+              fi
               if ! jq -e \
                  --arg tag "${TAG}" \
                  --arg commit "${EXPECTED_COMMIT}" \
@@ -132,13 +142,6 @@ jobs:
                   continue
                 fi
                 echo "[OK] Adopting committed ${TAG} from completed convergence owner ${activation_owner_run_id}."
-              fi
-              if ! ./scripts/verify-github-release-integrity.sh \
-                  "${TAG}" "${GITHUB_REPOSITORY}" \
-                  "${EXPECTED_RELEASE_ID}" "${EXPECTED_COMMIT}"; then
-                rm -f "${marker}"
-                echo "::error::Immutable release attestation verification failed for ${TAG}; customer convergence is blocked."
-                exit 1
               fi
               activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
               server_image_digest="$(jq -r '.server_image_digest' "${marker}")"

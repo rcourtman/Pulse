@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         provenance_verification_succeeds: bool = True,
         gh_version: str = "2.97.0",
         partial_download_once: bool = False,
+        supplied_activation: bytes | None = None,
     ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -52,30 +54,43 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                       exit {0 if verification_succeeds else 1}
                     fi
                     if [ "$1 $2" = "release download" ]; then
+                      want_activation=false
+                      download_dir=""
                       while [ "$#" -gt 0 ]; do
+                        if [ "$1" = --pattern ] && [ "$2" = release-activation.json ]; then
+                          want_activation=true
+                        fi
                         if [ "$1" = --dir ]; then
-                          mkdir -p "$2"
-                          if [ "$PARTIAL_DOWNLOAD_ONCE" = true ] && [ ! -e "$DOWNLOAD_STATE" ]; then
-                            touch "$DOWNLOAD_STATE"
-                            printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$2/checksums.txt"
-                            exit 1
-                          fi
-                          if [ -e "$2/release-activation.json" ] || [ -e "$2/checksums.txt" ]; then
-                            exit 66
-                          fi
-                          printf '%s\\n' '{{"schema_version": 1}}' > "$2/release-activation.json"
-                          printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$2/checksums.txt"
-                          if [ "$HAS_PORTABLE_PROVENANCE" = true ]; then
-                            printf '%s\\n' '{{"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"}}' \
-                              > "$2/release-build-provenance.sigstore.json"
-                          fi
-                          exit 0
+                          download_dir="$2"
                         fi
                         shift
                       done
-                      exit 65
+                      [ -n "$download_dir" ] || exit 65
+                      mkdir -p "$download_dir"
+                      if [ "$PARTIAL_DOWNLOAD_ONCE" = true ] && [ ! -e "$DOWNLOAD_STATE" ]; then
+                        touch "$DOWNLOAD_STATE"
+                        printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$download_dir/checksums.txt"
+                        exit 1
+                      fi
+                      if [ -e "$download_dir/checksums.txt" ]; then
+                        exit 66
+                      fi
+                      if [ "$want_activation" = true ]; then
+                        printf '%s\\n' '{{"schema_version": 1}}' > "$download_dir/release-activation.json"
+                      fi
+                      printf '%s\\n' 'abc  pulse-v6.5.0-linux-amd64.tar.gz' > "$download_dir/checksums.txt"
+                      if [ "$HAS_PORTABLE_PROVENANCE" = true ]; then
+                        printf '%s\\n' '{{"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"}}' \
+                          > "$download_dir/release-build-provenance.sigstore.json"
+                      fi
+                      exit 0
                     fi
                     if [ "$1 $2" = "release verify-asset" ]; then
+                      if [ "$(basename "$4")" = release-activation.json ] && \
+                         [ -n "$SUPPLIED_ACTIVATION_DIGEST" ] && \
+                         [ "$(sha256sum "$4" | awk '{{print $1}}')" != "$SUPPLIED_ACTIVATION_DIGEST" ]; then
+                        exit 67
+                      fi
                       printf '%s\\n' '{{"verified": true}}'
                       exit {0 if asset_verification_succeeds else 1}
                     fi
@@ -106,10 +121,26 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
                             for asset in release.get("assets", [])
                         )
                     ).lower(),
+                    "SUPPLIED_ACTIVATION_DIGEST": (
+                        hashlib.sha256(supplied_activation).hexdigest()
+                        if supplied_activation is not None
+                        else ""
+                    ),
                 }
             )
+            command = [
+                str(SCRIPT),
+                "v6.5.0",
+                "rcourtman/Pulse",
+                "123",
+                SOURCE_SHA,
+            ]
+            if supplied_activation is not None:
+                supplied_path = root / "marker-from-customer-path.json"
+                supplied_path.write_bytes(supplied_activation)
+                command.append(str(supplied_path))
             result = subprocess.run(
-                [str(SCRIPT), "v6.5.0", "rcourtman/Pulse", "123", SOURCE_SHA],
+                command,
                 cwd=ROOT,
                 env=env,
                 text=True,
@@ -226,6 +257,24 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls.count("release download"), 2)
+
+    def test_verifies_supplied_activation_bytes_without_reacquiring_them(self) -> None:
+        activation = b'{"schema_version":1,"server_image_digest":"sha256:exact"}\n'
+        result, calls = self.run_verifier(
+            self.release(), supplied_activation=activation
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        download_call = next(
+            call for call in calls.splitlines() if call.startswith("release download ")
+        )
+        self.assertNotIn("--pattern release-activation.json", download_call)
+        self.assertIn("release verify-asset v6.5.0", calls)
+
+    def test_rejects_empty_supplied_activation_before_release_lookup(self) -> None:
+        result, calls = self.run_verifier(self.release(), supplied_activation=b"")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not a non-empty regular file", result.stderr)
+        self.assertEqual(calls, "")
 
     def test_rejects_an_unsafe_github_cli_before_release_lookup(self) -> None:
         result, calls = self.run_verifier(self.release(), gh_version="2.96.1")

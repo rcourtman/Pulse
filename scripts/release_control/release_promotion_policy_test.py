@@ -447,6 +447,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("verify-github-release-integrity.sh", activation)
         self.assertIn("verify-github-release-integrity.sh", convergence)
         self.assertIn("verify-github-release-integrity.sh", commit_verdict)
+        self.assertIn('"${EXPECTED_COMMIT}" "${marker}"', convergence)
+        self.assertIn('"${verified_marker}"', activation)
+        marker_download = convergence.index('-o "${marker}"')
+        marker_integrity = convergence.index(
+            "verify-github-release-integrity.sh", marker_download
+        )
+        marker_parse = convergence.index("if ! jq -e", marker_download)
+        self.assertLess(marker_download, marker_integrity)
+        self.assertLess(marker_integrity, marker_parse)
         for publication_job in (activation, recovery_activation):
             with self.subTest(publication_job=publication_job[:40]):
                 self.assertIn(
@@ -536,6 +545,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Recovered draft activation marker digest does not match", job)
         self.assertIn(".immutable // false", job)
         self.assertIn("verify-github-release-integrity.sh", job)
+        self.assertIn('"${verified_marker}"', job)
 
         convergence = read(".github/workflows/release-convergence.yml")
         helm_pages_caller = workflow_job_block(convergence, "publish_helm_pages")
@@ -548,9 +558,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         committed = job.index("committed=true", publish_patch)
         readback = job.index("curl -fsSL --retry 12", committed)
+        integrity = job.index("verify-github-release-integrity.sh", readback)
         self.assertLess(marker_upload, publish_patch)
         self.assertLess(publish_patch, committed)
         self.assertLess(committed, readback)
+        self.assertLess(readback, integrity)
 
         helm_pages = read(".github/workflows/helm-pages.yml")
         self.assertIn("Require activated GitHub release", helm_pages)

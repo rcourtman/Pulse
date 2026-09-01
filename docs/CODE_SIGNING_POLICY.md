@@ -116,11 +116,12 @@ Normal stable publication and stable dry runs select `signpath` directly.
   environments are not promoted until `gh release verify <tag> --repo
   rcourtman/Pulse` validates GitHub's signed release attestation and `gh release
   verify-asset <tag> <downloaded-asset> --repo rcourtman/Pulse` binds the
-  downloaded activation marker to that attestation. The activation verifier
-  also binds the release's downloaded `checksums.txt` to that immutable packet
-  and verifies its exact workflow and source provenance. Operators can use the
-  same commands to verify the packet and any downloaded release asset
-  independently.
+  exact downloaded activation marker consumed by the promotion job to that
+  attestation; verification never substitutes a parallel download. The
+  activation verifier also binds the release's downloaded `checksums.txt` to
+  that immutable packet and verifies its exact workflow and source provenance.
+  Operators can use the same commands to verify the packet and any downloaded
+  release asset independently.
 
 ## Project roles
 
