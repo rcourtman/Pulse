@@ -7375,9 +7375,22 @@ the durable daemon identity. Dual-socket ambiguity evidence validates Docker
 and Podman against their respective recorded socket ownership and modes; it
 must not project the selected runtime's permissions onto the other socket.
 Its classification is local, opt-in,
-artifact-bound self-attestation only. No receipt exists merely because the
-harness is checked in, so rootless Docker and Podman remain live-unqualified
-and cannot change the product default.
+artifact-bound self-attestation only. The exact packet at source commit
+`60041ad9e60c282c892f944e04f777b874991a5d` passed all eleven canonical
+scenarios for Docker and all eleven for Podman on distinct disposable hosts.
+Its secret-free receipt SHA-256 is
+`7a116d63ab0cd1560482165055f0a8c9158ce0a8333a27bd9e8256582a52dfb5` and
+its attestation SHA-256 is
+`566279ecd7d7dfa89c92f24243e9fcd5ae3e295d4284bd559d4be42f1e83b3b5`.
+The validator matched 418 governed source hashes, exact artifacts, the two
+runtime-specific socket profiles, distinct host and daemon identities, and all
+twenty-two scenario records. The sanitized evidence record is
+`docs/release-control/v6/internal/records/secure-runtime-rootless-v1-local-qualification-2026-09-01.md`.
+This qualifies only the exercised local rootless monitoring, migration,
+fallback, recovery, ambiguity, parity, authority, and cleanup paths. It is not
+published-release provenance, default-profile authorization, rootless
+action/update qualification, or independent security review and cannot change
+the product default.
 
 ### Command and durable typed dispatch are context-honest and canceled when abandoned
 
