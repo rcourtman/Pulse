@@ -160,12 +160,20 @@ EXPLICIT_MAPPING_KEY_RE = re.compile(r"^\s*(?:-\s*)?\?\s")
 ESCAPED_MAPPING_KEY_RE = re.compile(
     r'''^\s*(?:-\s*)?"(?:[^"\\]|\\.)*\\(?:[^"\\]|\\.)*"\s*:'''
 )
+YAML_PROPERTY_PATTERN = (
+    r"(?:[&*][^\s,\[\]{}]+|!(?:<[^>\r\n]+>|[^\s,\[\]{}]+))"
+)
 LEADING_YAML_PROPERTY_RE = re.compile(
-    r"^\s*(?:-\s*)?(?:[&*][A-Za-z0-9_-]+|![^\s,\]}]+)(?:\s|$)"
+    rf"^\s*(?:(?:---|-)[ \t]+)?{YAML_PROPERTY_PATTERN}(?:\s|$)"
 )
 YAML_VALUE_PROPERTY_RE = re.compile(
     r'''^\s*(?:-\s*)?(?:[A-Za-z0-9_.-]+|"[^"]+"|'[^']+')'''
-    r"\s*:\s*(?:[&*][A-Za-z0-9_-]+|![^\s,\]}]+)(?:\s|$)"
+    rf"\s*:\s*{YAML_PROPERTY_PATTERN}(?:\s|$)"
+)
+FLOW_YAML_PROPERTY_RE = re.compile(
+    r"(?:[\[,]\s*|(?<![$\{])\{\s*|:\s*)"
+    + YAML_PROPERTY_PATTERN
+    + r"(?=\s|$|[,\]}])"
 )
 NONEMPTY_FLOW_MAPPING_RE = re.compile(
     r'''^\s*(?:-\s*)?(?:[A-Za-z0-9_.-]+|"[^"]+"|'[^']+')'''
@@ -397,7 +405,11 @@ def _audit_yaml_trust_shape(path: Path, lines: list[str]) -> list[Finding]:
                     "literal key spelling",
                 )
             )
-        if LEADING_YAML_PROPERTY_RE.match(code) or YAML_VALUE_PROPERTY_RE.search(code):
+        if (
+            LEADING_YAML_PROPERTY_RE.match(code)
+            or YAML_VALUE_PROPERTY_RE.search(code)
+            or FLOW_YAML_PROPERTY_RE.search(code)
+        ):
             findings.append(
                 Finding(
                     path,

@@ -274,6 +274,21 @@ jobs:
         )
         self.assertTrue(any("YAML anchors" in item for item in anchored))
 
+        flow_alias_keys = self.audit(
+            '''permissions: {}
+metadata: [&permission_key permissions, &oidc_key id-token, &uses_key uses]
+jobs:
+  attest:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    *permission_key:
+      *oidc_key: write
+    steps:
+      - *uses_key: owner/action@main
+'''
+        )
+        self.assertTrue(any("YAML anchors" in item for item in flow_alias_keys))
+
         flow = self.audit(
             '''permissions: {}
 jobs:
