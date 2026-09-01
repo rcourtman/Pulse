@@ -73,6 +73,15 @@ staged_files_match() {
 python3 scripts/release_control/format_staged_go.py
 python3 scripts/release_control/format_staged_frontend.py
 
+# Shipped docs under frontend-modern/public/docs are byte-for-byte copies of
+# repo docs, enforced only by a CI vitest the hooks never run. Two 2026-09-01
+# commits (f4886c2dfb, f313882a7b) each broke main's Frontend job by editing a
+# mirrored doc without its copy; catch that before the commit exists.
+if staged_files_match '^docs/|^frontend-modern/public/docs/|^(SECURITY|TERMS|ARCHITECTURE|CONTRIBUTING)\.md$'; then
+    echo "Running shipped docs mirror check..."
+    python3 scripts/check_docs_mirror.py --staged
+fi
+
 echo "Running browser verification guard..."
 python3 scripts/release_control/browser_verification_guard.py
 

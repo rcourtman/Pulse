@@ -5,8 +5,10 @@ on:
     paths:
       - "*.md"
       - "docs/**"
+      - "frontend-modern/public/docs/**"
       - ".github/ISSUE_TEMPLATE/**"
       - "scripts/check_public_docs.py"
+      - "scripts/check_docs_mirror.py"
       - ".github/workflows/public-docs.yml"
   push:
     branches:
@@ -14,8 +16,10 @@ on:
     paths:
       - "*.md"
       - "docs/**"
+      - "frontend-modern/public/docs/**"
       - ".github/ISSUE_TEMPLATE/**"
       - "scripts/check_public_docs.py"
+      - "scripts/check_docs_mirror.py"
       - ".github/workflows/public-docs.yml"
 
 permissions:
@@ -37,3 +41,6 @@ jobs:
 
       - name: Validate public documentation
         run: python3 scripts/check_public_docs.py
+
+      - name: Check shipped docs mirror sync
+        run: python3 scripts/check_docs_mirror.py
