@@ -116,7 +116,10 @@ EXTERNAL_CACHE_INPUT_RE = re.compile(
     rf"^\s*(?:{_yaml_key('cache-from')}|{_yaml_key('cache-to')})\s*:",
     re.IGNORECASE,
 )
-WRITE_PERMISSION_RE = re.compile(r"^\s+[A-Za-z-]+\s*:\s*write\s*$")
+WRITE_PERMISSION_RE = re.compile(
+    r'''^\s+(?:[A-Za-z-]+|"[A-Za-z-]+"|'[A-Za-z-]+')\s*:\s*'''
+    r'''(?:write|"write"|'write')\s*$'''
+)
 # This value is intentionally public and only uses secret storage as a legacy
 # configuration mechanism. Confidential credentials have no PR exception.
 NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
@@ -629,18 +632,32 @@ def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
 def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
     """Keep unsigned cache state out of credential- and write-capable jobs."""
     findings: list[Finding] = []
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if JOBS_RE.match(line.split("#", 1)[0])
+        ),
+        len(lines),
+    )
     top_level_write = any(
         WRITE_PERMISSION_RE.match(line.split("#", 1)[0]) and _indent(line) == 2
         for line in lines
     )
+    top_level_confidential_secret = _has_confidential_secret_reference(
+        lines[:jobs_index]
+    )
 
     for job_index, end_index, _ in _runner_job_ranges(lines):
         job_lines = lines[job_index:end_index]
-        privileged = top_level_write or _has_confidential_secret_reference(
-            job_lines
-        ) or any(
-            WRITE_PERMISSION_RE.match(line.split("#", 1)[0])
-            for line in job_lines
+        privileged = (
+            top_level_write
+            or top_level_confidential_secret
+            or _has_confidential_secret_reference(job_lines)
+            or any(
+                WRITE_PERMISSION_RE.match(line.split("#", 1)[0])
+                for line in job_lines
+            )
         )
         if not privileged:
             continue

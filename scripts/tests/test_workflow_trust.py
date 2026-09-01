@@ -452,6 +452,45 @@ jobs:
             2,
         )
 
+    def test_quoted_write_permissions_and_workflow_secrets_are_privileged(self) -> None:
+        quoted_write = self.audit(
+            f'''permissions: {{}}
+jobs:
+  publisher:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      "contents": "write"
+    steps:
+      - uses: actions/cache@{PIN}
+'''
+        )
+        self.assertTrue(
+            any(
+                "must not restore or save unsigned caches" in finding
+                for finding in quoted_write
+            )
+        )
+
+        inherited_secret = self.audit(
+            f'''permissions: {{}}
+env:
+  SIGNING_TOKEN: ${{{{ secrets.SIGNING_TOKEN }}}}
+jobs:
+  publisher:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/cache@{PIN}
+'''
+        )
+        self.assertTrue(
+            any(
+                "must not restore or save unsigned caches" in finding
+                for finding in inherited_secret
+            )
+        )
+
     def test_rejects_shell_template_data_but_accepts_env_data(self) -> None:
         findings = self.audit(
             """permissions: {}
