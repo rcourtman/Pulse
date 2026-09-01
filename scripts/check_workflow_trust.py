@@ -142,6 +142,13 @@ RUNS_ON_RE = re.compile(rf"^(\s*){_yaml_key('runs-on')}\s*:")
 TIMEOUT_RE = re.compile(
     rf"^(\s*){_yaml_key('timeout-minutes')}\s*:\s*(.*?)\s*$"
 )
+# OIDC-backed delivery identity is only trusted when GitHub owns the runner
+# lifecycle. Keep the accepted image labels explicit and reviewable so a job
+# cannot move to persistent or dynamically selected compute without changing
+# this contract. These are the hosted images used by Pulse's attestation jobs.
+TRUSTED_OIDC_RUNNER_LABELS = frozenset(
+    {"ubuntu-24.04", "windows-2025", "macos-15"}
+)
 
 
 @dataclass(frozen=True)
@@ -214,6 +221,39 @@ def _permission_mapping_has_write(
         if indent <= _indent(lines[permissions_index]):
             break
         if indent == child_indent and WRITE_PERMISSION_RE.match(code):
+            return True
+    return False
+
+
+def _permission_mapping_grants_scope_write(
+    lines: list[str],
+    permissions_index: int,
+    scope: str,
+    end_index: int | None = None,
+) -> bool:
+    """Return whether a permissions block grants literal write to *scope*."""
+    match = PERMISSIONS_RE.match(lines[permissions_index].split("#", 1)[0])
+    if not match:
+        return False
+    inline = match.group(2).strip().strip("'\"").lower()
+    if inline:
+        return inline == "write-all"
+
+    child_indent = _direct_mapping_indent(lines, permissions_index, end_index)
+    if child_indent is None:
+        return False
+    scope_write_re = re.compile(
+        rf"^\s+{_yaml_key(scope)}\s*:\s*(?:write|\"write\"|'write')\s*$"
+    )
+    limit = len(lines) if end_index is None else end_index
+    for line in lines[permissions_index + 1 : limit]:
+        code = line.split("#", 1)[0]
+        if not code.strip():
+            continue
+        indent = _indent(code)
+        if indent <= _indent(lines[permissions_index]):
+            break
+        if indent == child_indent and scope_write_re.match(code):
             return True
     return False
 
@@ -693,6 +733,85 @@ def _audit_runner_job_timeouts(path: Path, lines: list[str]) -> list[Finding]:
     return findings
 
 
+def _audit_oidc_runner_trust(path: Path, lines: list[str]) -> list[Finding]:
+    """Keep OIDC-backed delivery identity on reviewed GitHub-hosted images."""
+    findings: list[Finding] = []
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if JOBS_RE.match(line.split("#", 1)[0])
+        ),
+        len(lines),
+    )
+    top_level_oidc_write = any(
+        not match.group(1)
+        and _permission_mapping_grants_scope_write(lines, index, "id-token")
+        for index, line in enumerate(lines[:jobs_index])
+        if (match := PERMISSIONS_RE.match(line.split("#", 1)[0]))
+    )
+
+    for job_index, end_index, _ in _runner_job_ranges(lines):
+        direct_indent = _direct_mapping_indent(lines, job_index, end_index)
+        if direct_indent is None:
+            continue
+        permission_indexes = [
+            index
+            for index in range(job_index + 1, end_index)
+            if (
+                (match := PERMISSIONS_RE.match(lines[index].split("#", 1)[0]))
+                and len(match.group(1)) == direct_indent
+            )
+        ]
+        oidc_write = (
+            any(
+                _permission_mapping_grants_scope_write(
+                    lines, index, "id-token", end_index
+                )
+                for index in permission_indexes
+            )
+            if permission_indexes
+            else top_level_oidc_write
+        )
+        if not oidc_write:
+            continue
+
+        runner_declarations: list[tuple[int, str]] = []
+        for index in range(job_index + 1, end_index):
+            code = lines[index].split("#", 1)[0]
+            match = re.match(
+                rf"^(\s*){_yaml_key('runs-on')}\s*:\s*(.*?)\s*$", code
+            )
+            if match and len(match.group(1)) == direct_indent:
+                runner_declarations.append(
+                    (index, match.group(2).strip().strip("'\""))
+                )
+
+        # Reusable-workflow callers cannot choose a runner. The called
+        # workflow's local jobs own and are independently audited for this
+        # boundary.
+        if not runner_declarations:
+            continue
+        if (
+            len(runner_declarations) != 1
+            or runner_declarations[0][1] not in TRUSTED_OIDC_RUNNER_LABELS
+        ):
+            finding_index = (
+                runner_declarations[0][0] if runner_declarations else job_index
+            )
+            findings.append(
+                Finding(
+                    path,
+                    finding_index + 1,
+                    "id-token write jobs must use exactly one reviewed literal "
+                    "GitHub-hosted runner label; dynamic or self-hosted runners "
+                    "cannot mint trusted delivery identity",
+                )
+            )
+
+    return findings
+
+
 def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
     """Keep unsigned cache state out of credential- and write-capable jobs."""
     findings: list[Finding] = []
@@ -835,6 +954,7 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
     findings = _audit_runner_job_timeouts(path, lines)
+    findings.extend(_audit_oidc_runner_trust(path, lines))
     findings.extend(_audit_privileged_job_caches(path, lines))
     findings.extend(_audit_workflow_run_trigger(path, lines))
     has_workflow_run_trigger = _has_trigger(lines, "workflow_run")

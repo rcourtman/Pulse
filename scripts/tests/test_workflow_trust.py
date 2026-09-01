@@ -133,6 +133,89 @@ jobs:
         )
         self.assertEqual(findings, [])
 
+    def test_oidc_write_requires_reviewed_literal_hosted_runner(self) -> None:
+        trusted = self.audit(
+            """permissions: {}
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - run: echo attest
+"""
+        )
+        self.assertEqual(trusted, [])
+
+        for runner in (
+            "self-hosted",
+            "[self-hosted, Linux, X64]",
+            "${{ matrix.runner }}",
+            "ubuntu-26.04",
+        ):
+            with self.subTest(runner=runner):
+                findings = self.audit(
+                    f"""permissions: {{}}
+jobs:
+  attest:
+    runs-on: {runner}
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - run: echo attest
+"""
+                )
+                self.assertTrue(
+                    any("trusted delivery identity" in finding for finding in findings)
+                )
+
+        duplicate = self.audit(
+            """permissions: {}
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    runs-on: windows-2025
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - run: echo attest
+"""
+        )
+        self.assertTrue(
+            any("trusted delivery identity" in finding for finding in duplicate)
+        )
+
+    def test_top_level_oidc_permission_applies_to_local_jobs(self) -> None:
+        findings = self.audit(
+            """permissions:
+  id-token: write
+jobs:
+  attest:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - run: echo attest
+"""
+        )
+        self.assertTrue(
+            any("trusted delivery identity" in finding for finding in findings)
+        )
+
+    def test_reusable_workflow_caller_owns_oidc_runner_boundary(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  attest:
+    permissions:
+      id-token: write
+    uses: ./.github/workflows/attest.yml
+"""
+        )
+        self.assertEqual(findings, [])
+
     def test_rejects_implicit_or_unjustified_checkout_credentials(self) -> None:
         omitted = self.audit(
             f"""permissions: {{}}
