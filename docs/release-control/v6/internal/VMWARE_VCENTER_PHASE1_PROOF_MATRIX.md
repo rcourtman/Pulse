@@ -1,7 +1,8 @@
 # VMware vCenter Phase-1 Proof Matrix
 
 Last updated: 2026-05-23
-Status: ACTIVE
+Status: PARKED (not a current signal; reactivate only through a FEATURE_REQUESTS.md ledger entry). Last reviewed 2026-09-01.
+Status note: the automated proof floor listed below is landed; `VC-0` through `VC-8` remain unexecuted because no `vCenter` capability exists in `LOCAL_CAPABILITIES.md` (blocked record dated 2026-03-30). This matrix is the checklist to run if VMware support is reactivated; it is not a signal to do more non-live VMware work.
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`

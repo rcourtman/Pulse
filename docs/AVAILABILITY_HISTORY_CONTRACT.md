@@ -1,6 +1,6 @@
 # Availability History and Fleet View Contract
 
-Status: Implemented (Slice A)
+Status: IMPLEMENTED (history and fleet slices landed 2026-08-30 in `712f1a3bfe`: `POST /api/availability-history`, the `pkg/metrics` availability tables, and the Machines -> Availability table/fleet view; the demand-owner ledger entry is `threshold-met`; no further slices are defined here). Last reviewed 2026-09-01.
 Date: 2026-08-30
 Scope: `pulse` only
 Demand owner: `pulse-pro/FEATURE_REQUESTS.md`, "Fleet-scale machine
