@@ -102,4 +102,39 @@ describe('AlertDeliveryHealthCard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('send a test before relying on delivery');
     expect(screen.getByRole('button', { name: 'Refresh delivery status' })).toBeDisabled();
   });
+
+  it('keeps the overview treatment concise and points directly to delivery evidence', () => {
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <AlertDeliveryHealthCard
+              health={degradedHealth}
+              unavailable={false}
+              refreshing={false}
+              onRefresh={vi.fn()}
+              onRetryFailures={vi.fn()}
+              onDismissFailures={vi.fn()}
+              detailsHref="/alerts/notifications#notification-delivery-activity"
+              detailLevel="summary"
+              showRefresh={false}
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Most recent failures: authentication (2)');
+    expect(alert).toHaveTextContent(
+      'Review delivery activity for timestamps, destinations, alerts, and errors',
+    );
+    expect(alert).not.toHaveTextContent('Otherwise Pulse removes expired records hourly');
+    expect(screen.queryByRole('button', { name: 'Refresh delivery status' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Review delivery activity' })).toHaveAttribute(
+      'href',
+      '/alerts/notifications#notification-delivery-activity',
+    );
+  });
 });

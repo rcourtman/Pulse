@@ -88,7 +88,9 @@ export function OverviewTab(props: {
           dismissingFailures={deliveryHealthState.dismissingTerminalFailures()}
           onRetryFailures={() => void deliveryHealthState.retryTerminalFailures()}
           onDismissFailures={() => void deliveryHealthState.dismissTerminalFailures()}
-          detailsHref="/alerts/notifications"
+          detailsHref="/alerts/notifications#notification-delivery-activity"
+          detailLevel="summary"
+          showRefresh={false}
         />
       </Show>
       <AlertOverviewStatsCards state={overviewState} />

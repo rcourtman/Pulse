@@ -168,7 +168,7 @@ export function getAlertDestinationsDeliveryHealthTitle(status: 'degraded' | 'un
     : ALERT_DESTINATIONS_DELIVERY_UNAVAILABLE_TITLE;
 }
 
-export function getAlertDestinationsDeliveryHealthDescription(input: {
+type AlertDestinationsDeliveryHealthInput = {
   status: 'degraded' | 'unavailable';
   failed: number;
   deadLetter: number;
@@ -176,11 +176,9 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
   deadLetterRetentionDays: number;
   failureClasses7d?: Record<string, number>;
   failureClassesAvailable?: boolean;
-}) {
-  if (input.status === 'unavailable') {
-    return 'Pulse could not verify the notification queue. Review the destination settings below and send a test before relying on delivery.';
-  }
+};
 
+function getRetainedDeliveryOutcomes(input: AlertDestinationsDeliveryHealthInput) {
   const outcomes: string[] = [];
   if (input.failed > 0) {
     outcomes.push(
@@ -192,7 +190,38 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
       `${input.deadLetter} dead-lettered ${input.deadLetter === 1 ? 'delivery' : 'deliveries'} retained for ${input.deadLetterRetentionDays} days`,
     );
   }
-  const summary = outcomes.join(' and ') || 'A retained terminal delivery failure';
+  return outcomes.join(' and ') || 'A retained terminal delivery failure';
+}
+
+function getDominantDeliveryFailure(input: AlertDestinationsDeliveryHealthInput) {
+  if (!input.failureClassesAvailable || !input.failureClasses7d) return undefined;
+  return Object.entries(input.failureClasses7d)
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1])[0];
+}
+
+export function getAlertDestinationsDeliveryHealthSummary(
+  input: AlertDestinationsDeliveryHealthInput,
+) {
+  if (input.status === 'unavailable') {
+    return 'Pulse could not verify the notification queue. Review notification delivery before relying on it.';
+  }
+
+  const dominant = getDominantDeliveryFailure(input);
+  const diagnosis = dominant
+    ? ` Most recent failures: ${dominant[0].replace('_', ' ')} (${dominant[1]}).`
+    : '';
+  return `${getRetainedDeliveryOutcomes(input)}. These notifications were not delivered.${diagnosis} Review delivery activity for timestamps, destinations, alerts, and errors.`;
+}
+
+export function getAlertDestinationsDeliveryHealthDescription(
+  input: AlertDestinationsDeliveryHealthInput,
+) {
+  if (input.status === 'unavailable') {
+    return 'Pulse could not verify the notification queue. Review the destination settings below and send a test before relying on delivery.';
+  }
+
+  const summary = getRetainedDeliveryOutcomes(input);
   const guidanceByClass: Record<string, string> = {
     authentication: 'Check destination credentials, tokens, and account permissions.',
     rate_limited: 'Check provider rate limits and reduce delivery volume before retrying.',
@@ -203,13 +232,9 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
     unknown: 'Review the local notification audit details for the terminal error.',
   };
   let diagnostic = 'Check each enabled destination and send a test.';
-  if (input.failureClassesAvailable && input.failureClasses7d) {
-    const dominant = Object.entries(input.failureClasses7d)
-      .filter(([, count]) => count > 0)
-      .sort((left, right) => right[1] - left[1])[0];
-    if (dominant) {
-      diagnostic = `Most recent terminal failures were classified as ${dominant[0].replace('_', ' ')} (${dominant[1]}). ${guidanceByClass[dominant[0]] ?? guidanceByClass.unknown}`;
-    }
+  const dominant = getDominantDeliveryFailure(input);
+  if (dominant) {
+    diagnostic = `Most recent terminal failures were classified as ${dominant[0].replace('_', ' ')} (${dominant[1]}). ${guidanceByClass[dominant[0]] ?? guidanceByClass.unknown}`;
   }
   return `${summary}. These notifications were not delivered. ${diagnostic} Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them. Dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.`;
 }

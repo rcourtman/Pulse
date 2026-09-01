@@ -46,6 +46,7 @@ import {
   getAlertDestinationsAppriseValidationError,
   getAlertDestinationsConfigLoadError,
   getAlertDestinationsDeliveryHealthDescription,
+  getAlertDestinationsDeliveryHealthSummary,
   getAlertDestinationsDeliveryHealthTitle,
   getAlertDestinationsDeliveryDismissConfirmation,
   getAlertDestinationsDeliveryDismissLabel,
@@ -202,6 +203,22 @@ describe('alertDestinationsPresentation', () => {
     );
     expect(getAlertDestinationsDeliveryDismissConfirmation(2)).toContain(
       'Delivery history remains available',
+    );
+  });
+
+  it('summarizes degraded delivery health without configuration guidance', () => {
+    expect(
+      getAlertDestinationsDeliveryHealthSummary({
+        status: 'degraded',
+        failed: 1,
+        deadLetter: 2,
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
+        failureClasses7d: { connectivity: 3 },
+        failureClassesAvailable: true,
+      }),
+    ).toBe(
+      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Most recent failures: connectivity (3). Review delivery activity for timestamps, destinations, alerts, and errors.',
     );
   });
 });

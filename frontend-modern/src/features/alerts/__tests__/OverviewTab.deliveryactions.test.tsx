@@ -124,5 +124,7 @@ describe('OverviewTab delivery health actions', () => {
     });
     expect(screen.getByRole('button', { name: 'Retry retained deliveries' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Dismiss retained failures' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Refresh delivery status' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Most recent failures: connectivity (1).');
   });
 });
