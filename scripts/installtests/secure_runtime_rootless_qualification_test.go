@@ -1031,11 +1031,7 @@ func rootlessQualDualSocketEvidence(t *testing.T, uid int) []map[string]any {
 
 func rootlessQualAssertHelperNetworkDenied(t *testing.T) bool {
 	t.Helper()
-	rootlessQualCommand(t, 10*time.Second, "ip", "link", "add", "pulse-rootless-canary", "type", "dummy")
-	t.Cleanup(func() { _ = exec.Command("ip", "link", "del", "pulse-rootless-canary").Run() })
-	rootlessQualCommand(t, 10*time.Second, "ip", "address", "add", "192.0.2.1/32", "dev", "pulse-rootless-canary")
-	rootlessQualCommand(t, 10*time.Second, "ip", "link", "set", "pulse-rootless-canary", "up")
-	observations := secureRuntimeAssertHelperOutboundNetworkDenied(t)
+	observations := secureRuntimeAssertHelperLoopbackNetworkDenied(t)
 	return observations["helper_namespace_connection"] == "denied" && observations["host_canary_reachable"] == true
 }
 
