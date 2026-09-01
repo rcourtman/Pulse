@@ -198,7 +198,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ln -sf /dev/null /etc/systemd/system/docker.socket && \
     ln -sf /dev/null /etc/systemd/system/podman.service && \
     ln -sf /dev/null /etc/systemd/system/podman.socket && \
-    install -d -m 0700 /opt/pulse/packet && \
+    install -d -m 0700 /opt/pulse/packet /opt/pulse/result && \
     printf '%s\n' disposable-v1 >/etc/pulse-secure-runtime-rootless-qualification && \
     rm -f /etc/machine-id && touch /etc/machine-id && \
     systemctl set-default multi-user.target
@@ -253,7 +253,7 @@ run_runtime() {
   if ! docker exec \
       -e PULSE_SECURE_RUNTIME_ROOTLESS_QUALIFICATION=disposable-v1 \
       -e "PULSE_ROOTLESS_RUNTIME=${runtime_name}" \
-      -e PULSE_ROOTLESS_RECEIPT=/run/rootless-receipt.json \
+      -e PULSE_ROOTLESS_RECEIPT=/opt/pulse/result/rootless-receipt.json \
       -e PULSE_ROOTLESS_SOURCE_HASHES=/opt/pulse/packet/source-hashes.json \
       -e "PULSE_ROOTLESS_SOURCE_COMMIT=${SOURCE_COMMIT}" \
       -e PULSE_SECURE_RUNTIME_COLLECTOR=/opt/pulse/packet/pulse-agent \
@@ -268,7 +268,12 @@ run_runtime() {
     return 1
   fi
 
-  docker cp "${container_id}:/run/rootless-receipt.json" "${local_receipt}"
+  if ! docker exec "${container_id}" test -f /opt/pulse/result/rootless-receipt.json; then
+    capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
+    echo "ERROR: ${runtime_name} qualification did not retain its durable receipt" >&2
+    return 1
+  fi
+  docker cp "${container_id}:/opt/pulse/result/rootless-receipt.json" "${local_receipt}"
   capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
   chmod 0600 "${local_receipt}" "${OUTPUT_DIR}/${runtime_name}-test.log"
   remove_qualification_container_strict "${container_id}"

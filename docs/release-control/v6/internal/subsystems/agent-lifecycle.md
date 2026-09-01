@@ -7338,6 +7338,9 @@ standalone `secure-runtime-rootless-v1` receipt only after exact socket
 ownership, daemon rootless attestation, installer pinning, direct telemetry,
 same-family typed-helper fallback, recovery without collector restart,
 ambiguity refusal, authority isolation, and cleanup are recorded.
+Receipt output uses a dedicated root-owned, mode-`0700` `/opt/pulse/result`
+boundary instead of volatile `/run` state, so systemd user-manager teardown
+cannot erase a passing result before the wrapper retains it.
 The wrapper must compile every Go artifact with mandatory VCS stamping so a
 missing revision or unavailable clean-worktree proof fails before live evidence
 can be emitted; the receipt and validator retain the exact artifact hashes and

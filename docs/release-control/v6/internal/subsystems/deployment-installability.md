@@ -261,7 +261,10 @@ network-isolated Ubuntu/systemd hosts for real rootless Docker and Podman,
 never mounts a host daemon socket, and records each host identity separately.
 The exact qualification packet remains outside the image layers; the image
 must pre-create its root-owned, mode-`0700` packet destination before the
-wrapper injects artifacts into each stopped disposable container.
+wrapper injects artifacts into each stopped disposable container. The image
+must also pre-create the separate root-owned, mode-`0700` `/opt/pulse/result`
+output boundary; receipts are written there instead of volatile `/run` state so
+systemd user-manager cleanup cannot erase completed qualification evidence.
 Rootless Docker uses its supported `slirp4netns` driver inside the outer
 `--network none` container only; an unsupported `host` RootlessKit driver or
 an outer default route invalidates the proof. The disposable host uses a

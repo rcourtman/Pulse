@@ -38,6 +38,8 @@ const (
 	rootlessQualOptIn       = "PULSE_SECURE_RUNTIME_ROOTLESS_QUALIFICATION"
 	rootlessQualOptInValue  = "disposable-v1"
 	rootlessQualMarker      = "/etc/pulse-secure-runtime-rootless-qualification"
+	rootlessQualReceiptPath = "/opt/pulse/result/rootless-receipt.json"
+	rootlessQualResultDir   = "/opt/pulse/result"
 	rootlessQualFixture     = "pulse-rootless-qualification-fixture:v1"
 	rootlessQualRunningName = "pulse-rootless-running"
 	rootlessQualExitedName  = "pulse-rootless-exited"
@@ -520,8 +522,16 @@ func rootlessQualRequireDisposableHost(t *testing.T, runtimeKind, receiptPath st
 	if err != nil || strings.TrimSpace(string(marker)) != rootlessQualOptInValue {
 		t.Fatalf("disposable marker is absent or invalid: %v", err)
 	}
-	if !filepath.IsAbs(receiptPath) || filepath.Clean(receiptPath) != receiptPath {
-		t.Fatalf("PULSE_ROOTLESS_RECEIPT must be an exact absolute path: %q", receiptPath)
+	if receiptPath != rootlessQualReceiptPath {
+		t.Fatalf("PULSE_ROOTLESS_RECEIPT must use the dedicated durable output path %q: %q", rootlessQualReceiptPath, receiptPath)
+	}
+	resultInfo, err := os.Lstat(rootlessQualResultDir)
+	if err != nil {
+		t.Fatalf("inspect rootless qualification result directory: %v", err)
+	}
+	resultStat, ok := resultInfo.Sys().(*syscall.Stat_t)
+	if !ok || !resultInfo.IsDir() || resultInfo.Mode()&os.ModeSymlink != 0 || resultInfo.Mode().Perm() != 0o700 || resultStat.Uid != 0 {
+		t.Fatalf("rootless qualification result directory must be a root-owned, non-symlink directory with mode 0700: mode=%s stat=%#v", resultInfo.Mode(), resultInfo.Sys())
 	}
 	osRelease := string(rootlessQualReadFile(t, "/etc/os-release"))
 	if !strings.Contains(osRelease, "VERSION_ID=\"24.04\"") && !strings.Contains(osRelease, "VERSION_ID=24.04") {
@@ -1597,7 +1607,9 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 		`run_runtime docker`, `run_runtime podman`, `PULSE_ROOTLESS_RUNTIME=${runtime_name}`, `--privileged`,
 		`pulse-secure-runtime-rootless-qualification`, `qualification result != \"passed\"`,
 		`openssl pkeyutl -sign -rawin -inkey`, `qualification output directory must have exact mode 0700`,
-		`install -d -m 0700 /opt/pulse/packet`,
+		`install -d -m 0700 /opt/pulse/packet /opt/pulse/result`,
+		`PULSE_ROOTLESS_RECEIPT=/opt/pulse/result/rootless-receipt.json`,
+		`docker cp "${container_id}:/opt/pulse/result/rootless-receipt.json"`,
 		`capture_qualification_container_diagnostics`, `journalctl --no-pager -n 2000`,
 		`302a300506032b6570032100`, `len(spki) != len(prefix) + 32`,
 	} {
@@ -1608,7 +1620,7 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 	if count := strings.Count(script, `-buildvcs=true`); count != 3 {
 		t.Fatalf("rootless qualification wrapper must require VCS metadata for all three Go artifacts: got %d", count)
 	}
-	for _, forbidden := range []string{"/var/run/docker.sock:", "/run/podman/podman.sock:", "/sys/fs/cgroup:/sys/fs/cgroup", "--cgroupns=host", "-v $", "--volume"} {
+	for _, forbidden := range []string{"/var/run/docker.sock:", "/run/podman/podman.sock:", "/sys/fs/cgroup:/sys/fs/cgroup", "/run/rootless-receipt.json", "--cgroupns=host", "-v $", "--volume"} {
 		if strings.Contains(script, forbidden) {
 			t.Fatalf("rootless qualification wrapper contains forbidden host-runtime mount marker %q", forbidden)
 		}
@@ -1621,7 +1633,7 @@ func TestRootlessQualificationGuardAndWrapperInvariants(t *testing.T) {
 	if createIndex < 0 || trackIndex < 0 || trackIndex < createIndex {
 		t.Fatal("rootless wrapper must track the exact container ID only after docker create succeeds")
 	}
-	packetDirectoryIndex := strings.Index(script, `install -d -m 0700 /opt/pulse/packet`)
+	packetDirectoryIndex := strings.Index(script, `install -d -m 0700 /opt/pulse/packet /opt/pulse/result`)
 	packetCopyIndex := strings.Index(script, `docker cp "${PACKET_DIR}/." "${container_id}:/opt/pulse/packet"`)
 	if packetDirectoryIndex < 0 || packetCopyIndex < 0 || packetCopyIndex < packetDirectoryIndex {
 		t.Fatal("rootless wrapper must create the private packet destination in the image before artifact injection")
