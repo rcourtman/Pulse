@@ -26,6 +26,12 @@ Generate an installation command in the UI:
 
 Choose a target profile in that screen when you want explicit install flags for Docker, Kubernetes, Proxmox VE, or Proxmox Backup Server.
 
+The generated command is not tied to a single machine. For a Proxmox VE
+cluster, one API connection already provides cluster-wide inventory; the agent
+is per host, so run the same generated command on each cluster node where you
+want agent-provided telemetry (temperatures, SMART, host identity). Each agent
+registers itself and attaches to its own cluster member.
+
 The same generated command is also the supported v5-to-v6 agent upgrade path.
 Run it on the host that already has the v5 `pulse-agent` service to replace the
 binary and service configuration in place; do not uninstall the old service
