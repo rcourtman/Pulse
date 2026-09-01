@@ -154,7 +154,15 @@ func unifiedAgentLocalBuildCommand(normalized string) string {
 		env = append(env, "GOARCH="+goarch)
 	}
 
-	return fmt.Sprintf("%s go build -o bin/pulse-agent-%s ./cmd/pulse-agent", strings.Join(env, " "), normalized)
+	return fmt.Sprintf("%s go build -o bin/%s ./cmd/pulse-agent", strings.Join(env, " "), unifiedAgentLocalFilename(normalized))
+}
+
+func unifiedAgentLocalFilename(normalized string) string {
+	filename := "pulse-agent-" + normalized
+	if strings.HasPrefix(normalized, "windows-") {
+		return filename + ".exe"
+	}
+	return filename
 }
 
 func normalizeAgentHelperArch(arch string) string {
@@ -229,11 +237,12 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 	// Do NOT fall back to generic binary - that could serve the wrong architecture
 	normalized := normalizeUnifiedAgentArch(archParam)
 	if normalized != "" {
+		filename := unifiedAgentLocalFilename(normalized)
 		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), "pulse-agent-"+normalized),
-			filepath.Join("/opt/pulse", "pulse-agent-"+normalized),
-			filepath.Join("/app", "pulse-agent-"+normalized),
-			filepath.Join(r.projectRoot, "bin", "pulse-agent-"+normalized),
+			filepath.Join(pulseBinDir(), filename),
+			filepath.Join("/opt/pulse", filename),
+			filepath.Join("/app", filename),
+			filepath.Join(r.projectRoot, "bin", filename),
 		)
 	} else {
 		// No specific architecture requested - allow fallback to generic binary

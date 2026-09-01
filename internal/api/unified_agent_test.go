@@ -206,23 +206,23 @@ func TestDownloadUnifiedAgent_LocalReleaseBinaryIncludesSignatureHeader(t *testi
 	assert.Equal(t, encodedTestSSHSignature("signed-local-agent-ssh"), w.Header().Get(sshSignatureHeaderName))
 }
 
-func TestDownloadUnifiedAgent_WindowsReleaseAliasIncludesSignatureHeaders(t *testing.T) {
+// Regression coverage for #1820: release images carry Windows binaries and
+// detached signatures under the canonical .exe asset name. Looking up an
+// extensionless compatibility symlink made signature verification probe the
+// wrong sidecar names, reject the healthy local binary, and fall through to a
+// GitHub asset that might not exist yet.
+func TestDownloadUnifiedAgent_LocalWindowsReleaseUsesExecutableSignatures(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v6.4.2"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("GitHub fallback must not be used"))
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("proxy must not be used"))
 
-	binDir := filepath.Join(tempDir, "bin")
-	baseName := "pulse-agent-windows-amd64"
-	exePath := filepath.Join(binDir, baseName+".exe")
 	binContent := validTestUnifiedAgentBinary("windows-amd64")
-	require.NoError(t, os.WriteFile(exePath, binContent, 0755))
-	require.NoError(t, os.WriteFile(exePath+".sig", []byte("signed-windows-agent"), 0644))
-	require.NoError(t, os.WriteFile(exePath+".sshsig", []byte("signed-windows-agent-ssh"), 0644))
-	for _, suffix := range []string{"", ".sig", ".sshsig"} {
-		require.NoError(t, os.Symlink(baseName+".exe"+suffix, filepath.Join(binDir, baseName+suffix)))
-	}
+	binPath := filepath.Join(tempDir, "bin", "pulse-agent-windows-amd64.exe")
+	require.NoError(t, os.WriteFile(binPath, binContent, 0755))
+	require.NoError(t, os.WriteFile(binPath+".sig", []byte("signed-windows-agent"), 0644))
+	require.NoError(t, os.WriteFile(binPath+".sshsig", []byte("signed-windows-agent-ssh"), 0644))
 
-	req := httptest.NewRequest(http.MethodGet, "/download/pulse-agent?arch=windows-amd64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=windows-amd64", nil)
 	w := httptest.NewRecorder()
 	router.handleDownloadUnifiedAgent(w, req)
 
@@ -230,6 +230,11 @@ func TestDownloadUnifiedAgent_WindowsReleaseAliasIncludesSignatureHeaders(t *tes
 	assert.Equal(t, string(binContent), w.Body.String())
 	assert.Equal(t, "signed-windows-agent", w.Header().Get(signatureHeaderName))
 	assert.Equal(t, encodedTestSSHSignature("signed-windows-agent-ssh"), w.Header().Get(sshSignatureHeaderName))
+	assert.NotEqual(t, "github-proxy", w.Header().Get("X-Served-From"))
+}
+
+func TestUnifiedAgentLocalBuildCommandUsesWindowsExecutableName(t *testing.T) {
+	assert.Contains(t, unifiedAgentLocalBuildCommand("windows-amd64"), "-o bin/pulse-agent-windows-amd64.exe")
 }
 
 func TestDownloadUnifiedAgent_SkipsStaleLocalBinaryAndProxies(t *testing.T) {
