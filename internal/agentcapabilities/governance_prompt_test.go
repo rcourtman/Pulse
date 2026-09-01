@@ -346,3 +346,22 @@ func TestBuildPulseMCPOperatingInstructionsUsesRequestedSurfaceContract(t *testi
 		}
 	}
 }
+
+// TestPulseAssistantOperatingInstructionsBiasToAdvertisedActions pins the
+// GitHub #1782 contract: a recoverable ordering block is not a boundary to
+// report, and an advertised lifecycle capability is submitted through the
+// governed action tool rather than narrated as next steps.
+func TestPulseAssistantOperatingInstructionsBiasToAdvertisedActions(t *testing.T) {
+	instructions := BuildPulseAssistantOperatingInstructions()
+	for _, want := range []string{
+		"is an ordering rule, not a boundary",
+		"Never present it to the user as a prerequisite, a session or discovery binding, or a limitation.",
+		"submit the governed action tool for each target",
+		"Report a limitation only from a tool result in this turn",
+		"never hand the user manual steps for an action Pulse offers",
+	} {
+		if !strings.Contains(instructions, want) {
+			t.Fatalf("operating instructions missing %q:\n%s", want, instructions)
+		}
+	}
+}

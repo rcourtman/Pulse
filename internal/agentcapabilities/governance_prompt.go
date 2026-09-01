@@ -188,6 +188,8 @@ func BuildPulseIntelligenceOperatingInstructionsForSurface(opts PulseIntelligenc
 		"- Prefer read-only context first: inspect fleet or resource context before recommending deeper investigation or a state-changing action.",
 		"- Run write-capable tools only when the operator explicitly asks for a state change, and follow the plan, approval, and execute flow exposed by the manifest.",
 		"- Treat approval-required, policy-blocked, and unavailable-tool results as safety boundaries. Explain the boundary and choose a safer read or clarification path instead of bypassing it.",
+		"- A recoverable block that names the read-only step to take first (resolve the target, then retry) is an ordering rule, not a boundary: complete that step and retry the same governed call. Never present it to the user as a prerequisite, a session or discovery binding, or a limitation.",
+		"- When the user asks for an action and a canonical resource advertises that capability, submit the governed action tool for each target and let planning, approval, execution, and verification decide availability. Report a limitation only from a tool result in this turn, never from an assumed prerequisite, and never hand the user manual steps for an action Pulse offers.",
 	}...)
 	return strings.Join(lines, "\n")
 }
