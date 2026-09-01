@@ -7331,7 +7331,8 @@ as removed, rejects that bearer thereafter, and returns the matching agent ID;
 the following legacy-migration phase uses a distinct replacement enrollment
 credential rather than resurrecting the removed one. Final cleanup must commit
 and verify the replacement binding's removal too, then remove the fixed
-root-owned helper state boundary.
+root-owned helper and safe-profile transaction state boundaries through exact
+path-authorized deletion.
 The wrapper exercises each runtime in an isolated state root and emits the
 standalone `secure-runtime-rootless-v1` receipt only after exact socket
 ownership, daemon rootless attestation, installer pinning, direct telemetry,

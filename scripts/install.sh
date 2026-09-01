@@ -195,6 +195,7 @@ TMP_ACTION_RUNNER_BIN=""
 # leaves these unset and therefore never enters a migration transaction.
 SAFE_PROFILE_ACTION=""
 SAFE_PROFILE_STATE_DIR="/var/lib/pulse-agent-profile"
+SAFE_PROFILE_STATE_DIR_REMOVAL_AUTHORITY="$SAFE_PROFILE_STATE_DIR"
 SAFE_PROFILE_CURRENT_FILE="${SAFE_PROFILE_STATE_DIR}/current.env"
 SAFE_PROFILE_COLLECTOR_UNIT="/etc/systemd/system/${AGENT_NAME}.service"
 SAFE_PROFILE_TRANSACTION_DIR=""
@@ -3206,6 +3207,10 @@ remove_privileged_helper_state_dir() {
     remove_authorized_runtime_dir "privileged helper state" "$PRIVILEGED_HELPER_STATE_DIR" "${PRIVILEGED_HELPER_STATE_DIR_REMOVAL_AUTHORITY:-}"
 }
 
+remove_safe_profile_state_dir() {
+    remove_authorized_runtime_dir "safe-profile state" "$SAFE_PROFILE_STATE_DIR" "${SAFE_PROFILE_STATE_DIR_REMOVAL_AUTHORITY:-}"
+}
+
 detect_qnap_data_volume() {
     local qnap_vol=""
     local candidate=""
@@ -5541,6 +5546,9 @@ if [[ "$UNINSTALL" == "true" ]]; then
     fi
     if ! remove_privileged_helper_state_dir; then
         log_warn "Retained privileged helper state at ${PRIVILEGED_HELPER_STATE_DIR}; its path was not authorized by the fixed helper lifecycle boundary."
+    fi
+    if ! remove_safe_profile_state_dir; then
+        log_warn "Retained safe-profile state at ${SAFE_PROFILE_STATE_DIR}; its path was not authorized by the fixed profile lifecycle boundary."
     fi
 
     # Remove least-privilege helper artifacts. The pulse-agent system user is
