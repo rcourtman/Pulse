@@ -180,11 +180,7 @@ export function StandalonePageSurface() {
     ),
   );
   const setAvailabilityView = (view: AvailabilityChecksView) => {
-    const defaultView = resolveAvailabilityChecksView(undefined, model().availabilityChecks.length);
-    setSearchParams(
-      { [STANDALONE_QUERY_PARAMS.view]: view === defaultView ? null : view },
-      { replace: true },
-    );
+    setSearchParams({ [STANDALONE_QUERY_PARAMS.view]: view }, { replace: true });
   };
   const availabilityPosture = createMemo(() =>
     buildStandalonePostureSummary(model().availabilityChecks),

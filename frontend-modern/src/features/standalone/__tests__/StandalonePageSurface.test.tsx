@@ -321,7 +321,7 @@ describe('StandalonePageSurface', () => {
     expect(screen.getByTestId('availability-checks-table')).toHaveAttribute('data-view', 'fleet');
   });
 
-  it('keeps an explicit table choice stable for an estate-sized inventory', () => {
+  it('keeps every explicit presentation choice stable for an estate-sized inventory', () => {
     mocks.pathname = '/standalone/availability';
     mocks.searchParams = { view: 'table' };
     mocks.useUnifiedResources.mockReturnValue({
@@ -347,7 +347,7 @@ describe('StandalonePageSurface', () => {
 
     const props = mocks.AvailabilityChecksTable.mock.calls.at(-1)?.[0];
     props?.onViewChange?.('fleet');
-    expect(mocks.setSearchParams).toHaveBeenCalledWith({ view: null }, { replace: true });
+    expect(mocks.setSearchParams).toHaveBeenCalledWith({ view: 'fleet' }, { replace: true });
 
     props?.onViewChange?.('table');
     expect(mocks.setSearchParams).toHaveBeenCalledWith({ view: 'table' }, { replace: true });
