@@ -157,6 +157,6 @@ material hardening gap. A useful report contains:
 - Relevant source locations and test evidence
 - A practical containment or remediation suggestion when known
 
-Send suspected vulnerabilities privately to <security@pulseapp.io>. General
+Send suspected vulnerabilities privately to <security@pulserelay.pro>. General
 hardening suggestions without an exploitable path can use the public issue
 tracker after confirming that publication does not expose a weakness.

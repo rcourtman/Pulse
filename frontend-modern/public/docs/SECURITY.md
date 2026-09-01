@@ -114,7 +114,7 @@ Verify temperature collection is agent-based:
 
 **Documentation:** [Critical security notice for container deployments](#critical-security-notice-for-container-deployments)
 **Issues:** <https://github.com/rcourtman/pulse/issues>
-**Private disclosures:** <security@pulseapp.io>
+**Private disclosures:** <security@pulserelay.pro>
 
 ---
 

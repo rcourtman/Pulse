@@ -162,7 +162,7 @@ analysis, fuzzing, deployment-specific testing, or an independent threat model.
 ## Reporting findings
 
 Please report suspected vulnerabilities privately to
-<security@pulseapp.io>. Include the affected version or commit, deployment
+<security@pulserelay.pro>. Include the affected version or commit, deployment
 model, required privileges, reproduction steps, expected impact, and any
 suggested containment. Do not include live credentials or customer data.
 
