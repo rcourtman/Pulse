@@ -96,117 +96,125 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
       {(() => {
         const trends = props.state.alertTrends();
         return (
-          <div class="rounded bg-surface-alt p-1">
-            <div class="flex h-12 items-end gap-1">
-              {trends.buckets.map((value, index) => {
-                const scaledHeight =
-                  value > 0 ? Math.min(100, Math.max(20, Math.log(value + 1) * 20)) : 0;
-                const pixelHeight = value > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0;
-                const isSelected = props.state.selectedBarIndex() === index;
-                const bucketStart = trends.bucketTimes[index];
-                const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
-                const bucketRangeLabel = props.state.formatBucketRange(bucketStart, bucketEnd);
-                const bucketDurationText =
-                  trends.bucketSize % 24 === 0
-                    ? `${trends.bucketSize / 24} day${trends.bucketSize / 24 === 1 ? '' : 's'}`
-                    : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
-                const countLabel = getAlertBucketCountLabel(value);
-                const tooltipContent = [
-                  countLabel,
-                  `${bucketDurationText} period`,
-                  bucketRangeLabel,
-                ].join('\n');
+          <div
+            data-alert-frequency-scroll
+            class="overflow-x-auto pb-1"
+            role="group"
+            aria-label="Filter alert history by time period"
+          >
+            {/*
+              Keep each period at least 24 CSS pixels wide. On compact cards the
+              chart and its axis scroll as one surface instead of compressing
+              dozens of pointer targets below the WCAG 2.2 minimum target size.
+            */}
+            <div class="w-max min-w-full">
+              <div class="rounded bg-surface-alt p-1">
+                <div class="flex h-12 items-end gap-1">
+                  {trends.buckets.map((value, index) => {
+                    const scaledHeight =
+                      value > 0 ? Math.min(100, Math.max(20, Math.log(value + 1) * 20)) : 0;
+                    const pixelHeight = value > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0;
+                    const isSelected = () => props.state.selectedBarIndex() === index;
+                    const bucketStart = trends.bucketTimes[index];
+                    const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
+                    const bucketRangeLabel = props.state.formatBucketRange(bucketStart, bucketEnd);
+                    const bucketDurationText =
+                      trends.bucketSize % 24 === 0
+                        ? `${trends.bucketSize / 24} day${trends.bucketSize / 24 === 1 ? '' : 's'}`
+                        : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
+                    const countLabel = getAlertBucketCountLabel(value);
+                    const tooltipContent = [
+                      countLabel,
+                      `${bucketDurationText} period`,
+                      bucketRangeLabel,
+                    ].join('\n');
 
-                return (
-                  <div
-                    class="relative flex flex-1 cursor-pointer items-end"
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isSelected}
-                    aria-label={`${countLabel} between ${bucketRangeLabel}`}
-                    onClick={() =>
-                      props.state.setSelectedBarIndex(
-                        index === props.state.selectedBarIndex() ? null : index,
-                      )
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        props.state.setSelectedBarIndex(
-                          index === props.state.selectedBarIndex() ? null : index,
-                        );
-                      }
-                    }}
-                  >
-                    <div class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></div>
-                    <div
-                      class="relative w-full rounded-sm transition-all"
-                      style={{
-                        height: `${pixelHeight}px`,
-                        'background-color':
-                          value > 0 ? (isSelected ? '#2563eb' : '#3b82f6') : 'transparent',
-                        opacity: isSelected ? '1' : '0.8',
-                        'box-shadow': isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.4)' : 'none',
-                      }}
-                      title={bucketRangeLabel}
-                      onMouseEnter={(event) => {
-                        if (value <= 0) {
-                          hideTooltip();
-                          return;
+                    return (
+                      <button
+                        type="button"
+                        data-alert-frequency-bucket={index}
+                        class="relative flex h-12 min-w-6 flex-1 cursor-pointer items-end rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                        aria-pressed={isSelected()}
+                        aria-label={`${countLabel} between ${bucketRangeLabel}`}
+                        onClick={() =>
+                          props.state.setSelectedBarIndex(
+                            index === props.state.selectedBarIndex() ? null : index,
+                          )
                         }
-                        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-                        showTooltip(tooltipContent, rect.left + rect.width / 2, rect.top, {
-                          align: 'center',
-                          direction: 'up',
-                        });
-                      }}
-                      onMouseLeave={() => hideTooltip()}
-                    />
-                  </div>
-                );
-              })}
+                      >
+                        <span class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></span>
+                        <span
+                          class="relative w-full rounded-sm transition-all"
+                          style={{
+                            height: `${pixelHeight}px`,
+                            'background-color':
+                              value > 0 ? (isSelected() ? '#2563eb' : '#3b82f6') : 'transparent',
+                            opacity: isSelected() ? '1' : '0.8',
+                            'box-shadow': isSelected()
+                              ? '0 0 0 2px rgba(37, 99, 235, 0.4)'
+                              : 'none',
+                          }}
+                          title={bucketRangeLabel}
+                          onMouseEnter={(event) => {
+                            if (value <= 0) {
+                              hideTooltip();
+                              return;
+                            }
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            showTooltip(tooltipContent, rect.left + rect.width / 2, rect.top, {
+                              align: 'center',
+                              direction: 'up',
+                            });
+                          }}
+                          onMouseLeave={() => hideTooltip()}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <Show when={props.state.axisTicks().length > 0}>
+                <div class="relative mt-3 h-10">
+                  <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
+                  <For each={props.state.axisTicks()}>
+                    {(tick, index) => {
+                      const lastIndex = props.state.axisTicks().length - 1;
+                      const mobileMidpoint = Math.floor(lastIndex / 2);
+                      const visibleOnMobile =
+                        index() === 0 || index() === mobileMidpoint || index() === lastIndex;
+
+                      return (
+                        <div
+                          data-testid="alert-frequency-axis-tick"
+                          class="pointer-events-none absolute top-0 h-full flex-col items-center sm:flex"
+                          classList={{
+                            hidden: !visibleOnMobile,
+                            flex: visibleOnMobile,
+                          }}
+                          style={{ left: `${tick.position * 100}%` }}
+                        >
+                          <div class="h-3 w-px bg-slate-300"></div>
+                          <div
+                            data-testid="alert-frequency-axis-label"
+                            class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
+                            classList={{
+                              '-translate-x-1/2': tick.align === 'center',
+                              '-translate-x-full': tick.align === 'end',
+                            }}
+                          >
+                            {tick.label}
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
             </div>
           </div>
         );
       })()}
-
-      <Show when={props.state.axisTicks().length > 0}>
-        <div class="relative mt-3 h-10">
-          <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
-          <For each={props.state.axisTicks()}>
-            {(tick, index) => {
-              const lastIndex = props.state.axisTicks().length - 1;
-              const mobileMidpoint = Math.floor(lastIndex / 2);
-              const visibleOnMobile =
-                index() === 0 || index() === mobileMidpoint || index() === lastIndex;
-
-              return (
-                <div
-                  data-testid="alert-frequency-axis-tick"
-                  class="pointer-events-none absolute top-0 h-full flex-col items-center sm:flex"
-                  classList={{
-                    hidden: !visibleOnMobile,
-                    flex: visibleOnMobile,
-                  }}
-                  style={{ left: `${tick.position * 100}%` }}
-                >
-                  <div class="h-3 w-px bg-slate-300"></div>
-                  <div
-                    data-testid="alert-frequency-axis-label"
-                    class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
-                    classList={{
-                      '-translate-x-1/2': tick.align === 'center',
-                      '-translate-x-full': tick.align === 'end',
-                    }}
-                  >
-                    {tick.label}
-                  </div>
-                </div>
-              );
-            }}
-          </For>
-        </div>
-      </Show>
     </Card>
   );
 }
