@@ -28,12 +28,12 @@ on:
         default: ''
         type: string
       convergence_owner_asset_name:
-        description: 'Unique immutable owner record for the active convergence lease.'
+        description: 'Owner record stored in the exact convergence lease commit.'
         required: false
         default: ''
         type: string
       convergence_owner_asset_sha256:
-        description: 'SHA-256 digest of the immutable convergence owner record.'
+        description: 'SHA-256 digest of the commit-bound convergence owner record.'
         required: false
         default: ''
         type: string
@@ -238,20 +238,21 @@ jobs:
           if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
              [[ ! "${CONVERGENCE_RUN_ID}" =~ ^[0-9]+$ ]] || \
              [[ ! "${LEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || \
-             [[ "${OWNER_ASSET_NAME}" != "release-convergence-owner-${CONVERGENCE_RUN_ID}-"*"-${LEASE_SHA}.json" ]] || \
+             [[ ! "${OWNER_ASSET_NAME}" =~ ^release-convergence-owner-${CONVERGENCE_RUN_ID}-[1-9][0-9]*\.json$ ]] || \
              [[ ! "${OWNER_ASSET_SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
             echo "::error::Stable demo mutation requires an exact stable tag, convergence owner, and lease."
             exit 1
           fi
           release_state="$(
-            gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,publishedAt,tagName \
-              --jq '[.tagName, (.isDraft | tostring), (.isPrerelease | tostring), (.publishedAt // "")] | @tsv'
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+              --jq '[.tag_name, (.draft | tostring), (.prerelease | tostring), (.immutable // false | tostring), (.published_at // "")] | @tsv'
           )"
           if [ "$(awk -F '\t' '{print $1}' <<<"${release_state}")" != "${TAG}" ] || \
              [ "$(awk -F '\t' '{print $2}' <<<"${release_state}")" != "false" ] || \
              [ "$(awk -F '\t' '{print $3}' <<<"${release_state}")" != "false" ] || \
-             [ -z "$(awk -F '\t' '{print $4}' <<<"${release_state}")" ]; then
-            echo "::error::Stable demo mutation refuses inactive or prerelease tag ${TAG}."
+             [ "$(awk -F '\t' '{print $4}' <<<"${release_state}")" != "true" ] || \
+             [ -z "$(awk -F '\t' '{print $5}' <<<"${release_state}")" ]; then
+            echo "::error::Stable demo mutation refuses mutable, inactive, or prerelease tag ${TAG}."
             exit 1
           fi
           marker="$(mktemp)"
@@ -276,16 +277,15 @@ jobs:
           fi
           curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
             -o "${owner_record}" \
-            "https://github.com/${{ github.repository }}/releases/download/${TAG}/${OWNER_ASSET_NAME}"
+            "https://raw.githubusercontent.com/${{ github.repository }}/${LEASE_SHA}/${OWNER_ASSET_NAME}"
           printf '%s  %s\n' "${OWNER_ASSET_SHA256}" "${owner_record}" | sha256sum --check --
           jq -e \
             --arg tag "${TAG}" \
             --arg activation_owner_run_id "${activation_owner_run_id}" \
             --arg activation_marker_sha256 "${activation_marker_sha256}" \
             --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
-            --arg lease_sha "${LEASE_SHA}" \
             --arg owner_asset_name "${OWNER_ASSET_NAME}" \
-            '.schema_version == 1 and .tag == $tag and .activation_owner_run_id == $activation_owner_run_id and .activation_marker_sha256 == $activation_marker_sha256 and .convergence_run_id == $convergence_run_id and .lease_sha == $lease_sha and .owner_asset_name == $owner_asset_name' \
+            '.schema_version == 2 and .tag == $tag and .activation_owner_run_id == $activation_owner_run_id and .activation_marker_sha256 == $activation_marker_sha256 and .convergence_run_id == $convergence_run_id and .owner_asset_name == $owner_asset_name' \
             "${owner_record}" >/dev/null
           rm -f "${marker}" "${owner_record}"
           echo "[OK] Stable demo mutation is bound to committed ${TAG} convergence run ${CONVERGENCE_RUN_ID}."

@@ -207,8 +207,8 @@ jobs:
       lock_sha: ${{ steps.acquire.outputs.lock_sha }}
       superseded: ${{ steps.admit.outputs.superseded }}
       desired_tag: ${{ steps.admit.outputs.desired_tag }}
-      owner_asset_name: ${{ steps.owner.outputs.owner_asset_name }}
-      owner_asset_sha256: ${{ steps.owner.outputs.owner_asset_sha256 }}
+      owner_asset_name: ${{ steps.acquire.outputs.owner_asset_name }}
+      owner_asset_sha256: ${{ steps.acquire.outputs.owner_asset_sha256 }}
       server_image_digest: ${{ needs.await_activation_commit.outputs.server_image_digest }}
       control_plane_image_digest: ${{ needs.await_activation_commit.outputs.control_plane_image_digest }}
       helm_chart_digest: ${{ needs.await_activation_commit.outputs.helm_chart_digest }}
@@ -224,6 +224,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          TARGET_COMMITISH: ${{ inputs.target_commitish }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
+          R2_PREFIX: ${{ inputs.r2_prefix }}
+          ACTIVATION_OWNER_RUN_ID: ${{ needs.await_activation_commit.outputs.activation_owner_run_id }}
+          ACTIVATION_MARKER_SHA256: ${{ needs.await_activation_commit.outputs.activation_marker_sha256 }}
         run: |
           set -euo pipefail
           scripts/release_control/customer_promotion_lease.sh acquire "${TAG}"
@@ -271,69 +277,6 @@ jobs:
             echo "superseded=false" >> "$GITHUB_OUTPUT"
             echo "[OK] ${TAG} is the monotonic ${IS_PRERELEASE} channel convergence target."
           fi
-
-      - name: Bind this lease as the active convergence successor
-        id: owner
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-          TARGET_COMMITISH: ${{ inputs.target_commitish }}
-          RELEASE_ID: ${{ inputs.release_id }}
-          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
-          R2_PREFIX: ${{ inputs.r2_prefix }}
-          ACTIVATION_OWNER_RUN_ID: ${{ needs.await_activation_commit.outputs.activation_owner_run_id }}
-          ACTIVATION_MARKER_SHA256: ${{ needs.await_activation_commit.outputs.activation_marker_sha256 }}
-          LEASE_SHA: ${{ steps.acquire.outputs.lock_sha }}
-        run: |
-          set -euo pipefail
-          owner_dir="$(mktemp -d)"
-          verified_record="$(mktemp)"
-          cleanup() { rm -rf "${owner_dir}"; rm -f "${verified_record}"; }
-          trap cleanup EXIT
-          owner_asset_name="release-convergence-owner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${LEASE_SHA}.json"
-          owner_record="${owner_dir}/${owner_asset_name}"
-          jq -n \
-            --arg tag "${TAG}" \
-            --arg target_commitish "${TARGET_COMMITISH}" \
-            --arg release_id "${RELEASE_ID}" \
-            --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
-            --arg r2_prefix "${R2_PREFIX}" \
-            --arg activation_owner_run_id "${ACTIVATION_OWNER_RUN_ID}" \
-            --arg activation_marker_sha256 "${ACTIVATION_MARKER_SHA256}" \
-            --arg convergence_run_id "${GITHUB_RUN_ID}" \
-            --arg lease_sha "${LEASE_SHA}" \
-            --arg owner_asset_name "${owner_asset_name}" \
-            '{
-              schema_version: 1,
-              tag: $tag,
-              target_commitish: $target_commitish,
-              release_id: $release_id,
-              source_release_run_id: $source_release_run_id,
-              r2_prefix: $r2_prefix,
-              activation_owner_run_id: $activation_owner_run_id,
-              activation_marker_sha256: $activation_marker_sha256,
-              convergence_run_id: $convergence_run_id,
-              lease_sha: $lease_sha,
-              owner_asset_name: $owner_asset_name
-            }' > "${owner_record}"
-          owner_asset_sha256="$(sha256sum "${owner_record}" | awk '{print $1}')"
-          echo "owner_asset_name=${owner_asset_name}" >> "$GITHUB_OUTPUT"
-          echo "owner_asset_sha256=${owner_asset_sha256}" >> "$GITHUB_OUTPUT"
-          gh release upload "${TAG}" "${owner_record}"
-          curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors \
-            -o "${verified_record}" \
-            "https://github.com/${{ github.repository }}/releases/download/${TAG}/${owner_asset_name}"
-          printf '%s  %s\n' "${owner_asset_sha256}" "${verified_record}" | sha256sum --check --
-          jq -e \
-            --arg tag "${TAG}" \
-            --arg activation_owner_run_id "${ACTIVATION_OWNER_RUN_ID}" \
-            --arg activation_marker_sha256 "${ACTIVATION_MARKER_SHA256}" \
-            --arg convergence_run_id "${GITHUB_RUN_ID}" \
-            --arg lease_sha "${LEASE_SHA}" \
-            --arg owner_asset_name "${owner_asset_name}" \
-            '.schema_version == 1 and .tag == $tag and .activation_owner_run_id == $activation_owner_run_id and .activation_marker_sha256 == $activation_marker_sha256 and .convergence_run_id == $convergence_run_id and .lease_sha == $lease_sha and .owner_asset_name == $owner_asset_name' \
-            "${verified_record}" >/dev/null
-          echo "[OK] Bound convergence run ${GITHUB_RUN_ID} to lease ${LEASE_SHA} for ${TAG}."
 
   promote_floating_tags:
     name: Converge Docker aliases

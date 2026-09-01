@@ -29,11 +29,11 @@ on:
         required: true
         type: string
       pulse_owner_asset_name:
-        description: "Unique immutable convergence-owner evidence asset."
+        description: "Owner evidence path in the exact Pulse lease commit."
         required: true
         type: string
       pulse_owner_asset_sha256:
-        description: "SHA-256 digest of the immutable convergence-owner evidence."
+        description: "SHA-256 digest of the commit-bound owner evidence."
         required: true
         type: string
 
@@ -67,6 +67,56 @@ jobs:
             echo "::error::Private Pro staging did not return an R2 prefix."
             exit 1
           fi
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[1-9][0-9]*)?$ ]] || \
+             [[ ! "${PULSE_LEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || \
+             [[ ! "${PULSE_CONVERGENCE_RUN_ID}" =~ ^[0-9]+$ ]] || \
+             [[ ! "${PULSE_OWNER_ASSET_NAME}" =~ ^release-convergence-owner-${PULSE_CONVERGENCE_RUN_ID}-[1-9][0-9]*\.json$ ]] || \
+             [[ ! "${PULSE_OWNER_ASSET_SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Paid-runtime promotion requires an exact release, convergence owner, and lease."
+            exit 1
+          fi
+
+          release_json="$(mktemp)"
+          marker="$(mktemp)"
+          owner_record="$(mktemp)"
+          cleanup_owner_proof() {
+            rm -f "${release_json}" "${marker}" "${owner_record}"
+          }
+          trap cleanup_owner_proof EXIT
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" > "${release_json}"
+          jq -e --arg tag "${TAG}" \
+            '.tag_name == $tag and .draft == false and .immutable == true and (.published_at | type == "string" and length > 0)' \
+            "${release_json}" >/dev/null
+          observed_lease_sha="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/git/ref/heads/release-customer-promotion-lock" \
+              --jq '.object.sha'
+          )"
+          if [[ "${observed_lease_sha}" != "${PULSE_LEASE_SHA}" ]]; then
+            echo "::error::Paid-runtime lease is ${observed_lease_sha:-absent}, expected ${PULSE_LEASE_SHA}."
+            exit 1
+          fi
+          curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
+            -o "${marker}" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/release-activation.json"
+          curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
+            -o "${owner_record}" \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${PULSE_LEASE_SHA}/${PULSE_OWNER_ASSET_NAME}"
+          printf '%s  %s\n' "${PULSE_OWNER_ASSET_SHA256}" "${owner_record}" | sha256sum --check --
+          activation_owner_run_id="$(jq -r '.convergence_run_id' "${marker}")"
+          activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
+          jq -e \
+            --arg tag "${TAG}" \
+            --arg r2_prefix "${R2_PREFIX}" \
+            --arg activation_owner_run_id "${activation_owner_run_id}" \
+            --arg activation_marker_sha256 "${activation_marker_sha256}" \
+            --arg convergence_run_id "${PULSE_CONVERGENCE_RUN_ID}" \
+            --arg owner_asset_name "${PULSE_OWNER_ASSET_NAME}" \
+            '.schema_version == 2 and .tag == $tag and .r2_prefix == $r2_prefix and .activation_owner_run_id == $activation_owner_run_id and .activation_marker_sha256 == $activation_marker_sha256 and .convergence_run_id == $convergence_run_id and .owner_asset_name == $owner_asset_name' \
+            "${owner_record}" >/dev/null
+          cleanup_owner_proof
+          trap - EXIT
+          echo "[OK] Paid-runtime mutation is bound to immutable ${TAG} convergence run ${PULSE_CONVERGENCE_RUN_ID}."
 
           wait_for_workflow() {
             local repo="$1"

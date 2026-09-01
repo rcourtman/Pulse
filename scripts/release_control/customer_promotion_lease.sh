@@ -25,18 +25,81 @@ acquire() {
     return 1
   fi
 
+  : "${TARGET_COMMITISH:?TARGET_COMMITISH is required}"
+  : "${RELEASE_ID:?RELEASE_ID is required}"
+  : "${SOURCE_RELEASE_RUN_ID:?SOURCE_RELEASE_RUN_ID is required}"
+  : "${R2_PREFIX:?R2_PREFIX is required}"
+  : "${ACTIVATION_OWNER_RUN_ID:?ACTIVATION_OWNER_RUN_ID is required}"
+  : "${ACTIVATION_MARKER_SHA256:?ACTIVATION_MARKER_SHA256 is required}"
+  if [[ ! "${TARGET_COMMITISH}" =~ ^[0-9a-f]{40}$ ]] || \
+     [[ ! "${RELEASE_ID}" =~ ^[0-9]+$ ]] || \
+     [[ ! "${SOURCE_RELEASE_RUN_ID}" =~ ^[0-9]+$ ]] || \
+     [[ ! "${ACTIVATION_OWNER_RUN_ID}" =~ ^[0-9]+$ ]] || \
+     [[ ! "${ACTIVATION_MARKER_SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "::error::Customer-promotion owner identity is malformed."
+    return 1
+  fi
+
   export GIT_AUTHOR_NAME="${GITHUB_ACTOR}"
   export GIT_AUTHOR_EMAIL="${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
   export GIT_COMMITTER_NAME="${GIT_AUTHOR_NAME}"
   export GIT_COMMITTER_EMAIL="${GIT_AUTHOR_EMAIL}"
   local lock_message="Release customer promotion lock run=${GITHUB_RUN_ID} attempt=${GITHUB_RUN_ATTEMPT} owner=${tag}"
-  local lock_commit
-  lock_commit="$(printf '%s\n' "${lock_message}" | git commit-tree "$(git rev-parse 'HEAD^{tree}')" -p HEAD)"
+  local owner_dir owner_record owner_asset_name owner_asset_sha256 owner_ref
+  local owner_blob lock_index lock_tree lock_commit
+  owner_dir="$(mktemp -d)"
+  lock_index="$(mktemp)"
+  owner_asset_name="release-convergence-owner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+  owner_ref="refs/tags/${owner_asset_name%.json}"
+  owner_record="${owner_dir}/${owner_asset_name}"
+  jq -n \
+    --arg tag "${tag}" \
+    --arg target_commitish "${TARGET_COMMITISH}" \
+    --arg release_id "${RELEASE_ID}" \
+    --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
+    --arg r2_prefix "${R2_PREFIX}" \
+    --arg activation_owner_run_id "${ACTIVATION_OWNER_RUN_ID}" \
+    --arg activation_marker_sha256 "${ACTIVATION_MARKER_SHA256}" \
+    --arg convergence_run_id "${GITHUB_RUN_ID}" \
+    --arg owner_asset_name "${owner_asset_name}" \
+    '{
+      schema_version: 2,
+      tag: $tag,
+      target_commitish: $target_commitish,
+      release_id: $release_id,
+      source_release_run_id: $source_release_run_id,
+      r2_prefix: $r2_prefix,
+      activation_owner_run_id: $activation_owner_run_id,
+      activation_marker_sha256: $activation_marker_sha256,
+      convergence_run_id: $convergence_run_id,
+      owner_asset_name: $owner_asset_name
+    }' > "${owner_record}"
+  owner_asset_sha256="$(sha256sum "${owner_record}" | awk '{print $1}')"
+
+  # Store the owner record inside the lease commit itself. The exact lock SHA
+  # therefore addresses both the active lease and immutable evidence for its
+  # owner without trying to append an asset to an already-published release.
+  owner_blob="$(git hash-object -w "${owner_record}")"
+  GIT_INDEX_FILE="${lock_index}" git read-tree HEAD
+  GIT_INDEX_FILE="${lock_index}" git update-index --add --cacheinfo \
+    "100644,${owner_blob},${owner_asset_name}"
+  lock_tree="$(GIT_INDEX_FILE="${lock_index}" git write-tree)"
+  lock_commit="$(printf '%s\n' "${lock_message}" | git commit-tree "${lock_tree}" -p HEAD)"
   local deadline=$((SECONDS + timeout_seconds))
 
   while (( SECONDS < deadline )); do
-    if git push origin "${lock_commit}:${LOCK_REF}" >/dev/null 2>&1; then
-      echo "lock_sha=${lock_commit}" >> "${GITHUB_OUTPUT}"
+    # The unique evidence tag retains the exact commit after the active lock ref
+    # is released. Atomic creation prevents either ref from existing alone.
+    if git push --atomic origin \
+         "${lock_commit}:${LOCK_REF}" \
+         "${lock_commit}:${owner_ref}" >/dev/null 2>&1; then
+      {
+        echo "lock_sha=${lock_commit}"
+        echo "owner_asset_name=${owner_asset_name}"
+        echo "owner_asset_sha256=${owner_asset_sha256}"
+      } >> "${GITHUB_OUTPUT}"
+      rm -rf -- "${owner_dir}"
+      rm -f -- "${lock_index}"
       echo "[OK] Acquired global customer-promotion lease ${lock_commit}."
       return 0
     fi
@@ -92,6 +155,8 @@ acquire() {
     sleep 30
   done
 
+  rm -rf -- "${owner_dir}"
+  rm -f -- "${lock_index}"
   echo "::error::Timed out acquiring the global customer-promotion lease."
   return 1
 }

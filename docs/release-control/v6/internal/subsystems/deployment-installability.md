@@ -1729,11 +1729,14 @@ artifact-selection behaviour.
    run is completed, a fresh manual convergence dispatch from fixed workflow
    code may adopt the same immutable tag, source run, target commit, release ID,
    R2 prefix, and activation-marker digest. Adoption happens only after lease
-   acquisition and publishes a unique immutable owner record whose asset name
-   includes the new run ID, run attempt, and lease SHA. Downstream demo and paid
-   broker mutation must verify the exact passed owner filename and SHA-256. A
-   clobbered constant owner record is forbidden because cached prior bytes could
-   authorize stale ownership.
+   acquisition and writes a unique owner record into the exact lease commit.
+   The record name includes the new run ID and run attempt; downstream demo and
+   paid broker mutation must read it from the passed lease commit and verify the
+   exact filename and SHA-256. A unique evidence tag retains that exact commit
+   after the active lease ref is released. The release remains sealed after
+   publication, while every successor gets immutable, run-scoped Git evidence.
+   Reading a floating ref or a clobbered constant record is forbidden because
+   cached prior bytes could authorize stale ownership.
    A support-only private Pro prerelease image is a narrower exception for
    customer verification of an already-fixed defect. It may dispatch the private
    `Build Pro Release` workflow with `publish_docker_image=true`,

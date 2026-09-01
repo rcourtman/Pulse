@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import tempfile
 import unittest
-import json
 
 import yaml
 from yaml.constructor import ConstructorError
@@ -664,7 +666,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             "inputs.verify_only != true",
             "release-activation.json",
             ".convergence_run_id == $convergence_run_id",
-            "Stable demo mutation refuses inactive or prerelease tag",
+            "Stable demo mutation refuses mutable, inactive, or prerelease tag",
+            "https://raw.githubusercontent.com/${{ github.repository }}/${LEASE_SHA}/${OWNER_ASSET_NAME}",
+            ".immutable // false",
+            ".schema_version == 2",
         ):
             self.assertIn(needle, demo_mutation)
         self.assertIn("tag: ${{ inputs.tag }}", demo_caller)
@@ -686,6 +691,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             "pulse_owner_asset_name: $pulse_owner_asset_name",
             "pulse_owner_asset_sha256: $pulse_owner_asset_sha256",
             "return_run_details: true",
+            ".immutable == true",
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${PULSE_LEASE_SHA}/${PULSE_OWNER_ASSET_NAME}",
+            ".schema_version == 2",
+            "Paid-runtime mutation is bound to immutable",
         ):
             self.assertIn(needle, paid_dispatch)
 
@@ -703,7 +712,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("release-customer-promotion-lock", release_workflow)
         self.assertIn("customer_promotion_lease.sh acquire", lease)
         self.assertIn("refs/heads/release-customer-promotion-lock", lease_script)
-        self.assertIn("git push origin \"${lock_commit}:${LOCK_REF}\"", lease_script)
+        self.assertIn("git push --atomic origin", lease_script)
+        self.assertIn('"${lock_commit}:${owner_ref}"', lease_script)
         self.assertIn('"repos/${GITHUB_REPOSITORY}/git/refs"', lease_script)
         self.assertIn("Bootstrapped absent customer-promotion lease ref", lease_script)
         self.assertIn("--force-with-lease=\"${LOCK_REF}:${observed_sha}\"", lease_script)
@@ -715,6 +725,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("no global customer pointer will move backward", lease)
         self.assertIn("customer_promotion_lease.sh release", release_lease)
         self.assertIn("--force-with-lease=\"${LOCK_REF}:${lock_sha}\"", lease_script)
+        self.assertIn('schema_version: 2', lease_script)
+        self.assertIn('git hash-object -w "${owner_record}"', lease_script)
+        self.assertIn('GIT_INDEX_FILE="${lock_index}" git update-index', lease_script)
+        self.assertNotIn('gh release upload "${TAG}" "${owner_record}"', lease)
 
         helm_pages = workflow_job_block(convergence, "publish_helm_pages")
         convergence_verdict = workflow_job_block(convergence, "convergence_verdict")
@@ -854,6 +868,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         convergence = read(".github/workflows/release-convergence.yml")
         await_commit = workflow_job_block(convergence, "await_activation_commit")
         lease = workflow_job_block(convergence, "acquire_customer_promotion_lease")
+        lease_script = read("scripts/release_control/customer_promotion_lease.sh")
 
         original_owner = "100"
         successor_owner = "200"
@@ -870,17 +885,116 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertTrue(successor_may_adopt)
         self.assertIn("Adopting committed ${TAG} from completed convergence owner", await_commit)
-        self.assertIn("Bind this lease as the active convergence successor", lease)
-        self.assertIn("activation_owner_run_id", lease)
-        self.assertIn("activation_marker_sha256", lease)
-        self.assertIn("release-convergence-owner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${LEASE_SHA}.json", lease)
-        self.assertNotIn("#release-convergence-owner.json", lease)
-        self.assertIn("owner_asset_sha256", lease)
-        self.assertIn("sha256sum --check --", lease)
+        self.assertIn("ACTIVATION_OWNER_RUN_ID", lease)
+        self.assertIn("ACTIVATION_MARKER_SHA256", lease)
+        self.assertIn(
+            "release-convergence-owner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json",
+            lease_script,
+        )
+        self.assertIn("owner_asset_sha256", lease_script)
+        self.assertIn("git commit-tree", lease_script)
+        self.assertNotIn("gh release upload", lease)
 
-        stale_name = f"release-convergence-owner-{original_owner}-5-{'a' * 40}.json"
-        successor_name = f"release-convergence-owner-{successor_owner}-1-{'b' * 40}.json"
+        stale_name = f"release-convergence-owner-{original_owner}-5.json"
+        successor_name = f"release-convergence-owner-{successor_owner}-1.json"
         self.assertNotEqual(stale_name, successor_name)
+
+    def test_customer_promotion_lease_commit_contains_exact_owner_evidence(self) -> None:
+        script = REPO_ROOT / "scripts" / "release_control" / "customer_promotion_lease.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            remote = root / "remote.git"
+            checkout = root / "checkout"
+            output = root / "github-output"
+            subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+            subprocess.run(["git", "init", str(checkout)], check=True, capture_output=True)
+            for key, value in (
+                ("user.name", "Pulse Test"),
+                ("user.email", "pulse-test@example.invalid"),
+            ):
+                subprocess.run(
+                    ["git", "config", key, value], cwd=checkout, check=True
+                )
+            (checkout / "README").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README"], cwd=checkout, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=checkout, check=True, capture_output=True)
+            subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=checkout, check=True)
+            subprocess.run(
+                ["git", "push", "origin", "HEAD:refs/heads/release-customer-promotion-lock"],
+                cwd=checkout,
+                check=True,
+                capture_output=True,
+            )
+
+            env = os.environ.copy()
+            env.update(
+                {
+                    "GH_TOKEN": "test-token",
+                    "GITHUB_REPOSITORY": "rcourtman/Pulse",
+                    "GITHUB_RUN_ID": "200",
+                    "GITHUB_RUN_ATTEMPT": "3",
+                    "GITHUB_ACTOR": "pulse-test",
+                    "GITHUB_ACTOR_ID": "1234",
+                    "GITHUB_OUTPUT": str(output),
+                    "TARGET_COMMITISH": "a" * 40,
+                    "RELEASE_ID": "321",
+                    "SOURCE_RELEASE_RUN_ID": "100",
+                    "R2_PREFIX": "v6.5.0-pro-test",
+                    "ACTIVATION_OWNER_RUN_ID": "150",
+                    "ACTIVATION_MARKER_SHA256": "b" * 64,
+                }
+            )
+            result = subprocess.run(
+                [str(script), "acquire", "v6.5.0"],
+                cwd=checkout,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            outputs = dict(
+                line.split("=", 1)
+                for line in output.read_text(encoding="utf-8").splitlines()
+            )
+            self.assertRegex(outputs["lock_sha"], r"^[0-9a-f]{40}$")
+            self.assertEqual(
+                outputs["owner_asset_name"],
+                "release-convergence-owner-200-3.json",
+            )
+            record_text = subprocess.run(
+                [
+                    "git",
+                    "show",
+                    f"{outputs['lock_sha']}:{outputs['owner_asset_name']}",
+                ],
+                cwd=checkout,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout
+            record = json.loads(record_text)
+            self.assertEqual(record["schema_version"], 2)
+            self.assertEqual(record["convergence_run_id"], "200")
+            self.assertEqual(record["activation_owner_run_id"], "150")
+            self.assertNotIn("lease_sha", record)
+            self.assertEqual(
+                outputs["owner_asset_sha256"],
+                hashlib.sha256(record_text.encode()).hexdigest(),
+            )
+            retained = subprocess.run(
+                [
+                    "git",
+                    "ls-remote",
+                    "origin",
+                    "refs/tags/release-convergence-owner-200-3",
+                ],
+                cwd=checkout,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.split()[0]
+            self.assertEqual(retained, outputs["lock_sha"])
 
     def test_private_dispatches_wait_for_the_exact_created_run(self) -> None:
         release_workflow = read(".github/workflows/create-release.yml")
@@ -1498,7 +1612,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("--enforce-prerelease-observation-window", dry_run_workflow)
         self.assertNotIn("--enforce-prerelease-observation-window", dry_run_helper)
         self.assertIn("render_release_body.py", content)
-        self.assertIn('--promotion-channel "${{ needs.prepare.outputs.release_stage }}"', content)
+        self.assertIn('WORKFLOW_OUTPUT_3: ${{ needs.prepare.outputs.release_stage }}', content)
+        self.assertIn('--promotion-channel "${WORKFLOW_OUTPUT_3}"', content)
         self.assertIn(
             "needs.prepare.outputs.release_stage != 'alpha' && needs.prepare.outputs.release_stage != 'beta'",
             content,
@@ -1565,8 +1680,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("statuses: write", validation_workflow)
         self.assertIn("curl --fail-with-body --silent --show-error -X POST", validation_workflow)
         self.assertIn('"context": "Release Asset Validation"', validation_workflow)
-        self.assertIn('--arg tag "${{ steps.context.outputs.tag }}"', validation_workflow)
-        self.assertIn('--arg target_commitish "${{ steps.context.outputs.target_commitish }}"', validation_workflow)
+        self.assertIn('WORKFLOW_OUTPUT_4: ${{ steps.context.outputs.tag }}', validation_workflow)
+        self.assertIn(
+            'WORKFLOW_OUTPUT_5: ${{ steps.context.outputs.target_commitish }}',
+            validation_workflow,
+        )
+        self.assertIn('--arg tag "${WORKFLOW_OUTPUT_4}"', validation_workflow)
+        self.assertIn('--arg target_commitish "${WORKFLOW_OUTPUT_5}"', validation_workflow)
         self.assertIn("{body: $body, tag_name: $tag, target_commitish: $target_commitish}", validation_workflow)
         self.assertIn("{draft: true, tag_name: $tag, target_commitish: $target_commitish}", validation_workflow)
         self.assertIn("Validation release body update detached release tag", validation_workflow)
@@ -1606,8 +1726,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             'ACTUAL_TARGET_COMMITISH=$(jq -r \'.target_commitish // empty\' "$RELEASE_JSON_FILE")',
             content,
         )
-        self.assertIn('./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"', content)
-        self.assertIn('./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"', content)
+        self.assertIn('WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}', content)
+        self.assertIn('./scripts/backfill-release-assets.sh --tag "${WORKFLOW_OUTPUT_1}" --repo "${{ github.repository }}"', content)
+        self.assertIn('./scripts/validate-published-release.sh "${WORKFLOW_OUTPUT_1}" "${{ github.repository }}"', content)
         self.assertIn("PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
         self.assertIn(
@@ -1616,8 +1737,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 - name: Validate published release packet
                   env:
                     PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+                    WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
                   run: |
-                    ./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"
+                    ./scripts/validate-published-release.sh "${WORKFLOW_OUTPUT_1}" "${{ github.repository }}"
                 """
             ),
             normalize_ws(content),

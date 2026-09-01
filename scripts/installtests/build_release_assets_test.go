@@ -3137,7 +3137,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	for _, needle := range []string{
 		`"repos/${GITHUB_REPOSITORY}/git/refs"`,
 		`Bootstrapped absent customer-promotion lease ref`,
-		`git push origin "${lock_commit}:${LOCK_REF}"`,
+		`git push --atomic origin`,
+		`"${lock_commit}:${owner_ref}"`,
 	} {
 		if !strings.Contains(leaseScript, needle) {
 			t.Fatalf("customer-promotion lease missing absent-ref bootstrap contract: %s", needle)
