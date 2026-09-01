@@ -48,6 +48,22 @@ import { AvailabilityFleetView } from './AvailabilityFleetView';
 
 export type AvailabilityChecksView = 'table' | 'fleet';
 
+// The fleet presentation exists to keep an estate-sized availability list
+// scannable. Small inventories still benefit from the table's extra columns,
+// while 20+ checks match the first scale at which operators have reported the
+// table becoming difficult to scan. An explicit route value always wins so a
+// chosen presentation remains shareable and stable across refreshes.
+export const AVAILABILITY_FLEET_DEFAULT_MIN_CHECKS = 20;
+
+export const resolveAvailabilityChecksView = (
+  routeValue: string | string[] | undefined,
+  checkCount: number,
+): AvailabilityChecksView => {
+  const selectedValue = Array.isArray(routeValue) ? routeValue[0] : routeValue;
+  if (selectedValue === 'table' || selectedValue === 'fleet') return selectedValue;
+  return checkCount >= AVAILABILITY_FLEET_DEFAULT_MIN_CHECKS ? 'fleet' : 'table';
+};
+
 const settingsLinkClass =
   'inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover';
 

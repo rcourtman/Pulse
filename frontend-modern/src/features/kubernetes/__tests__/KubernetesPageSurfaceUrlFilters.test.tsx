@@ -86,7 +86,11 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     renderSurfaceAt('/kubernetes/overview');
 
     expect(screen.queryByRole('region', { name: 'Kubernetes attention' })).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('1 workload needs attention');
+    expect(
+      screen
+        .getAllByRole('status')
+        .find((status) => status.textContent?.includes('1 workload needs attention')),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute(
       'href',
       '/kubernetes/workloads',

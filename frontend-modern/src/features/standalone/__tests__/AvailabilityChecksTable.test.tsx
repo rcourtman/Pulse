@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import type { ProbeAgentOption } from '@/utils/availabilityProbeAgents';
-import { AvailabilityChecksTable } from '../AvailabilityChecksTable';
+import { AvailabilityChecksTable, resolveAvailabilityChecksView } from '../AvailabilityChecksTable';
 
 const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -57,6 +57,14 @@ afterEach(() => {
 });
 
 describe('AvailabilityChecksTable', () => {
+  it('uses the fleet default only for estate-sized inventories without an explicit view', () => {
+    expect(resolveAvailabilityChecksView(undefined, 19)).toBe('table');
+    expect(resolveAvailabilityChecksView(undefined, 20)).toBe('fleet');
+    expect(resolveAvailabilityChecksView('table', 50)).toBe('table');
+    expect(resolveAvailabilityChecksView('fleet', 1)).toBe('fleet');
+    expect(resolveAvailabilityChecksView(['fleet'], 1)).toBe('fleet');
+  });
+
   it('renders agentless check status from unified network endpoint resources', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);
 

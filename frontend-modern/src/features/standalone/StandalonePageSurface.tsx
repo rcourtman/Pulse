@@ -33,7 +33,11 @@ import {
 import { updateStore } from '@/stores/updates';
 import { formatRelativeTime } from '@/utils/format';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
-import { AvailabilityChecksTable, type AvailabilityChecksView } from './AvailabilityChecksTable';
+import {
+  AvailabilityChecksTable,
+  resolveAvailabilityChecksView,
+  type AvailabilityChecksView,
+} from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
 import { collectHostIdentityConflictHosts } from './hostIdentityConflict';
 import { HostIdentityConflictNotice } from './HostIdentityConflictNotice';
@@ -170,11 +174,15 @@ export function StandalonePageSurface() {
     );
   };
   const availabilityView = createMemo<AvailabilityChecksView>(() =>
-    searchParams[STANDALONE_QUERY_PARAMS.view] === 'fleet' ? 'fleet' : 'table',
+    resolveAvailabilityChecksView(
+      searchParams[STANDALONE_QUERY_PARAMS.view],
+      model().availabilityChecks.length,
+    ),
   );
   const setAvailabilityView = (view: AvailabilityChecksView) => {
+    const defaultView = resolveAvailabilityChecksView(undefined, model().availabilityChecks.length);
     setSearchParams(
-      { [STANDALONE_QUERY_PARAMS.view]: view === 'table' ? null : view },
+      { [STANDALONE_QUERY_PARAMS.view]: view === defaultView ? null : view },
       { replace: true },
     );
   };

@@ -21,9 +21,19 @@ const mocks = vi.hoisted(() => ({
       onResetFilters?: () => void;
     }) => <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />,
   ),
-  AvailabilityChecksTable: vi.fn((props: { resources: Resource[] }) => (
-    <div data-testid="availability-checks-table" data-resource-count={props.resources.length} />
-  )),
+  AvailabilityChecksTable: vi.fn(
+    (props: {
+      resources: Resource[];
+      view?: string;
+      onViewChange?: (value: 'table' | 'fleet') => void;
+    }) => (
+      <div
+        data-testid="availability-checks-table"
+        data-resource-count={props.resources.length}
+        data-view={props.view}
+      />
+    ),
+  ),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
@@ -59,6 +69,14 @@ vi.mock('../AgentsMachinesTable', () => ({
 
 vi.mock('../AvailabilityChecksTable', () => ({
   AvailabilityChecksTable: mocks.AvailabilityChecksTable,
+  resolveAvailabilityChecksView: (
+    routeValue: string | string[] | undefined,
+    checkCount: number,
+  ) => {
+    const selectedValue = Array.isArray(routeValue) ? routeValue[0] : routeValue;
+    if (selectedValue === 'table' || selectedValue === 'fleet') return selectedValue;
+    return checkCount >= 20 ? 'fleet' : 'table';
+  },
 }));
 
 vi.mock('@/features/platformPage/sharedPlatformPage', async () => {
@@ -270,6 +288,7 @@ describe('StandalonePageSurface', () => {
       'data-resource-count',
       '2',
     );
+    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute('data-view', 'table');
     expect(screen.getByTestId('standalone-posture-summary')).toHaveTextContent(
       'All 2 checks reporting normally',
     );
@@ -277,6 +296,61 @@ describe('StandalonePageSurface', () => {
       'href',
       '/settings/monitoring/availability',
     );
+  });
+
+  it('defaults estate-sized availability inventories to the fleet view', () => {
+    mocks.pathname = '/standalone/availability';
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () =>
+        Array.from({ length: 20 }, (_, index) =>
+          resource({
+            id: `availability:service-${index}`,
+            type: 'network-endpoint',
+            platformType: 'availability',
+            sources: ['availability'],
+            availability: freshAvailability({ targetId: `service-${index}` }),
+          }),
+        ),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute('data-view', 'fleet');
+  });
+
+  it('keeps an explicit table choice stable for an estate-sized inventory', () => {
+    mocks.pathname = '/standalone/availability';
+    mocks.searchParams = { view: 'table' };
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () =>
+        Array.from({ length: 20 }, (_, index) =>
+          resource({
+            id: `availability:service-${index}`,
+            type: 'network-endpoint',
+            platformType: 'availability',
+            sources: ['availability'],
+            availability: freshAvailability({ targetId: `service-${index}` }),
+          }),
+        ),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    const table = screen.getByTestId('availability-checks-table');
+    expect(table).toHaveAttribute('data-view', 'table');
+
+    const props = mocks.AvailabilityChecksTable.mock.calls.at(-1)?.[0];
+    props?.onViewChange?.('fleet');
+    expect(mocks.setSearchParams).toHaveBeenCalledWith({ view: null }, { replace: true });
+
+    props?.onViewChange?.('table');
+    expect(mocks.setSearchParams).toHaveBeenCalledWith({ view: 'table' }, { replace: true });
   });
 
   it('counts every configured check when two attached services share one monitored host', () => {
