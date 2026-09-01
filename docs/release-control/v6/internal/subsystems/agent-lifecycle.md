@@ -1760,7 +1760,9 @@ lifecycle conditions, but compact empty-state spacing, icon treatment, and text
 hierarchy must compose frontend-primitives' `EmptyState` `variant="panel"`
 instead of lifecycle-local centered icon/text shells.
 
-32. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `deployment-installability`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
+32. `scripts/run-secure-runtime-rootful-qualification.sh` shared with `deployment-installability`: the rootful runtime qualification wrapper is both an agent lifecycle typed-helper provider-boundary proof entry point and a deployment installability proof harness.
+
+33. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `deployment-installability`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
 
 ## Extension Points
 
@@ -7391,6 +7393,29 @@ fallback, recovery, ambiguity, parity, authority, and cleanup paths. It is not
 published-release provenance, default-profile authorization, rootless
 action/update qualification, or independent security review and cannot change
 the product default.
+
+### Rootful container qualification has its own typed-helper packet
+
+`scripts/run-secure-runtime-rootful-qualification.sh` is the destructive,
+explicit entrypoint for real rootful Docker and Podman proof on two distinct
+disposable Ubuntu/systemd hosts. It never mounts a host daemon socket and runs
+the outer containers without a default route. The packet binds exact clean Go
+artifacts and governed source hashes, then records fresh install, legacy
+migration with authority reduction, collector and helper restart continuity,
+helper loss without an authoritative empty replacement, exact recovery,
+bounded helper-operation failure, ordinary collector-update preservation,
+authority isolation, and cleanup for both runtimes. Rootful telemetry is
+intentionally summary-only: the collector remains unable to open the
+root-owned daemon socket and gains neither container actions nor updates.
+
+`scripts/release_control/secure_runtime_rootful_attestation_v1.py` accepts only
+the exact Docker-then-Podman ten-scenario contract, distinct host and daemon
+identities, canonical rootful socket paths, stable semantic inventory, causal
+report streams, bounded failure and recovery, and immutable artifact/source
+bindings. Adding this packet does not itself qualify the runtime. Only a
+retained passing receipt and attestation may support a local opt-in claim, and
+neither can establish published-release provenance, default-profile
+authorization, appliance support, or independent security review.
 
 ### Command and durable typed dispatch are context-honest and canceled when abandoned
 

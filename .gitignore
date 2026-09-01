@@ -271,6 +271,9 @@ scripts/release_control/*
 !scripts/release_control/secure_runtime_attestation_v6_test.py
 !scripts/release_control/secure_runtime_attestation_v7.py
 !scripts/release_control/secure_runtime_attestation_v7_test.py
+!scripts/release_control/secure_runtime_rootful_attestation_v1.py
+!scripts/release_control/secure_runtime_rootful_attestation_v1_test.py
+!scripts/release_control/secure_runtime_rootful_source_manifest_v1.json
 !scripts/release_control/secure_runtime_rootless_attestation_v1.py
 !scripts/release_control/secure_runtime_rootless_attestation_v1_test.py
 !scripts/release_control/secure_runtime_rootless_source_manifest_v1.json
