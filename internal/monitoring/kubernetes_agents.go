@@ -1071,13 +1071,24 @@ func (m *Monitor) RemoveKubernetesCluster(clusterID string) (models.KubernetesCl
 		}
 	}
 
-	// Revoke the API token associated with this Kubernetes cluster
+	// Revoke the API token associated with this Kubernetes cluster unless a
+	// sibling module still uses it. Unified-agent installs share one credential
+	// across host, Docker, and Kubernetes reports; revoking it here would turn a
+	// Kubernetes-only removal into 401s for the surviving modules.
 	if cluster.TokenID != "" {
-		tokenRemoved, err := m.revokeAPIToken(cluster.TokenID)
-		if err != nil {
-			log.Warn().Err(err).Str("tokenID", cluster.TokenID).Msg("API token revocation rolled back after Kubernetes cluster removal")
-		} else if tokenRemoved != nil {
-			log.Info().Str("tokenID", cluster.TokenID).Str("tokenName", cluster.TokenName).Msg("API token revoked for removed Kubernetes cluster")
+		tokenID := strings.TrimSpace(cluster.TokenID)
+		if m.agentTokenUsedByLiveResource(tokenID) {
+			log.Info().
+				Str("tokenID", tokenID).
+				Str("k8sClusterID", clusterID).
+				Msg("API token still used by other agents; skipping revocation during Kubernetes cluster removal")
+		} else {
+			tokenRemoved, err := m.revokeAPIToken(tokenID)
+			if err != nil {
+				log.Warn().Err(err).Str("tokenID", tokenID).Msg("API token revocation rolled back after Kubernetes cluster removal")
+			} else if tokenRemoved != nil {
+				log.Info().Str("tokenID", tokenID).Str("tokenName", cluster.TokenName).Msg("API token revoked for removed Kubernetes cluster")
+			}
 		}
 	}
 

@@ -40,3 +40,31 @@ func (m *Monitor) revokeAPIToken(tokenID string) (*config.APITokenRecord, error)
 
 	return removed, nil
 }
+
+// agentTokenUsedByLiveResource reports whether any currently monitored agent
+// module still authenticates with tokenID. Unified-agent installs legitimately
+// share one credential across host, Docker, and Kubernetes reports, so removing
+// one module must not revoke the credential out from under its siblings.
+// Callers that are removing a resource should delete it from state first.
+func (m *Monitor) agentTokenUsedByLiveResource(tokenID string) bool {
+	tokenID = strings.TrimSpace(tokenID)
+	if tokenID == "" || m == nil || m.state == nil {
+		return false
+	}
+	for _, host := range m.state.GetHosts() {
+		if strings.TrimSpace(host.TokenID) == tokenID {
+			return true
+		}
+	}
+	for _, host := range m.state.GetDockerHosts() {
+		if strings.TrimSpace(host.TokenID) == tokenID {
+			return true
+		}
+	}
+	for _, cluster := range m.state.GetKubernetesClusters() {
+		if strings.TrimSpace(cluster.TokenID) == tokenID {
+			return true
+		}
+	}
+	return false
+}

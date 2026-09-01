@@ -773,8 +773,6 @@ func (h *UnifiedAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Re
 		switch {
 		case errors.Is(err, monitoring.ErrHostAgentTokenMismatch):
 			writeErrorResponse(w, http.StatusForbidden, "agent_lookup_forbidden", "Agent does not belong to this API token", nil)
-		case errors.Is(err, monitoring.ErrHostAgentTokenShared):
-			writeErrorResponse(w, http.StatusConflict, "agent_token_shared", "Collector credential is still used by another agent and must be rotated before uninstall", nil)
 		case errors.Is(err, monitoring.ErrHostAgentNotFound):
 			writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Agent has not registered with Pulse yet", nil)
 		default:

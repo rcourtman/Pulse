@@ -356,29 +356,9 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	// agent's next report with 401.
 	if host.TokenID != "" {
 		tokenID := strings.TrimSpace(host.TokenID)
-		tokenStillUsed := false
-		if readState := m.snapshotBackedUnifiedReadState(); readState != nil {
-			for _, other := range readState.Hosts() {
-				if other != nil && strings.TrimSpace(other.TokenID()) == tokenID {
-					tokenStillUsed = true
-					break
-				}
-			}
-			if !tokenStillUsed {
-				for _, other := range readState.DockerHosts() {
-					if other == nil {
-						continue
-					}
-					if dockerHostStableID(other) == hostID || strings.TrimSpace(other.ID()) == hostID {
-						continue
-					}
-					if strings.TrimSpace(other.TokenID()) == tokenID {
-						tokenStillUsed = true
-						break
-					}
-				}
-			}
-		}
+		// The Docker host is already gone from state, so any remaining match is
+		// a live sibling module (host, Docker, or Kubernetes).
+		tokenStillUsed := m.agentTokenUsedByLiveResource(tokenID)
 		if !tokenStillUsed {
 			tokenRemoved, err := m.revokeAPIToken(tokenID)
 			if err != nil {
@@ -498,7 +478,6 @@ func (m *Monitor) removeDockerHostsForHostAgent(
 
 var (
 	ErrHostAgentNotFound      = errors.New("host agent not found")
-	ErrHostAgentTokenShared   = errors.New("host agent token is still used by another resource")
 	ErrHostAgentTokenMismatch = errors.New("host agent token mismatch")
 )
 
@@ -589,9 +568,6 @@ func (m *Monitor) removeHostAgentLocked(hostID, requiredTokenID string, requireD
 	tokenID := strings.TrimSpace(host.TokenID)
 	hostname := strings.TrimSpace(host.Hostname)
 	tokenStillUsed := m.hostAgentTokenUsedOutsideRemoval(tokenID, hostID, host, tombstone)
-	if requireDurableRevocation && tokenStillUsed {
-		return models.Host{}, ErrHostAgentTokenShared
-	}
 	if m.hostContinuityStore != nil {
 		if err := m.hostContinuityStore.Upsert(tombstone); err != nil {
 			return models.Host{}, fmt.Errorf("persist host agent removal tombstone: %w", err)
@@ -745,6 +721,11 @@ func (m *Monitor) hostAgentTokenUsedOutsideRemoval(
 			continue
 		}
 		if strings.TrimSpace(other.TokenID) == tokenID {
+			return true
+		}
+	}
+	for _, cluster := range m.state.GetKubernetesClusters() {
+		if strings.TrimSpace(cluster.TokenID) == tokenID {
 			return true
 		}
 	}
