@@ -60,6 +60,11 @@ func TestEvaluateResourceHealthPrecedenceAndVerdicts(t *testing.T) {
 			want:     HealthOK,
 		},
 		{
+			name:     "positive status without telemetry cannot be healthy",
+			resource: Resource{ID: "host-missing", Type: ResourceTypeAgent, Status: StatusOnline},
+			want:     HealthUnknown, code: "telemetry_missing",
+		},
+		{
 			name:     "informational alert does not invent attention",
 			resource: Resource{ID: "host-info", Type: ResourceTypeAgent, Status: StatusOnline, LastSeen: now},
 			alerts:   []ResourceHealthAlert{{ResourceID: "host-info", Level: "info", Type: "notice"}},

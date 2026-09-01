@@ -89,6 +89,13 @@ func EvaluateResourceHealth(resource Resource, alerts []ResourceHealthAlert, now
 
 	switch strings.ToLower(strings.TrimSpace(string(resource.Status))) {
 	case "online", "running", "ready", "healthy", "available", "active", "up":
+		// A positive provider status without an observation timestamp is not
+		// enough to prove current health. Some compatibility and synthetic
+		// producers do not populate SourceStatus, so keep this guard at the
+		// canonical verdict boundary rather than relying on that map alone.
+		if resource.LastSeen.IsZero() {
+			return healthWithReason(HealthUnknown, "telemetry_missing", "")
+		}
 		return ResourceHealth{Verdict: HealthOK, Reasons: []ResourceHealthReason{}}
 	case "warning", "degraded", "unhealthy", "pending":
 		return healthWithReason(HealthAttention, "degraded", "")
