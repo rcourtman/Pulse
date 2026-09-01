@@ -37,7 +37,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `16` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `17` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -133,6 +133,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notification failures server error 7d (schema v15) | `0` | Count terminal failures classified locally as destination HTTP 5xx server errors without sending response content, destination identity, or provider identity |
 | Notification failures unknown 7d (schema v5) | `0` | Count terminal failures that do not match another fixed class without sending raw errors |
 | Alert AI enabled | `true`/`false` | See whether AI analysis on alert firing is switched on, without sending alert content, resource identifiers, or analysis text |
+| AI provider class | `local` | See one closed bucket for how the Patrol (or default) model is reached: `none`, `local` (Ollama or a private-network OpenAI-compatible endpoint), `cloud_byok` (a hosted provider with your own key), `cloud_subscription` (the Codex or Claude CLI subscription route), or the retired `hosted_quickstart`, without sending the provider, model name, endpoint, or account |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
@@ -199,6 +200,22 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence Patrol investigations 30d | `3` | Count findings investigated by Patrol in the current 30-day telemetry window without sending finding IDs, resource IDs, or details |
 | Pulse Intelligence Patrol resolved findings 30d | `2` | Count findings resolved or fix-verified in the current 30-day telemetry window without sending finding IDs, resource IDs, fix details, or verification detail |
 | Pulse Intelligence Patrol blocked cause | `provider_not_configured` | See one fixed machine cause code when Patrol is enabled but blocked from running, so an install whose Patrol can never work is distinguishable from one that runs and finds nothing, without sending blocked-reason text, provider endpoints, model names, error text, or configuration |
+| Pulse Intelligence Patrol autonomy level | `approval` | See the effective Patrol mode after licence and Autopilot acknowledgement gating (`monitor`, `approval`, `assisted`, or `full`) without sending acknowledgement text, actors, or timestamps |
+| Pulse Intelligence Patrol input tokens bucket 30d | `5m_20m` | See one coarse bucket (`zero`, `under_1m`, `1m_5m`, `5m_20m`, `20m_plus`) for Patrol prompt-token volume in the current 30-day telemetry window without sending exact token counts, prices, providers, models, prompts, or responses |
+| Pulse Intelligence Patrol output tokens bucket 30d | `100k_500k` | See one coarse bucket (`zero`, `under_100k`, `100k_500k`, `500k_2m`, `2m_plus`) for Patrol completion-token volume in the current 30-day telemetry window without sending exact token counts, prices, providers, models, prompts, or responses |
+| Pulse Intelligence Patrol investigation outcome fix verified 30d | `1` | Count investigated findings whose latest outcome is a verified fix in the current 30-day telemetry window without sending finding IDs, resource IDs, or fix details |
+| Pulse Intelligence Patrol investigation outcome fix queued 30d | `2` | Count investigated findings whose latest outcome is a fix awaiting approval without sending finding IDs, resource IDs, or plan details |
+| Pulse Intelligence Patrol investigation outcome fix executed 30d | `0` | Count investigated findings whose latest outcome is a fix that ran and is awaiting verification without sending finding IDs, resource IDs, command text, or output |
+| Pulse Intelligence Patrol investigation outcome fix rejected 30d | `1` | Count investigated findings whose latest outcome is an operator-rejected fix without sending finding IDs, resource IDs, actors, or reasons |
+| Pulse Intelligence Patrol investigation outcome fix failed 30d | `0` | Count investigated findings whose latest outcome is a fix that failed or failed verification without sending finding IDs, resource IDs, command text, error text, or output |
+| Pulse Intelligence Patrol investigation outcome fix verification unknown 30d | `3` | Count investigated findings whose latest fix ran but could not be independently verified without sending finding IDs, resource IDs, or verification detail |
+| Pulse Intelligence Patrol investigation outcome resolved 30d | `1` | Count investigated findings whose latest outcome is resolved without sending finding IDs, resource IDs, or details |
+| Pulse Intelligence Patrol investigation outcome needs attention 30d | `4` | Count investigated findings whose latest outcome requires operator attention without sending finding IDs, resource IDs, or the investigation text |
+| Pulse Intelligence Patrol investigation outcome cannot fix 30d | `2` | Count investigated findings Patrol concluded it cannot fix without sending finding IDs, resource IDs, or the investigation text |
+| Pulse Intelligence Patrol investigation outcome timed out 30d | `0` | Count investigated findings whose latest investigation timed out without sending finding IDs, resource IDs, or provider detail |
+| Pulse Intelligence Patrol investigation outcome in progress 30d | `1` | Count investigated findings whose investigation is still pending or running at send time without sending finding IDs, resource IDs, or session IDs |
+| Pulse Intelligence Patrol investigation outcome failed 30d | `0` | Count investigated findings whose investigation errored out before recording an outcome without sending finding IDs, resource IDs, or error text |
+| Pulse Intelligence Patrol investigation outcome other 30d | `0` | Count investigated findings that finished without a typed outcome without sending finding IDs, resource IDs, or details |
 | Pulse Intelligence external agent enabled | `true`/`false` | See whether at least one token can use the external Pulse Intelligence agent/MCP surface without sending token counts, names, scopes, or values |
 | Pulse Intelligence external agent used 30d | `true`/`false` | See whether an external-agent-capable API token reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, or request details |
 | Pulse Intelligence MCP adapter used 30d | `true`/`false` | See whether the `pulse-mcp` adapter reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, prompts, or request details |
@@ -287,13 +304,24 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 16. Schema v16 adds four
+The current telemetry contract is schema version 17. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
 locally and includes only their rolling 30-day totals in the existing heartbeat;
 there is no browser identifier, raw event stream, guest identity, selected
 range, cursor coordinate, value, route, or interaction timing.
+
+Schema v17 adds four closed Patrol posture fields and thirteen outcome counts.
+The provider class says only how the Patrol model is reached (local,
+bring-your-own-key cloud, CLI subscription, the retired hosted route, or none);
+it is derived locally from the configured route and never carries the
+provider, model name, endpoint, or account. The autonomy level is the
+effective mode Pulse enforces. The two token fields are coarse buckets of the
+existing local usage ledger, so exact token counts, prices, providers, and
+models stay on the install. The outcome counts partition the findings already
+counted as investigated; no finding, resource, session, or action identity is
+added.
 
 #### Server-side handling and retention
 
