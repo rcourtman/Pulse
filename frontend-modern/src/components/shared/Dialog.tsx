@@ -19,6 +19,7 @@ interface DialogProps {
   ariaLabel?: string;
   ariaLabelledBy?: string;
   ariaDescribedBy?: string;
+  returnFocus?: () => HTMLElement | null | undefined;
 }
 
 export const Dialog: Component<DialogProps> = (props) => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
 import { SecurityAuthPanel } from '../SecurityAuthPanel';
@@ -158,6 +158,22 @@ describe('settings read-only panel states', () => {
 
     expect(screen.getByDisplayValue('')).toBeDisabled();
     expect(screen.getByRole('button', { name: /add endpoint/i })).toBeDisabled();
+  });
+
+  it('returns focus to the endpoint field after removing a webhook row', async () => {
+    render(() => <AuditWebhookPanel />);
+
+    const removeButton = await screen.findByRole('button', { name: 'Remove webhook endpoint' });
+    fireEvent.click(removeButton);
+    expect(screen.getByRole('dialog', { name: 'Remove audit webhook' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'Remove webhook endpoint' }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText('https://your-api.com/webhook')).toHaveFocus();
   });
 
   it('keeps audit webhook locked copy neutral when upgrade prompts are hidden', async () => {

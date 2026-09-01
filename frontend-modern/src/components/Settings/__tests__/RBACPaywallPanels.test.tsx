@@ -247,16 +247,15 @@ describe('RBAC paywall settings panels', () => {
   });
 
   it('shows readable SSO identity details and confirms deprovisioning', async () => {
-    getUsersMock.mockResolvedValueOnce([
-      {
-        username: 'sso:oidc:okta:opaque_subject',
-        displayName: 'Alice Example',
-        email: 'alice@example.com',
-        providerType: 'oidc',
-        providerId: 'okta',
-        roleIds: ['admin'],
-      },
-    ]);
+    const user = {
+      username: 'sso:oidc:okta:opaque_subject',
+      displayName: 'Alice Example',
+      email: 'alice@example.com',
+      providerType: 'oidc',
+      providerId: 'okta',
+      roleIds: ['admin'],
+    };
+    getUsersMock.mockResolvedValueOnce([user]).mockResolvedValueOnce([]);
 
     render(() => <UserAssignmentsPanel />);
 
@@ -274,6 +273,10 @@ describe('RBAC paywall settings panels', () => {
       expect(deleteUserMock).toHaveBeenCalledWith('sso:oidc:okta:opaque_subject');
     });
     expect(notificationSuccessMock).toHaveBeenCalledWith('User access removed for Alice Example');
+    await waitFor(() => {
+      expect(screen.queryByText('Alice Example')).not.toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText('Search users...')).toHaveFocus();
   });
 
   it('does not render stale user data when assignment storage is unavailable', async () => {

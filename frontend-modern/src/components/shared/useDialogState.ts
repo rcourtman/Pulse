@@ -7,6 +7,7 @@ interface DialogStateOptions {
   isOpen: boolean;
   layout?: DialogLayout;
   onClose: () => void;
+  returnFocus?: () => HTMLElement | null | undefined;
 }
 
 let openDialogCount = 0;
@@ -169,8 +170,15 @@ export function useDialogState(options: DialogStateOptions): {
       const shouldRestoreFocus = isTopmostDialog(dialogId);
       document.removeEventListener('keydown', onKeyDown);
       unlockBodyScroll(dialogId);
-      if (shouldRestoreFocus && previousFocus && document.contains(previousFocus)) {
-        previousFocus.focus({ preventScroll: true });
+      if (shouldRestoreFocus) {
+        const requestedReturnFocus = options.returnFocus?.();
+        const returnTarget =
+          requestedReturnFocus && document.contains(requestedReturnFocus)
+            ? requestedReturnFocus
+            : previousFocus && document.contains(previousFocus)
+              ? previousFocus
+              : null;
+        returnTarget?.focus({ preventScroll: true });
       }
     });
   });

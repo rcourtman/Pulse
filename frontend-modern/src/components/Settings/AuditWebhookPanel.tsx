@@ -28,6 +28,7 @@ interface AuditWebhookPanelProps {
 
 export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
   const [urlToRemove, setUrlToRemove] = createSignal<string | null>(null);
+  let newUrlInputRef: HTMLInputElement | undefined;
   const {
     canManage,
     handleAddWebhook,
@@ -124,6 +125,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
           </Show>
           <div class="flex gap-3 pt-4 border-t border-border">
             <input
+              ref={newUrlInputRef}
               type="text"
               placeholder="https://your-api.com/webhook"
               class={`${formControl} flex-1`}
@@ -168,6 +170,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
           onClose={() => setUrlToRemove(null)}
           panelClass="max-w-md"
           ariaLabel="Remove audit webhook"
+          returnFocus={() => newUrlInputRef}
         >
           <div class="w-full p-6">
             <h3 class="text-lg font-semibold text-base-content mb-2">Remove audit webhook?</h3>

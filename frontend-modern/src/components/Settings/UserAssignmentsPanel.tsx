@@ -23,6 +23,7 @@ import { Dialog } from '@/components/shared/Dialog';
 export const UserAssignmentsPanel: Component = () => {
   const state = useUserAssignmentsPanelState();
   const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
+  let searchInputRef: HTMLInputElement | undefined;
 
   return (
     <div class="space-y-6">
@@ -30,6 +31,9 @@ export const UserAssignmentsPanel: Component = () => {
         title="User Access"
         action={
           <SearchField
+            inputRef={(element) => {
+              searchInputRef = element;
+            }}
             placeholder="Search users..."
             value={state.searchQuery()}
             onChange={state.setSearchQuery}
@@ -212,6 +216,7 @@ export const UserAssignmentsPanel: Component = () => {
             closeOnBackdrop={false}
             panelClass="max-w-lg"
             ariaLabel={`Remove user access: ${getUserIdentityDisplayName(user())}`}
+            returnFocus={() => searchInputRef}
           >
             <div class="space-y-5 p-6">
               <div>

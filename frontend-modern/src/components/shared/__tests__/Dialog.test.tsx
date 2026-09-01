@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import dialogSource from '@/components/shared/Dialog.tsx?raw';
@@ -329,5 +329,43 @@ describe('Dialog', () => {
 
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     expect(trigger).toHaveFocus();
+  });
+
+  it('can return focus to a stable workflow target when the trigger is removed', async () => {
+    const [isOpen, setIsOpen] = createSignal(false);
+    const [showTrigger, setShowTrigger] = createSignal(true);
+    let stableTarget: HTMLButtonElement | undefined;
+    render(() => (
+      <>
+        <button ref={stableTarget} type="button">
+          Stable target
+        </button>
+        <Show when={showTrigger()}>
+          <button type="button" onClick={() => setIsOpen(true)}>
+            Remove item
+          </button>
+        </Show>
+        <Dialog
+          isOpen={isOpen()}
+          onClose={() => {
+            setShowTrigger(false);
+            setIsOpen(false);
+          }}
+          returnFocus={() => stableTarget}
+        >
+          <button type="button" onClick={() => setIsOpen(false)}>
+            Cancel
+          </button>
+        </Dialog>
+      </>
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Remove item' });
+    trigger.focus();
+    await fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('button', { name: 'Remove item' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stable target' })).toHaveFocus();
   });
 });
