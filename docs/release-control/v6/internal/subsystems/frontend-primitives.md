@@ -108,7 +108,10 @@ relates that combobox to the value list and active option, and returns focus to
 the updated chip after selection or Escape. Its chip, remove, and option targets
 remain at least 24 pixels in each applicable dimension. The menu opens above the
 chip on phone layouts so fixed navigation cannot obscure its options, while
-larger layouts retain downward placement. A shared `SearchInput` that offers
+larger layouts retain downward placement. Arrow navigation keeps the active
+option selected for assistive technology and scrolled into the visible listbox;
+pinned search-term remove actions follow the same 24-pixel target minimum. A
+shared `SearchInput` that offers
 visual inline completion without a popup remains a native textbox; it must not
 claim combobox semantics or autocomplete relationships that do not exist.
 On narrow screens the physical-disk scope may reprioritize its canonical table

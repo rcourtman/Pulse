@@ -381,7 +381,10 @@ describe('FilterBar', () => {
     fireEvent.input(input, { target: { value: 'pv' } });
     fireEvent.keyDown(input, { key: 'Tab' });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(screen.getByRole('button', { name: 'Remove search term pve1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove search term pve1' })).toHaveClass(
+      'min-h-6',
+      'min-w-6',
+    );
 
     fireEvent.input(input, { target: { value: 'doc' } });
     fireEvent.keyDown(input, { key: 'Tab' });
