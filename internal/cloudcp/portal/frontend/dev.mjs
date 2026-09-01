@@ -64,7 +64,7 @@ function demoWorkspace(id, displayName, createdAt, agentCount, alerts) {
 function buildScenarioTemplate(name) {
   const base = {
     authenticated: true,
-    email: 'courtman@gmail.com',
+    email: 'courtman@example.com',
     has_self_hosted_commercial: false,
     public_site_url: 'https://pulserelay.pro',
     support_email: 'support@pulserelay.pro',
@@ -167,7 +167,7 @@ function buildScenarioTemplate(name) {
         members: [
           { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
           { email: 'ops@example.com', role: 'tech', user_id: 'u_ops' },
-          { email: 'courtman@gmail.com', role: 'read_only', user_id: 'u_view' },
+          { email: 'courtman@example.com', role: 'read_only', user_id: 'u_view' },
         ],
       }],
     };
