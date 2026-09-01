@@ -43,6 +43,7 @@ func coalescePresentationHostResourcesOnce(
 	coalesced := make([]Resource, 0, len(resources))
 	indexesByHostKey := make(map[string][]int, len(resources))
 	parentRedirects := make(map[string]string)
+	guardedHostKeys := presentationAmbiguousProxmoxHostKeys(resources)
 	for _, resource := range resources {
 		resource.Type = CanonicalResourceType(resource.Type)
 		hostKey := presentationHostMergeKey(resource)
@@ -62,6 +63,9 @@ func coalescePresentationHostResourcesOnce(
 				continue
 			}
 			if presentationHostIdentitiesDistinct(existing, resource) {
+				continue
+			}
+			if guardedHostKeys[hostKey] && !presentationGuardedMergeAllowed(existing, resource) {
 				continue
 			}
 			if !presentationHostnamesCompatible(existing, resource) {
@@ -215,7 +219,96 @@ func presentationHostIdentitiesDistinct(left, right Resource) bool {
 		presentationIdentityValuesConflict(left.Proxmox.ClusterName, right.Proxmox.ClusterName) {
 		return true
 	}
+	if presentationProxmoxNodeScopesDistinct(left.Proxmox, right.Proxmox) {
+		return true
+	}
 	return false
+}
+
+// presentationProxmoxNodeScopesDistinct reports whether two Proxmox node
+// facets describe different provider connections without any same-machine
+// proof. Standalone connections are provider scopes too, and both machines in
+// two hand-added sites are commonly just "pve" (#1753), so a shared short
+// hostname must not fold one site's node row into the other's. The proof
+// mirrors the state-layer rule: the same connection instance, the same node
+// identity, the same non-empty cluster, or the same endpoint host still
+// merge; anything less keeps the rows apart.
+func presentationProxmoxNodeScopesDistinct(left, right *ProxmoxData) bool {
+	if left == nil || right == nil {
+		return false
+	}
+	if strings.TrimSpace(left.NodeName) == "" || strings.TrimSpace(right.NodeName) == "" {
+		return false
+	}
+	if !presentationIdentityValuesConflict(left.Instance, right.Instance) {
+		return false
+	}
+	if presentationIdentityValuesEqual(left.NodeIdentity, right.NodeIdentity) {
+		return false
+	}
+	if presentationIdentityValuesEqual(left.ClusterName, right.ClusterName) {
+		return false
+	}
+	if presentationIdentityValuesEqual(extractHostname(left.HostURL), extractHostname(right.HostURL)) {
+		return false
+	}
+	return true
+}
+
+func presentationIdentityValuesEqual(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	return left != "" && right != "" && strings.EqualFold(left, right)
+}
+
+// presentationAmbiguousProxmoxHostKeys marks merge buckets that contain node
+// facets from two or more distinct Proxmox provider scopes. Inside such a
+// bucket a bare shared hostname no longer identifies a machine, so
+// hostname-only merges of an agent row into a node row must fail closed and
+// only the state-layer agent link may attach one (#1753: the Agent badge and
+// per-node stats jumped between two sites named "pve" on every refresh).
+func presentationAmbiguousProxmoxHostKeys(resources []Resource) map[string]bool {
+	facetsByKey := make(map[string][]*ProxmoxData)
+	guarded := make(map[string]bool)
+	for i := range resources {
+		facet := resources[i].Proxmox
+		if facet == nil || strings.TrimSpace(facet.NodeName) == "" {
+			continue
+		}
+		hostKey := presentationHostMergeKey(resources[i])
+		if hostKey == "" || guarded[hostKey] {
+			continue
+		}
+		for _, existing := range facetsByKey[hostKey] {
+			if presentationProxmoxNodeScopesDistinct(existing, facet) {
+				guarded[hostKey] = true
+				break
+			}
+		}
+		facetsByKey[hostKey] = append(facetsByKey[hostKey], facet)
+	}
+	return guarded
+}
+
+// presentationGuardedMergeAllowed gates merges inside an ambiguous bucket.
+// A pair of node facets is already governed by the scope veto, and agent-only
+// pairs never satisfy the runtime-platform source requirement, so the case
+// that matters is an agent row meeting a node row: it may only attach to the
+// node whose state-layer agent link names it.
+func presentationGuardedMergeAllowed(left, right Resource) bool {
+	leftFacet := left.Proxmox != nil && strings.TrimSpace(left.Proxmox.NodeName) != ""
+	rightFacet := right.Proxmox != nil && strings.TrimSpace(right.Proxmox.NodeName) != ""
+	if leftFacet == rightFacet {
+		return true
+	}
+	node, agent := left, right
+	if rightFacet {
+		node, agent = right, left
+	}
+	if agent.Agent == nil {
+		return false
+	}
+	return presentationIdentityValuesEqual(node.Proxmox.LinkedAgentID, agent.Agent.AgentID)
 }
 
 func presentationIdentityValuesConflict(left, right string) bool {
@@ -338,6 +431,13 @@ func mergePresentationHostResources(left, right Resource) Resource {
 	}
 	if merged.Proxmox == nil {
 		merged.Proxmox = secondary.Proxmox
+		// The Proxmox node row's name is display-name aware (the configured
+		// Node Name), while an agent-backed primary is named after the bare
+		// reported hostname. Keep the configured name on the merged row
+		// (#1753: "Node Name field not observed").
+		if merged.Proxmox != nil && strings.TrimSpace(secondary.Name) != "" {
+			merged.Name = secondary.Name
+		}
 	}
 	if merged.Docker == nil {
 		merged.Docker = secondary.Docker
