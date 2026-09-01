@@ -2908,9 +2908,19 @@ func secureRuntimeNonLoopbackIPv4(t *testing.T) string {
 
 func secureRuntimeAssertHelperOutboundNetworkDenied(t *testing.T) map[string]any {
 	t.Helper()
-	secureRuntimeAssertHelperProtocol(t)
 	hostIP := secureRuntimeNonLoopbackIPv4(t)
-	listener, err := net.Listen("tcp4", "0.0.0.0:0")
+	return secureRuntimeAssertHelperNetworkCanaryDenied(t, "0.0.0.0:0", hostIP, "host-interface-tcp")
+}
+
+func secureRuntimeAssertHelperLoopbackNetworkDenied(t *testing.T) map[string]any {
+	t.Helper()
+	return secureRuntimeAssertHelperNetworkCanaryDenied(t, "127.0.0.1:0", "127.0.0.1", "host-loopback-tcp")
+}
+
+func secureRuntimeAssertHelperNetworkCanaryDenied(t *testing.T, listenAddress, hostIP, canaryScope string) map[string]any {
+	t.Helper()
+	secureRuntimeAssertHelperProtocol(t)
+	listener, err := net.Listen("tcp4", listenAddress)
 	if err != nil {
 		t.Fatalf("listen for helper network-isolation canary: %v", err)
 	}
@@ -2957,7 +2967,7 @@ func secureRuntimeAssertHelperOutboundNetworkDenied(t *testing.T) map[string]any
 		t.Fatalf("helper network namespace reached host-interface canary %s", canaryURL)
 	}
 	return map[string]any{
-		"canary_scope":                "host-interface-tcp",
+		"canary_scope":                canaryScope,
 		"host_canary_reachable":       true,
 		"helper_namespace_connection": "denied",
 		"helper_main_pid":             mainPID,
