@@ -458,7 +458,7 @@ func TestCollectorUninstallTransactionFailsClosedAndRetriesAfterRestart(t *testi
 	}
 }
 
-func TestCollectorUninstallRejectsCredentialStillUsedByAnotherHost(t *testing.T) {
+func TestCollectorUninstallPreservesCredentialStillUsedByAnotherHost(t *testing.T) {
 	dataPath := t.TempDir()
 	const rawToken = "collector-uninstall-shared-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport, config.ScopeAgentConfigRead}, nil)
@@ -488,18 +488,26 @@ func TestCollectorUninstallRejectsCredentialStillUsedByAnotherHost(t *testing.T)
 		t.Fatal(err)
 	}
 	rec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/agent/uninstall", rawToken, uninstallBody)
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("shared credential uninstall status = %d, want 409: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("shared credential uninstall status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 	hosts := runtime.monitor.GetLiveHostsSnapshot()
-	if len(hosts) != 2 {
-		t.Fatalf("shared credential failure changed live hosts: %+v", hosts)
+	if len(hosts) != 1 || hosts[0].ID != keeperID {
+		t.Fatalf("shared credential uninstall did not retain only the sibling host: %+v", hosts)
 	}
 	if _, ok := runtime.config.ValidateAPIToken(rawToken); !ok {
-		t.Fatal("shared credential failure revoked the keeper credential")
+		t.Fatal("shared credential uninstall revoked the keeper credential")
 	}
 	if targetID == keeperID {
 		t.Fatalf("test setup did not create distinct hosts: %q", targetID)
+	}
+	status, _, body = postHostRemovalLifecycleReport(t, runtime, rawToken, report("shared-target", "shared-target.local"))
+	if status != http.StatusBadRequest {
+		t.Fatalf("removed host resumed reporting with shared credential: status=%d body=%s", status, body)
+	}
+	status, reportedKeeperID, body := postHostRemovalLifecycleReport(t, runtime, rawToken, report("shared-keeper", "shared-keeper.local"))
+	if status != http.StatusOK || reportedKeeperID != keeperID {
+		t.Fatalf("sibling host report failed after shared credential uninstall: status=%d id=%q body=%s", status, reportedKeeperID, body)
 	}
 }
 
