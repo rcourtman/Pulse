@@ -115,6 +115,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
             calls,
         )
         self.assertIn(f"--source-digest {SOURCE_SHA}", calls)
+        self.assertIn("--deny-self-hosted-runners", calls)
         self.assertIn("--predicate-type https://slsa.dev/provenance/v1", calls)
 
     def test_rejects_a_moved_exact_version_tag_before_attestation(self) -> None:

@@ -78,6 +78,7 @@ verify_image() {
             --bundle-from-oci \
             --signer-workflow "$SIGNER_WORKFLOW" \
             --source-digest "$SOURCE_SHA" \
+            --deny-self-hosted-runners \
             --predicate-type https://slsa.dev/provenance/v1 \
             >/dev/null
     done
