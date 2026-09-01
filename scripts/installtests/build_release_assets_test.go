@@ -905,8 +905,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`ACTUAL_TARGET_COMMITISH=$(jq -r '.target_commitish // empty' "$RELEASE_JSON_FILE")`,
 		`Draft release ${RELEASE_ID} is bound to tag ${ACTUAL_RELEASE_TAG}, expected ${TAG}.`,
 		`Draft release ${RELEASE_ID} target_commitish is ${ACTUAL_TARGET_COMMITISH}, expected ${HEAD_SHA}.`,
-		`./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"`,
-		`./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"`,
+		`./scripts/backfill-release-assets.sh --tag "${WORKFLOW_OUTPUT_1}" --repo "${{ github.repository }}"`,
+		`./scripts/validate-published-release.sh "${WORKFLOW_OUTPUT_1}" "${{ github.repository }}"`,
 		// End-to-end install.sh smoke must run downstream of
 		// validate_release_assets on every release that is not a
 		// historical asset backfill. Without this wiring the smoke
@@ -1000,8 +1000,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`statuses: write`,
 		`curl --fail-with-body --silent --show-error -X POST`,
 		`"context": "Release Asset Validation"`,
-		`--arg tag "${{ steps.context.outputs.tag }}"`,
-		`--arg target_commitish "${{ steps.context.outputs.target_commitish }}"`,
+		`--arg tag "${WORKFLOW_OUTPUT_4}"`,
+		`--arg target_commitish "${WORKFLOW_OUTPUT_5}"`,
 		`{body: $body, tag_name: $tag, target_commitish: $target_commitish}`,
 		`{draft: true, tag_name: $tag, target_commitish: $target_commitish}`,
 		`Validation release body update detached release tag`,
@@ -2261,8 +2261,8 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`activation_convergence_run_id:`,
 		`release-activation.json`,
 		`.convergence_run_id == $convergence_run_id`,
-		`gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}"`,
-		`Stable demo mutation refuses inactive or prerelease tag`,
+		`gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"`,
+		`Stable demo mutation refuses mutable, inactive, or prerelease tag`,
 		`Verify public browser smoke`,
 		`PULSE_DEMO_AUTH_USER`,
 		`PULSE_DEMO_AUTH_PASS`,
