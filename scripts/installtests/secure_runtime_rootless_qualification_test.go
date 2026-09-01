@@ -881,7 +881,7 @@ func rootlessQualRunUnpinnedCollector(t *testing.T, serverURL, collectorCredenti
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "runuser", "-u", "pulse-agent", "--", "env", "-u", "DOCKER_HOST", "-u", "PODMAN_HOST", "-u", "CONTAINER_HOST",
+	cmd := rootlessQualProcessGroupCommand(ctx, "runuser", "-u", "pulse-agent", "--", "env", "-u", "DOCKER_HOST", "-u", "PODMAN_HOST", "-u", "CONTAINER_HOST",
 		"PULSE_URL="+serverURL, "PULSE_TOKEN="+collectorCredential, "PULSE_INTERVAL=1s", "PULSE_AGENT_ID="+secureRuntimeLabAgentID,
 		"PULSE_HOSTNAME="+secureRuntimeLabHostname, "PULSE_ENABLE_HOST=false", "PULSE_ENABLE_DOCKER=true", "PULSE_ENABLE_COMMANDS=false",
 		"PULSE_AGENT_ALLOW_PLAINTEXT_HTTP=true", "/usr/local/bin/pulse-agent", "--state-dir", stateDir, "--health-addr", "")
@@ -893,6 +893,55 @@ func rootlessQualRunUnpinnedCollector(t *testing.T, serverURL, collectorCredenti
 		t.Fatalf("separate ambiguity probe disturbed protected collector: before=%d after=%d", protectedPID, afterPID)
 	}
 	return string(out)
+}
+
+func rootlessQualProcessGroupCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	// The ambiguity probe crosses runuser before starting the collector. Killing
+	// only runuser leaves the collector holding CombinedOutput's pipe open.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return os.ErrProcessDone
+		}
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil {
+			if errors.Is(err, syscall.ESRCH) {
+				return os.ErrProcessDone
+			}
+			return err
+		}
+		return nil
+	}
+	return cmd
+}
+
+func TestRootlessQualificationCancellationKillsProbeProcessGroup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	cmd := rootlessQualProcessGroupCommand(ctx, "sh", "-c", "sleep 30 & child=$!; echo $child; wait")
+	out, err := cmd.CombinedOutput()
+	if err == nil || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		t.Fatalf("process-group probe did not reach bounded cancellation: err=%v output=%q", err, out)
+	}
+	if elapsed := time.Since(started); elapsed > 3*time.Second {
+		t.Fatalf("process-group cancellation waited for an inherited output pipe: elapsed=%s output=%q", elapsed, out)
+	}
+	childPID, parseErr := strconv.Atoi(strings.TrimSpace(string(out)))
+	if parseErr != nil || childPID <= 1 {
+		t.Fatalf("process-group probe returned invalid child PID %q: %v", out, parseErr)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		err = syscall.Kill(childPID, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("probe child %d survived process-group cancellation: %v", childPID, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func rootlessQualServicePin(t *testing.T, runtimeKind string) string {
