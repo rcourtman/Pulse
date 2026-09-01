@@ -1388,6 +1388,7 @@
         "scripts/install.sh",
         "scripts/installtests/windows_agent_lifecycle.ps1",
         "scripts/installtests/windowslifecycleserver/main.go",
+        "scripts/run-native-pve-action-qualification.sh",
         "tests/integration/tests/84-docker-restart-real-lab-artifact.spec.ts"
       ],
       "verification": {
@@ -1456,6 +1457,20 @@
             "internal/agenthelper/container_inventory_test.go",
             "internal/agenthelper/update_activation_test.go"
           ]
+          },
+          {
+            "id": "native-pve-action-qualification",
+            "label": "native disposable-PVE typed action qualification proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/run-native-pve-action-qualification.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/hostagent/proxmox_guest_lifecycle_pve_linux_test.go",
+              "scripts/installtests/native_pve_action_qualification_test.go"
+            ]
           },
           {
             "id": "patrol-autonomy-colima-real-lab",

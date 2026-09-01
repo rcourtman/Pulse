@@ -1320,6 +1320,32 @@ requires recovery inspection. Package and containment-probe units never gain
 `AF_NETLINK` or the handoff relaxation. This provider-aware path remains
 unqualified until disposable-PVE proof establishes the native scope handoff,
 bridged networking, postcondition, and cancellation behavior.
+`scripts/run-native-pve-action-qualification.sh` is the fail-closed entrypoint
+for the live provider slice. It requires a clean exact source revision, pinned
+SSH host identity, a dedicated PVE node with no installed or loaded Pulse
+runner, distinct VM and container IDs, and a confirmation bound to the machine
+ID, PVE node, source revision, and both guest IDs. The Linux test then rejects
+templates, HA-managed guests, non-local owners, running initial state, missing
+`pulse-disposable` tags, absent bridged interfaces, and config-identity drift.
+It runs the candidate runner as the real hidden launcher behind a temporary
+runtime-only anchor and executes the test inside a root-owned systemd
+supervisor. The supervisor's independent `ExecStopPost` cleanup revalidates the
+durable original identities, stops exact qualification action units and any
+still-running original guests, and removes only the matching anchor invocation
+after normal exit, timeout, or process termination. The harness revalidates the
+exact PVE config digest before every mutation and cleanup and records artifact
+hashes/build metadata, bound production results, per-operation transient-unit
+and sideband disappearance, VMID-specific native PVE cgroups, per-NIC live
+bridge attachment paths, final states, and any emergency cleanup in
+root-private structured receipts. Emergency cleanup, missing cleanup evidence,
+or identity ambiguity fails the run; an identity mismatch never authorizes a
+cleanup mutation against a replacement guest. The reboot observation proves
+only that the fixed provider command returned and the production running
+postcondition passed, not an independent in-guest reboot. A checked-in harness,
+skipped local test, or unattested receipt is not provider qualification.
+Cancellation after provider handoff, hook inheritance, WSS/API authorization,
+durable reconnect/replay, and exact release-artifact reproduction remain
+separate required evidence and must not be inferred from this lifecycle pass.
 Docker/Podman lifecycle remains on the already-connected daemon API operator;
 the action runner does not fall back to a killable external runtime CLI.
 Host storage-pressure cleanup is a second closed agent operation. The report
