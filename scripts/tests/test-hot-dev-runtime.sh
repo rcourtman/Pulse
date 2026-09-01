@@ -325,13 +325,38 @@ test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts() {
   assert_contains "loopback binds do not advertise a LAN browser URL" "${output}" "loopback_lan="
 }
 
+assert_module_at_least() {
+  local desc="$1"
+  local modules="$2"
+  local module="$3"
+  local floor="$4"
+  local version
+
+  version="$(printf '%s\n' "${modules}" | awk -v module="${module}" '$1 == module { print $2 }')"
+  if [[ -z "${version}" ]]; then
+    echo "[FAIL] ${desc}" >&2
+    echo "Module not found in go list output: ${module}" >&2
+    ((failures++))
+    return
+  fi
+  # A floor, not a pin: upgrades past the advisory-safe version must keep
+  # passing, only a downgrade below the floor may fail.
+  if [[ "$(printf '%s\n%s\n' "${floor}" "${version}" | sort -V | head -n1)" == "${floor}" ]]; then
+    echo "[PASS] ${desc}"
+  else
+    echo "[FAIL] ${desc}" >&2
+    echo "Expected ${module} >= ${floor}, found ${version}" >&2
+    ((failures++))
+  fi
+}
+
 test_go_module_security_dependency_floors() {
   local output
   output="$(cd "${ROOT_DIR}" && go list -m golang.org/x/net golang.org/x/crypto golang.org/x/sys)"
 
-  assert_contains "Go module floor keeps x/net past restricted-outbound advisories" "${output}" "golang.org/x/net v0.56.0"
-  assert_contains "Go module floor keeps x/crypto aligned with x/net security floor" "${output}" "golang.org/x/crypto v0.54.0"
-  assert_contains "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys v0.47.0"
+  assert_module_at_least "Go module floor keeps x/net past restricted-outbound advisories" "${output}" "golang.org/x/net" "v0.56.0"
+  assert_module_at_least "Go module floor keeps x/crypto aligned with x/net security floor" "${output}" "golang.org/x/crypto" "v0.54.0"
+  assert_module_at_least "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys" "v0.47.0"
 }
 
 test_go_release_toolchain_floor() {
