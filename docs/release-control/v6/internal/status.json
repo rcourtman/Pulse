@@ -9943,6 +9943,38 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "dependency-update-ci-receipt-admission",
+      "summary": "The frontend-dependency-security path policy requires every package manifest or lockfile commit to stage one of two source-oriented proof files, so automated lockfile-only dependency updates cannot pass the canonical completion guard even when the required Frontend job performs a clean install and both full-graph and production npm audits. Eight open Dependabot pull requests currently have no compliant landing path. Delivery-trust should extend the guard with a machine-verifiable CI-receipt proof mode: a lockfile-only dependency bump may pass preflight when the policy binds it to the required frontend audit job, and landing remains conditional on that job's successful audit receipt; manifest changes or audit suppression must continue to require direct proof.",
+      "owner": "delivery-trust",
+      "status": "triaged",
+      "recorded_at": "2026-09-01",
+      "lane_ids": [
+        "L1"
+      ],
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "proposed_resolution": "target-update",
+      "coverage_impact": 8,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": ".github/workflows/build-and-test.yml",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/registry.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/canonical_completion_guard.py",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
