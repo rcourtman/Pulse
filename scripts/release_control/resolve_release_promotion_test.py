@@ -790,5 +790,100 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             )
 
 
+class ReleaseTrainPromotionTest(unittest.TestCase):
+    """The release train: a stable ships its soaked candidate, and minors soak a week."""
+
+    def promote(self, version: str, **overrides):
+        promoted = f"{version}-rc.1"
+        arguments = dict(
+            version=version,
+            promoted_from_tag_input=promoted,
+            rollback_version_input="6.4.1",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            tag_exists_fn=lambda tag: tag in {f"v{promoted}", "v6.4.1"},
+            tag_commit_fn=lambda tag: "abc123",
+            head_descends_from_fn=lambda commit: commit == "abc123",
+            tag_created_unix_fn=lambda tag: 100,
+            now_unix_fn=lambda: 100 + (168 * 3600),
+            changed_paths_fn=lambda base_tag: [
+                "VERSION",
+                "deploy/helm/pulse/Chart.yaml",
+                "docs/RELEASE_NOTES.md",
+                "docs/releases/RELEASE_NOTES_v6.5.0.md",
+                "docs/release-control/v6/internal/status.json",
+            ],
+        )
+        arguments.update(overrides)
+        return resolver.resolve_metadata(**arguments)
+
+    def test_release_metadata_paths_are_the_only_allowed_drift(self) -> None:
+        for path in (
+            "VERSION",
+            "deploy/helm/pulse/Chart.yaml",
+            "deploy/helm/pulse/README.md",
+            "docker-compose.yml",
+            "docs/RELEASE_NOTES.md",
+            "docs/UPGRADE_v6.md",
+            "frontend-modern/public/docs/UPGRADE_v6.md",
+            "docs/releases/V6_CHANGELOG_v6.5.0.md",
+            "docs/release-control/v6/internal/records/v6.5.0-ga.md",
+            "docs/release-control/v6/internal/status.json",
+            "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIsNotNone(resolver.RELEASE_METADATA_PATH_RE.match(path))
+        for path in (
+            "internal/api/router.go",
+            "frontend-modern/src/App.tsx",
+            ".github/workflows/create-release.yml",
+            "docs/TRUENAS.md",
+            "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
+            "scripts/install.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertIsNone(resolver.RELEASE_METADATA_PATH_RE.match(path))
+
+    def test_minor_promotion_ships_exactly_the_soaked_candidate(self) -> None:
+        metadata = self.promote("6.5.0")
+        self.assertEqual(metadata["promoted_from_tag"], "v6.5.0-rc.1")
+        self.assertEqual(metadata["soak_hours"], "168")
+
+    def test_content_the_candidate_never_soaked_is_refused(self) -> None:
+        drift = [
+            "VERSION",
+            "internal/api/router.go",
+            "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+        ]
+        with self.assertRaisesRegex(ValueError, "never soaked.*2 paths beyond release metadata"):
+            self.promote("6.5.0", changed_paths_fn=lambda base_tag: drift)
+        with self.assertRaisesRegex(ValueError, "never soaked"):
+            self.promote("6.5.1", changed_paths_fn=lambda base_tag: drift)
+
+    def test_hotfix_exception_still_requires_a_reason_for_drift(self) -> None:
+        drift = ["VERSION", "internal/api/router.go"]
+        with self.assertRaisesRegex(ValueError, "hotfix_reason is required"):
+            self.promote("6.5.1", hotfix_exception=True, changed_paths_fn=lambda base_tag: drift)
+        metadata = self.promote(
+            "6.5.1",
+            hotfix_exception=True,
+            hotfix_reason_input="Active customer harm: agents cannot re-enrol after upgrade.",
+            changed_paths_fn=lambda base_tag: drift,
+            now_unix_fn=lambda: 100 + (2 * 3600),
+        )
+        self.assertEqual(metadata["hotfix_exception"], "true")
+
+    def test_minor_releases_soak_seven_days_and_patches_seventy_two_hours(self) -> None:
+        with self.assertRaisesRegex(ValueError, "release train requires 168 hours"):
+            self.promote("6.5.0", now_unix_fn=lambda: 100 + (100 * 3600))
+        metadata = self.promote("6.5.1", now_unix_fn=lambda: 100 + (73 * 3600))
+        self.assertEqual(metadata["soak_hours"], "73")
+        with self.assertRaisesRegex(ValueError, "minimum is 72 hours"):
+            self.promote("6.5.1", now_unix_fn=lambda: 100 + (71 * 3600))
+
+
 if __name__ == "__main__":
     unittest.main()
