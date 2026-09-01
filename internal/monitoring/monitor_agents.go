@@ -1346,9 +1346,49 @@ func hostTokenBindingKey(tokenID, hostname string) string {
 	return fmt.Sprintf("%s:%s", tokenID, hostname)
 }
 
-func lookupHostTokenBinding(bindings map[string]string, tokenID, hostname string) string {
+// hostTokenBindingMachineSeparator splits the hostname and machine-ID parts of
+// a machine-qualified binding key. The unit separator cannot appear in a
+// hostname or /etc/machine-id value.
+const hostTokenBindingMachineSeparator = "\x1f"
+
+// hostTokenMachineBindingKey qualifies the token+hostname binding with the
+// reporting machine's identity. Two standalone sites reusing one short
+// hostname and one shared install token are distinct machines and must hold
+// distinct binding slots (#1753); a report without a machine ID keeps the
+// legacy token+hostname key.
+func hostTokenMachineBindingKey(tokenID, hostname, machineID string) string {
+	base := hostTokenBindingKey(tokenID, hostname)
+	if base == "" {
+		return ""
+	}
+	machineID = strings.TrimSpace(machineID)
+	if machineID == "" {
+		return base
+	}
+	return base + hostTokenBindingMachineSeparator + machineID
+}
+
+// splitHostTokenBindingRemainder decomposes the part of a binding key after
+// "tokenID:" into its hostname and optional machine-ID components.
+func splitHostTokenBindingRemainder(remainder string) (hostname, machineID string) {
+	if at := strings.Index(remainder, hostTokenBindingMachineSeparator); at >= 0 {
+		return strings.TrimSpace(remainder[:at]), strings.TrimSpace(remainder[at+len(hostTokenBindingMachineSeparator):])
+	}
+	return strings.TrimSpace(remainder), ""
+}
+
+func lookupHostTokenBinding(bindings map[string]string, tokenID, hostname, machineID string) string {
 	if len(bindings) == 0 {
 		return ""
+	}
+
+	machineID = strings.TrimSpace(machineID)
+	if machineID != "" {
+		if machineKey := hostTokenMachineBindingKey(tokenID, hostname, machineID); machineKey != "" {
+			if boundID := strings.TrimSpace(bindings[machineKey]); boundID != "" {
+				return boundID
+			}
+		}
 	}
 
 	bindingKey := hostTokenBindingKey(tokenID, hostname)
@@ -1365,12 +1405,39 @@ func lookupHostTokenBinding(bindings map[string]string, tokenID, hostname string
 		if boundID == "" || !strings.HasPrefix(key, prefix) {
 			continue
 		}
-		boundHostname := strings.TrimSpace(strings.TrimPrefix(key, prefix))
-		if hostAgentHostnamesMatch(boundHostname, hostname) {
-			return boundID
+		boundHostname, boundMachineID := splitHostTokenBindingRemainder(strings.TrimPrefix(key, prefix))
+		if !hostAgentHostnamesMatch(boundHostname, hostname) {
+			continue
 		}
+		// A binding qualified with a different machine's identity belongs to
+		// another physical host that happens to share this hostname (#1753).
+		if machineID != "" && boundMachineID != "" && !strings.EqualFold(boundMachineID, machineID) {
+			continue
+		}
+		return boundID
 	}
 	return ""
+}
+
+// hostTokenBindingMachineConflict reports whether adopting boundID would fold
+// this report into a host record that demonstrably belongs to a different
+// machine: the record's machine ID and the report's machine ID are both known
+// and disagree. Same-machine reinstalls (equal or missing machine IDs) keep
+// the binding so host identity stays stable (#1753).
+func hostTokenBindingMachineConflict(hosts []models.Host, boundID, machineID string) bool {
+	boundID = strings.TrimSpace(boundID)
+	machineID = strings.TrimSpace(machineID)
+	if boundID == "" || machineID == "" {
+		return false
+	}
+	for _, candidate := range hosts {
+		if strings.TrimSpace(candidate.ID) != boundID {
+			continue
+		}
+		boundMachine := strings.TrimSpace(candidate.MachineID)
+		return boundMachine != "" && !strings.EqualFold(boundMachine, machineID)
+	}
+	return false
 }
 
 func hostAgentHostnamesMatch(left, right string) bool {
@@ -1707,7 +1774,7 @@ func (m *Monitor) RebuildTokenBindings() {
 		if hostname == "" || agentID == "" {
 			continue
 		}
-		newHostBindings[hostTokenBindingKey(tokenID, hostname)] = agentID
+		newHostBindings[hostTokenMachineBindingKey(tokenID, hostname, host.MachineID())] = agentID
 	}
 
 	// Log what changed
@@ -2889,16 +2956,24 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 	existingHostModels := m.state.GetHosts()
 
+	reportMachineID := strings.TrimSpace(report.Host.MachineID)
 	identifier := baseIdentifier
 	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
-		bindingKey := hostTokenBindingKey(tokenID, hostname)
+		bindingKey := hostTokenMachineBindingKey(tokenID, hostname, reportMachineID)
 
 		m.mu.Lock()
 		if m.hostTokenBindings == nil {
 			m.hostTokenBindings = make(map[string]string)
 		}
-		boundID := lookupHostTokenBinding(m.hostTokenBindings, tokenID, hostname)
+		boundID := lookupHostTokenBinding(m.hostTokenBindings, tokenID, hostname, reportMachineID)
+		if boundID != "" && hostTokenBindingMachineConflict(existingHostModels, boundID, reportMachineID) {
+			// The binding resolves to a record that provably belongs to a
+			// different machine: a second standalone site reusing the same
+			// short hostname and shared install token (#1753). Fall through to
+			// the unbound path so this machine gets its own identity slot.
+			boundID = ""
+		}
 		if boundID != "" {
 			m.hostTokenBindings[bindingKey] = boundID
 		}
@@ -2968,7 +3043,11 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			if m.hostTokenBindings == nil {
 				m.hostTokenBindings = make(map[string]string)
 			}
-			if existing := lookupHostTokenBinding(m.hostTokenBindings, tokenID, hostname); existing != "" {
+			existing := lookupHostTokenBinding(m.hostTokenBindings, tokenID, hostname, reportMachineID)
+			if existing != "" && hostTokenBindingMachineConflict(existingHostModels, existing, reportMachineID) {
+				existing = ""
+			}
+			if existing != "" {
 				m.hostTokenBindings[bindingKey] = existing
 				identifier = existing
 			} else {
@@ -3006,7 +3085,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				if m.hostTokenBindings == nil {
 					m.hostTokenBindings = make(map[string]string)
 				}
-				m.hostTokenBindings[hostTokenBindingKey(tokenID, hostname)] = identifier
+				m.hostTokenBindings[hostTokenMachineBindingKey(tokenID, hostname, report.Host.MachineID)] = identifier
 				m.mu.Unlock()
 			}
 			log.Info().
