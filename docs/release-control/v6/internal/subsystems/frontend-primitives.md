@@ -103,6 +103,14 @@ The TrueNAS Storage `Storage type` scope follows the same boundary with stable
 `volumes` and `disks` route values. It composes the shared filter bar, exposes
 the current option through pressed-state semantics, preserves the scope in the
 URL across reload, and removes the query value for the default `all` state.
+An active filter chip's searchable value menu keeps DOM focus on its input,
+relates that combobox to the value list and active option, and returns focus to
+the updated chip after selection or Escape. Its chip, remove, and option targets
+remain at least 24 pixels in each applicable dimension. The menu opens above the
+chip on phone layouts so fixed navigation cannot obscure its options, while
+larger layouts retain downward placement. A shared `SearchInput` that offers
+visual inline completion without a popup remains a native textbox; it must not
+claim combobox semantics or autocomplete relationships that do not exist.
 On narrow screens the physical-disk scope may reprioritize its canonical table
 columns to endurance, temperature, and health while retaining the shared table
 overflow and touch-target behavior; it must not introduce a second mobile-only

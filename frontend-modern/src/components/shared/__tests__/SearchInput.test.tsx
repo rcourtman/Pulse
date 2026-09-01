@@ -280,6 +280,8 @@ describe('SearchInput', () => {
 
     const { container } = render(() => <InlineCompletionHarness />);
     const input = screen.getByPlaceholderText('Infrastructure search');
+    expect(input).toHaveRole('textbox');
+    expect(input).not.toHaveAttribute('aria-autocomplete');
     input.focus();
     fireEvent.input(input, { target: { value: 'pv' } });
 
