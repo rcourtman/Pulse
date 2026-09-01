@@ -327,8 +327,10 @@ packet. The explicit
 `scripts/run-secure-runtime-rootful-qualification.sh` wrapper creates distinct
 network-isolated Ubuntu/systemd hosts for real rootful Docker and Podman and
 never mounts a host daemon socket. Its standalone schema-v1 receipt binds the
-exact qualification, collector, helper, installer, source manifest, canonical
-root-owned socket, summary inventory, migration, restart, loss, recovery,
+exact canonical remote-main commit, immutable Ubuntu base-image digest,
+qualification, collector, helper, installer, every compiled installtests
+package input, source manifest, canonical root-owned socket, summary inventory,
+migration, restart, loss, recovery,
 bounded operation, update-preservation, authority-isolation, and cleanup
 evidence before the independent validator can emit a local artifact-bound
 self-attestation. All Go artifacts require exact clean VCS metadata and all

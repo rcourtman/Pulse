@@ -7400,11 +7400,14 @@ the product default.
 explicit entrypoint for real rootful Docker and Podman proof on two distinct
 disposable Ubuntu/systemd hosts. It never mounts a host daemon socket and runs
 the outer containers without a default route. The packet binds exact clean Go
-artifacts and governed source hashes, then records fresh install, legacy
-migration with authority reduction, collector and helper restart continuity,
-helper loss without an authoritative empty replacement, exact recovery,
-bounded helper-operation failure, ordinary collector-update preservation,
-authority isolation, and cleanup for both runtimes. Rootful telemetry is
+artifacts, every compiled installtests package input, the canonical remote-main
+commit, the immutable Ubuntu base-image digest, and governed source hashes,
+then records fresh install, legacy migration with authority reduction,
+collector and helper restart continuity, helper loss without an authoritative
+empty replacement, exact recovery, bounded helper-operation failure through a
+root-owned collector-executable copy of the qualification binary, ordinary
+collector-update preservation, authority isolation, and cleanup for both
+runtimes. Rootful telemetry is
 intentionally summary-only: the collector remains unable to open the
 root-owned daemon socket and gains neither container actions nor updates.
 

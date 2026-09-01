@@ -64,6 +64,7 @@ IDENTITY_RE = hardened.IDENTITY_RE
 VERSION_RE = hardened.VERSION_RE
 GO_VERSION_RE = hardened.GO_VERSION_RE
 COMMIT_RE = hardened.COMMIT_RE
+BASE_IMAGE_RE = re.compile(r"^ubuntu@sha256:[0-9a-f]{64}$")
 
 
 SUMMARY_KEYS = {
@@ -357,11 +358,12 @@ def validate_run(run_value: Any, expected_runtime: str, index: int, receipt_star
 
 def validate_receipt(receipt: Any) -> dict[str, Any]:
     reject_sensitive_evidence(receipt)
-    root = require_object(receipt, "receipt", {"schema_version", "kind", "result", "source_commit", "started_at", "completed_at", "artifacts", "source_hashes", "runs"})
+    root = require_object(receipt, "receipt", {"schema_version", "kind", "result", "source_commit", "base_image", "started_at", "completed_at", "artifacts", "source_hashes", "runs"})
     require(type(root["schema_version"]) is int and root["schema_version"] == RECEIPT_SCHEMA_VERSION, "receipt.schema_version must be 1")
     require(root["kind"] == RECEIPT_KIND, f"receipt.kind must be {RECEIPT_KIND}")
     require(root["result"] == "passed", "receipt.result must be passed")
     source_commit = require_text(root["source_commit"], "receipt.source_commit", pattern=COMMIT_RE, maximum=40)
+    require_text(root["base_image"], "receipt.base_image", pattern=BASE_IMAGE_RE, maximum=78)
     started = parse_timestamp(root["started_at"], "receipt.started_at")
     completed = parse_timestamp(root["completed_at"], "receipt.completed_at")
     require(started < completed, "receipt chronology is invalid")
@@ -531,6 +533,7 @@ def create_attestation(
         "source_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "source_hash_count": len(source_hashes),
         "source_commit": receipt["source_commit"],
+        "qualified_base_image": receipt["base_image"],
         "source_commit_verified": verify_git_commit,
         "artifact_bindings": bindings,
         "validated_runtimes": list(REQUIRED_RUNTIMES),

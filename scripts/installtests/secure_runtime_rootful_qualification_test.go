@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -40,26 +41,31 @@ const (
 	rootfulQualRunningName = "pulse-rootful-running"
 	rootfulQualExitedName  = "pulse-rootful-exited"
 	rootfulQualHelperSock  = "/run/pulse-agent/helper.sock"
+	rootfulQualBoundProbe  = "/usr/local/libexec/pulse-rootful-qualification/dockeragent.test"
 )
 
-var rootfulQualScenarioOrder = []string{
-	"fresh_install",
-	"legacy_migration",
-	"collector_restart",
-	"helper_restart",
-	"helper_loss",
-	"helper_recovery",
-	"operation_bounds",
-	"update_preservation",
-	"authority_isolation",
-	"cleanup",
-}
+var (
+	rootfulQualBaseImagePattern = regexp.MustCompile(`^ubuntu@sha256:[0-9a-f]{64}$`)
+	rootfulQualScenarioOrder    = []string{
+		"fresh_install",
+		"legacy_migration",
+		"collector_restart",
+		"helper_restart",
+		"helper_loss",
+		"helper_recovery",
+		"operation_bounds",
+		"update_preservation",
+		"authority_isolation",
+		"cleanup",
+	}
+)
 
 type rootfulQualReceipt struct {
 	SchemaVersion int                   `json:"schema_version"`
 	Kind          string                `json:"kind"`
 	Result        string                `json:"result"`
 	SourceCommit  string                `json:"source_commit"`
+	BaseImage     string                `json:"base_image"`
 	StartedAt     string                `json:"started_at"`
 	CompletedAt   string                `json:"completed_at"`
 	SourceHashes  map[string]string     `json:"source_hashes"`
@@ -357,6 +363,7 @@ func TestSecureRuntimeRootfulQualification(t *testing.T) {
 	receipt := rootfulQualReceipt{
 		SchemaVersion: 1, Kind: "pulse-secure-runtime-rootful-qualification", Result: "passed",
 		SourceCommit: strings.TrimSpace(os.Getenv("PULSE_ROOTFUL_SOURCE_COMMIT")),
+		BaseImage:    strings.TrimSpace(os.Getenv("PULSE_ROOTFUL_UBUNTU_IMAGE")),
 		StartedAt:    started.Format(time.RFC3339Nano), CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		SourceHashes: rootfulQualSourceHashes(t), Artifacts: rootfulQualArtifactIdentities(t, installerPath),
 		Runs: []rootfulQualRun{{
@@ -653,12 +660,30 @@ func rootfulQualRunBoundProbe(t *testing.T, deadline time.Duration) time.Duratio
 	if err != nil {
 		t.Fatal(err)
 	}
+	boundProbe := strings.TrimSpace(os.Getenv("PULSE_ROOTFUL_BOUND_PROBE_BINARY"))
+	if boundProbe != rootfulQualBoundProbe {
+		t.Fatalf("PULSE_ROOTFUL_BOUND_PROBE_BINARY must use %q: %q", rootfulQualBoundProbe, boundProbe)
+	}
+	if secureRuntimeHash(rootlessQualReadFile(t, boundProbe)) != secureRuntimeHash(rootlessQualReadFile(t, executable)) {
+		t.Fatal("collector-executable bound probe differs from the qualification binary")
+	}
+	for _, path := range []string{filepath.Dir(boundProbe), boundProbe} {
+		info, statErr := os.Lstat(path)
+		if statErr != nil {
+			t.Fatalf("stat bound-probe path %s: %v", path, statErr)
+		}
+		statInfo, ok := info.Sys().(*syscall.Stat_t)
+		isProbe := path == boundProbe
+		if !ok || statInfo.Uid != 0 || info.Mode().Perm() != 0o755 || isProbe && !info.Mode().IsRegular() || !isProbe && !info.IsDir() {
+			t.Fatalf("bound-probe path is not root-owned mode 0755 with a regular executable: %s %+v", path, info)
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), deadline+3*time.Second)
 	defer cancel()
 	started := time.Now()
 	cmd := exec.CommandContext(ctx, "runuser", "-u", "pulse-agent", "--", "env",
 		"PULSE_ROOTFUL_BOUND_PROBE=1", fmt.Sprintf("PULSE_ROOTFUL_BOUND_DEADLINE_MS=%d", deadline.Milliseconds()),
-		executable, "-test.run", "^TestSecureRuntimeRootfulBoundProbe$", "-test.count=1", "-test.v", "-test.timeout=10s")
+		boundProbe, "-test.run", "^TestSecureRuntimeRootfulBoundProbe$", "-test.count=1", "-test.v", "-test.timeout=10s")
 	output, err := cmd.CombinedOutput()
 	elapsed := time.Since(started)
 	if err != nil || !strings.Contains(string(output), "ROOTFUL_BOUND_RESULT=deadline_exceeded") {
@@ -760,7 +785,7 @@ func rootfulQualValidateReceipt(receipt rootfulQualReceipt, expectedRuns int) er
 	if receipt.SchemaVersion != 1 || receipt.Kind != "pulse-secure-runtime-rootful-qualification" || receipt.Result != "passed" {
 		return errors.New("invalid rootful qualification identity")
 	}
-	if len(receipt.SourceCommit) != 40 || receipt.StartedAt == "" || receipt.CompletedAt == "" || len(receipt.SourceHashes) == 0 || len(receipt.Runs) != expectedRuns {
+	if len(receipt.SourceCommit) != 40 || !rootfulQualBaseImagePattern.MatchString(receipt.BaseImage) || receipt.StartedAt == "" || receipt.CompletedAt == "" || len(receipt.SourceHashes) == 0 || len(receipt.Runs) != expectedRuns {
 		return errors.New("incomplete rootful qualification envelope")
 	}
 	for _, run := range receipt.Runs {
@@ -801,6 +826,7 @@ func TestRootfulQualificationReceiptContract(t *testing.T) {
 	receipt := rootfulQualReceipt{
 		SchemaVersion: 1, Kind: "pulse-secure-runtime-rootful-qualification", Result: "passed",
 		SourceCommit: strings.Repeat("a", 40), StartedAt: time.Now().UTC().Format(time.RFC3339Nano), CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		BaseImage:    "ubuntu@sha256:" + strings.Repeat("c", 64),
 		SourceHashes: map[string]string{"go.mod": strings.Repeat("b", 64)},
 		Runs:         []rootfulQualRun{{Host: rootlessQualHost{MachineID: strings.Repeat("1", 32)}, Runtime: rootfulQualRuntime{Runtime: "docker", RuntimeVersion: "1", DaemonID: "daemon", SocketPath: "/var/run/docker.sock", SocketUID: 0, SocketGID: 999, SocketMode: "0660", SocketType: "unix"}, Scenarios: scenarios}},
 	}
@@ -820,6 +846,7 @@ func TestRootfulQualificationGoSchemaPassesPythonValidator(t *testing.T) {
 	receipt := rootfulQualReceipt{
 		SchemaVersion: 1, Kind: "pulse-secure-runtime-rootful-qualification", Result: "passed",
 		SourceCommit: commit, StartedAt: started.Format(time.RFC3339Nano),
+		BaseImage:    "ubuntu@sha256:" + strings.Repeat("c", 64),
 		CompletedAt:  started.Add(2 * time.Minute).Format(time.RFC3339Nano),
 		SourceHashes: map[string]string{"internal/agenthelper/container_inventory.go": digest, "scripts/install.sh": digest},
 		Artifacts: rootlessQualArtifacts{
@@ -972,6 +999,9 @@ func TestRootfulQualificationWrapperInvariants(t *testing.T) {
 		"capture_qualification_container_diagnostics", "journalctl --no-pager -n 2000",
 		"org.pulse.rootful-qualification.run", "-buildvcs=true",
 		"github.com/rcourtman/pulse-go-rewrite/scripts/installtests.test",
+		"https://github.com/rcourtman/Pulse.git", "refs/remotes/origin/main", "refs/heads/main",
+		"PULSE_ROOTFUL_UBUNTU_IMAGE", "PULSE_ROOTFUL_BOUND_PROBE_BINARY",
+		rootfulQualBoundProbe,
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("rootful qualification wrapper missing %q", required)

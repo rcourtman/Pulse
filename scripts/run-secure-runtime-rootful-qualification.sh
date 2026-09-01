@@ -5,6 +5,8 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly UBUNTU_IMAGE="${PULSE_ROOTFUL_UBUNTU_IMAGE:?set PULSE_ROOTFUL_UBUNTU_IMAGE to an immutable ubuntu@sha256:... Ubuntu 24.04 image}"
 readonly OUTPUT_PARENT="${PULSE_ROOTFUL_QUALIFICATION_OUTPUT_DIR:?set PULSE_ROOTFUL_QUALIFICATION_OUTPUT_DIR to an existing absolute private directory}"
 readonly CONFIRM="${PULSE_ROOTFUL_QUALIFICATION_CONFIRM:-}"
+readonly CANONICAL_ORIGIN_URL="https://github.com/rcourtman/Pulse.git"
+readonly BOUND_PROBE_PATH="/usr/local/libexec/pulse-rootful-qualification/dockeragent.test"
 
 portable_mode() {
   stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
@@ -44,6 +46,22 @@ if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
 fi
 
 readonly SOURCE_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+origin_url="$(git -C "${REPO_ROOT}" remote get-url origin)"
+if [[ "${origin_url}" != "${CANONICAL_ORIGIN_URL}" ]]; then
+  echo "ERROR: qualification requires the canonical Pulse origin URL" >&2
+  exit 2
+fi
+origin_main="$(git -C "${REPO_ROOT}" rev-parse refs/remotes/origin/main)"
+remote_main_record="$(git -C "${REPO_ROOT}" ls-remote --exit-code origin refs/heads/main)"
+if [[ ! "${remote_main_record}" =~ ^([0-9a-f]{40})$'\t'refs/heads/main$ ]]; then
+  echo "ERROR: canonical remote main lookup returned an unexpected result" >&2
+  exit 2
+fi
+remote_main="${BASH_REMATCH[1]}"
+if [[ "${SOURCE_COMMIT}" != "${origin_main}" || "${SOURCE_COMMIT}" != "${remote_main}" ]]; then
+  echo "ERROR: qualification requires HEAD, origin/main, and canonical remote main to be identical" >&2
+  exit 2
+fi
 readonly EXPECTED_CONFIRM="I_HAVE_VERIFIED_THESE_ARE_DISPOSABLE_ROOTFUL_SYSTEMD_CONTAINERS_COMMIT_${SOURCE_COMMIT}"
 if [[ "${CONFIRM}" != "${EXPECTED_CONFIRM}" ]]; then
   echo "ERROR: exact destructive opt-in required:" >&2
@@ -272,7 +290,7 @@ capture_qualification_container_diagnostics() {
 run_runtime() {
   local runtime_name="$1"
   local container_name="pulse-rootful-qual-${runtime_name}-${SOURCE_COMMIT:0:8}-$$"
-  local container_id local_receipt machine_id_file machine_id deadline mounts
+  local container_id local_receipt machine_id_file machine_id deadline mounts packet_probe_hash installed_probe_hash
   local_receipt="${OUTPUT_DIR}/${runtime_name}-receipt.json"
   machine_id_file="${PACKET_DIR}/.machine-id-${runtime_name}"
   machine_id="$(openssl rand -hex 16)"
@@ -303,6 +321,14 @@ run_runtime() {
     fi
     sleep 1
   done
+  docker exec "${container_id}" install -d -o root -g root -m 0755 "$(dirname "${BOUND_PROBE_PATH}")"
+  docker exec "${container_id}" install -o root -g root -m 0755 /opt/pulse/packet/dockeragent.test "${BOUND_PROBE_PATH}"
+  packet_probe_hash="$(sha256_files "${PACKET_DIR}/dockeragent.test" | awk '{print $1}')"
+  installed_probe_hash="$(docker exec "${container_id}" sha256sum "${BOUND_PROBE_PATH}" | awk '{print $1}')"
+  if [[ ! "${packet_probe_hash}" =~ ^[0-9a-f]{64}$ || "${installed_probe_hash}" != "${packet_probe_hash}" ]]; then
+    echo "ERROR: ${runtime_name} collector-executable bound probe differs from the qualification binary" >&2
+    return 1
+  fi
   if docker exec "${container_id}" sh -c 'ip route | grep -q "^default "'; then
     echo "ERROR: ${runtime_name} qualification container unexpectedly has a default route" >&2
     return 1
@@ -319,6 +345,8 @@ run_runtime() {
       -e PULSE_ROOTFUL_RECEIPT=/opt/pulse/result/rootful-receipt.json \
       -e PULSE_ROOTFUL_SOURCE_HASHES=/opt/pulse/packet/source-hashes.json \
       -e "PULSE_ROOTFUL_SOURCE_COMMIT=${SOURCE_COMMIT}" \
+      -e "PULSE_ROOTFUL_UBUNTU_IMAGE=${UBUNTU_IMAGE}" \
+      -e "PULSE_ROOTFUL_BOUND_PROBE_BINARY=${BOUND_PROBE_PATH}" \
       -e PULSE_SECURE_RUNTIME_COLLECTOR=/opt/pulse/packet/pulse-agent \
       -e PULSE_SECURE_RUNTIME_COLLECTOR_SIGNATURE=/opt/pulse/packet/pulse-agent.sig \
       -e PULSE_SECURE_RUNTIME_HELPER=/opt/pulse/packet/pulse-agent-helper \
@@ -355,7 +383,7 @@ docker = json.loads(docker_path.read_text())
 podman = json.loads(podman_path.read_text())
 if docker.get("result") != "passed" or podman.get("result") != "passed":
     raise SystemExit('per-runtime qualification result != "passed"')
-for field in ("schema_version", "kind", "source_commit", "source_hashes", "artifacts"):
+for field in ("schema_version", "kind", "source_commit", "base_image", "source_hashes", "artifacts"):
     if docker.get(field) != podman.get(field):
         raise SystemExit(f"per-runtime qualification field differs: {field}")
 runs = docker.get("runs", []) + podman.get("runs", [])
@@ -368,6 +396,7 @@ if len(set(machine_ids)) != 2 or len(set(daemon_ids)) != 2:
 combined = {
     "schema_version": docker["schema_version"], "kind": docker["kind"], "result": "passed",
     "source_commit": docker["source_commit"],
+    "base_image": docker["base_image"],
     "started_at": min(docker["started_at"], podman["started_at"]),
     "completed_at": max(docker["completed_at"], podman["completed_at"]),
     "source_hashes": docker["source_hashes"], "artifacts": docker["artifacts"], "runs": runs,

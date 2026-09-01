@@ -270,6 +270,7 @@ class RootfulAttestationV1Test(unittest.TestCase):
             "kind": attester.RECEIPT_KIND,
             "result": "passed",
             "source_commit": self.commit,
+            "base_image": "ubuntu@sha256:" + "c" * 64,
             "started_at": self.ts(0),
             "completed_at": self.ts(50),
             "source_hashes": {name: sha(data) for name, data in self.sources.items()},
@@ -314,6 +315,7 @@ class RootfulAttestationV1Test(unittest.TestCase):
         result = self.attest()
         self.assertEqual(result["validated_runtimes"], ["docker", "podman"])
         self.assertEqual(result["classification"], attester.CLASSIFICATION)
+        self.assertEqual(result["qualified_base_image"], self.receipt["base_image"])
         self.assertEqual(set(result["artifact_bindings"]), set(self.artifacts))
         self.assertEqual(
             result["limitations"],
@@ -328,6 +330,7 @@ class RootfulAttestationV1Test(unittest.TestCase):
     def test_exact_runtime_topology_and_order_fail_closed(self) -> None:
         mutations = [
             lambda r: r.update(schema_version=True),
+            lambda r: r.update(base_image="ubuntu:latest"),
             lambda r: r["runs"].pop(),
             lambda r: r["runs"].reverse(),
             lambda r: r["runs"][1]["host"].update(machine_id=r["runs"][0]["host"]["machine_id"]),
@@ -467,6 +470,37 @@ class RootfulAttestationV1Test(unittest.TestCase):
             "scripts/run-secure-runtime-rootful-qualification.sh",
         }
         self.assertTrue(required.issubset(manifest["exact_paths"]))
+        repo_root = Path(__file__).resolve().parents[2]
+        compiled_test_inputs = {
+            path.relative_to(repo_root).as_posix()
+            for path in (repo_root / "scripts" / "installtests").glob("*_test.go")
+        }
+        self.assertTrue(compiled_test_inputs.issubset(manifest["exact_paths"]))
+        go_list = subprocess.run(
+            [
+                "go",
+                "list",
+                "-deps",
+                "-test",
+                "-f",
+                '{{if and (not .Standard) .Module}}{{if eq .Module.Path "github.com/rcourtman/pulse-go-rewrite"}}{{.Dir}}{{end}}{{end}}',
+                "./scripts/installtests",
+            ],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        recursive_roots = set(manifest["recursive_roots"])
+        for raw_directory in go_list.stdout.splitlines():
+            directory = Path(raw_directory)
+            if not raw_directory or directory == repo_root / "scripts" / "installtests":
+                continue
+            relative = directory.relative_to(repo_root).as_posix()
+            self.assertTrue(
+                any(relative == root or relative.startswith(root + "/") for root in recursive_roots),
+                f"compiled qualification dependency is outside the source manifest: {relative}",
+            )
         self.assertIn("internal/agenthelper", manifest["recursive_roots"])
         self.assertIn("pkg/auth", manifest["recursive_roots"])
 
