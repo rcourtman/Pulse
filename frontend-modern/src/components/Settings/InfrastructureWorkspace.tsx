@@ -80,6 +80,11 @@ interface AgentUninstallCommands {
   windows: string;
 }
 
+const ADD_DIALOG_TITLE_ID = 'infrastructure-add-dialog-title';
+const ADD_DIALOG_DESCRIPTION_ID = 'infrastructure-add-dialog-description';
+const EDIT_DIALOG_TITLE_ID = 'infrastructure-edit-dialog-title';
+const EDIT_DIALOG_DESCRIPTION_ID = 'infrastructure-edit-dialog-description';
+
 const ADD_STEP_TO_TYPE: Record<ManagedAddTypeStep, ConnectionType> = {
   agent: 'agent',
   'linux-host': 'agent',
@@ -1020,14 +1025,19 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           <Dialog
             isOpen={true}
             onClose={closeAddFlow}
-            ariaLabel={addDialogTitle()}
+            ariaLabelledBy={ADD_DIALOG_TITLE_ID}
+            ariaDescribedBy={ADD_DIALOG_DESCRIPTION_ID}
             panelClass={isAgentDialog() ? 'max-w-6xl' : 'max-w-5xl'}
           >
             <div class="flex h-full min-h-0 flex-col">
               <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
                 <div class="space-y-1">
-                  <h2 class="text-base font-semibold text-base-content">{addDialogTitle()}</h2>
-                  <p class="text-sm text-muted">{addDialogDescription()}</p>
+                  <h2 id={ADD_DIALOG_TITLE_ID} class="text-base font-semibold text-base-content">
+                    {addDialogTitle()}
+                  </h2>
+                  <p id={ADD_DIALOG_DESCRIPTION_ID} class="text-sm text-muted">
+                    {addDialogDescription()}
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -1090,14 +1100,22 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               <Dialog
                 isOpen={true}
                 onClose={closeEditFlow}
-                ariaLabel={editDialogTitle()}
+                ariaLabelledBy={EDIT_DIALOG_TITLE_ID}
+                ariaDescribedBy={EDIT_DIALOG_DESCRIPTION_ID}
                 panelClass={connection.type === 'agent' ? 'max-w-5xl' : 'max-w-5xl'}
               >
                 <div class="flex h-full min-h-0 flex-col">
                   <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
                     <div class="space-y-1">
-                      <h2 class="text-base font-semibold text-base-content">{editDialogTitle()}</h2>
-                      <p class="text-sm text-muted">{editDialogDescription()}</p>
+                      <h2
+                        id={EDIT_DIALOG_TITLE_ID}
+                        class="text-base font-semibold text-base-content"
+                      >
+                        {editDialogTitle()}
+                      </h2>
+                      <p id={EDIT_DIALOG_DESCRIPTION_ID} class="text-sm text-muted">
+                        {editDialogDescription()}
+                      </p>
                     </div>
                     <Button
                       type="button"

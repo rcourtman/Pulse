@@ -868,6 +868,12 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAccessibleName('Add infrastructure');
+    expect(dialog).toHaveAccessibleDescription(
+      'Choose the system, device, host, or service you want Pulse to monitor.',
+    );
+    expect(dialog).toHaveAttribute('aria-labelledby', 'infrastructure-add-dialog-title');
+    expect(dialog).toHaveAttribute('aria-describedby', 'infrastructure-add-dialog-description');
     expect(screen.getAllByText('Add infrastructure').length).toBeGreaterThan(0);
     expect(
       screen.getByText('Choose the system, device, host, or service you want Pulse to monitor.'),
@@ -984,6 +990,11 @@ describe('InfrastructureWorkspace', () => {
     fireEvent.click(manageButton);
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAccessibleName('Manage zeus');
+    expect(dialog).toHaveAccessibleDescription('Proxmox VE · https://10.0.0.1:8006');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'infrastructure-edit-dialog-title');
+    expect(dialog).toHaveAttribute('aria-describedby', 'infrastructure-edit-dialog-description');
     expect(screen.getByText('Manage zeus')).toBeInTheDocument();
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
 

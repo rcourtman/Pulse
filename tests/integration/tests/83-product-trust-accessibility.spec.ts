@@ -296,6 +296,7 @@ test("representative authenticated surfaces have no automatically detectable WCA
   await page.emulateMedia({ reducedMotion: "reduce" });
   const surfaces = [
     { route: "/alerts/overview", heading: "Alerts Overview" },
+    { route: "/settings/infrastructure", heading: "Infrastructure" },
     { route: "/settings/system-general", heading: "General" },
     { route: "/patrol", heading: "Patrol" },
   ] as const;
@@ -313,6 +314,25 @@ test("representative authenticated surfaces have no automatically detectable WCA
       await scanForUnexpectedReducedMotion(page),
       `${surface.route} should complete non-essential motion immediately when reduced motion is requested`,
     ).toEqual([]);
+
+    if (surface.route === "/settings/infrastructure") {
+      const addButton = page.getByRole("button", {
+        name: "Add infrastructure",
+      });
+      await addButton.click();
+      const dialog = page.getByRole("dialog", { name: "Add infrastructure" });
+      await expect(dialog).toHaveAccessibleDescription(
+        "Choose the system, device, host, or service you want Pulse to monitor.",
+      );
+      await expect(page.locator(":focus")).toHaveAttribute(
+        "aria-label",
+        "Close add infrastructure dialog",
+      );
+      expect(await scanForWcagViolations(page)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await expect(addButton).toBeFocused();
+    }
   }
 });
 
