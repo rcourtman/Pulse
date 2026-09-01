@@ -1779,6 +1779,7 @@ func TestRunConfiguresTypedPrivilegeHelperFromInstallerEnvironment(t *testing.T)
 		"-enable-docker=false",
 		"-enable-kubernetes=false",
 		"-health-addr", "",
+		"-state-dir", t.TempDir(),
 	}, func(string) string { return "" })
 	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("run returned error: %v", err)
@@ -1839,6 +1840,7 @@ func TestRunRejectsUnhealthyTypedPrivilegeHelper(t *testing.T) {
 		"-enable-docker=false",
 		"-enable-kubernetes=false",
 		"-health-addr", "",
+		"-state-dir", t.TempDir(),
 	}, func(string) string { return "" })
 	if err == nil || !strings.Contains(err.Error(), "verify typed privilege helper protocol") {
 		t.Fatalf("run error = %v", err)

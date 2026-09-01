@@ -35,7 +35,13 @@ CACHE_DIR="${WORKER_ROOT}/cache"
 RECEIPT_DIR="${WORKER_ROOT}/receipts"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-${SOURCE_SHA:0:12}-${PROFILE}"
 RUN_DIR="${WORKER_ROOT}/tmp/${RUN_ID}"
-GO_TMP_DIR="${RUN_DIR}/go-tmp"
+# Go places test temp directories under GOTMPDIR, and several packages bind
+# unix sockets under t.TempDir at the 108-byte sun_path limit. GitHub runners
+# leave GOTMPDIR unset so those fixtures resolve under /tmp; the worker must
+# match that layout exactly or the socket tests fail with "bind: invalid
+# argument". Set PULSE_RELEASE_PREFLIGHT_GO_TMP_DIR only for a deliberately
+# isolated, equally short directory.
+GO_TMP_DIR="${PULSE_RELEASE_PREFLIGHT_GO_TMP_DIR:-}"
 TIMINGS_FILE="${RUN_DIR}/timings.tsv"
 TEST_DATA_DIR="${WORKER_ROOT}/test-data/${PROFILE}"
 
@@ -67,7 +73,6 @@ mkdir -p \
   "$CACHE_DIR/npm" \
   "$RECEIPT_DIR" \
   "$RUN_DIR" \
-  "$GO_TMP_DIR" \
   "$(dirname "$TEST_DATA_DIR")"
 
 exec 9>"${WORKER_ROOT}/worker.lock"
@@ -83,7 +88,10 @@ unset GH_TOKEN GITHUB_TOKEN PULSE_LICENSE_PRIVATE_KEY PULSE_UPDATE_SIGNING_KEY
 
 export GOCACHE="$CACHE_DIR/go-build"
 export GOMODCACHE="$CACHE_DIR/go-mod"
-export GOTMPDIR="$GO_TMP_DIR"
+if [ -n "$GO_TMP_DIR" ]; then
+  mkdir -p "$GO_TMP_DIR"
+  export GOTMPDIR="$GO_TMP_DIR"
+fi
 export npm_config_cache="$CACHE_DIR/npm"
 # Match the canonical workflow's isolated single-repository checkout. Tests
 # that explicitly require private sibling repositories use this signal to
@@ -105,7 +113,9 @@ phase() {
 }
 
 cleanup() {
-  rm -rf "$GO_TMP_DIR"
+  if [ -n "$GO_TMP_DIR" ]; then
+    rm -rf "$GO_TMP_DIR"
+  fi
   if [ -d "$REPOSITORY_DIR/tests/integration" ]; then
     (
       cd "$REPOSITORY_DIR/tests/integration"
