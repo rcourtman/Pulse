@@ -36,6 +36,7 @@ HOSTED_LATEST_RE = re.compile(r"\b(?:ubuntu|windows|macos)-latest\b")
 USES_RE = re.compile(
     rf"^\s*(?:-\s*)?{_yaml_key('uses')}\s*:\s*([^\s#]+)"
 )
+WITH_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('with')}\s*:\s*(.*)$")
 RUN_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('run')}\s*:\s*(.*)$")
 ENV_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('env')}\s*:\s*$")
 ENV_ENTRY_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*?)\s*$")
@@ -138,6 +139,15 @@ WRITE_PERMISSION_RE = re.compile(
 # configuration mechanism. Confidential credentials have no PR exception.
 NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
+# These action inputs are programs, not ordinary data. GitHub's Actions
+# CodeQL models treat the same actions as code-injection sinks: expression
+# substitution happens before the action's JavaScript, PowerShell, or CLI
+# interpreter receives the generated source.
+GENERATED_CODE_ACTION_INPUTS = {
+    "actions/github-script@": frozenset({"script"}),
+    "azure/cli@": frozenset({"inlinescript"}),
+    "azure/powershell@": frozenset({"inlinescript"}),
+}
 # v7.0.1 includes checkout's fail-closed fork-PR protection for privileged
 # pull_request_target and workflow_run events. Keep this exact-pin allowlist
 # reviewable: a dependency refresh must not silently discard that boundary.
@@ -295,20 +305,86 @@ def _permission_mapping_grants_scope_write(
     return False
 
 
-def _checkout_block(lines: list[str], uses_index: int) -> list[tuple[int, str]]:
-    """Return lines belonging to the checkout step after its uses declaration."""
+def _action_block(lines: list[str], uses_index: int) -> list[tuple[int, str]]:
+    """Return every line belonging to the action step containing ``uses``."""
     uses_indent = _indent(lines[uses_index])
+    step_start = uses_index
+    step_indent = uses_indent
+    if not lines[uses_index].lstrip().startswith("- "):
+        for index in range(uses_index - 1, -1, -1):
+            line = lines[index]
+            if (
+                line.strip()
+                and _indent(line) < uses_indent
+                and line.lstrip().startswith("- ")
+            ):
+                step_start = index
+                step_indent = _indent(line)
+                break
+
     block: list[tuple[int, str]] = []
-    for index in range(uses_index + 1, len(lines)):
+    for index in range(step_start, len(lines)):
         line = lines[index]
         stripped = line.strip()
-        if stripped and (
-            _indent(line) < uses_indent
-            or (_indent(line) == uses_indent and stripped.startswith("- "))
+        if index != step_start and stripped and (
+            _indent(line) < step_indent
+            or (_indent(line) == step_indent and stripped.startswith("- "))
         ):
             break
         block.append((index, line))
     return block
+
+
+def _action_generated_code_lines(
+    lines: list[str], uses_index: int, input_names: frozenset[str]
+) -> list[tuple[int, str]]:
+    """Return source lines from executable inputs to an action step."""
+    uses_indent = _indent(lines[uses_index])
+    field_indent = (
+        uses_indent + 2
+        if lines[uses_index].lstrip().startswith("- ")
+        else uses_indent
+    )
+    block = _action_block(lines, uses_index)
+    if not block:
+        return []
+    block_end = block[-1][0] + 1
+    generated_lines: list[tuple[int, str]] = []
+
+    for index, line in block:
+        code = line.split("#", 1)[0]
+        with_match = WITH_RE.match(code)
+        if not with_match:
+            continue
+        with_field_indent = len(with_match.group(1)) + (
+            2 if code.lstrip().startswith("- ") else 0
+        )
+        if with_field_indent != field_indent:
+            continue
+        with_end = min(_mapping_end_index(lines, index), block_end)
+        input_indent = _direct_mapping_indent(lines, index, with_end)
+        if input_indent is None:
+            continue
+        input_re = re.compile(
+            rf"^(\s*)(?:{'|'.join(_yaml_key(name) for name in input_names)})"
+            r"\s*:\s*(.*)$",
+            re.IGNORECASE,
+        )
+        for input_index in range(index + 1, with_end):
+            input_match = input_re.match(lines[input_index])
+            if not input_match or len(input_match.group(1)) != input_indent:
+                continue
+            value = input_match.group(2).strip()
+            if value not in {"|", "|-", "|+", ">", ">-", ">+"}:
+                generated_lines.append((input_index, input_match.group(2)))
+                continue
+            for script_index in range(input_index + 1, with_end):
+                script_line = lines[script_index]
+                if script_line.strip() and _indent(script_line) <= input_indent:
+                    break
+                generated_lines.append((script_index, script_line))
+
+    return generated_lines
 
 
 def _runner_job_ranges(lines: list[str]) -> list[tuple[int, int, int]]:
@@ -1018,7 +1094,7 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
                         )
                     )
                 elif dependency.startswith(SETUP_CACHE_ACTION_PREFIXES):
-                    action_block = _checkout_block(lines, index)
+                    action_block = _action_block(lines, index)
                     unsafe_cache_lines: list[int] = []
                     for cache_index, cache_line in action_block:
                         cache_match = CACHE_INPUT_RE.match(cache_line.split("#", 1)[0])
@@ -1205,6 +1281,28 @@ def audit_workflow(path: Path) -> list[Finding]:
         dependency = match.group(1).strip("'\"")
         if dependency.startswith("./"):
             continue
+        dependency_lower = dependency.lower()
+        generated_input_names = next(
+            (
+                input_names
+                for prefix, input_names in GENERATED_CODE_ACTION_INPUTS.items()
+                if dependency_lower.startswith(prefix)
+            ),
+            None,
+        )
+        if generated_input_names:
+            for script_index, script_line in _action_generated_code_lines(
+                lines, index, generated_input_names
+            ):
+                if _is_untrusted_expression(script_line):
+                    findings.append(
+                        Finding(
+                            path,
+                            script_index + 1,
+                            "workflow data must enter executable action inputs "
+                            "through env instead of generated source",
+                        )
+                    )
         if has_workflow_run_trigger and dependency.lower().startswith(
             WORKFLOW_RUN_ARTIFACT_ACTION_PREFIX
         ):
@@ -1250,7 +1348,7 @@ def audit_workflow(path: Path) -> list[Finding]:
                     "protection baseline",
                 )
             )
-        checkout_block = _checkout_block(lines, index)
+        checkout_block = _action_block(lines, index)
         if has_workflow_run_trigger and any(
             WORKFLOW_RUN_CODE_REF_RE.search(block_line.split("#", 1)[0])
             for _, block_line in checkout_block

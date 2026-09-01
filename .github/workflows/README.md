@@ -49,6 +49,12 @@ be interpolated into the generated shell program. Outputs remain data even
 when an intermediate step parsed or validated them, because later substitution
 would turn their value back into shell source.
 
+The same boundary applies to action inputs that are themselves executable
+source. The audit recognizes the script inputs of `actions/github-script`,
+`azure/cli`, and `azure/powershell` and rejects workflow or event data embedded
+in those programs. Pass the value through step `env` and read it from the
+script's process environment instead.
+
 Jobs that receive confidential repository secrets or a write-capable
 `GITHUB_TOKEN` do not restore or save caches. This includes setup-action
 dependency caches, direct Actions caches, and external BuildKit cache imports:

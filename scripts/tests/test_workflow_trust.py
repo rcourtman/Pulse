@@ -776,6 +776,51 @@ jobs:
             5,
         )
 
+    def test_rejects_template_data_in_executable_action_inputs(self) -> None:
+        findings = self.audit(
+            f"""permissions: {{}}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@{PIN}
+        with:
+          script: |
+            const title = '${{{{ github.event.issue.title }}}}';
+            const requested = '${{{{ inputs.name }}}}';
+      - with:
+          inlineScript: echo "${{{{ secrets.DEPLOY_TOKEN }}}}"
+        uses: azure/cli@{PIN}
+      - uses: azure/powershell@{PIN}
+        with:
+          inlineScript: |
+            Write-Output '${{{{ steps.prepare.outputs.command }}}}'
+"""
+        )
+        self.assertEqual(
+            sum("executable action inputs" in finding for finding in findings),
+            4,
+        )
+
+        safe = self.audit(
+            f"""permissions: {{}}
+jobs:
+  safe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@{PIN}
+        env:
+          TITLE: ${{{{ github.event.issue.title }}}}
+        with:
+          script: |
+            const title = process.env.TITLE;
+            const source = '${{{{ github.sha }}}}';
+"""
+        )
+        self.assertEqual(safe, [])
+
     def test_rejects_step_and_job_outputs_in_generated_shell(self) -> None:
         findings = self.audit(
             """permissions: {}
