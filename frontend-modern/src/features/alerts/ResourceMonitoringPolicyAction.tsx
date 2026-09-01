@@ -10,6 +10,7 @@ import {
 } from '@/api/resourceOperatorState';
 import { notificationStore } from '@/stores/notifications';
 import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPolicy';
+import { useMenuButton } from '@/components/shared/useMenuButton';
 
 interface ResourceMonitoringPolicyActionProps {
   resourceId: string;
@@ -34,6 +35,12 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
   const [menuPosition, setMenuPosition] = createSignal({ left: 0, top: 0 });
   let triggerRef: HTMLButtonElement | undefined;
   let menuRef: HTMLDivElement | undefined;
+  const menuButton = useMenuButton({
+    isOpen: menuOpen,
+    setOpen: setMenuOpen,
+    trigger: () => triggerRef,
+    menu: () => menuRef,
+  });
 
   // The menu renders through a portal with fixed positioning so it can extend
   // past the alert card's scroll container: rendered in place, the last card's
@@ -58,7 +65,7 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
       if (target instanceof Element && target.closest('[data-monitoring-policy-menu-root]')) {
         return;
       }
-      setMenuOpen(false);
+      menuButton.closeMenu();
     };
     window.addEventListener('resize', updateMenuPosition);
     window.addEventListener('scroll', updateMenuPosition, true);
@@ -126,7 +133,7 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
         note: current?.note,
       };
       await setResourceOperatorState(props.resourceId, input);
-      setMenuOpen(false);
+      menuButton.closeMenu(true);
       notificationStore.success(`${choice.label} saved for ${props.resourceName}`);
     } catch (error) {
       notificationStore.error(
@@ -146,11 +153,16 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
       <button
         type="button"
         ref={triggerRef}
+        id={menuButton.triggerId}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen()}
+        aria-controls={menuButton.menuId}
         class="inline-flex min-h-9 cursor-pointer items-center rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+        onKeyDown={menuButton.handleTriggerKeyDown}
         onClick={(event) => {
           event.stopPropagation();
           updateMenuPosition();
-          setMenuOpen((open) => !open);
+          menuButton.toggleMenu();
         }}
       >
         {saving() ? 'Saving…' : 'Monitoring'}
@@ -159,15 +171,17 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
         <Portal mount={document.body}>
           <div
             ref={menuRef}
+            id={menuButton.menuId}
             data-monitoring-policy-menu-root
             role="menu"
+            aria-labelledby={menuButton.triggerId}
             class="fixed z-[9999] w-72 rounded-md border border-border bg-surface p-1.5 shadow-lg"
             style={{ left: `${menuPosition().left}px`, top: `${menuPosition().top}px` }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
               event.stopPropagation();
-              if (event.key === 'Escape') setMenuOpen(false);
+              menuButton.handleMenuKeyDown(event);
             }}
           >
             <p class="px-2 pb-1.5 text-[11px] text-muted">
@@ -177,6 +191,8 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
               {(choice) => (
                 <button
                   type="button"
+                  role="menuitem"
+                  tabindex="-1"
                   disabled={saving()}
                   class="block w-full rounded px-2 py-2 text-left hover:bg-surface-hover disabled:opacity-50"
                   onClick={() => void applyChoice(choice)}

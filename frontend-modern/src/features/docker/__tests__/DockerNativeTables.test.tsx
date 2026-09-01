@@ -937,10 +937,30 @@ describe('Docker native tables', () => {
         name: 'Container actions for edge-web',
       }),
     );
+    const lifecycleMenu = screen.getByRole('menu', {
+      name: 'Container actions for edge-web',
+    });
     const restartButton = screen.getByRole('menuitem', {
       name: 'Review restart for edge-web',
     });
-    fireEvent.click(restartButton);
+    await waitFor(() =>
+      expect(
+        within(lifecycleMenu).getByRole('menuitem', { name: 'Review stop for edge-web' }),
+      ).toHaveFocus(),
+    );
+    fireEvent.keyDown(restartButton, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    const lifecycleTrigger = screen.getByRole('button', {
+      name: 'Container actions for edge-web',
+    });
+    expect(lifecycleTrigger).toHaveFocus();
+    fireEvent.keyDown(lifecycleTrigger, { key: 'ArrowUp' });
+    await waitFor(() => expect(screen.getAllByRole('menuitem').at(-1)).toHaveFocus());
+    fireEvent.click(
+      screen.getByRole('menuitem', {
+        name: 'Review restart for edge-web',
+      }),
+    );
 
     await waitFor(() =>
       expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(

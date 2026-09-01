@@ -16,6 +16,7 @@ import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SquareIcon from 'lucide-solid/icons/square';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+import { useMenuButton } from '@/components/shared/useMenuButton';
 import { notificationStore } from '@/stores/notifications';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import type { Resource } from '@/types/resource';
@@ -82,6 +83,13 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [menuPosition, setMenuPosition] = createSignal({ left: 0, top: 0 });
   let menuTriggerRef: HTMLButtonElement | undefined;
+  let menuRef: HTMLDivElement | undefined;
+  const menuButton = useMenuButton({
+    isOpen: menuOpen,
+    setOpen: setMenuOpen,
+    trigger: () => menuTriggerRef,
+    menu: () => menuRef,
+  });
 
   const updateMenuPosition = () => {
     if (!menuTriggerRef || typeof window === 'undefined') return;
@@ -100,7 +108,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Element && target.closest('[data-docker-lifecycle-menu-root]')) return;
-      setMenuOpen(false);
+      menuButton.closeMenu();
     };
     window.addEventListener('resize', updateMenuPosition);
     window.addEventListener('scroll', updateMenuPosition, true);
@@ -201,20 +209,22 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
         <button
           ref={menuTriggerRef}
           type="button"
+          id={menuButton.triggerId}
           class={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border ${enabledButtonClass}`}
           title={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
           aria-label={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
           aria-haspopup="menu"
           aria-expanded={menuOpen() ? 'true' : 'false'}
+          aria-controls={menuButton.menuId}
           onMouseDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             event.stopPropagation();
-            if (event.key === 'Escape') setMenuOpen(false);
+            menuButton.handleTriggerKeyDown(event);
           }}
           onClick={(event) => {
             event.stopPropagation();
             updateMenuPosition();
-            setMenuOpen((open) => !open);
+            menuButton.toggleMenu();
           }}
         >
           <MoreHorizontalIcon class="h-4 w-4" aria-hidden="true" />
@@ -223,16 +233,19 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
         <Show when={menuOpen()}>
           <Portal mount={document.body}>
             <div
+              ref={menuRef}
+              id={menuButton.menuId}
               data-prevent-toggle
               data-docker-lifecycle-menu-root
               role="menu"
+              aria-labelledby={menuButton.triggerId}
               class="fixed z-[9999] w-52 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
               style={{ left: `${menuPosition().left}px`, top: `${menuPosition().top}px` }}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => {
                 event.stopPropagation();
-                if (event.key === 'Escape') setMenuOpen(false);
+                menuButton.handleMenuKeyDown(event);
               }}
             >
               <For each={DOCKER_CONTAINER_LIFECYCLE_ACTIONS}>
@@ -247,6 +260,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
                     <button
                       type="button"
                       role="menuitem"
+                      tabindex="-1"
                       class="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={disabled()}
                       title={titleForAction(spec.action, spec.label)}
@@ -254,7 +268,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
                       data-docker-container-action={spec.action}
                       onClick={(event) => {
                         event.stopPropagation();
-                        setMenuOpen(false);
+                        menuButton.closeMenu(true);
                         void prepareLifecycleReview(spec.action);
                       }}
                     >

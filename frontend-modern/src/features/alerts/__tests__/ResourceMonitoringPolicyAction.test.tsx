@@ -72,6 +72,73 @@ describe('ResourceMonitoringPolicyAction', () => {
     expect(menu.className).toContain('fixed');
   });
 
+  it('moves keyboard focus through policy choices and returns it on Escape', async () => {
+    operatorStateMock.get.mockResolvedValue(null);
+    render(() => (
+      <ResourceMonitoringPolicyAction
+        resourceId="vm:101"
+        resourceName="legacy-lxc"
+        resourceType="system-container"
+      />
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Monitoring' });
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const choices = await screen.findAllByRole('menuitem');
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('menu')).toHaveAccessibleName('Monitoring');
+    await waitFor(() => expect(choices[0]).toHaveFocus());
+
+    fireEvent.keyDown(choices[0], { key: 'ArrowDown' });
+    expect(choices[1]).toHaveFocus();
+    fireEvent.keyDown(choices[1], { key: 'End' });
+    expect(choices.at(-1)).toHaveFocus();
+
+    fireEvent.keyDown(choices.at(-1)!, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('opens on ArrowUp with the last policy choice focused', async () => {
+    operatorStateMock.get.mockResolvedValue(null);
+    render(() => (
+      <ResourceMonitoringPolicyAction
+        resourceId="vm:101"
+        resourceName="legacy-lxc"
+        resourceType="system-container"
+      />
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Monitoring' });
+    fireEvent.keyDown(trigger, { key: 'ArrowUp' });
+    const choices = await screen.findAllByRole('menuitem');
+    await waitFor(() => expect(choices.at(-1)).toHaveFocus());
+  });
+
+  it('closes before native Tab navigation leaves the portaled menu', async () => {
+    operatorStateMock.get.mockResolvedValue(null);
+    render(() => (
+      <ResourceMonitoringPolicyAction
+        resourceId="vm:101"
+        resourceName="legacy-lxc"
+        resourceType="system-container"
+      />
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Monitoring' });
+    fireEvent.click(trigger);
+    const firstChoice = (await screen.findAllByRole('menuitem'))[0];
+    await waitFor(() => expect(firstChoice).toHaveFocus());
+
+    fireEvent.keyDown(firstChoice, { key: 'Tab' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it('retires provider inventory without changing its previous monitoring mode', async () => {
     operatorStateMock.get.mockResolvedValue({
       canonicalId: 'vm:101',
