@@ -70,15 +70,43 @@ describe('IncidentTimelinePanel', () => {
       />
     ));
 
-    expect(screen.getByText('Loading timeline...')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading timeline...');
 
     setState({ loading: false, error: true, timeline: undefined });
 
-    expect(screen.getByText('Failed to load timeline.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to load timeline.');
+    expect(screen.getByRole('button', { name: 'Retry' })).toHaveClass('min-h-11', 'focus:ring-2');
 
     setState({ loading: false, error: false, timeline: undefined });
 
-    expect(screen.getByText('No incident timeline available.')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('No incident timeline available.');
+  });
+
+  it('keeps failure recovery operable and out of implicit form submission', () => {
+    const [filters, setFilters] = createSignal(new Set<string>());
+    const onRetry = vi.fn();
+
+    render(() => (
+      <IncidentTimelinePanel
+        loading={() => false}
+        error={() => true}
+        timeline={() => undefined}
+        filters={filters}
+        setFilters={setFilters}
+        filterVariant="panel"
+        eventCardVariant="alt"
+        noteDraft={() => ''}
+        onNoteDraftChange={vi.fn()}
+        noteSaving={() => false}
+        onSaveNote={vi.fn()}
+        onRetry={onRetry}
+      />
+    ));
+
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    expect(retry).toHaveAttribute('type', 'button');
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 
   it('renders shared timeline content and note handling', () => {
@@ -116,7 +144,10 @@ describe('IncidentTimelinePanel', () => {
     });
     expect(handleNoteDraftChange).toHaveBeenCalledWith('updated note');
 
-    fireEvent.click(screen.getByText('Save Note'));
+    const saveNote = screen.getByRole('button', { name: 'Save Note' });
+    expect(saveNote).toHaveAttribute('type', 'button');
+    expect(saveNote).toHaveClass('min-h-11', 'focus:ring-2');
+    fireEvent.click(saveNote);
     expect(handleSave).toHaveBeenCalledTimes(1);
   });
 

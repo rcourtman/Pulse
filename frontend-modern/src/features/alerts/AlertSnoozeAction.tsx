@@ -1,5 +1,6 @@
 import { For, createSignal } from 'solid-js';
 
+import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import type { Alert } from '@/types/api';
 import {
@@ -35,9 +36,12 @@ export function AlertSnoozeAction(props: {
   timelineState: AlertIncidentTimelineState;
 }) {
   const [open, setOpen] = createSignal(false);
+  const [submittingPreset, setSubmittingPreset] = createSignal(false);
   const id = () => getCanonicalAlertId(props.alert);
   const busy = () =>
-    props.state.snoozeProcessingAlerts().has(id()) || props.state.processingAlerts().has(id());
+    submittingPreset() ||
+    props.state.snoozeProcessingAlerts().has(id()) ||
+    props.state.processingAlerts().has(id());
   const presets: SnoozePreset[] = [
     'oneHour',
     'twoHours',
@@ -53,8 +57,10 @@ export function AlertSnoozeAction(props: {
 
   return (
     <>
-      <button
-        class="px-2.5 py-1.5 text-xs font-medium rounded border border-border text-muted hover:text-base-content hover:bg-surface-alt transition-colors disabled:opacity-50"
+      <Button
+        variant="outline"
+        size="sm"
+        class="text-muted hover:text-base-content"
         disabled={busy()}
         onClick={() => {
           if (isAlertSnoozed(props.alert)) {
@@ -70,7 +76,7 @@ export function AlertSnoozeAction(props: {
         {isAlertSnoozed(props.alert)
           ? getAlertOverviewResumeLabel()
           : getAlertOverviewSnoozeLabel()}
-      </button>
+      </Button>
       <Dialog
         isOpen={open()}
         onClose={() => setOpen(false)}
@@ -80,30 +86,37 @@ export function AlertSnoozeAction(props: {
         <div class="p-5">
           <h2 class="text-lg font-semibold text-base-content">{getAlertOverviewSnoozeTitle()}</h2>
           <p class="mt-1 text-sm text-muted">{getAlertOverviewSnoozeDescription()}</p>
-          <div class="mt-4 grid gap-2">
+          <div class="mt-4 grid gap-2" aria-busy={submittingPreset()}>
             <For each={presets}>
               {(preset) => (
-                <button
-                  class="w-full rounded-lg border border-border px-3 py-2 text-left text-sm text-base-content hover:border-primary hover:bg-primary/5 transition-colors"
+                <Button
+                  variant="outline"
+                  size="md"
+                  class="w-full justify-start rounded-lg text-left hover:border-primary hover:bg-primary/5"
+                  disabled={busy()}
                   onClick={async () => {
+                    if (busy()) return;
+                    setSubmittingPreset(true);
                     try {
                       await props.state.handleSnooze(props.alert, snoozePresetExpiry(preset));
                       await refreshOpenTimeline();
                       setOpen(false);
                     } catch {
                       // State owns rollback and user-visible failure reporting.
+                    } finally {
+                      setSubmittingPreset(false);
                     }
                   }}
                 >
                   {getAlertOverviewSnoozeOptionLabel(preset)}
-                </button>
+                </Button>
               )}
             </For>
           </div>
           <div class="mt-4 flex justify-end">
-            <button class="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               {getAlertOverviewCancelLabel()}
-            </button>
+            </Button>
           </div>
         </div>
       </Dialog>

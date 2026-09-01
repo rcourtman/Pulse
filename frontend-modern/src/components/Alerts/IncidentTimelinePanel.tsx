@@ -4,6 +4,7 @@ import { filterIncidentEvents } from '@/features/alerts/types';
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
+import { Button } from '@/components/shared/Button';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import {
@@ -52,7 +53,9 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
   return (
     <>
       <Show when={props.loading()}>
-        <p class="text-xs text-muted">{getAlertTimelineLoadingState().text}</p>
+        <p class="text-xs text-muted" role="status">
+          {getAlertTimelineLoadingState().text}
+        </p>
       </Show>
       <Show when={!props.loading() && timeline()}>
         {(loadedTimeline) => (
@@ -125,13 +128,14 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
                 onInput={(event) => props.onNoteDraftChange(event.currentTarget.value)}
               />
               <div class="flex justify-end">
-                <button
+                <Button
+                  size="sm"
                   class={getAlertIncidentNoteSaveButtonClass()}
                   disabled={props.noteSaving() || !props.noteDraft().trim()}
                   onClick={() => props.onSaveNote()}
                 >
                   {getAlertTimelineSaveNoteLabel(props.noteSaving())}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -140,13 +144,24 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
       <Show when={!props.loading() && !timeline()}>
         <Show
           when={props.error()}
-          fallback={<p class="text-xs text-muted">{getAlertTimelineUnavailableState().text}</p>}
+          fallback={
+            <p class="text-xs text-muted" role="status">
+              {getAlertTimelineUnavailableState().text}
+            </p>
+          }
         >
           <div class="flex items-center gap-2">
-            <p class="text-xs text-error">{getAlertTimelineFailureState().text}</p>
-            <button class="text-xs text-primary hover:underline" onClick={() => props.onRetry()}>
+            <p class="text-xs text-error" role="alert">
+              {getAlertTimelineFailureState().text}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="text-primary hover:underline"
+              onClick={() => props.onRetry()}
+            >
               {getAlertTimelineFailureState().actionLabel}
-            </button>
+            </Button>
           </div>
         </Show>
       </Show>
