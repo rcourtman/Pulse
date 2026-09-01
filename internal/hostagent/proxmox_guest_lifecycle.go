@@ -3,8 +3,8 @@ package hostagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +24,8 @@ type proxmoxGuestLifecycleManager struct {
 func newProxmoxGuestLifecycleManager() *proxmoxGuestLifecycleManager {
 	return &proxmoxGuestLifecycleManager{
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			return exec.CommandContext(ctx, name, args...).CombinedOutput()
+			result := runTypedActionCommand(ctx, nil, typedActionCatalogProxmox, name, args...)
+			return []byte(result.stdout), result.err
 		},
 		now: time.Now,
 	}
@@ -59,7 +60,11 @@ func (m *proxmoxGuestLifecycleManager) Apply(ctx context.Context, req agentexec.
 	}
 	// This is the entire mutation catalog: fixed tool, fixed verb, decimal VMID.
 	if _, err := m.run(ctx, tool, req.Operation, strconv.Itoa(req.VMID)); err != nil {
-		result.Error = "Proxmox guest lifecycle mutation did not complete"
+		if ctx.Err() != nil || errors.Is(err, errTypedActionContainmentIndeterminate) {
+			result.Error = "Proxmox guest lifecycle mutation was interrupted after dispatch; target state requires recovery inspection"
+		} else {
+			result.Error = "Proxmox guest lifecycle mutation did not complete"
+		}
 		return result
 	}
 	result.MutationCompleted, result.ExecutionPhase = true, agentexec.ProxmoxGuestPhaseVerify

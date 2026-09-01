@@ -106,6 +106,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	reconcileCtx, reconcileCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	err = actionrunner.ReconcileTypedActionUnits(reconcileCtx)
+	reconcileCancel()
+	if err != nil {
+		return fmt.Errorf("reconcile typed action containment: %w", err)
+	}
 	token, err := readPrivateValue(config.TokenFile, "runner token")
 	if err != nil {
 		return err
@@ -264,6 +270,9 @@ func readPrivateValue(path, label string) (string, error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "__pulse_typed_action_launcher" {
+		os.Exit(actionrunner.RunTypedActionLauncher(os.Args[2:]))
+	}
 	var err error
 	if len(os.Args) > 1 && (os.Args[1] == "cancel-pending-credential" || os.Args[1] == "revoke-credential") {
 		err = runCredentialLifecycleCommand(os.Args[1], os.Args[2:])

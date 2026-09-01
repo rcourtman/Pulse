@@ -23,6 +23,14 @@ func RevokeCredential(ctx context.Context, config CredentialLifecycleConfig, hos
 	return hostagent.RevokeActionRunnerCredential(ctx, config, hostID, hostname)
 }
 
+func RunTypedActionLauncher(args []string) int {
+	return hostagent.RunTypedActionLauncher(args)
+}
+
+func ReconcileTypedActionUnits(ctx context.Context) error {
+	return hostagent.ReconcileTypedActionUnits(ctx)
+}
+
 // Client is the action-runner-owned facade over the existing typed action
 // codecs and executors. The hostagent implementation remains an internal
 // compatibility detail while the collector continues its legacy migration.
