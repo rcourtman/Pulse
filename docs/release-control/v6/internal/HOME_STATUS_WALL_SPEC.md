@@ -1,7 +1,7 @@
 # Home Status Wall Spec
 
-Last updated: 2026-09-01
-Status: IMPLEMENTED (tab-reachable; default-route gate remains)
+Last updated: 2026-09-01 (review appended)
+Status: IMPLEMENTED, REVISION REQUIRED (tab-reachable; default-route gate stays closed until R1 to R5 below land and are re-exercised in a browser)
 Owner of record: Richard (product decisions), implementing agent (execution)
 Related evidence: GitHub issues #1478, #1433, #1460
 
@@ -267,3 +267,69 @@ refetch); no new subscription machinery. No polling loops.
 - No releases, tags, GitHub posts, or emails.
 - If a governing rule above conflicts with something discovered in code,
   stop and report rather than reinterpreting the rule.
+
+## Review 2026-09-01 (Richard, live exercise on a 1,510-resource estate)
+
+The implementation follows this spec faithfully. The failures below are
+spec assumptions that do not survive scale, so they are recorded here as
+binding revisions. The default-route flip stays gated until R1 to R5 are
+landed and re-exercised in a browser at desktop and narrow widths.
+
+Observed on first paint: 572 tiles, 275 of them in "Needs attention", 232
+of those "Backup stale". Two resources were actually critical.
+
+Demand record: `repos/pulse-pro/FEATURE_REQUESTS.md`, "Fleet health Home
+wall" (named bet). This spec is a record of a decision, not demand; do not
+extend the surface beyond R1 to R6 without a current ledger entry.
+
+### R1. Backup staleness is not attention
+
+`backup_stale` leaves the `attention` verdict. A resource whose only
+finding is backup age renders in its platform group with the amber reason
+text, never in "Needs attention". "Needs attention" is reserved for live
+alert evidence, confirmed availability failure, offline infrastructure,
+and `degraded` or incident codes. Threshold configurability still belongs
+to issue #839; this revision changes placement, not the rule.
+
+### R2. "Needs attention" is capped and summarised
+
+Render at most 24 attention tiles, most severe first, followed by one
+inline line "N more need attention" that expands in place. Non-ok tiles
+are still never hidden inside platform groups.
+
+### R3. Tiles are fleet members, not resource rows
+
+The wall shows nodes, hosts, agents, availability targets, VMs and
+containers, Docker hosts, and Kubernetes clusters. It does not show
+physical disks, per-node storage mounts, Docker images, volumes,
+networks, secrets, or configs, or Kubernetes namespaced objects. Their
+health still rolls up into the owning node or host tile as a reason
+("2 disks degraded"). The rollup is computed server-side where the verdict
+is, not in the page.
+
+### R4. Host context on every tile
+
+Every tile carries its parent in a second muted line ("on pve-03",
+"cluster analytics"). Duplicate display names are otherwise
+indistinguishable (`ceph-rbd` appeared 16 times).
+
+### R5. Every tile deep-links to the resource, including nodes and hosts
+
+A node or host tile opens its platform page with that row selected and
+scrolled into view. Today node tiles open the platform overview with no
+selection and the node can sit below the "Show all" fold. Extend the
+existing `resourceLinks` helpers rather than adding page-local routing.
+
+### R6. Reasons in plain language
+
+Reason text never shows an alert-type slug. "Warning alert
+zfs-pool-state" becomes "Pool degraded", "Critical alert connectivity"
+becomes "Unreachable", "Telemetry stale 3h" becomes "No data for 3h", and
+bare "Degraded" carries its source ("Degraded (TrueNAS pool)"). Map alert
+types to copy in one place under i18n.
+
+### Kept as-is
+
+Server-side verdict engine and precedence, posture line, no stat cards,
+empty and error states, healthy-group cap and expander, narrow layout,
+accessibility labels.
