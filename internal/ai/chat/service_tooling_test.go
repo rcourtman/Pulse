@@ -333,6 +333,17 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	if !strings.Contains(prompt, "Never redirect the user to manual qm or pct commands when Pulse offers the requested lifecycle capability") {
 		t.Fatalf("expected system prompt to keep offered Proxmox lifecycle actions on the governed Pulse path, got %q", prompt)
 	}
+	for _, want := range []string{
+		"is an ordering rule, not a boundary",
+		"Never present it to the user as a prerequisite, a session or discovery binding, or a limitation.",
+		"submit pulse_control for each target",
+		"Report a limitation only from a tool result in this turn",
+		"never hand the user manual steps for an action Pulse offers",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected system prompt to carry the advertised-action contract (#1782) %q", want)
+		}
+	}
 	if !strings.Contains(prompt, "Do not claim that a guest agent or capability is unavailable without current tool evidence") {
 		t.Fatalf("expected system prompt to prohibit invented guest-agent limitations, got %q", prompt)
 	}

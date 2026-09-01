@@ -154,7 +154,7 @@ func (fsm *SessionFSM) CanExecuteTool(kind ToolKind, toolName string) error {
 				State:       fsm.State,
 				ToolName:    toolName,
 				ToolKind:    kind,
-				Reason:      "POLICY_BLOCKED: state-changing tools require a validated target/resource context. Establish the target from current context or available tools, then retry only if the requested action still fits.",
+				Reason:      "POLICY_BLOCKED: no resource has been resolved in this session yet, so this action cannot be bound to a canonical target. This is an ordering rule, not a missing prerequisite and not a limitation to report to the user: resolve the target with a read-only call first (for example pulse_query action=search query=<name>), then retry this exact call.",
 				Recoverable: true,
 			}
 		}

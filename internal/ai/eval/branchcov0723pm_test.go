@@ -60,6 +60,7 @@ func branchcov0723pmScenarioCtors() []struct {
 		{"StrictResolutionScenario", StrictResolutionScenario},
 		{"StrictResolutionRecoveryScenario", StrictResolutionRecoveryScenario},
 		{"StrictResolutionBlockScenario", StrictResolutionBlockScenario},
+		{"ProxmoxBulkLifecycleActionScenario", ProxmoxBulkLifecycleActionScenario},
 		{"ApprovalScenario", ApprovalScenario},
 		{"ApprovalComboScenario", ApprovalComboScenario},
 		{"ApprovalApproveScenario", ApprovalApproveScenario},
@@ -207,7 +208,7 @@ func TestBranchcov0723pm_ScenarioCatalogParity(t *testing.T) {
 
 func TestBranchcov0723pm_ScenarioCatalogInvariants(t *testing.T) {
 	ctors := branchcov0723pmScenarioCtors()
-	require.Len(t, ctors, 36, "catalog table must list every scenario constructor")
+	require.Len(t, ctors, 37, "catalog table must list every scenario constructor")
 
 	seen := make(map[string]string, len(ctors))
 

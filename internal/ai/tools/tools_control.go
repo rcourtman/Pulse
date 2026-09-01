@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -81,24 +82,31 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		return NewErrorResult(fmt.Errorf("action is required")), nil
 	}
 
-	validation := e.validateResolvedResource(resourceRef, action, true)
-	if validation.IsBlocked() {
-		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
+	// Bind the reference to a canonical resource. The legacy per-executor
+	// allowed-action list is deliberately not consulted here: it predates
+	// canonical capabilities (Proxmox guests advertise "reboot", the legacy
+	// list only knew "restart"), and whether the action is available is the
+	// action lifecycle's decision at plan time, from the resource's own
+	// advertised capabilities.
+	target, blocked := e.resolveControlTarget(resourceRef, action)
+	if blocked != nil {
+		return *blocked, nil
 	}
-	if validation.Resource == nil {
-		if validation.ErrorMsg != "" {
-			return NewErrorResult(errors.New(validation.ErrorMsg)), nil
+	// Current capability evidence is the only permitted source of "not
+	// available". When the canonical record is in hand and does not advertise
+	// the action (or its lifecycle synonym), answer from that evidence now so
+	// read-only platforms are refused with the resource's real capability
+	// list even before the planner runs. The planner applies the same rule.
+	if target.canonical != nil {
+		if _, ok := advertisedActionName(*target.canonical, action); !ok {
+			return controlPlanFailureResult(target, action, actionplanner.ErrCapabilityNotFound), nil
 		}
-		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Resource discovery is required first", resourceRef)), nil
-	}
-	if validation.ErrorMsg != "" {
-		return NewErrorResult(errors.New(validation.ErrorMsg)), nil
 	}
 
 	if e.typedActionPlanner == nil {
 		return NewErrorResult(fmt.Errorf("canonical action planning is unavailable")), nil
 	}
-	resourceID := unifiedresources.CanonicalResourceID(validation.Resource.GetResourceID())
+	resourceID := target.canonicalID()
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource %q has no canonical resource id", resourceRef)), nil
 	}
@@ -110,18 +118,26 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		RequestedBy:    "pulse_assistant",
 	})
 	if err != nil {
-		return NewErrorResult(err), nil
+		return controlPlanFailureResult(target, action, err), nil
+	}
+	capability := action
+	if target.canonical != nil {
+		if advertised, ok := advertisedActionName(*target.canonical, action); ok {
+			capability = advertised
+		}
 	}
 	return NewJSONResult(map[string]interface{}{
 		"planned":           true,
 		"action_id":         plan.ActionID,
 		"resource_id":       resourceID,
-		"capability":        action,
+		"resource_name":     target.displayName(),
+		"requested_action":  action,
+		"capability":        capability,
 		"requires_approval": plan.RequiresApproval,
 		"approval_policy":   plan.ApprovalPolicy,
 		"plan_hash":         plan.PlanHash,
 		"expires_at":        plan.ExpiresAt,
-		"message":           "Typed action planned. Approval and execution remain on the canonical action lifecycle.",
+		"message":           "Typed action planned. Pulse owns approval, execution, and verification from here; do not ask the user to run the action manually.",
 	}), nil
 }
 
