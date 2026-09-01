@@ -225,9 +225,9 @@ run_runtime() {
 
   container_id="$(docker create --name "${container_name}" --hostname "pulse-rootless-${runtime_name}" \
     --label "${CONTAINER_RUN_LABEL}=${CONTAINER_RUN_NONCE}" \
-    --privileged --network none --cgroupns=host \
+    --privileged --network none --cgroupns=private \
     --tmpfs /run:rw,nosuid,nodev,mode=755 --tmpfs /run/lock:rw,nosuid,nodev,mode=755 \
-    -v /sys/fs/cgroup:/sys/fs/cgroup:rw "${IMAGE_TAG}")"
+    "${IMAGE_TAG}")"
   CONTAINER_IDS+=("${container_id}")
   docker cp "${PACKET_DIR}/." "${container_id}:/opt/pulse/packet"
   docker start "${container_id}" >/dev/null
