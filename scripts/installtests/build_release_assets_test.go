@@ -2285,6 +2285,39 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	}
 }
 
+func TestDemoMutationAndRecoverySharePhysicalTargetLock(t *testing.T) {
+	updateBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
+	if err != nil {
+		t.Fatalf("read update-demo-server workflow: %v", err)
+	}
+	recoveryBytes, err := os.ReadFile(repoFile(".github", "workflows", "recover-demo-server.yml"))
+	if err != nil {
+		t.Fatalf("read recover-demo-server workflow: %v", err)
+	}
+
+	for name, workflow := range map[string]string{
+		"update":   string(updateBytes),
+		"recovery": string(recoveryBytes),
+	} {
+		for _, required := range []string{
+			"concurrency:\n",
+			"group: stable-demo-runtime",
+			"queue: max",
+			"cancel-in-progress: false",
+		} {
+			if !strings.Contains(workflow, required) {
+				t.Fatalf("%s demo workflow must share the non-cancelling physical-target lock: missing %q", name, required)
+			}
+		}
+	}
+	if !strings.Contains(string(updateBytes), "environment: ${{ needs.resolve.outputs.environment_name }}") {
+		t.Fatal("update demo workflow must apply the shared lock to its resolved environment target")
+	}
+	if !strings.Contains(string(recoveryBytes), "environment: demo-stable") {
+		t.Fatal("demo recovery workflow must apply the shared lock to the stable target")
+	}
+}
+
 func TestDemoSshSetupHelperHandlesIpLiteralTargets(t *testing.T) {
 	helperBytes, err := os.ReadFile(repoFile(".github", "scripts", "setup-demo-ssh.sh"))
 	if err != nil {

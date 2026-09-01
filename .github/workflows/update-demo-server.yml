@@ -41,6 +41,15 @@ on:
 permissions:
   contents: read
 
+# GitHub environments gate secret access and deployment admission, but do not
+# serialize jobs. Share one resource lock with the recovery workflow so two
+# release convergences, a verification run, and emergency recovery can never
+# operate on the single stable demo host concurrently.
+concurrency:
+  group: stable-demo-runtime
+  queue: max
+  cancel-in-progress: false
+
 jobs:
   resolve:
     runs-on: ubuntu-24.04

@@ -7,7 +7,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: stable-demo-runtime-recovery
+  # This is the same physical target lock used by update-demo-server.yml.
+  group: stable-demo-runtime
+  queue: max
   cancel-in-progress: false
 
 jobs:

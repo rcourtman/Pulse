@@ -155,16 +155,17 @@ Optional environment variables:
 ### How It Works
 
 1. **Trigger**: Runs from the lease-owning Release Convergence workflow after an exact activation marker is committed
-2. **Target selection**: Stable tags deploy to `demo-stable`; prerelease tags are skipped because the public v6 preview target is retired after GA
-3. **Service identity**: Stable runs default to the `pulse` service identity
-4. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
-5. **Latest check**: Refuses to update the public demo unless the published tag is the latest stable release
-6. **Network attach**: Joins Tailscale before any SSH step so governed demo targets can stay on private hostnames or Tailscale IPs
-7. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
-8. **Host identity check**: Verifies the SSH target reports the governed expected hostname before running installer or deploy steps
-9. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
-10. **Browser smoke**: Uses the governed Playwright helper to prove the public demo still renders the login shell in a real browser
-11. **Cleanup**: Removes SSH key from runner
+2. **Target serialization**: Enters the bounded FIFO queue for the shared `stable-demo-runtime` concurrency lock also used by emergency recovery; GitHub environment admission alone does not serialize work on the host, and the default single-pending concurrency mode would discard superseded pending operations
+3. **Target selection**: Stable tags deploy to `demo-stable`; prerelease tags are skipped because the public v6 preview target is retired after GA
+4. **Service identity**: Stable runs default to the `pulse` service identity
+5. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
+6. **Latest check**: Refuses to update the public demo unless the published tag is the latest stable release
+7. **Network attach**: Joins Tailscale before any SSH step so governed demo targets can stay on private hostnames or Tailscale IPs
+8. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
+9. **Host identity check**: Verifies the SSH target reports the governed expected hostname before running installer or deploy steps
+10. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
+11. **Browser smoke**: Uses the governed Playwright helper to prove the public demo still renders the login shell in a real browser
+12. **Cleanup**: Removes SSH key from runner
 
 ### Testing
 
