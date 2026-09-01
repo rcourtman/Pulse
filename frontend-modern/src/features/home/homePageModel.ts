@@ -34,6 +34,7 @@ export type HomeResourceTile = {
 export type HomeResourceGroup = {
   key: HomePlatformKey;
   tiles: HomeResourceTile[];
+  hiddenTiles: HomeResourceTile[];
   hiddenCount: number;
 };
 
@@ -201,10 +202,7 @@ export function buildHomeAttentionTiles(resources: readonly Resource[]): HomeRes
     .sort(compareHomeTiles);
 }
 
-export function buildHomeResourceGroups(
-  resources: readonly Resource[],
-  expandedGroups: ReadonlySet<HomePlatformKey> = new Set(),
-): HomeResourceGroup[] {
+export function buildHomeResourceGroups(resources: readonly Resource[]): HomeResourceGroup[] {
   const grouped = new Map<HomePlatformKey, HomeResourceTile[]>();
   resources.forEach((resource) => {
     const tile = toHomeResourceTile(resource);
@@ -216,16 +214,17 @@ export function buildHomeResourceGroups(
   return PLATFORM_ORDER.flatMap((key) => {
     const tiles = (grouped.get(key) ?? []).sort(compareHomeTiles);
     if (tiles.length === 0) return [];
-    if (expandedGroups.has(key)) return [{ key, tiles, hiddenCount: 0 }];
 
     const neverHidden = tiles.filter((tile) => tile.verdict !== 'ok' && tile.verdict !== 'off');
     const calm = tiles.filter((tile) => tile.verdict === 'ok' || tile.verdict === 'off');
     const visibleCalm = calm.slice(0, HOME_HEALTHY_GROUP_LIMIT);
+    const hiddenTiles = calm.slice(HOME_HEALTHY_GROUP_LIMIT);
     return [
       {
         key,
         tiles: [...neverHidden, ...visibleCalm],
-        hiddenCount: calm.length - visibleCalm.length,
+        hiddenTiles,
+        hiddenCount: hiddenTiles.length,
       },
     ];
   });

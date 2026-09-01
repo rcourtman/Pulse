@@ -68,6 +68,7 @@ describe('homePageModel', () => {
       'unknown-second',
     ]);
     expect(group?.hiddenCount).toBe(5);
+    expect(group?.hiddenTiles).toHaveLength(5);
   });
 
   it('groups resources in product navigation order and removes attention duplicates', () => {

@@ -112,4 +112,28 @@ describe('HomePageSurface', () => {
       '/settings/infrastructure',
     );
   });
+
+  it('identifies the resource region controlled by each group disclosure', async () => {
+    renderHome(
+      Array.from({ length: 61 }, (_, index) =>
+        resource({
+          id: `host-${index}`,
+          name: `Host ${index}`,
+          displayName: `Host ${index}`,
+        }),
+      ),
+    );
+
+    const disclosure = screen.getByRole('button', { name: 'Show all (1)' });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(disclosure).toHaveAttribute('aria-controls', 'home-group-proxmox-resources');
+    expect(document.getElementById('home-group-proxmox-resources')).toBeInTheDocument();
+
+    disclosure.focus();
+    await fireEvent.click(disclosure);
+
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    expect(disclosure).toHaveFocus();
+    expect(screen.getByRole('link', { name: 'Host 60: Healthy. Healthy' })).toBeInTheDocument();
+  });
 });

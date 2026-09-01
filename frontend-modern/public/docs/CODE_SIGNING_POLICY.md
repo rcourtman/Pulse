@@ -60,6 +60,9 @@ Normal stable publication and stable dry runs select `signpath` directly.
 
 - Release artifacts are built by GitHub Actions from an exact commit on the
   `main` branch.
+- The credential-free cross-platform payload is compiled on a fresh
+  GitHub-hosted VM. Persistent self-hosted runners are not permitted in the
+  production payload compilation job.
 - The release workflow records artifact digests and promotes the same immutable
   candidate without rebuilding it.
 - Only binaries built from the public repository's source and build scripts may

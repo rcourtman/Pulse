@@ -17,6 +17,7 @@ import {
   buildHomeResourceGroups,
   getHomeVerdictTone,
   type HomePlatformKey,
+  type HomeResourceGroup,
   type HomeResourceTile,
 } from './homePageModel';
 
@@ -123,12 +124,57 @@ function ResourceTile(props: { tile: HomeResourceTile }) {
   );
 }
 
+function ResourceGroup(props: {
+  group: HomeResourceGroup;
+  expanded: () => boolean;
+  onToggle: () => void;
+}) {
+  const resourceGridId = `home-group-${props.group.key}-resources`;
+  const displayedTiles = () =>
+    props.expanded() ? [...props.group.tiles, ...props.group.hiddenTiles] : props.group.tiles;
+
+  return (
+    <section class="space-y-3" aria-labelledby={`home-group-${props.group.key}`}>
+      <div class="flex items-end justify-between gap-3">
+        <h2 id={`home-group-${props.group.key}`} class="text-lg font-semibold">
+          {platformLabel(props.group.key)}
+        </h2>
+        <Show when={props.group.hiddenCount > 0}>
+          <button
+            type="button"
+            onClick={props.onToggle}
+            class="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-sm font-medium text-blue-600 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400"
+            aria-expanded={props.expanded()}
+            aria-controls={resourceGridId}
+          >
+            {props.expanded()
+              ? t('home.group.showLess')
+              : t('home.group.showAll', { count: props.group.hiddenCount })}
+            <Show
+              when={props.expanded()}
+              fallback={<ChevronDownIcon class="h-4 w-4" aria-hidden="true" />}
+            >
+              <ChevronUpIcon class="h-4 w-4" aria-hidden="true" />
+            </Show>
+          </button>
+        </Show>
+      </div>
+      <div
+        id={resourceGridId}
+        class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      >
+        <For each={displayedTiles()}>{(tile) => <ResourceTile tile={tile} />}</For>
+      </div>
+    </section>
+  );
+}
+
 export default function HomePageSurface() {
   const resources = useResources();
   const [expandedGroups, setExpandedGroups] = createSignal<ReadonlySet<HomePlatformKey>>(new Set());
   const posture = createMemo(() => buildHomePosture(resources.resources()));
   const attentionTiles = createMemo(() => buildHomeAttentionTiles(resources.resources()));
-  const groups = createMemo(() => buildHomeResourceGroups(resources.resources(), expandedGroups()));
+  const groups = createMemo(() => buildHomeResourceGroups(resources.resources()));
   const refetch = () => resources.refetch().catch(() => undefined);
   const newestTelemetry = createMemo(() => {
     const timestamp = resources
@@ -165,7 +211,6 @@ export default function HomePageSurface() {
       return next;
     });
   };
-
   return (
     <div class="space-y-6">
       <PageHeader
@@ -268,39 +313,13 @@ export default function HomePageSurface() {
         </Show>
 
         <For each={groups()}>
-          {(group) => {
-            const expanded = () => expandedGroups().has(group.key);
-            return (
-              <section class="space-y-3" aria-labelledby={`home-group-${group.key}`}>
-                <div class="flex items-end justify-between gap-3">
-                  <h2 id={`home-group-${group.key}`} class="text-lg font-semibold">
-                    {platformLabel(group.key)}
-                  </h2>
-                  <Show when={group.hiddenCount > 0 || expanded()}>
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.key)}
-                      class="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-sm font-medium text-blue-600 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400"
-                      aria-expanded={expanded()}
-                    >
-                      {expanded()
-                        ? t('home.group.showLess')
-                        : t('home.group.showAll', { count: group.hiddenCount })}
-                      <Show
-                        when={expanded()}
-                        fallback={<ChevronDownIcon class="h-4 w-4" aria-hidden="true" />}
-                      >
-                        <ChevronUpIcon class="h-4 w-4" aria-hidden="true" />
-                      </Show>
-                    </button>
-                  </Show>
-                </div>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  <For each={group.tiles}>{(tile) => <ResourceTile tile={tile} />}</For>
-                </div>
-              </section>
-            );
-          }}
+          {(group) => (
+            <ResourceGroup
+              group={group}
+              expanded={() => expandedGroups().has(group.key)}
+              onToggle={() => toggleGroup(group.key)}
+            />
+          )}
         </For>
       </Show>
     </div>
