@@ -412,6 +412,33 @@ jobs:
             3,
         )
 
+    def test_rejects_dispatch_data_and_whole_github_contexts_in_shell(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - run: echo "${{ github.event.inputs.release_name }}"
+      - run: echo "${{ github.event.client_payload.command }}"
+      - run: echo "${{ github['event']['inputs']['release_name'] }}"
+      - run: echo "${{ github.event['client_payload']['command'] }}"
+      - run: echo "${{ toJSON(github.event) }}"
+      - run: echo "${{ toJSON(github) }}"
+      - run: echo "${{ github['token'] }}"
+      - env:
+          RELEASE_NAME: ${{ github.event.inputs.release_name }}
+          COMMAND: ${{ github.event.client_payload.command }}
+          EVENT_JSON: ${{ toJSON(github.event) }}
+        run: printf '%s %s %s\n' "$RELEASE_NAME" "$COMMAND" "$EVENT_JSON"
+"""
+        )
+        self.assertEqual(
+            sum("must enter run scripts through env" in finding for finding in findings),
+            7,
+        )
+
     def test_rejects_untrusted_github_metadata_in_generated_shell(self) -> None:
         findings = self.audit(
             """on: [pull_request]

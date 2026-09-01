@@ -24,14 +24,22 @@ USES_RE = re.compile(
 )
 RUN_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('run')}\s*:\s*(.*)$")
 EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
-# Workflow-call and dispatch inputs are data, not shell source. Step and job
-# outputs are data too: they can carry event or input values across an
-# otherwise-safe intermediate step. Secrets include github.token because
+# Workflow-call and dispatch inputs are data, not shell source. The legacy
+# github.event.inputs alias is identical data, and repository_dispatch callers
+# fully control client_payload. Step and job outputs are data too: they can
+# carry event or input values across an otherwise-safe intermediate step.
+# Whole github contexts are unsafe because they include event data (and the
+# github context includes github.token). Secrets include github.token because
 # Actions makes that credential available independently of an explicit
 # secrets.GITHUB_TOKEN reference.
 SHELL_DATA_CONTEXT_RE = re.compile(
     r"(?<![\w.])(?:inputs|secrets)\b|"
-    r"(?<![\w.])github\.token\b|"
+    r"(?<![\w.])github(?:\.token\b|\[\s*['\"]token['\"]\s*\])|"
+    r"(?<![\w.])github\b(?:\.event\b|\[\s*['\"]event['\"]\s*\])"
+    r"(?:\.(?:inputs|client_payload)\b|"
+    r"\[\s*['\"](?:inputs|client_payload)['\"]\s*\])|"
+    r"(?<![\w.])github\b(?:\.event\b|\[\s*['\"]event['\"]\s*\])?"
+    r"(?!\s*(?:\.|\[))|"
     r"(?<![\w.])(?:steps|needs)\b"
     r"(?=[^}\n]*(?:\.outputs\b|\[\s*['\"]outputs['\"]\s*\]))"
 )
@@ -435,8 +443,9 @@ def audit_workflow(path: Path) -> list[Finding]:
                             Finding(
                                 path,
                                 script_index + 1,
-                                "workflow inputs, secrets, and step/job outputs "
-                                "must enter run scripts through env",
+                                "workflow inputs, dispatch payloads, secrets, "
+                                "GitHub contexts, and step/job outputs must enter "
+                                "run scripts through env",
                             )
                         )
                     elif UNTRUSTED_GITHUB_CONTEXT_RE.search(expression):
