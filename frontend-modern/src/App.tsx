@@ -74,6 +74,7 @@ import {
 } from '@/features/platformNavigation/platformNavigationModel';
 import type { Resource } from '@/types/resource';
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
+import { AppBootstrapStatus } from '@/components/AppBootstrapStatus';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -508,14 +509,7 @@ function App() {
     });
 
     return (
-      <Show
-        when={!runtime.isLoading()}
-        fallback={
-          <div class="min-h-screen flex items-center justify-center bg-base">
-            <div class="text-muted">Loading...</div>
-          </div>
-        }
-      >
+      <Show when={!runtime.isLoading()} fallback={<AppBootstrapStatus />}>
         <Show
           when={isPublicRoute()}
           fallback={

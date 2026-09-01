@@ -209,6 +209,11 @@ describe('Global update progress authorization', () => {
 });
 
 describe('App architecture', () => {
+  it('keeps first-load connection progress understandable and retryable', () => {
+    expect(appSource).toContain('fallback={<AppBootstrapStatus />}');
+    expect(appSource).not.toContain('<div class="text-muted">Loading...</div>');
+  });
+
   it('keeps every top-level destination on the same wide shell contract', () => {
     expect(appStylesSource).toContain('--pulse-shell-max-width: min(97vw, 1920px)');
     expect(appStylesSource).not.toContain('--pulse-shell-max-width: min(97vw, 1560px)');
