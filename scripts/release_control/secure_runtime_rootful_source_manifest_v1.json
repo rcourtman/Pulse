@@ -61,6 +61,7 @@
     "internal/dockeragent",
     "internal/hostagent",
     "internal/hostmetrics",
+    "internal/kubernetesagent",
     "internal/logging",
     "internal/mock",
     "internal/mockmode",

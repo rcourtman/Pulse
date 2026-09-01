@@ -476,31 +476,32 @@ class RootfulAttestationV1Test(unittest.TestCase):
             for path in (repo_root / "scripts" / "installtests").glob("*_test.go")
         }
         self.assertTrue(compiled_test_inputs.issubset(manifest["exact_paths"]))
-        go_list = subprocess.run(
-            [
-                "go",
-                "list",
-                "-deps",
-                "-test",
-                "-f",
-                '{{if and (not .Standard) .Module}}{{if eq .Module.Path "github.com/rcourtman/pulse-go-rewrite"}}{{.Dir}}{{end}}{{end}}',
-                "./scripts/installtests",
-            ],
-            cwd=repo_root,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
         recursive_roots = set(manifest["recursive_roots"])
-        for raw_directory in go_list.stdout.splitlines():
-            directory = Path(raw_directory)
-            if not raw_directory or directory == repo_root / "scripts" / "installtests":
-                continue
-            relative = directory.relative_to(repo_root).as_posix()
-            self.assertTrue(
-                any(relative == root or relative.startswith(root + "/") for root in recursive_roots),
-                f"compiled qualification dependency is outside the source manifest: {relative}",
+        for target, include_tests in (
+            ("./scripts/installtests", True),
+            ("./cmd/pulse-agent", False),
+            ("./cmd/pulse-agent-helper", False),
+        ):
+            command = ["go", "list", "-deps"]
+            if include_tests:
+                command.append("-test")
+            command.extend(
+                [
+                    "-f",
+                    '{{if and (not .Standard) .Module}}{{if eq .Module.Path "github.com/rcourtman/pulse-go-rewrite"}}{{.Dir}}{{end}}{{end}}',
+                    target,
+                ]
             )
+            go_list = subprocess.run(command, cwd=repo_root, check=True, capture_output=True, text=True)
+            for raw_directory in go_list.stdout.splitlines():
+                directory = Path(raw_directory)
+                if not raw_directory or directory == repo_root / "scripts" / "installtests":
+                    continue
+                relative = directory.relative_to(repo_root).as_posix()
+                self.assertTrue(
+                    any(relative == root or relative.startswith(root + "/") for root in recursive_roots),
+                    f"compiled dependency for {target} is outside the source manifest: {relative}",
+                )
         self.assertIn("internal/agenthelper", manifest["recursive_roots"])
         self.assertIn("pkg/auth", manifest["recursive_roots"])
 
