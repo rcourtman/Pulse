@@ -17,6 +17,14 @@ STABLE_TAG = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 SOURCE_SHA = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID = re.compile(r"^[0-9]+$")
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+RELEASE_REFERENCE_VIOLATIONS = frozenset(
+    {
+        "release_payload_invalid",
+        "release_id_invalid",
+        "stable_tag_invalid",
+        "source_identity_invalid",
+    }
+)
 IMMUTABLE_REPLACEMENT_ACTION = (
     "Do not edit the immutable release; restore the last known-good stable target if "
     "needed, then publish a corrected replacement through convergence."
@@ -228,6 +236,21 @@ def release_identity(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def release_is_referenceable(payload: Any, failures: list[Violation]) -> bool:
+    """Return whether the release can be looked up without trusting it.
+
+    A mutable, draft, prerelease, or incompletely published release must still
+    fail continuity admission. Its validated tag, numeric release ID, and exact
+    source SHA are nevertheless safe lookup data for collecting independent
+    activation diagnostics. Keeping this distinction explicit prevents a
+    first failure from hiding additional damage while preserving fail-closed
+    delivery gates.
+    """
+    return isinstance(payload, dict) and not any(
+        item.code in RELEASE_REFERENCE_VIOLATIONS for item in failures
+    )
+
+
 def activation_violations(
     payload: Any, expected_release: dict[str, Any]
 ) -> list[Violation]:
@@ -364,18 +387,20 @@ def validate_release(args: argparse.Namespace) -> int:
         )
     }
     write_diagnostic(args.diagnostic, "stable_release_identity", identity, failures)
+
+    if release_is_referenceable(payload, failures):
+        append_outputs(
+            args.github_output,
+            {
+                "referenceable": "true",
+                "tag": payload["tag_name"],
+                "release_id": str(payload["id"]),
+                "source_sha": payload["target_commitish"],
+            },
+        )
     if failures:
         report_failures(failures, RELEASE_RULES)
         return 1
-
-    append_outputs(
-        args.github_output,
-        {
-            "tag": payload["tag_name"],
-            "release_id": str(payload["id"]),
-            "source_sha": payload["target_commitish"],
-        },
-    )
     return 0
 
 
@@ -383,8 +408,8 @@ def validate_activation(args: argparse.Namespace) -> int:
     try:
         release = read_json(args.release_json)
         release_failures = release_violations(release)
-        if release_failures or not isinstance(release, dict):
-            raise ValueError("release identity did not pass validation")
+        if not release_is_referenceable(release, release_failures):
+            raise ValueError("release identity is not safe to reference")
         activation = read_json(args.activation_json)
     except ValueError as exc:
         activation = None

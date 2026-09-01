@@ -69,7 +69,11 @@ evidence packet, including partial outcomes when a check fails; GitHub applies
 the repository's configured retention maximum and reports any clamp in the
 workflow warning. Six-hour lock-watch evidence explicitly records its narrower
 `release_lock` mode and skipped full-surface checks. The job is read-only and
-requires the public `PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable.
+requires the public `PULSE_UPDATE_SIGNING_PUBLIC_KEY` repository variable. A
+failed release-trust check still permits activation-marker inspection when the
+tag, numeric release ID, and exact source SHA are structurally valid. This
+exposes independent marker damage in the same evidence packet; it never admits
+the release or enables later delivery checks unless both trust checks pass.
 
 Future release candidates also carry
 `release-build-provenance.sigstore.json`, produced by the hosted

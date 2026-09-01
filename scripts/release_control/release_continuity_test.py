@@ -90,6 +90,7 @@ class ReleaseContinuityTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(diagnostic["status"], "success")
         self.assertEqual(diagnostic["violations"], [])
+        self.assertIn("referenceable=true\n", output)
         self.assertIn("tag=v6.4.2\n", output)
         self.assertIn("release_id=12345\n", output)
         self.assertIn(f"source_sha={SOURCE_SHA}\n", output)
@@ -99,7 +100,10 @@ class ReleaseContinuityTest(unittest.TestCase):
         release["immutable"] = False
         result, diagnostic, output = self.run_command("release", release)
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(output, "")
+        self.assertIn("referenceable=true\n", output)
+        self.assertIn("tag=v6.4.2\n", output)
+        self.assertIn("release_id=12345\n", output)
+        self.assertIn(f"source_sha={SOURCE_SHA}\n", output)
         self.assertEqual(diagnostic["status"], "failure")
         self.assertEqual(
             [item["code"] for item in diagnostic["violations"]],
@@ -189,6 +193,29 @@ class ReleaseContinuityTest(unittest.TestCase):
                 "publish a corrected replacement" in item["action"]
                 for item in diagnostic["violations"]
             )
+        )
+
+    def test_mutable_release_does_not_hide_activation_damage(self) -> None:
+        release = valid_release()
+        release["immutable"] = False
+        activation = valid_activation()
+        del activation["server_image_digest"]
+        del activation["control_plane_image_digest"]
+        del activation["helm_chart_digest"]
+
+        result, diagnostic, output = self.run_command(
+            "activation", release, activation
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(output, "")
+        self.assertEqual(
+            [item["code"] for item in diagnostic["violations"]],
+            [
+                "server_digest_invalid",
+                "control_plane_digest_invalid",
+                "helm_digest_invalid",
+            ],
         )
 
 

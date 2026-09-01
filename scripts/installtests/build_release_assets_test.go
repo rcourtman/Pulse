@@ -162,6 +162,8 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`scripts/release_control/release_continuity.py release`,
 		"release-diagnostic.json",
 		"Bind the release activation marker",
+		`!cancelled()`,
+		`steps.release.outputs.referenceable == 'true'`,
 		`scripts/release_control/release_continuity.py activation`,
 		"activation-diagnostic.json",
 		`steps.activation.outcome == 'success'`,
@@ -215,6 +217,23 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		step := workflowStepBlock(t, workflowJobBlock(t, workflow, "release-continuity"), stepName)
 		if !strings.Contains(step, `github.event.schedule != '17 */6 * * *'`) {
 			t.Fatalf("%s must not run for the six-hour release-lock trigger", stepName)
+		}
+	}
+	for _, stepName := range []string{
+		"Verify immutable release and build provenance",
+		"Authenticate every published release asset",
+		"Verify exact-version container identities",
+		"Verify stable container discovery aliases",
+		"Verify exact-version Helm identity",
+	} {
+		step := workflowStepBlock(t, workflowJobBlock(t, workflow, "release-continuity"), stepName)
+		for _, admission := range []string{
+			`steps.release.outcome == 'success'`,
+			`steps.activation.outcome == 'success'`,
+		} {
+			if !strings.Contains(step, admission) {
+				t.Fatalf("%s must remain behind continuity admission: %s", stepName, admission)
+			}
 		}
 	}
 }
@@ -905,6 +924,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`ACTUAL_TARGET_COMMITISH=$(jq -r '.target_commitish // empty' "$RELEASE_JSON_FILE")`,
 		`Draft release ${RELEASE_ID} is bound to tag ${ACTUAL_RELEASE_TAG}, expected ${TAG}.`,
 		`Draft release ${RELEASE_ID} target_commitish is ${ACTUAL_TARGET_COMMITISH}, expected ${HEAD_SHA}.`,
+		`WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}`,
 		`./scripts/backfill-release-assets.sh --tag "${WORKFLOW_OUTPUT_1}" --repo "${{ github.repository }}"`,
 		`./scripts/validate-published-release.sh "${WORKFLOW_OUTPUT_1}" "${{ github.repository }}"`,
 		// End-to-end install.sh smoke must run downstream of
@@ -1000,6 +1020,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`statuses: write`,
 		`curl --fail-with-body --silent --show-error -X POST`,
 		`"context": "Release Asset Validation"`,
+		`WORKFLOW_OUTPUT_4: ${{ steps.context.outputs.tag }}`,
+		`WORKFLOW_OUTPUT_5: ${{ steps.context.outputs.target_commitish }}`,
 		`--arg tag "${WORKFLOW_OUTPUT_4}"`,
 		`--arg target_commitish "${WORKFLOW_OUTPUT_5}"`,
 		`{body: $body, tag_name: $tag, target_commitish: $target_commitish}`,
@@ -2262,6 +2284,9 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`release-activation.json`,
 		`.convergence_run_id == $convergence_run_id`,
 		`gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"`,
+		`.immutable // false`,
+		`https://raw.githubusercontent.com/${{ github.repository }}/${LEASE_SHA}/${OWNER_ASSET_NAME}`,
+		`.schema_version == 2`,
 		`Stable demo mutation refuses mutable, inactive, or prerelease tag`,
 		`Verify public browser smoke`,
 		`PULSE_DEMO_AUTH_USER`,

@@ -80,7 +80,11 @@ jobs:
 
       - name: Bind the release activation marker
         id: activation
-        if: ${{ steps.release.outcome == 'success' }}
+        # A structurally valid tag/id/SHA remains safe lookup data even when
+        # release trust fails. Inspect its marker so one defect cannot hide a
+        # second; all public-surface verification below still requires both
+        # release and activation admission to succeed.
+        if: ${{ !cancelled() && steps.release.outputs.referenceable == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
