@@ -162,6 +162,17 @@ type WorkloadsLinkOptions = {
 
 type DockerLinkOptions = {
   host?: string | null;
+  query?: string | null;
+};
+
+type KubernetesLinkOptions = {
+  cluster?: string | null;
+  namespace?: string | null;
+  query?: string | null;
+};
+
+type StandaloneLinkOptions = {
+  query?: string | null;
 };
 
 type StorageLinkOptions = {
@@ -326,6 +337,13 @@ export const buildStandalonePath = (tab: string = STANDALONE_DEFAULT_TAB): strin
   return normalized ? `${STANDALONE_PATH}/${normalized}` : STANDALONE_PATH;
 };
 
+export const buildStandaloneRouteSearch = (options: StandaloneLinkOptions = {}): string => {
+  const params = new URLSearchParams();
+  const query = normalizeQueryValue(options.query);
+  if (query) params.set(STANDALONE_QUERY_PARAMS.query, query);
+  return serializedRouteSearch(params);
+};
+
 export const buildDockerPath = (tab: string = DOCKER_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${DOCKER_PATH}/${normalized}` : DOCKER_PATH;
@@ -334,13 +352,26 @@ export const buildDockerPath = (tab: string = DOCKER_DEFAULT_TAB): string => {
 export const buildDockerRouteSearch = (options: DockerLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const host = normalizeQueryValue(options.host);
+  const query = normalizeQueryValue(options.query);
   if (host) params.set(DOCKER_QUERY_PARAMS.host, host);
+  if (query) params.set(DOCKER_QUERY_PARAMS.query, query);
   return serializedRouteSearch(params);
 };
 
 export const buildKubernetesPath = (tab: string = KUBERNETES_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${KUBERNETES_PATH}/${normalized}` : KUBERNETES_PATH;
+};
+
+export const buildKubernetesRouteSearch = (options: KubernetesLinkOptions = {}): string => {
+  const params = new URLSearchParams();
+  const cluster = normalizeQueryValue(options.cluster);
+  const namespace = normalizeQueryValue(options.namespace);
+  const query = normalizeQueryValue(options.query);
+  if (cluster) params.set(KUBERNETES_QUERY_PARAMS.cluster, cluster);
+  if (namespace) params.set(KUBERNETES_QUERY_PARAMS.namespace, namespace);
+  if (query) params.set(KUBERNETES_QUERY_PARAMS.query, query);
+  return serializedRouteSearch(params);
 };
 
 export const buildTrueNASPath = (tab: string = TRUENAS_DEFAULT_TAB): string => {

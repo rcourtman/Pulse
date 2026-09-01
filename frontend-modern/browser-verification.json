@@ -1,16 +1,22 @@
 {
   "version": 1,
-  "base_sha": "57598cbf3ef8eae78cb7a1c71631d0bf04a130f9",
-  "verified_at": "2026-08-31T21:19:58Z",
+  "base_sha": "f12c4007ab3082bed1211b1744d0b1fec284a635",
+  "verified_at": "2026-09-01T02:51:11Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/FindingsPanel.tsx"
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/features/home/homePageModel.ts",
+    "frontend-modern/src/routing/resourceLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/FindingsPanel.tsx": "18c7fbdd3a27b634675cfc039f7bfaec43015f5d8ec9d6a15d92ad1f93d4a5f7"
+    "frontend-modern/src/AppLayout.tsx": "2d54ea2114174d1a08ca6fdbfb7063d321ebcca87cfc402e7ce923e1a499ed15",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "a327ba73d7f25d8c557242b946a8bc390355a894fc7de284dcca90c6af562fca",
+    "frontend-modern/src/features/home/homePageModel.ts": "752b80838cf993855c7e236bdea804ecbffcaab3b70a1bf2ff5bfbbd86be38fb",
+    "frontend-modern/src/routing/resourceLinks.ts": "802a806a933f38a4dd57d766319c79d1507eed9e1f4c33b294e8e8ebfca97b4c"
   },
   "routes": [
-    "/patrol"
+    "/home"
   ],
   "viewports": [
     {
@@ -23,15 +29,16 @@
     }
   ],
   "states": [
-    "active Patrol finding options collapsed with aria-expanded false",
-    "active Patrol finding outcome review expanded with Resolve or dismiss controls visible",
-    "same finding options collapsed again with its review panel removed",
-    "desktop and narrow layouts remained readable and fit without horizontal overflow"
+    "mixed critical, attention, stale, powered-off, and healthy fleet state",
+    "healthy resource group expanded from its disclosure limit",
+    "last loaded fleet retained after a refresh returned an error",
+    "Docker container and standalone agent tiles targeted scoped investigation views",
+    "desktop and mobile navigation count badges met the WCAG color-contrast scan"
   ],
   "interactions": [
-    "opened and closed one finding options disclosure by pointer at desktop width",
-    "opened the same disclosure with keyboard Enter and closed it with Space at narrow width",
-    "verified the visible Finding options label is included in the accessible name",
-    "verified aria-expanded and aria-controls matched the rendered disclosure state"
+    "expanded the healthy resource disclosure by pointer",
+    "triggered a resource refresh failure and verified the cached-state warning",
+    "verified WCAG A and AA scans, reduced motion, and no horizontal overflow",
+    "verified scoped resource link hrefs at desktop width"
   ]
 }

@@ -959,7 +959,7 @@ export function AppLayout(props: AppLayoutProps) {
                                   </span>
                                 )}
                                 {tab.breakdown && tab.breakdown.warning > 0 && (
-                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900/100 dark:text-amber-950/100 bg-amber-200 dark:bg-amber-500 rounded-full">
                                     {tab.breakdown.warning}
                                   </span>
                                 )}
@@ -967,7 +967,7 @@ export function AppLayout(props: AppLayoutProps) {
                             );
                           }
                           return (
-                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900/100 dark:text-amber-950/100 bg-amber-200 dark:bg-amber-500 rounded-full">
                               {total}
                             </span>
                           );

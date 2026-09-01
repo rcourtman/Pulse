@@ -241,6 +241,14 @@ test("Home status wall is readable and motionless across desktop and phone width
     page.getByRole("link", { name: /PVE node down: Critical/ }),
   ).toBeVisible();
   await expect(
+    page.getByRole("link", { name: "Batch worker: Powered off. Powered off" }),
+  ).toHaveAttribute("href", "/docker/overview?q=container-off");
+  await expect(
+    page.getByRole("link", {
+      name: "Remote agent: Stale. Telemetry stale 12m",
+    }),
+  ).toHaveAttribute("href", "/standalone/machines?q=agent-stale");
+  await expect(
     page.getByRole("link", {
       name: "Healthy VM 1: Healthy. Healthy",
       exact: true,

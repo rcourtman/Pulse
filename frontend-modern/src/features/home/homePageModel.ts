@@ -8,9 +8,12 @@ import {
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   buildDockerPath,
+  buildDockerRouteSearch,
   buildKubernetesPath,
+  buildKubernetesRouteSearch,
   buildProxmoxPath,
   buildStandalonePath,
+  buildStandaloneRouteSearch,
   buildStorageRouteSearch,
   buildTrueNASPath,
   buildVmwarePath,
@@ -62,14 +65,70 @@ const VERDICT_RANK: Record<ResourceHealthVerdict, number> = {
   ok: 0,
 };
 
-const KUBERNETES_WORKLOAD_TYPES = new Set([
-  'k8s-deployment',
-  'k8s-replicaset',
-  'k8s-statefulset',
-  'k8s-daemonset',
-  'k8s-job',
-  'k8s-cronjob',
-]);
+const DOCKER_TAB_BY_TYPE: Readonly<Record<string, string>> = {
+  'docker-image': 'images',
+  'docker-volume': 'storage',
+  'docker-network': 'networks',
+  'docker-service': 'swarm',
+  'docker-task': 'swarm',
+  'docker-swarm-node': 'swarm',
+  'docker-secret': 'swarm',
+  'docker-config': 'swarm',
+};
+
+const KUBERNETES_TAB_BY_TYPE: Readonly<Record<string, string>> = {
+  'k8s-node': 'nodes',
+  pod: 'workloads',
+  'k8s-deployment': 'workloads',
+  'k8s-replicaset': 'workloads',
+  'k8s-statefulset': 'workloads',
+  'k8s-daemonset': 'workloads',
+  'k8s-job': 'workloads',
+  'k8s-cronjob': 'workloads',
+  'k8s-horizontal-pod-autoscaler': 'workloads',
+  'k8s-service': 'services',
+  'k8s-ingress': 'services',
+  'k8s-endpoint-slice': 'services',
+  'k8s-persistent-volume': 'storage',
+  'k8s-persistent-volume-claim': 'storage',
+  'k8s-storage-class': 'storage',
+  'k8s-namespace': 'configuration',
+  'k8s-configmap': 'configuration',
+  'k8s-secret': 'configuration',
+  'k8s-serviceaccount': 'configuration',
+  'k8s-role': 'configuration',
+  'k8s-cluster-role': 'configuration',
+  'k8s-role-binding': 'configuration',
+  'k8s-cluster-role-binding': 'configuration',
+  'k8s-resource-quota': 'configuration',
+  'k8s-limit-range': 'configuration',
+  'k8s-network-policy': 'configuration',
+  'k8s-pod-disruption-budget': 'configuration',
+  'k8s-event': 'events',
+};
+
+const TRUENAS_TAB_BY_TYPE: Readonly<Record<string, string>> = {
+  storage: 'storage',
+  pool: 'storage',
+  dataset: 'storage',
+  physical_disk: 'storage',
+  'app-container': 'apps',
+  vm: 'vms',
+  'network-share': 'shares',
+};
+
+const getKubernetesRouteSearch = (resource: Resource): string =>
+  buildKubernetesRouteSearch({
+    cluster: resource.kubernetes?.clusterId ?? resource.kubernetes?.clusterName,
+    namespace: resource.kubernetes?.namespace,
+    query: resource.id,
+  });
+
+const getDockerRouteSearch = (resource: Resource, includeQuery: boolean): string =>
+  buildDockerRouteSearch({
+    host: resource.docker?.hostname,
+    query: includeQuery ? resource.id : undefined,
+  });
 
 export function getHomeVerdictTone(verdict: ResourceHealthVerdict): StatusIndicatorVariant {
   switch (verdict) {
@@ -94,12 +153,19 @@ export function getHomePlatformKey(resource: Resource): HomePlatformKey {
     return 'proxmox';
   if (platform.includes('docker') || platform.includes('podman') || sources.includes('docker'))
     return 'docker';
-  if (platform.includes('kubernetes') || sources.includes('kubernetes')) return 'kubernetes';
+  if (
+    platform.includes('kubernetes') ||
+    sources.includes('kubernetes') ||
+    resource.type === 'pod' ||
+    resource.type.startsWith('k8s-')
+  )
+    return 'kubernetes';
   if (platform.includes('truenas') || sources.includes('truenas')) return 'truenas';
   if (platform.includes('vmware') || platform.includes('vsphere') || sources.includes('vmware'))
     return 'vmware';
   if (
     platform.includes('standalone') ||
+    platform === 'agent' ||
     platform.includes('availability') ||
     sources.includes('agent') ||
     sources.includes('availability')
@@ -129,21 +195,33 @@ export function getHomeResourceHref(resource: Resource): string {
     }
   };
 
-  if (isWorkload(resource) || KUBERNETES_WORKLOAD_TYPES.has(resource.type)) {
+  if (platform === 'docker') {
+    const tab = DOCKER_TAB_BY_TYPE[resource.type] ?? 'overview';
+    const isOverviewResource = tab === 'overview';
+    const search = isOverviewResource
+      ? getDockerRouteSearch(resource, resource.type === 'app-container')
+      : '';
+    return `${buildDockerPath(tab)}${search}`;
+  }
+
+  if (platform === 'kubernetes') {
+    const tab = KUBERNETES_TAB_BY_TYPE[resource.type] ?? 'overview';
+    return `${buildKubernetesPath(tab)}${getKubernetesRouteSearch(resource)}`;
+  }
+
+  if (platform === 'truenas') {
+    return buildTrueNASPath(TRUENAS_TAB_BY_TYPE[resource.type] ?? 'overview');
+  }
+
+  if (isWorkload(resource)) {
     const search = buildWorkloadsRouteSearch({ resource: resource.id });
     switch (platform) {
       case 'proxmox':
         return `${buildProxmoxPath('overview')}${search}`;
-      case 'kubernetes':
-        return `${buildKubernetesPath('workloads')}${search}`;
-      case 'truenas':
-        return buildTrueNASPath(resource.type === 'vm' ? 'vms' : 'apps');
       case 'vmware':
         return `${buildVmwarePath('overview')}${search}`;
       case 'standalone':
-        return `${buildStandalonePath('machines')}${search}`;
-      case 'docker':
-        return buildDockerPath('overview');
+        return `${buildStandalonePath('machines')}${buildStandaloneRouteSearch({ query: resource.id })}`;
       default:
         return '/alerts/overview';
     }
@@ -155,6 +233,9 @@ export function getHomeResourceHref(resource: Resource): string {
   }
   if (resource.type === 'network-endpoint') {
     return buildStandalonePath('availability');
+  }
+  if (platform === 'standalone') {
+    return `${buildStandalonePath('machines')}${buildStandaloneRouteSearch({ query: resource.id })}`;
   }
   return buildPlatformPath();
 }

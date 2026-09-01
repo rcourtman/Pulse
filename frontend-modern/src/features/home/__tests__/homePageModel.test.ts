@@ -90,11 +90,55 @@ describe('homePageModel', () => {
 
   it('links workloads to valid existing platform surfaces', () => {
     expect(getHomeResourceHref(resource('pve-vm', 'ok'))).toBe('/proxmox/overview?resource=pve-vm');
-    expect(getHomeResourceHref(resource('docker-container', 'ok', 'docker'))).toBe(
-      '/docker/overview',
-    );
+    expect(
+      getHomeResourceHref({
+        ...resource('docker-container', 'ok', 'docker'),
+        type: 'app-container',
+      }),
+    ).toBe('/docker/overview?q=docker-container');
     expect(getHomeResourceHref(resource('vsphere-vm', 'ok', 'vmware-vsphere'))).toBe(
       '/vmware/overview?resource=vsphere-vm',
     );
+  });
+
+  it('keeps Home investigation links scoped to the resource workflow', () => {
+    expect(
+      getHomeResourceHref({
+        ...resource('docker-container:api', 'attention', 'docker'),
+        type: 'app-container',
+        docker: { hostname: 'edge host' },
+      }),
+    ).toBe('/docker/overview?host=edge+host&q=docker-container%3Aapi');
+
+    expect(
+      getHomeResourceHref({
+        ...resource('k8s:pod:api', 'critical', 'kubernetes'),
+        type: 'pod',
+        kubernetes: { clusterId: 'cluster-1', namespace: 'payments' },
+      }),
+    ).toBe('/kubernetes/workloads?cluster=cluster-1&namespace=payments&q=k8s%3Apod%3Aapi');
+
+    expect(
+      getHomeResourceHref({
+        ...resource('truenas-disk', 'stale', 'truenas'),
+        type: 'physical_disk',
+      }),
+    ).toBe('/truenas/storage');
+
+    expect(
+      getHomeResourceHref({
+        ...resource('k8s:service:api', 'ok', 'generic'),
+        type: 'k8s-service',
+        sources: [],
+      }),
+    ).toBe('/kubernetes/services?q=k8s%3Aservice%3Aapi');
+
+    expect(
+      getHomeResourceHref({
+        ...resource('machine:edge', 'ok', 'agent'),
+        type: 'agent',
+        sources: [],
+      }),
+    ).toBe('/standalone/machines?q=machine%3Aedge');
   });
 });
