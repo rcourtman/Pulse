@@ -90,6 +90,12 @@ Normal stable publication and stable dry runs select `signpath` directly.
   that verification, and Helm Pages refuses to advertise a chart whose OCI
   tag, signer workflow, source commit, or digest has drifted from the immutable
   activation packet.
+- Exact-version server and control-plane container tags in Docker Hub and GHCR
+  must resolve to one digest per image. Each registry copy must carry SLSA v1
+  provenance from the exact `publish-docker.yml` workflow, release source
+  commit, workflow commit, and a GitHub-hosted runner before either image
+  digest can enter `release-activation.json`. Activation recovery repeats the
+  same policy before customer-facing aliases can move.
 - Release activation requires GitHub CLI 2.97.0 or newer, which includes the
   literal signer-identity matcher fix. The shared
   `scripts/require-safe-gh-attestation.sh` guard enforces this floor. The
