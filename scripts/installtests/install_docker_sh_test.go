@@ -41,6 +41,15 @@ func isPrereleaseVersion(version string) bool {
 	return strings.Contains(version, "-")
 }
 
+// unpublishedStableVersions lists stable versions whose tag and packet exist in
+// the repository but which never activated as a public GitHub release. They are
+// not valid rollback targets and must not be treated as the previous stable.
+var unpublishedStableVersions = map[string]bool{
+	// Tagged 2026-08-31; the private Pro build failed its memory gate and the
+	// release commit verdict failed, so the packet shipped through v6.4.3 instead.
+	"6.4.2": true,
+}
+
 func previousStablePatchVersion(version string) (string, bool) {
 	if isPrereleaseVersion(version) {
 		return "", false
@@ -50,10 +59,17 @@ func previousStablePatchVersion(version string) (string, bool) {
 		return "", false
 	}
 	patch, err := strconv.Atoi(parts[2])
-	if err != nil || patch <= 0 {
+	if err != nil {
 		return "", false
 	}
-	return fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch-1), true
+	for patch > 0 {
+		patch--
+		candidate := fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch)
+		if !unpublishedStableVersions[candidate] {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 func previousStableForPrereleaseVersion(version string) (string, bool) {
@@ -80,7 +96,7 @@ func previousStableForPrereleaseVersion(version string) (string, bool) {
 		filename := filepath.Base(releaseNote)
 		candidate := strings.TrimSuffix(strings.TrimPrefix(filename, "RELEASE_NOTES_v"), ".md")
 		parts, valid := parseStableVersion(candidate)
-		if !valid || compareStableVersions(parts, baseParts) >= 0 {
+		if !valid || compareStableVersions(parts, baseParts) >= 0 || unpublishedStableVersions[candidate] {
 			continue
 		}
 		if !found || compareStableVersions(parts, best) > 0 {
@@ -397,8 +413,8 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		comparisonLine,
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"add the canonical `alert_fired` mobile push type, but preserve the existing `view_alert` navigation action and all route, request/response, pairing, and authorization contracts.",
-		"Published Pulse Mobile iOS build 12 and Android versionCode 9 already route `action_type=view_alert`, so the server cut is classified `existing-mobile-build-compatible`; no companion upload or public mobile-store rollout is part of this candidate.",
+		"No governed mobile-facing path changed from `v"+previous+"`, so the release decision is `no-mobile-impact`",
+		"no companion upload or public mobile-store rollout is part of this candidate.",
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)

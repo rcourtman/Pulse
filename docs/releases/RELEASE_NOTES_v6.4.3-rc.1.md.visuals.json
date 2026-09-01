@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "The release owner declined the model-selected visual plan. The single proposed Patrol before/after capture depends on mock mode holding an attention item and an active finding for the same resource at capture time, which is not a deterministic static UI comparison, so this candidate publishes no screenshots.",
+  "captures": []
+}
