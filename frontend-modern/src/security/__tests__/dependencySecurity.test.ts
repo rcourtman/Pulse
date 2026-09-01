@@ -85,7 +85,7 @@ describe('frontend dependency security floors', () => {
     }
   });
 
-  it('keeps browserslist above the query-cache and custom-stats advisory floors', () => {
+  it('keeps browserslist above the unbounded-cache and custom-stats floors', () => {
     const versions = lockedVersions('browserslist');
     expect(versions).not.toHaveLength(0);
     for (const version of versions) {
