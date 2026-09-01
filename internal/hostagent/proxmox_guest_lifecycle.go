@@ -15,6 +15,7 @@ import (
 )
 
 type proxmoxGuestCommandRunner func(context.Context, string, ...string) ([]byte, error)
+type proxmoxTypedActionRunner func(context.Context, []string, typedActionCatalog, string, ...string) typedActionCommandResult
 
 type proxmoxGuestLifecycleManager struct {
 	run proxmoxGuestCommandRunner
@@ -22,13 +23,28 @@ type proxmoxGuestLifecycleManager struct {
 }
 
 func newProxmoxGuestLifecycleManager() *proxmoxGuestLifecycleManager {
+	return newProxmoxGuestLifecycleManagerWithTypedRunner(runTypedActionCommand)
+}
+
+func newProxmoxGuestLifecycleManagerWithTypedRunner(run proxmoxTypedActionRunner) *proxmoxGuestLifecycleManager {
 	return &proxmoxGuestLifecycleManager{
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			result := runTypedActionCommand(ctx, nil, typedActionCatalogProxmox, name, args...)
+			catalog := typedActionCatalogProxmox
+			if len(args) > 0 {
+				catalog = typedActionCatalogForProxmoxInvocation(name, args[0])
+			}
+			result := run(ctx, nil, catalog, name, args...)
 			return []byte(result.stdout), result.err
 		},
 		now: time.Now,
 	}
+}
+
+func typedActionCatalogForProxmoxInvocation(tool, verb string) typedActionCatalog {
+	if isProxmoxHandoffLifecycleInvocation(tool, verb) {
+		return typedActionCatalogProxmoxHandoff
+	}
+	return typedActionCatalogProxmox
 }
 
 func (m *proxmoxGuestLifecycleManager) Apply(ctx context.Context, req agentexec.ProxmoxGuestLifecyclePayload) (result agentexec.ProxmoxGuestLifecycleResultPayload) {

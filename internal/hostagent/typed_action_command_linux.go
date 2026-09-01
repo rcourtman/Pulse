@@ -50,6 +50,7 @@ type typedActionLauncherResult struct {
 	Signal              int    `json:"signal,omitempty"`
 	ScanComplete        bool   `json:"scan_complete"`
 	DescendantsObserved bool   `json:"descendants_observed"`
+	ProviderHandoff     bool   `json:"provider_handoff,omitempty"`
 	Error               string `json:"error,omitempty"`
 }
 
@@ -131,6 +132,10 @@ func runTypedActionCommandPlatform(ctx context.Context, env []string, catalog ty
 		result.err = errors.Join(errTypedActionContainmentIndeterminate, waitResult.err, fmt.Errorf("typed action launcher result unavailable: %w", resultErr))
 		return result
 	}
+	if launcherResult.ProviderHandoff != (catalog == typedActionCatalogProxmoxHandoff) {
+		result.err = errors.Join(errTypedActionContainmentIndeterminate, waitResult.err, errors.New("typed action launcher reported a mismatched provider handoff mode"))
+		return result
+	}
 	result.exitCode = launcherResult.ExitCode
 	if !launcherResult.TargetStarted || !launcherResult.ScanComplete || launcherResult.Error != "" {
 		result.err = errors.Join(errTypedActionContainmentIndeterminate, waitResult.err, fmt.Errorf("typed action launcher could not establish terminal state: %s", launcherResult.Error))
@@ -209,6 +214,7 @@ func typedActionSystemdRunArgs(unit, runnerPath, resultPath string, env []string
 	}
 	restrictSUIDSGID := "yes"
 	protectKernelModules := "yes"
+	addressFamilies := "AF_UNIX AF_INET AF_INET6"
 	if catalog == typedActionCatalogPackage {
 		// apt/dpkg must be able to install setuid/setgid files and kernel
 		// package payloads. This relaxation remains inside the exact closed
@@ -216,18 +222,31 @@ func typedActionSystemdRunArgs(unit, runnerPath, resultPath string, env []string
 		restrictSUIDSGID = "no"
 		protectKernelModules = "no"
 	}
+	if catalog == typedActionCatalogProxmox && len(args) == 2 && (args[0] == "stop" || args[0] == "shutdown") {
+		// PVE's qm/pct stop and shutdown paths can tear down guest networking
+		// through route netlink. Keep that family confined to the contained
+		// Proxmox catalog; package and containment probes do not need it.
+		addressFamilies += " AF_NETLINK"
+	}
 	result := []string{
 		"--no-ask-password", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--unit=" + unit,
 		"--property=User=root", "--property=Group=root", "--property=UMask=0077", "--property=Restart=no",
 		"--property=KillMode=control-group", "--property=KillSignal=SIGTERM", "--property=SendSIGKILL=yes", "--property=FinalKillSignal=SIGKILL",
 		"--property=TimeoutStopSec=" + typedActionSystemdStopGrace, "--property=RuntimeMaxSec=" + typedActionRuntimeMaximum,
 		"--property=BindsTo=pulse-agent-runner.service", "--property=After=pulse-agent-runner.service", "--property=PartOf=pulse-agent-runner.service",
-		"--property=NoNewPrivileges=yes", "--property=PrivateTmp=yes", "--property=ProtectHome=yes", "--property=ProtectSystem=no",
-		"--property=ProtectKernelTunables=yes", "--property=ProtectKernelModules=" + protectKernelModules, "--property=ProtectControlGroups=yes",
-		"--property=LockPersonality=yes", "--property=RestrictSUIDSGID=" + restrictSUIDSGID, "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
-		"--property=SystemCallArchitectures=native", "--property=WorkingDirectory=/",
-		"--setenv=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "--setenv=LC_ALL=C",
 	}
+	if catalog != typedActionCatalogProxmoxHandoff {
+		result = append(result,
+			"--property=NoNewPrivileges=yes", "--property=PrivateTmp=yes", "--property=ProtectHome=yes", "--property=ProtectSystem=no",
+			"--property=ProtectKernelTunables=yes", "--property=ProtectKernelModules="+protectKernelModules, "--property=ProtectControlGroups=yes",
+			"--property=LockPersonality=yes", "--property=RestrictSUIDSGID="+restrictSUIDSGID, "--property=RestrictAddressFamilies="+addressFamilies,
+			"--property=SystemCallArchitectures=native",
+		)
+	}
+	result = append(result,
+		"--property=WorkingDirectory=/",
+		"--setenv=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "--setenv=LC_ALL=C",
+	)
 	for _, value := range env {
 		result = append(result, "--setenv="+value)
 	}
@@ -349,10 +368,13 @@ func RunTypedActionLauncher(args []string) int {
 		return typedActionLauncherSupervisorFailureExit
 	}
 	result := typedActionLauncherResult{Version: typedActionResultVersion, ExitCode: -1}
-	if err := typedActionBecomeSubreaper(); err != nil {
-		result.Error = "establish typed action child subreaper"
-		_ = writeTypedActionLauncherResult(resultPath, result)
-		return typedActionLauncherSupervisorFailureExit
+	providerHandoff := catalog == typedActionCatalogProxmoxHandoff
+	if !providerHandoff {
+		if err := typedActionBecomeSubreaper(); err != nil {
+			result.Error = "establish typed action child subreaper"
+			_ = writeTypedActionLauncherResult(resultPath, result)
+			return typedActionLauncherSupervisorFailureExit
+		}
 	}
 	target, err := typedActionResolveTarget(catalog, name)
 	if err != nil {
@@ -385,12 +407,23 @@ func RunTypedActionLauncher(args []string) int {
 			result.Error = "wait for fixed-catalog target"
 		}
 	}
-	descendants, scanErr := typedActionInspectDescendants()
-	if scanErr != nil {
-		result.Error = "inspect transient service cgroup"
-	} else {
+	var scanErr error
+	if providerHandoff {
+		// Proxmox start/reboot deliberately hand VM/container processes to
+		// PVE-owned scopes. PID 1's collection of this exact transient unit
+		// proves no process remains in Pulse's unit; the lifecycle manager must
+		// then establish the requested state through an independent status read.
 		result.ScanComplete = true
-		result.DescendantsObserved = descendants
+		result.ProviderHandoff = true
+	} else {
+		var descendants bool
+		descendants, scanErr = typedActionInspectDescendants()
+		if scanErr != nil {
+			result.Error = "inspect transient service cgroup"
+		} else {
+			result.ScanComplete = true
+			result.DescendantsObserved = descendants
+		}
 	}
 	if err := writeTypedActionLauncherResult(resultPath, result); err != nil {
 		return typedActionLauncherSupervisorFailureExit
@@ -398,7 +431,7 @@ func RunTypedActionLauncher(args []string) int {
 	if scanErr != nil {
 		return typedActionLauncherInspectionFailureExit
 	}
-	if descendants {
+	if result.DescendantsObserved {
 		return typedActionLauncherDescendantExit
 	}
 	if result.Signal != 0 || result.ExitCode < 0 {
@@ -424,9 +457,10 @@ func parseTypedActionLauncherArgs(args []string) (typedActionCatalog, string, st
 
 func resolveTypedActionTarget(catalog typedActionCatalog, name string) (string, error) {
 	allowed := map[typedActionCatalog]map[string][]string{
-		typedActionCatalogPackage: {"apt-get": {"/usr/bin/apt-get"}, "dpkg": {"/usr/bin/dpkg"}},
-		typedActionCatalogProxmox: {"qm": {"/usr/sbin/qm", "/usr/bin/qm"}, "pct": {"/usr/sbin/pct", "/usr/bin/pct"}},
-		typedActionCatalogProbe:   {"true": {"/usr/bin/true", "/bin/true"}},
+		typedActionCatalogPackage:        {"apt-get": {"/usr/bin/apt-get"}, "dpkg": {"/usr/bin/dpkg"}},
+		typedActionCatalogProxmox:        {"qm": {"/usr/sbin/qm", "/usr/bin/qm"}, "pct": {"/usr/sbin/pct", "/usr/bin/pct"}},
+		typedActionCatalogProxmoxHandoff: {"qm": {"/usr/sbin/qm", "/usr/bin/qm"}, "pct": {"/usr/sbin/pct", "/usr/bin/pct"}},
+		typedActionCatalogProbe:          {"true": {"/usr/bin/true", "/bin/true"}},
 	}
 	for _, candidate := range allowed[catalog][name] {
 		resolved, err := filepath.EvalSymlinks(candidate)

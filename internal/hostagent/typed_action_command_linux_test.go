@@ -12,9 +12,25 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("PULSE_TEST_TYPED_ACTION_NETLINK_CANARY") == "1" {
+		if os.Getenv("PULSE_TEST_TYPED_ACTION_NO_NEW_PRIVS_CANARY") == "1" {
+			value, _, errno := syscall.Syscall6(syscall.SYS_PRCTL, uintptr(unix.PR_GET_NO_NEW_PRIVS), 0, 0, 0, 0, 0)
+			if errno != 0 || value != 0 {
+				os.Exit(96)
+			}
+		}
+		fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_CLOEXEC, unix.NETLINK_ROUTE)
+		if err != nil {
+			os.Exit(97)
+		}
+		_ = unix.Close(fd)
+		os.Exit(0)
+	}
 	if len(os.Args) > 1 && os.Args[1] == typedActionLauncherCommand {
 		if target := os.Getenv("PULSE_TEST_TYPED_ACTION_TARGET"); target != "" {
 			typedActionResolveTarget = func(typedActionCatalog, string) (string, error) { return target, nil }
@@ -92,6 +108,113 @@ func TestTypedActionNonPackageCatalogKeepsKernelAndSUIDRestrictions(t *testing.T
 		if !strings.Contains(joined, required) {
 			t.Fatalf("Proxmox transient service missing %q:\n%s", required, joined)
 		}
+	}
+}
+
+func TestTypedActionAddressFamiliesAreCatalogSpecific(t *testing.T) {
+	tests := []struct {
+		name    string
+		catalog typedActionCatalog
+		command string
+		args    []string
+		want    string
+	}{
+		{name: "package", catalog: typedActionCatalogPackage, command: "apt-get", args: []string{"update"}, want: "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6"},
+		{name: "probe", catalog: typedActionCatalogProbe, command: "true", want: "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6"},
+		{name: "proxmox status", catalog: typedActionCatalogProxmox, command: "qm", args: []string{"status", "100"}, want: "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6"},
+		{name: "proxmox stop", catalog: typedActionCatalogProxmox, command: "qm", args: []string{"stop", "100"}, want: "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK"},
+		{name: "proxmox shutdown", catalog: typedActionCatalogProxmox, command: "pct", args: []string{"shutdown", "100"}, want: "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK"},
+		{name: "proxmox handoff", catalog: typedActionCatalogProxmoxHandoff, command: "qm", args: []string{"start", "100"}, want: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			args, err := typedActionSystemdRunArgs(
+				"pulse-agent-action-0123456789abcdef0123456789abcdef.service",
+				"/usr/local/bin/pulse-agent-runner", "/var/lib/pulse-agent-runner/typed-actions/result.json",
+				nil, test.catalog, test.command, test.args,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got string
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "--property=RestrictAddressFamilies=") {
+					if got != "" {
+						t.Fatalf("duplicate address-family property: %v", args)
+					}
+					got = arg
+				}
+			}
+			if got != test.want {
+				t.Fatalf("address-family property=%q want=%q", got, test.want)
+			}
+			if test.catalog != typedActionCatalogProxmox && strings.Contains(got, "AF_NETLINK") {
+				t.Fatalf("%s catalog unexpectedly received route-netlink access", test.catalog)
+			}
+		})
+	}
+}
+
+func TestTypedActionProxmoxHandoffOmitsInheritableSandbox(t *testing.T) {
+	args, err := typedActionSystemdRunArgs(
+		"pulse-agent-action-0123456789abcdef0123456789abcdef.service",
+		"/usr/local/bin/pulse-agent-runner", "/var/lib/pulse-agent-runner/typed-actions/result.json",
+		nil, typedActionCatalogProxmoxHandoff, "qm", []string{"start", "100"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(args, "\n")
+	for _, required := range []string{
+		"--property=KillMode=control-group", "--property=SendSIGKILL=yes",
+		"--property=BindsTo=pulse-agent-runner.service", "--property=PartOf=pulse-agent-runner.service",
+		"--catalog\nproxmox-handoff", "--\nqm\nstart\n100",
+	} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("Proxmox handoff arguments missing %q:\n%s", required, joined)
+		}
+	}
+	for _, forbidden := range []string{
+		"NoNewPrivileges=", "PrivateTmp=", "ProtectHome=", "ProtectSystem=", "ProtectKernel",
+		"ProtectControlGroups=", "LockPersonality=", "RestrictSUIDSGID=", "RestrictAddressFamilies=", "SystemCallArchitectures=",
+	} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("Proxmox handoff inherited incompatible sandbox property %q:\n%s", forbidden, joined)
+		}
+	}
+}
+
+func TestTypedActionLauncherProviderHandoffSkipsSubreaperAndScan(t *testing.T) {
+	withTypedActionLinuxHooks(t)
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "target.sh")
+	if err := os.WriteFile(target, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var subreaperCalls atomic.Int32
+	var inspectCalls atomic.Int32
+	typedActionResolveTarget = func(typedActionCatalog, string) (string, error) { return target, nil }
+	typedActionBecomeSubreaper = func() error {
+		subreaperCalls.Add(1)
+		return errors.New("provider handoff must not become a subreaper")
+	}
+	typedActionInspectDescendants = func() (bool, error) {
+		inspectCalls.Add(1)
+		return false, errors.New("provider handoff must not scan adopted descendants")
+	}
+	resultPath := filepath.Join(tmp, "handoff.json")
+	if got := RunTypedActionLauncher([]string{"--catalog", "proxmox-handoff", "--result-file", resultPath, "--", "qm", "start", "100"}); got != 0 {
+		t.Fatalf("provider handoff launcher exit=%d", got)
+	}
+	result, err := readTypedActionLauncherResult(resultPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.ProviderHandoff || !result.ScanComplete || result.DescendantsObserved || result.ExitCode != 0 {
+		t.Fatalf("provider handoff sideband=%#v", result)
+	}
+	if subreaperCalls.Load() != 0 || inspectCalls.Load() != 0 {
+		t.Fatalf("provider handoff used ordinary descendant inspection: subreaper=%d inspect=%d", subreaperCalls.Load(), inspectCalls.Load())
 	}
 }
 
@@ -613,5 +736,63 @@ func TestTypedActionRealSystemdPackageUnitCanInstallSetuidPayload(t *testing.T) 
 	}
 	if info.Mode()&os.ModeSetuid == 0 {
 		t.Fatalf("package fixture mode=%v, setuid bit was not preserved", info.Mode())
+	}
+}
+
+func TestTypedActionRealSystemdProxmoxNetlinkIsCatalogSpecific(t *testing.T) {
+	if os.Getenv("PULSE_TEST_SYSTEMD_TYPED_ACTION") != "1" {
+		t.Skip("set PULSE_TEST_SYSTEMD_TYPED_ACTION=1 inside a root systemd host")
+	}
+	if os.Geteuid() != 0 {
+		t.Fatal("real transient-service proof must run as root")
+	}
+	withTypedActionLinuxHooks(t)
+	stateDir, err := os.MkdirTemp("/run", "pulse-agent-runner-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(stateDir) })
+	t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", stateDir)
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	testBinary := filepath.Join(stateDir, "hostagent.test")
+	binary, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(testBinary, binary, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(stateDir, "netlink-target")
+	targetScript := "#!/bin/sh\nexport PULSE_TEST_TYPED_ACTION_NETLINK_CANARY=1\nif [ \"$1\" = start ]; then export PULSE_TEST_TYPED_ACTION_NO_NEW_PRIVS_CANARY=1; fi\nexec " + testBinary + " \"$@\"\n"
+	if err := os.WriteFile(target, []byte(targetScript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runnerPath := filepath.Join(stateDir, "pulse-agent-runner-test")
+	runnerScript := "#!/bin/sh\nexport PULSE_TEST_TYPED_ACTION_TARGET=" + target + "\nexec " + testBinary + " \"$@\"\n"
+	if err := os.WriteFile(runnerPath, []byte(runnerScript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	typedActionCurrentExecutable = func() (string, error) { return runnerPath, nil }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	allowed := runTypedActionCommand(ctx, nil, typedActionCatalogProxmox, "qm", "stop", "100")
+	if allowed.err != nil || allowed.exitCode != 0 {
+		t.Fatalf("Proxmox route-netlink canary exit=%d err=%v stderr=%q", allowed.exitCode, allowed.err, allowed.stderr)
+	}
+	handoffCtx, handoffCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer handoffCancel()
+	handoff := runTypedActionCommand(handoffCtx, nil, typedActionCatalogProxmoxHandoff, "qm", "start", "100")
+	if handoff.err != nil || handoff.exitCode != 0 {
+		t.Fatalf("Proxmox native handoff canary exit=%d err=%v stderr=%q", handoff.exitCode, handoff.err, handoff.stderr)
+	}
+	deniedCtx, deniedCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer deniedCancel()
+	denied := runTypedActionCommand(deniedCtx, nil, typedActionCatalogProbe, "true")
+	if denied.exitCode != 97 || denied.err == nil || !strings.Contains(denied.err.Error(), "status 97") {
+		t.Fatalf("probe catalog unexpectedly opened route-netlink: exit=%d err=%v stderr=%q", denied.exitCode, denied.err, denied.stderr)
 	}
 }

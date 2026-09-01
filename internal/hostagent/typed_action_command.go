@@ -9,9 +9,10 @@ import (
 type typedActionCatalog string
 
 const (
-	typedActionCatalogPackage typedActionCatalog = "package"
-	typedActionCatalogProxmox typedActionCatalog = "proxmox"
-	typedActionCatalogProbe   typedActionCatalog = "probe"
+	typedActionCatalogPackage        typedActionCatalog = "package"
+	typedActionCatalogProxmox        typedActionCatalog = "proxmox"
+	typedActionCatalogProxmoxHandoff typedActionCatalog = "proxmox-handoff"
+	typedActionCatalogProbe          typedActionCatalog = "probe"
 )
 
 const (
@@ -57,7 +58,11 @@ func validateTypedActionInvocation(catalog typedActionCatalog, name string, args
 			}
 		}
 	case typedActionCatalogProxmox:
-		if (name == "qm" || name == "pct") && len(args) == 2 && isProxmoxLifecycleVerb(args[0]) && isPositiveDecimalID(args[1]) {
+		if (name == "qm" || name == "pct") && len(args) == 2 && isProxmoxContainedLifecycleInvocation(name, args[0]) && isPositiveDecimalID(args[1]) {
+			return nil
+		}
+	case typedActionCatalogProxmoxHandoff:
+		if (name == "qm" || name == "pct") && len(args) == 2 && isProxmoxHandoffLifecycleInvocation(name, args[0]) && isPositiveDecimalID(args[1]) {
 			return nil
 		}
 	case typedActionCatalogProbe:
@@ -68,10 +73,23 @@ func validateTypedActionInvocation(catalog typedActionCatalog, name string, args
 	return fmt.Errorf("typed action invocation is outside the closed %s catalog", catalog)
 }
 
-func isProxmoxLifecycleVerb(value string) bool {
-	switch value {
-	case "status", "start", "stop", "reboot":
+func isProxmoxContainedLifecycleInvocation(tool, verb string) bool {
+	switch verb {
+	case "status", "stop", "shutdown":
 		return true
+	case "reboot":
+		return tool == "qm"
+	default:
+		return false
+	}
+}
+
+func isProxmoxHandoffLifecycleInvocation(tool, verb string) bool {
+	switch verb {
+	case "start":
+		return true
+	case "reboot":
+		return tool == "pct"
 	default:
 		return false
 	}

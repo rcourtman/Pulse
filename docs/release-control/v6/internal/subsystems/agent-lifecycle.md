@@ -1305,6 +1305,21 @@ and indeterminate Proxmox dispatch requires target-state recovery inspection.
 The package unit alone permits setuid/setgid file creation and kernel-package
 payload writes because apt/dpkg legitimately require them; every other runner
 hardening property and the exact package command catalog remain enforced.
+Contained Proxmox stop/shutdown units alone add `AF_NETLINK` to their
+address-family allowlist because PVE teardown helpers can configure bridged
+networking through route netlink; status and QEMU reboot retain the narrower
+family set. QEMU/container start and container reboot use a distinct fixed
+`proxmox-handoff` catalog: PID 1 launches the same hidden validator in an exact
+transient unit, but the unit omits sandbox settings that would otherwise be
+inherited by PVE-managed VM/container processes after they move to native PVE
+scopes. The handoff launcher deliberately does not become a child subreaper;
+the exact transient unit must disappear before return, and the lifecycle may
+report success only after a separate contained status read proves the requested
+VMID state. Cancellation after a provider handoff remains indeterminate and
+requires recovery inspection. Package and containment-probe units never gain
+`AF_NETLINK` or the handoff relaxation. This provider-aware path remains
+unqualified until disposable-PVE proof establishes the native scope handoff,
+bridged networking, postcondition, and cancellation behavior.
 Docker/Podman lifecycle remains on the already-connected daemon API operator;
 the action runner does not fall back to a killable external runtime CLI.
 Host storage-pressure cleanup is a second closed agent operation. The report

@@ -3,10 +3,72 @@ package hostagent
 import (
 	"context"
 	"io"
+	"reflect"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rs/zerolog"
 )
+
+func TestCommandClientProxmoxRunnerUsesProviderHandoffOnlyForGuestCreation(t *testing.T) {
+	tests := []struct {
+		name            string
+		kind            string
+		operation       string
+		before          string
+		after           string
+		mutationCatalog typedActionCatalog
+	}{
+		{name: "VM start hands off", kind: "vm", operation: "start", before: "stopped", after: "running", mutationCatalog: typedActionCatalogProxmoxHandoff},
+		{name: "container start hands off", kind: "ct", operation: "start", before: "stopped", after: "running", mutationCatalog: typedActionCatalogProxmoxHandoff},
+		{name: "VM reboot stays contained", kind: "vm", operation: "reboot", before: "running", after: "running", mutationCatalog: typedActionCatalogProxmox},
+		{name: "container reboot hands off", kind: "ct", operation: "reboot", before: "running", after: "running", mutationCatalog: typedActionCatalogProxmoxHandoff},
+		{name: "graceful shutdown stays contained", kind: "ct", operation: "shutdown", before: "running", after: "stopped", mutationCatalog: typedActionCatalogProxmox},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			payload := agentexec.ProxmoxGuestLifecyclePayload{
+				RequestID: "attempt-" + test.kind + "-" + test.operation,
+				ActionID:  "action-" + test.kind + "-" + test.operation,
+				Operation: test.operation, GuestKind: test.kind, VMID: 141,
+				ExpectedStatus: test.before, Timeout: 30,
+			}
+			if err := agentexec.BindProxmoxGuestLifecyclePayload(&payload); err != nil {
+				t.Fatal(err)
+			}
+			type invocation struct {
+				catalog typedActionCatalog
+				name    string
+				args    []string
+			}
+			var calls []invocation
+			manager := newProxmoxGuestLifecycleManagerWithTypedRunner(func(_ context.Context, _ []string, catalog typedActionCatalog, name string, args ...string) typedActionCommandResult {
+				calls = append(calls, invocation{catalog: catalog, name: name, args: append([]string(nil), args...)})
+				if args[0] == "status" {
+					status := test.before
+					if len(calls) == 3 {
+						status = test.after
+					}
+					return typedActionCommandResult{stdout: "status: " + status, exitCode: 0}
+				}
+				return typedActionCommandResult{exitCode: 0}
+			})
+			result := manager.Apply(context.Background(), payload)
+			if result.ExecutionPhase != agentexec.ProxmoxGuestPhaseComplete || !result.MutationCompleted || !result.ReadbackRan {
+				t.Fatalf("result=%+v", result)
+			}
+			tool := "qm"
+			if test.kind == "ct" {
+				tool = "pct"
+			}
+			if len(calls) != 3 || calls[0].catalog != typedActionCatalogProxmox || calls[0].name != tool || !reflect.DeepEqual(calls[0].args, []string{"status", "141"}) ||
+				calls[1].catalog != test.mutationCatalog || calls[1].name != tool || !reflect.DeepEqual(calls[1].args, []string{test.operation, "141"}) ||
+				calls[2].catalog != typedActionCatalogProxmox || calls[2].name != tool || !reflect.DeepEqual(calls[2].args, []string{"status", "141"}) {
+				t.Fatalf("typed action calls=%+v", calls)
+			}
+		})
+	}
+}
 
 func TestNew_DefaultPulseURLUsedForCommandClient(t *testing.T) {
 	logger := zerolog.New(io.Discard)
