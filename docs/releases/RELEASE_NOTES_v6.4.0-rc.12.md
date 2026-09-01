@@ -17,7 +17,7 @@
 - **Better notification control** - Alerts can be snoozed individually, maintenance can recur by scope, escalation repeats can target specific destinations, delivery routes can filter by severity, and informational events remain distinct from warnings.
 - **Earlier capacity warnings** - Rolling metric windows and predictive storage forecasts surface sustained pressure and likely exhaustion before a single threshold breach becomes an outage.
 - **More accurate host disk health** - SMART sector, media, endurance, spare, and CRC thresholds can be tuned per host, while empty Unraid slots remain neutral and Proxmox-linked agents avoid duplicate disk-risk alerts.
-- **External availability monitoring** - Dead-man checks can notify when an expected external signal stops arriving, with configuration and recovery state persisted.
+- **External monitoring for Pulse itself** - Pulse can send a health signal to a Healthchecks-compatible watchdog on another host, with configuration and recovery state persisted.
 - **Clearer infrastructure details** - Resource drawers, Proxmox backup views, and alert timelines present more complete and consistent context across desktop and narrow layouts.
 - **Phone-friendly Settings** - On narrow layouts, phone Settings use a searchable index, sticky section title, compact controls, and full-size touch targets.
 - **Safer governed actions** - Docker action results carry independently observed post-action state, while deployment enrollment and credential changes persist atomically.

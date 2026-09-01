@@ -32,10 +32,18 @@ MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 HTML_ASSET = re.compile(r"(?:src|href)=[\"']([^\"']+)[\"']")
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 
+MISLEADING_PUBLIC_CLAIMS = {
+    r"dead-man checks can notify when an expected external signal stops arriving": (
+        "dead-man direction is reversed; Pulse sends its own health signal to an "
+        "external watchdog"
+    ),
+}
+
 
 def public_markdown_files() -> list[Path]:
     files = [ROOT / name for name in ROOT_DOCS if (ROOT / name).exists()]
     files.extend(sorted((ROOT / "docs").glob("*.md")))
+    files.extend(sorted((ROOT / "docs" / "releases").glob("*.md")))
     files.extend(sorted((ROOT / "docs" / "i18n").glob("**/*.md")))
     files.extend(sorted((ROOT / ".github" / "ISSUE_TEMPLATE").glob("*.md")))
     return files
@@ -110,6 +118,19 @@ def check_links(files: list[Path]) -> list[str]:
     return errors
 
 
+def check_public_claims(files: list[Path]) -> list[str]:
+    """Reject product claims whose direction changes the advertised capability."""
+
+    errors: list[str] = []
+    for path in files:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        display_path = path.relative_to(ROOT)
+        for pattern, label in MISLEADING_PUBLIC_CLAIMS.items():
+            if re.search(pattern, text, flags=re.IGNORECASE):
+                errors.append(f"{display_path}: {label}")
+    return errors
+
+
 def check_current_claims() -> list[str]:
     errors: list[str] = []
     retired_patterns = {
@@ -152,6 +173,7 @@ def check_current_claims() -> list[str]:
 def main() -> int:
     files = public_markdown_files()
     errors = check_links(files)
+    errors.extend(check_public_claims(files))
     errors.extend(check_current_claims())
 
     if errors:
