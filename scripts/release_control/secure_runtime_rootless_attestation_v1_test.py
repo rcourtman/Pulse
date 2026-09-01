@@ -70,6 +70,10 @@ class RootlessAttestationV1Test(unittest.TestCase):
         return {"runtime": runtime, "path": attester.expected_socket_path(runtime, uid), "uid": uid,
                 "gid": gid, "mode": mode, "type": "unix", "symlink": False}
 
+    @staticmethod
+    def socket_permissions(runtime: str) -> tuple[int, str]:
+        return (4100, "0660") if runtime == "docker" else (4200, "0600")
+
     def direct(self, runtime: str, pid: int, daemon: str, uid: int, gid: int, mode: str) -> dict:
         return {
             "collector_pid": pid, "service_pid": pid, "collection_path": "collector-owned-rootless-socket",
@@ -84,7 +88,7 @@ class RootlessAttestationV1Test(unittest.TestCase):
 
     def make_run(self, runtime: str, index: int) -> dict:
         uid = 1200 + index * 100
-        gid, mode = uid, "0600" if runtime == "docker" else "0660"
+        gid, mode = self.socket_permissions(runtime)
         daemon = runtime + "-durable-daemon"
         fresh = self.direct(runtime, 4100 + index * 100, daemon, uid, gid, mode)
         migration = {**self.direct(runtime, fresh["collector_pid"] + 1, daemon, uid, gid, mode),
@@ -109,7 +113,9 @@ class RootlessAttestationV1Test(unittest.TestCase):
         recovery = self.direct(runtime, restart["collector_pid"], daemon, uid, gid, mode)
         ambiguity = {
             "protected_collector_pid": restart["collector_pid"], "probe_kind": "separate-unpinned-collector",
-            "live_sockets": [self.socket(name, uid, gid, mode) for name in attester.REQUIRED_RUNTIMES],
+            "live_sockets": [
+                self.socket(name, uid, *self.socket_permissions(name)) for name in attester.REQUIRED_RUNTIMES
+            ],
             "admission_refused": True, "fail_closed": True, "daemon_probe_count": 0,
             "container_actions_enabled": False, "collector_restart_count": 0,
         }
@@ -258,6 +264,7 @@ class RootlessAttestationV1Test(unittest.TestCase):
             lambda r: self.scenario(r, 0, "socket_loss_helper_fallback")["evidence"].update(container_actions_enabled=True),
             lambda r: self.scenario(r, 0, "dual_socket_ambiguity_refusal")["evidence"].update(daemon_probe_count=1),
             lambda r: self.scenario(r, 0, "dual_socket_ambiguity_refusal")["evidence"]["live_sockets"][0].update(path="/tmp/socket"),
+            lambda r: self.scenario(r, 0, "dual_socket_ambiguity_refusal")["evidence"]["live_sockets"][1].update(gid=9999),
             lambda r: self.scenario(r, 0, "daemon_restart")["evidence"].update(full_fields_present=False),
         ]
         for mutation in mutations:

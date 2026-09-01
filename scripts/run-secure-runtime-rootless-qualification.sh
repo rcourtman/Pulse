@@ -234,6 +234,16 @@ run_runtime() {
   local container_name="pulse-rootless-qual-${runtime_name}-${SOURCE_COMMIT:0:8}-$$"
   local container_id
   local local_receipt="${OUTPUT_DIR}/${runtime_name}-receipt.json"
+  local machine_id_file="${PACKET_DIR}/.machine-id-${runtime_name}"
+  local machine_id
+
+  machine_id="$(openssl rand -hex 16)"
+  if [[ ! "${machine_id}" =~ ^[0-9a-f]{32}$ || "${machine_id}" == "00000000000000000000000000000000" ]]; then
+    echo "ERROR: unable to generate a valid machine ID for ${runtime_name} qualification" >&2
+    return 1
+  fi
+  printf '%s\n' "${machine_id}" >"${machine_id_file}"
+  chmod 0444 "${machine_id_file}"
 
   container_id="$(docker create --name "${container_name}" --hostname "pulse-rootless-${runtime_name}" \
     --label "${CONTAINER_RUN_LABEL}=${CONTAINER_RUN_NONCE}" \
@@ -241,6 +251,8 @@ run_runtime() {
     --tmpfs /run:rw,nosuid,nodev,mode=755 --tmpfs /run/lock:rw,nosuid,nodev,mode=755 \
     "${IMAGE_TAG}")"
   CONTAINER_IDS+=("${container_id}")
+  docker cp "${machine_id_file}" "${container_id}:/etc/machine-id"
+  rm -f -- "${machine_id_file}"
   docker cp "${PACKET_DIR}/." "${container_id}:/opt/pulse/packet"
   docker start "${container_id}" >/dev/null
 

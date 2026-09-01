@@ -17,27 +17,45 @@
 // it is not scanned even though the filenames do not match the suffixes above.
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const REPO_ROOT = path.resolve(ROOT, '..');
-const DOCS_ROOT = path.join(REPO_ROOT, 'docs');
-const SKIP_DIRS = new Set([path.join(DOCS_ROOT, 'release-control', 'v6', 'internal', 'subsystems')]);
+const SKIP_PREFIXES = ['docs/release-control/v6/internal/subsystems/'];
 const PLANNING_SUFFIX = /_(SPEC|PLAN|CONTRACT)\.md$/;
 const HEADER_LINES = 40;
 const STATUS_LINE = /^(Status:\s*\S|## Status\s*$)/;
 
-function walk(dir, out) {
-  if (SKIP_DIRS.has(dir)) return out;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, out);
-    else if (entry.isFile() && PLANNING_SUFFIX.test(entry.name)) out.push(full);
+function trackedPlanningDocuments() {
+  let tracked;
+  try {
+    tracked = execFileSync('git', ['-C', REPO_ROOT, 'ls-files', '-z', '--', 'docs'], {
+      encoding: 'utf8',
+    });
+  } catch (error) {
+    console.error(
+      `planning-doc-status-audit: unable to enumerate tracked documents: ${error.message}`,
+    );
+    process.exit(2);
   }
-  return out;
+
+  return tracked
+    .split('\0')
+    .filter(Boolean)
+    .filter((relative) => PLANNING_SUFFIX.test(relative))
+    .filter((relative) => !SKIP_PREFIXES.some((prefix) => relative.startsWith(prefix)))
+    .map((relative) => path.join(REPO_ROOT, ...relative.split('/')))
+    .filter((file) => {
+      try {
+        return fs.lstatSync(file).isFile();
+      } catch {
+        return false;
+      }
+    });
 }
 
 const failures = [];
-for (const file of walk(DOCS_ROOT, []).sort()) {
+for (const file of trackedPlanningDocuments().sort()) {
   const head = fs.readFileSync(file, 'utf8').split('\n').slice(0, HEADER_LINES);
   if (!head.some((line) => STATUS_LINE.test(line))) {
     failures.push(path.relative(REPO_ROOT, file));

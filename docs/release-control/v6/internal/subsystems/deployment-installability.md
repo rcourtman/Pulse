@@ -259,6 +259,9 @@ the immutable schema-v7 systemd packet. The opt-in
 `scripts/run-secure-runtime-rootless-qualification.sh` wrapper creates fresh,
 network-isolated Ubuntu/systemd hosts for real rootless Docker and Podman,
 never mounts a host daemon socket, and records each host identity separately.
+It installs a fresh valid machine ID into each stopped container before first
+systemd boot, and the combined validator rejects duplicate Docker and Podman
+machine identities rather than accepting a shared image-derived fallback.
 The exact qualification packet remains outside the image layers; the image
 must pre-create its root-owned, mode-`0700` packet destination before the
 wrapper injects artifacts into each stopped disposable container. The image
@@ -299,6 +302,9 @@ a build failure rather than an attestable omission. Checking in the harness or p
 ordinary contract tests is not live qualification. Until a complete
 secret-free receipt and attestation are retained, this surface remains
 implemented-but-unqualified and cannot change the opt-in safe-profile default.
+When both runtime sockets are present for ambiguity refusal, the validator
+checks each entry against that runtime's own recorded GID and mode while using
+the current disposable host's collector UID and canonical socket path.
 Failed runtime tests must retain the disposable systemd journal and container
 log before nonce-bound cleanup; absence of a receipt is not a replacement for
 the causal failure record.

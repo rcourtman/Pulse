@@ -5011,8 +5011,10 @@
         "frontend-modern/src/components/shared/"
       ],
       "owned_files": [
+        "frontend-modern/scripts/__tests__/planning-doc-status-audit.test.mjs",
         "frontend-modern/scripts/canonical-platform-audit.mjs",
         "frontend-modern/scripts/header-audit.mjs",
+        "frontend-modern/scripts/planning-doc-status-audit.mjs",
         "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs",
         "frontend-modern/scripts/shared-template-audit.mjs",
         "frontend-modern/scripts/shared-template-registry.json",
@@ -5142,6 +5144,19 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "tracked-planning-document-status-audit",
+            "label": "tracked planning-document status audit proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/scripts/planning-doc-status-audit.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/scripts/__tests__/planning-doc-status-audit.test.mjs"
+            ]
+          },
           {
             "id": "global-app-shell-css",
             "label": "global app-shell css proof",

@@ -7324,6 +7324,10 @@ or granting an outer default route is invalid qualification. The outer host
 uses a private cgroup namespace with no host cgroup bind mount. Each dedicated
 runtime identity must have an active delegated systemd user manager before its
 daemon starts, and cleanup must stop that manager and remove its linger state.
+Before each disposable host's first systemd boot, the wrapper installs a fresh
+valid machine ID into that stopped container. The combined receipt validator
+rejects a Docker and Podman pair that reports the same machine identity; a
+shared image fallback identity cannot stand in for two independent hosts.
 The in-container control-plane fixture must implement the same authenticated
 collector-uninstall response contract as the production lifecycle client. A
 teardown succeeds only after the fixture records the exact registered binding
@@ -7367,7 +7371,10 @@ exact qualification artifact. It treats rootless and rootful helper
 inventories as separate daemon identities, requires direct recovery to restore
 the original rootless identity and rich telemetry, and understands that a
 collector restart creates a new report stream while daemon restart preserves
-the durable daemon identity. Its classification is local, opt-in,
+the durable daemon identity. Dual-socket ambiguity evidence validates Docker
+and Podman against their respective recorded socket ownership and modes; it
+must not project the selected runtime's permissions onto the other socket.
+Its classification is local, opt-in,
 artifact-bound self-attestation only. No receipt exists merely because the
 harness is checked in, so rootless Docker and Podman remain live-unqualified
 and cannot change the product default.
