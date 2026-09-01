@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createRoot, createSignal } from 'solid-js';
+import { createComponent, createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
   PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT,
@@ -13,6 +13,7 @@ import {
   PlatformTableRelativeTimeValue,
   PlatformTableTemperatureValue,
   PlatformTableToolbar,
+  PlatformResourceCounter,
   createPlatformTableFilterState,
   formatPlatformTableBytesValue,
   formatPlatformTableCountRatioValue,
@@ -412,6 +413,28 @@ describe('PlatformTableToolbar', () => {
 
     expect(search()).toBe('');
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  it('exposes changing filter counts as one polite status message', () => {
+    const [visible, setVisible] = createSignal(3);
+
+    render(() =>
+      createComponent(PlatformResourceCounter, {
+        get visible() {
+          return visible();
+        },
+        total: 3,
+        rowNoun: 'rows',
+      }),
+    );
+
+    const resultStatus = screen.getByRole('status');
+    expect(resultStatus).toHaveAttribute('aria-live', 'polite');
+    expect(resultStatus).toHaveAttribute('aria-atomic', 'true');
+    expect(resultStatus).toHaveTextContent('3 rows');
+
+    setVisible(0);
+    expect(resultStatus).toHaveTextContent('0 of 3 rows');
   });
 
   it('delegates active platform state to one custom reset when the route owns it', () => {

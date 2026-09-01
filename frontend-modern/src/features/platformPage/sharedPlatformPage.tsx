@@ -1285,7 +1285,12 @@ export const PlatformResourceCounter: Component<{
 }> = (props) => {
   const totalNoun = () => getPlatformResourceCountNoun(props.rowNoun, props.total);
   return (
-    <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+    <span
+      class="ml-auto whitespace-nowrap text-xs font-medium text-muted"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <Show
         when={props.visible !== props.total}
         fallback={
