@@ -188,6 +188,12 @@ func NewActionRunnerClient(config ActionRunnerClientConfig, agentID, hostname, v
 	client.actionRunnerOnly = true
 	client.runtimeRole = agentexec.RuntimeRoleActionRunner
 	client.actionCapability = agentexec.ActionCapabilityTypedV1
+	if config.DockerContainerLifecycleOperator == nil {
+		// The privileged runner never falls back to a Docker/Podman CLI. A
+		// daemon may already have accepted a mutation after its CLI exits, so
+		// process containment cannot establish the operation's terminal state.
+		client.dockerLifecycle = nil
+	}
 	client.healthPath = strings.TrimSpace(config.HealthPath)
 	client.actionActivationNonce = strings.TrimSpace(config.ActivationNonce)
 	client.healthCapabilities = []string{

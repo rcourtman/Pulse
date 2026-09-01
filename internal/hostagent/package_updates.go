@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"os"
 	"os/exec"
 	"sort"
@@ -22,9 +21,8 @@ const (
 )
 
 var (
-	packageUpdateCommandContext = exec.CommandContext
-	packageUpdateLookPath       = exec.LookPath
-	packageUpdateStat           = os.Stat
+	packageUpdateLookPath = exec.LookPath
+	packageUpdateStat     = os.Stat
 )
 
 // packageUpdateManager owns both host package telemetry and the only command
@@ -288,26 +286,10 @@ type packageUpdateCommandResult struct {
 }
 
 func runPackageUpdateCommand(ctx context.Context, env []string, name string, args ...string) packageUpdateCommandResult {
-	cmd := packageUpdateCommandContext(ctx, name, args...)
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
+	result := runTypedActionCommand(ctx, env, typedActionCatalogPackage, name, args...)
+	return packageUpdateCommandResult{
+		stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, err: result.err,
 	}
-	stdout := newCappedBuffer(maxCommandOutputSize)
-	stderr := newCappedBuffer(maxCommandOutputSize)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	err := cmd.Run()
-	result := packageUpdateCommandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
-	if err == nil {
-		return result
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		result.exitCode = exitErr.ExitCode()
-	} else {
-		result.exitCode = -1
-	}
-	return result
 }
 
 func parseAPTSimulatedUpgrades(output string) []agentexec.HostPackageUpdate {

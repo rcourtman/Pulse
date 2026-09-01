@@ -1288,6 +1288,25 @@ so Pulse must re-plan against the widened or changed set. A reboot-required
 marker is reported as state, never acted upon by this capability. Generic
 agent command execution, Patrol prose, lifecycle UI, and external agents must
 not reconstruct or bypass this typed operation.
+Every fixed-catalog package and Proxmox guest invocation runs inside a
+cryptographically named transient systemd service. PID 1 starts a hidden
+runner launcher that revalidates the closed tool/argument/environment catalog,
+mirrors the runner sandbox, caps output, and records direct-process and cgroup
+inspection state through a root-private atomic sideband. `KillMode=control-group`
+and bounded TERM-to-KILL escalation own cancellation; disappearance of the
+exact transient unit, never a PID/PGID observation or pipe close, is the sole
+authority to release the shared typed-action gate and package-manager lease.
+The runner reconciles stale private units and executes a harmless containment
+probe before registering. Missing systemd features, manager-query ambiguity,
+launcher inspection failure, or a direct process exiting with descendants is
+indeterminate and fail-closed; failed adopted workers remain indeterminate even
+after they exit. Package interruption sets recovery-required,
+and indeterminate Proxmox dispatch requires target-state recovery inspection.
+The package unit alone permits setuid/setgid file creation and kernel-package
+payload writes because apt/dpkg legitimately require them; every other runner
+hardening property and the exact package command catalog remain enforced.
+Docker/Podman lifecycle remains on the already-connected daemon API operator;
+the action runner does not fall back to a killable external runtime CLI.
 Host storage-pressure cleanup is a second closed agent operation. The report
 may expose only the bounded `apt-package-cache` provider, its reclaimable byte
 count, freshness, and a SHA-256 fingerprint; cache entry names and paths remain

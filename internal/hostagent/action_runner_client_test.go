@@ -49,6 +49,14 @@ func TestNewActionRunnerClientIsTypedOnlyAndEmitsExplicitRole(t *testing.T) {
 	}
 }
 
+func TestActionRunnerWithoutConnectedContainerOperatorHasNoCLIFallback(t *testing.T) {
+	client := NewActionRunnerClient(ActionRunnerClientConfig{StateDir: t.TempDir()}, "host-1", "node-1", "test")
+	t.Cleanup(func() { _ = client.Close() })
+	if client.dockerLifecycle != nil {
+		t.Fatal("action runner exposed a Docker/Podman CLI fallback without a connected daemon operator")
+	}
+}
+
 func TestActionRunnerTransportRequiresTLSExceptLoopback(t *testing.T) {
 	logger := zerolog.Nop()
 	for _, test := range []struct {
