@@ -110,12 +110,21 @@ jobs:
     steps:
       - name: Extract version
         id: extract
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+          HISTORICAL_ASSET_BACKFILL_INPUT: ${{ inputs.historical_asset_backfill_only }}
         run: |
-          VERSION=$(jq -r '.inputs.version // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
-          if [ -z "$VERSION" ]; then
-            echo "::error::workflow_dispatch must include a version input"
+          set -euo pipefail
+          if [[ ! "${VERSION_INPUT}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]]; then
+            echo "::error::workflow_dispatch must include an exact supported version"
             exit 1
           fi
+          if [[ "${HISTORICAL_ASSET_BACKFILL_INPUT}" != "true" && \
+                "${HISTORICAL_ASSET_BACKFILL_INPUT}" != "false" ]]; then
+            echo "::error::historical_asset_backfill_only must be true or false"
+            exit 1
+          fi
+          VERSION="${VERSION_INPUT}"
           TAG="v${VERSION}"
 
           IS_PRERELEASE="false"
@@ -130,7 +139,7 @@ jobs:
           fi
 
           SOURCE_BRANCH="${GITHUB_REF_NAME}"
-          HISTORICAL_ASSET_BACKFILL_ONLY=$(jq -r '.inputs.historical_asset_backfill_only // "false"' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "false")
+          HISTORICAL_ASSET_BACKFILL_ONLY="${HISTORICAL_ASSET_BACKFILL_INPUT}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT

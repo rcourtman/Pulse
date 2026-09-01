@@ -50,7 +50,7 @@ jobs:
           CHART_DIGEST: ${{ inputs.chart_digest }}
         run: |
           set -euo pipefail
-          if [[ -z "${VERSION}" ]] || \
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]] || \
              [[ ! "${SOURCE_RELEASE_RUN_ID}" =~ ^[0-9]+$ ]] || \
              [[ ! "${TARGET_COMMITISH}" =~ ^[0-9a-f]{40}$ ]] || \
              [[ ! "${CHART_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
@@ -102,7 +102,8 @@ jobs:
             exit 1
           fi
 
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          validated_version="${VERSION}"
+          echo "version=${validated_version}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
 
       - name: Download immutable qualified chart

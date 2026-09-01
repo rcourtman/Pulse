@@ -104,6 +104,10 @@ jobs:
         run: |
           set -euo pipefail
           [[ "${GITHUB_REF}" == refs/heads/* ]]
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]]; then
+            echo "::error::Release candidate version is not an exact supported version."
+            exit 1
+          fi
           dispatch_payload="$(jq -nc \
             --arg ref "${SOURCE_REF}" \
             --arg version "${VERSION}" \
@@ -621,7 +625,9 @@ jobs:
             files = $files
           }
           $evidence | ConvertTo-Json -Depth 6 | Set-Content windows-signing-evidence.json -Encoding utf8NoBOM
-          "signing_backend=$env:WINDOWS_SIGNING_BACKEND" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($env:WINDOWS_SIGNING_BACKEND -notin @('signpath', 'legacy-pfx')) { throw "Invalid Windows signing backend." }
+          $validatedBackend = $env:WINDOWS_SIGNING_BACKEND
+          "signing_backend=$validatedBackend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload signed Windows binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -662,9 +668,14 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          echo "artifact_name=release-candidate-${GITHUB_SHA}-${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "manifest_artifact_name=release-candidate-manifest-${GITHUB_SHA}-${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "container_artifact_name=release-container-payload-${GITHUB_SHA}-${VERSION}" >> "$GITHUB_OUTPUT"
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]]; then
+            echo "::error::Release candidate version is not an exact supported version."
+            exit 1
+          fi
+          validated_version="${VERSION}"
+          echo "artifact_name=release-candidate-${GITHUB_SHA}-${validated_version}" >> "$GITHUB_OUTPUT"
+          echo "manifest_artifact_name=release-candidate-manifest-${GITHUB_SHA}-${validated_version}" >> "$GITHUB_OUTPUT"
+          echo "container_artifact_name=release-container-payload-${GITHUB_SHA}-${validated_version}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -33,10 +33,12 @@ jobs:
         env:
           EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
           REQUEST_ID: ${{ inputs.request_id }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           [[ "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]
           [[ "${REQUEST_ID}" =~ ^[0-9]+-[0-9]+$ ]]
+          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]]
           test "${GITHUB_SHA}" = "${EXPECTED_SOURCE_SHA}"
           test "${GITHUB_WORKFLOW_SHA}" = "${EXPECTED_SOURCE_SHA}"
 

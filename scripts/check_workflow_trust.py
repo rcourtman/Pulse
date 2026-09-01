@@ -23,7 +23,13 @@ USES_RE = re.compile(
     rf"^\s*(?:-\s*)?{_yaml_key('uses')}\s*:\s*([^\s#]+)"
 )
 RUN_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('run')}\s*:\s*(.*)$")
+ENV_RE = re.compile(rf"^(\s*)(?:-\s*)?{_yaml_key('env')}\s*:\s*$")
+ENV_ENTRY_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*?)\s*$")
 EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
+GITHUB_COMMAND_FILE_RE = re.compile(r"\bGITHUB_(?:ENV|OUTPUT|PATH|STATE)\b")
+SHELL_ASSIGNMENT_RE = re.compile(
+    r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*="
+)
 # Workflow-call and dispatch inputs are data, not shell source. The legacy
 # github.event.inputs alias is identical data, and repository_dispatch callers
 # fully control client_payload. Step and job outputs are data too: they can
@@ -151,6 +157,151 @@ def _run_script_lines(lines: list[str], run_index: int) -> list[tuple[int, str]]
             break
         script.append((index, line))
     return script
+
+
+def _step_env_bindings(lines: list[str], run_index: int) -> dict[str, str]:
+    """Return literal step env names and values for a run declaration."""
+    run_match = RUN_RE.match(lines[run_index])
+    if not run_match:
+        return {}
+    field_indent = len(run_match.group(1))
+
+    step_start = run_index
+    for index in range(run_index - 1, -1, -1):
+        line = lines[index]
+        if (
+            line.strip()
+            and _indent(line) == field_indent - 2
+            and line.lstrip().startswith("- ")
+        ):
+            step_start = index
+            break
+
+    step_end = len(lines)
+    for index in range(run_index + 1, len(lines)):
+        line = lines[index]
+        if (
+            line.strip()
+            and _indent(line) == field_indent - 2
+            and line.lstrip().startswith("- ")
+        ):
+            step_end = index
+            break
+
+    bindings: dict[str, str] = {}
+
+    # Job-level env is inherited by every run step. Locate the enclosing job
+    # from normal Actions indentation before applying step-level overrides.
+    job_key_indent = field_indent - 6
+    job_start: int | None = None
+    for index in range(step_start - 1, -1, -1):
+        code = lines[index].split("#", 1)[0]
+        if _indent(code) == job_key_indent and JOB_RE.match(code):
+            job_start = index
+            break
+    if job_start is not None:
+        job_end = len(lines)
+        for index in range(job_start + 1, len(lines)):
+            code = lines[index].split("#", 1)[0]
+            if code.strip() and _indent(code) == job_key_indent and JOB_RE.match(code):
+                job_end = index
+                break
+        job_field_indent = field_indent - 4
+        for index in range(job_start + 1, job_end):
+            code = lines[index].split("#", 1)[0]
+            match = ENV_RE.match(code)
+            if not match or len(match.group(1)) != job_field_indent:
+                continue
+            for env_line in lines[index + 1 : job_end]:
+                env_code = env_line.split("#", 1)[0]
+                if not env_code.strip():
+                    continue
+                if _indent(env_code) <= job_field_indent:
+                    break
+                entry = ENV_ENTRY_RE.match(env_code)
+                if entry and _indent(env_code) == job_field_indent + 2:
+                    bindings[entry.group(1)] = entry.group(2).strip("'\"")
+            break
+
+    for index in range(step_start, step_end):
+        code = lines[index].split("#", 1)[0]
+        match = ENV_RE.match(code)
+        mapping_indent = len(match.group(1)) if match else -1
+        inline_step_field = bool(match and code.lstrip().startswith("- "))
+        if not match or not (
+            mapping_indent == field_indent
+            or (inline_step_field and mapping_indent + 2 == field_indent)
+        ):
+            continue
+        for env_line in lines[index + 1 : step_end]:
+            code = env_line.split("#", 1)[0]
+            if not code.strip():
+                continue
+            if _indent(code) <= field_indent:
+                break
+            entry = ENV_ENTRY_RE.match(code)
+            if entry and _indent(code) == field_indent + 2:
+                bindings[entry.group(1)] = entry.group(2).strip("'\"")
+        break
+    return bindings
+
+
+def _shell_variable_reference(line: str, name: str) -> bool:
+    escaped = re.escape(name)
+    return bool(
+        re.search(
+            rf"(?:\$\{{{escaped}(?::?[-+?=][^}}]*)?\}}|\${escaped}\b|\$env:{escaped}\b)",
+            line,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _is_untrusted_expression(value: str) -> bool:
+    return any(
+        SHELL_DATA_CONTEXT_RE.search(expression)
+        or UNTRUSTED_GITHUB_CONTEXT_RE.search(expression)
+        for expression in EXPRESSION_RE.findall(value)
+    )
+
+
+def _audit_command_file_data(
+    path: Path,
+    lines: list[str],
+    run_index: int,
+) -> list[Finding]:
+    """Keep raw workflow/event values out of GitHub runner command files."""
+    findings: list[Finding] = []
+    bindings = {
+        name: value
+        for name, value in _step_env_bindings(lines, run_index).items()
+        if _is_untrusted_expression(value)
+    }
+    event_payload_variables: set[str] = set()
+
+    for script_index, script_line in _run_script_lines(lines, run_index):
+        assignment = SHELL_ASSIGNMENT_RE.match(script_line)
+        if assignment and "GITHUB_EVENT_PATH" in script_line:
+            event_payload_variables.add(assignment.group(1))
+
+        if not GITHUB_COMMAND_FILE_RE.search(script_line):
+            continue
+        unsafe_names = sorted(
+            name
+            for name in (*bindings, *event_payload_variables)
+            if _shell_variable_reference(script_line, name)
+        )
+        if unsafe_names:
+            findings.append(
+                Finding(
+                    path,
+                    script_index + 1,
+                    "untrusted workflow data must be validated or encoded "
+                    "before writing to GitHub command files "
+                    f"({', '.join(unsafe_names)})",
+                )
+            )
+    return findings
 
 
 def _has_trigger(lines: list[str], event: str) -> bool:
@@ -425,6 +576,7 @@ def audit_workflow(path: Path) -> list[Finding]:
             )
 
         if RUN_RE.match(code):
+            findings.extend(_audit_command_file_data(path, lines, index))
             for script_index, script_line in _run_script_lines(lines, index):
                 if has_workflow_run_trigger and WORKFLOW_RUN_INGRESS_COMMAND_RE.search(
                     script_line

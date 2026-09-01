@@ -42,6 +42,13 @@ be interpolated into the generated shell program. Outputs remain data even
 when an intermediate step parsed or validated them, because later substitution
 would turn their value back into shell source.
 
+Passing data through `env` does not make it safe to append to the runner's
+`GITHUB_OUTPUT`, `GITHUB_ENV`, `GITHUB_PATH`, or `GITHUB_STATE` command files.
+The audit rejects direct writes of workflow data and values read from the event
+payload; a step must first constrain the value to its exact one-line grammar or
+encode it with the command-file multiline protocol. This prevents embedded
+newlines from creating additional outputs or environment entries.
+
 Workflows triggered by `pull_request` cannot reference confidential repository
 secrets. Canonical governance therefore keeps its pull-request checks local to
 the public checkout. `canonical-private-governance.yml` performs cross-repo

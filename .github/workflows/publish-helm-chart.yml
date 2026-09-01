@@ -212,9 +212,14 @@ jobs:
         run: |
           set -euo pipefail
           helm registry logout ghcr.io || true
-          ./scripts/verify-release-helm-chart.sh \
+          proof_output="$(./scripts/verify-release-helm-chart.sh \
             "${RELEASE_TAG}" "${GITHUB_SHA}" \
-            "${GITHUB_REPOSITORY}" "${EXPECTED_DIGEST}" >> "$GITHUB_OUTPUT"
+            "${GITHUB_REPOSITORY}" "${EXPECTED_DIGEST}")"
+          if [[ ! "${proof_output}" =~ ^chart_digest=sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Helm verification did not return one exact chart digest."
+            exit 1
+          fi
+          printf '%s\n' "${proof_output}" >> "$GITHUB_OUTPUT"
 
       - name: Attach chart to release
         if: github.event_name == 'release'

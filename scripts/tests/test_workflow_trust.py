@@ -412,6 +412,51 @@ jobs:
             3,
         )
 
+    def test_rejects_raw_workflow_data_in_github_command_files(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      JOB_RELEASE: ${{ needs.prepare.outputs.release }}
+    steps:
+      - env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+          DERIVED_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          echo "release=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          printf 'digest=%s\\n' "$DERIVED_DIGEST" >> "$GITHUB_ENV"
+          echo "job_release=$JOB_RELEASE" >> "$GITHUB_STATE"
+      - run: |
+          EVENT_TAG=$(jq -r '.release.tag_name' "$GITHUB_EVENT_PATH")
+          echo "tag=$EVENT_TAG" >> "$GITHUB_OUTPUT"
+"""
+        )
+        self.assertEqual(
+            sum("validated or encoded" in finding for finding in findings),
+            4,
+        )
+
+    def test_accepts_validated_command_file_values(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  safe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          RELEASE_INPUT: ${{ inputs.release }}
+        run: |
+          [[ "$RELEASE_INPUT" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]
+          validated_release="$RELEASE_INPUT"
+          printf 'release=%s\\n' "$validated_release" >> "$GITHUB_OUTPUT"
+"""
+        )
+        self.assertEqual(findings, [])
+
     def test_rejects_dispatch_data_and_whole_github_contexts_in_shell(self) -> None:
         findings = self.audit(
             """permissions: {}
