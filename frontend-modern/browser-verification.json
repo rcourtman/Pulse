@@ -1,22 +1,16 @@
 {
   "version": 1,
-  "base_sha": "f12c4007ab3082bed1211b1744d0b1fec284a635",
-  "verified_at": "2026-09-01T02:51:11Z",
+  "base_sha": "b1240c6ca3b56bfa48317c5e1013eac150496b14",
+  "verified_at": "2026-09-01T14:51:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/features/home/homePageModel.ts",
-    "frontend-modern/src/routing/resourceLinks.ts"
+    "frontend-modern/src/utils/agentInstallCommand.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "2d54ea2114174d1a08ca6fdbfb7063d321ebcca87cfc402e7ce923e1a499ed15",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "a327ba73d7f25d8c557242b946a8bc390355a894fc7de284dcca90c6af562fca",
-    "frontend-modern/src/features/home/homePageModel.ts": "752b80838cf993855c7e236bdea804ecbffcaab3b70a1bf2ff5bfbbd86be38fb",
-    "frontend-modern/src/routing/resourceLinks.ts": "802a806a933f38a4dd57d766319c79d1507eed9e1f4c33b294e8e8ebfca97b4c"
+    "frontend-modern/src/utils/agentInstallCommand.ts": "5c9157c99245a5a202d4383f31c19e0115db7b488e1d920541b7d541aba5eb06"
   },
   "routes": [
-    "/home"
+    "/settings/infrastructure"
   ],
   "viewports": [
     {
@@ -29,16 +23,14 @@
     }
   ],
   "states": [
-    "mixed critical, attention, stale, powered-off, and healthy fleet state",
-    "healthy resource group expanded from its disclosure limit",
-    "last loaded fleet retained after a refresh returned an error",
-    "Docker container and standalone agent tiles targeted scoped investigation views",
-    "desktop and mobile navigation count badges met the WCAG color-contrast scan"
+    "Add Pulse Agent flow after a fresh local install token was generated",
+    "default Linux install command with root and sudo elevation branches",
+    "desktop and narrow command layouts with no observed horizontal page overflow"
   ],
   "interactions": [
-    "expanded the healthy resource disclosure by pointer",
-    "triggered a resource refresh failure and verified the cached-state warning",
-    "verified WCAG A and AA scans, reduced motion, and no horizontal overflow",
-    "verified scoped resource link hrefs at desktop width"
+    "opened Add Pulse Agent from Settings > Infrastructure",
+    "generated a fresh local agent token and dismissed the one-time token dialog",
+    "copied the generated install command at desktop and narrow widths",
+    "verified the copied command uses a private /tmp/pulse-agent-bootstrap.XXXXXX directory, --token-file, preflight, and sudo fallback"
   ]
 }

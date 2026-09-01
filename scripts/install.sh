@@ -127,6 +127,7 @@ AGENT_LOG_FILE="" # When set, pass --log-file so the agent's rotating log writer
 DEFAULT_STATE_DIR="/var/lib/pulse-agent"
 STATE_DIR="$DEFAULT_STATE_DIR"  # Persistent state directory (overridden per platform)
 STATE_DIR_SOURCE="default"      # default, explicit, recovered, or platform
+STATE_DIR_REMOVAL_AUTHORITY="$DEFAULT_STATE_DIR"
 CURL_CA_BUNDLE="${PULSE_CACERT:-}" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
 NON_INTERACTIVE="false"
 TOKEN_FILE_PATH=""       # Path to file containing the token
@@ -163,7 +164,8 @@ PRIVILEGED_HELPER_SERVICE_UNIT="/etc/systemd/system/${PRIVILEGED_HELPER_NAME}.se
 PRIVILEGED_HELPER_SOCKET_UNIT="/etc/systemd/system/${PRIVILEGED_HELPER_NAME}.socket"
 PRIVILEGED_HELPER_SOCKET_DIR="/run/pulse-agent"
 PRIVILEGED_HELPER_SOCKET_PATH="${PRIVILEGED_HELPER_SOCKET_DIR}/helper.sock"
-PRIVILEGED_HELPER_CREDENTIAL_DIR="/etc/pulse-agent"
+INSTALLER_LIFECYCLE_DIR="/etc/pulse-agent"
+PRIVILEGED_HELPER_CREDENTIAL_DIR="$INSTALLER_LIFECYCLE_DIR"
 PRIVILEGED_HELPER_STATE_DIR="/var/lib/pulse-agent-helper"
 PRIVILEGED_HELPER_UPDATE_STAGING_DIR="${PRIVILEGED_HELPER_STATE_DIR}/update-staging"
 PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR="/var/lib/pulse-agent/update-quarantine"
@@ -199,6 +201,7 @@ SAFE_PROFILE_TRANSACTION_ACTIVE="false"
 SAFE_PROFILE_TRANSACTION_COMMITTED="false"
 SAFE_PROFILE_PRIOR_REGISTRATION_LAST_SEEN=""
 AGENT_REGISTRATION_LAST_SEEN=""
+CONNECTION_INFO_PERSISTED="false"
 
 SYSTEMD_ENV_LINES=""
 SHELL_EXPORT_LINES=""
@@ -478,7 +481,7 @@ ensure_agent_disk_headroom() {
 }
 
 has_pinned_installer_signature_key() {
-    [[ -n "$PINNED_INSTALLER_SSH_PUBLIC_KEY" && "$PINNED_INSTALLER_SSH_PUBLIC_KEY" != "__PULSE_INSTALLER_SSH_PUBLIC_KEY__" ]]
+    [[ -n "${PINNED_INSTALLER_SSH_PUBLIC_KEY:-}" && "$PINNED_INSTALLER_SSH_PUBLIC_KEY" != "__PULSE_INSTALLER_SSH_PUBLIC_KEY__" ]]
 }
 
 decode_base64_to_file() {
@@ -656,8 +659,8 @@ collector_lifecycle_binary() {
         printf '%s\n' "$TMP_BIN"
         return 0
     fi
-    if [[ -x "${INSTALL_DIR%/}/${BINARY_NAME}" ]]; then
-        printf '%s\n' "${INSTALL_DIR%/}/${BINARY_NAME}"
+    if [[ -x "${INSTALL_DIR:-/usr/local/bin}/${BINARY_NAME:-pulse-agent}" ]]; then
+        printf '%s\n' "${INSTALL_DIR:-/usr/local/bin}/${BINARY_NAME:-pulse-agent}"
         return 0
     fi
     return 1
@@ -719,6 +722,7 @@ run_collector_lifecycle_command() {
     local -a lifecycle_args
 
     lifecycle_binary=$(collector_lifecycle_binary) || return 1
+    trusted_lifecycle_regular_file "$lifecycle_binary" 755 || return 1
     prepare_collector_lifecycle_token_file || return 1
     lifecycle_args=("$command_name" --url "$PULSE_URL" --token-file "$COLLECTOR_LIFECYCLE_TOKEN_FILE")
     collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
@@ -789,6 +793,45 @@ verify_agent_server_registration() {
     fi
     [[ $lookup_rc -eq 2 ]] && return 2
     return 1
+}
+
+collector_credential_state_present() {
+    local candidate=""
+
+    [[ -n "${PULSE_TOKEN:-}" ]] && return 0
+    for candidate in \
+        "${STATE_DIR%/}/runtime.token" \
+        "${RUNTIME_TOKEN_FILE:-}" \
+        "${STATE_DIR%/}/token" \
+        "${PRIVILEGED_HELPER_CREDENTIAL_DIR%/}/token"; do
+        [[ -n "$candidate" ]] || continue
+        if [[ -e "$candidate" || -L "$candidate" || -p "$candidate" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+uninstall_collector_registration() {
+    local uninstall_hostname="${HOSTNAME_OVERRIDE:-}"
+    local removed_agent_id=""
+    local -a uninstall_args=(collector-uninstall)
+
+    if [[ -z "${AGENT_ID:-}" ]]; then
+        AGENT_ID=$(recover_agent_id_from_state_file || true)
+    fi
+    if [[ -z "$uninstall_hostname" ]]; then
+        uninstall_hostname=$(hostname 2>/dev/null || true)
+    fi
+    [[ -n "${AGENT_ID:-}" ]] && uninstall_args+=(--agent-id "$AGENT_ID")
+    [[ -n "$uninstall_hostname" ]] && uninstall_args+=(--hostname "$uninstall_hostname")
+    [[ ${#uninstall_args[@]} -gt 1 ]] || return 1
+    removed_agent_id=$(run_collector_lifecycle_command "${uninstall_args[@]}" 2>/dev/null) || return 1
+    [[ -n "$removed_agent_id" ]] || return 1
+    if [[ -n "${AGENT_ID:-}" && "$removed_agent_id" != "$AGENT_ID" ]]; then
+        return 1
+    fi
+    AGENT_ID="$removed_agent_id"
 }
 
 # verify_agent_server_registration_with_retry polls the server-side lookup for
@@ -2205,7 +2248,7 @@ safe_profile_begin_transaction() {
 
     prior_profile=$(safe_profile_detect_current_profile)
     printf '%s\n' \
-        "FORMAT_VERSION=2" \
+        "FORMAT_VERSION=3" \
         "PRIOR_PROFILE=${prior_profile}" \
         "TARGET_PROFILE=typed-helper-monitoring-only" \
         "STATE_DIR=${STATE_DIR}" \
@@ -2241,6 +2284,9 @@ safe_profile_begin_transaction() {
     safe_profile_snapshot_entry "${STATE_DIR%/}/runtime.token" runtime-token RUNTIME_TOKEN
     safe_profile_snapshot_entry "${STATE_DIR%/}/agent-id" agent-id AGENT_ID_FILE
     safe_profile_snapshot_entry "${STATE_DIR%/}/connection.env" connection-env CONNECTION_ENV
+    safe_profile_snapshot_entry "${INSTALLER_LIFECYCLE_DIR%/}/connection.env" lifecycle-connection-env LIFECYCLE_CONNECTION_ENV
+    safe_profile_snapshot_entry "${INSTALLER_LIFECYCLE_DIR%/}/install.sh" lifecycle-install-script LIFECYCLE_INSTALL_SCRIPT
+    safe_profile_snapshot_entry "${INSTALLER_LIFECYCLE_DIR%/}/install.sh.sha256" lifecycle-install-checksum LIFECYCLE_INSTALL_CHECKSUM
     safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-registered" proxmox-registered PROXMOX_REGISTERED
     safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-pve-registered" proxmox-pve-registered PROXMOX_PVE_REGISTERED
     safe_profile_snapshot_entry "${STATE_DIR%/}/proxmox-pbs-registered" proxmox-pbs-registered PROXMOX_PBS_REGISTERED
@@ -2307,7 +2353,7 @@ safe_profile_restore_transaction() {
     esac
     [[ -d "$transaction_dir" && ! -L "$transaction_dir" && -f "$manifest_file" && ! -L "$manifest_file" ]] || return 1
     format_version=$(safe_profile_manifest_value "$manifest_file" FORMAT_VERSION)
-    [[ "$format_version" == "1" || "$format_version" == "2" ]] || return 1
+    [[ "$format_version" == "1" || "$format_version" == "2" || "$format_version" == "3" ]] || return 1
     snapshot_state_dir=$(safe_profile_manifest_value "$manifest_file" STATE_DIR)
     [[ -n "$snapshot_state_dir" && "$snapshot_state_dir" == /* && "$snapshot_state_dir" != "/" ]] || return 1
     prior_profile=$(safe_profile_manifest_value "$manifest_file" PRIOR_PROFILE)
@@ -2331,7 +2377,12 @@ safe_profile_restore_transaction() {
     safe_profile_restore_entry "$transaction_dir" runtime-token "${snapshot_state_dir%/}/runtime.token" RUNTIME_TOKEN
     safe_profile_restore_entry "$transaction_dir" agent-id "${snapshot_state_dir%/}/agent-id" AGENT_ID_FILE
     safe_profile_restore_entry "$transaction_dir" connection-env "${snapshot_state_dir%/}/connection.env" CONNECTION_ENV
-    if [[ "$format_version" == "2" ]]; then
+    if [[ "$format_version" == "3" ]]; then
+        safe_profile_restore_entry "$transaction_dir" lifecycle-connection-env "${INSTALLER_LIFECYCLE_DIR%/}/connection.env" LIFECYCLE_CONNECTION_ENV
+        safe_profile_restore_entry "$transaction_dir" lifecycle-install-script "${INSTALLER_LIFECYCLE_DIR%/}/install.sh" LIFECYCLE_INSTALL_SCRIPT
+        safe_profile_restore_entry "$transaction_dir" lifecycle-install-checksum "${INSTALLER_LIFECYCLE_DIR%/}/install.sh.sha256" LIFECYCLE_INSTALL_CHECKSUM
+    fi
+    if [[ "$format_version" == "2" || "$format_version" == "3" ]]; then
         safe_profile_restore_entry "$transaction_dir" proxmox-registered "${snapshot_state_dir%/}/proxmox-registered" PROXMOX_REGISTERED
         safe_profile_restore_entry "$transaction_dir" proxmox-pve-registered "${snapshot_state_dir%/}/proxmox-pve-registered" PROXMOX_PVE_REGISTERED
         safe_profile_restore_entry "$transaction_dir" proxmox-pbs-registered "${snapshot_state_dir%/}/proxmox-pbs-registered" PROXMOX_PBS_REGISTERED
@@ -2346,7 +2397,7 @@ safe_profile_restore_transaction() {
     else
         rmdir "$PRIVILEGED_HELPER_CREDENTIAL_DIR" 2>/dev/null || true
     fi
-    if [[ "$format_version" == "2" ]]; then
+    if [[ "$format_version" == "2" || "$format_version" == "3" ]]; then
         safe_profile_restore_state_metadata "$transaction_dir" "$snapshot_state_dir" || return 1
     fi
     rm -f "$PRIVILEGED_HELPER_SOCKET_PATH"
@@ -2911,7 +2962,10 @@ complete_installation_flow() {
 
     local verification_rc=0
 
-    save_connection_info "$state_dir"
+    if [[ "$CONNECTION_INFO_PERSISTED" != "true" ]]; then
+        save_connection_info "$state_dir"
+        CONNECTION_INFO_PERSISTED="true"
+    fi
     verify_agent_started || verification_rc=$?
     if [[ $verification_rc -eq 0 ]]; then
         report_proxmox_registration_outcome "$state_dir" || true
@@ -2957,20 +3011,169 @@ select_platform_state_dir() {
     if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
         STATE_DIR="$platform_default"
         STATE_DIR_SOURCE="platform"
+        STATE_DIR_REMOVAL_AUTHORITY="$STATE_DIR"
     fi
+}
+
+portable_path_uid() {
+    stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1" 2>/dev/null
+}
+
+portable_path_mode() {
+    stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
+}
+
+trusted_lifecycle_regular_file() {
+    local path="$1"
+    local expected_mode="$2"
+    local parent=""
+    local effective_uid=""
+    local file_uid=""
+    local file_mode=""
+    local parent_uid=""
+    local parent_mode=""
+
+    [[ "$path" == /* && -f "$path" && ! -L "$path" ]] || return 1
+    parent=$(dirname "$path")
+    [[ -d "$parent" && ! -L "$parent" ]] || return 1
+    effective_uid=$(id -u) || return 1
+    file_uid=$(portable_path_uid "$path") || return 1
+    file_mode=$(portable_path_mode "$path") || return 1
+    parent_uid=$(portable_path_uid "$parent") || return 1
+    parent_mode=$(portable_path_mode "$parent") || return 1
+    [[ "$file_uid" == "$effective_uid" && "$file_mode" == "$expected_mode" &&
+       "$parent_uid" == "$effective_uid" && "$parent_mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    (( (8#$parent_mode & 0022) == 0 ))
+}
+
+trusted_connection_state_file() {
+    trusted_lifecycle_regular_file "$1" 600
+}
+
+trusted_private_lifecycle_regular_file() {
+    local path="$1"
+    local parent=""
+    local effective_uid=""
+    local file_uid=""
+    local file_mode=""
+    local parent_uid=""
+    local parent_mode=""
+
+    [[ "$path" == /* && -f "$path" && ! -L "$path" ]] || return 1
+    parent=$(dirname "$path")
+    [[ -d "$parent" && ! -L "$parent" ]] || return 1
+    effective_uid=$(id -u) || return 1
+    file_uid=$(portable_path_uid "$path") || return 1
+    file_mode=$(portable_path_mode "$path") || return 1
+    parent_uid=$(portable_path_uid "$parent") || return 1
+    parent_mode=$(portable_path_mode "$parent") || return 1
+    [[ "$file_uid" == "$effective_uid" && "$file_mode" =~ ^[0-7]{3,4}$ &&
+       "$parent_uid" == "$effective_uid" && "$parent_mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    (( (8#$file_mode & 0077) == 0 && (8#$parent_mode & 0022) == 0 ))
+}
+
+installer_file_sha256() {
+    sha256sum "$1" 2>/dev/null | awk '{print $1}' ||
+        shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+}
+
+sync_lifecycle_path() {
+    local path="$1"
+
+    if command -v sync >/dev/null 2>&1; then
+        sync -f "$path" 2>/dev/null || sync >/dev/null 2>&1 || return 1
+    fi
+}
+
+prepare_installer_lifecycle_dir() {
+    local lifecycle_dir="$1"
+
+    [[ -n "$lifecycle_dir" && "$lifecycle_dir" == /* && "$lifecycle_dir" != "/" ]] || return 1
+    [[ ! -L "$lifecycle_dir" ]] || return 1
+    mkdir -p "$lifecycle_dir" || return 1
+    [[ -d "$lifecycle_dir" && ! -L "$lifecycle_dir" ]] || return 1
+    if [[ "$(id -u)" == "0" ]]; then
+        if [[ "$LEAST_PRIVILEGE" == "true" ]]; then
+            chown "root:${LEAST_PRIVILEGE_USER}" "$lifecycle_dir" || return 1
+            chmod 0750 "$lifecycle_dir" || return 1
+        else
+            chown root:root "$lifecycle_dir" || return 1
+            chmod 0700 "$lifecycle_dir" || return 1
+        fi
+    else
+        chmod 0700 "$lifecycle_dir" || return 1
+    fi
+}
+
+install_lifecycle_file_atomically() {
+    local source_path="$1"
+    local target_path="$2"
+    local target_mode="$3"
+    local target_dir=""
+    local target_name=""
+    local target_tmp=""
+
+    target_dir=$(dirname "$target_path")
+    target_name=$(basename "$target_path")
+    [[ -f "$source_path" && ! -L "$source_path" && -d "$target_dir" && ! -L "$target_dir" ]] || return 1
+    target_tmp=$(mktemp "${target_dir}/.${target_name}.XXXXXX") || return 1
+    TMP_FILES+=("$target_tmp")
+    cp "$source_path" "$target_tmp" || return 1
+    chmod "$target_mode" "$target_tmp" || return 1
+    if [[ "$(id -u)" == "0" ]]; then
+        chown root:root "$target_tmp" || return 1
+    fi
+    sync_lifecycle_path "$target_tmp" || return 1
+    mv -f "$target_tmp" "$target_path" || return 1
+    sync_lifecycle_path "$target_path" || return 1
+    sync_lifecycle_path "$target_dir" || return 1
+}
+
+verify_saved_installer_self_integrity() {
+    local script_path="${1:-$0}"
+    local script_dir=""
+    local lifecycle_dir=""
+    local expected=""
+    local actual=""
+    local checksum_path=""
+
+    [[ -f "$script_path" && ! -L "$script_path" ]] || return 0
+    [[ -d "$INSTALLER_LIFECYCLE_DIR" && ! -L "$INSTALLER_LIFECYCLE_DIR" ]] || return 0
+    script_dir=$(cd "$(dirname "$script_path")" 2>/dev/null && pwd -P) || return 1
+    lifecycle_dir=$(cd "$INSTALLER_LIFECYCLE_DIR" 2>/dev/null && pwd -P) || return 1
+    if [[ "$script_dir" != "$lifecycle_dir" || "$(basename "$script_path")" != "install.sh" ]]; then
+        return 0
+    fi
+    checksum_path="${script_dir}/install.sh.sha256"
+    trusted_lifecycle_regular_file "$script_path" 700 || return 1
+    trusted_lifecycle_regular_file "$checksum_path" 600 || return 1
+    expected=$(awk 'NR == 1 { print $1; exit }' "$checksum_path" 2>/dev/null || true)
+    [[ "$expected" =~ ^[a-f0-9]{64}$ ]] || return 1
+    actual=$(installer_file_sha256 "$script_path")
+    [[ -n "$actual" && "$actual" == "$expected" ]]
 }
 
 discover_state_dir_from_saved_installer() {
     local script_path="${1:-$0}"
     local script_dir=""
+    local conn_env=""
+    local saved_state_dir=""
 
     if [[ "${STATE_DIR_SOURCE:-default}" != "default" || ! -f "$script_path" ]]; then
         return 1
     fi
     script_dir=$(cd "$(dirname "$script_path")" 2>/dev/null && pwd -P) || return 1
-    if [[ -f "$script_dir/connection.env" ]]; then
-        STATE_DIR="$script_dir"
+    conn_env="${script_dir}/connection.env"
+    if trusted_connection_state_file "$conn_env"; then
+        saved_state_dir=$(read_connection_state_value "$conn_env" "PULSE_STATE_DIR")
+        if [[ -z "$saved_state_dir" && "$script_dir" != "$INSTALLER_LIFECYCLE_DIR" ]]; then
+            saved_state_dir="$script_dir"
+        fi
+        [[ -n "$saved_state_dir" && "$saved_state_dir" == /* && "$saved_state_dir" != "/" &&
+           "$saved_state_dir" != *$'\r'* && "$saved_state_dir" != *$'\n'* ]] || return 1
+        STATE_DIR="$saved_state_dir"
         STATE_DIR_SOURCE="recovered"
+        STATE_DIR_REMOVAL_AUTHORITY="$saved_state_dir"
         return 0
     fi
     return 1
@@ -2982,6 +3185,10 @@ remove_agent_state_dir() {
     if [[ -z "$state_dir" || "$state_dir" != /* || "$state_dir" == "/" ||
           "$state_dir" == *$'\r'* || "$state_dir" == *$'\n'* ]]; then
         log_warn "Refusing to remove invalid agent state directory: ${state_dir:-<empty>}"
+        return 1
+    fi
+    if [[ -z "${STATE_DIR_REMOVAL_AUTHORITY:-}" || "$state_dir" != "$STATE_DIR_REMOVAL_AUTHORITY" ]]; then
+        log_warn "Refusing to remove agent state directory without exact trusted lifecycle authority: $state_dir"
         return 1
     fi
     rm -rf -- "$state_dir"
@@ -3888,7 +4095,7 @@ read_connection_state_value() {
     local file="$1"
     local key="$2"
 
-    if [[ ! -f "$file" ]]; then
+    if ! trusted_connection_state_file "$file"; then
         return 0
     fi
 
@@ -3918,8 +4125,7 @@ recover_token_from_default_agent_token_file() {
         token_paths+=("${DEFAULT_STATE_DIR:-/var/lib/pulse-agent}/token" "$TRUENAS_STATE_DIR/token")
     fi
     for token_path in "${token_paths[@]}"; do
-        [[ -n "$token_path" && -f "$token_path" ]] || continue
-        recovered_token=$(cat "$token_path" 2>/dev/null || true)
+        recovered_token=$(read_collector_token_file_safely "$token_path" 2>/dev/null || true)
         if [[ -n "$recovered_token" ]]; then
             PULSE_TOKEN="$recovered_token"
             return 0
@@ -3933,12 +4139,15 @@ recover_connection_state() {
     local file="$1"
     local saved_state_dir=""
 
+    trusted_connection_state_file "$file" || return 1
+
     saved_state_dir=$(read_connection_state_value "$file" "PULSE_STATE_DIR")
     if [[ -n "$saved_state_dir" && "$saved_state_dir" == /* && "$saved_state_dir" != "/" &&
           "$saved_state_dir" != *$'\r'* && "$saved_state_dir" != *$'\n'* &&
           "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
         STATE_DIR="$saved_state_dir"
         STATE_DIR_SOURCE="recovered"
+        STATE_DIR_REMOVAL_AUTHORITY="$saved_state_dir"
     fi
 
     if [[ -z "$PULSE_URL" ]]; then
@@ -3950,8 +4159,8 @@ recover_connection_state() {
     if [[ -z "$PULSE_TOKEN" ]]; then
         local saved_token_file=""
         saved_token_file=$(read_connection_state_value "$file" "PULSE_TOKEN_FILE")
-        if [[ -n "$saved_token_file" && -f "$saved_token_file" ]]; then
-            PULSE_TOKEN=$(cat "$saved_token_file")
+        if [[ -n "$saved_token_file" ]]; then
+            PULSE_TOKEN=$(read_collector_token_file_safely "$saved_token_file" 2>/dev/null || true)
         fi
     fi
     if [[ -z "$PULSE_TOKEN" && -n "$PULSE_URL" ]]; then
@@ -4017,8 +4226,8 @@ apply_recovered_agent_arg_value() {
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
         token-file)
-            if [[ -z "$PULSE_TOKEN" && -n "$value" && -f "$value" ]]; then
-                PULSE_TOKEN=$(cat "$value")
+            if [[ -z "$PULSE_TOKEN" && -n "$value" ]]; then
+                PULSE_TOKEN=$(read_collector_token_file_safely "$value" 2>/dev/null || true)
             fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
@@ -4257,8 +4466,8 @@ recover_connection_state_from_env_stream() {
                 ;;
             PULSE_TOKEN_FILE=*)
                 value="${env_line#*=}"
-                if [[ -z "$PULSE_TOKEN" && -n "$value" && -f "$value" ]]; then
-                    PULSE_TOKEN=$(cat "$value")
+                if [[ -z "$PULSE_TOKEN" && -n "$value" ]]; then
+                    PULSE_TOKEN=$(read_collector_token_file_safely "$value" 2>/dev/null || true)
                 fi
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
@@ -4607,13 +4816,13 @@ recover_connection_state_from_existing_agent() {
 find_connection_state_file() {
     local conn_env=""
     local qnap_state_dir=""
-    local conn_paths=("${STATE_DIR%/}/connection.env")
+    local conn_paths=("${INSTALLER_LIFECYCLE_DIR%/}/connection.env" "${STATE_DIR%/}/connection.env")
 
     if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
         conn_paths+=("${DEFAULT_STATE_DIR:-/var/lib/pulse-agent}/connection.env" /boot/config/plugins/pulse-agent/connection.env "$TRUENAS_STATE_DIR/connection.env")
     fi
     for conn_env in "${conn_paths[@]}"; do
-        if [[ -f "$conn_env" ]]; then
+        if trusted_connection_state_file "$conn_env"; then
             printf '%s\n' "$conn_env"
             return 0
         fi
@@ -4621,12 +4830,96 @@ find_connection_state_file() {
 
     if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
         qnap_state_dir=$(find_qnap_state_dir || true)
-        if [[ -n "$qnap_state_dir" ]] && [[ -f "$qnap_state_dir/connection.env" ]]; then
+        if [[ -n "$qnap_state_dir" ]] && trusted_connection_state_file "$qnap_state_dir/connection.env"; then
             printf '%s\n' "$qnap_state_dir/connection.env"
             return 0
         fi
     fi
 
+    return 1
+}
+
+read_collector_token_file_safely() {
+    local token_path="$1"
+    local explicit_path="${2:-false}"
+    local lifecycle_binary=""
+    local collector_uid=""
+    local token_value=""
+    local token_size=""
+    local -a token_args
+
+    [[ -n "$token_path" && "$token_path" == /* ]] || return 1
+    if [[ "$explicit_path" != "true" ]]; then
+        case "$token_path" in
+            "${STATE_DIR%/}/token"|"${STATE_DIR%/}/runtime.token"|"${PRIVILEGED_HELPER_CREDENTIAL_DIR:-/etc/pulse-agent}/token") ;;
+            *)
+                if [[ -z "${RUNTIME_TOKEN_FILE:-}" || "$token_path" != "$RUNTIME_TOKEN_FILE" ]]; then
+                    return 1
+                fi
+                ;;
+        esac
+    fi
+
+    [[ -e "$token_path" || -L "$token_path" || -p "$token_path" ]] || return 1
+    lifecycle_binary=$(collector_lifecycle_binary 2>/dev/null || true)
+    if [[ -n "$lifecycle_binary" ]] && trusted_lifecycle_regular_file "$lifecycle_binary" 755; then
+        token_args=(collector-read-token --token-file "$token_path")
+        collector_uid=$(id -u "${LEAST_PRIVILEGE_USER:-pulse-agent}" 2>/dev/null || true)
+        if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
+            token_args+=(--token-owner-uid "$collector_uid")
+        fi
+        if token_value=$("$lifecycle_binary" "${token_args[@]}" 2>/dev/null); then
+            printf '%s\n' "$token_value"
+            return 0
+        fi
+    fi
+
+    # Legacy root-owned token files may predate the descriptor-safe lifecycle
+    # command. Only a private regular file under a trusted parent can use this
+    # compatibility path; collector-owned state requires the Go reader.
+    if trusted_private_lifecycle_regular_file "$token_path"; then
+        token_size=$(wc -c < "$token_path" 2>/dev/null | tr -d ' ' || true)
+        [[ "$token_size" =~ ^[0-9]+$ && "$token_size" -ge 1 && "$token_size" -le 4096 ]] || return 1
+        IFS= read -r token_value < "$token_path" || true
+        if [[ -n "$token_value" && "$token_value" != *$'\r'* && "$token_value" != *$'\n'* ]]; then
+            printf '%s\n' "$token_value"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+read_agent_id_file_safely() {
+    local aid_path="$1"
+    local lifecycle_binary=""
+    local collector_uid=""
+    local identity=""
+    local -a identity_args
+
+    [[ -e "$aid_path" || -L "$aid_path" || -p "$aid_path" ]] || return 1
+    lifecycle_binary=$(collector_lifecycle_binary 2>/dev/null || true)
+    if [[ -n "$lifecycle_binary" ]] && trusted_lifecycle_regular_file "$lifecycle_binary" 755; then
+        identity_args=(collector-read-agent-id --agent-id-file "$aid_path")
+        collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+        if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
+            identity_args+=(--token-owner-uid "$collector_uid")
+        fi
+        if identity=$("$lifecycle_binary" "${identity_args[@]}" 2>/dev/null); then
+            printf '%s\n' "$identity"
+            return 0
+        fi
+    fi
+
+    # Legacy root-owned installations may predate the descriptor-safe helper
+    # command. Their parent and file are not writable by the runtime, so a
+    # bounded shell read remains a boundary-only compatibility path.
+    if trusted_lifecycle_regular_file "$aid_path" 600; then
+        IFS= read -r identity < "$aid_path" || true
+        if [[ ${#identity} -ge 1 && ${#identity} -le 128 && "$identity" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]]; then
+            printf '%s\n' "$identity"
+            return 0
+        fi
+    fi
     return 1
 }
 
@@ -4647,8 +4940,7 @@ recover_agent_id_from_state_file() {
     fi
 
     for aid_path in "${aid_paths[@]}"; do
-        if [[ -f "$aid_path" ]]; then
-            cat "$aid_path"
+        if read_agent_id_file_safely "$aid_path"; then
             return 0
         fi
     done
@@ -4659,18 +4951,34 @@ recover_agent_id_from_state_file() {
 # Save install script and connection details for offline uninstall
 save_connection_info() {
     local state_dir="$1"
-    local conn_env="${state_dir}/connection.env"
+    local lifecycle_dir="$state_dir"
+    local conn_env=""
     local conn_tmp=""
+    local installer_source=""
+    local installer_tmp=""
+    local lifecycle_binary=""
+    local installer_signature=""
+    local checksum_tmp=""
+    local installer_sha=""
     local old_umask=""
+
+    if [[ "$LEAST_PRIVILEGE" == "true" ]]; then
+        lifecycle_dir="$INSTALLER_LIFECYCLE_DIR"
+    fi
+    conn_env="${lifecycle_dir%/}/connection.env"
     old_umask=$(umask)
     umask 077
     mkdir -p "$state_dir"
-    chmod 700 "$state_dir"
+    if [[ "$LEAST_PRIVILEGE" != "true" ]]; then
+        chmod 700 "$state_dir"
+    fi
+    prepare_installer_lifecycle_dir "$lifecycle_dir" ||
+        fail "Refusing unsafe installer lifecycle directory: ${lifecycle_dir}" "$EXIT_GENERAL"
     # Save connection details so uninstall can deregister without --url/--token.
     # Single-quote values to prevent shell interpretation on read-back.
     # Legacy connection files may contain PULSE_TOKEN, but new installs persist
     # only the protected token file path.
-    conn_tmp=$(mktemp "${state_dir}/.connection.env.XXXXXX")
+    conn_tmp=$(mktemp "${lifecycle_dir%/}/.connection.env.XXXXXX")
     TMP_FILES+=("$conn_tmp")
     write_connection_state_value "$conn_tmp" "PULSE_STATE_DIR" "$state_dir"
     write_connection_state_value "$conn_tmp" "PULSE_URL" "$PULSE_URL"
@@ -4683,31 +4991,58 @@ save_connection_info() {
     fi
     write_connection_state_value "$conn_tmp" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"
     write_connection_state_value "$conn_tmp" "PULSE_CACERT" "$CURL_CA_BUNDLE"
-    chmod 600 "$conn_tmp"
-    mv -f "$conn_tmp" "$conn_env"
-    umask "$old_umask"
+    install_lifecycle_file_atomically "$conn_tmp" "$conn_env" 0600 ||
+        fail "Failed to persist protected installer lifecycle state" "$EXIT_GENERAL"
     # Save a copy of this install script for offline uninstall.
     # When run via "curl | bash", $0 is /dev/stdin — not a usable file.
     # Try local copy first, then download a fresh copy from the server.
     local saved=false
     if [[ -f "$0" && "$0" != "/dev/stdin" && "$0" != "bash" && "$0" != "-bash" ]]; then
-        if cp "$0" "${state_dir}/install.sh" 2>/dev/null; then
-            saved=true
+        installer_source="$0"
+    fi
+    if [[ -z "$installer_source" ]]; then
+        # stdin installs have no local source file. Persist a fresh copy only
+        # when the installed root-owned lifecycle binary can enforce the same
+        # CA/fingerprint/no-proxy policy and the embedded release key can verify
+        # the server-provided SSH signature.
+        installer_tmp=$(mktemp "${lifecycle_dir%/}/.install-source.XXXXXX")
+        TMP_FILES+=("$installer_tmp")
+        lifecycle_binary=$(collector_lifecycle_binary 2>/dev/null || true)
+        if has_pinned_installer_signature_key &&
+           [[ -n "$lifecycle_binary" ]] && trusted_lifecycle_regular_file "$lifecycle_binary" 755; then
+            local -a download_args=(collector-download-installer --url "$PULSE_URL" --output "$installer_tmp")
+            [[ -n "$CURL_CA_BUNDLE" ]] && download_args+=(--cacert "$CURL_CA_BUNDLE")
+            [[ -n "$SERVER_FINGERPRINT" ]] && download_args+=(--server-fingerprint "$SERVER_FINGERPRINT")
+            if installer_signature=$("$lifecycle_binary" "${download_args[@]}" 2>/dev/null) &&
+               [[ -n "$installer_signature" ]]; then
+                verify_download_signature "$installer_tmp" "$installer_signature"
+                installer_source="$installer_tmp"
+            fi
+        fi
+        if [[ -z "$installer_source" ]]; then
+            log_warn "Offline installer was not saved because an authenticated signed installer source was unavailable. Download a fresh installer from Pulse when removal is needed."
         fi
     fi
-    if [[ "$saved" != "true" ]]; then
-        # Download from the server (we know it's reachable — we just installed from it)
-        local dl_args=(-fsSL --connect-timeout 10 --max-time 30)
-        if [[ "$INSECURE" == "true" ]]; then dl_args+=(-k); fi
-        if [[ -n "$CURL_CA_BUNDLE" ]]; then dl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
-        curl "${dl_args[@]}" -o "${state_dir}/install.sh" "${PULSE_URL}/install.sh" 2>/dev/null || true
-    fi
-    if [[ -f "${state_dir}/install.sh" ]]; then
-        chmod +x "${state_dir}/install.sh"
-        SAVED_INSTALL_SCRIPT="${state_dir}/install.sh"
+    if [[ -n "$installer_source" && -f "$installer_source" && ! -L "$installer_source" ]]; then
+        install_lifecycle_file_atomically "$installer_source" "${lifecycle_dir%/}/install.sh" 0700 ||
+            fail "Failed to persist the protected offline installer" "$EXIT_GENERAL"
+        installer_sha=$(installer_file_sha256 "${lifecycle_dir%/}/install.sh")
+        [[ "$installer_sha" =~ ^[a-f0-9]{64}$ ]] ||
+            fail "Failed to hash the protected offline installer" "$EXIT_GENERAL"
+        checksum_tmp=$(mktemp "${lifecycle_dir%/}/.install-sha.XXXXXX")
+        TMP_FILES+=("$checksum_tmp")
+        printf '%s  install.sh\n' "$installer_sha" > "$checksum_tmp"
+        install_lifecycle_file_atomically "$checksum_tmp" "${lifecycle_dir%/}/install.sh.sha256" 0600 ||
+            fail "Failed to persist the protected offline installer checksum" "$EXIT_GENERAL"
+        SAVED_INSTALL_SCRIPT="${lifecycle_dir%/}/install.sh"
+        saved=true
     else
         SAVED_INSTALL_SCRIPT=""
     fi
+    if [[ "$lifecycle_dir" != "$state_dir" ]]; then
+        rm -f -- "${state_dir%/}/connection.env" "${state_dir%/}/install.sh" "${state_dir%/}/install.sh.sha256"
+    fi
+    umask "$old_umask"
 }
 
 # --- Parse Arguments ---
@@ -4761,7 +5096,7 @@ while [[ $# -gt 0 ]]; do
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
         --report-ip) REPORT_IP="$2"; shift 2 ;;
-        --state-dir) STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; shift 2 ;;
+        --state-dir) STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; STATE_DIR_REMOVAL_AUTHORITY="$2"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
@@ -4813,6 +5148,8 @@ case "$SAFE_PROFILE_ACTION" in
     *) fail "Internal safe-profile action is invalid" "$EXIT_GENERAL" ;;
 esac
 
+verify_saved_installer_self_integrity "$0" ||
+    fail "Saved Pulse installer integrity verification failed; use a freshly authenticated installer instead" "$EXIT_SIGNATURE_FAILED"
 discover_state_dir_from_saved_installer "$0" || true
 
 if [[ -z "$STATE_DIR" || "$STATE_DIR" != /* || "$STATE_DIR" == "/" ||
@@ -4831,12 +5168,9 @@ fi
 
 # Read token from file if --token-file was provided
 if [[ -n "$TOKEN_FILE_PATH" ]]; then
-    if [[ ! -f "$TOKEN_FILE_PATH" ]]; then
-        fail "Token file not found: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
-    fi
-    PULSE_TOKEN=$(cat "$TOKEN_FILE_PATH")
+    PULSE_TOKEN=$(read_collector_token_file_safely "$TOKEN_FILE_PATH" true 2>/dev/null || true)
     if [[ -z "$PULSE_TOKEN" ]]; then
-        fail "Token file is empty: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
+        fail "Token file must be a readable private regular file containing one bounded token: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
     fi
     # Clean up token file after reading in non-interactive mode (deploy bootstrap tokens are one-time use)
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
@@ -4856,7 +5190,7 @@ if [[ -n "$ACTION_TOKEN_FILE_PATH" ]]; then
     if [[ ! "$ACTION_TOKEN_SIZE" =~ ^[0-9]+$ || "$ACTION_TOKEN_SIZE" -lt 1 || "$ACTION_TOKEN_SIZE" -gt 4096 ]]; then
         fail "Action token file must contain between 1 and 4096 bytes" "$EXIT_MISSING_ARGS"
     fi
-    ACTION_TOKEN=$(cat "$ACTION_TOKEN_FILE_PATH")
+    ACTION_TOKEN=$(read_collector_token_file_safely "$ACTION_TOKEN_FILE_PATH" true 2>/dev/null || true)
     if [[ -z "$ACTION_TOKEN" || "$ACTION_TOKEN" == *$'\r'* || "$ACTION_TOKEN" == *$'\n'* ]]; then
         fail "Action token file must contain one non-empty token value" "$EXIT_MISSING_ARGS"
     fi
@@ -5154,63 +5488,17 @@ if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
     local qnap_state_dir=""
 
-    # Try to notify the Pulse server about uninstallation if we have connection details
-    # This ensures the agent record is removed and any linked PVE nodes are updated immediately.
-    if [[ -n "$PULSE_URL" ]]; then
-        # Try to recover agent ID if not provided.
-        # Priority: agent-id file (canonical) > hostname API lookup (fallback)
-        if [[ -z "$AGENT_ID" ]]; then
-            local aid_path=""
-            local aid_paths=("${STATE_DIR%/}/agent-id")
-            if [[ "$STATE_DIR_SOURCE" == "default" ]]; then
-                aid_paths+=("$DEFAULT_STATE_DIR/agent-id" /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
-            fi
-            qnap_state_dir=$(find_qnap_state_dir || true)
-            if [[ -n "$qnap_state_dir" ]]; then
-                aid_paths+=("$qnap_state_dir/agent-id")
-            fi
-
-            # Primary: canonical agent-id file
-            for aid_path in "${aid_paths[@]}"; do
-                if [[ -f "$aid_path" ]]; then
-                    AGENT_ID=$(cat "$aid_path")
-                    log_info "Recovered agent ID from ${aid_path}"
-                    break
-                fi
-            done
+    # A credential-bearing install must durably remove its exact server record
+    # through the same CA/fingerprint/no-proxy transport used by lifecycle
+    # migration before any local credential or service state is deleted.
+    if [[ -n "$PULSE_URL" ]] && collector_credential_state_present; then
+        log_info "Authenticating Pulse server removal before local teardown..."
+        if ! uninstall_collector_registration; then
+            fail "Pulse did not durably confirm collector removal; local credentials and services were retained. Restore trusted server connectivity and retry uninstall." "$EXIT_GENERAL"
         fi
-        if [[ -z "$AGENT_ID" ]]; then
-            # API fallback: prefer explicit hostname continuity from the caller,
-            # otherwise fall back to the local hostname.
-            LOOKUP_HOSTNAME="$HOSTNAME_OVERRIDE"
-            if [[ -z "$LOOKUP_HOSTNAME" ]]; then
-                LOOKUP_HOSTNAME=$(hostname 2>/dev/null || true)
-            fi
-            if [[ -n "$LOOKUP_HOSTNAME" ]]; then
-                LOOKUP_ARGS=(-fsSL --connect-timeout 5)
-                if [[ "$INSECURE" == "true" ]]; then LOOKUP_ARGS+=(-k); fi
-                if [[ -n "$CURL_CA_BUNDLE" ]]; then LOOKUP_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-                LOOKUP_HOSTNAME_ESCAPED=$(url_encode "$LOOKUP_HOSTNAME")
-                LOOKUP_RESP=$(curl_with_pulse_token "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=${LOOKUP_HOSTNAME_ESCAPED}" 2>/dev/null || true)
-                if [[ -n "$LOOKUP_RESP" ]]; then
-                    # Extract .agent.id from JSON (portable, no jq dependency)
-                    AGENT_ID=$(echo "$LOOKUP_RESP" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"//; s/"$//' || true)
-                    if [[ -n "$AGENT_ID" ]]; then
-                        log_info "Recovered agent ID via server lookup: ${AGENT_ID}"
-                    fi
-                fi
-            fi
-        fi
-
-        if [[ -n "$AGENT_ID" ]]; then
-            log_info "Notifying Pulse server to unregister agent ID: ${AGENT_ID}..."
-            CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json")
-            if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
-            if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-
-            # Send unregistration request (ignore errors as we are uninstalling anyway)
-            curl_with_pulse_token "${CURL_ARGS[@]}" -d "{\"agentId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
-        fi
+        log_info "Pulse durably removed agent ID: ${AGENT_ID}."
+    elif [[ -n "$PULSE_URL" ]]; then
+        log_warn "No local collector credential exists; continuing with local-only removal."
     fi
 
     # Kill wrapper scripts first: they are watchdogs, so stopping the agent
@@ -5236,7 +5524,9 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Remove legacy binaries
 
     # Remove agent state directory (contains agent ID, proxmox registration state, etc.)
-    remove_agent_state_dir "$STATE_DIR"
+    if ! remove_agent_state_dir "$STATE_DIR"; then
+        log_warn "Retained agent state at ${STATE_DIR}; its path was not authorized by explicit or protected lifecycle state."
+    fi
 
     # Remove least-privilege helper artifacts. The pulse-agent system user is
     # deliberately left behind: deleting accounts can orphan files elsewhere,
@@ -6803,6 +7093,8 @@ if command -v systemctl >/dev/null 2>&1; then
         if ! safe_profile_verify_declared_health; then
             fail "Safe-profile collector did not satisfy local readiness, helper availability, and server registration; restoring the previous profile" "$EXIT_GENERAL"
         fi
+        save_connection_info "$STATE_DIR"
+        CONNECTION_INFO_PERSISTED="true"
         safe_profile_commit_transaction ||
             fail "Safe-profile health passed but its atomic profile record could not be committed; restoring the previous profile" "$EXIT_GENERAL"
     fi

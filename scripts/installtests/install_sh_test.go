@@ -1,6 +1,8 @@
 package installtests
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -803,11 +805,11 @@ func TestInstallSHUsesHostnameOverrideForUninstallLookup(t *testing.T) {
 
 	script := string(content)
 	required := []string{
-		`LOOKUP_HOSTNAME="$HOSTNAME_OVERRIDE"`,
-		`if [[ -z "$LOOKUP_HOSTNAME" ]]; then`,
-		`LOOKUP_HOSTNAME=$(hostname 2>/dev/null || true)`,
-		`LOOKUP_HOSTNAME_ESCAPED=$(url_encode "$LOOKUP_HOSTNAME")`,
-		`"${PULSE_URL}/api/agents/agent/lookup?hostname=${LOOKUP_HOSTNAME_ESCAPED}"`,
+		`local uninstall_hostname="${HOSTNAME_OVERRIDE:-}"`,
+		`if [[ -z "$uninstall_hostname" ]]; then`,
+		`uninstall_hostname=$(hostname 2>/dev/null || true)`,
+		`uninstall_args+=(--hostname "$uninstall_hostname")`,
+		`removed_agent_id=$(run_collector_lifecycle_command "${uninstall_args[@]}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -824,9 +826,9 @@ func TestInstallSHUrlEncodesHostnameLookupQuery(t *testing.T) {
 
 	script := string(content)
 	required := []string{
-		`url_encode() {`,
-		`printf -v encoded '%%%02X' "'$c"`,
-		`LOOKUP_HOSTNAME_ESCAPED=$(url_encode "$LOOKUP_HOSTNAME")`,
+		`collector-uninstall`,
+		`uninstall_args+=(--hostname "$uninstall_hostname")`,
+		`run_collector_lifecycle_command "${uninstall_args[@]}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -941,6 +943,7 @@ func TestInstallSHRetargetPreservesIdentityWithoutOldEndpointTrust(t *testing.T)
 	}
 	connectionPath := filepath.Join(stateDir, "connection.env")
 	connection := strings.Join([]string{
+		"PULSE_STATE_DIR='" + stateDir + "'",
 		"PULSE_URL='https://old-pulse.example.test:7655'",
 		"PULSE_TOKEN_FILE='" + tokenPath + "'",
 		"PULSE_AGENT_ID='agent-123'",
@@ -967,8 +970,9 @@ func TestInstallSHRetargetPreservesIdentityWithoutOldEndpointTrust(t *testing.T)
 		STATE_DIR_SOURCE="default"
 		DEFAULT_STATE_DIR="/var/lib/pulse-agent"
 		TRUENAS_STATE_DIR="/data/pulse-agent"
+` + extractLifecycleTrustShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "read_connection_state_value") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state") + `
 		recover_connection_state "${PULSE_TEST_CONNECTION:?}"
 		printf 'URL=%s\nTOKEN=%s\nAGENT_ID=%s\nHOSTNAME=%s\nINSECURE=%s\nFINGERPRINT=%s\nCACERT=%s\n' \
@@ -1040,7 +1044,7 @@ func TestInstallSHRetargetDoesNotRecoverLegacyServiceTrust(t *testing.T) {
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 		recover_connection_state_from_arg_stream <<'ARGS'
@@ -1120,7 +1124,7 @@ func TestInstallSHRecoversV5ProcessArgsForSavedStateUpdate(t *testing.T) {
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
@@ -1215,7 +1219,7 @@ func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
 ` + extractInstallShellFunction(t, "running_agent_arg_stream") + `
@@ -1307,7 +1311,7 @@ export PULSE_CACERT='/conf/pulse-ca.pem'
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 ` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
@@ -1383,7 +1387,7 @@ func TestInstallSHRejectsPartialRecoveredProcessConnectionState(t *testing.T) {
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 		if recover_connection_state_from_arg_stream <<'ARGS'
 /usr/local/bin/pulse-agent
@@ -1460,7 +1464,7 @@ func TestInstallSHRecoversLegacyDefaultTokenFileForSavedStateUpdate(t *testing.T
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
@@ -1546,7 +1550,7 @@ func TestInstallSHCombinesRecoveredProcessArgsAndEnvConnectionState(t *testing.T
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 		if recover_connection_state_from_arg_stream <<'ARGS'
@@ -1624,7 +1628,7 @@ func TestInstallSHUpdateModeMergesExplicitURLWithRunningV5ProcessState(t *testin
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractInstallShellFunction(t, "update_connection_state_incomplete") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
@@ -1812,7 +1816,7 @@ func TestInstallSHUsesQNAPStateForUninstallRecovery(t *testing.T) {
 	required := []string{
 		`qnap_state_dir=$(find_qnap_state_dir || true)`,
 		`aid_paths+=("$qnap_state_dir/agent-id")`,
-		`if [[ -n "$qnap_state_dir" ]] && [[ -f "$qnap_state_dir/connection.env" ]]; then`,
+		`if [[ -n "$qnap_state_dir" ]] && trusted_connection_state_file "$qnap_state_dir/connection.env"; then`,
 		`remove_qnap_autorun_block "$AUTORUN_PATH"`,
 	}
 	for _, needle := range required {
@@ -2997,9 +3001,53 @@ func extractInstallShellFunction(t *testing.T, name string) string {
 	return string(match)
 }
 
+func extractLifecycleTrustShellFunctions(t *testing.T) string {
+	t.Helper()
+	names := []string{
+		"portable_path_uid",
+		"portable_path_mode",
+		"trusted_lifecycle_regular_file",
+		"trusted_connection_state_file",
+	}
+	var functions strings.Builder
+	for _, name := range names {
+		functions.WriteString(extractInstallShellFunction(t, name))
+		functions.WriteByte('\n')
+	}
+	return functions.String()
+}
+
+func extractLifecyclePersistenceShellFunctions(t *testing.T) string {
+	t.Helper()
+	names := []string{
+		"installer_file_sha256",
+		"sync_lifecycle_path",
+		"prepare_installer_lifecycle_dir",
+		"install_lifecycle_file_atomically",
+		"has_pinned_installer_signature_key",
+	}
+	var functions strings.Builder
+	functions.WriteString(extractLifecycleTrustShellFunctions(t))
+	for _, name := range names {
+		functions.WriteString(extractInstallShellFunction(t, name))
+		functions.WriteByte('\n')
+	}
+	return functions.String()
+}
+
+func extractTokenRecoveryShellFunctions(t *testing.T) string {
+	t.Helper()
+	return extractLifecycleTrustShellFunctions(t) +
+		extractInstallShellFunction(t, "trusted_private_lifecycle_regular_file") + "\n" +
+		extractInstallShellFunction(t, "collector_lifecycle_binary") + "\n" +
+		extractInstallShellFunction(t, "read_collector_token_file_safely") + "\n" +
+		extractInstallShellFunction(t, "recover_token_from_default_agent_token_file")
+}
+
 func extractCollectorLifecycleShellFunctions(t *testing.T, includeVerify bool) string {
 	t.Helper()
-	functions := extractInstallShellFunction(t, "collector_lifecycle_binary") + "\n" +
+	functions := extractLifecycleTrustShellFunctions(t) +
+		extractInstallShellFunction(t, "collector_lifecycle_binary") + "\n" +
 		extractInstallShellFunction(t, "prepare_collector_lifecycle_token_file") + "\n" +
 		extractInstallShellFunction(t, "run_collector_lifecycle_command")
 	if includeVerify {
@@ -3275,11 +3323,15 @@ func TestStateDirFlagIsAcceptedByInstallerParser(t *testing.T) {
 		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 		DISK_EXCLUDES=()
 		STATE_DIR="/var/lib/pulse-agent"
+		STATE_DIR_SOURCE="default"
+		STATE_DIR_REMOVAL_AUTHORITY="$STATE_DIR"
 		CURL_CA_BUNDLE=""
 		NON_INTERACTIVE="false"
 		TOKEN_FILE_PATH=""
 		OUTPUT_FORMAT="text"
 		PREFLIGHT_ONLY="false"
+		verify_saved_installer_self_integrity() { return 0; }
+		discover_state_dir_from_saved_installer() { return 1; }
 		set -- --state-dir /tmp/pulse-agent-state --non-interactive --url https://pulse.example.com --token deadbeef
 ` + extractInstallShellSection(t, "# --- Parse Arguments ---", "# Read token from file if --token-file was provided") + `
 		printf 'STATE_DIR=%s\nNON_INTERACTIVE=%s\nPULSE_URL=%s\n' "$STATE_DIR" "$NON_INTERACTIVE" "$PULSE_URL"
@@ -3386,7 +3438,11 @@ func TestInstallSHExplicitCustomStateNeverFallsBackToDefaultInstance(t *testing.
 		STATE_DIR_SOURCE="explicit"
 		DEFAULT_STATE_DIR="` + defaultState + `"
 		TRUENAS_STATE_DIR="` + filepath.Join(root, "truenas") + `"
+        INSTALLER_LIFECYCLE_DIR="` + filepath.Join(root, "lifecycle") + `"
+        LEAST_PRIVILEGE_USER="pulse-agent"
+` + extractLifecycleTrustShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "find_connection_state_file") + `
+` + extractInstallShellFunction(t, "read_agent_id_file_safely") + `
 ` + extractInstallShellFunction(t, "recover_agent_id_from_state_file") + `
 		printf 'connection=%s\n' "$(find_connection_state_file)"
 		rm -f "$STATE_DIR/connection.env"
@@ -3422,6 +3478,10 @@ func TestInstallSHSavedInstallerDiscoversItsCustomStateDir(t *testing.T) {
 		set -euo pipefail
 		STATE_DIR="/var/lib/pulse-agent"
 		STATE_DIR_SOURCE="default"
+        STATE_DIR_REMOVAL_AUTHORITY="/var/lib/pulse-agent"
+        INSTALLER_LIFECYCLE_DIR="` + filepath.Join(t.TempDir(), "lifecycle") + `"
+` + extractLifecycleTrustShellFunctions(t) + `
+` + extractInstallShellFunction(t, "read_connection_state_value") + `
 ` + extractInstallShellFunction(t, "discover_state_dir_from_saved_installer") + `
 		discover_state_dir_from_saved_installer "` + installerPath + `"
 		printf 'state=%s source=%s\n' "$STATE_DIR" "$STATE_DIR_SOURCE"
@@ -3511,7 +3571,7 @@ ExecStart=/usr/local/bin/pulse-agent --url https://custom.example --token-file `
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 ` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
@@ -3520,7 +3580,7 @@ ExecStart=/usr/local/bin/pulse-agent --url https://custom.example --token-file `
 				recover_connection_state_from_systemd_unit
 				printf 'state=%s source=%s url=%s token=%s commands=%s\n' \
 					"$STATE_DIR" "$STATE_DIR_SOURCE" "$PULSE_URL" "$PULSE_TOKEN" "$ENABLE_COMMANDS"
-				remove_agent_state_dir "$STATE_DIR"
+				remove_agent_state_dir "$STATE_DIR" || true
 			`
 			out, err := exec.Command("bash", "-c", script).CombinedOutput()
 			if err != nil {
@@ -3541,8 +3601,8 @@ ExecStart=/usr/local/bin/pulse-agent --url https://custom.example --token-file `
 			if strings.Contains(got, "default999") {
 				t.Fatalf("systemd discovery borrowed default token:\n%s", got)
 			}
-			if _, err := os.Stat(customState); !os.IsNotExist(err) {
-				t.Fatalf("uninstall did not remove discovered custom state: %v", err)
+			if _, err := os.Stat(customState); err != nil {
+				t.Fatalf("process-derived state path should be retained without protected removal authority: %v", err)
 			}
 			if _, err := os.Stat(defaultState); err != nil {
 				t.Fatalf("uninstall removed the default instance instead of discovered custom state: %v", err)
@@ -3617,7 +3677,7 @@ func TestInstallSHDiscoversCustomStateDirFromGeneratedLaunchdPlist(t *testing.T)
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
-` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "launchd_agent_arg_stream") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_launchd_plist") + `
@@ -3656,6 +3716,14 @@ func TestInstallSHConnectionEnvPersistsCanonicalStateDirWithoutTokenValue(t *tes
 		SERVER_FINGERPRINT=""
 		CURL_CA_BUNDLE=""
 		SAVED_INSTALL_SCRIPT=""
+		LEAST_PRIVILEGE="false"
+		LEAST_PRIVILEGE_USER="pulse-agent"
+		INSTALLER_LIFECYCLE_DIR="` + filepath.Join(t.TempDir(), "lifecycle") + `"
+		EXIT_GENERAL=1
+		TMP_FILES=()
+		fail() { printf 'FAIL:%s\n' "$1" >&2; return 99; }
+		log_warn() { :; }
+` + extractLifecyclePersistenceShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "write_connection_state_value") + `
 ` + extractInstallShellFunction(t, "save_connection_info") + `
 		curl() { return 1; }
@@ -3721,10 +3789,17 @@ func TestInstallSHStateWritesReplaceSymlinksAtomically(t *testing.T) {
 		SERVER_FINGERPRINT=""
 		CURL_CA_BUNDLE=""
 		SAVED_INSTALL_SCRIPT=""
+		LEAST_PRIVILEGE="false"
+		LEAST_PRIVILEGE_USER="pulse-agent"
+		INSTALLER_LIFECYCLE_DIR="` + filepath.Join(t.TempDir(), "lifecycle") + `"
+		EXIT_GENERAL=1
 		NON_INTERACTIVE="true"
 		TMP_FILES=()
 		log_info() { :; }
+		log_warn() { :; }
+		fail() { printf 'FAIL:%s\n' "$1" >&2; return 99; }
 		curl() { return 1; }
+` + extractLifecyclePersistenceShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "write_connection_state_value") + `
 ` + extractInstallShellFunction(t, "ensure_runtime_token_file") + `
 ` + extractInstallShellFunction(t, "save_connection_info") + `
@@ -3758,6 +3833,221 @@ func TestInstallSHStateWritesReplaceSymlinksAtomically(t *testing.T) {
 		if info.Mode()&os.ModeSymlink != 0 {
 			t.Fatalf("%s remained a symlink after atomic replacement", path)
 		}
+	}
+}
+
+func TestInstallSHLeastPrivilegeLifecycleStateIsRootBoundarySeparated(t *testing.T) {
+	root := t.TempDir()
+	stateDir := filepath.Join(root, "collector-state")
+	lifecycleDir := filepath.Join(root, "root-lifecycle")
+	sourceInstaller := filepath.Join(root, "source-install.sh")
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sourceInstaller, []byte("#!/usr/bin/env bash\necho lifecycle\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"connection.env", "install.sh", "install.sh.sha256"} {
+		if err := os.WriteFile(filepath.Join(stateDir, name), []byte("collector-controlled\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	script := `
+		set -euo pipefail
+		STATE_DIR="` + stateDir + `"
+		PULSE_URL="https://pulse.example.com"
+		RUNTIME_TOKEN_FILE="$STATE_DIR/runtime.token"
+		AGENT_ID="agent-safe"
+		HOSTNAME_OVERRIDE="host-safe"
+		REPORT_IP=""
+		INSECURE="false"
+		SERVER_FINGERPRINT=""
+		CURL_CA_BUNDLE=""
+		SAVED_INSTALL_SCRIPT=""
+		LEAST_PRIVILEGE="true"
+		LEAST_PRIVILEGE_USER="` + os.Getenv("USER") + `"
+		INSTALLER_LIFECYCLE_DIR="` + lifecycleDir + `"
+		EXIT_GENERAL=1
+		TMP_FILES=()
+		fail() { printf 'FAIL:%s\n' "$1" >&2; return 99; }
+		curl() { return 1; }
+` + extractLifecyclePersistenceShellFunctions(t) + `
+` + extractInstallShellFunction(t, "write_connection_state_value") + `
+` + extractInstallShellFunction(t, "save_connection_info") + `
+		save_connection_info "$STATE_DIR"
+		printf 'saved=%s\n' "$SAVED_INSTALL_SCRIPT"
+	`
+	cmd := exec.Command("bash", "-c", script, sourceInstaller)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "saved="+filepath.Join(lifecycleDir, "install.sh")) {
+		t.Fatalf("saved installer did not move to lifecycle boundary:\n%s", out)
+	}
+	for _, name := range []string{"connection.env", "install.sh", "install.sh.sha256"} {
+		if _, err := os.Lstat(filepath.Join(stateDir, name)); !os.IsNotExist(err) {
+			t.Fatalf("collector state retained privileged lifecycle file %s: %v", name, err)
+		}
+	}
+	for path, wantMode := range map[string]os.FileMode{
+		filepath.Join(lifecycleDir, "connection.env"):    0600,
+		filepath.Join(lifecycleDir, "install.sh"):        0700,
+		filepath.Join(lifecycleDir, "install.sh.sha256"): 0600,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != wantMode {
+			t.Fatalf("%s mode = %o, want %o", path, info.Mode().Perm(), wantMode)
+		}
+	}
+	connection, err := os.ReadFile(filepath.Join(lifecycleDir, "connection.env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(connection), "PULSE_STATE_DIR='"+stateDir+"'") {
+		t.Fatalf("protected lifecycle state omitted collector state path:\n%s", connection)
+	}
+	installer, err := os.ReadFile(filepath.Join(lifecycleDir, "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantHash := fmt.Sprintf("%x", sha256.Sum256(installer))
+	checksum, err := os.ReadFile(filepath.Join(lifecycleDir, "install.sh.sha256"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(checksum), wantHash+"  install.sh") {
+		t.Fatalf("installer checksum = %q, want hash %s", checksum, wantHash)
+	}
+}
+
+func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) {
+	root := t.TempDir()
+	lifecycleDir := filepath.Join(root, "lifecycle")
+	if err := os.MkdirAll(lifecycleDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	installerPath := filepath.Join(lifecycleDir, "install.sh")
+	if err := os.WriteFile(installerPath, []byte("#!/usr/bin/env bash\necho original\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	installer, err := os.ReadFile(installerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := fmt.Sprintf("%x", sha256.Sum256(installer))
+	if err := os.WriteFile(filepath.Join(lifecycleDir, "install.sh.sha256"), []byte(hash+"  install.sh\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	verifyScript := `
+		set -euo pipefail
+		INSTALLER_LIFECYCLE_DIR="` + lifecycleDir + `"
+` + extractLifecycleTrustShellFunctions(t) + `
+` + extractInstallShellFunction(t, "installer_file_sha256") + `
+` + extractInstallShellFunction(t, "verify_saved_installer_self_integrity") + `
+		verify_saved_installer_self_integrity "` + installerPath + `"
+	`
+	if out, err := exec.Command("bash", "-c", verifyScript).CombinedOutput(); err != nil {
+		t.Fatalf("untampered installer failed verification: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(installerPath, []byte("#!/usr/bin/env bash\necho replaced\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("bash", "-c", verifyScript).CombinedOutput(); err == nil {
+		t.Fatalf("tampered installer passed verification:\n%s", out)
+	}
+
+	attackerDir := filepath.Join(root, "collector-writable")
+	sentinelDir := filepath.Join(root, "must-survive")
+	if err := os.MkdirAll(attackerDir, 0777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(attackerDir, 0777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sentinelDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sentinelDir, "sentinel"), []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	attackerInstaller := filepath.Join(attackerDir, "install.sh")
+	if err := os.WriteFile(attackerInstaller, []byte("#!/usr/bin/env bash\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(attackerDir, "connection.env"), []byte("PULSE_STATE_DIR='"+sentinelDir+"'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	recoveryScript := `
+		set -euo pipefail
+		STATE_DIR="/var/lib/pulse-agent"
+		STATE_DIR_SOURCE="default"
+		STATE_DIR_REMOVAL_AUTHORITY="/var/lib/pulse-agent"
+		INSTALLER_LIFECYCLE_DIR="` + lifecycleDir + `"
+		log_warn() { :; }
+` + extractLifecycleTrustShellFunctions(t) + `
+` + extractInstallShellFunction(t, "read_connection_state_value") + `
+` + extractInstallShellFunction(t, "discover_state_dir_from_saved_installer") + `
+` + extractInstallShellFunction(t, "remove_agent_state_dir") + `
+		discover_state_dir_from_saved_installer "` + attackerInstaller + `" || true
+		STATE_DIR="` + sentinelDir + `"
+		remove_agent_state_dir "$STATE_DIR" || true
+	`
+	if out, err := exec.Command("bash", "-c", recoveryScript).CombinedOutput(); err != nil {
+		t.Fatalf("fail-closed recovery harness: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(sentinelDir, "sentinel")); err != nil {
+		t.Fatalf("untrusted lifecycle state authorized recursive deletion: %v", err)
+	}
+}
+
+func TestInstallSHLegacyCollectorOwnedTokenReaderFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	stateDir := filepath.Join(root, "collector-state")
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "token"), []byte("legacy-monitoring-token\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fakeBinary := filepath.Join(root, "collector-owned-pulse-agent")
+	marker := filepath.Join(root, "executed")
+	if err := os.WriteFile(fakeBinary, []byte("#!/usr/bin/env bash\ntouch '"+marker+"'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	script := `
+		set -euo pipefail
+		STATE_DIR="` + stateDir + `"
+		STATE_DIR_SOURCE="explicit"
+		DEFAULT_STATE_DIR="/var/lib/pulse-agent"
+		TRUENAS_STATE_DIR="/data/pulse-agent"
+		PULSE_TOKEN=""
+		RUNTIME_TOKEN_FILE=""
+		PRIVILEGED_HELPER_CREDENTIAL_DIR="` + filepath.Join(root, "protected") + `"
+		LEAST_PRIVILEGE_USER="pulse-agent"
+		collector_lifecycle_binary() { printf '%s\n' "` + fakeBinary + `"; }
+		trusted_lifecycle_regular_file() { return 1; }
+		trusted_private_lifecycle_regular_file() { return 1; }
+` + extractInstallShellFunction(t, "read_collector_token_file_safely") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+		recover_token_from_default_agent_token_file || true
+		printf 'token=%s\n' "$PULSE_TOKEN"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "token=" {
+		t.Fatalf("untrusted legacy reader recovered a token: %s", out)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("root installer executed collector-owned lifecycle binary: %v", err)
 	}
 }
 
@@ -4277,6 +4567,150 @@ func TestInstallSHRequiresPinnedSignatureVerificationForReleaseDownloads(t *test
 			t.Fatalf("install.sh missing signed-download verification contract: %s", needle)
 		}
 	}
+}
+
+func TestInstallSHOfflineInstallerAndUninstallUseAuthenticatedLifecycleTransport(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(content)
+	save := extractInstallShellFunction(t, "save_connection_info")
+	uninstall := extractInstallShellFunction(t, "uninstall_collector_registration")
+	for _, required := range []string{
+		`collector-download-installer --url "$PULSE_URL" --output "$installer_tmp"`,
+		`verify_download_signature "$installer_tmp" "$installer_signature"`,
+		`collector-uninstall`,
+		`run_collector_lifecycle_command "${uninstall_args[@]}"`,
+		`Pulse did not durably confirm collector removal; local credentials and services were retained.`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("installer lifecycle transport contract missing %q", required)
+		}
+	}
+	if regexp.MustCompile(`(?m)^[ \t]*curl[ \t]`).MatchString(save) || strings.Contains(save, `-k`) {
+		t.Fatal("offline installer persistence must not use curl or generic insecure TLS")
+	}
+	if regexp.MustCompile(`(?m)^[ \t]*curl[ \t]`).MatchString(uninstall) || strings.Contains(uninstall, `-k`) {
+		t.Fatal("collector uninstall must not use curl or generic insecure TLS")
+	}
+}
+
+func TestInstallSHOfflineInstallerRequiresValidServedSignature(t *testing.T) {
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		t.Skip("ssh-keygen is required for SSH signature verification")
+	}
+	root := t.TempDir()
+	privateKey := filepath.Join(root, "signing-key")
+	keygen := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", privateKey)
+	if out, err := keygen.CombinedOutput(); err != nil {
+		t.Fatalf("ssh-keygen: %v\n%s", err, out)
+	}
+	publicKeyBytes, err := os.ReadFile(privateKey + ".pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKeyFields := strings.Fields(string(publicKeyBytes))
+	if len(publicKeyFields) < 2 {
+		t.Fatalf("invalid generated public key: %q", publicKeyBytes)
+	}
+	publicKey := publicKeyFields[0] + " " + publicKeyFields[1]
+	validPayload := filepath.Join(root, "valid-install.sh")
+	invalidPayload := filepath.Join(root, "invalid-install.sh")
+	if err := os.WriteFile(validPayload, []byte("#!/usr/bin/env bash\necho signed\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(invalidPayload, []byte("#!/usr/bin/env bash\necho forged\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	signer := exec.Command("ssh-keygen", "-Y", "sign", "-f", privateKey, "-n", "pulse-install", validPayload)
+	if out, err := signer.CombinedOutput(); err != nil {
+		t.Fatalf("sign installer: %v\n%s", err, out)
+	}
+	signatureBytes, err := os.ReadFile(validPayload + ".sig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encodedSignature := base64.StdEncoding.EncodeToString(signatureBytes)
+	fakeLifecycle := filepath.Join(root, "pulse-agent")
+	fakeScript := `#!/usr/bin/env bash
+set -euo pipefail
+output=""
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "--output" ]]; then output="$2"; shift 2; continue; fi
+  shift
+done
+cp "${PULSE_TEST_INSTALLER_PAYLOAD:?}" "$output"
+printf '%s\n' "${PULSE_TEST_INSTALLER_SIGNATURE:?}"
+`
+	if err := os.WriteFile(fakeLifecycle, []byte(fakeScript), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(t *testing.T, payload string, wantSuccess bool) {
+		t.Helper()
+		caseRoot := t.TempDir()
+		stateDir := filepath.Join(caseRoot, "state")
+		lifecycleDir := filepath.Join(caseRoot, "lifecycle")
+		script := `
+			set -euo pipefail
+			STATE_DIR="` + stateDir + `"
+			PULSE_URL="https://pulse.example.test"
+			RUNTIME_TOKEN_FILE="$STATE_DIR/token"
+			AGENT_ID="agent-signed"
+			HOSTNAME_OVERRIDE="host-signed"
+			REPORT_IP=""
+			INSECURE="true"
+			SERVER_FINGERPRINT="` + strings.Repeat("a", 64) + `"
+			CURL_CA_BUNDLE=""
+			SAVED_INSTALL_SCRIPT=""
+			LEAST_PRIVILEGE="true"
+			LEAST_PRIVILEGE_USER="$(id -un)"
+			INSTALLER_LIFECYCLE_DIR="` + lifecycleDir + `"
+			COLLECTOR_LIFECYCLE_BINARY_PATH="` + fakeLifecycle + `"
+			PINNED_INSTALLER_SSH_PUBLIC_KEY="` + publicKey + `"
+			INSTALL_SIGNATURE_IDENTITY="pulse-installer"
+			INSTALL_SIGNATURE_NAMESPACE="pulse-install"
+			EXIT_GENERAL=1
+			EXIT_SIGNATURE_FAILED=17
+			OUTPUT_FORMAT=text
+			TMP_FILES=()
+			json_event() { :; }
+			log_info() { :; }
+			log_warn() { :; }
+			fail() { printf 'FAIL:%s\n' "$1" >&2; return "${2:-1}"; }
+			curl() { printf 'unexpected curl\n' >&2; return 98; }
+` + extractLifecyclePersistenceShellFunctions(t) + `
+` + extractInstallShellFunction(t, "collector_lifecycle_binary") + `
+` + extractInstallShellFunction(t, "decode_base64_to_file") + `
+` + extractInstallShellFunction(t, "verify_download_signature") + `
+` + extractInstallShellFunction(t, "write_connection_state_value") + `
+` + extractInstallShellFunction(t, "save_connection_info") + `
+			save_connection_info "$STATE_DIR"
+		`
+		cmd := exec.Command("bash", "-c", script)
+		cmd.Env = append(os.Environ(), "PULSE_TEST_INSTALLER_PAYLOAD="+payload, "PULSE_TEST_INSTALLER_SIGNATURE="+encodedSignature)
+		out, err := cmd.CombinedOutput()
+		if wantSuccess {
+			if err != nil {
+				t.Fatalf("valid signature rejected: %v\n%s", err, out)
+			}
+			body, readErr := os.ReadFile(filepath.Join(lifecycleDir, "install.sh"))
+			if readErr != nil || string(body) != "#!/usr/bin/env bash\necho signed\n" {
+				t.Fatalf("saved installer body=%q err=%v", body, readErr)
+			}
+			return
+		}
+		if err == nil {
+			t.Fatalf("invalid signature was accepted:\n%s", out)
+		}
+		if _, statErr := os.Stat(filepath.Join(lifecycleDir, "install.sh")); !os.IsNotExist(statErr) {
+			t.Fatalf("invalidly signed installer was persisted: %v", statErr)
+		}
+	}
+
+	run(t, validPayload, true)
+	run(t, invalidPayload, false)
 }
 
 func TestBuildContainerInstallCommandPreservesForcedVersion(t *testing.T) {
@@ -6171,7 +6605,8 @@ func TestInstallSHTypedPrivilegedHelperProfileIsOptInAndFailClosed(t *testing.T)
 		`chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"`,
 		`chown -R "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "$STATE_DIR"`,
 		`protect_typed_profile_credentials`,
-		`PRIVILEGED_HELPER_CREDENTIAL_DIR="/etc/pulse-agent"`,
+		`INSTALLER_LIFECYCLE_DIR="/etc/pulse-agent"`,
+		`PRIVILEGED_HELPER_CREDENTIAL_DIR="$INSTALLER_LIFECYCLE_DIR"`,
 		`chown "root:${LEAST_PRIVILEGE_USER}" "$PRIVILEGED_HELPER_CREDENTIAL_DIR"`,
 		`chmod 0750 "$PRIVILEGED_HELPER_CREDENTIAL_DIR"`,
 		`chown "root:${LEAST_PRIVILEGE_USER}" "$RUNTIME_TOKEN_FILE"`,

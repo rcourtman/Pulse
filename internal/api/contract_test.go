@@ -10194,16 +10194,16 @@ func TestContract_ProxmoxInstallCommandUsesPrivilegeEscalationWrapper(t *testing
 		IncludeInstallType: true,
 	})
 
-	if !strings.Contains(got, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`) {
+	if !strings.Contains(got, `if [ "$(id -u)" -eq 0 ]; then`) {
 		t.Fatalf("install command missing root-or-sudo wrapper: %s", got)
 	}
 	if !strings.Contains(got, `sudo bash -s --`) {
 		t.Fatalf("install command missing sudo fallback: %s", got)
 	}
-	if strings.Contains(got, "| bash -s -- --url") {
-		t.Fatalf("install command preserved raw bash pipe instead of governed wrapper: %s", got)
+	if !strings.Contains(got, `token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`) {
+		t.Fatalf("install command missing root-owned sudo token bootstrap: %s", got)
 	}
-	if !strings.Contains(got, `rm -f "$token_file"`) {
+	if !strings.Contains(got, `rm -rf -- "$token_dir"`) {
 		t.Fatalf("install command missing ephemeral token cleanup: %s", got)
 	}
 }

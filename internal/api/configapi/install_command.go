@@ -24,14 +24,7 @@ func BuildProxmoxAgentInstallCommand(opts AgentInstallCommandOptions) string {
 		curlFlags = "-kfsSL"
 	}
 	token := strings.TrimSpace(opts.Token)
-	tokenSetup, tokenArg, tokenCleanup := "", "", ""
-	if token != "" {
-		tokenSetup = fmt.Sprintf(`token_file=$(mktemp) && chmod 600 "$token_file" && printf %%s %s > "$token_file" && `, posixShellQuote(token))
-		tokenArg = " \\\n  --token-file \"$token_file\""
-		tokenCleanup = `; rc=$?; rm -f "$token_file"; exit $rc`
-	}
-	command := fmt.Sprintf("%scurl %s %s | bash -s -- \\\n  --url %s \\\n  --enable-proxmox", tokenSetup, curlFlags, posixShellQuote(installScriptURL), posixShellQuote(baseURL))
-	command += tokenArg
+	command := fmt.Sprintf("curl %s %s | bash -s -- \\\n  --url %s \\\n  --enable-proxmox", curlFlags, posixShellQuote(installScriptURL), posixShellQuote(baseURL))
 	if opts.Insecure || strings.HasPrefix(strings.ToLower(baseURL), "http://") {
 		command += " \\\n  --insecure"
 	}
@@ -41,7 +34,42 @@ func BuildProxmoxAgentInstallCommand(opts AgentInstallCommandOptions) string {
 	if opts.EnableCommands {
 		command += " \\\n  --enable-commands"
 	}
-	return withPrivilegeEscalation(command) + tokenCleanup
+	if token == "" {
+		return withPrivilegeEscalation(command)
+	}
+
+	rootCommand := command + " \\\n  --token-file \"$token_file\""
+	sudoCommand := strings.Replace(command, "| bash -s --", "| sudo bash -s --", 1) + " \\\n  --token-file \"$token_file\""
+	return fmt.Sprintf(`(
+  set -e
+  token_dir=""
+  cleanup() {
+    if [ -n "${token_dir:-}" ]; then
+      if [ "$(id -u)" -eq 0 ]; then
+        rm -rf -- "$token_dir"
+      elif command -v sudo >/dev/null 2>&1; then
+        sudo rm -rf -- "$token_dir" >/dev/null 2>&1 || true
+      fi
+    fi
+  }
+  trap cleanup EXIT HUP INT TERM
+  if [ "$(id -u)" -eq 0 ]; then
+    token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)
+    token_file="$token_dir/token"
+    umask 077
+    printf %%s %s > "$token_file"
+    %s
+  elif command -v sudo >/dev/null 2>&1; then
+    token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)
+    token_file="$token_dir/token"
+    printf %%s %s | sudo tee "$token_file" >/dev/null
+    sudo chmod 0600 "$token_file"
+    %s
+  else
+    echo "Root privileges required. Run as root (su -) and retry." >&2
+    exit 1
+  fi
+)`, posixShellQuote(token), rootCommand, posixShellQuote(token), sudoCommand)
 }
 
 func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {

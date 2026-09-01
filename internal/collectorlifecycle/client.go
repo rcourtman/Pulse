@@ -23,6 +23,7 @@ const (
 	defaultRequestTimeout = 15 * time.Second
 	maximumResponseBytes  = 64 << 10
 	maximumBearerBytes    = 4 << 10
+	maximumInstallerBytes = 4 << 20
 )
 
 var (
@@ -48,6 +49,15 @@ type Config struct {
 	Timeout       time.Duration
 }
 
+// PublicConfig contains the trust-only inputs for downloading a public Pulse
+// lifecycle artifact without exposing a bearer.
+type PublicConfig struct {
+	PulseURL          string
+	CACertPath        string
+	ServerFingerprint string
+	Timeout           time.Duration
+}
+
 // Client can only reduce the current collector's authority and inspect its
 // authoritative registration. It deliberately exposes no general request API.
 type Client struct {
@@ -67,28 +77,42 @@ type Registration struct {
 // New validates the destination before reading the bearer and constructs a
 // redirect-denying, system-CA/custom-CA/exact-leaf-pin-aware HTTP client.
 func New(config Config) (*Client, error) {
-	baseURL, err := securityutil.NormalizePulseHTTPBaseURL(config.PulseURL)
-	if err != nil {
-		return nil, fmt.Errorf("validate collector lifecycle URL: %w", err)
-	}
-	if baseURL.Scheme == "http" && !exactLifecycleLoopbackHost(baseURL.Hostname()) {
-		return nil, errors.New("collector lifecycle plaintext HTTP is allowed only for localhost, 127.0.0.1, or ::1")
-	}
-	if baseURL.Scheme == "http" && (strings.TrimSpace(config.CACertPath) != "" || strings.TrimSpace(config.ServerFingerprint) != "") {
-		return nil, errors.New("collector lifecycle TLS trust options require an HTTPS URL")
-	}
-	bearer, err := readPrivateBearer(config.TokenFile, config.TokenOwnerUID)
+	baseURL, httpClient, err := newLifecycleHTTPClient(PublicConfig{
+		PulseURL:          config.PulseURL,
+		CACertPath:        config.CACertPath,
+		ServerFingerprint: config.ServerFingerprint,
+		Timeout:           config.Timeout,
+	})
 	if err != nil {
 		return nil, err
 	}
+	bearer, err := readPrivateBearer(config.TokenFile, config.TokenOwnerUID)
+	if err != nil {
+		httpClient.CloseIdleConnections()
+		return nil, err
+	}
+	return &Client{baseURL: baseURL, bearer: bearer, http: httpClient}, nil
+}
+
+func newLifecycleHTTPClient(config PublicConfig) (*url.URL, *http.Client, error) {
+	baseURL, err := securityutil.NormalizePulseHTTPBaseURL(config.PulseURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate collector lifecycle URL: %w", err)
+	}
+	if baseURL.Scheme == "http" && !exactLifecycleLoopbackHost(baseURL.Hostname()) {
+		return nil, nil, errors.New("collector lifecycle plaintext HTTP is allowed only for localhost, 127.0.0.1, or ::1")
+	}
+	if baseURL.Scheme == "http" && (strings.TrimSpace(config.CACertPath) != "" || strings.TrimSpace(config.ServerFingerprint) != "") {
+		return nil, nil, errors.New("collector lifecycle TLS trust options require an HTTPS URL")
+	}
 	tlsConfig, err := agenttls.NewClientTLSConfig(config.CACertPath, false, config.ServerFingerprint)
 	if err != nil {
-		return nil, fmt.Errorf("configure collector lifecycle TLS: %w", err)
+		return nil, nil, fmt.Errorf("configure collector lifecycle TLS: %w", err)
 	}
 	if baseURL.Scheme == "https" && strings.TrimSpace(config.CACertPath) == "" && strings.TrimSpace(config.ServerFingerprint) == "" {
 		roots, err := loadSystemCertPool()
 		if err != nil || roots == nil {
-			return nil, fmt.Errorf("load system certificate authorities: %w", err)
+			return nil, nil, fmt.Errorf("load system certificate authorities: %w", err)
 		}
 		tlsConfig.RootCAs = roots
 	}
@@ -96,15 +120,11 @@ func New(config Config) (*Client, error) {
 	if timeout <= 0 {
 		timeout = defaultRequestTimeout
 	}
-	return &Client{
-		baseURL: baseURL,
-		bearer:  bearer,
-		http: &http.Client{
-			Timeout:   timeout,
-			Transport: &http.Transport{TLSClientConfig: tlsConfig},
-			CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-				return fmt.Errorf("collector lifecycle server returned redirect to %s; use the final Pulse URL explicitly", req.URL)
-			},
+	return baseURL, &http.Client{
+		Timeout:   timeout,
+		Transport: &http.Transport{TLSClientConfig: tlsConfig},
+		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+			return fmt.Errorf("collector lifecycle server returned redirect to %s; use the final Pulse URL explicitly", req.URL)
 		},
 	}, nil
 }
@@ -229,6 +249,77 @@ func (c *Client) VerifyRegistration(ctx context.Context, agentID, hostname strin
 		return Registration{}, fmt.Errorf("%w: registration freshness did not advance", ErrRegistrationPending)
 	}
 	return Registration{AgentID: payload.Agent.ID, Hostname: payload.Agent.Hostname, LastSeen: lastSeen}, nil
+}
+
+// Uninstall removes the exact bearer-bound collector record. If agentID is
+// unavailable, hostname is first resolved through the authenticated lookup.
+// Only a bounded success response naming the exact agent authorizes teardown.
+func (c *Client) Uninstall(ctx context.Context, agentID, hostname string) (string, error) {
+	agentID = strings.TrimSpace(agentID)
+	hostname = strings.TrimSpace(hostname)
+	if !validBoundedIdentity(agentID, 256) {
+		registration, err := c.VerifyRegistration(ctx, "", hostname, time.Time{})
+		if err != nil {
+			return "", fmt.Errorf("resolve collector uninstall identity: %w", err)
+		}
+		agentID = registration.AgentID
+	}
+	body, err := json.Marshal(map[string]string{"agentId": agentID})
+	if err != nil {
+		return "", err
+	}
+	response, err := c.do(ctx, http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body), "application/json")
+	if err != nil {
+		return "", fmt.Errorf("uninstall collector: %w", err)
+	}
+	defer response.Body.Close()
+	encoded, err := io.ReadAll(io.LimitReader(response.Body, maximumResponseBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read collector uninstall response: %w", err)
+	}
+	if len(encoded) > maximumResponseBytes || response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("uninstall collector: server returned %s", response.Status)
+	}
+	var result struct {
+		Success bool   `json:"success"`
+		AgentID string `json:"agentId"`
+	}
+	if json.Unmarshal(encoded, &result) != nil || !result.Success || strings.TrimSpace(result.AgentID) != agentID {
+		return "", errors.New("uninstall collector: server returned invalid confirmation")
+	}
+	return agentID, nil
+}
+
+// DownloadInstaller fetches the public shell installer through the same
+// validated TLS/pin, no-proxy, redirect-denying transport used by credential
+// lifecycle operations. Signature verification remains the caller's job.
+func DownloadInstaller(ctx context.Context, config PublicConfig) ([]byte, string, error) {
+	baseURL, httpClient, err := newLifecycleHTTPClient(config)
+	if err != nil {
+		return nil, "", err
+	}
+	defer httpClient.CloseIdleConnections()
+	target := strings.TrimRight(baseURL.String(), "/") + "/install.sh"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return nil, "", fmt.Errorf("download installer: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("download installer: server returned %s", response.Status)
+	}
+	encoded, err := io.ReadAll(io.LimitReader(response.Body, maximumInstallerBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("read installer: %w", err)
+	}
+	if len(encoded) == 0 || len(encoded) > maximumInstallerBytes {
+		return nil, "", errors.New("download installer: response is empty or exceeds the size limit")
+	}
+	return encoded, strings.TrimSpace(response.Header.Get("X-Signature-SSHSIG")), nil
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body io.Reader, contentType string) (*http.Response, error) {

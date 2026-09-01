@@ -3,7 +3,9 @@ package monitoring
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -494,6 +496,12 @@ func (m *Monitor) removeDockerHostsForHostAgent(
 	return removedCount
 }
 
+var (
+	ErrHostAgentNotFound      = errors.New("host agent not found")
+	ErrHostAgentTokenShared   = errors.New("host agent token is still used by another resource")
+	ErrHostAgentTokenMismatch = errors.New("host agent token mismatch")
+)
+
 // RemoveHostAgent removes a host agent from monitoring state and clears related data.
 func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	hostID = strings.TrimSpace(hostID)
@@ -503,14 +511,40 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 
 	m.hostAgentLifecycleMu.Lock()
 	defer m.hostAgentLifecycleMu.Unlock()
+	return m.removeHostAgentLocked(hostID, "", false)
+}
+
+// UninstallHostAgent removes the exact collector record bound to tokenID. Unlike
+// operator-initiated deletion, this path does not report success until the
+// removal tombstone and any dedicated credential revocation are durable.
+func (m *Monitor) UninstallHostAgent(hostID, tokenID string) (models.Host, error) {
+	hostID = strings.TrimSpace(hostID)
+	tokenID = strings.TrimSpace(tokenID)
+	if hostID == "" || tokenID == "" {
+		return models.Host{}, fmt.Errorf("host id and token id are required")
+	}
+
+	m.hostAgentLifecycleMu.Lock()
+	defer m.hostAgentLifecycleMu.Unlock()
+	return m.removeHostAgentLocked(hostID, tokenID, true)
+}
+
+func (m *Monitor) removeHostAgentLocked(hostID, requiredTokenID string, requireDurableRevocation bool) (models.Host, error) {
 
 	continuity, hasContinuity := config.HostContinuityEntry{}, false
 	if m.hostContinuityStore != nil {
 		continuity, hasContinuity = m.hostContinuityStore.Get(hostID)
 	}
 
-	host, removed := m.state.RemoveHost(hostID)
-	if !removed {
+	host, present := models.Host{}, false
+	for _, candidate := range m.state.GetHosts() {
+		if candidate.ID == hostID {
+			host = candidate
+			present = true
+			break
+		}
+	}
+	if !present {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
 			log.Debug().Str("hostID", hostID).Msg("host not present in state during removal")
 		}
@@ -523,19 +557,86 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 			}
 		}
 	}
+	if requireDurableRevocation {
+		boundTokenID := strings.TrimSpace(host.TokenID)
+		if boundTokenID == "" {
+			boundTokenID = strings.TrimSpace(continuity.TokenID)
+		}
+		if boundTokenID != requiredTokenID {
+			if !present && hasContinuity && !continuity.RemovedAt.IsZero() && slices.Contains(continuity.DeniedTokenIDs, requiredTokenID) {
+				// The exact durable transaction already committed. This makes a
+				// duplicated in-process request harmless even after live state is gone.
+				return hostFromContinuityEntry(continuity), nil
+			}
+			if !present && !hasContinuity {
+				return models.Host{}, ErrHostAgentNotFound
+			}
+			return models.Host{}, ErrHostAgentTokenMismatch
+		}
+		if m.hostContinuityStore == nil {
+			return models.Host{}, fmt.Errorf("durable host continuity store unavailable")
+		}
+		if err := m.hostContinuityStore.LoadError(); err != nil {
+			return models.Host{}, fmt.Errorf("durable host continuity state unavailable: %w", err)
+		}
+	}
 
 	removedAt := time.Now().UTC()
 	if !continuity.RemovedAt.IsZero() {
 		removedAt = continuity.RemovedAt.UTC()
 	}
 	tombstone := removedHostContinuityEntry(hostID, host, continuity, removedAt)
+	tokenID := strings.TrimSpace(host.TokenID)
+	hostname := strings.TrimSpace(host.Hostname)
+	tokenStillUsed := m.hostAgentTokenUsedOutsideRemoval(tokenID, hostID, host, tombstone)
+	if requireDurableRevocation && tokenStillUsed {
+		return models.Host{}, ErrHostAgentTokenShared
+	}
 	if m.hostContinuityStore != nil {
 		if err := m.hostContinuityStore.Upsert(tombstone); err != nil {
-			if removed {
-				m.state.UpsertHost(host)
-			}
 			return models.Host{}, fmt.Errorf("persist host agent removal tombstone: %w", err)
 		}
+	}
+
+	var tokenRemoved *config.APITokenRecord
+	if tokenID != "" && !tokenStillUsed {
+		if requireDurableRevocation && m.persistence == nil {
+			rollbackErr := m.restoreHostContinuityAfterFailedRemoval(hostID, continuity, hasContinuity)
+			if rollbackErr != nil {
+				return models.Host{}, errors.Join(
+					errors.New("collector credential persistence unavailable"),
+					fmt.Errorf("restore host continuity after unavailable credential persistence: %w", rollbackErr),
+				)
+			}
+			return models.Host{}, errors.New("collector credential persistence unavailable")
+		}
+		var err error
+		tokenRemoved, err = m.revokeAPIToken(tokenID)
+		if err != nil && requireDurableRevocation {
+			rollbackErr := m.restoreHostContinuityAfterFailedRemoval(hostID, continuity, hasContinuity)
+			if rollbackErr != nil {
+				return models.Host{}, errors.Join(
+					fmt.Errorf("persist collector credential revocation: %w", err),
+					fmt.Errorf("restore host continuity after failed revocation: %w", rollbackErr),
+				)
+			}
+			return models.Host{}, fmt.Errorf("persist collector credential revocation: %w", err)
+		}
+		if err != nil {
+			log.Warn().Err(err).Str("tokenID", tokenID).Msg("API token revocation rolled back after host agent removal")
+		} else if tokenRemoved != nil {
+			log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
+		}
+	} else if tokenID != "" && tokenStillUsed {
+		log.Info().
+			Str("tokenID", tokenID).
+			Str("hostID", hostID).
+			Msg("API token still used by other agents; skipping revocation during host removal")
+	}
+
+	host, removed := m.state.RemoveHost(hostID)
+	if !removed {
+		host = hostFromContinuityEntry(tombstone)
 	}
 
 	removedEntry := removedHostAgentFromContinuity(tombstone)
@@ -549,50 +650,6 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	m.state.AddRemovedHostAgent(removedEntry)
 
 	removedDockerHosts := m.removeDockerHostsForHostAgent(hostID, host, tombstone, removedAt)
-
-	tokenID := strings.TrimSpace(host.TokenID)
-	hostname := strings.TrimSpace(host.Hostname)
-
-	tokenStillUsed := false
-	if tokenID != "" && m.state != nil {
-		readState := m.snapshotBackedUnifiedReadState()
-		for _, other := range readState.Hosts() {
-			if other == nil {
-				continue
-			}
-			if strings.TrimSpace(other.TokenID()) == tokenID {
-				tokenStillUsed = true
-				break
-			}
-		}
-		if !tokenStillUsed {
-			for _, other := range readState.DockerHosts() {
-				if other == nil {
-					continue
-				}
-				if strings.TrimSpace(other.TokenID()) == tokenID {
-					tokenStillUsed = true
-					break
-				}
-			}
-		}
-	}
-
-	var tokenRemoved *config.APITokenRecord
-	if tokenID != "" && !tokenStillUsed {
-		var err error
-		tokenRemoved, err = m.revokeAPIToken(tokenID)
-		if err != nil {
-			log.Warn().Err(err).Str("tokenID", tokenID).Msg("API token revocation rolled back after host agent removal")
-		} else if tokenRemoved != nil {
-			log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
-		}
-	} else if tokenID != "" && tokenStillUsed {
-		log.Info().
-			Str("tokenID", tokenID).
-			Str("hostID", hostID).
-			Msg("API token still used by other agents; skipping revocation during host removal")
-	}
 
 	if tokenID != "" {
 		m.mu.Lock()
@@ -663,6 +720,49 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	m.refreshUnifiedResourceStoreAfterAgentStateChange()
 
 	return host, nil
+}
+
+func (m *Monitor) hostAgentTokenUsedOutsideRemoval(
+	tokenID string,
+	hostID string,
+	host models.Host,
+	continuity config.HostContinuityEntry,
+) bool {
+	tokenID = strings.TrimSpace(tokenID)
+	if tokenID == "" || m == nil || m.state == nil {
+		return false
+	}
+	for _, other := range m.state.GetHosts() {
+		if strings.TrimSpace(other.ID) == hostID {
+			continue
+		}
+		if strings.TrimSpace(other.TokenID) == tokenID {
+			return true
+		}
+	}
+	for _, other := range m.state.GetDockerHosts() {
+		if dockerHostBelongsToHostAgent(other, hostID, host, continuity) {
+			continue
+		}
+		if strings.TrimSpace(other.TokenID) == tokenID {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Monitor) restoreHostContinuityAfterFailedRemoval(
+	hostID string,
+	previous config.HostContinuityEntry,
+	existed bool,
+) error {
+	if m == nil || m.hostContinuityStore == nil {
+		return nil
+	}
+	if existed {
+		return m.hostContinuityStore.Upsert(previous)
+	}
+	return m.hostContinuityStore.Delete(hostID)
 }
 
 func removedHostContinuityEntry(

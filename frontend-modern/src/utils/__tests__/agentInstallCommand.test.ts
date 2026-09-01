@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildUnixAgentInstallCommand,
@@ -15,7 +19,9 @@ describe('agentInstallCommand', () => {
     });
 
     expect(command).toContain("--url 'http://pulse.example:7655'");
-    expect(command).toContain('printf %s \'token-123\' > "$token_file"');
+    expect(command).toContain('token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)');
+    expect(command).toContain('token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)');
+    expect(command).toContain('printf %s \'token-123\' | sudo tee "$token_file" >/dev/null');
     expect(command).toContain('--token-file "$token_file"');
     expect(command).toContain('--insecure');
   });
@@ -31,6 +37,7 @@ describe('agentInstallCommand', () => {
     );
     expect(command).toContain("--url 'https://pulse.example/base path/agent'\"'\"'s'");
     expect(command).toContain("printf %s 'tok'\"'\"'en' > \"$token_file\"");
+    expect(command).toContain("printf %s 'tok'\"'\"'en' | sudo tee \"$token_file\" >/dev/null");
     expect(command).toContain('--token-file "$token_file"');
     expect(command).not.toContain("--token 'tok");
   });
@@ -45,12 +52,98 @@ describe('agentInstallCommand', () => {
     const sudoIndex = command.indexOf('sudo bash "$install_script"');
 
     expect(command).toContain('tmp_dir=$(mktemp -d)');
-    expect(command).toContain('trap \'rm -rf "$tmp_dir"\' EXIT');
+    expect(command).toContain('trap cleanup EXIT HUP INT TERM');
     expect(command).toContain('bash "$install_script" --url');
     expect(command).toContain('--output json');
     expect(command).toContain('--non-interactive');
     expect(preflightIndex).toBeGreaterThan(-1);
     expect(sudoIndex).toBeGreaterThan(preflightIndex);
+    expect(
+      command.indexOf('token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)'),
+    ).toBeGreaterThan(preflightIndex);
+  });
+
+  it('executes root and sudo token bootstraps from trusted private directories', () => {
+    if (process.platform === 'win32') return;
+
+    const fixtureDir = mkdtempSync(join(tmpdir(), 'pulse-install-command-'));
+    try {
+      const binDir = join(fixtureDir, 'bin');
+      const installer = join(fixtureDir, 'installer.sh');
+      const capture = join(fixtureDir, 'captured-token');
+      execFileSync('mkdir', ['-p', binDir]);
+      writeFileSync(
+        installer,
+        `#!/usr/bin/env bash
+set -e
+token_file=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --preflight-only) exit 0 ;;
+    --token-file) token_file="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[ -n "$token_file" ]
+[ "$(stat -c %a "$token_file" 2>/dev/null || stat -f %Lp "$token_file")" = "600" ]
+parent_dir=$(dirname "$token_file")
+[ "$(stat -c %a "$parent_dir" 2>/dev/null || stat -f %Lp "$parent_dir")" = "700" ]
+[ "$(stat -c %u "$token_file" 2>/dev/null || stat -f %u "$token_file")" = "$(stat -c %u "$parent_dir" 2>/dev/null || stat -f %u "$parent_dir")" ]
+cat "$token_file" > "$FAKE_CAPTURE"
+`,
+      );
+      chmodSync(installer, 0o700);
+      writeFileSync(
+        join(binDir, 'curl'),
+        `#!/bin/sh
+output=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) output="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cp "$FAKE_INSTALLER" "$output"
+`,
+      );
+      writeFileSync(
+        join(binDir, 'sudo'),
+        `#!/bin/sh
+exec "$@"
+`,
+      );
+      writeFileSync(
+        join(binDir, 'id'),
+        `#!/bin/sh
+if [ "$1" = "-u" ]; then
+  printf '%s\n' "$FAKE_ID_UID"
+else
+  exec /usr/bin/id "$@"
+fi
+`,
+      );
+      for (const name of ['curl', 'sudo', 'id']) chmodSync(join(binDir, name), 0o700);
+
+      const command = buildUnixAgentInstallCommand({
+        baseUrl: 'https://pulse.example',
+        token: 'token-123',
+      });
+      for (const fakeUID of ['0', '1000']) {
+        rmSync(capture, { force: true });
+        execFileSync('bash', ['-c', command], {
+          env: {
+            ...process.env,
+            PATH: `${binDir}:${process.env.PATH || ''}`,
+            FAKE_CAPTURE: capture,
+            FAKE_ID_UID: fakeUID,
+            FAKE_INSTALLER: installer,
+          },
+        });
+        expect(readFileSync(capture, 'utf8')).toBe('token-123');
+      }
+    } finally {
+      rmSync(fixtureDir, { recursive: true, force: true });
+    }
   });
 
   it('normalizes trailing slashes before building installer transport', () => {

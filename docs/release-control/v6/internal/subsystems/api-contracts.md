@@ -7565,6 +7565,13 @@ The unified-agent uninstall command contract must also fail closed on
 token-required Pulse instances: copied shell and PowerShell uninstall payloads
 must use the same resolved token source as install and upgrade, so required
 auth cannot silently collapse into tokenless deregistration transport.
+The collector self-uninstall API response is teardown authority only after the
+exact host/token transaction has durably persisted the host-removal tombstone
+and revoked a dedicated bearer. Either persistence failure returns a
+non-success response without changing live state; a token still shared by
+another live host returns conflict until it is split or rotated. A successful
+response names the exact removed agent ID, and restart must preserve removal
+and old-secret rejection.
 Agent profile assignment payloads now also fail closed on missing profiles:
 `POST /api/admin/profiles/assignments` must reject unknown `profile_id`
 references with the canonical not-found response instead of writing orphan
@@ -7680,6 +7687,12 @@ download the shared installer into an ephemeral directory, run
 `/download/pulse-agent?arch=...` is reachable with checksum metadata, and
 pass selected tokens to the installer through an ephemeral `--token-file`
 instead of a raw `--token` service argument.
+The token file itself must be created only after the selected root or sudo
+branch begins, inside a root-owned mode-0700 bootstrap directory and with mode
+0600, then the whole directory must be removed on every exit. The frontend
+host-command builder and backend Proxmox-command builder must preserve this
+same executable contract so a fresh root installer never has to trust a token
+file or parent directory owned by the invoking user.
 `/download/pulse-agent` serves only an agent binary carrying this server's own
 agent version. A local artifact that satisfies the report-contract and
 signature checks but predates the running server is refused the same way an

@@ -164,26 +164,44 @@ export const buildUnixAgentInstallCommand = ({
     ...normalizedExtraArgs,
     '--non-interactive',
   ].join(' \\\n    ');
+  const rootTokenSetup = normalizedToken
+    ? `    token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)
+    token_file="$token_dir/token"
+    umask 077
+    printf %s ${shellQuoteArg(normalizedToken)} > "$token_file"
+`
+    : '';
+  const sudoTokenSetup = normalizedToken
+    ? `    token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)
+    token_file="$token_dir/token"
+    printf %s ${shellQuoteArg(normalizedToken)} | sudo tee "$token_file" >/dev/null
+    sudo chmod 0600 "$token_file"
+`
+    : '';
 
   return `(
   set -e
   tmp_dir=$(mktemp -d)
+  token_dir=""
   install_script="$tmp_dir/install.sh"
-  trap 'rm -rf "$tmp_dir"' EXIT
-  curl ${curlFlags}${normalizedCaCertPath ? ` --cacert ${shellQuoteArg(normalizedCaCertPath)}` : ''} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script"
-  chmod +x "$install_script"${
-    normalizedToken
-      ? `
-  token_file="$tmp_dir/token"
-  umask 077
-  printf %s ${shellQuoteArg(normalizedToken)} > "$token_file"`
-      : ''
+  cleanup() {
+    rm -rf -- "$tmp_dir"
+    if [ -n "${'${token_dir:-}'}" ]; then
+      if [ "$(id -u)" -eq 0 ]; then
+        rm -rf -- "$token_dir"
+      elif command -v sudo >/dev/null 2>&1; then
+        sudo rm -rf -- "$token_dir" >/dev/null 2>&1 || true
+      fi
+    fi
   }
+  trap cleanup EXIT HUP INT TERM
+  curl ${curlFlags}${normalizedCaCertPath ? ` --cacert ${shellQuoteArg(normalizedCaCertPath)}` : ''} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script"
+  chmod +x "$install_script"
   bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg}
   if [ "$(id -u)" -eq 0 ]; then
-    bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
+${rootTokenSetup}    bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
   elif command -v sudo >/dev/null 2>&1; then
-    sudo bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
+${sudoTokenSetup}    sudo bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
   else
     echo "Root privileges required. Run as root (su -) and retry." >&2
     exit 1

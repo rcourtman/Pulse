@@ -23,7 +23,7 @@ from release_promotion_policy_support import (
     slice_requires_staged_governance_inputs,
     staged_governance_input_errors,
 )
-from repo_file_io import REPO_ROOT, git_env, read_repo_text
+from repo_file_io import REPO_ROOT, git_env, read_repo_text, strip_local_git_env
 
 USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
 
@@ -918,27 +918,58 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             remote = root / "remote.git"
             checkout = root / "checkout"
             output = root / "github-output"
-            subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
-            subprocess.run(["git", "init", str(checkout)], check=True, capture_output=True)
+            git_subprocess_env = strip_local_git_env(os.environ.copy())
+            subprocess.run(
+                ["git", "init", "--bare", str(remote)],
+                check=True,
+                capture_output=True,
+                env=git_subprocess_env,
+            )
+            subprocess.run(
+                ["git", "init", str(checkout)],
+                check=True,
+                capture_output=True,
+                env=git_subprocess_env,
+            )
             for key, value in (
                 ("user.name", "Pulse Test"),
                 ("user.email", "pulse-test@example.invalid"),
             ):
                 subprocess.run(
-                    ["git", "config", key, value], cwd=checkout, check=True
+                    ["git", "config", key, value],
+                    cwd=checkout,
+                    check=True,
+                    env=git_subprocess_env,
                 )
             (checkout / "README").write_text("base\n", encoding="utf-8")
-            subprocess.run(["git", "add", "README"], cwd=checkout, check=True)
-            subprocess.run(["git", "commit", "-m", "base"], cwd=checkout, check=True, capture_output=True)
-            subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=checkout, check=True)
+            subprocess.run(
+                ["git", "add", "README"],
+                cwd=checkout,
+                check=True,
+                env=git_subprocess_env,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "base"],
+                cwd=checkout,
+                check=True,
+                capture_output=True,
+                env=git_subprocess_env,
+            )
+            subprocess.run(
+                ["git", "remote", "add", "origin", str(remote)],
+                cwd=checkout,
+                check=True,
+                env=git_subprocess_env,
+            )
             subprocess.run(
                 ["git", "push", "origin", "HEAD:refs/heads/release-customer-promotion-lock"],
                 cwd=checkout,
                 check=True,
                 capture_output=True,
+                env=git_subprocess_env,
             )
 
-            env = os.environ.copy()
+            env = git_subprocess_env.copy()
             env.update(
                 {
                     "GH_TOKEN": "test-token",

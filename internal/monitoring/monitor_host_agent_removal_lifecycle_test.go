@@ -3,6 +3,7 @@ package monitoring
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -194,6 +195,90 @@ func TestHostAgentRemovalLifecycleRevokesDedicatedCredentialAndRetainsDenial(t *
 	}
 	if _, err := monitor.ApplyHostReport(report, &oldToken); err == nil {
 		t.Fatal("explicitly revoked credential bypassed the durable identity denial")
+	}
+}
+
+func TestCollectorUninstallHostAgentTransactionRollsBackAndRetries(t *testing.T) {
+	dataPath := t.TempDir()
+	monitor := newHostRemovalLifecycleMonitor(t, dataPath)
+	monitor.persistence = config.NewConfigPersistence(dataPath)
+
+	now := time.Now().UTC()
+	token := config.APITokenRecord{
+		ID:        "collector-uninstall-token",
+		Name:      "Collector uninstall token",
+		Hash:      "collector-uninstall-hash",
+		CreatedAt: now.Add(-time.Hour),
+		Scopes:    []string{config.ScopeAgentReport, config.ScopeAgentConfigRead},
+	}
+	monitor.config.APITokens = []config.APITokenRecord{token}
+	if err := monitor.persistence.SaveAPITokens(monitor.config.APITokens); err != nil {
+		t.Fatalf("SaveAPITokens: %v", err)
+	}
+
+	report := hostRemovalLifecycleReport(
+		"collector-uninstall-machine",
+		"collector-uninstall-machine",
+		"collector-uninstall-agent",
+		"collector-uninstall.local",
+		"linux",
+		now,
+	)
+	host, err := monitor.ApplyHostReport(report, &token)
+	if err != nil {
+		t.Fatalf("initial ApplyHostReport: %v", err)
+	}
+
+	// Block only the credential inventory's atomic replacement. The removal
+	// tombstone can still be written first, so this exercises the rollback
+	// half of the durable uninstall transaction rather than a preflight error.
+	credentialBlocker := filepath.Join(dataPath, "api_tokens.json.tmp")
+	if err := os.Mkdir(credentialBlocker, 0o700); err != nil {
+		t.Fatalf("create credential persistence blocker: %v", err)
+	}
+	if _, err := monitor.UninstallHostAgent(host.ID, token.ID); err == nil {
+		t.Fatal("UninstallHostAgent authorized teardown without durable credential revocation")
+	}
+	if hosts := monitor.GetLiveHostsSnapshot(); len(hosts) != 1 || hosts[0].ID != host.ID {
+		t.Fatalf("failed uninstall changed live host state: %+v", hosts)
+	}
+	if len(monitor.config.APITokens) != 1 || monitor.config.APITokens[0].ID != token.ID {
+		t.Fatalf("failed uninstall changed live credential inventory: %+v", monitor.config.APITokens)
+	}
+	continuity, ok := monitor.hostContinuityStore.Get(host.ID)
+	if !ok || !continuity.RemovedAt.IsZero() || continuity.TokenID != token.ID {
+		t.Fatalf("failed uninstall did not restore active continuity: (%+v, %v)", continuity, ok)
+	}
+
+	if err := os.Remove(credentialBlocker); err != nil {
+		t.Fatalf("remove credential persistence blocker: %v", err)
+	}
+	removed, err := monitor.UninstallHostAgent(host.ID, token.ID)
+	if err != nil {
+		t.Fatalf("retry UninstallHostAgent: %v", err)
+	}
+	if removed.ID != host.ID {
+		t.Fatalf("removed host = %+v, want %q", removed, host.ID)
+	}
+	if hosts := monitor.GetLiveHostsSnapshot(); len(hosts) != 0 {
+		t.Fatalf("successful uninstall retained live host: %+v", hosts)
+	}
+	if len(monitor.config.APITokens) != 0 {
+		t.Fatalf("successful uninstall retained live credential: %+v", monitor.config.APITokens)
+	}
+	persistedTokens, err := monitor.persistence.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens after retry: %v", err)
+	}
+	if len(persistedTokens) != 0 {
+		t.Fatalf("successful uninstall retained durable credential: %+v", persistedTokens)
+	}
+	tombstone, ok := monitor.hostContinuityStore.Get(host.ID)
+	if !ok || tombstone.RemovedAt.IsZero() || !slices.Contains(tombstone.DeniedTokenIDs, token.ID) {
+		t.Fatalf("successful uninstall tombstone = (%+v, %v)", tombstone, ok)
+	}
+	if _, err := monitor.UninstallHostAgent(host.ID, token.ID); err != nil {
+		t.Fatalf("idempotent uninstall retry: %v", err)
 	}
 }
 
