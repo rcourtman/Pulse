@@ -75,7 +75,7 @@ func TestProxmoxGuestLifecycleCancellationStopsMutationAndProducesBoundFailure(t
 
 func TestProxmoxGuestLifecycleTerminalReceiptReplaysWithoutSecondMutation(t *testing.T) {
 	payload := boundProxmoxPayload(t)
-	client := &CommandClient{agentID: "agent-pve", logger: zerolog.Nop(), activeCommands: make(map[string]context.CancelFunc)}
+	client := &CommandClient{agentID: "agent-pve", logger: zerolog.Nop(), cancellableRequests: make(map[cancellableRequestKey]*cancellableRequestState)}
 	receipts, err := operationreceipt.Open(filepath.Join(t.TempDir(), "receipts.db"), hostOperationReceiptConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -130,5 +130,79 @@ func TestProxmoxGuestLifecycleTerminalReceiptReplaysWithoutSecondMutation(t *tes
 	}
 	if mutations != 1 {
 		t.Fatalf("mutations=%d, want 1", mutations)
+	}
+}
+
+func TestProxmoxGuestLifecycleCancellationBeforeHandlerRegistrationSkipsProviderAndPersistsReceipt(t *testing.T) {
+	payload := boundProxmoxPayload(t)
+	client := &CommandClient{agentID: "agent-pve", logger: zerolog.Nop(), cancellableRequests: make(map[cancellableRequestKey]*cancellableRequestState)}
+	receipts, err := operationreceipt.Open(filepath.Join(t.TempDir(), "receipts.db"), hostOperationReceiptConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer receipts.Close()
+	client.operationReceipts = receipts
+	client.proxmoxGuestLifecycle = newProxmoxGuestLifecycleManager()
+	providerCalls := 0
+	client.proxmoxGuestLifecycle.run = func(context.Context, string, ...string) ([]byte, error) {
+		providerCalls++
+		return nil, errors.New("provider must not run after pre-registration cancellation")
+	}
+
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	serverConnections := make(chan *websocket.Conn, 1)
+	releaseServer := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, upgradeErr := upgrader.Upgrade(w, r, nil)
+		if upgradeErr != nil {
+			return
+		}
+		serverConnections <- conn
+		<-releaseServer
+		_ = conn.Close()
+	}))
+	defer server.Close()
+	remote, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close()
+	serverConn := <-serverConnections
+	defer func() { releaseServer <- struct{}{} }()
+
+	if client.noteCancellableRequest(serverConn, payload.RequestID) == nil {
+		t.Fatal("failed to admit cancellable Proxmox request")
+	}
+	handlerWaiting := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	handlerDone := make(chan struct{})
+	go func() {
+		close(handlerWaiting)
+		<-releaseHandler
+		client.handleProxmoxGuestLifecycle(context.Background(), serverConn, payload)
+		close(handlerDone)
+	}()
+	<-handlerWaiting
+	client.handleCancelCommand(serverConn, cancelCommandPayload{RequestID: payload.RequestID})
+	close(releaseHandler)
+
+	var message wsMessage
+	if err := remote.ReadJSON(&message); err != nil {
+		t.Fatal(err)
+	}
+	<-handlerDone
+	var result agentexec.ProxmoxGuestLifecycleResultPayload
+	if message.Type != msgTypeProxmoxGuestLifecycleResult || json.Unmarshal(message.Payload, &result) != nil {
+		t.Fatalf("terminal cancellation message=%+v result=%+v", message, result)
+	}
+	if result.MutationStarted || result.ExecutionPhase != agentexec.ProxmoxGuestPhasePreflight || !strings.Contains(result.Error, "canceled before mutation") {
+		t.Fatalf("pre-registration cancellation receipt=%+v", result)
+	}
+	if providerCalls != 0 {
+		t.Fatalf("provider calls=%d, want zero", providerCalls)
+	}
+	query, err := receipts.Query(agentexec.ProxmoxGuestLifecycleOperationIdentity(client.agentID, payload))
+	if err != nil || query.Status != operationreceipt.QueryFoundTerminal || query.Record == nil {
+		t.Fatalf("durable cancellation query=%+v err=%v", query, err)
 	}
 }

@@ -44,8 +44,8 @@ func (c *CommandClient) handleDockerContainerUpdate(ctx context.Context, conn *w
 		timeout = 15 * time.Minute
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, timeout)
-	c.registerActiveCommand(payload.RequestID, cancel)
-	defer c.unregisterActiveCommand(payload.RequestID)
+	state, _ := c.registerActiveCommand(conn, payload.RequestID, cancel)
+	defer c.finishCancellableRequest(conn, payload.RequestID, state)
 	defer cancel()
 
 	result := c.runDockerContainerUpdate(operationCtx, payload)
@@ -73,6 +73,10 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Docker update preflight refused: invalid payload")
 		result.ReasonCode = agentexec.ActionRefusalContractInvalid
 		result.Error = "typed container update preflight refused"
+		return result
+	}
+	if ctx.Err() != nil {
+		result.Error = "container update canceled before mutation dispatch"
 		return result
 	}
 	if c.dockerUpdater == nil {

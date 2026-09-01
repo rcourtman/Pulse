@@ -178,6 +178,27 @@ func ValidateOperationQueryResultForIdentity(result operationreceipt.QueryResult
 			return fmt.Errorf("docker container update readback has invalid terminal chronology")
 		}
 		return nil
+	case "start", "stop", "shutdown", "reboot":
+		if result.Record.ResultKind != ProxmoxGuestLifecycleReceiptKind || result.Record.ResultVersion != ProxmoxGuestLifecycleReceiptVersion {
+			return fmt.Errorf("proxmox guest lifecycle query result envelope mismatch")
+		}
+		payload, err := DecodeProxmoxGuestLifecycleResultPayload(result.Record.Result)
+		if err != nil {
+			return err
+		}
+		if payload.RequestID != identity.AttemptID || payload.ActionID != identity.ActionID || payload.Operation != identity.OperationKind || payload.OperationVersion != identity.OperationVersion || payload.RequestDigest != identity.RequestDigest {
+			return operationreceipt.ErrBindingConflict
+		}
+		if payload.MutationStarted && payload.Before.ObservedAt.IsZero() {
+			return fmt.Errorf("proxmox guest lifecycle mutation lacks a durable preflight observation")
+		}
+		if !payload.Before.ObservedAt.IsZero() && result.Record.TerminalAt.Before(payload.Before.ObservedAt) {
+			return fmt.Errorf("proxmox guest lifecycle preflight has invalid terminal chronology")
+		}
+		if payload.ReadbackRan && (payload.After.ObservedAt.IsZero() || result.Record.TerminalAt.Before(payload.After.ObservedAt)) {
+			return fmt.Errorf("proxmox guest lifecycle readback has invalid terminal chronology")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported operation query kind %q", identity.OperationKind)
 	}

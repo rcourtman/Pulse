@@ -116,10 +116,10 @@ type RegisteredPayload struct {
 }
 
 // CancelCommandPayload is sent by the server when it stops waiting for a
-// previously dispatched execute_command request (caller context expired or
-// the server-side timeout fired). Agents that understand it abort the running
-// command and reap its whole process tree; older agents ignore the message
-// and rely on their own per-command timeout.
+// previously dispatched command or durable typed operation (caller context
+// expired or the server-side timeout fired). Typed operation cancellation is
+// best effort: a mutation that already started remains indeterminate and is
+// reconciled through its durable receipt.
 type CancelCommandPayload struct {
 	RequestID string `json:"request_id"`
 }

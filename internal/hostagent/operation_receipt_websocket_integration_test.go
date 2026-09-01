@@ -2,10 +2,12 @@ package hostagent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -231,5 +233,163 @@ func TestRealServerAndUnifiedAgentWebSocketDockerDuplicateReplayMutatesOnce(t *t
 	defer manager.mu.Unlock()
 	if manager.calls != 1 {
 		t.Fatalf("typed docker mutation calls = %d, want one", manager.calls)
+	}
+}
+
+func TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfterReconnect(t *testing.T) {
+	admission := agentexec.AgentAdmission{
+		TokenID: "runner-token", AgentID: "agent-pve", Hostname: "pve.example.test",
+		RuntimeRole: agentexec.RuntimeRoleActionRunner, ActionCapability: agentexec.ActionCapabilityTypedV1,
+	}
+	server := agentexec.NewServerWithAdmissionValidator(func(token, _, _ string) (agentexec.AgentAdmission, bool) {
+		return admission, token == admission.TokenID
+	}, func(agentexec.AgentAdmission) bool { return true })
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPatch && request.URL.Path == "/api/agents/action-runner/credential" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		server.HandleWebSocket(w, request)
+	}))
+	defer httpServer.Close()
+
+	stateDir := t.TempDir()
+	logger := zerolog.Nop()
+	mutationStarted := make(chan struct{})
+	var startOnce sync.Once
+	var mutationMu sync.Mutex
+	mutationCalls := 0
+	manager := newProxmoxGuestLifecycleManager()
+	manager.run = func(ctx context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) == 0 {
+			return nil, errors.New("missing Proxmox verb")
+		}
+		if args[0] == "status" {
+			return []byte("status: running"), nil
+		}
+		if args[0] != "shutdown" || len(args) != 2 || args[1] != "101" {
+			return nil, errors.New("unexpected Proxmox mutation")
+		}
+		mutationMu.Lock()
+		mutationCalls++
+		mutationMu.Unlock()
+		startOnce.Do(func() { close(mutationStarted) })
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+
+	startRunner := func(t *testing.T) (*CommandClient, context.CancelFunc, <-chan error) {
+		t.Helper()
+		client := NewActionRunnerClient(ActionRunnerClientConfig{
+			PulseURL: httpServer.URL, APIToken: admission.TokenID, StateDir: stateDir,
+			HealthPath: filepath.Join(stateDir, "health.json"), ActivationNonce: strings.Repeat("a", 32), Logger: &logger,
+		}, admission.AgentID, admission.Hostname, "test")
+		client.proxmoxGuestLifecycle = manager
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- client.Run(ctx) }()
+		deadline := time.Now().Add(3 * time.Second)
+		for !server.IsAgentConnected(admission.AgentID) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !server.IsAgentConnected(admission.AgentID) {
+			cancel()
+			_ = client.Close()
+			t.Fatal("action runner did not connect")
+		}
+		return client, cancel, done
+	}
+	stopRunner := func(t *testing.T, client *CommandClient, cancel context.CancelFunc, done <-chan error) {
+		t.Helper()
+		cancel()
+		_ = client.Close()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("action runner did not stop")
+		}
+	}
+
+	request := agentexec.ProxmoxGuestLifecyclePayload{
+		RequestID: "pve.cancel-replay.1", ActionID: "pve.cancel-replay", Operation: "shutdown",
+		GuestKind: "vm", VMID: 101, ExpectedStatus: "running", Timeout: 30,
+	}
+	if err := agentexec.BindProxmoxGuestLifecyclePayload(&request); err != nil {
+		t.Fatal(err)
+	}
+	identity := agentexec.ProxmoxGuestLifecycleOperationIdentity(admission.AgentID, request)
+
+	first, cancelFirst, firstDone := startRunner(t)
+	dispatchCtx, cancelDispatch := context.WithCancel(context.Background())
+	dispatchDone := make(chan error, 1)
+	go func() {
+		_, err := server.ExecuteProxmoxGuestLifecycle(dispatchCtx, admission.AgentID, request)
+		dispatchDone <- err
+	}()
+	select {
+	case <-mutationStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Proxmox mutation did not start")
+	}
+	cancelDispatch()
+	if err := <-dispatchDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled dispatch error = %v, want context.Canceled", err)
+	}
+
+	var query operationreceipt.QueryResult
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		queryCtx, cancelQuery := context.WithTimeout(context.Background(), time.Second)
+		result, err := server.QueryAgentOperation(queryCtx, admission.AgentID, identity)
+		cancelQuery()
+		if err == nil && result.Status == operationreceipt.QueryFoundTerminal {
+			query = result
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if query.Record == nil || query.Status != operationreceipt.QueryFoundTerminal {
+		t.Fatalf("terminal receipt not observed after cancellation: %+v", query)
+	}
+	var canceled agentexec.ProxmoxGuestLifecycleResultPayload
+	if err := json.Unmarshal(query.Record.Result, &canceled); err != nil {
+		t.Fatal(err)
+	}
+	if !canceled.MutationStarted || canceled.MutationCompleted || !strings.Contains(canceled.Error, "recovery inspection") {
+		t.Fatalf("canceled durable receipt = %+v", canceled)
+	}
+	stopRunner(t, first, cancelFirst, firstDone)
+
+	second, cancelSecond, secondDone := startRunner(t)
+	defer stopRunner(t, second, cancelSecond, secondDone)
+	replayed, err := server.ExecuteProxmoxGuestLifecycle(context.Background(), admission.AgentID, request)
+	if err != nil || replayed == nil || !replayed.MutationStarted || replayed.MutationCompleted || replayed.Error != canceled.Error {
+		t.Fatalf("replayed result = %+v, err=%v", replayed, err)
+	}
+	mutationMu.Lock()
+	if mutationCalls != 1 {
+		t.Fatalf("Proxmox mutations = %d, want one", mutationCalls)
+	}
+	mutationMu.Unlock()
+
+	for _, mutate := range []func(*operationreceipt.Identity){
+		func(conflict *operationreceipt.Identity) { conflict.ActionID = "different-action" },
+		func(conflict *operationreceipt.Identity) {
+			conflict.RequestDigest = "sha256:" + strings.Repeat("f", 64)
+		},
+	} {
+		conflict := identity
+		mutate(&conflict)
+		queryCtx, cancelQuery := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		_, err := server.QueryAgentOperation(queryCtx, admission.AgentID, conflict)
+		cancelQuery()
+		if err == nil {
+			t.Fatalf("conflicting receipt identity was accepted: %+v", conflict)
+		}
+	}
+	wrongAgent := identity
+	wrongAgent.AgentID = "other-agent"
+	if _, err := server.QueryAgentOperation(context.Background(), admission.AgentID, wrongAgent); !errors.Is(err, operationreceipt.ErrBindingConflict) {
+		t.Fatalf("cross-agent receipt query error = %v", err)
 	}
 }

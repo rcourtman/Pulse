@@ -6380,7 +6380,7 @@ originally authorized expected value when validating the admitted request
 digest. The generic receipt store continues to bind completion and replay to
 the exact admitted attempt/action/operation/digest/agent identity, while the
 drift observation records why mutation was refused and replan is required.
-Typed APT, storage-cleanup, and Docker result payloads carry an optional bounded
+Typed APT, storage-cleanup, Docker, and Proxmox result payloads carry an optional bounded
 `reason_code` for pre-mutation refusal. Codes distinguish invalid contracts,
 missing agent capabilities, target drift, unavailable inspection, package
 manager contention or health, and bounded preflight failure without exposing
@@ -6389,8 +6389,11 @@ the field and remain valid; the server projects that legacy absence to
 `preflight_refused`. A refusal code cannot accompany a started mutation or a
 successful result. An already-empty package cache is a verified no-op success,
 because the requested postcondition is already satisfied.
-Callback loss and a reopened server store reconcile both APT actions by query
-only; the original typed dispatch is never resent. Legacy APT v1 terminal
+Callback loss and a reopened server store reconcile APT, Docker, and Proxmox
+actions by exact identity query only; the original typed dispatch is never
+resent. Proxmox query validation recognizes every closed lifecycle verb,
+revalidates the terminal envelope and chronology, and rejects mismatched
+action, digest, or agent identity. Legacy APT v1 terminal
 payloads that predate additive package-manager health facts remain
 structurally valid receipts, but their verified claim is projected as health-
 unknown/inconclusive rather than confirmed.
@@ -7234,7 +7237,7 @@ qualify migration and failure rollback, typed-helper update activation,
 provider parity and documented degradation, and separately credentialed live
 action sessions. Unsupported platforms continue to fail closed on migration.
 
-### Command dispatch is context-honest and abandoned executions are canceled
+### Command and durable typed dispatch are context-honest and canceled when abandoned
 
 The agent command transport now refuses to dispatch work its caller has
 already stopped waiting for, and propagates abandonment to the agent
@@ -7242,33 +7245,54 @@ already stopped waiting for, and propagates abandonment to the agent
 expired poll context were re-issued every cycle while every previous copy
 kept running on the Proxmox host). Three coupled guarantees:
 
-1. `agentexec.Server.ExecuteCommand` and `ReadFile` fail with a
+1. `agentexec.Server.ExecuteCommand`, `ReadFile`, and every durable typed
+   mutation dispatcher fail with a
    `not dispatched` error when the caller's context is already expired —
    nothing crosses the WebSocket, so a caller polling on a dead deadline
    cannot leave the agent executing commands nobody awaits.
 2. When the server stops waiting for a dispatched request (its own
-   command timeout or caller-context cancellation), it sends the new
+   operation timeout or caller-context cancellation), it sends exactly one
    best-effort server→agent `cancel_command` message
    (`MsgTypeCancelCmd`, payload `CancelCommandPayload{request_id}`).
    Agents that predate the message ignore the unknown type and fall back
-   to their own per-command timeout; the protocol change is additive.
+   to their own per-command timeout; the protocol change is additive. Before
+   launching a handler, the runner records the request in a bounded,
+   connection-generation-scoped state table. Cancellation or connection
+   teardown before handler registration leaves a tombstone that registration
+   consumes atomically, so provider handoff cannot start after abandonment.
 3. The unified agent's command client tracks in-flight
-   `execute_command`/`read_file` executions by request ID and, on
-   `cancel_command`, cancels that execution's context. Command execution
+   `execute_command`/`read_file` executions and durable host update,
+   storage-cleanup, Proxmox guest lifecycle, and container lifecycle/update
+   operations by request ID and, on `cancel_command`, cancels that execution's
+   context. Command execution
    runs each command in its own process group (`Setpgid`; SIGKILL of the
    group via `cmd.Cancel`, `taskkill /T` on Windows), bounds `Wait` with
    a 5s `WaitDelay` so orphan-held pipes cannot hang it, treats
    `exec.ErrWaitDelay` after a clean exit as success, and reports
    cancellation as a distinct `command canceled` failure. This ports the
    `pulse/v6-release` process-leak fix (45480a5cc) to main, which had
-   never received it, and extends it with server-driven cancellation.
+   never received it, and extends it with server-driven cancellation. A typed
+   mutation that reached provider handoff remains explicitly indeterminate;
+   cancellation never claims rollback or no effect. The runner commits its
+   bounded terminal receipt after cancellation when its durable store remains
+   healthy even when the original waiter has gone, and reconnect/replay
+   returns that exact receipt without a second mutation.
 
 Proofs: `internal/agentexec/server_websocket_test.go`
 (`TestExecuteCommand_ExpiredContextNeverDispatches`,
 `TestExecuteCommand_AbandonedCommandSendsCancel`),
+`internal/agentexec/server_websocket_test.go`
+(`TestTypedOperations_AbandonedDispatchSendsExactlyOneCancel`,
+`TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches`),
+`internal/hostagent/operation_receipt_websocket_integration_test.go`
+(`TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfterReconnect`),
 `internal/hostagent/command_client_test.go`
 (`TestCommandClient_handleCancelCommand_CancelsRegisteredRequest`,
-`TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp`), and
+`TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp`,
+`TestCommandClient_CancellationBeforeRegistrationIsConsumedAndConnectionScoped`,
+`TestCommandClient_StaleCleanupCannotEraseReusedRequestCancellation`),
+`internal/hostagent/proxmox_guest_lifecycle_test.go`
+(`TestProxmoxGuestLifecycleCancellationBeforeHandlerRegistrationSkipsProviderAndPersistsReceipt`), and
 `internal/hostagent/commands_execute_unix_test.go` (timeout and cancel
 kill the whole process group; WaitDelay unblocks inherited pipes).
 

@@ -2,10 +2,12 @@ package hostagent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"reflect"
 	"testing"
 
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rs/zerolog"
 )
@@ -291,10 +293,10 @@ func TestCommandClient_handleCancelCommand_CancelsRegisteredRequest(t *testing.T
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c.registerActiveCommand("req-1", cancel)
-	defer c.unregisterActiveCommand("req-1")
+	state, _ := c.registerActiveCommand(nil, "req-1", cancel)
+	defer c.finishCancellableRequest(nil, "req-1", state)
 
-	c.handleCancelCommand(cancelCommandPayload{RequestID: "req-1"})
+	c.handleCancelCommand(nil, cancelCommandPayload{RequestID: "req-1"})
 
 	select {
 	case <-ctx.Done():
@@ -310,15 +312,146 @@ func TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp(t *testing.T) {
 
 	otherCtx, otherCancel := context.WithCancel(context.Background())
 	defer otherCancel()
-	c.registerActiveCommand("other", otherCancel)
-	defer c.unregisterActiveCommand("other")
+	state, _ := c.registerActiveCommand(nil, "other", otherCancel)
+	defer c.finishCancellableRequest(nil, "other", state)
 
-	c.handleCancelCommand(cancelCommandPayload{RequestID: "missing"})
+	c.handleCancelCommand(nil, cancelCommandPayload{RequestID: "missing"})
 
 	select {
 	case <-otherCtx.Done():
 		t.Fatalf("cancel for unknown request canceled an unrelated command")
 	default:
+	}
+}
+
+func TestCommandClient_CancellationBeforeRegistrationIsConsumedAndConnectionScoped(t *testing.T) {
+	c := &CommandClient{logger: zerolog.Nop()}
+	firstConnection := &websocket.Conn{}
+	secondConnection := &websocket.Conn{}
+	const requestID = "typed-before-register"
+
+	firstState := c.noteCancellableRequest(firstConnection, requestID)
+	if firstState == nil {
+		t.Fatal("failed to admit first cancellable request")
+	}
+	c.handleCancelCommand(firstConnection, cancelCommandPayload{RequestID: requestID})
+	firstCtx, firstCancel := context.WithCancel(context.Background())
+	defer firstCancel()
+	_, firstRegistered := c.registerActiveCommand(firstConnection, requestID, firstCancel)
+	if firstRegistered {
+		t.Fatal("pre-registration cancellation did not stop provider handoff")
+	}
+	select {
+	case <-firstCtx.Done():
+	default:
+		t.Fatal("pre-registration cancellation was not consumed by registration")
+	}
+
+	secondState := c.noteCancellableRequest(secondConnection, requestID)
+	if secondState == nil {
+		t.Fatal("connection-scoped request id was incorrectly treated as a duplicate")
+	}
+	secondCtx, secondCancel := context.WithCancel(context.Background())
+	defer secondCancel()
+	_, secondRegistered := c.registerActiveCommand(secondConnection, requestID, secondCancel)
+	if !secondRegistered {
+		t.Fatal("cancellation leaked into a different WebSocket generation")
+	}
+	c.clearCancellableRequests(firstConnection)
+	select {
+	case <-secondCtx.Done():
+		t.Fatal("first-generation teardown canceled second-generation work")
+	default:
+	}
+	c.clearCancellableRequests(secondConnection)
+	select {
+	case <-secondCtx.Done():
+	default:
+		t.Fatal("connection teardown did not cancel its active request")
+	}
+
+	thirdConnection := &websocket.Conn{}
+	thirdState := c.noteCancellableRequest(thirdConnection, "teardown-before-register")
+	if thirdState == nil {
+		t.Fatal("failed to admit teardown-race request")
+	}
+	c.clearCancellableRequests(thirdConnection)
+	thirdCtx, thirdCancel := context.WithCancel(context.Background())
+	defer thirdCancel()
+	_, thirdRegistered := c.registerActiveCommand(thirdConnection, "teardown-before-register", thirdCancel)
+	if thirdRegistered {
+		t.Fatal("request crossed registration after its connection was torn down")
+	}
+	select {
+	case <-thirdCtx.Done():
+	default:
+		t.Fatal("teardown tombstone was not consumed at registration")
+	}
+}
+
+func TestCommandClient_CancellableRequestAdmissionIsBounded(t *testing.T) {
+	c := &CommandClient{logger: zerolog.Nop()}
+	conn := &websocket.Conn{}
+	states := make([]*cancellableRequestState, maxCancellableRequestsPerConnection)
+	for i := 0; i < maxCancellableRequestsPerConnection; i++ {
+		states[i] = c.noteCancellableRequest(conn, fmt.Sprintf("request-%d", i))
+		if states[i] == nil {
+			t.Fatalf("request %d was refused below the bound", i)
+		}
+	}
+	if c.noteCancellableRequest(conn, "over-capacity") != nil {
+		t.Fatal("over-capacity cancellable request was admitted")
+	}
+	c.clearCancellableRequests(conn)
+	for i := 0; i < maxCancellableRequestsPerConnection; i++ {
+		c.finishCancellableRequest(conn, fmt.Sprintf("request-%d", i), states[i])
+	}
+	if c.noteCancellableRequest(conn, "after-clear") == nil {
+		t.Fatal("cancellable request capacity did not recover after teardown")
+	}
+}
+
+func TestCommandClient_StaleCleanupCannotEraseReusedRequestCancellation(t *testing.T) {
+	c := &CommandClient{logger: zerolog.Nop()}
+	conn := &websocket.Conn{}
+	const requestID = "reused-request"
+
+	firstState := c.noteCancellableRequest(conn, requestID)
+	if firstState == nil {
+		t.Fatal("failed to admit first request generation")
+	}
+	firstCtx, firstCancel := context.WithCancel(context.Background())
+	registeredState, registered := c.registerActiveCommand(conn, requestID, firstCancel)
+	if !registered || registeredState != firstState {
+		t.Fatal("first request generation did not register")
+	}
+	// Model the handler's cleanup before its wrapper defer runs.
+	c.finishCancellableRequest(conn, requestID, registeredState)
+
+	secondState := c.noteCancellableRequest(conn, requestID)
+	if secondState == nil || secondState == firstState {
+		t.Fatal("failed to admit a distinct reused request generation")
+	}
+	// The stale outer cleanup from generation A must not delete generation B.
+	c.finishCancellableRequest(conn, requestID, firstState)
+	c.handleCancelCommand(conn, cancelCommandPayload{RequestID: requestID})
+	secondCtx, secondCancel := context.WithCancel(context.Background())
+	defer secondCancel()
+	registeredState, registered = c.registerActiveCommand(conn, requestID, secondCancel)
+	if registered || registeredState != secondState {
+		t.Fatal("reused request lost its pre-registration cancellation fence")
+	}
+	select {
+	case <-secondCtx.Done():
+	default:
+		t.Fatal("reused request cancellation was not consumed")
+	}
+	c.finishCancellableRequest(conn, requestID, secondState)
+	firstCancel()
+	select {
+	case <-firstCtx.Done():
+	default:
+		t.Fatal("first request cleanup did not retain its own cancel function")
 	}
 }
 

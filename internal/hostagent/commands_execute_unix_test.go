@@ -121,14 +121,14 @@ func TestCommandClient_executeCommand_CancelKillsProcessGroup(t *testing.T) {
 
 	cmdCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c.registerActiveCommand(payload.RequestID, cancel)
-	defer c.unregisterActiveCommand(payload.RequestID)
+	state, _ := c.registerActiveCommand(nil, payload.RequestID, cancel)
+	defer c.finishCancellableRequest(nil, payload.RequestID, state)
 
 	go func() {
 		// Give the shell time to start, then cancel the way handleMessages
 		// does when a cancel_command arrives.
 		time.Sleep(300 * time.Millisecond)
-		c.handleCancelCommand(cancelCommandPayload{RequestID: payload.RequestID})
+		c.handleCancelCommand(nil, cancelCommandPayload{RequestID: payload.RequestID})
 	}()
 
 	start := time.Now()

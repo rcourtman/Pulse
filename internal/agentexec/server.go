@@ -2176,14 +2176,14 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			Msg("Agent command completed")
 		return &result, nil
 	case <-timer.C:
-		s.cancelAgentCommand(ac, cmd.RequestID)
+		s.cancelAgentRequest(ac, cmd.RequestID, "execute_command")
 		execLog.Warn().
 			Dur("timeout", timeout).
 			Dur("duration", time.Since(startedAt)).
 			Msg("Agent command timed out")
 		return nil, fmt.Errorf("command timed out after %v", timeout)
 	case <-ctx.Done():
-		s.cancelAgentCommand(ac, cmd.RequestID)
+		s.cancelAgentRequest(ac, cmd.RequestID, "execute_command")
 		execLog.Warn().
 			Err(ctx.Err()).
 			Dur("duration", time.Since(startedAt)).
@@ -2196,22 +2196,22 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	}
 }
 
-// cancelAgentCommand tells an agent to abort an execute_command request the
-// server has stopped waiting for, so the agent can reap the command's process
-// tree instead of running it to its full timeout. Best effort: agents that
-// predate the cancel_command message ignore it and fall back to their own
-// per-command timeout.
-func (s *Server) cancelAgentCommand(ac *agentConn, requestID string) {
+// cancelAgentRequest tells an agent to abort a request the server has stopped
+// waiting for. Typed runners bind this message to the in-flight request
+// context; already-started mutations remain indeterminate and are reconciled
+// through their durable receipts. Best effort: agents that predate the
+// cancel_command message ignore it and fall back to their own timeout.
+func (s *Server) cancelAgentRequest(ac *agentConn, requestID, operation string) {
 	msg, err := NewMessage(MsgTypeCancelCmd, requestID, CancelCommandPayload{RequestID: requestID})
 	if err != nil {
-		log.Debug().Err(err).Str("request_id", requestID).Msg("Failed to encode command cancellation")
+		log.Debug().Err(err).Str("request_id", requestID).Str("operation", operation).Msg("Failed to encode request cancellation")
 		return
 	}
 	ac.writeMu.Lock()
 	err = s.sendMessage(ac.conn, msg)
 	ac.writeMu.Unlock()
 	if err != nil {
-		log.Debug().Err(err).Str("request_id", requestID).Msg("Failed to send command cancellation to agent")
+		log.Debug().Err(err).Str("request_id", requestID).Str("operation", operation).Msg("Failed to send request cancellation to agent")
 	}
 }
 
@@ -2263,6 +2263,12 @@ func prepareHostOperationRequest(s *Server, agentID string, requestID *string, b
 
 func dispatchHostOperation[Req hostOperationPayload, Res any](ctx context.Context, s *Server, agentID string, req Req, op hostOperationDispatch[Req, Res]) (*Res, error) {
 	requestID, actionID, operation, timeoutSeconds := req.hostOperationIdentity()
+	if ctx == nil {
+		return nil, fmt.Errorf("%s request %q not dispatched: context is required", op.label, requestID)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("%s request %q not dispatched: %w", op.label, requestID, err)
+	}
 
 	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
@@ -2313,8 +2319,10 @@ func dispatchHostOperation[Req hostOperationPayload, Res any](ctx context.Contex
 		}
 		return &result, nil
 	case <-timer.C:
+		s.cancelAgentRequest(ac, requestID, operation)
 		return nil, fmt.Errorf("%s timed out after %s", op.label, time.Duration(timeoutSeconds)*time.Second)
 	case <-ctx.Done():
+		s.cancelAgentRequest(ac, requestID, operation)
 		return nil, ctx.Err()
 	case <-ac.done:
 		return nil, fmt.Errorf("agent %s disconnected before %s receipt", agentID, op.label)
@@ -2565,6 +2573,12 @@ func dispatchTypedDockerContainerOperation[Res any](
 	pending map[string]chan Res, label string,
 	validate func(Res) error,
 ) (*Res, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("%s request %q not dispatched: context is required", label, requestID)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("%s request %q not dispatched: %w", label, requestID, err)
+	}
 	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent %s not connected", agentID)
@@ -2613,8 +2627,10 @@ func dispatchTypedDockerContainerOperation[Res any](
 		}
 		return &result, nil
 	case <-timer.C:
+		s.cancelAgentRequest(ac, requestID, identity.OperationKind)
 		return nil, fmt.Errorf("%s timed out after %s", label, time.Duration(timeoutSeconds)*time.Second)
 	case <-ctx.Done():
+		s.cancelAgentRequest(ac, requestID, identity.OperationKind)
 		return nil, ctx.Err()
 	case <-ac.done:
 		return nil, fmt.Errorf("agent %s disconnected before %s receipt", agentID, label)
@@ -2835,10 +2851,10 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 			Msg("Agent read_file completed")
 		return &result, nil
 	case <-timer.C:
-		s.cancelAgentCommand(ac, req.RequestID)
+		s.cancelAgentRequest(ac, req.RequestID, "read_file")
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
-		s.cancelAgentCommand(ac, req.RequestID)
+		s.cancelAgentRequest(ac, req.RequestID, "read_file")
 		return nil, fmt.Errorf("read_file %q on agent %q canceled: %w", req.RequestID, agentID, ctx.Err())
 	case <-ac.done:
 		return nil, fmt.Errorf("agent %s disconnected before read_file result", agentID)

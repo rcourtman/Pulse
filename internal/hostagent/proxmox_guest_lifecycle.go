@@ -145,10 +145,19 @@ func (c *CommandClient) handleProxmoxGuestLifecycle(ctx context.Context, conn *w
 		return
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, time.Duration(payload.Timeout)*time.Second)
-	c.registerActiveCommand(payload.RequestID, cancel)
-	defer c.unregisterActiveCommand(payload.RequestID)
+	state, registered := c.registerActiveCommand(conn, payload.RequestID, cancel)
+	defer c.finishCancellableRequest(conn, payload.RequestID, state)
 	defer cancel()
-	result := c.proxmoxGuestLifecycle.Apply(operationCtx, payload)
+	result := agentexec.ProxmoxGuestLifecycleResultPayload{
+		RequestID: payload.RequestID, ActionID: payload.ActionID, Operation: payload.Operation,
+		OperationVersion: payload.OperationVersion, RequestDigest: payload.RequestDigest,
+		GuestKind: payload.GuestKind, VMID: payload.VMID, ExecutionPhase: agentexec.ProxmoxGuestPhasePreflight,
+	}
+	if !registered || operationCtx.Err() != nil {
+		result.Error = "Proxmox guest lifecycle canceled before mutation dispatch"
+	} else {
+		result = c.proxmoxGuestLifecycle.Apply(operationCtx, payload)
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return

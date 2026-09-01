@@ -1833,6 +1833,24 @@ func registerCancelTestAgent(t *testing.T, s *Server, tsURL string) *cancelTestC
 	return &cancelTestConn{t: t, conn: conn}
 }
 
+func registerTypedCancelTestAgent(t *testing.T, s *Server, tsURL string) *cancelTestConn {
+	t.Helper()
+	conn, _, err := dialAgentExecWebSocket(t, tsURL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "typed-a1", Hostname: "typed-host1", Version: "1.2.3", Platform: "linux", Token: "typed-token",
+		RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1,
+		OperationReceiptVersion: operationreceipt.ProtocolVersion,
+	}))
+	if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+		t.Fatalf("typed action runner registration failed: %s", ack.Message)
+	}
+	return &cancelTestConn{t: t, conn: conn}
+}
+
 type cancelTestConn struct {
 	t    *testing.T
 	conn *websocket.Conn
@@ -1967,4 +1985,156 @@ func TestExecuteCommand_AbandonedCommandSendsCancel(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTypedOperations_AbandonedDispatchSendsExactlyOneCancel(t *testing.T) {
+	type dispatchFunc func(context.Context, *Server) error
+	cases := []struct {
+		name        string
+		messageType MessageType
+		dispatch    dispatchFunc
+	}{
+		{
+			name: "host update", messageType: MsgTypeHostUpdate,
+			dispatch: func(ctx context.Context, s *Server) error {
+				req := HostUpdatePayload{RequestID: "update.cancel.1", ActionID: "update", Operation: HostUpdateOperationInstall, ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64), Timeout: 30}
+				if err := BindHostUpdatePayload(&req); err != nil {
+					return err
+				}
+				_, err := s.ExecuteHostUpdate(ctx, "typed-a1", req)
+				return err
+			},
+		},
+		{
+			name: "storage cleanup", messageType: MsgTypeHostStorageCleanup,
+			dispatch: func(ctx context.Context, s *Server) error {
+				req := HostStorageCleanupPayload{RequestID: "cleanup.cancel.1", ActionID: "cleanup", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: "sha256:" + strings.Repeat("b", 64), Timeout: 30}
+				if err := BindHostStorageCleanupPayload(&req); err != nil {
+					return err
+				}
+				_, err := s.ExecuteHostStorageCleanup(ctx, "typed-a1", req)
+				return err
+			},
+		},
+		{
+			name: "Proxmox guest lifecycle", messageType: MsgTypeProxmoxGuestLifecycle,
+			dispatch: func(ctx context.Context, s *Server) error {
+				req := ProxmoxGuestLifecyclePayload{RequestID: "pve.cancel.1", ActionID: "pve", Operation: "shutdown", GuestKind: "vm", VMID: 101, ExpectedStatus: "running", Timeout: 30}
+				if err := BindProxmoxGuestLifecyclePayload(&req); err != nil {
+					return err
+				}
+				_, err := s.ExecuteProxmoxGuestLifecycle(ctx, "typed-a1", req)
+				return err
+			},
+		},
+		{
+			name: "container lifecycle", messageType: MsgTypeDockerContainerLifecycle,
+			dispatch: func(ctx context.Context, s *Server) error {
+				req := DockerContainerLifecyclePayload{RequestID: "docker.cancel.1", ActionID: "docker", Operation: DockerContainerOperationRestart, Runtime: "docker", ContainerID: strings.Repeat("c", 12), ExpectedState: "running", Timeout: 30}
+				if err := BindDockerContainerLifecyclePayload(&req); err != nil {
+					return err
+				}
+				_, err := s.ExecuteDockerContainerLifecycle(ctx, "typed-a1", req)
+				return err
+			},
+		},
+		{
+			name: "container update", messageType: MsgTypeDockerContainerUpdate,
+			dispatch: func(ctx context.Context, s *Server) error {
+				req := DockerContainerUpdatePayload{RequestID: "docker-update.cancel.1", ActionID: "docker-update", Runtime: "docker", ContainerID: strings.Repeat("d", 12), ExpectedImageDigest: "sha256:" + strings.Repeat("e", 64), Timeout: 30}
+				if err := BindDockerContainerUpdatePayload(&req); err != nil {
+					return err
+				}
+				_, err := s.ExecuteDockerContainerUpdate(ctx, "typed-a1", req)
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			admission := AgentAdmission{TokenID: "typed-token", AgentID: "typed-a1", Hostname: "typed-host1", RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1}
+			s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+				return admission, token == admission.TokenID
+			}, func(AgentAdmission) bool { return true })
+			ts := newWSServer(t, s)
+			defer ts.Close()
+			agent := registerTypedCancelTestAgent(t, s, ts.URL)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan error, 1)
+			go func() { done <- tc.dispatch(ctx, s) }()
+
+			request, ok := agent.nextMessage(3 * time.Second)
+			if !ok || request.Type != tc.messageType {
+				t.Fatalf("dispatched message = %+v, want %s", request, tc.messageType)
+			}
+			cancel()
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Fatalf("dispatch error = %v, want context.Canceled", err)
+			}
+
+			cancelMessage, ok := agent.nextMessage(3 * time.Second)
+			if !ok || cancelMessage.Type != MsgTypeCancelCmd {
+				t.Fatalf("cancellation message = %+v, want %s", cancelMessage, MsgTypeCancelCmd)
+			}
+			var payload CancelCommandPayload
+			if cancelMessage.Payload == nil || json.Unmarshal(*cancelMessage.Payload, &payload) != nil || payload.RequestID != request.ID {
+				t.Fatalf("cancellation payload = %+v, want request_id %q", payload, request.ID)
+			}
+			if duplicate, ok := agent.nextMessage(250 * time.Millisecond); ok && duplicate.Type == MsgTypeCancelCmd {
+				t.Fatalf("received duplicate cancellation: %+v", duplicate)
+			}
+		})
+	}
+}
+
+func TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches(t *testing.T) {
+	newTypedServer := func(t *testing.T) (*Server, *httptest.Server, *cancelTestConn) {
+		t.Helper()
+		admission := AgentAdmission{TokenID: "typed-token", AgentID: "typed-a1", Hostname: "typed-host1", RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1}
+		s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+			return admission, token == admission.TokenID
+		}, func(AgentAdmission) bool { return true })
+		ts := newWSServer(t, s)
+		t.Cleanup(ts.Close)
+		return s, ts, registerTypedCancelTestAgent(t, s, ts.URL)
+	}
+
+	t.Run("expired caller context", func(t *testing.T) {
+		s, _, agent := newTypedServer(t)
+		expired, expire := context.WithCancel(context.Background())
+		expire()
+		notDispatched := ProxmoxGuestLifecyclePayload{RequestID: "pve.expired.1", ActionID: "pve", Operation: "shutdown", GuestKind: "vm", VMID: 101, ExpectedStatus: "running", Timeout: 30}
+		if err := BindProxmoxGuestLifecyclePayload(&notDispatched); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.ExecuteProxmoxGuestLifecycle(expired, "typed-a1", notDispatched); !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "not dispatched") {
+			t.Fatalf("expired dispatch error = %v", err)
+		}
+		if unexpected, ok := agent.nextMessage(250 * time.Millisecond); ok {
+			t.Fatalf("expired context reached action runner: %+v", unexpected)
+		}
+	})
+
+	t.Run("server timeout", func(t *testing.T) {
+		s, _, agent := newTypedServer(t)
+		timed := ProxmoxGuestLifecyclePayload{RequestID: "pve.timeout.1", ActionID: "pve", Operation: "shutdown", GuestKind: "vm", VMID: 101, ExpectedStatus: "running", Timeout: 1}
+		if err := BindProxmoxGuestLifecyclePayload(&timed); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() { _, err := s.ExecuteProxmoxGuestLifecycle(context.Background(), "typed-a1", timed); done <- err }()
+		request, ok := agent.nextMessage(3 * time.Second)
+		if !ok || request.Type != MsgTypeProxmoxGuestLifecycle {
+			t.Fatalf("timeout request = %+v", request)
+		}
+		if err := <-done; err == nil || !strings.Contains(err.Error(), "timed out") {
+			t.Fatalf("timeout error = %v", err)
+		}
+		cancelMessage, ok := agent.nextMessage(3 * time.Second)
+		if !ok || cancelMessage.Type != MsgTypeCancelCmd {
+			t.Fatalf("timeout cancellation = %+v", cancelMessage)
+		}
+	})
 }

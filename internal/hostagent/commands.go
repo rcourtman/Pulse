@@ -127,12 +127,13 @@ type CommandClient struct {
 	connMu sync.Mutex
 	done   chan struct{}
 
-	// In-flight execute_command requests by request ID, so a server-issued
-	// cancel_command can abort the execution (and its process group) instead
-	// of letting an abandoned command run to its full timeout. The server
-	// enforces unique in-flight request IDs on its side.
-	activeCommandsMu sync.Mutex
-	activeCommands   map[string]context.CancelFunc
+	// In-flight command and durable typed-operation requests by request ID, so
+	// a server-issued cancel_command can abort the local execution context
+	// instead of letting abandoned work run to its full timeout. Mutations that
+	// already crossed provider handoff remain indeterminate and are settled by
+	// their durable receipt. The server enforces unique in-flight request IDs.
+	activeCommandsMu    sync.Mutex
+	cancellableRequests map[cancellableRequestKey]*cancellableRequestState
 
 	// actionRunnerOnly is an immutable constructor-selected protocol ceiling.
 	// It permits only the closed typed action families and their receipt,
@@ -144,6 +145,18 @@ type CommandClient struct {
 	healthCapabilities    []string
 	actionActivationNonce string
 	actionHealthWriter    func(bool) error
+}
+
+const maxCancellableRequestsPerConnection = 256
+
+type cancellableRequestKey struct {
+	connection *websocket.Conn
+	requestID  string
+}
+
+type cancellableRequestState struct {
+	cancel   context.CancelFunc
+	canceled bool
 }
 
 // NewCommandClient creates a new command execution client
@@ -185,6 +198,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		operationReceiptErr:   receiptErr,
 		logger:                logger,
 		done:                  make(chan struct{}),
+		cancellableRequests:   make(map[cancellableRequestKey]*cancellableRequestState),
 	}
 }
 
@@ -398,6 +412,7 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	c.connMu.Lock()
 	c.conn = conn
 	c.connMu.Unlock()
+	defer c.clearCancellableRequests(conn)
 
 	defer func() {
 		c.connMu.Lock()
@@ -600,6 +615,18 @@ func computeReconnectDelay(failures int) time.Duration {
 	return utils.ExponentialBackoff(reconnectDelay, reconnectMaxDelay, failures, reconnectJitterRatio, reconnectRandFloat64)
 }
 
+func (c *CommandClient) launchCancellableRequest(conn *websocket.Conn, requestID, operation string, handle func()) {
+	state := c.noteCancellableRequest(conn, requestID)
+	if state == nil {
+		c.logger.Warn().Str("request_id", requestID).Str("operation", operation).Msg("Dropping duplicate, invalid, or over-capacity cancellable request")
+		return
+	}
+	go func() {
+		defer c.finishCancellableRequest(conn, requestID, state)
+		handle()
+	}()
+}
+
 func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn) error {
 	for {
 		select {
@@ -627,8 +654,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				continue
 			}
 
-			// Execute command in background
-			go c.handleExecuteCommand(ctx, conn, payload)
+			c.launchCancellableRequest(conn, payload.RequestID, "execute_command", func() {
+				c.handleExecuteCommand(ctx, conn, payload)
+			})
 
 		case msgTypeReadFile:
 			// Handle read_file similarly (uses cat command internally)
@@ -637,7 +665,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				c.logger.Error().Err(err).Msg("Failed to parse read_file payload")
 				continue
 			}
-			go c.handleExecuteCommand(ctx, conn, payload)
+			c.launchCancellableRequest(conn, payload.RequestID, "read_file", func() {
+				c.handleExecuteCommand(ctx, conn, payload)
+			})
 
 		case msgTypeHostUpdate:
 			payload, err := agentexec.DecodeHostUpdatePayload(msg.Payload)
@@ -645,7 +675,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				c.logger.Error().Err(err).Msg("Failed to parse host_update payload")
 				continue
 			}
-			go c.handleHostUpdate(ctx, conn, payload)
+			c.launchCancellableRequest(conn, payload.RequestID, payload.Operation, func() {
+				c.handleHostUpdate(ctx, conn, payload)
+			})
 
 		case msgTypeProxmoxGuestLifecycle:
 			payload, err := agentexec.DecodeProxmoxGuestLifecyclePayload(msg.Payload)
@@ -653,7 +685,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				c.logger.Warn().Err(err).Msg("Dropping invalid Proxmox guest lifecycle request")
 				continue
 			}
-			go c.handleProxmoxGuestLifecycle(ctx, conn, payload)
+			c.launchCancellableRequest(conn, payload.RequestID, payload.Operation, func() {
+				c.handleProxmoxGuestLifecycle(ctx, conn, payload)
+			})
 
 		case msgTypeActionPreflight:
 			payload, err := agentexec.DecodeActionPreflightPayload(msg.Payload)
@@ -677,7 +711,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				c.logger.Error().Err(err).Msg("Failed to parse host_storage_cleanup payload")
 				continue
 			}
-			go c.handleHostStorageCleanup(ctx, conn, payload)
+			c.launchCancellableRequest(conn, payload.RequestID, payload.Operation, func() {
+				c.handleHostStorageCleanup(ctx, conn, payload)
+			})
 
 		case msgTypeDockerContainerUpdate:
 			payload, err := agentexec.DecodeDockerContainerUpdatePayload(msg.Payload)
@@ -685,7 +721,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				c.logger.Warn().Err(err).Msg("Dropping invalid docker container update request")
 				continue
 			}
-			go c.handleDockerContainerUpdate(ctx, conn, payload)
+			c.launchCancellableRequest(conn, payload.RequestID, payload.Operation, func() {
+				c.handleDockerContainerUpdate(ctx, conn, payload)
+			})
 
 		case msgTypeDockerContainerLifecycle:
 			payload, err := agentexec.DecodeDockerContainerLifecyclePayload(msg.Payload)
@@ -693,7 +731,9 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				c.logger.Error().Err(err).Msg("Failed to parse docker container lifecycle payload")
 				continue
 			}
-			go c.handleDockerContainerLifecycle(ctx, conn, payload)
+			c.launchCancellableRequest(conn, payload.RequestID, payload.Operation, func() {
+				c.handleDockerContainerLifecycle(ctx, conn, payload)
+			})
 
 		case msgTypeOperationQuery:
 			query, err := operationreceipt.DecodeQuery(msg.Payload)
@@ -733,7 +773,7 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 				c.logger.Error().Err(err).Msg("Failed to parse cancel_command payload")
 				continue
 			}
-			c.handleCancelCommand(payload)
+			c.handleCancelCommand(conn, payload)
 
 		default:
 			c.logger.Debug().Str("type", string(msg.Type)).Msg("Unknown message type")
@@ -753,7 +793,9 @@ func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Co
 		RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
 		ExecutionPhase: agentexec.HostUpdatePhasePreflight, Verification: agentexec.HostUpdateVerificationInconclusive,
 	}
-	if c.packageUpdates == nil {
+	if updateCtx.Err() != nil {
+		result.Error = "host update canceled before mutation dispatch"
+	} else if c.packageUpdates == nil {
 		result.Error = "host package update service is unavailable"
 	} else {
 		result = c.packageUpdates.Apply(updateCtx, payload)
@@ -887,9 +929,9 @@ func (c *CommandClient) beginHostAPTOperation(ctx context.Context, conn *websock
 		timeout = defaultTimeout
 	}
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
-	c.registerActiveCommand(requestID, cancel)
+	state, _ := c.registerActiveCommand(conn, requestID, cancel)
 	return opCtx, func() {
-		c.unregisterActiveCommand(requestID)
+		c.finishCancellableRequest(conn, requestID, state)
 		cancel()
 	}, true
 }
@@ -941,7 +983,9 @@ func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *webs
 		RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
 		ExecutionPhase: agentexec.HostStorageCleanupPhasePreflight, Verification: agentexec.HostStorageCleanupVerificationInconclusive,
 	}
-	if c.storageCleanup == nil {
+	if cleanupCtx.Err() != nil {
+		result.Error = "host cleanup canceled before mutation dispatch"
+	} else if c.storageCleanup == nil {
 		result.Error = "host storage cleanup service is unavailable"
 	} else {
 		result = c.storageCleanup.Apply(cleanupCtx, payload)
@@ -971,15 +1015,17 @@ func (c *CommandClient) handleDockerContainerLifecycle(ctx context.Context, conn
 		timeout = 2 * time.Minute
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, timeout)
-	c.registerActiveCommand(payload.RequestID, cancel)
-	defer c.unregisterActiveCommand(payload.RequestID)
+	state, _ := c.registerActiveCommand(conn, payload.RequestID, cancel)
+	defer c.finishCancellableRequest(conn, payload.RequestID, state)
 	defer cancel()
 	result := agentexec.DockerContainerLifecycleResultPayload{
 		RequestID: payload.RequestID, ActionID: payload.ActionID, Operation: payload.Operation,
 		OperationVersion: payload.OperationVersion, RequestDigest: payload.RequestDigest, ContainerID: payload.ContainerID,
 		ExecutionPhase: agentexec.DockerContainerPhasePreflight,
 	}
-	if c.dockerLifecycle == nil {
+	if operationCtx.Err() != nil {
+		result.Error = "container lifecycle canceled before mutation dispatch"
+	} else if c.dockerLifecycle == nil {
 		result.Error = "typed container lifecycle service is unavailable"
 	} else {
 		result = c.dockerLifecycle.Apply(operationCtx, payload)
@@ -1182,8 +1228,8 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 
 	cmdCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c.registerActiveCommand(payload.RequestID, cancel)
-	defer c.unregisterActiveCommand(payload.RequestID)
+	state, _ := c.registerActiveCommand(conn, payload.RequestID, cancel)
+	defer c.finishCancellableRequest(conn, payload.RequestID, state)
 
 	result := c.executeCommand(cmdCtx, payload)
 	result.Duration = time.Since(startTime).Milliseconds()
@@ -1217,36 +1263,116 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	}
 }
 
-func (c *CommandClient) registerActiveCommand(requestID string, cancel context.CancelFunc) {
-	c.activeCommandsMu.Lock()
-	defer c.activeCommandsMu.Unlock()
-	if c.activeCommands == nil {
-		c.activeCommands = make(map[string]context.CancelFunc)
+func (c *CommandClient) noteCancellableRequest(conn *websocket.Conn, requestID string) *cancellableRequestState {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" || len(requestID) > 128 {
+		return nil
 	}
-	c.activeCommands[requestID] = cancel
-}
-
-func (c *CommandClient) unregisterActiveCommand(requestID string) {
+	key := cancellableRequestKey{connection: conn, requestID: requestID}
 	c.activeCommandsMu.Lock()
 	defer c.activeCommandsMu.Unlock()
-	delete(c.activeCommands, requestID)
+	if c.cancellableRequests == nil {
+		c.cancellableRequests = make(map[cancellableRequestKey]*cancellableRequestState)
+	}
+	if _, exists := c.cancellableRequests[key]; exists || len(c.cancellableRequests) >= maxCancellableRequestsPerConnection {
+		return nil
+	}
+	state := &cancellableRequestState{}
+	c.cancellableRequests[key] = state
+	return state
 }
 
-// handleCancelCommand aborts an in-flight execute_command request the server
-// has stopped waiting for. Canceling the command context SIGKILLs its whole
-// process group, so an abandoned `pct exec` against a wedged guest is reaped
-// instead of running to its full timeout and orphaning children.
-func (c *CommandClient) handleCancelCommand(payload cancelCommandPayload) {
+// registerActiveCommand atomically consumes a cancellation that arrived after
+// the WebSocket reader admitted the request but before its handler goroutine
+// registered. false means the handler must not cross provider handoff.
+func (c *CommandClient) registerActiveCommand(conn *websocket.Conn, requestID string, cancel context.CancelFunc) (*cancellableRequestState, bool) {
+	key := cancellableRequestKey{connection: conn, requestID: strings.TrimSpace(requestID)}
 	c.activeCommandsMu.Lock()
-	cancel, ok := c.activeCommands[payload.RequestID]
+	if c.cancellableRequests == nil {
+		c.cancellableRequests = make(map[cancellableRequestKey]*cancellableRequestState)
+	}
+	state, exists := c.cancellableRequests[key]
+	if !exists {
+		if len(c.cancellableRequests) >= maxCancellableRequestsPerConnection {
+			c.activeCommandsMu.Unlock()
+			cancel()
+			return nil, false
+		}
+		state = &cancellableRequestState{}
+		c.cancellableRequests[key] = state
+	}
+	if state.cancel != nil {
+		c.activeCommandsMu.Unlock()
+		cancel()
+		return nil, false
+	}
+	state.cancel = cancel
+	canceled := state.canceled
+	c.activeCommandsMu.Unlock()
+	if canceled {
+		cancel()
+		return state, false
+	}
+	return state, true
+}
+
+func (c *CommandClient) finishCancellableRequest(conn *websocket.Conn, requestID string, state *cancellableRequestState) {
+	key := cancellableRequestKey{connection: conn, requestID: strings.TrimSpace(requestID)}
+	c.activeCommandsMu.Lock()
+	if current := c.cancellableRequests[key]; state != nil && current == state {
+		delete(c.cancellableRequests, key)
+	}
+	c.activeCommandsMu.Unlock()
+}
+
+func (c *CommandClient) clearCancellableRequests(conn *websocket.Conn) {
+	var cancels []context.CancelFunc
+	c.activeCommandsMu.Lock()
+	for key, state := range c.cancellableRequests {
+		if key.connection != conn {
+			continue
+		}
+		// Retain the canceled state until the already-launched handler consumes
+		// it or its wrapper exits. Deleting a not-yet-registered entry here would
+		// let that handler recreate the key after disconnect and cross provider
+		// handoff under a dead WebSocket generation.
+		state.canceled = true
+		if state != nil && state.cancel != nil {
+			cancels = append(cancels, state.cancel)
+		}
+	}
+	c.activeCommandsMu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+}
+
+// handleCancelCommand aborts an in-flight command or durable typed-operation
+// context the server has stopped waiting for. Generic commands reap their
+// process group; typed mutations persist an indeterminate terminal receipt
+// when cancellation arrives after provider handoff.
+func (c *CommandClient) handleCancelCommand(conn *websocket.Conn, payload cancelCommandPayload) {
+	key := cancellableRequestKey{connection: conn, requestID: strings.TrimSpace(payload.RequestID)}
+	c.activeCommandsMu.Lock()
+	state, ok := c.cancellableRequests[key]
+	var cancel context.CancelFunc
+	if ok && state != nil {
+		if state.cancel == nil {
+			state.canceled = true
+		} else {
+			cancel = state.cancel
+		}
+	}
 	c.activeCommandsMu.Unlock()
 
-	if ok {
+	if cancel != nil {
 		c.logger.Info().Str("request_id", payload.RequestID).Msg("Canceling command at server request")
 		cancel()
+	} else if ok {
+		c.logger.Info().Str("request_id", payload.RequestID).Msg("Remembering cancellation until request handler registers")
 	} else {
-		// Common benign race: the result was already sent while the cancel
-		// was in flight.
+		// Common benign race: the result was already sent while the cancellation
+		// was in flight. Unknown request IDs are never retained for future work.
 		c.logger.Debug().Str("request_id", payload.RequestID).Msg("No active command to cancel")
 	}
 }
