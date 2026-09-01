@@ -1183,7 +1183,41 @@ func rootlessQualStopUnit(t *testing.T, unit string) {
 	if stateErr == nil && strings.TrimSpace(loadState) == "not-found" {
 		return
 	}
+	activeState, activeErr := rootlessQualCommandError(30*time.Second, "systemctl", "show", "--property=ActiveState", "--value", unit)
+	if rootlessQualResetFailureIsAlreadyUnloaded(resetOutput, activeState, activeErr) {
+		return
+	}
 	t.Fatalf("systemctl reset-failed %s: %v\n%s", unit, resetErr, resetOutput)
+}
+
+func rootlessQualResetFailureIsAlreadyUnloaded(resetOutput, activeState string, activeErr error) bool {
+	if activeErr != nil || strings.TrimSpace(activeState) != "inactive" {
+		return false
+	}
+	message := strings.ToLower(resetOutput)
+	return strings.Contains(message, "unit not loaded") || strings.Contains(message, "unit not found")
+}
+
+func TestRootlessQualificationAcceptsAlreadyUnloadedUnitAfterSuccessfulStop(t *testing.T) {
+	if !rootlessQualResetFailureIsAlreadyUnloaded("Failed to reset failed state: Unit not loaded.", "inactive\n", nil) {
+		t.Fatal("already-unloaded inactive unit was not accepted")
+	}
+	for _, test := range []struct {
+		name        string
+		output      string
+		activeState string
+		err         error
+	}{
+		{name: "still active", output: "Unit not loaded", activeState: "active"},
+		{name: "different failure", output: "Access denied", activeState: "inactive"},
+		{name: "state unavailable", output: "Unit not loaded", activeState: "", err: errors.New("show failed")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if rootlessQualResetFailureIsAlreadyUnloaded(test.output, test.activeState, test.err) {
+				t.Fatal("unsafe reset failure was accepted")
+			}
+		})
+	}
 }
 
 func rootlessQualBestEffortStop(units ...string) {
