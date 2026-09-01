@@ -77,6 +77,7 @@ verify_image() {
             --repo "$REPOSITORY" \
             --bundle-from-oci \
             --signer-workflow "$SIGNER_WORKFLOW" \
+            --signer-digest "$SOURCE_SHA" \
             --source-digest "$SOURCE_SHA" \
             --deny-self-hosted-runners \
             --predicate-type https://slsa.dev/provenance/v1 \

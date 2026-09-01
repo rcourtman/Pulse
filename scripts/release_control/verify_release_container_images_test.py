@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import textwrap
@@ -105,18 +106,35 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
             result.stdout.splitlines(),
             [f"server_digest={DIGEST}", f"control_plane_digest={DIGEST}"],
         )
-        self.assertEqual(len(calls.splitlines()), 4)
-        self.assertIn(f"oci://docker.io/rcourtman/pulse@{DIGEST}", calls)
-        self.assertIn(f"oci://ghcr.io/rcourtman/pulse-control-plane@{DIGEST}", calls)
-        self.assertIn("--repo rcourtman/Pulse", calls)
-        self.assertIn("--bundle-from-oci", calls)
-        self.assertIn(
-            "--signer-workflow github.com/rcourtman/Pulse/.github/workflows/publish-docker.yml",
-            calls,
-        )
-        self.assertIn(f"--source-digest {SOURCE_SHA}", calls)
-        self.assertIn("--deny-self-hosted-runners", calls)
-        self.assertIn("--predicate-type https://slsa.dev/provenance/v1", calls)
+        subjects = {
+            f"oci://docker.io/rcourtman/pulse@{DIGEST}",
+            f"oci://ghcr.io/rcourtman/pulse@{DIGEST}",
+            f"oci://docker.io/rcourtman/pulse-control-plane@{DIGEST}",
+            f"oci://ghcr.io/rcourtman/pulse-control-plane@{DIGEST}",
+        }
+        expected_policy = [
+            "--repo",
+            "rcourtman/Pulse",
+            "--bundle-from-oci",
+            "--signer-workflow",
+            "github.com/rcourtman/Pulse/.github/workflows/publish-docker.yml",
+            "--signer-digest",
+            SOURCE_SHA,
+            "--source-digest",
+            SOURCE_SHA,
+            "--deny-self-hosted-runners",
+            "--predicate-type",
+            "https://slsa.dev/provenance/v1",
+        ]
+        invocations = [shlex.split(call) for call in calls.splitlines()]
+        self.assertEqual(len(invocations), len(subjects))
+        self.assertEqual({invocation[2] for invocation in invocations}, subjects)
+        for invocation in invocations:
+            self.assertEqual(
+                invocation,
+                ["attestation", "verify", invocation[2], *expected_policy],
+                f"incomplete attestation policy for {invocation[2]}",
+            )
 
     def test_rejects_a_moved_exact_version_tag_before_attestation(self) -> None:
         changed = "sha256:" + "c" * 64
