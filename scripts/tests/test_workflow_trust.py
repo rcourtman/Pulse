@@ -491,6 +491,45 @@ jobs:
             1,
         )
 
+    def test_conditional_bash_reassignment_does_not_clear_possible_taint(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  unsafe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          if [ "$RELEASE_NAME" = latest ]; then
+            RELEASE_NAME=v1.2.3
+          fi
+          printf 'release=%s\\n' "$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+"""
+        )
+        self.assertEqual(
+            sum("validated or encoded" in finding for finding in findings),
+            1,
+        )
+
+    def test_unconditional_bash_reassignment_clears_possible_taint(self) -> None:
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  safe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          RELEASE_NAME=v1.2.3
+          printf 'release=%s\\n' "$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+"""
+        )
+        self.assertEqual(findings, [])
+
     def test_powershell_trusted_reassignment_is_case_insensitive(self) -> None:
         findings = self.audit(
             """permissions: {}

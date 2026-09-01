@@ -108,7 +108,7 @@ jobs:
           TARGET="${REQUESTED_TARGET:-auto}"
           if [ -z "$TARGET" ] || [ "$TARGET" = "auto" ]; then
             if [ "$IS_PRERELEASE" = "true" ]; then
-              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+              python3 scripts/write_github_output.py tag "$TAG"
               echo "target=stable" >> "$GITHUB_OUTPUT"
               echo "environment_name=demo-stable" >> "$GITHUB_OUTPUT"
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -132,8 +132,8 @@ jobs:
               ;;
           esac
 
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py tag "$TAG"
+          python3 scripts/write_github_output.py target "$TARGET"
           echo "environment_name=$ENVIRONMENT_NAME" >> "$GITHUB_OUTPUT"
           echo "Resolved demo deployment: tag=${TAG}, target=${TARGET}, environment=${ENVIRONMENT_NAME}"
 

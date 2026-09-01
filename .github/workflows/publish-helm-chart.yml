@@ -88,9 +88,9 @@ jobs:
             IS_PRERELEASE="true"
           fi
 
-          echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
-          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py chart_version "$CHART_VERSION"
+          python3 scripts/write_github_output.py app_version "$APP_VERSION"
+          python3 scripts/write_github_output.py release_tag "$RELEASE_TAG"
           echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository

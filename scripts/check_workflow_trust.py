@@ -34,6 +34,13 @@ SHELL_ASSIGNMENT_RE = re.compile(
 POWERSHELL_ASSIGNMENT_RE = re.compile(
     r"^\s*(?:\[[^\]\r\n]+\]\s*)?\$([A-Za-z_][A-Za-z0-9_]*)\s*="
 )
+# A trusted reassignment only clears possible taint when it is guaranteed to
+# execute. Assignments inside these Bash compound commands affect one branch or
+# iteration, so a later command can still observe the original workflow value.
+BASH_CONTROL_OPEN_RE = re.compile(
+    r"^\s*(?:if|case|for|select|while|until)\b"
+)
+BASH_CONTROL_CLOSE_RE = re.compile(r"^\s*(?:fi|esac|done)\b")
 # Workflow-call and dispatch inputs are data, not shell source. The legacy
 # github.event.inputs alias is identical data, and repository_dispatch callers
 # fully control client_payload. Step and job outputs are data too: they can
@@ -334,8 +341,12 @@ def _audit_command_file_data(
         if _is_untrusted_expression(value)
     }
     unsafe_names = set(bindings)
+    bash_control_depth = 0
 
     for script_index, script_line in _run_script_lines(lines, run_index):
+        if BASH_CONTROL_CLOSE_RE.match(script_line):
+            bash_control_depth = max(0, bash_control_depth - 1)
+        opens_bash_control = bool(BASH_CONTROL_OPEN_RE.match(script_line))
         assignment = SHELL_ASSIGNMENT_RE.match(script_line)
         powershell_assignment = False
         if assignment is None:
@@ -362,9 +373,14 @@ def _audit_command_file_data(
                         for name in unsafe_names
                         if name.casefold() != assigned_name.casefold()
                     }
-                elif _bash_assignment_persists(script_line, assignment):
+                elif (
+                    bash_control_depth == 0
+                    and _bash_assignment_persists(script_line, assignment)
+                ):
                     unsafe_names.discard(assigned_name)
 
+        if opens_bash_control:
+            bash_control_depth += 1
         if not GITHUB_COMMAND_FILE_RE.search(script_line):
             continue
         referenced_unsafe_names = sorted(

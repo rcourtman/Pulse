@@ -136,7 +136,7 @@ jobs:
             VERSION="$(tr -d '\r\n' < VERSION)"
           fi
           REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
-          echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py required_branch "${REQUIRED_BRANCH}"
           echo "[OK] Governed release branch for ${VERSION} is ${REQUIRED_BRANCH}"
 
       - name: Resolve rehearsal metadata

@@ -1099,7 +1099,7 @@ jobs:
           rm -f "$NOTES_FILE" "$RELEASE_PAYLOAD" "$RELEASE_JSON_FILE" "$ACTUAL_BODY_FILE"
 
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
-          echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
+          python3 scripts/write_github_output.py release_id "${RELEASE_ID}"
           echo "[OK] Draft release: ${TAG} (ID: ${RELEASE_ID})"
 
       - name: Upload checksums
