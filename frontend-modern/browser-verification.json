@@ -1,20 +1,17 @@
 {
   "version": 1,
-  "base_sha": "4651fae79edb7a4e8b540a9c1736e3e3eb01eb6d",
-  "verified_at": "2026-09-01T21:29:08Z",
+  "base_sha": "d9053933deaf282b0f107cf158bc1ac2c3c32087",
+  "verified_at": "2026-09-01T22:44:22Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx",
-    "frontend-modern/src/components/shared/SearchInput.tsx"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx": "7818ac401d63cc0dc7de3f64bb1cb20dde1b4846fbb3a80abaf47c59c73da5f7",
-    "frontend-modern/src/components/shared/SearchInput.tsx": "de2b7b14a32e8f22f6baa721c8ed00d4b5b36ca319b2cf964fbbfae0be556bd0"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "78ff7a3dd13194d92d616ad8f5596f5827844c5bb0c742ba67501b2b9f833809",
+    "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx": "d41c1ec6f22e61a1684ae35893d2dda7aba1f26b59a7df12746709f644f9a3c9"
   },
-  "routes": [
-    "/proxmox/backups/date?type=vm",
-    "/proxmox/backups/date?type=ct"
-  ],
+  "routes": ["/proxmox/overview", "/proxmox/backups/date?type=vm"],
   "viewports": [
     {
       "width": 1440,
@@ -26,17 +23,16 @@
     }
   ],
   "states": [
-    "active Type filter with selected and unselected values on the Proxmox backups page",
-    "filter value search with an empty result announcement",
-    "desktop popover below the chip and phone popover above the chip clear of fixed navigation",
-    "shared backup search with inline completion available and native textbox semantics"
+    "pinned workload search term with focused remove action",
+    "active Node filter with a 51-option searchable value list",
+    "keyboard-active option beyond the listbox's initial visible range",
+    "desktop popover below the chip and phone popover above the chip clear of fixed navigation"
   ],
   "interactions": [
-    "opened the Type filter and verified combobox, listbox, controls, and active-descendant relationships",
-    "moved the active option with ArrowDown, selected with Enter, and verified focus returned to the updated chip and the URL changed",
-    "searched for a missing value and verified the status announcement, then dismissed with Escape and verified focus restoration",
-    "selected an option by pointer, dismissed the reopened menu by clicking outside it, and focused the shared backup search",
-    "measured chip, remove, and option targets at 24 pixels or larger and checked both viewports for horizontal overflow",
-    "ran an Axe WCAG 2.2 AA scan over the complete filter bar with no violations"
+    "committed and keyboard-removed a pinned workload search term and measured its target at 24 pixels or larger",
+    "opened the Node filter, moved 16 options with ArrowDown, and verified one selected active option remained visible inside the listbox",
+    "measured chip, remove, and option targets at 24 pixels or larger",
+    "dismissed with Escape and verified focus return, then reopened and dismissed by outside pointer activation",
+    "checked both viewports for horizontal overflow and ran an Axe WCAG 2.2 A/AA scan of the filter bar with no violations"
   ]
 }

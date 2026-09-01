@@ -117,6 +117,19 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     filteredOptions().length > 0 ? `${listboxId}-option-${activeIndex()}` : undefined,
   );
 
+  // aria-activedescendant moves assistive-technology focus without moving DOM
+  // focus. Keep the same option visible for sighted keyboard users when the
+  // value catalog is taller than the scrollable listbox.
+  createEffect(() => {
+    if (!open()) return;
+    const id = activeOptionId();
+    if (!id) return;
+    queueMicrotask(() => {
+      if (!open() || activeOptionId() !== id) return;
+      document.getElementById(id)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    });
+  });
+
   // Seed activeIndex on the currently-selected option when the popover opens
   // so Enter without further typing keeps the existing value (no-op) rather
   // than picking the first option in the list.
@@ -207,7 +220,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
                     type="button"
                     role="option"
                     tabIndex={-1}
-                    aria-selected={isSelected()}
+                    aria-selected={isActive()}
                     aria-label={option.ariaLabel}
                     onMouseEnter={() => setActiveIndex(index())}
                     onMouseDown={(event) => event.preventDefault()}

@@ -73,7 +73,7 @@ const FilterSearchTermChip: Component<{
       type="button"
       onClick={props.onRemove}
       aria-label={`Remove search term ${props.term.label}`}
-      class="rounded-r-full py-0.5 pl-1 pr-1.5 text-muted hover:bg-blue-100 hover:text-base-content dark:hover:bg-blue-900/50"
+      class="inline-flex min-h-6 min-w-6 items-center justify-center rounded-r-full py-0.5 pl-1 pr-1.5 text-muted hover:bg-blue-100 hover:text-base-content focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 dark:hover:bg-blue-900/50"
     >
       <span aria-hidden="true">×</span>
     </button>

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FilterChip } from './FilterChip';
 import type { FilterDef } from './filterCatalog';
@@ -46,12 +46,19 @@ describe('FilterChip', () => {
       'aria-activedescendant',
       within(listbox).getByRole('option', { name: 'pve1' }).id,
     );
+    const nextOption = within(listbox).getByRole('option', { name: 'Node pve2' });
+    const scrollIntoView = vi.fn();
+    nextOption.scrollIntoView = scrollIntoView;
 
     fireEvent.keyDown(combobox, { key: 'ArrowDown' });
-    expect(combobox).toHaveAttribute(
-      'aria-activedescendant',
-      within(listbox).getByRole('option', { name: 'Node pve2' }).id,
+    expect(combobox).toHaveAttribute('aria-activedescendant', nextOption.id);
+    expect(within(listbox).getByRole('option', { name: 'pve1' })).toHaveAttribute(
+      'aria-selected',
+      'false',
     );
+    expect(nextOption).toHaveAttribute('aria-selected', 'true');
+    await Promise.resolve();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
   });
 
   it('commits the active option and restores focus to the chip trigger', async () => {
