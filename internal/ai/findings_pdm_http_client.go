@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,6 +24,7 @@ const (
 	pdmResourcesListPath        = "api2/extjs/resources/list"
 	pdmAPITokenAuthScheme       = "PDMAPIToken"
 	pdmHTTPClientRequestTimeout = 10 * time.Second
+	pdmResourcesResponseLimit   = 16 << 20 // 16 MiB
 )
 
 type pdmHTTPClient struct {
@@ -106,9 +108,16 @@ func (c *pdmHTTPClient) ResourceList(ctx context.Context) ([]pdmResource, error)
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("fetch PDM resources: unexpected status %d", resp.StatusCode)
 	}
+	if err := securityutil.LimitResponseBody(resp, pdmResourcesResponseLimit); err != nil {
+		return nil, fmt.Errorf("read PDM resources response: %w", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read PDM resources response: %w", err)
+	}
 
 	var envelope pdmResourcesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+	if err := json.Unmarshal(body, &envelope); err != nil {
 		return nil, fmt.Errorf("decode PDM resources response: %w", err)
 	}
 

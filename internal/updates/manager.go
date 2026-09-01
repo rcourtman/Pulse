@@ -90,6 +90,7 @@ const (
 	defaultUpdateReleaseRepo string = "rcourtman/Pulse"
 	defaultUpdateAPIBaseURL  string = "https://api.github.com"
 	maxReleaseFeedBytes      int64  = 1 << 20   // 1 MiB
+	maxReleaseMetadataBytes  int64  = 1 << 20   // 1 MiB
 	maxChecksumFileBytes     int64  = 1 << 20   // 1 MiB
 	maxUpdateDownloadBytes   int64  = 512 << 20 // 512 MiB
 	minUpdateTempFreeBytes   int64  = 128 << 20 // 128 MiB
@@ -97,6 +98,17 @@ const (
 	updateExtractSafetyBytes int64  = 32 << 20  // 32 MiB
 	maxRetainedUpdateBackups int    = 3
 )
+
+func decodeReleaseMetadata(resp *http.Response, destination any) error {
+	if err := securityutil.LimitResponseBody(resp, maxReleaseMetadataBytes); err != nil {
+		return err
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(body, destination)
+}
 
 func updateReleaseRepo() string {
 	repo := strings.TrimSpace(os.Getenv("PULSE_GITHUB_REPO"))
@@ -919,7 +931,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	}
 
 	var releases []ReleaseInfo
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+	if err := decodeReleaseMetadata(resp, &releases); err != nil {
 		return nil, fmt.Errorf("failed to decode releases: %w", err)
 	}
 

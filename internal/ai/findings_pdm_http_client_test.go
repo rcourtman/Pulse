@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -10,6 +11,12 @@ import (
 	"testing"
 	"time"
 )
+
+type pdmRoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f pdmRoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestPDMHTTPClientResourceListUsesCurrentAPIAuthAndGroupedResponse(t *testing.T) {
 	const (
@@ -110,6 +117,32 @@ func TestPDMHTTPClientNonSuccessErrorDoesNotExposeToken(t *testing.T) {
 	errText := err.Error()
 	if strings.Contains(errText, tokenSecret) || strings.Contains(errText, "Authorization") || strings.Contains(errText, "PDMAPIToken") {
 		t.Fatalf("error exposes auth material: %q", errText)
+	}
+}
+
+func TestPDMHTTPClientRejectsOversizedResourcesResponse(t *testing.T) {
+	client, err := newPDMHTTPClient(pdmAlertBridgeConfig{
+		APIURL:         "https://pdm.example.test",
+		APIToken:       "root@pam!pulse",
+		APITokenSecret: "secret",
+	})
+	if err != nil {
+		t.Fatalf("newPDMHTTPClient: %v", err)
+	}
+	client.httpClient.Transport = pdmRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Status:        http.StatusText(http.StatusOK),
+			Body:          io.NopCloser(strings.NewReader("{}")),
+			ContentLength: pdmResourcesResponseLimit + 1,
+			Header:        make(http.Header),
+			Request:       req,
+		}, nil
+	})
+
+	_, err = client.ResourceList(context.Background())
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("response body exceeds %d bytes", pdmResourcesResponseLimit)) {
+		t.Fatalf("ResourceList error = %v, want response size rejection", err)
 	}
 }
 

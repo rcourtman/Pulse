@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -168,6 +169,31 @@ func TestGetLatestReleaseForChannelRetriesTransientStatus(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&hits); got != 2 {
 		t.Fatalf("request count = %d, want 2", got)
+	}
+}
+
+func TestGetLatestReleaseForChannelRejectsStreamingOversizedResponse(t *testing.T) {
+	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.(http.Flusher).Flush()
+		_, _ = io.WriteString(w, `[{"tag_name":"v9.9.9","body":"`)
+		_, _ = io.WriteString(w, strings.Repeat("x", int(maxReleaseMetadataBytes)))
+		_, _ = io.WriteString(w, `"}]`)
+	}))
+	defer server.Close()
+
+	t.Setenv("PULSE_UPDATE_SERVER", server.URL)
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	currentVer, err := ParseVersion("1.0.0")
+	if err != nil {
+		t.Fatalf("ParseVersion: %v", err)
+	}
+
+	_, err = manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("response body exceeds %d bytes", maxReleaseMetadataBytes)) {
+		t.Fatalf("getLatestReleaseForChannel error = %v, want response size rejection", err)
 	}
 }
 

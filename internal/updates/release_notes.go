@@ -2,7 +2,6 @@ package updates
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -100,7 +99,7 @@ func (m *Manager) GetReleaseNotes(ctx context.Context, version string) (*Release
 	}
 
 	var release ReleaseInfo
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxReleaseFeedBytes)).Decode(&release); err != nil {
+	if err := decodeReleaseMetadata(resp, &release); err != nil {
 		return nil, fmt.Errorf("failed to decode release notes: %w", err)
 	}
 

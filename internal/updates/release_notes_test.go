@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -68,6 +70,22 @@ func TestGetReleaseNotes_FetchesByTagAndCaches(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Fatalf("expected 1 GitHub request after caching, got %d", got)
+	}
+}
+
+func TestGetReleaseNotesRejectsDeclaredOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.FormatInt(maxReleaseMetadataBytes+1, 10))
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_UPDATE_SERVER", server.URL)
+
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	_, err := manager.GetReleaseNotes(context.Background(), "9.9.9")
+	if err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("GetReleaseNotes error = %v, want response size rejection", err)
 	}
 }
 
