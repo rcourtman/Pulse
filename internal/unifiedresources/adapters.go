@@ -46,7 +46,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		linkedAgentID = strings.TrimSpace(linkedHost.ID)
 	}
 	nodeDisplayName := ""
-	if node.IsClusterMember && !strings.EqualFold(strings.TrimSpace(node.DisplayName), strings.TrimSpace(node.Name)) {
+	if !strings.EqualFold(strings.TrimSpace(node.DisplayName), strings.TrimSpace(node.Name)) {
 		nodeDisplayName = strings.TrimSpace(node.DisplayName)
 	}
 

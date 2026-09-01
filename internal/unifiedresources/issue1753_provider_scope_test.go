@@ -126,3 +126,67 @@ func TestIssue1753RepeatedShortProviderEndpointCannotClaimLegacyPin(t *testing.T
 		}
 	}
 }
+
+// Exercise the full snapshot adapter and registry merge, not just the final
+// presentation coalesce. The agent source is ingested after the Proxmox source
+// and has higher generic naming priority, so the provider display identity
+// must remain explicit on the Proxmox facet to survive that merge.
+func TestIssue1753TwoStandaloneSitesWithAgentsStayDistinctEndToEnd(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC)
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID: "staging-pve", NodeIdentity: "staging-pve", Name: "pve",
+				DisplayName: "Staging", Instance: "staging", Host: "https://pve.staging.example:8006",
+				Status: "online", LinkedAgentID: "agent-staging", LastSeen: now,
+			},
+			{
+				ID: "production-pve", NodeIdentity: "production-pve", Name: "pve",
+				DisplayName: "Production", Instance: "production", Host: "https://pve.production.example:8006",
+				Status: "online", LinkedAgentID: "agent-production", LastSeen: now,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID: "agent-staging", Hostname: "pve", MachineID: "machine-staging",
+				LinkedNodeID: "staging-pve", Status: "online", LastSeen: now,
+			},
+			{
+				ID: "agent-production", Hostname: "pve", MachineID: "machine-production",
+				LinkedNodeID: "production-pve", Status: "online", LastSeen: now,
+			},
+		},
+		LastUpdate: now,
+	})
+
+	resources := adapter.GetAll()
+	if len(resources) != 2 {
+		t.Fatalf("presentation resources = %d, want 2: %+v", len(resources), resources)
+	}
+	byInstance := make(map[string]Resource, len(resources))
+	for _, resource := range resources {
+		if resource.Proxmox != nil {
+			byInstance[resource.Proxmox.Instance] = resource
+		}
+	}
+	for instance, want := range map[string]struct {
+		agentID     string
+		displayName string
+	}{
+		"staging":    {agentID: "agent-staging", displayName: "Staging"},
+		"production": {agentID: "agent-production", displayName: "Production"},
+	} {
+		resource, ok := byInstance[instance]
+		if !ok {
+			t.Fatalf("missing %q provider resource: %+v", instance, resources)
+		}
+		if resource.Agent == nil || resource.Agent.AgentID != want.agentID {
+			t.Fatalf("%q agent = %+v, want %q", instance, resource.Agent, want.agentID)
+		}
+		if resource.Name != want.displayName || resource.Proxmox.NodeDisplayName != want.displayName {
+			t.Fatalf("%q display identity = name %q, node display %q; want %q", instance, resource.Name, resource.Proxmox.NodeDisplayName, want.displayName)
+		}
+	}
+}
