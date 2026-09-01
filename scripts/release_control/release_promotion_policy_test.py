@@ -1700,7 +1700,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('Retargeting existing draft tag ${TAG}', content)
         self.assertIn('Resuming quarantined draft for ${TAG}', content)
         self.assertIn('Resuming quarantined draft release for ${TAG}', content)
-        self.assertIn('release_activation_committed=${RELEASE_ACTIVATION_COMMITTED}', content)
+        self.assertIn(
+            'write_github_output.py release_activation_committed "${RELEASE_ACTIVATION_COMMITTED}"',
+            content,
+        )
         self.assertIn('[ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]', content)
         self.assertIn('[ "$ACTIVATION_COMMITTED" != "true" ]', content)
         self.assertNotIn('[ -z "$EXISTING_RELEASE_PUBLISHED_AT" ]', content)
@@ -1708,7 +1711,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('--rawfile body "$NOTES_FILE"', content)
         self.assertIn('--input "$RELEASE_PAYLOAD"', content)
         self.assertIn('--expected-body-file "$NOTES_FILE"', content)
-        self.assertIn('historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}', content)
+        self.assertIn(
+            'write_github_output.py historical_asset_backfill_only "${HISTORICAL_ASSET_BACKFILL_ONLY}"',
+            content,
+        )
         self.assertIn(
             "if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}",
             content,
