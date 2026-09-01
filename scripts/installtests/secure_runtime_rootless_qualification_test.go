@@ -430,6 +430,7 @@ func TestSecureRuntimeRootlessQualification(t *testing.T) {
 	rootlessQualStopUnit(t, daemon.rootlessUnit)
 	rootlessQualStopUnit(t, daemon.rootfulUnit)
 	rootlessQualStopUserManager(t, daemon)
+	rootlessQualWaitRuntimeMountsReleased(t, daemon, 30*time.Second)
 	rootlessQualRemoveRuntimeState(t, daemon)
 	rootlessQualAssertPulseRemoved(t)
 	for _, socket := range []string{daemon.rootlessSock, daemon.rootfulSock} {
@@ -1173,11 +1174,87 @@ func rootlessQualAssertPulseRemoved(t *testing.T) {
 
 func rootlessQualRemoveRuntimeState(t *testing.T, d rootlessQualDaemon) {
 	t.Helper()
-	for _, path := range []string{d.home, filepath.Join("/run/user", strconv.Itoa(d.uid)), "/var/lib/pulse-rootful-docker", "/var/lib/containers/storage"} {
+	for _, path := range rootlessQualRuntimeStateRoots(d) {
 		if err := os.RemoveAll(path); err != nil {
 			t.Fatalf("remove runtime state %s: %v", path, err)
 		}
 	}
+}
+
+func rootlessQualRuntimeStateRoots(d rootlessQualDaemon) []string {
+	return []string{d.home, filepath.Join("/run/user", strconv.Itoa(d.uid)), "/var/lib/pulse-rootful-docker", "/var/lib/containers/storage"}
+}
+
+func rootlessQualWaitRuntimeMountsReleased(t *testing.T, d rootlessQualDaemon, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var remaining []string
+	for {
+		mountInfo, err := os.ReadFile("/proc/self/mountinfo")
+		if err != nil {
+			t.Fatalf("read kernel mount table before runtime-state deletion: %v", err)
+		}
+		remaining, err = rootlessQualMountPointsBelow(string(mountInfo), rootlessQualRuntimeStateRoots(d))
+		if err != nil {
+			t.Fatalf("parse kernel mount table before runtime-state deletion: %v", err)
+		}
+		if len(remaining) == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("runtime mounts remain after service shutdown: %q", remaining)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func rootlessQualMountPointsBelow(mountInfo string, roots []string) ([]string, error) {
+	cleanRoots := make([]string, 0, len(roots))
+	for _, root := range roots {
+		if root = filepath.Clean(strings.TrimSpace(root)); root != "." {
+			cleanRoots = append(cleanRoots, root)
+		}
+	}
+	var matches []string
+	for lineNumber, line := range strings.Split(mountInfo, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 6 {
+			return nil, fmt.Errorf("line %d has %d fields", lineNumber+1, len(fields))
+		}
+		mountPoint, err := rootlessQualDecodeMountInfoPath(fields[4])
+		if err != nil {
+			return nil, fmt.Errorf("line %d mount point: %w", lineNumber+1, err)
+		}
+		mountPoint = filepath.Clean(mountPoint)
+		for _, root := range cleanRoots {
+			if mountPoint == root || root == string(filepath.Separator) || strings.HasPrefix(mountPoint, root+string(filepath.Separator)) {
+				matches = append(matches, mountPoint)
+				break
+			}
+		}
+	}
+	sort.Strings(matches)
+	return slices.Compact(matches), nil
+}
+
+func rootlessQualDecodeMountInfoPath(value string) (string, error) {
+	var decoded strings.Builder
+	decoded.Grow(len(value))
+	for i := 0; i < len(value); i++ {
+		if value[i] != '\\' {
+			decoded.WriteByte(value[i])
+			continue
+		}
+		if i+3 >= len(value) || value[i+1] < '0' || value[i+1] > '7' || value[i+2] < '0' || value[i+2] > '7' || value[i+3] < '0' || value[i+3] > '7' {
+			return "", fmt.Errorf("invalid mountinfo escape at byte %d", i)
+		}
+		decoded.WriteByte((value[i+1]-'0')*64 + (value[i+2]-'0')*8 + value[i+3] - '0')
+		i += 3
+	}
+	return decoded.String(), nil
 }
 
 func rootlessQualRemoveFixtures(t *testing.T, d rootlessQualDaemon) {
@@ -1511,6 +1588,40 @@ exit 2
 	}
 	if !slices.Equal(commands, want) {
 		t.Fatalf("fixture cleanup command order = %q, want %q", commands, want)
+	}
+}
+
+func TestRootlessQualificationMountReleaseUsesExactKernelPaths(t *testing.T) {
+	mountInfo := strings.Join([]string{
+		"36 25 0:32 / /var/lib/containers/storage rw,relatime - overlay overlay rw",
+		"37 36 0:33 / /var/lib/containers/storage/overlay/abc/merged rw,relatime - overlay overlay rw",
+		"38 25 0:34 / /var/lib/containers/storage-other rw,relatime - tmpfs tmpfs rw",
+		"39 25 0:35 / /var/lib/pulse\\040rootless/data rw,relatime - tmpfs tmpfs rw",
+		"40 25 0:36 / /var/lib/pulse\\134rootless/data rw,relatime - tmpfs tmpfs rw",
+	}, "\n")
+
+	got, err := rootlessQualMountPointsBelow(mountInfo, []string{
+		"/var/lib/containers/storage",
+		"/var/lib/pulse rootless",
+		`/var/lib/pulse\rootless`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"/var/lib/containers/storage",
+		"/var/lib/containers/storage/overlay/abc/merged",
+		"/var/lib/pulse rootless/data",
+		`/var/lib/pulse\rootless/data`,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("mounts beneath runtime roots = %q, want %q", got, want)
+	}
+	if _, err := rootlessQualMountPointsBelow("1 2 3", []string{"/var/lib/containers/storage"}); err == nil {
+		t.Fatal("malformed mountinfo line was accepted")
+	}
+	if _, err := rootlessQualMountPointsBelow("1 2 3 4 /bad\\09x 6", []string{"/bad"}); err == nil {
+		t.Fatal("malformed mountinfo escape was accepted")
 	}
 }
 
