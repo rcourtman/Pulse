@@ -1,7 +1,7 @@
 # VMware vCenter Phase-1 API Runtime Spec
 
 Last updated: 2026-03-30
-Status: PLANNED
+Status: IMPLEMENTED (`/api/vmware/connections` route family and provider runtime shipped: `internal/api/vmware_handlers.go`, `internal/vmware/client*.go`, `internal/monitoring/vmware_poller.go`; the operator-route exclusion is pinned by `internal/api/route_inventory_test.go`; live failure-classification proof on a real `vCenter` is still outstanding). Last reviewed 2026-09-01.
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`

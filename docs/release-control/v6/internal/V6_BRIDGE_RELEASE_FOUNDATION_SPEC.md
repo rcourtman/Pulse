@@ -1,7 +1,7 @@
 # Pulse v6 Bridge Release Foundation Spec
 
 Last updated: 2026-03-17
-Status: ACTIVE
+Status: SUPERSEDED (recorded as `status.json.resolved_decisions.v6-bridge-release-foundation` on 2026-03-17; the Governance Mapping promotions below now run as lanes `L18` policy-aware data governance, `L19` resource change intelligence, `L20` action governance and auditability, and `L22` fleet governance and rollout control, which are the current signal). Last reviewed 2026-09-01.
 
 ## Intent
 

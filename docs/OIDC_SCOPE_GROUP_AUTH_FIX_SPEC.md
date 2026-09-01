@@ -5,6 +5,9 @@
 Resolved on 2026-07-07; see Resolution. Reporter retest still requires a
 release artifact containing both fixes.
 
+Last reviewed 2026-09-01: the `pulse` fixes shipped in `v6.0.4`/`v6.0.5` (latest
+stable is `v6.4.2`). This is a closed handoff record, not a current signal.
+
 Primary issue: #1535
 
 Related issues: #1528, #1533

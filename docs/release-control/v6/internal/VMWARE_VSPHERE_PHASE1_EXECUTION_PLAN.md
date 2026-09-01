@@ -1,7 +1,8 @@
 # VMware vSphere Phase-1 Execution Plan
 
 Last updated: 2026-03-31
-Status: ACTIVE
+Status: PARKED (not a current signal; reactivate only through a FEATURE_REQUESTS.md ledger entry). Last reviewed 2026-09-01.
+Status note: the shared phase-1 floor reached the `first-lab-ready` checkpoint (`PLATFORM_SUPPORT_MANIFEST.json` admits `vmware-vsphere` at `first-lab-ready`; the four companion specs are IMPLEMENTED). The only remaining work is the live `vCenter` proof run, blocked since 2026-03-30 with no `vCenter` capability in `LOCAL_CAPABILITIES.md`, tracked as lane-followup `platform-admission-execution-post-rc-hardening`, and backed by no `FEATURE_REQUESTS.md` entry for VMware support.
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `status.json.resolved_decisions.vmware-vsphere-vcenter-first-admission-model`

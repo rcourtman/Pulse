@@ -1,6 +1,7 @@
 # Legacy Host Classification Audit
 
 Date: 2026-03-05
+Status: RECORD of the 2026-03-05 audit. The Post-Release Queue below is PARKED (not a current signal; reactivate only through a FEATURE_REQUESTS.md ledger entry); `models.Host` and `StateSnapshot.Hosts` compatibility shims are still present, so the queue was never worked. Last reviewed 2026-09-01.
 Scope: `pulse` repo only, focused on v6-facing paths and release verification artifacts.
 
 ## Verdict

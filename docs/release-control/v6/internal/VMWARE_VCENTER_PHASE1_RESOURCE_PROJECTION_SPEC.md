@@ -1,7 +1,7 @@
 # VMware vCenter Phase-1 Resource Projection Spec
 
 Last updated: 2026-05-22
-Status: PLANNED
+Status: IMPLEMENTED (canonical projection shipped: `unifiedresources.SourceVMware` fed by `internal/monitoring/vmware_poller.go` and `internal/vmware/client_topology.go`, network inventory added in `5016cbc2ba`; `vmware-vsphere` is admitted at `first-lab-ready` in `PLATFORM_SUPPORT_MANIFEST.json`; live `vCenter` projection proof is still outstanding). Last reviewed 2026-09-01.
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`

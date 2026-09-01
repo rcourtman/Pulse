@@ -1,7 +1,7 @@
 # Infrastructure-Aware Service Assurance Plan
 
 Last updated: 2026-08-30
-Status: ACCEPTED — SLICES A, B, C, D, AND E IMPLEMENTED
+Status: ACCEPTED LANE; slices A–E IMPLEMENTED (2026-08-30). Slices F–H PARKED (not a current signal; reactivate only through a FEATURE_REQUESTS.md ledger entry — the nearest entry, "Infrastructure lifecycle event timeline", is `watching` with one signal). Last reviewed 2026-09-01.
 Governance surfaces:
 
 - `status.json.coverage_gaps.infrastructure-aware-service-assurance`

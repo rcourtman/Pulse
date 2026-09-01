@@ -1,7 +1,7 @@
 # Customer Account Portal Spec
 
 Last updated: 2026-04-20
-Status: ACTIVE
+Status: IMPLEMENTED (the `L17` RC floor is delivered: `internal/cloudcp/portal` account shell with `GET /api/portal/bootstrap`, plus the `pulse-pro/landing-page` utility pages; `status.json` lane `L17` is `bounded-residual`, and the post-GA expansion is tracked only as lane-followup `account-commercial-transition-external-proof`, not a current build signal). Last reviewed 2026-09-01.
 Lane: `L17`
 
 ## Intent

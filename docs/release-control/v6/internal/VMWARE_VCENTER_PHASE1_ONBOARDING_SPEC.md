@@ -1,7 +1,7 @@
 # VMware vCenter Phase-1 Onboarding Spec
 
 Last updated: 2026-03-30
-Status: PLANNED
+Status: IMPLEMENTED (shared platform-connections onboarding shipped: `internal/api/vmware_handlers.go`, `internal/config/vmware.go`, `frontend-modern/src/pages/Vmware.tsx`, `tests/integration/tests/22-vmware-connections-workspace.spec.ts`; the live `vCenter` proof run is still outstanding, tracked only as lane-followup `platform-admission-execution-post-rc-hardening`). Last reviewed 2026-09-01.
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`

@@ -1,7 +1,7 @@
 # VMware vCenter Phase-1 Alerts And Assistant Spec
 
 Last updated: 2026-03-30
-Status: PLANNED
+Status: IMPLEMENTED (shared alert/history and read-only Assistant paths shipped: `frontend-modern/src/components/Alerts/ThresholdsTableVMwareTab.tsx`, `tests/integration/tests/36-vmware-alert-history-resource-incidents.spec.ts`, `38-vmware-ai-chat-mentions.spec.ts`, `42-vmware-ai-chat-read-recovery.spec.ts`, `internal/ai/tools/control_resource_test.go`; live alarm-fidelity proof on a real `vCenter` is still outstanding). Last reviewed 2026-09-01.
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`

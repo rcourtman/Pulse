@@ -1,6 +1,6 @@
 # Alert Engine Evolution
 
-Status: Active
+Status: IMPLEMENTED (phases 0–3 engine side complete 2026-08-27: `internal/alerts/alert_policy.go`, `history_projection.go`, `lifecycle_contract_test.go`; the rules-first UI migration stays deferred and demand-gated through FEATURE_REQUESTS.md, as recorded under Phase 3 below). Last reviewed 2026-09-01.
 Date: 2026-08-26
 Scope: `pulse` only
 Predecessor: `docs/CANONICAL_ALERT_ENGINE_MIGRATION_2026-03-10.md`
