@@ -10,6 +10,7 @@ const (
 	maxVersionResponseBodyBytes  = 64 * 1024
 	maxRegistryManifestBodyBytes = 4 * 1024 * 1024
 	maxRegistryTokenBodyBytes    = 1 * 1024 * 1024
+	maxContainerStatsBodyBytes   = 4 * 1024 * 1024
 )
 
 func readBodyWithLimit(r io.Reader, maxBytes int64) ([]byte, error) {

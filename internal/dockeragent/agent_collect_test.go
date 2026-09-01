@@ -563,6 +563,29 @@ func TestCollectContainer(t *testing.T) {
 		}
 	})
 
+	t.Run("oversized stats response", func(t *testing.T) {
+		agent := &Agent{
+			docker: &fakeDockerClient{
+				containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+					inspect := baseInspect()
+					inspect.State = &containertypes.State{Running: true}
+					return inspect, nil, nil
+				},
+				containerStatsOneShotFn: func(context.Context, string) (dockerStatsResponseReader, error) {
+					return dockerStatsResponseReader{
+						Body: io.NopCloser(strings.NewReader(strings.Repeat("x", maxContainerStatsBodyBytes+1))),
+					}, nil
+				},
+			},
+			logger: logger,
+		}
+
+		_, err := agent.collectContainer(context.Background(), containertypes.Summary{ID: "container-123456"})
+		if err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+			t.Fatalf("collectContainer() error = %v, want response size limit error", err)
+		}
+	})
+
 	t.Run("uptime negative clamped", func(t *testing.T) {
 		future := time.Now().Add(5 * time.Minute).Format(time.RFC3339Nano)
 		inspect := baseInspect()

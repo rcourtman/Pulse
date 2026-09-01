@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"math/big"
 	"net/netip"
@@ -591,7 +590,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 			}
 		}()
 
-		payload, err := io.ReadAll(statsResp.Body)
+		payload, err := readBodyWithLimit(statsResp.Body, maxContainerStatsBodyBytes)
 		if err != nil {
 			return agentsdocker.Container{}, fmt.Errorf("read stats: %w", err)
 		}
