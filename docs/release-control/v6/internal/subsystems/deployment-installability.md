@@ -3949,7 +3949,10 @@ install. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
 pins the known safe floors for advisories remediated by commit `6ba85a185`,
 including DOMPurify `GHSA-55q2-fjhq-7xh7`, brace-expansion
 `GHSA-mh99-v99m-4gvg` and `GHSA-rgw5-rvv9-x895`, and nanoid
-`GHSA-2v37-7h3g-55p8`, while
+`GHSA-2v37-7h3g-55p8`. The same floor test requires every locked browserslist
+copy to be at least `4.28.7`, closing the unbounded-query-cache
+`GHSA-c83g-rgw3-j3cx` and untrusted-custom-stats
+`GHSA-73wf-gq98-2v4g` advisories, while
 `scripts/installtests/build_release_assets_test.go` prevents either CI audit
 gate from being removed silently. A later advisory must advance these floors
 and its sanitizer or dependency-specific regression proof together; audit
