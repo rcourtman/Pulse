@@ -4055,7 +4055,53 @@ func TestInstallSHPrivilegedHelperStateRemovalRequiresExactLifecycleAuthority(t 
 	}
 }
 
-func TestInstallSHFullUninstallRemovesPrivilegedHelperStateOnlyAfterServerConfirmation(t *testing.T) {
+func TestInstallSHSafeProfileStateRemovalRequiresExactLifecycleAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		authority  func(string) string
+		wantRemove bool
+	}{
+		{name: "exact fixed boundary", authority: func(path string) string { return path }, wantRemove: true},
+		{name: "mismatched boundary", authority: func(path string) string { return path + "-other" }, wantRemove: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			profileState := filepath.Join(t.TempDir(), "pulse-agent-profile")
+			if err := os.MkdirAll(profileState, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(profileState, "current.env"), []byte("retained-or-removed"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			script := `
+				set -u
+				SAFE_PROFILE_STATE_DIR="` + profileState + `"
+				SAFE_PROFILE_STATE_DIR_REMOVAL_AUTHORITY="` + tc.authority(profileState) + `"
+				log_warn() { :; }
+` + extractInstallShellFunction(t, "remove_authorized_runtime_dir") + `
+` + extractInstallShellFunction(t, "remove_safe_profile_state_dir") + `
+				if remove_safe_profile_state_dir; then
+					printf 'removed\n'
+				else
+					printf 'retained\n'
+				fi
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("safe-profile-state cleanup harness: %v\n%s", err, out)
+			}
+			_, statErr := os.Stat(profileState)
+			if tc.wantRemove {
+				if !os.IsNotExist(statErr) || string(out) != "removed\n" {
+					t.Fatalf("authorized safe-profile state survived: stat=%v output=%q", statErr, out)
+				}
+			} else if statErr != nil || string(out) != "retained\n" {
+				t.Fatalf("unauthorized safe-profile state changed: stat=%v output=%q", statErr, out)
+			}
+		})
+	}
+}
+
+func TestInstallSHFullUninstallRemovesRuntimeStateOnlyAfterServerConfirmation(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -4063,11 +4109,12 @@ func TestInstallSHFullUninstallRemovesPrivilegedHelperStateOnlyAfterServerConfir
 	script := string(content)
 	confirmation := strings.LastIndex(script, `if ! uninstall_collector_registration; then`)
 	helperCleanup := strings.LastIndex(script, `if ! remove_privileged_helper_state_dir; then`)
-	if confirmation < 0 || helperCleanup < 0 {
-		t.Fatalf("full uninstall lifecycle is missing server confirmation or helper-state cleanup: confirmation=%d cleanup=%d", confirmation, helperCleanup)
+	profileCleanup := strings.LastIndex(script, `if ! remove_safe_profile_state_dir; then`)
+	if confirmation < 0 || helperCleanup < 0 || profileCleanup < 0 {
+		t.Fatalf("full uninstall lifecycle is missing server confirmation or fixed-state cleanup: confirmation=%d helper=%d profile=%d", confirmation, helperCleanup, profileCleanup)
 	}
-	if helperCleanup <= confirmation {
-		t.Fatal("privileged helper state cleanup can run before authenticated server removal")
+	if helperCleanup <= confirmation || profileCleanup <= confirmation {
+		t.Fatal("fixed privileged runtime state cleanup can run before authenticated server removal")
 	}
 }
 
