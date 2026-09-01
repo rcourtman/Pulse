@@ -245,7 +245,7 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     placeholder: 'Fireworks API key',
     configuredPlaceholder: '••••••••••• (configured)',
     actionLinkLabel: 'Get API key →',
-    actionLinkHref: 'https://fireworks.ai/account/api-keys',
+    actionLinkHref: 'https://app.fireworks.ai/settings/users/api-keys',
     helperText: 'Uses https://api.fireworks.ai/inference/v1 automatically.',
     clearTitle: 'Clear API key',
   },

@@ -1243,7 +1243,7 @@ func TestOpenAIClient_ListModels_OpenRouterReturnsCatalog(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/models", r.URL.Path)
 		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
-		assert.Equal(t, "https://pulse.app", r.Header.Get("HTTP-Referer"))
+		assert.Equal(t, "https://pulserelay.pro", r.Header.Get("HTTP-Referer"))
 		assert.Equal(t, "Pulse", r.Header.Get("X-Title"))
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1274,7 +1274,7 @@ func TestOpenAIClient_TestConnection_OpenRouterValidatesCurrentKey(t *testing.T)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/key", r.URL.Path)
 		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
-		assert.Equal(t, "https://pulse.app", r.Header.Get("HTTP-Referer"))
+		assert.Equal(t, "https://pulserelay.pro", r.Header.Get("HTTP-Referer"))
 		assert.Equal(t, "Pulse", r.Header.Get("X-Title"))
 
 		w.Header().Set("Content-Type", "application/json")

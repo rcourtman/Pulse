@@ -24,7 +24,7 @@ const (
 	openaiStreamMaxRetries     = 1
 	openaiStreamInitialBackoff = 1 * time.Second
 	openaiStreamChunkTimeout   = 12 * time.Second
-	openrouterRefererURL       = "https://pulse.app"
+	openrouterRefererURL       = "https://pulserelay.pro"
 	openrouterAppTitle         = "Pulse"
 	// OpenRouter preflights affordability against the requested maximum
 	// completion budget. Leaving it unset can make small chat turns reserve a
