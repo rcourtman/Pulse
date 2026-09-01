@@ -987,6 +987,13 @@ artifact-selection behaviour.
    against their exact `.exe` targets and then omit them, because the image
    recreates those aliases deterministically and the immutable payload
    manifest remains regular-file-only.
+   Each alias is a three-member delivery contract: the extensionless binary,
+   `.sig`, and `.sshsig` paths must resolve respectively to the signed `.exe`,
+   `.exe.sig`, and `.exe.sshsig` files. Server archives must create those
+   aliases only after signing the complete cross-platform payload, and both
+   source-built and exact-candidate images must recreate and qualify all three;
+   otherwise the download handler rejects the local Windows agent and falls
+   through to a release asset with the wrong filename identity.
    Helm Pages convergence must promote the immutable chart artifact produced
    and qualified by the exact create-release run. It must bind that artifact
    to the activated source run, tag, commit, and activation marker, and must

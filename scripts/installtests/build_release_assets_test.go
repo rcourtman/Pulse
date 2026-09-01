@@ -509,12 +509,63 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 		`test "${actual_embedded_agent}" = "${expected_agent}"`,
 		`test "$(readlink /usr/local/bin/pulse-agent)" = "/opt/pulse/bin/pulse-agent-linux-amd64"`,
 		`test -x /usr/local/bin/pulse-agent`,
+		`for arch in amd64 arm64 386; do`,
+		`target="pulse-agent-windows-${arch}.exe${suffix}"`,
+		`test -s "${alias}"`,
 		`test ! -x "$sidecar"`,
 	} {
 		if !strings.Contains(qualifier, needle) {
 			t.Fatalf("exact-candidate container qualification missing embedded agent mode guard: %s", needle)
 		}
 	}
+}
+
+func TestWindowsAgentAliasesCarryDetachedSignatureSidecars(t *testing.T) {
+	commonPath := repoFile("scripts", "release_asset_common.sh")
+	tempDir := t.TempDir()
+	for _, arch := range []string{"amd64", "arm64", "386"} {
+		base := filepath.Join(tempDir, "pulse-agent-windows-"+arch+".exe")
+		for _, suffix := range []string{"", ".sig", ".sshsig"} {
+			if err := os.WriteFile(base+suffix, []byte("packet-"+arch+suffix), 0o644); err != nil {
+				t.Fatalf("write Windows packet fixture: %v", err)
+			}
+		}
+	}
+	cmd := exec.Command("bash", "-c", `source "$1"; pulse_release_link_windows_agent_aliases "$2"`, "windows-agent-alias-test", commonPath, tempDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("create Windows agent packet aliases: %v\n%s", err, output)
+	}
+	for _, arch := range []string{"amd64", "arm64", "386"} {
+		for _, suffix := range []string{"", ".sig", ".sshsig"} {
+			alias := filepath.Join(tempDir, "pulse-agent-windows-"+arch+suffix)
+			want := "pulse-agent-windows-" + arch + ".exe" + suffix
+			got, err := os.Readlink(alias)
+			if err != nil {
+				t.Fatalf("read Windows agent alias %s: %v", alias, err)
+			}
+			if got != want {
+				t.Fatalf("Windows agent alias %s targets %q, want %q", alias, got, want)
+			}
+			if info, err := os.Stat(alias); err != nil || info.Size() == 0 {
+				t.Fatalf("Windows agent alias %s does not resolve to a non-empty packet member: info=%v err=%v", alias, info, err)
+			}
+		}
+	}
+
+	assertFileContainsAll(t, repoFile("Dockerfile"),
+		`ln -s pulse-agent-windows-amd64.exe.sig /opt/pulse/bin/pulse-agent-windows-amd64.sig`,
+		`ln -s pulse-agent-windows-amd64.exe.sshsig /opt/pulse/bin/pulse-agent-windows-amd64.sshsig`,
+		`ln -sf pulse-agent-windows-amd64.exe.sig /opt/pulse/bin/pulse-agent-windows-amd64.sig`,
+		`ln -sf pulse-agent-windows-amd64.exe.sshsig /opt/pulse/bin/pulse-agent-windows-amd64.sshsig`,
+	)
+	assertFileContainsAll(t, repoFile("scripts", "build-release.sh"),
+		`pulse_release_sign_directory_assets "$universal_dir/bin"`,
+		`pulse_release_link_windows_agent_aliases "$universal_dir/bin"`,
+	)
+	assertFileContainsAll(t, repoFile("scripts", "prepare-release-container-context.sh"),
+		`for suffix in "" .sig .sshsig; do`,
+		`expected_target="pulse-agent-windows-${windows_arch}.exe${suffix}"`,
+	)
 }
 
 func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *testing.T) {
@@ -548,6 +599,11 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 			"scripts/install.sh.sshsig":          "shared-installer-sshsig",
 			"VERSION":                            version,
 		}
+		for _, windowsArch := range []string{"amd64", "arm64", "386"} {
+			name := "bin/pulse-agent-windows-" + windowsArch + ".exe"
+			files[name+".sig"] = "shared-windows-" + windowsArch + "-signature"
+			files[name+".sshsig"] = "shared-windows-" + windowsArch + "-ssh-signature"
+		}
 		for _, helperTarget := range []string{"linux-amd64", "linux-arm64", "linux-armv7", "linux-armv6", "linux-386"} {
 			name := "bin/pulse-agent-helper-" + helperTarget
 			files[name] = "shared-helper-" + helperTarget
@@ -576,11 +632,13 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 			}
 		}
 		for _, windowsArch := range []string{"amd64", "arm64", "386"} {
-			name := "bin/pulse-agent-windows-" + windowsArch
-			target := "pulse-agent-windows-" + windowsArch + ".exe"
-			header := &tar.Header{Name: name, Mode: 0o777, Typeflag: tar.TypeSymlink, Linkname: target}
-			if err := tarWriter.WriteHeader(header); err != nil {
-				t.Fatalf("write %s alias to %s archive: %v", name, arch, err)
+			for _, suffix := range []string{"", ".sig", ".sshsig"} {
+				name := "bin/pulse-agent-windows-" + windowsArch + suffix
+				target := "pulse-agent-windows-" + windowsArch + ".exe" + suffix
+				header := &tar.Header{Name: name, Mode: 0o777, Typeflag: tar.TypeSymlink, Linkname: target}
+				if err := tarWriter.WriteHeader(header); err != nil {
+					t.Fatalf("write %s alias to %s archive: %v", name, arch, err)
+				}
 			}
 		}
 		if err := tarWriter.Close(); err != nil {
@@ -614,9 +672,11 @@ func TestReleaseContainerContextTreatsServerSignaturesAsArchitectureBound(t *tes
 		t.Fatalf("prepared context retained duplicate universal payload: %v", err)
 	}
 	for _, windowsArch := range []string{"amd64", "arm64", "386"} {
-		aliasPath := filepath.Join(outputDir, "amd64", "bin", "pulse-agent-windows-"+windowsArch)
-		if _, err := os.Lstat(aliasPath); !os.IsNotExist(err) {
-			t.Fatalf("prepared context retained recreated Windows alias %s: %v", aliasPath, err)
+		for _, suffix := range []string{"", ".sig", ".sshsig"} {
+			aliasPath := filepath.Join(outputDir, "amd64", "bin", "pulse-agent-windows-"+windowsArch+suffix)
+			if _, err := os.Lstat(aliasPath); !os.IsNotExist(err) {
+				t.Fatalf("prepared context retained recreated Windows alias %s: %v", aliasPath, err)
+			}
 		}
 	}
 

@@ -98,6 +98,15 @@ jobs:
             set -euo pipefail
             test "$(readlink /usr/local/bin/pulse-agent)" = "/opt/pulse/bin/pulse-agent-linux-amd64"
             test -x /usr/local/bin/pulse-agent
+            for arch in amd64 arm64 386; do
+              for suffix in "" .sig .sshsig; do
+                alias="/opt/pulse/bin/pulse-agent-windows-${arch}${suffix}"
+                target="pulse-agent-windows-${arch}.exe${suffix}"
+                test -L "${alias}"
+                test "$(readlink "${alias}")" = "${target}"
+                test -s "${alias}"
+              done
+            done
             for sidecar in /opt/pulse/bin/*.sig /opt/pulse/bin/*.sshsig; do
               test ! -x "$sidecar"
             done

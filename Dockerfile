@@ -369,10 +369,17 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Unified agent binaries (all platforms and architectures) plus detached signatures
 COPY --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/
-# Create symlinks for Windows without .exe extension
+# Create complete binary/signature aliases for Windows without .exe extension.
+# The download handler resolves this name and reads detached sidecars beside it.
 RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
+    ln -s pulse-agent-windows-amd64.exe.sig /opt/pulse/bin/pulse-agent-windows-amd64.sig && \
+    ln -s pulse-agent-windows-amd64.exe.sshsig /opt/pulse/bin/pulse-agent-windows-amd64.sshsig && \
     ln -s pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
+    ln -s pulse-agent-windows-arm64.exe.sig /opt/pulse/bin/pulse-agent-windows-arm64.sig && \
+    ln -s pulse-agent-windows-arm64.exe.sshsig /opt/pulse/bin/pulse-agent-windows-arm64.sshsig && \
     ln -s pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386 && \
+    ln -s pulse-agent-windows-386.exe.sig /opt/pulse/bin/pulse-agent-windows-386.sig && \
+    ln -s pulse-agent-windows-386.exe.sshsig /opt/pulse/bin/pulse-agent-windows-386.sshsig && \
     chown -R pulse:pulse /opt/pulse
 
 # Arch-resolved /usr/local/bin/pulse-agent so the helm chart's agent workload
@@ -411,8 +418,14 @@ RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1 && \
         ln -sf /opt/pulse/bin/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent; \
     fi && \
     ln -sf pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
+    ln -sf pulse-agent-windows-amd64.exe.sig /opt/pulse/bin/pulse-agent-windows-amd64.sig && \
+    ln -sf pulse-agent-windows-amd64.exe.sshsig /opt/pulse/bin/pulse-agent-windows-amd64.sshsig && \
     ln -sf pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
+    ln -sf pulse-agent-windows-arm64.exe.sig /opt/pulse/bin/pulse-agent-windows-arm64.sig && \
+    ln -sf pulse-agent-windows-arm64.exe.sshsig /opt/pulse/bin/pulse-agent-windows-arm64.sshsig && \
     ln -sf pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386 && \
+    ln -sf pulse-agent-windows-386.exe.sig /opt/pulse/bin/pulse-agent-windows-386.sig && \
+    ln -sf pulse-agent-windows-386.exe.sshsig /opt/pulse/bin/pulse-agent-windows-386.sshsig && \
     chown -R pulse:pulse /opt/pulse
 
 # Unified Agent image assembled from the same immutable candidate payload.

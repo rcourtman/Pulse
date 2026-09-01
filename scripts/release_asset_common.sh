@@ -124,6 +124,20 @@ pulse_release_sign_directory_assets() {
     done < <(find "${dir}" -maxdepth 1 -type f ! -name '*.sig' ! -name '*.sshsig' -print0)
 }
 
+pulse_release_link_windows_agent_aliases() {
+    local dir="$1"
+    local target=""
+    local suffix=""
+
+    for target in windows-amd64 windows-arm64 windows-386; do
+        for suffix in "" .sig .sshsig; do
+            ln -sf \
+                "pulse-agent-${target}.exe${suffix}" \
+                "${dir}/pulse-agent-${target}${suffix}"
+        done
+    done
+}
+
 pulse_release_stage_server_archive() {
     local archive_path="$1"
     local staging_dir="$2"
@@ -171,13 +185,6 @@ pulse_release_stage_server_archive() {
         dest="${staging_dir}/bin/pulse-agent-runner-${target}"
         install -m 0755 "${src}" "${dest}"
     done
-    (
-        cd "${staging_dir}/bin"
-        ln -sf pulse-agent-windows-amd64.exe pulse-agent-windows-amd64
-        ln -sf pulse-agent-windows-arm64.exe pulse-agent-windows-arm64
-        ln -sf pulse-agent-windows-386.exe pulse-agent-windows-386
-    )
-
     install -m 0755 "${PULSE_SCRIPTS_DIR}/install-container-agent.sh" "${staging_dir}/scripts/install-container-agent.sh"
     install -m 0755 "${PULSE_SCRIPTS_DIR}/install-docker.sh" "${staging_dir}/scripts/install-docker.sh"
     install -m 0755 "${rendered_installers_dir}/install.sh" "${staging_dir}/scripts/install.sh"
@@ -189,6 +196,7 @@ pulse_release_stage_server_archive() {
     pulse_release_sign_directory_assets "${staging_dir}/bin"
     pulse_release_sign_directory_assets "${staging_dir}/scripts"
     pulse_release_sign_file "${staging_dir}/VERSION"
+    pulse_release_link_windows_agent_aliases "${staging_dir}/bin"
 
     mkdir -p "$(dirname "${archive_path}")"
     (

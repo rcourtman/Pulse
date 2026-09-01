@@ -396,11 +396,9 @@ esac
 EOF
 chmod +x "$universal_dir/bin/pulse-agent"
 
-# Add VERSION file
+# Add VERSION file. Sign the completed universal payload only after every
+# cross-platform agent has been staged below.
 echo "$VERSION" > "$universal_dir/VERSION"
-pulse_release_sign_directory_assets "$universal_dir/bin"
-pulse_release_sign_directory_assets "$universal_dir/scripts"
-pulse_release_sign_file "$universal_dir/VERSION"
 
 # Package standalone unified agent binaries (all platforms)
 # Linux
@@ -500,10 +498,12 @@ cp "$BUILD_DIR/pulse-agent-windows-amd64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$universal_dir/bin/"
 
-# Create symlinks for Windows binaries without .exe extension (required for download endpoint)
-ln -s pulse-agent-windows-amd64.exe "$universal_dir/bin/pulse-agent-windows-amd64"
-ln -s pulse-agent-windows-arm64.exe "$universal_dir/bin/pulse-agent-windows-arm64"
-ln -s pulse-agent-windows-386.exe "$universal_dir/bin/pulse-agent-windows-386"
+# Sign all regular payload files, then create the extensionless Windows aliases
+# as complete binary/signature triplets required by the download endpoint.
+pulse_release_sign_directory_assets "$universal_dir/bin"
+pulse_release_sign_directory_assets "$universal_dir/scripts"
+pulse_release_sign_file "$universal_dir/VERSION"
+pulse_release_link_windows_agent_aliases "$universal_dir/bin"
 
 # Create universal tarball
 cd "$universal_dir"
