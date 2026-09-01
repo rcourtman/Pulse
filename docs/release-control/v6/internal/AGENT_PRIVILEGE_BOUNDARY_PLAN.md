@@ -175,9 +175,10 @@ migration, helper restart continuity, and helper-loss/recovery scenarios. The
 release workflow creates its daemon inside the disposable systemd host, seeds
 an offline source-bound fixture image, exposes only the root-owned Unix socket,
 and never mounts the hosted runner's Docker socket. V7 narrows only the
-rootful-Docker summary-inventory residual; Podman, rootless-runtime parity,
-container metrics, image-update checks, typed container actions, appliance
-coverage, and external review remain open. No schema-v7 receipt exists until
+rootful-Docker summary-inventory residual; rootful Podman, standalone rootless
+runtime proof, container metrics, image-update checks, typed container actions,
+appliance coverage, and external review remain outside that schema. No
+schema-v7 receipt exists until
 an exact immutable prerelease packet successfully completes that workflow, so
 this contract does not change the product default or upgrade the current v6
 evidence classification.
@@ -245,9 +246,12 @@ query before proving ancestry. `HEAD`, a local branch, or an arbitrary ref can
 never receive the committed-main label.
 
 The repository still needs a fresh exact committed release-candidate run,
-representative Proxmox, SMART, Docker and rootless Podman telemetry/action
-parity, appliance profiles, and the external security review. Until those
-proofs are recorded, the safe profile remains opt-in and provider degradation
+representative Proxmox and SMART proof, the complete standalone rootful
+Docker/Podman lifecycle matrix, any separately authorized rootless update or
+action proof, appliance profiles, and the external security review. The local
+rootless Docker/Podman monitoring and lifecycle matrix described below is now
+qualified for its exact source-bound packet, but it does not satisfy those
+remaining proofs. The safe profile remains opt-in and provider degradation
 remains an explicit residual rather than evidence that the candidate lane is
 complete.
 
@@ -265,9 +269,10 @@ and the running collector can transition between direct rootless monitoring
 and typed-helper summary fallback without restarting or enabling collector
 actions. Legacy Docker report-response commands, registry update scans, and
 orphan-backup cleanup are disabled statically whenever the helper-backed safe
-profile is configured. This is implementation proof only; the live fresh-install, restart,
-ambiguity, loss, bidirectional recovery, and telemetry-parity matrix remains
-the qualification residual.
+profile is configured. The standalone packet below now binds this
+implementation to a live local fresh-install, migration, restart, ambiguity,
+loss, recovery, authority-isolation, cleanup, and telemetry-parity exercise for
+both runtime families.
 
 The standalone `secure-runtime-rootless-v1` packet now owns that residual
 without changing the immutable schema-v7 systemd contract. Its opt-in wrapper
@@ -276,9 +281,25 @@ collector-owned rootless Docker and Podman daemons, separate same-family
 rootful helper baselines, exact installer pins, runtime loss and recovery, and
 cleanup before its independent validator can emit a local artifact-bound
 self-attestation. A checked-in harness or locally passing ordinary tests are
-not qualification. Until a complete secret-free receipt and attestation are
-retained, the matrix row remains implemented-but-unqualified and the safe
-profile remains opt-in.
+not qualification.
+
+The exact packet at source commit
+`60041ad9e60c282c892f944e04f777b874991a5d` passed all eleven canonical
+scenarios for Docker and all eleven for Podman on distinct disposable hosts.
+The secret-free receipt SHA-256 is
+`7a116d63ab0cd1560482165055f0a8c9158ce0a8333a27bd9e8256582a52dfb5` and
+the local artifact-bound attestation SHA-256 is
+`566279ecd7d7dfa89c92f24243e9fcd5ae3e295d4284bd559d4be42f1e83b3b5`.
+The validator matched 418 governed source files, both runtime-specific socket
+profiles, distinct host and daemon identities, and all twenty-two scenario
+records. The sanitized evidence record is
+`internal/records/secure-runtime-rootless-v1-local-qualification-2026-09-01.md`.
+This closes the local live-proof residual only for the exercised rootless
+monitoring, migration, fallback, recovery, ambiguity, parity, authority, and
+cleanup paths. Its classification remains local, opt-in, artifact-bound
+self-attestation; it is not published-release provenance, default-profile
+authorization, rootless action/update qualification, or independent security
+review. The safe profile therefore remains opt-in.
 
 ## Target Architecture
 

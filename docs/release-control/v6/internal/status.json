@@ -9836,6 +9836,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/secure-runtime-rootless-v1-local-qualification-2026-09-01.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/agenttokens/install.go",
           "kind": "file"
         },
