@@ -525,8 +525,11 @@ func (s *Service) enforceBudget(useCase string) error {
 		if normalized == "" {
 			normalized = "chat"
 		}
-		return fmt.Errorf("Pulse Assistant cost budget exceeded (%.2f/%.2f USD over %d days) - disable Pulse Assistant or raise budget to continue",
-			summary.Totals.EstimatedUSD, cfg.CostBudgetUSD30d, summary.EffectiveDays)
+		return &CostBudgetExceededError{
+			SpentUSD:  summary.Totals.EstimatedUSD,
+			BudgetUSD: cfg.CostBudgetUSD30d,
+			Days:      summary.EffectiveDays,
+		}
 	}
 
 	return nil

@@ -33,10 +33,13 @@ import {
   PATROL_WORKSPACE_QUEUE_TITLE,
   PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION,
   PATROL_WORKSPACE_RUN_RECORD_TITLE,
-  PATROL_WORKSPACE_SETUP_DESCRIPTION,
   PATROL_WORKSPACE_SETUP_TITLE,
+  getPatrolWorkspaceSetupDescription,
 } from './patrolControlPresentation';
-import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
+import {
+  resolvePatrolBlockedActionCause,
+  type PatrolIntelligenceState,
+} from './usePatrolIntelligenceState';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import {
   presentationPolicyHidesCommercialSurfaces,
@@ -63,9 +66,19 @@ export function PatrolIntelligenceWorkspace(props: {
   const isHistoryOpen = () => state.activeTab() === 'history';
   const isSetupOnly = () =>
     !isHistoryOpen() && !state.selectedRun() && state.shouldShowPatrolSetupOnly();
-  const setupAction = () => getPatrolSetupAction(state.patrolReadiness()?.cause);
-  const setupHint = () => getPatrolSetupHint(state.patrolReadiness()?.cause);
   const setupFinding = () => state.findingsTabBadgeFindings().find(isPatrolRuntimeFinding);
+  // A runtime block (a used-up cost budget) outranks the readiness cause,
+  // which reads "none" while Patrol is configured but paused. The block state
+  // is in memory, so after a restart the persisted runtime finding's own
+  // failure cause carries the same answer until the next run (#1789).
+  const setupFindingCause = () => setupFinding()?.failureCause;
+  const setupCause = () =>
+    resolvePatrolBlockedActionCause(
+      state.blockedCause() || setupFindingCause(),
+      state.patrolReadiness()?.cause,
+    );
+  const setupAction = () => getPatrolSetupAction(setupCause());
+  const setupHint = () => getPatrolSetupHint(setupCause());
   const setupReason = () => {
     const finding = setupFinding();
     return getPatrolSetupIssueReason({
@@ -87,7 +100,7 @@ export function PatrolIntelligenceWorkspace(props: {
     isHistoryOpen()
       ? PATROL_WORKSPACE_HISTORY_DESCRIPTION
       : isSetupOnly()
-        ? PATROL_WORKSPACE_SETUP_DESCRIPTION
+        ? getPatrolWorkspaceSetupDescription(setupCause())
         : state.selectedRun()
           ? PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION
           : getPatrolQueueWorkspaceDescription({

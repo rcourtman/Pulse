@@ -3,6 +3,7 @@ import {
   getPatrolProviderSettingsAction,
   getPatrolSetupAction,
   getPatrolSetupHint,
+  PATROL_BUDGET_EXHAUSTED_CAUSE,
   PATROL_PROVIDER_SETTINGS_ACTION,
 } from '@/utils/patrolRuntimeActions';
 
@@ -31,6 +32,14 @@ describe('patrolRuntimeActions', () => {
     for (const cause of ['model_not_selected', 'model_unsupported_tools', undefined, '']) {
       expect(getPatrolSetupAction(cause)).toEqual(PATROL_PROVIDER_SETTINGS_ACTION);
     }
+  });
+
+  it('routes an exhausted cost budget to the budget field, not the model check (#1789)', () => {
+    expect(getPatrolSetupAction(PATROL_BUDGET_EXHAUSTED_CAUSE)).toEqual({
+      label: 'Raise the cost budget',
+      href: '/settings/pulse-intelligence/provider',
+    });
+    expect(getPatrolSetupHint(PATROL_BUDGET_EXHAUSTED_CAUSE)).toBe('');
   });
 
   it('suppresses the tool-check hint for config-level causes', () => {

@@ -1,11 +1,18 @@
 import { A } from '@solidjs/router';
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createMemo } from 'solid-js';
 import { AIProviderConfigurationSection } from '@/components/Settings/AIProviderConfigurationSection';
 import { isModelProviderConfigured } from '@/components/Settings/aiSettingsModel';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import type { PatrolModelReadinessSnapshot } from '@/types/ai';
 import { AIModelPicker } from '@/components/shared/AIModelPicker';
+import type { AIModelPickerAnnotation } from '@/components/shared/AIModelPicker';
+import {
+  getPatrolCostPresentation,
+  getPatrolGuidedModelIds,
+  resolvePatrolModelGuidance,
+  type PatrolCostTone,
+} from '@/utils/aiPatrolCostPresentation';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import {
   formatAIModelRouteLabel,
@@ -368,6 +375,120 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
   );
 };
 
+const patrolCostToneClasses = (tone: PatrolCostTone) => {
+  switch (tone) {
+    case 'positive':
+      return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200';
+    case 'warning':
+      return 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200';
+    case 'danger':
+      return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-800 dark:text-red-200';
+    default:
+      return 'border-border bg-surface-alt text-base-content';
+  }
+};
+
+const patrolCostLineToneClass = (tone: PatrolCostTone) => {
+  switch (tone) {
+    case 'warning':
+      return 'text-amber-700 dark:text-amber-300';
+    case 'danger':
+      return 'text-red-700 dark:text-red-300';
+    default:
+      return '';
+  }
+};
+
+/**
+ * What Patrol will cost on the chosen model and schedule, with the assumption
+ * and the 30-day spend against budget in the same place. Rendered under the
+ * Patrol model picker and under the shared default when it drives Patrol.
+ */
+export const PatrolCostPreview: Component<{ state: AISettingsState }> = (props) => {
+  const { state } = props;
+  const presentation = createMemo(() => getPatrolCostPresentation(state.patrolCostPreview()));
+  return (
+    <Show when={presentation()}>
+      {(view) => (
+        <div
+          class={`mt-2 rounded border px-3 py-2 ${patrolCostToneClasses(view().tone)}`}
+          data-testid="patrol-cost-preview"
+          role="status"
+        >
+          <div class="flex items-baseline justify-between gap-2">
+            <p class="text-xs font-medium">
+              <span class="mr-1 text-[10px] font-semibold uppercase opacity-70">Estimate</span>{' '}
+              {view().headline}
+            </p>
+            <Show when={state.patrolCostPreviewLoading()}>
+              <span class="text-[10px] opacity-70">updating…</span>
+            </Show>
+          </div>
+          <Show when={view().detail}>
+            <p class="mt-1 text-[11px] opacity-90">{view().detail}</p>
+          </Show>
+          <Show when={view().assumption}>
+            <p class="mt-1 text-[11px] opacity-75">{view().assumption}</p>
+          </Show>
+          <p class={`mt-1 text-[11px] ${patrolCostLineToneClass(view().budgetTone) || 'opacity-90'}`}>
+            {view().budget}
+          </p>
+          <Show when={view().schedule}>
+            <p class="mt-1 text-[11px] opacity-90">{view().schedule}</p>
+          </Show>
+          <Show when={state.patrolIntervalAutoAdjust()}>
+            {(adjust) => (
+              <p class="mt-1 text-[11px] font-medium" data-testid="patrol-schedule-auto-adjust">
+                {adjust().sentence}
+              </p>
+            )}
+          </Show>
+        </div>
+      )}
+    </Show>
+  );
+};
+
+const usePatrolModelGuidance = (
+  state: AISettingsState,
+  models: () => { id: string; provider?: string }[],
+) => {
+  const annotations = createMemo(() =>
+    resolvePatrolModelGuidance(models(), state.patrolModelGuidance()),
+  );
+  const annotationRecord = createMemo<Record<string, AIModelPickerAnnotation>>(() =>
+    Object.fromEntries(
+      Array.from(annotations().entries()).map(([id, annotation]) => [
+        id,
+        { badge: annotation.badge, note: annotation.note, tone: annotation.tone },
+      ]),
+    ),
+  );
+  const sections = createMemo(() => {
+    const ids = getPatrolGuidedModelIds(annotations());
+    return ids.length > 0 ? [{ title: 'Suggested for Patrol', modelIds: ids }] : [];
+  });
+  return { annotations, annotationRecord, sections };
+};
+
+const SelectedModelGuidanceNote: Component<{
+  annotation: () => AIModelPickerAnnotation | undefined;
+}> = (props) => (
+  <Show when={props.annotation()}>
+    {(annotation) => (
+      <p
+        class={`mt-1 text-xs ${
+          annotation().tone === 'warning'
+            ? 'text-amber-600 dark:text-amber-400'
+            : 'text-muted'
+        }`}
+      >
+        <span class="font-medium">{annotation().badge}:</span> {annotation().note}
+      </p>
+    )}
+  </Show>
+);
+
 export const AIModelOverrideField: Component<{
   state: AISettingsState;
   kind: AIModelOverrideKind;
@@ -376,7 +497,8 @@ export const AIModelOverrideField: Component<{
   const { state } = props;
   const config = () => MODEL_OVERRIDE_CONFIG[props.kind];
   const selectedModel = () => state.form[config().formKey];
-  const setSelectedModel = (modelId: string) => state.setForm(config().formKey, modelId);
+  const setSelectedModel = (modelId: string) => state.handleModelSelection(config().formKey, modelId);
+  const guidesPatrol = () => props.kind === 'patrol';
   const modelLabel = (modelId: string) => {
     const trimmed = modelId.trim();
     if (!trimmed) {
@@ -397,6 +519,9 @@ export const AIModelOverrideField: Component<{
     `${controlClass()} flex items-center gap-2 justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`;
   const sharedDefaultDescription = () =>
     state.form.model ? `Currently ${modelLabel(state.form.model)}` : 'No shared default model set';
+  const guidance = usePatrolModelGuidance(state, () => (guidesPatrol() ? selectableModels() : []));
+  const selectedAnnotation = () =>
+    guidesPatrol() ? guidance.annotationRecord()[selectedModel().trim()] : undefined;
 
   return (
     <div class={formField}>
@@ -450,8 +575,11 @@ export const AIModelOverrideField: Component<{
           buttonClass={pickerButtonClass()}
           buttonLabelClass="min-w-0 flex-1 truncate text-left font-normal"
           dropdownClass="w-[calc(100vw-2rem)] max-w-xl"
+          modelSections={guidance.sections()}
+          modelAnnotations={guidance.annotationRecord()}
         />
       </Show>
+      <SelectedModelGuidanceNote annotation={selectedAnnotation} />
       <Show when={selectedModel() && !isModelProviderConfigured(selectedModel(), state.settings())}>
         <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
           <svg
@@ -473,6 +601,9 @@ export const AIModelOverrideField: Component<{
           to be configured. Add an API key on Provider & Models or select a different model.
         </p>
       </Show>
+      <Show when={guidesPatrol()}>
+        <PatrolCostPreview state={state} />
+      </Show>
       <Show when={props.includePatrolReadiness}>
         <PatrolModelReadinessControl state={state} />
       </Show>
@@ -491,6 +622,10 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
       );
   };
   const sharedModelOptions = () => selectableModels(state.form.model);
+  const sharedGuidance = usePatrolModelGuidance(state, sharedModelOptions);
+  const sharedDrivesPatrol = () => !state.form.patrolModel.trim();
+  const sharedSelectedAnnotation = () =>
+    sharedDrivesPatrol() ? sharedGuidance.annotationRecord()[state.form.model.trim()] : undefined;
   const pickerButtonClass = () =>
     `${controlClass()} flex items-center gap-2 justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`;
   const pickerLabelClass = 'min-w-0 flex-1 truncate text-left font-normal';
@@ -545,7 +680,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           <AIModelPicker
             models={sharedModelOptions()}
             selectedModel={state.form.model}
-            onModelSelect={(modelId) => state.setForm('model', modelId)}
+            onModelSelect={(modelId) => state.handleModelSelection('model', modelId)}
             emptySelectionLabel="Select a model..."
             title="Select shared default model"
             searchPlaceholder="Search configured provider models"
@@ -558,8 +693,11 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             buttonClass={pickerButtonClass()}
             buttonLabelClass={pickerLabelClass}
             dropdownClass={pickerDropdownClass}
+            modelSections={sharedGuidance.sections()}
+            modelAnnotations={sharedGuidance.annotationRecord()}
           />
         </Show>
+        <SelectedModelGuidanceNote annotation={sharedSelectedAnnotation} />
         <Show when={state.modelsError()}>
           <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
             <svg
@@ -606,6 +744,9 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           Used by Pulse Assistant and Patrol unless you set a section-specific override. Service
           context discovery follows the Patrol model when one is set.
         </p>
+        <Show when={sharedDrivesPatrol()}>
+          <PatrolCostPreview state={state} />
+        </Show>
       </div>
 
       <div class={formField}>

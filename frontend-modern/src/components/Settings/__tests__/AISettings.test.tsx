@@ -20,6 +20,8 @@ const testProviderMock = vi.fn();
 const testConnectionMock = vi.fn();
 const runDiscoveryRefreshMock = vi.fn();
 const runPatrolModelReadinessMock = vi.fn();
+const getPatrolCostPreviewMock = vi.fn();
+const getPatrolModelGuidanceMock = vi.fn();
 const fetchAgentCapabilitiesManifestMock = vi.fn();
 const listSessionsMock = vi.fn();
 const summarizeSessionMock = vi.fn();
@@ -59,6 +61,11 @@ vi.mock('@/api/discovery', () => ({
 
 vi.mock('@/api/patrol', () => ({
   runPatrolModelReadiness: (...args: unknown[]) => runPatrolModelReadinessMock(...args),
+}));
+
+vi.mock('@/api/aiPatrolCost', () => ({
+  getPatrolCostPreview: (...args: unknown[]) => getPatrolCostPreviewMock(...args),
+  getPatrolModelGuidance: (...args: unknown[]) => getPatrolModelGuidanceMock(...args),
 }));
 
 vi.mock('@/api/agentCapabilities', async (importOriginal) => {
@@ -157,6 +164,8 @@ const resetAllMocks = () => {
   testConnectionMock.mockReset();
   runDiscoveryRefreshMock.mockReset();
   runPatrolModelReadinessMock.mockReset();
+  getPatrolCostPreviewMock.mockReset();
+  getPatrolModelGuidanceMock.mockReset();
   fetchAgentCapabilitiesManifestMock.mockReset();
   listSessionsMock.mockReset();
   summarizeSessionMock.mockReset();
@@ -181,6 +190,8 @@ const setupDefaultMocks = () => {
   entitlementsMock.mockReturnValue({ trial_eligible: true });
   getSettingsMock.mockResolvedValue(baseSettings());
   getModelsMock.mockResolvedValue({ models: [] });
+  getPatrolCostPreviewMock.mockResolvedValue(null);
+  getPatrolModelGuidanceMock.mockResolvedValue({ rules: [] });
   testConnectionMock.mockResolvedValue({ success: true, message: 'ok' });
   testProviderMock.mockResolvedValue({
     success: true,
@@ -1542,5 +1553,266 @@ describe('AISettings provider setup flow', () => {
     expect(
       screen.queryByText(/Hosted quickstart requires an activated entitlement/i),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('AISettings Patrol cost preview and model guidance', () => {
+  const flashProjection = (overrides: Record<string, unknown> = {}) => ({
+    provider: 'gemini',
+    model: 'gemini-2.5-flash',
+    model_route: 'gemini:gemini-2.5-flash',
+    billed_per_token: true,
+    pricing_known: true,
+    pricing_as_of: '2026-06-04',
+    input_usd_per_mtok: 0.3,
+    output_usd_per_mtok: 2.5,
+    per_run_input_tokens: 104_528,
+    per_run_output_tokens: 4_491,
+    per_run_source: 'default',
+    history_run_count: 0,
+    per_run_usd: 0.0426,
+    interval_minutes: 360,
+    scheduled_runs_per_day: 4,
+    triggered_runs_per_day: 0,
+    triggered_per_run_usd: 0,
+    scheduled_projected_30d_usd: 5.11,
+    projected_30d_usd: 5.11,
+    interval_estimates: [
+      { interval_minutes: 60, scheduled_runs_per_day: 24, projected_30d_usd: 30.67 },
+      { interval_minutes: 180, scheduled_runs_per_day: 8, projected_30d_usd: 10.22 },
+      { interval_minutes: 360, scheduled_runs_per_day: 4, projected_30d_usd: 5.11 },
+      { interval_minutes: 720, scheduled_runs_per_day: 2, projected_30d_usd: 2.56 },
+      { interval_minutes: 1440, scheduled_runs_per_day: 1, projected_30d_usd: 1.28 },
+    ],
+    budget_usd_30d: 20,
+    spend_30d_usd: 3.2,
+    spend_30d_known: true,
+    patrol_spend_30d_usd: 2.5,
+    budget_reached: false,
+    recommended_interval_minutes: 360,
+    recommendation_reason: 'fits_budget_share',
+    recommendation_target_usd: 10,
+    ...overrides,
+  });
+
+  const sonnetProjection = (intervalMinutes: number) =>
+    flashProjection({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5',
+      model_route: 'anthropic:claude-sonnet-5',
+      input_usd_per_mtok: 2,
+      output_usd_per_mtok: 10,
+      per_run_usd: 0.254,
+      interval_minutes: intervalMinutes,
+      scheduled_runs_per_day: 1440 / intervalMinutes,
+      scheduled_projected_30d_usd: intervalMinutes === 360 ? 30.5 : 7.62,
+      projected_30d_usd: intervalMinutes === 360 ? 30.5 : 7.62,
+      interval_estimates: [
+        { interval_minutes: 60, scheduled_runs_per_day: 24, projected_30d_usd: 183 },
+        { interval_minutes: 180, scheduled_runs_per_day: 8, projected_30d_usd: 61 },
+        { interval_minutes: 360, scheduled_runs_per_day: 4, projected_30d_usd: 30.5 },
+        { interval_minutes: 720, scheduled_runs_per_day: 2, projected_30d_usd: 15.25 },
+        { interval_minutes: 1440, scheduled_runs_per_day: 1, projected_30d_usd: 7.62 },
+      ],
+      recommended_interval_minutes: 1440,
+    });
+
+  const cloudSettings = (overrides: Partial<AISettingsType> = {}): AISettingsType => ({
+    ...baseSettings(),
+    enabled: true,
+    configured: true,
+    model: 'gemini:gemini-2.5-flash',
+    gemini_configured: true,
+    anthropic_configured: true,
+    ollama_configured: true,
+    configured_providers: ['gemini', 'anthropic', 'ollama'],
+    patrol_interval_minutes: 360,
+    cost_budget_usd_30d: 20,
+    ...overrides,
+  });
+
+  const cloudModels = () => ({
+    models: [
+      { id: 'gemini:gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'gemini', notable: true },
+      {
+        id: 'gemini:gemini-2.5-flash-lite',
+        name: 'Gemini 2.5 Flash-Lite',
+        provider: 'gemini',
+        notable: true,
+      },
+      { id: 'anthropic:claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'anthropic', notable: true },
+      { id: 'ollama:qwen3:8b', name: 'qwen3:8b', provider: 'ollama', notable: true },
+    ],
+  });
+
+  const guidance = () => ({
+    rules: [
+      {
+        provider: 'gemini',
+        model_prefix: 'gemini-',
+        exclude: ['!flash-lite'],
+        level: 'caution',
+        reason: 'Flash-Lite could not file Patrol verdicts on a Pro install.',
+      },
+      {
+        provider: 'gemini',
+        model_prefix: 'gemini-2.5-flash',
+        exclude: ['lite'],
+        level: 'suggested',
+        reason: 'Lowest-cost standard tier for this provider.',
+      },
+      {
+        provider: 'ollama',
+        model_prefix: 'qwen3:8b',
+        model_exact: true,
+        level: 'recommended',
+        reason: 'Passed the Patrol tool-call check.',
+      },
+    ],
+  });
+
+  it('shows the monthly estimate, assumptions, and spend against budget next to the Patrol model', async () => {
+    getSettingsMock.mockResolvedValue(cloudSettings());
+    getModelsMock.mockResolvedValue(cloudModels());
+    getPatrolCostPreviewMock.mockResolvedValue(flashProjection());
+    getPatrolModelGuidanceMock.mockResolvedValue(guidance());
+
+    renderComponent('patrol');
+
+    const preview = await screen.findByTestId('patrol-cost-preview');
+    expect(preview).toHaveTextContent('About $5.11 a month for Patrol');
+    expect(preview).toHaveTextContent('4 scheduled runs a day × about 105k tokens in and 4k out per run');
+    expect(preview).toHaveTextContent('roughly three quarters of a word');
+    expect(preview).toHaveTextContent(
+      'Spent so far: about $3.20 of your $20 30-day budget ($2.50 of that was Patrol).',
+    );
+    expect(getPatrolCostPreviewMock).toHaveBeenCalledWith(
+      { model: 'gemini:gemini-2.5-flash', intervalMinutes: 360 },
+      expect.anything(),
+    );
+    // The schedule options carry the same estimate so the trade-off is visible where it is made.
+    const schedule = screen.getByLabelText('Schedule') as HTMLSelectElement;
+    const daily = Array.from(schedule.options).find((option) => option.value === '1440');
+    expect(daily?.textContent).toContain('≈ $1.28/month');
+    expect(screen.getByTestId('patrol-schedule-cost')).toHaveTextContent(
+      'About $5.11 a month for Patrol with gemini:gemini-2.5-flash. Estimate.',
+    );
+  });
+
+  it('pins guided models at the top of the Patrol picker and warns on known failures', async () => {
+    getSettingsMock.mockResolvedValue(cloudSettings({ patrol_model: 'gemini:gemini-2.5-flash-lite' }));
+    getModelsMock.mockResolvedValue(cloudModels());
+    getPatrolCostPreviewMock.mockResolvedValue(flashProjection());
+    getPatrolModelGuidanceMock.mockResolvedValue(guidance());
+
+    renderComponent('patrol');
+
+    // The selection itself carries the warning once the picker is closed.
+    expect(
+      await screen.findByText('Flash-Lite could not file Patrol verdicts on a Pro install.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Select Patrol model'));
+    expect(await screen.findByText('Suggested for Patrol')).toBeInTheDocument();
+    expect(screen.getByText('Recommended for Patrol')).toBeInTheDocument();
+    expect(screen.getByText('Suggested starting point')).toBeInTheDocument();
+    expect(screen.getAllByText('Caution').length).toBeGreaterThan(0);
+    const listbox = screen.getByRole('listbox', { name: 'Select Patrol model' });
+    const optionNames = within(listbox)
+      .getAllByRole('option')
+      .map((option) => option.getAttribute('aria-label') || '');
+    const pinnedOllama = optionNames.findIndex((name) => name.startsWith('qwen3:8b'));
+    const pinnedFlash = optionNames.findIndex((name) => name.startsWith('Gemini 2.5 Flash.'));
+    const groupedLite = optionNames.findIndex((name) => name.startsWith('Gemini 2.5 Flash-Lite'));
+    expect(pinnedOllama).toBeGreaterThanOrEqual(0);
+    expect(pinnedFlash).toBeGreaterThan(pinnedOllama);
+    expect(groupedLite).toBeGreaterThan(pinnedFlash);
+  });
+
+  it('slows the default schedule when a per-token model is picked and explains why', async () => {
+    getSettingsMock.mockResolvedValue(cloudSettings({ model: 'ollama:qwen3:8b' }));
+    getModelsMock.mockResolvedValue(cloudModels());
+    getPatrolCostPreviewMock.mockImplementation(async (query: { model?: string; intervalMinutes?: number }) =>
+      query.model === 'anthropic:claude-sonnet-5'
+        ? sonnetProjection(query.intervalMinutes ?? 360)
+        : flashProjection({
+            provider: 'ollama',
+            model: 'qwen3:8b',
+            model_route: 'ollama:qwen3:8b',
+            billed_per_token: false,
+            projected_30d_usd: 0,
+            scheduled_projected_30d_usd: 0,
+            recommended_interval_minutes: 0,
+            recommendation_reason: 'not_billed_per_token',
+          }),
+    );
+
+    renderComponent('patrol');
+
+    expect(await screen.findByTestId('patrol-cost-preview')).toHaveTextContent(
+      'No per-token bill for Patrol',
+    );
+    const schedule = screen.getByLabelText('Schedule') as HTMLSelectElement;
+    expect(schedule.value).toBe('360');
+
+    fireEvent.click(screen.getByTitle('Select Patrol model'));
+    fireEvent.click(await screen.findByRole('option', { name: /^Claude Sonnet 5/ }));
+
+    await waitFor(() => {
+      expect(schedule.value).toBe('1440');
+    });
+    expect(await screen.findByTestId('patrol-schedule-auto-adjust')).toHaveTextContent(
+      'Schedule set to once a day because claude-sonnet-5 bills per token: about $7.62 a month instead of $30.50 at every 6 hours',
+    );
+    expect(screen.getByTestId('patrol-cost-preview')).toHaveTextContent(
+      'Change it under Patrol › Schedule.',
+    );
+    expect(screen.getByTestId('patrol-schedule-cost').parentElement).toHaveTextContent(
+      'Changed from every 6 hours to keep the per-token bill down.',
+    );
+  });
+
+  it('leaves a schedule the install already chose untouched when the model changes', async () => {
+    getSettingsMock.mockResolvedValue(
+      cloudSettings({ model: 'ollama:qwen3:8b', patrol_interval_minutes: 720 }),
+    );
+    getModelsMock.mockResolvedValue(cloudModels());
+    getPatrolCostPreviewMock.mockImplementation(async (query: { model?: string; intervalMinutes?: number }) =>
+      query.model === 'anthropic:claude-sonnet-5'
+        ? sonnetProjection(query.intervalMinutes ?? 720)
+        : flashProjection({ billed_per_token: false, recommended_interval_minutes: 0 }),
+    );
+
+    renderComponent('patrol');
+    await screen.findByTestId('patrol-cost-preview');
+    const schedule = screen.getByLabelText('Schedule') as HTMLSelectElement;
+    expect(schedule.value).toBe('720');
+
+    fireEvent.click(screen.getByTitle('Select Patrol model'));
+    fireEvent.click(await screen.findByRole('option', { name: /^Claude Sonnet 5/ }));
+
+    await waitFor(() => {
+      expect(getPatrolCostPreviewMock).toHaveBeenCalledWith(
+        { model: 'anthropic:claude-sonnet-5', intervalMinutes: 720 },
+        expect.anything(),
+      );
+    });
+    expect(schedule.value).toBe('720');
+    expect(screen.queryByTestId('patrol-schedule-auto-adjust')).not.toBeInTheDocument();
+  });
+
+  it('shows a reached budget as a pause, not a healthy estimate', async () => {
+    getSettingsMock.mockResolvedValue(cloudSettings());
+    getModelsMock.mockResolvedValue(cloudModels());
+    getPatrolCostPreviewMock.mockResolvedValue(
+      flashProjection({ spend_30d_usd: 20.4, budget_reached: true }),
+    );
+
+    renderComponent('patrol');
+
+    const preview = await screen.findByTestId('patrol-cost-preview');
+    expect(preview).toHaveTextContent(
+      'Budget reached: about $20.40 of your $20 30-day budget is spent, so Patrol is paused',
+    );
   });
 });
