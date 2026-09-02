@@ -1274,6 +1274,8 @@ Request bodies:
 
 ### Cost Tracking
 - `GET /api/ai/cost/summary`
+- `GET /api/ai/patrol/cost-preview` (optional `model` as `provider:model`, `interval_minutes`; projects Patrol's 30-day cost for a model and schedule from Pulse's price table and the install's run history, with the per-run token assumption, 30-day spend against budget, and a recommended schedule)
+- `GET /api/ai/patrol/model-guidance` (recommended / suggested / caution markers for the Patrol model pickers, plus this install's cached readiness pass)
 - `POST /api/ai/cost/reset` (admin)
 - `GET /api/ai/cost/export` (admin)
 

@@ -1,9 +1,10 @@
-import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { runDiscoveryRefresh } from '@/api/discovery';
 import { runPatrolModelReadiness, type PatrolModelReadinessResponse } from '@/api/patrol';
+import { getPatrolCostPreview, getPatrolModelGuidance } from '@/api/aiPatrolCost';
 import {
   AI_PROVIDERS,
   createInitialProviderHealth,
@@ -24,7 +25,18 @@ import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
-import type { AISettings as AISettingsType, AIProvider, AuthMethod, ModelInfo } from '@/types/ai';
+import type {
+  AISettings as AISettingsType,
+  AIProvider,
+  AuthMethod,
+  ModelInfo,
+  PatrolCostProjection,
+  PatrolModelGuidanceResponse,
+} from '@/types/ai';
+import {
+  getPatrolIntervalAutoAdjust,
+  type PatrolIntervalAutoAdjust,
+} from '@/utils/aiPatrolCostPresentation';
 import { normalizeAIControlLevel, type AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
@@ -270,6 +282,86 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     setPatrolModelReadinessResult(data?.patrol_model_readiness ?? null);
   };
 
+  // Cost preview and model guidance for the Patrol model choice. The server
+  // owns the price table and the install's run history; the form only says
+  // which model and schedule to price.
+  const [patrolCostPreview, setPatrolCostPreview] = createSignal<PatrolCostProjection | null>(null);
+  const [patrolCostPreviewLoading, setPatrolCostPreviewLoading] = createSignal(false);
+  const [patrolModelGuidance, setPatrolModelGuidance] =
+    createSignal<PatrolModelGuidanceResponse | null>(null);
+  const [patrolIntervalAutoAdjust, setPatrolIntervalAutoAdjust] =
+    createSignal<PatrolIntervalAutoAdjust | null>(null);
+  let patrolCostPreviewAbortController: AbortController | null = null;
+  let patrolCostPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+  let patrolCostPreviewUserSelection = false;
+
+  const loadPatrolModelGuidance = async () => {
+    try {
+      setPatrolModelGuidance(await getPatrolModelGuidance());
+    } catch (error) {
+      logger.debug('[AISettings] Failed to load Patrol model guidance:', error);
+    }
+  };
+
+  const refreshPatrolCostPreview = async () => {
+    const userSelection = patrolCostPreviewUserSelection;
+    patrolCostPreviewUserSelection = false;
+    const model = effectivePatrolModel();
+    const intervalMinutes = form.patrolIntervalMinutes;
+    patrolCostPreviewAbortController?.abort();
+    if (!model) {
+      patrolCostPreviewAbortController = null;
+      setPatrolCostPreview(null);
+      setPatrolCostPreviewLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    patrolCostPreviewAbortController = controller;
+    setPatrolCostPreviewLoading(true);
+    try {
+      const projection = await getPatrolCostPreview({ model, intervalMinutes }, controller.signal);
+      if (controller.signal.aborted) return;
+      setPatrolCostPreview(projection ?? null);
+      if (userSelection && projection) {
+        const adjust = getPatrolIntervalAutoAdjust(projection, {
+          currentIntervalMinutes: form.patrolIntervalMinutes,
+          savedIntervalMinutes: settings()?.patrol_interval_minutes ?? 360,
+        });
+        if (adjust) {
+          setForm('patrolIntervalMinutes', adjust.to);
+          setPatrolIntervalAutoAdjust(adjust);
+        }
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      logger.debug('[AISettings] Failed to load Patrol cost preview:', error);
+      setPatrolCostPreview(null);
+    } finally {
+      if (patrolCostPreviewAbortController === controller) {
+        patrolCostPreviewAbortController = null;
+        setPatrolCostPreviewLoading(false);
+      }
+    }
+  };
+
+  const schedulePatrolCostPreviewRefresh = () => {
+    if (patrolCostPreviewTimer) clearTimeout(patrolCostPreviewTimer);
+    patrolCostPreviewTimer = setTimeout(() => {
+      patrolCostPreviewTimer = null;
+      void refreshPatrolCostPreview();
+    }, 150);
+  };
+
+  type ModelFormKey = 'model' | 'chatModel' | 'patrolModel' | 'discoveryModel';
+  // Model picks made by the operator (as opposed to loads and resets) are
+  // the only moment the schedule may be defaulted for a per-token model.
+  const handleModelSelection = (formKey: ModelFormKey, modelId: string) => {
+    if (formKey === 'model' || formKey === 'patrolModel') {
+      patrolCostPreviewUserSelection = true;
+    }
+    setForm(formKey, modelId);
+  };
+
   const [showSetupModal, setShowSetupModal] = createSignal(false);
   const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
@@ -359,6 +451,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         current.ollama_configured),
     );
   });
+
+  const effectivePatrolModel = createMemo(() => (form.patrolModel || form.model).trim());
   const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
@@ -692,6 +786,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         controller.signal,
       );
       setPatrolModelReadinessResult(result);
+      void loadPatrolModelGuidance();
     } catch (error) {
       const errorName =
         typeof error === 'object' && error !== null && 'name' in error ? String(error.name) : '';
@@ -747,6 +842,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       resetForm(data);
       syncModelCatalogForSettings(data);
       hydratePatrolModelReadinessFromSettings(data);
+      void loadPatrolModelGuidance();
       void runProviderPreflight(data);
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
@@ -1317,7 +1413,21 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     void loadSettings();
   });
 
-  onCleanup(() => patrolModelReadinessAbortController?.abort());
+  createEffect(
+    on([effectivePatrolModel, () => form.patrolIntervalMinutes, () => settings()], () => {
+      const adjust = patrolIntervalAutoAdjust();
+      if (adjust && form.patrolIntervalMinutes !== adjust.to) {
+        setPatrolIntervalAutoAdjust(null);
+      }
+      schedulePatrolCostPreviewRefresh();
+    }),
+  );
+
+  onCleanup(() => {
+    patrolModelReadinessAbortController?.abort();
+    patrolCostPreviewAbortController?.abort();
+    if (patrolCostPreviewTimer) clearTimeout(patrolCostPreviewTimer);
+  });
 
   return {
     alertAnalysisLocked,
@@ -1327,8 +1437,10 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     chatSessionsError,
     chatSessionsLoading,
     discoveryRunRunning,
+    effectivePatrolModel,
     expandedProviders,
     form,
+    handleModelSelection,
     formatSessionLabel,
     handleClearProvider,
     handleCloseSetupModal,
@@ -1348,6 +1460,10 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     loadSettings,
     modelsError,
     modelsLoading,
+    patrolCostPreview,
+    patrolCostPreviewLoading,
+    patrolIntervalAutoAdjust,
+    patrolModelGuidance,
     patrolModelReadinessResult,
     patrolModelReadinessRunning,
     preflightLastCheckedAt,

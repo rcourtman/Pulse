@@ -337,7 +337,7 @@ func (s *Service) recoverPatrolAfterToolPreflight(result PatrolPreflightResult) 
 		return false
 	}
 	breakerRecovered := patrol.recoverCircuitBreakerAfterVerifiedPreflight()
-	runtimeFindingResolved := patrol.resolvePatrolRuntimeFailureFinding("patrol_preflight_success")
+	runtimeFindingResolved := patrol.resolvePatrolRuntimeFailureFinding(patrolRuntimeResolveReasonPreflight)
 	return breakerRecovered || runtimeFindingResolved
 }
 

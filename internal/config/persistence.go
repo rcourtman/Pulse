@@ -2507,6 +2507,7 @@ type AIFindingRecord struct {
 	Description         string     `json:"description"`
 	Recommendation      string     `json:"recommendation,omitempty"`
 	Evidence            string     `json:"evidence,omitempty"`
+	FailureCause        string     `json:"failure_cause,omitempty"`
 	Source              string     `json:"source,omitempty"`
 	DetectedAt          time.Time  `json:"detected_at"`
 	LastSeenAt          time.Time  `json:"last_seen_at"`
