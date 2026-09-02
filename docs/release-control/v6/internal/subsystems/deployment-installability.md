@@ -948,6 +948,15 @@ artifact-selection behaviour.
    Worker startup must compare the complete `go`-prefixed toolchain identity
    from `go.mod` with `go env GOVERSION` so a formatting mismatch cannot reject
    an otherwise exact toolchain or conceal a real version drift.
+   The worker must activate an installed `mise` toolchain before its tool
+   checks, because it runs over a non-login ssh shell where profile hooks do
+   not load; it must leave `GOTMPDIR` unset by default so unix-socket test
+   fixtures resolve under `/tmp` exactly as on GitHub runners; and it must
+   publish the smoke stacks on a host port pair it has verified free
+   (honouring `PULSE_RELEASE_PREFLIGHT_E2E_PORT`), probe health and update
+   status on that port, and hand Playwright the same base URL, because a
+   worker may also host long-running Pulse instances on `7655` and `17655`
+   and a port collision fails the smoke only after every other stage passed.
    Race-instrumented Go builds must place `GOTMPDIR` under the worker's
    persistent run directory and remove that bounded scratch directory on exit;
    a small WSL `/tmp` tmpfs must not turn release qualification into a false
@@ -1947,6 +1956,11 @@ artifact-selection behaviour.
    `release` and `workflow_dispatch` triggers, and its chart-version
    resolver must prefer inputs over the release-event tag when inputs are
    present so all three entry paths converge on the same identity.
+   Because that resolver writes its outputs through
+   `scripts/write_github_output.py`, the workflow must check out the
+   repository before the resolver step runs; de41ea1883 introduced the
+   script call ahead of the checkout and every chart publish failed until
+   the v6.4.3-rc.1 run exposed it.
    `helm-pages.yml` must not treat chart-releaser's "no chart changes
    detected" no-op as a successful Pages publication for a newly published
    release version. A successful Pages workflow must create or update the
