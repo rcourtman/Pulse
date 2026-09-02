@@ -44,6 +44,35 @@ RUN_DIR="${WORKER_ROOT}/tmp/${RUN_ID}"
 GO_TMP_DIR="${PULSE_RELEASE_PREFLIGHT_GO_TMP_DIR:-}"
 TIMINGS_FILE="${RUN_DIR}/timings.tsv"
 TEST_DATA_DIR="${WORKER_ROOT}/test-data/${PROFILE}"
+# The smoke stacks publish the Pulse server and agent ports on the host. A
+# worker may also host long-running Pulse instances (pulse-dev keeps the
+# dogfood instance on 7655 and a second instance on 17655), and a collision
+# fails the smoke only after every other stage has passed. Honour an explicit
+# override, otherwise take the first candidate pair with both ports free.
+smoke_port_pair_is_free() {
+  local listeners
+  listeners="$(ss -Hltn 2>/dev/null | awk '{print $4}' | sed 's/.*://' | sort -u)"
+  ! printf '%s\n' "$listeners" | grep -qx "$1" && ! printf '%s\n' "$listeners" | grep -qx "$2"
+}
+if [ -n "${PULSE_RELEASE_PREFLIGHT_E2E_PORT:-}" ]; then
+  PULSE_E2E_PORT="$PULSE_RELEASE_PREFLIGHT_E2E_PORT"
+  PULSE_E2E_AGENT_PORT="${PULSE_RELEASE_PREFLIGHT_E2E_AGENT_PORT:-$((PULSE_E2E_PORT + 1))}"
+else
+  PULSE_E2E_PORT=""
+  for candidate in 27655 28655 29655 31655; do
+    if smoke_port_pair_is_free "$candidate" "$((candidate + 1))"; then
+      PULSE_E2E_PORT="$candidate"
+      PULSE_E2E_AGENT_PORT="$((candidate + 1))"
+      break
+    fi
+  done
+  if [ -z "$PULSE_E2E_PORT" ]; then
+    echo "Error: no free host port pair for the smoke stack; set PULSE_RELEASE_PREFLIGHT_E2E_PORT." >&2
+    exit 3
+  fi
+fi
+export PULSE_E2E_PORT PULSE_E2E_AGENT_PORT
+export PULSE_E2E_BASE_URL="http://localhost:${PULSE_E2E_PORT}"
 
 # The worker is invoked over a non-login ssh shell, so /etc/profile.d is not
 # sourced and an infra-managed mise toolchain (Node 24, Go) would be shadowed by
@@ -236,6 +265,7 @@ run_playwright() {
     --env CI=true \
     --env HOME=/tmp \
     --env "PULSE_E2E_DIAGNOSTIC=${PULSE_E2E_DIAGNOSTIC:-}" \
+    --env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}" \
     --volume "$REPOSITORY_DIR/tests/integration:/work" \
     --workdir /work \
     "$PLAYWRIGHT_IMAGE" \
@@ -250,10 +280,10 @@ run_rehearsal_smoke() {
   export MOCK_STALE_RELEASE=false
   export PULSE_E2E_DIAGNOSTIC=1
   docker compose -f docker-compose.test.yml up -d --wait
-  timeout 60 sh -c 'until curl -fsS http://localhost:7655/api/health >/dev/null; do sleep 2; done'
+  timeout 60 sh -c 'until curl -fsS ${PULSE_E2E_BASE_URL}/api/health >/dev/null; do sleep 2; done'
   run_playwright tests/00-diagnostic.spec.ts --project=chromium --reporter=list
   local status
-  status="$(curl -s -o "$RUN_DIR/update-status.json" -w '%{http_code}' http://localhost:7655/api/updates/status || true)"
+  status="$(curl -s -o "$RUN_DIR/update-status.json" -w '%{http_code}' ${PULSE_E2E_BASE_URL}/api/updates/status || true)"
   case "$status" in
     200|401|403) ;;
     *)
@@ -275,7 +305,7 @@ run_release_smoke() {
   docker compose -f docker-compose.test.yml up -d
   timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q healthy; do sleep 2; done'
   timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q healthy; do sleep 2; done'
-  timeout 60 sh -c 'until curl -fsS http://localhost:7655/api/health >/dev/null; do sleep 2; done'
+  timeout 60 sh -c 'until curl -fsS ${PULSE_E2E_BASE_URL}/api/health >/dev/null; do sleep 2; done'
   run_playwright tests/95-release-smoke.spec.ts --project=chromium --reporter=list
   docker compose -f docker-compose.test.yml down -v
 }
