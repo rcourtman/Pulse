@@ -3,15 +3,11 @@
   "base_sha": "1813f4ec1d8eb3e1aa5a87afa84ab3b0a9a08d16",
   "verified_at": "2026-09-02T00:22:28Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/components/shared/FilterBar/FilterChip.tsx"],
   "content_sha256": {
     "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx": "7d5dcccd569eb1391f48630b6459a1f53c0665dd4619912c8c3705e490cf0610"
   },
-  "routes": [
-    "/proxmox/overview"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
     {
       "width": 1440,
