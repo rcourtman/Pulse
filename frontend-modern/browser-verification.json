@@ -1,31 +1,20 @@
 {
   "version": 1,
-  "base_sha": "38ef8224e75486d378409357e31cad5f8668d725",
-  "verified_at": "2026-09-02T17:36:42Z",
+  "base_sha": "da3ce9142cd0019a3f25993f9eed7e1927ec4f85",
+  "verified_at": "2026-09-02T17:49:49Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
-    "frontend-modern/src/components/Settings/Settings.tsx",
-    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx",
-    "frontend-modern/src/components/WhatsNewCard.tsx",
     "frontend-modern/src/i18n/messages.de.ts",
     "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/utils/localStorage.ts"
+    "frontend-modern/src/i18n/messages.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx": "9512529c0e6b86ba4e1055c5009158d442bd8d4a84c2dd9f73822a053989886a",
-    "frontend-modern/src/components/Settings/Settings.tsx": "72682c86dd055761cbd68d4f57b684afe4d978a0b53748859d0721e711ce321a",
-    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx": "7f8ddc0c826b5abe90f40ac08ef3856d046510a7f72afe2f40f32ae72e547eba",
-    "frontend-modern/src/components/WhatsNewCard.tsx": "90543f19d61e9ba6d93251a7bcc9c179fa8d7ccb6ab3364e364d0ea13b2c31f0",
-    "frontend-modern/src/i18n/messages.de.ts": "2bf991f57916bba30a432e01957d9a1276ea8dbce0a394843a3e0336dda66bd7",
-    "frontend-modern/src/i18n/messages.es.ts": "5efcb236003e3b98f361135e3a4774522b7fe069f73b3786882329050b09acbc",
-    "frontend-modern/src/i18n/messages.ts": "2aef7e14ffca7adc28533a38dc953de098d1f26ee2d1ff46a9c4455907b3a194",
-    "frontend-modern/src/utils/localStorage.ts": "19a532f55271b2fc696e3ba4ae6ba098e759f0f9df207015c803f7fcc0050bd6"
+    "frontend-modern/src/i18n/messages.de.ts": "8970ad9d40cc51eaa2d313086fc4b6a6045937af8d49830514b1c94323865180",
+    "frontend-modern/src/i18n/messages.es.ts": "d384afcd35909dff7befa52088bf988bd5a710d1e806e6e3949cc99c2c920256",
+    "frontend-modern/src/i18n/messages.ts": "2de135e647f2120dfb131c7dbe8718f769f9acc88566fb753544ef3e71197f08"
   },
   "routes": [
-    "/ (first-run setup wizard, fresh data dir)",
-    "/settings/system-general#usage-telemetry (mock data, existing-install localStorage baseline)"
+    "/ (first-run setup wizard, fresh data dir)"
   ],
   "viewports": [
     {
@@ -38,20 +27,12 @@
     }
   ],
   "states": [
-    "Setup welcome step: Usage statistics card with new copy, no PULSE_TELEMETRY instruction, Full details link",
-    "Setup security step (bootstrap validation and quick-setup responses intercepted by Playwright, no real token): Usage statistics toggle default on",
-    "Setup security step: toggle off, aria-pressed false",
-    "Setup completion reached after Create Account with toggle off",
-    "Settings system-general with prior release baseline: no telemetry-payload-update-notice banner rendered",
-    "Settings Usage data and privacy panel: description leads with what the summary is for; Preview payload rendered as primary Button; Reset ID secondary",
-    "Settings panel with payload preview open at 390px: no horizontal page overflow",
-    "Locales: en verified live; de/es catalog copy covered by i18n and SetupWizard localization unit tests"
+    "Setup welcome card: purpose-first copy, \"You choose on the next step\" wording, no PULSE_TELEMETRY instruction",
+    "Setup security step (setup endpoints intercepted by Playwright, no real token): Usage statistics toggle description leads with the benefit, default on",
+    "Locales: en verified live; de/es covered by i18n and SetupWizard localization unit tests"
   ],
   "interactions": [
     "Fill bootstrap token field with a placeholder and click Verify bootstrap token (validation endpoint intercepted)",
-    "Click Usage statistics toggle on the security step",
-    "Click Create Account & Continue: observed POST /api/security/quick-setup then POST /api/system/settings/update {\"telemetryEnabled\":false}",
-    "Click Preview payload in Settings and read the rendered heartbeat JSON",
-    "Resize to 390x844 and repeat the wizard, security step, and Settings panel checks"
+    "Read the security-step toggle label and description at 1280 and 390 widths"
   ]
 }

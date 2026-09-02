@@ -299,6 +299,12 @@ describe('i18n foundation', () => {
       expect(telemetryNotice).not.toMatch(/anonymous/i);
       expect(setupTelemetryChoice).toContain('IP');
       expect(setupTelemetryChoice).not.toMatch(/anonymous/i);
+      // Both setup surfaces say what the summary is for before what it holds,
+      // and neither tells the reader how to turn it off: the toggle is the
+      // control, and the how-to-disable copy lives in Full details and Settings.
+      const purposeWording = { de: 'Prioritaet', es: 'prioridad' } as const;
+      expect(setupTelemetryChoice).toContain(purposeWording[locale]);
+      expect(telemetryNotice).not.toMatch(/ausschalten|desactivarl/i);
       expect(deploymentChoice).toContain('Pulse');
       expect(deploymentChoice).not.toContain('Docker');
       expect(deploymentChoice).not.toContain('LXC');

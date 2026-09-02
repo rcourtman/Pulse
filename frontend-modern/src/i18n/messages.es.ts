@@ -283,14 +283,14 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.security.showPassword.hide': 'Ocultar',
   'setup.security.showPassword.show': 'Mostrar',
   'setup.security.telemetry.description':
-    'Enviar un pequeño resumen diario de uso: conteos y flags de activado/desactivado con un ID de instalación seudónimo rotativo, nunca hostnames, credenciales ni direcciones IP. Puedes cambiarlo en cualquier momento en Ajustes.',
+    'Enviar un pequeño resumen diario de uso para que las funciones y plataformas de las que dependes tengan prioridad. Contiene conteos y flags de activado/desactivado con un ID de instalación seudónimo rotativo, nunca hostnames, credenciales ni direcciones IP. Puedes cambiarlo en cualquier momento en Ajustes.',
   'setup.security.telemetry.title': 'Estadísticas de uso',
   'setup.security.title': 'Crear tu cuenta de administrador',
   'setup.step.firstSource': 'Primera fuente',
   'setup.step.security': 'Seguridad',
   'setup.step.unlockServer': 'Desbloquear servidor',
   'setup.welcome.telemetryNotice.description':
-    'Pulse envía un pequeño resumen diario de uso para que su mantenedor pueda ver cuántas instalaciones están activas, qué versiones están desplegadas y qué funciones se usan. Contiene conteos y flags de activado/desactivado con un ID de instalación seudónimo rotativo, nunca hostnames, credenciales, direcciones IP ni nada que escribas. Está activado por defecto. Puedes desactivarlo en el siguiente paso o en cualquier momento en Ajustes.',
+    'Pulse envía un pequeño resumen diario de uso que muestra qué versiones están desplegadas y qué funciones y plataformas se usan, para que el desarrollo se centre donde Pulse se usa de verdad. Contiene conteos y flags de activado/desactivado con un ID de instalación seudónimo rotativo, nunca hostnames, credenciales, direcciones IP ni nada que escribas. Está activado por defecto. Decides en el siguiente paso y puedes cambiarlo en cualquier momento en Ajustes.',
   'setup.welcome.telemetryNotice.title': 'Estadísticas de uso',
   'setup.wizard.ariaLabel': 'Asistente de configuración de Pulse',
   'setup.welcome.action.continueSecurity': 'Continuar a Seguridad',

@@ -291,14 +291,14 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.security.showPassword.hide': 'Ausblenden',
   'setup.security.showPassword.show': 'Anzeigen',
   'setup.security.telemetry.description':
-    'Eine kleine taegliche Nutzungszusammenfassung senden: Zaehler und An/Aus-Flags mit einer rotierenden pseudonymen Installations-ID, niemals Hostnamen, Zugangsdaten oder IP-Adressen. Jederzeit in den Einstellungen aenderbar.',
+    'Eine kleine taegliche Nutzungszusammenfassung senden, damit die Funktionen und Plattformen, auf die Sie sich verlassen, Prioritaet bekommen. Sie enthaelt Zaehler und An/Aus-Flags mit einer rotierenden pseudonymen Installations-ID, niemals Hostnamen, Zugangsdaten oder IP-Adressen. Jederzeit in den Einstellungen aenderbar.',
   'setup.security.telemetry.title': 'Nutzungsstatistiken',
   'setup.security.title': 'Admin-Konto erstellen',
   'setup.step.firstSource': 'Erste Quelle',
   'setup.step.security': 'Sicherheit',
   'setup.step.unlockServer': 'Server entsperren',
   'setup.welcome.telemetryNotice.description':
-    'Pulse sendet eine kleine taegliche Nutzungszusammenfassung, damit der Maintainer sehen kann, wie viele Installationen aktiv sind, welche Releases im Einsatz sind und welche Funktionen genutzt werden. Sie enthaelt Zaehler und An/Aus-Flags mit einer rotierenden pseudonymen Installations-ID, niemals Hostnamen, Zugangsdaten, IP-Adressen oder etwas, das Sie eingeben. Sie ist standardmaessig aktiviert. Sie koennen sie im naechsten Schritt oder jederzeit in den Einstellungen ausschalten.',
+    'Pulse sendet eine kleine taegliche Nutzungszusammenfassung, die zeigt, welche Releases im Einsatz sind und welche Funktionen und Plattformen genutzt werden, damit die Entwicklung dort ansetzt, wo Pulse tatsaechlich genutzt wird. Sie enthaelt Zaehler und An/Aus-Flags mit einer rotierenden pseudonymen Installations-ID, niemals Hostnamen, Zugangsdaten, IP-Adressen oder etwas, das Sie eingeben. Sie ist standardmaessig aktiviert. Sie entscheiden im naechsten Schritt und koennen es jederzeit in den Einstellungen aendern.',
   'setup.welcome.telemetryNotice.title': 'Nutzungsstatistiken',
   'setup.wizard.ariaLabel': 'Pulse-Einrichtungsassistent',
   'setup.welcome.action.continueSecurity': 'Weiter zu Sicherheit',

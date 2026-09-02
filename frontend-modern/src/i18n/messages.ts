@@ -102,14 +102,14 @@ export const EN_MESSAGES = {
   'setup.security.showPassword.hide': 'Hide',
   'setup.security.showPassword.show': 'Show',
   'setup.security.telemetry.description':
-    'Send a small daily usage summary: counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, or IP addresses. Change this at any time in Settings.',
+    'Send a small daily usage summary so the features and platforms you rely on get priority. It holds counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, or IP addresses. Change this at any time in Settings.',
   'setup.security.telemetry.title': 'Usage statistics',
   'setup.security.title': 'Create your admin account',
   'setup.step.firstSource': 'First source',
   'setup.step.security': 'Security',
   'setup.step.unlockServer': 'Unlock server',
   'setup.welcome.telemetryNotice.description':
-    'Pulse sends a small daily usage summary so its maintainer can see how many installs are active, which releases are deployed, and which features are used. It holds counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, IP addresses, or anything you type. It is on by default. You can turn it off in the next step or at any time in Settings.',
+    'Pulse sends a small daily usage summary showing which releases are deployed and which features and platforms are in use, so development effort goes where Pulse is actually used. It holds counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, IP addresses, or anything you type. It is on by default. You choose on the next step and can change it at any time in Settings.',
   'setup.welcome.telemetryNotice.title': 'Usage statistics',
   'setup.wizard.ariaLabel': 'Pulse Setup Wizard',
   'alerts.activation.label.enabled': 'Notifications enabled',
