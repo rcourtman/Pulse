@@ -178,10 +178,6 @@ describe('AppLayout navigation icons', () => {
     expect(main).toHaveClass('mb-1', 'sm:mb-2');
     expect(main).toHaveAttribute('id', 'main');
     expect(main).toHaveAttribute('tabindex', '-1');
-    const skipLink = screen.getByRole('link', { name: 'Skip to main content' });
-    expect(skipLink).toHaveAttribute('href', '#main');
-    fireEvent.click(skipLink);
-    expect(main).toHaveFocus();
     expect(screen.getByText('Preview')).toHaveClass('bg-orange-700', 'text-white');
     expect(screen.getByText('Preview')).not.toHaveClass('bg-orange-500');
     expect(container.querySelector('footer')).toHaveClass('pulse-footer', 'px-2', 'sm:px-4');

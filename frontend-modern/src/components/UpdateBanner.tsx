@@ -170,7 +170,7 @@ export function UpdateBanner() {
 
                 {/* Pre-release badge */}
                 <Show when={updateStore.updateInfo()?.isPrerelease && !isExpanded()}>
-                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 rounded">
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
                     Pre-release
                   </span>
                 </Show>
