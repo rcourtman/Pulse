@@ -5893,3 +5893,12 @@ interpreted as authoritative emptiness, deletion, backup completion, recovery
 state, or permission to clean up storage. Propagating the marker through the
 shared resource projection creates no snapshot, restore, retention, or
 container-action authority.
+
+### Patrol digest reads are not storage or recovery authority
+
+`GET /api/ai/patrol/digest` reads retained Patrol run history, the in-memory
+findings store, canonical action audit records, and usage cost events, and
+writes nothing. It creates no backup, snapshot, retention, cleanup, or recovery
+state. Its action counts are a projection of the existing action audit table
+(`GetActionAuditsByStates`, filtered to Patrol origin); no new persistence,
+table, or migration is introduced by the digest.

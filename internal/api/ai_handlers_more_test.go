@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -632,5 +633,62 @@ func TestAISettingsHandler_GetAIService_NonDefaultWithTenantMonitorWithoutPersis
 	}
 	if tenantSvc.IsEnabled() {
 		t.Fatal("expected fail-closed tenant service to be disabled")
+	}
+}
+
+// TestHandleGetPatrolDigest_PayloadContract pins the wire shape the Patrol
+// "This week" card and docs/API.md describe: snake_case rollup groups, an
+// explicit window with coverage flags, and by_outcome serialised as an object.
+func TestHandleGetPatrolDigest_PayloadContract(t *testing.T) {
+	t.Parallel()
+	handler := createTestAIHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/digest?days=14", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetPatrolDigest(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"generated_at", "window", "mode", "runs", "findings", "investigations", "actions", "alerts", "spend"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("digest payload missing %q: %s", key, rec.Body.String())
+		}
+	}
+
+	var window struct {
+		Days            int  `json:"days"`
+		HistoryComplete bool `json:"history_complete"`
+	}
+	if err := json.Unmarshal(payload["window"], &window); err != nil {
+		t.Fatal(err)
+	}
+	if window.Days != 14 || !window.HistoryComplete {
+		t.Fatalf("window = %+v", window)
+	}
+
+	var investigations map[string]json.RawMessage
+	if err := json.Unmarshal(payload["investigations"], &investigations); err != nil {
+		t.Fatal(err)
+	}
+	if string(investigations["by_outcome"]) != "{}" {
+		t.Fatalf("by_outcome must serialise as an empty object, got %s", investigations["by_outcome"])
+	}
+
+	var findings map[string]json.RawMessage
+	if err := json.Unmarshal(payload["findings"], &findings); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"new", "open_by_severity", "resolved", "auto_resolved", "dismissed", "suppressed"} {
+		if _, ok := findings[key]; !ok {
+			t.Fatalf("findings rollup missing %q: %s", key, payload["findings"])
+		}
+	}
+	if strings.TrimSpace(string(payload["mode"])) != `"monitor"` {
+		t.Fatalf("mode = %s, want monitor when no autonomy is configured", payload["mode"])
 	}
 }

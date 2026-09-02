@@ -10009,6 +10009,45 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "patrol-value-visibility",
+      "summary": "Nothing in Pulse shows a paying customer what Patrol has done for them. Patrol runs roughly 164 times per install per month, raises findings, investigates, proposes and executes fixes, and records model spend, but no surface adds that up: run history is per run, findings are per finding, action audits live under Actions, and spend sits on the AI cost dashboard. The 2026-09-01 assessment found 33 of 175 Pro subscriptions past due and 80 percent of paying installs never seeing the paid loop fire; a customer who cannot see the work stops paying for it. The gap is a read-only rollup over records Pulse already keeps, first as an in-app card on the Patrol page and second as a weekly email through existing notification channels.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-09-02",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 4,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/PATROL_WEEKLY_DIGEST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/cost/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
@@ -10074,6 +10113,30 @@
         "product-demand: pulse-pro/FEATURE_REQUESTS.md#fleet-scale-machine-availability-and-service-probes",
         "telemetry: 339 of 6578 active persistent installs configured 2449 availability targets on 2026-08-29; 70 installs had at least 10 targets"
       ]
+    },
+    {
+      "id": "patrol-weekly-digest",
+      "name": "Patrol Weekly Digest",
+      "summary": "Show paying customers what Patrol did for them: a read-only weekly rollup of runs, findings raised and resolved, investigations, Patrol-origin actions, alerts reviewed, estimated model spend, and the current mode, computed only from records Pulse already retains. The first slice is the aggregation endpoint and an in-app This week card on the Patrol page; the weekly email through existing notification channels is the unscheduled second slice.",
+      "status": "proposed",
+      "recorded_at": "2026-09-02",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L6"
+      ],
+      "coverage_gap_ids": [
+        "patrol-value-visibility"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "demand_evidence": [
+        "named-bet: the 2026-09-01 assessment found nothing in Pulse shows a customer what Patrol did for them while 33 of 175 Pro subscriptions are past due and 80 percent of paying installs never saw the paid loop fire",
+        "product-demand: pulse-pro/FEATURE_REQUESTS.md#patrol-weekly-digest-what-patrol-did-for-you",
+        "design-note: docs/PATROL_WEEKLY_DIGEST.md"
+      ]
     }
   ],
   "work_claims": [
@@ -10088,6 +10151,19 @@
       "work_item": {
         "kind": "coverage-gap",
         "id": "patrol-findings-hygiene-attention-noise"
+      }
+    },
+    {
+      "id": "claude-patrol-digest-candidate-lane-patrol-weekly-digest",
+      "agent_id": "claude-patrol-digest",
+      "summary": "Patrol weekly digest: aggregation endpoint and in-app This week card",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-09-02T05:37:43Z",
+      "heartbeat_at": "2026-09-02T05:37:43Z",
+      "expires_at": "2026-09-02T11:37:43Z",
+      "work_item": {
+        "kind": "candidate-lane",
+        "id": "patrol-weekly-digest"
       }
     }
   ],
