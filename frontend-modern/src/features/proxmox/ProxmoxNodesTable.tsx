@@ -372,13 +372,6 @@ export const ProxmoxNodesTable: Component<{
                 const isSelected = () => selectedNodeId() === node.id;
                 const toggleNodeDrawer = () =>
                   setSelectedNodeId((current) => (current === node.id ? null : node.id));
-                const handleActivationKey: JSX.EventHandler<HTMLTableRowElement, KeyboardEvent> = (
-                  event,
-                ) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                  event.preventDefault();
-                  toggleNodeDrawer();
-                };
                 const version = () => asTrimmedString(getResourceVersion(node));
                 const cluster = () => getResourceClusterLabel(node);
                 const counts = () => countGuestsForNode(props.guests, node);
@@ -723,16 +716,12 @@ export const ProxmoxNodesTable: Component<{
                 return (
                   <>
                     <TableRow
-                      class={`host-row cursor-pointer text-[11px] outline-none sm:text-xs ${
+                      class={`host-row cursor-pointer text-[11px] sm:text-xs ${
                         isSelected() ? 'bg-surface-hover' : rowAlertBg()
-                      } ${isOnline() ? '' : 'opacity-60'} focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
-                      aria-controls={isSelected() ? detailRowId() : undefined}
-                      aria-expanded={isSelected() ? 'true' : 'false'}
+                      } ${isOnline() ? '' : 'opacity-60'}`}
                       data-proxmox-host-row={node.id}
                       data-workload-alert-accent={alertAccentTone()}
                       onClick={toggleNodeDrawer}
-                      onKeyDown={handleActivationKey}
-                      tabIndex={0}
                     >
                       <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
                     </TableRow>

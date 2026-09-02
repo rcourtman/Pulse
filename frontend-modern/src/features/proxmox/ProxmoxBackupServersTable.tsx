@@ -357,7 +357,6 @@ export function ProxmoxBackupServersTable(props: {
                       <TableRow
                         {...getPlatformResourceDetailRowInteractionProps({
                           expanded: isExpanded(),
-                          detailRowId: detailRowId(),
                           onToggle: () => detail.toggle(rowIdentity),
                         })}
                       >

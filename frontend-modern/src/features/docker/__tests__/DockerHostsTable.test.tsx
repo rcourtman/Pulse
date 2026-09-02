@@ -201,7 +201,11 @@ describe('DockerHostsTable', () => {
 
     fireEvent.click(hostRow!);
 
-    expect(hostRow).toHaveAttribute('aria-expanded', 'true');
+    expect(hostRow).not.toHaveAttribute('aria-expanded');
+    expect(hostRow?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(screen.getByTestId('docker-host-drawer')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/docker/overview');
     expect(window.location.search).toBe('');
@@ -230,7 +234,11 @@ describe('DockerHostsTable', () => {
 
     fireEvent.click(link);
 
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     expect(screen.queryByTestId('docker-host-drawer')).not.toBeInTheDocument();
   });
 

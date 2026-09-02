@@ -191,18 +191,7 @@ export const ProxmoxCephClusterDrawer: Component<{
                       setExpandedPoolKey((current) => (current === poolKey() ? null : poolKey()));
                     return (
                       <>
-                        <TableRow
-                          class="cursor-pointer"
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded()}
-                          onClick={toggle}
-                          onKeyDown={(event) => {
-                            if (event.key !== 'Enter' && event.key !== ' ') return;
-                            event.preventDefault();
-                            toggle();
-                          }}
-                          tabIndex={0}
-                        >
+                        <TableRow class="cursor-pointer" onClick={toggle}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} font-medium text-base-content`}
                           >

@@ -9,7 +9,6 @@ type ResourceLike = Pick<Resource, 'id'>;
 
 export type PlatformResourceDetailRowInteractionOptions = {
   expanded: boolean;
-  detailRowId: string;
   onToggle: () => void;
   class?: string;
 };
@@ -21,18 +20,14 @@ export type PlatformResourceDetailState = {
   open: (resource: ResourceLike) => void;
   toggle: (resource: ResourceLike) => void;
   close: (resource?: ResourceLike) => void;
-  handleActivationKey: (
-    resource: ResourceLike,
-  ) => JSX.EventHandler<HTMLTableRowElement, KeyboardEvent>;
 };
 
-export const PLATFORM_RESOURCE_DETAIL_ROW_CLASS =
-  'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+export const PLATFORM_RESOURCE_DETAIL_ROW_CLASS = 'cursor-pointer';
 
 export const getPlatformResourceDetailRowClass = (expanded: boolean): string =>
   `${PLATFORM_RESOURCE_DETAIL_ROW_CLASS}${expanded ? ' bg-surface-hover' : ''}`;
 
-const isInteractiveDetailRowDescendant = (event: MouseEvent | KeyboardEvent): boolean => {
+const isInteractiveDetailRowDescendant = (event: MouseEvent): boolean => {
   const target = event.target;
   const currentTarget = event.currentTarget;
   if (
@@ -47,9 +42,9 @@ const isInteractiveDetailRowDescendant = (event: MouseEvent | KeyboardEvent): bo
   );
 };
 
-// Canonical whole-row disclosure contract. Keeping pointer, keyboard, focus,
-// aria linkage, and interactive-child exclusion together prevents a table
-// from becoming mouse-only (or from opening when an embedded link is used).
+// Whole-row clicking remains a pointer convenience. The nested native
+// disclosure button owns keyboard focus and aria-expanded/aria-controls so a
+// static data-table row is not exposed as a second, unnamed control.
 export function getPlatformResourceDetailRowInteractionProps(
   options: PlatformResourceDetailRowInteractionOptions,
 ): JSX.HTMLAttributes<HTMLTableRowElement> {
@@ -58,15 +53,6 @@ export function getPlatformResourceDetailRowInteractionProps(
     onClick: (event) => {
       if (!isInteractiveDetailRowDescendant(event)) options.onToggle();
     },
-    onKeyDown: (event) => {
-      if (isInteractiveDetailRowDescendant(event)) return;
-      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Space') return;
-      event.preventDefault();
-      options.onToggle();
-    },
-    tabIndex: 0,
-    'aria-expanded': options.expanded,
-    'aria-controls': options.detailRowId,
   };
 }
 
@@ -106,14 +92,6 @@ export function createPlatformResourceDetailState(options: {
       setExpandedResourceId(null);
     }
   };
-  const handleActivationKey =
-    (resource: ResourceLike): JSX.EventHandler<HTMLTableRowElement, KeyboardEvent> =>
-    (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      toggle(resource);
-    };
-
   return {
     expandedResourceId,
     isExpanded,
@@ -121,7 +99,6 @@ export function createPlatformResourceDetailState(options: {
     open,
     toggle,
     close,
-    handleActivationKey,
   };
 }
 

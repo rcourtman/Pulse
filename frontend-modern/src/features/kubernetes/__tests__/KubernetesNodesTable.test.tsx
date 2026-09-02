@@ -105,9 +105,17 @@ describe('KubernetesNodesTable', () => {
     expect(launchLink).toHaveAttribute('href', 'https://worker-01.internal');
     expect(launchLink).toHaveAttribute('target', '_blank');
     expect(launchLink).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     fireEvent.click(launchLink);
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

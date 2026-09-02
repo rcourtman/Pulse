@@ -58,11 +58,16 @@ describe('TrueNASAlertsTable', () => {
 
     const row = screen.getByText('Device /dev/sdc has SMART test failures.').closest('tr');
     expect(row).toBeTruthy();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
     const detail = within(screen.getByTestId('truenas-alert-detail'));
     expect(detail.getByText('Alert detail')).toBeInTheDocument();
@@ -83,6 +88,10 @@ describe('TrueNASAlertsTable', () => {
     await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('truenas-alert-detail')).not.toBeInTheDocument();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

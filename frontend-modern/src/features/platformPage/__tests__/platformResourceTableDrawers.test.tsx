@@ -71,12 +71,14 @@ const makeResource = ({
 });
 
 const expectRowOpensResourceDrawer = async (row: HTMLTableRowElement, resourceId: string) => {
-  expect(row).toHaveAttribute('aria-expanded', 'false');
+  expect(row).not.toHaveAttribute('aria-expanded');
+  expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
 
   await fireEvent.click(row);
 
-  expect(row).toHaveAttribute('aria-expanded', 'true');
+  expect(row).not.toHaveAttribute('aria-expanded');
+  expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
     'data-resource-id',
     resourceId,
@@ -88,7 +90,8 @@ const expectRowOpensResourceDrawer = async (row: HTMLTableRowElement, resourceId
 
   await fireEvent.click(screen.getByRole('button', { name: 'Close resource drawer' }));
 
-  expect(row).toHaveAttribute('aria-expanded', 'false');
+  expect(row).not.toHaveAttribute('aria-expanded');
+  expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
 };
 

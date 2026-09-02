@@ -674,12 +674,8 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       <>
         <TableRow
           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-          aria-controls={isExpanded() ? detailRowId() : undefined}
-          aria-expanded={isExpanded() ? 'true' : 'false'}
           data-docker-container-row={resource.id}
           onClick={() => drawer.toggle(resource)}
-          onKeyDown={drawer.handleActivationKey(resource)}
-          tabIndex={0}
         >
           <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
         </TableRow>

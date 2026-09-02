@@ -248,12 +248,8 @@ export const KubernetesAutoscalingTable: Component<{
                       <>
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-kubernetes-autoscaling-row={resource.id}
                           onClick={() => drawer.toggle(resource)}
-                          onKeyDown={drawer.handleActivationKey(resource)}
-                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">

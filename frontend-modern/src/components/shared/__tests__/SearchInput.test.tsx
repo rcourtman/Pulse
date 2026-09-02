@@ -348,6 +348,9 @@ describe('SearchInput', () => {
 
     const { container } = render(() => <InlineCompletionHarness />);
     const input = screen.getByPlaceholderText('Infrastructure search');
+    expect(screen.getByRole('textbox', { name: 'Infrastructure search' })).toBe(input);
+    expect(input).not.toHaveAttribute('role');
+    expect(input).toHaveAttribute('aria-autocomplete', 'inline');
     input.focus();
     fireEvent.input(input, { target: { value: 'pv' } });
 

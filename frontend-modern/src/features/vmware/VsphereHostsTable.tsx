@@ -385,12 +385,8 @@ export const VsphereHostsTable: Component<{
                       <>
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${hostAlertBg()}`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-vsphere-host-row={host.id}
                           onClick={() => drawer.toggle(host)}
-                          onKeyDown={drawer.handleActivationKey(host)}
-                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">

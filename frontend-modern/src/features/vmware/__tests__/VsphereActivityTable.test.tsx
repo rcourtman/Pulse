@@ -107,11 +107,16 @@ describe('VsphereActivityTable', () => {
     expect(screen.getByText('administrator@vsphere.local')).toBeInTheDocument();
 
     const row = screen.getByText('Reconfigure virtual machine').closest('tr');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('vsphere-activity-detail'));
     expect(detail.getByText('vSphere activity detail')).toBeInTheDocument();
     expect(detail.getByText('Managed object')).toBeInTheDocument();
@@ -124,6 +129,10 @@ describe('VsphereActivityTable', () => {
     await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('vsphere-activity-detail')).not.toBeInTheDocument();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

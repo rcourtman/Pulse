@@ -35,7 +35,6 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
         onFocus={search.enhancements.onFieldFocus}
         onBlur={search.enhancements.onFieldBlur}
         completionSuffix={search.enhancements.completionSuffix()}
-        role={search.enhancements.hasSuggestions() ? 'combobox' : undefined}
         ariaAutocomplete={search.enhancements.hasSuggestions() ? 'inline' : undefined}
         trailingControls={
           <SearchInputTrailingControls state={search.enhancements} tips={props.tips} />
