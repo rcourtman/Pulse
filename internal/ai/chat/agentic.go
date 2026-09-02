@@ -972,6 +972,12 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	lookGateToolAttempted := false
 	lookGateBlocks := 0
 
+	// Advertised-action gate state; see maxAdvertisedActionGateBlocks. Only a
+	// pulse_control call that reached execution counts: a call the FSM refused
+	// for ordering has not been submitted yet.
+	controlToolExecutedThisRun := false
+	advertisedActionGateBlocks := 0
+
 	// Track where each turn's messages begin in providerMessages for compaction.
 	// We keep the last N turns' tool results in full; older ones get compacted.
 	const compactionKeepTurns = 2                  // Keep last 2 turns' tool results in full (KA preserves key facts)
@@ -1778,6 +1784,41 @@ agenticLoop:
 				}
 			}
 
+			// === ADVERTISED-ACTION GATE: an action request ends in pulse_control, not prose ===
+			// The field failure this pins: the operator asks to reboot N guests,
+			// the model resolves them, then writes a report with "next steps"
+			// and an invented prerequisite instead of submitting the governed
+			// action. When the resolved targets advertise the requested
+			// capability and pulse_control was offered but never submitted,
+			// refuse the prose ending once and steer to the exact calls.
+			if !textOnlySafetyBrake &&
+				!controlToolExecutedThisRun &&
+				advertisedActionGateBlocks < maxAdvertisedActionGateBlocks &&
+				!isPatrolDetectionExecution(a.currentExecutionProfile()) &&
+				!isPatrolInvestigationExecution(a.currentExecutionProfile()) &&
+				a.executor != nil &&
+				providerToolOffered(tools, agentcapabilities.PulseControlToolName) {
+				if action, ok := requestedLifecycleAction(latestUserRequest(messages)); ok {
+					if targets := a.executor.SessionTargetsAdvertisingAction(action); len(targets) > 0 {
+						advertisedActionGateBlocks++
+						gatePrompt := buildAdvertisedActionGatePrompt(action, targets)
+						log.Warn().
+							Str("session_id", sessionID).
+							Str("requested_action", action).
+							Int("advertised_targets", len(targets)).
+							Int("gate_blocks", advertisedActionGateBlocks).
+							Msg("[AgenticLoop] Refused prose-only ending for an advertised action request (advertised-action gate)")
+						// The premature prose stays in the transcript (it was
+						// already streamed); the correction is a provider-only
+						// user-role anchor so the next turn can submit the action.
+						providerMessages = appendFSMVerificationPrompt(providerMessages, gatePrompt)
+						currentTurnStartIndex = len(providerMessages)
+						turn++
+						continue
+					}
+				}
+			}
+
 			// === FSM ENFORCEMENT GATE 2: Check if final answer is allowed ===
 			a.mu.Lock()
 			fsm := a.sessionFSM
@@ -2274,6 +2315,12 @@ agenticLoop:
 			pendingExec = append(pendingExec, pendingToolExec{tc: tc, toolKind: toolKind})
 			// A real tool attempt satisfies the look-before-asking gate.
 			lookGateToolAttempted = true
+			if tc.Name == agentcapabilities.PulseControlToolName {
+				// A submitted governed action satisfies the advertised-action
+				// gate whatever the plan outcome: a real boundary from this
+				// call is evidence the model may report.
+				controlToolExecutedThisRun = true
+			}
 		}
 
 		// --- Phase 2: Execute pending tools ---

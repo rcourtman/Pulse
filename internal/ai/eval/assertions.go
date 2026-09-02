@@ -814,3 +814,29 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// AssertToolCallCountAtLeast checks that a tool was called at least min times
+// in the step. Bulk action requests plan one governed action per target, so a
+// single call for a five-target request is a failure, not a pass.
+func AssertToolCallCountAtLeast(toolName string, min int) Assertion {
+	return func(result *StepResult) AssertionResult {
+		count := 0
+		for _, tc := range result.ToolCalls {
+			if tc.Name == toolName {
+				count++
+			}
+		}
+		if count < min {
+			return AssertionResult{
+				Name:    fmt.Sprintf("ToolCallCountAtLeast(%s, %d)", toolName, min),
+				Passed:  false,
+				Message: fmt.Sprintf("%s was called %d time(s), want at least %d", toolName, count, min),
+			}
+		}
+		return AssertionResult{
+			Name:    fmt.Sprintf("ToolCallCountAtLeast(%s, %d)", toolName, min),
+			Passed:  true,
+			Message: fmt.Sprintf("%s was called %d time(s)", toolName, count),
+		}
+	}
+}
