@@ -279,6 +279,14 @@ without the other lanes changing the candidate underneath it.
    v6.2.0, v6.3.0, and v6.4.0. They remain recorded and bounded; the train
    does not continue the practice. An exception requires active customer
    harm and is recorded in the release notes.
+7. The `v6.4.3` patch line predates the first train and is the first line
+   released under the train's branch rule. `release/v6.4` was created from
+   `main` at the exact-SHA-qualified commit `56e51e622e` on 2026-09-02 and is
+   declared in `control_plane.json` with the version prefix `6.4.3`, so the
+   release workflow refuses a `v6.4.3` dispatch from any other branch and a
+   moving `main` can no longer invalidate the compiler's exact-SHA binding
+   between dispatch and compilation, which is what failed run 33579042375.
+   Earlier `6.4.x` versions keep their historical `main` mapping.
 
 ## Paid Pro Artifact Lineage
 
