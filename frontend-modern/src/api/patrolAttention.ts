@@ -38,6 +38,19 @@ export interface AttentionResource {
   resourceId: string;
 }
 
+/**
+ * AttentionFlapping summarises an item whose lifecycle keeps switching between
+ * open and resolved. Present only once the shared flapping threshold (four
+ * transitions inside 24 hours) is crossed; the full transition list stays in
+ * the detail timeline.
+ */
+export interface AttentionFlapping {
+  transitionCount: number;
+  windowHours: number;
+  firstTransitionAt: string;
+  lastTransitionAt: string;
+}
+
 export interface AttentionItem {
   id: string;
   operationalRecordId: string;
@@ -59,6 +72,7 @@ export interface AttentionItem {
   recommendedNextStep?: string;
   availableActions: AttentionActionOffer[];
   verificationState: AttentionVerificationState;
+  flapping?: AttentionFlapping;
 }
 
 export interface AttentionItemDetail {

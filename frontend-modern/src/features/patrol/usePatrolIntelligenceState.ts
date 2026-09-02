@@ -807,6 +807,13 @@ export function usePatrolIntelligenceState() {
 
     try {
       await Promise.all([
+        // The Patrol surface needs dismissed findings too: the attention
+        // detail shows the decision Patrol already remembers for a mirrored
+        // finding, and the store's default load is active-only. Listed first
+        // so it flips the store's sticky include-resolved preference before
+        // loadDashboardData issues its own findings read; otherwise the two
+        // responses race and the active-only one can win.
+        aiIntelligenceStore.loadPatrolFindings({ includeResolved: true }),
         aiIntelligenceStore.loadDashboardData(),
         refetchPatrolStatus(),
         loadAutonomySettings(),
@@ -828,7 +835,10 @@ export function usePatrolIntelligenceState() {
     try {
       await Promise.all([
         refetchPatrolStatus(),
-        aiIntelligenceStore.loadPatrolFindings(),
+        // Include dismissed and resolved findings: the attention detail shows
+        // the decision Patrol already remembers for a mirrored finding, and a
+        // dismissed finding is not in the active-only default set.
+        aiIntelligenceStore.loadPatrolFindings({ includeResolved: true }),
         aiIntelligenceStore.loadPendingApprovals(),
         patrolRunHistory.refetch({ background: true }),
       ]);
