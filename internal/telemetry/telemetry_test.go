@@ -423,31 +423,36 @@ func TestApplySnapshot(t *testing.T) {
 			PulseIntelligencePatrolInvestigations30d:                       6,
 			PulseIntelligencePatrolResolvedFindings30d:                     3,
 			PulseIntelligencePatrolBlockedCause:                            "provider_not_configured",
-			PulseIntelligenceExternalAgentEnabled:                          true,
-			PulseIntelligenceExternalAgentUsed30d:                          true,
-			PulseIntelligenceMCPAdapterUsed30d:                             true,
-			PulseIntelligenceExternalAgentContextRequests30d:               8,
-			PulseIntelligenceExternalAgentEventStreamRequests30d:           2,
-			PulseIntelligenceExternalAgentProvisioningRequests30d:          1,
-			PulseIntelligenceExternalAgentOperatorStateRequests30d:         3,
-			PulseIntelligenceExternalAgentFindingRequests30d:               5,
-			PulseIntelligenceExternalAgentActionRequests30d:                4,
-			PulseIntelligenceActionPlans30d:                                6,
-			PulseIntelligenceApprovalRequests30d:                           2,
-			PulseIntelligenceRejectedActionDecisions30d:                    1,
-			PulseIntelligenceApprovedActionDecisions30d:                    1,
-			PulseIntelligenceApprovedActionAttempts30d:                     1,
-			PulseIntelligenceApprovedActionSuccesses30d:                    1,
-			PulseIntelligenceApprovedActionInFlight30d:                     2,
-			PulseIntelligenceApprovedActionUnclassified30d:                 3,
-			PulseIntelligenceApprovedActionRefusalsPlanStale30d:            4,
-			PulseIntelligenceApprovedActionRefusalsPolicy30d:               5,
-			PulseIntelligenceApprovedActionRefusalsCapability30d:           6,
-			PulseIntelligenceApprovedActionRefusalsTargetChanged30d:        7,
-			PulseIntelligenceApprovedActionRefusalsPrerequisite30d:         8,
-			PulseIntelligenceApprovedActionRefusalsContract30d:             9,
-			PulseIntelligenceApprovedActionRefusalsOther30d:                10,
-			PulseIntelligenceVerifiedFindingResolutions30d:                 8,
+			PulseIntelligencePatrolAutonomyLevel:                           "approval",
+			PulseIntelligencePatrolInputTokensBucket30d:                    "5m_20m",
+			PulseIntelligencePatrolOutputTokensBucket30d:                   "100k_500k",
+			PulseIntelligencePatrolInvestigationOutcomeCannotFix30d:        4,
+			AIProviderClass:                                         "local",
+			PulseIntelligenceExternalAgentEnabled:                   true,
+			PulseIntelligenceExternalAgentUsed30d:                   true,
+			PulseIntelligenceMCPAdapterUsed30d:                      true,
+			PulseIntelligenceExternalAgentContextRequests30d:        8,
+			PulseIntelligenceExternalAgentEventStreamRequests30d:    2,
+			PulseIntelligenceExternalAgentProvisioningRequests30d:   1,
+			PulseIntelligenceExternalAgentOperatorStateRequests30d:  3,
+			PulseIntelligenceExternalAgentFindingRequests30d:        5,
+			PulseIntelligenceExternalAgentActionRequests30d:         4,
+			PulseIntelligenceActionPlans30d:                         6,
+			PulseIntelligenceApprovalRequests30d:                    2,
+			PulseIntelligenceRejectedActionDecisions30d:             1,
+			PulseIntelligenceApprovedActionDecisions30d:             1,
+			PulseIntelligenceApprovedActionAttempts30d:              1,
+			PulseIntelligenceApprovedActionSuccesses30d:             1,
+			PulseIntelligenceApprovedActionInFlight30d:              2,
+			PulseIntelligenceApprovedActionUnclassified30d:          3,
+			PulseIntelligenceApprovedActionRefusalsPlanStale30d:     4,
+			PulseIntelligenceApprovedActionRefusalsPolicy30d:        5,
+			PulseIntelligenceApprovedActionRefusalsCapability30d:    6,
+			PulseIntelligenceApprovedActionRefusalsTargetChanged30d: 7,
+			PulseIntelligenceApprovedActionRefusalsPrerequisite30d:  8,
+			PulseIntelligenceApprovedActionRefusalsContract30d:      9,
+			PulseIntelligenceApprovedActionRefusalsOther30d:         10,
+			PulseIntelligenceVerifiedFindingResolutions30d:          8,
 		}
 	}
 
@@ -553,6 +558,11 @@ func TestApplySnapshot(t *testing.T) {
 		ping.PulseIntelligencePatrolInvestigations30d != 6 ||
 		ping.PulseIntelligencePatrolResolvedFindings30d != 3 ||
 		ping.PulseIntelligencePatrolBlockedCause != "provider_not_configured" ||
+		ping.PulseIntelligencePatrolAutonomyLevel != "approval" ||
+		ping.PulseIntelligencePatrolInputTokensBucket30d != "5m_20m" ||
+		ping.PulseIntelligencePatrolOutputTokensBucket30d != "100k_500k" ||
+		ping.PulseIntelligencePatrolInvestigationOutcomeCannotFix30d != 4 ||
+		ping.AIProviderClass != "local" ||
 		ping.PulseIntelligenceActionPlans30d != 6 ||
 		ping.PulseIntelligenceApprovalRequests30d != 2 ||
 		ping.PulseIntelligenceRejectedActionDecisions30d != 1 ||
