@@ -3185,6 +3185,14 @@ func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
 	if !(attestationLogin < chartPush && chartPush < attestation) {
 		t.Fatal("publish-helm-chart.yml must authenticate the OCI attestation client before pushing and attesting the chart")
 	}
+	// The chart-version resolver writes its outputs through
+	// scripts/write_github_output.py, so the repository must already be
+	// checked out when it runs (de41ea1883 broke every chart publish this way).
+	checkout := strings.Index(workflow, "- name: Checkout repository")
+	chartVersion := strings.Index(workflow, "- name: Determine chart version")
+	if !(checkout >= 0 && chartVersion > checkout) {
+		t.Fatal("publish-helm-chart.yml must check out the repository before the chart-version resolver runs scripts/write_github_output.py")
+	}
 	for _, forbidden := range []string{
 		`versions/latest/restore`,
 		`-f visibility=public`,

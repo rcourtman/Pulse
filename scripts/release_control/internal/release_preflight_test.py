@@ -248,6 +248,22 @@ class ReleasePreflightTest(unittest.TestCase):
         )
         self.assertIn("is not reachable from a fetched origin branch", runner)
 
+    def test_worker_matches_ci_toolchain_and_publishes_smoke_on_a_free_port(self) -> None:
+        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
+        # Non-login ssh shells never source profile hooks, so an installed mise
+        # toolchain must be activated explicitly or a stale system Node wins.
+        self.assertIn('"$HOME/.local/bin/mise" activate bash --shims', worker)
+        # GitHub runners leave GOTMPDIR unset; unix-socket fixtures sit at the
+        # sun_path limit under /tmp, so the worker must not nest test temp dirs.
+        self.assertIn('GO_TMP_DIR="${PULSE_RELEASE_PREFLIGHT_GO_TMP_DIR:-}"', worker)
+        # Smoke stacks publish on a verified-free host port pair and every probe
+        # and the browser use that port; a worker may host Pulse on 7655.
+        self.assertIn("smoke_port_pair_is_free", worker)
+        self.assertIn("PULSE_RELEASE_PREFLIGHT_E2E_PORT", worker)
+        self.assertIn('export PULSE_E2E_BASE_URL="http://localhost:${PULSE_E2E_PORT}"', worker)
+        self.assertIn('--env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}"', worker)
+        self.assertNotIn("localhost:7655", worker)
+
     def test_worker_serializes_resource_intensive_test_suites(self) -> None:
         worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
         scheduling_block = re.search(
