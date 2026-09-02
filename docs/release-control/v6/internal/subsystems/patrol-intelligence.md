@@ -65,6 +65,7 @@ sources, and retains the note as operator context.
 36. `frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx`
 37. `frontend-modern/src/features/patrol/patrolHomePresentation.ts`
 38. `frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx`
+39. `frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx`
 
 ## Shared Boundaries
 
@@ -2558,3 +2559,22 @@ finding and carried onto the unified finding as `failureCause`, and a provider
 preflight success no longer clears a budget-exhausted runtime finding, so the
 setup card still routes to the budget after a restart clears the in-memory
 block state.
+
+### This week card answers what Patrol did for the customer
+
+The Activity tab leads with `PatrolWeeklyDigestCard` ("This week"), rendered
+above Verified outcomes and never inside the Inbox decision surface. It shows
+six tiles in plain customer language: Patrol runs, New issues, Issues resolved,
+Investigated, Fixes run, and Estimated spend, with the effective Patrol mode
+sentence underneath, and it links to `/actions` only when Patrol-origin fixes
+are waiting for approval. The card reads `GET /api/ai/patrol/digest` and must
+not recompute counts from findings or run history client-side. Forensic
+vocabulary (evidence classes, verdicts, model names, tool traces) stays out of
+the card and remains in run history and the Actions audit. Empty history
+renders "Patrol has not run in the last N days"; a truncated history says
+"Since <date> (older runs are no longer kept)"; a failed load says the summary
+is unavailable rather than showing zeros. Proofs:
+`frontend-modern/src/features/patrol/__tests__/PatrolWeeklyDigestCard.test.tsx`,
+`frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceSurface.test.tsx`,
+`frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx` (card ordering),
+and the browser receipt in `frontend-modern/browser-verification.json`.

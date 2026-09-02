@@ -54,6 +54,10 @@ vi.mock('../PatrolRecentWorkPanel', () => ({
   PatrolRecentWorkPanel: () => <div>Recent work</div>,
 }));
 
+vi.mock('../PatrolWeeklyDigestCard', () => ({
+  PatrolWeeklyDigestCard: () => <div>This week</div>,
+}));
+
 vi.mock('@/stores/actionInbox', () => ({
   actionInboxStore: { pendingActionCount: 0 },
 }));
