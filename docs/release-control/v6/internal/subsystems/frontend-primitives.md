@@ -3110,6 +3110,12 @@ viewport ordering, and reduced-motion-safe behavior. Detail deep links use
 The temporary-suppression reason and duration are labelled native controls
 owned by `FormTextarea` and `FormSelect`; Patrol must not recreate their label,
 focus, responsive touch-target, or controlled-value shells locally.
+The Lasting decisions section reuses the same ownership: its four decision
+triggers are shared `Button` primitives in a labelled list, the inline
+confirmation note or rule reason is a `FormTextarea`, and the alert-only
+guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
+Patrol findings accessor into the workbench; the workbench does not fetch or
+poll findings itself.
 The objective brief and optional-context fields in `PatrolObjectivesPanel`
 share the same `FormTextarea` ownership contract.
 

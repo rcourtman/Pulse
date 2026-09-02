@@ -117,7 +117,9 @@ describe('usePatrolIntelligenceState', () => {
 
     expect(patrolIntelligenceStateSource).toContain('async function loadVisiblePatrolData()');
     expect(patrolIntelligenceStateSource).toContain('refetchPatrolStatus()');
-    expect(patrolIntelligenceStateSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
+    expect(patrolIntelligenceStateSource).toContain(
+      'aiIntelligenceStore.loadPatrolFindings({ includeResolved: true })',
+    );
     expect(patrolIntelligenceStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');
     expect(patrolIntelligenceStateSource).toContain(
       'patrolRunHistory.refetch({ background: true })',

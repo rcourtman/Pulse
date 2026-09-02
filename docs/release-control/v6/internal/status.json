@@ -9975,6 +9975,40 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "patrol-findings-hygiene-attention-noise",
+      "summary": "Two users in a row (discussions #1623 and #1699) could not find Patrol's durable outcomes because Remember as expected, Dismiss: Not an issue, Dismiss: Later, and Create rule sat two levels below the Needs attention detail, which offered only Acknowledge and Suppress. The same screenshot showed an alert with eleven open/resolved transitions in a day rendered as eleven timeline rows, and Patrol findings that restate an active alert (same resource, same condition) listed as separate items. Telemetry on 2026-09-01 showed 4,709 findings across 736 installs but only 255 investigations across 27, so most findings are seen and ignored. Attention needs: alert-mirroring findings folded under the alert, flapping collapsed to one labelled item with a count, and the durable decisions on the detail with one-line explanations.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-09-02",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/findings_alert_mirror.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/findings_storm_throttler.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
@@ -10042,7 +10076,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "claude-patrol-findings-hygiene-coverage-gap-patrol-findings-hygiene-attention-noise",
+      "agent_id": "claude-patrol-findings-hygiene",
+      "summary": "Fold alert-mirroring findings under the alert, collapse flapping, surface lasting Patrol decisions on the attention detail",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-09-02T03:29:56Z",
+      "heartbeat_at": "2026-09-02T03:29:56Z",
+      "expires_at": "2026-09-02T09:29:56Z",
+      "work_item": {
+        "kind": "coverage-gap",
+        "id": "patrol-findings-hygiene-attention-noise"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
