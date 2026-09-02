@@ -86,6 +86,10 @@ services:
       # Dev-only endpoints the suite depends on (first-run reset in the
       # first-session specs) are gated on development mode.
       - PULSE_DEV=true
+      # Each shard's isolated browser sessions share one Docker bridge IP.
+      # Keep production's universal limit intact while preventing that synthetic
+      # aggregation from starving later tests in this development-only stack.
+      - PULSE_DEV_GENERAL_API_RATE_LIMIT=5000
       - PULSE_MULTI_TENANT_ENABLED=${PULSE_MULTI_TENANT_ENABLED:-false}
       - PULSE_ALLOW_DOCKER_UPDATES=true
       - PULSE_UPDATE_STAGE_DELAY_MS=250

@@ -263,8 +263,14 @@ test.describe("Offline Proxmox node visibility", () => {
       expect(linkBox!.width).toBeGreaterThanOrEqual(24);
       expect(linkBox!.height).toBeGreaterThanOrEqual(24);
 
-      // Opening the adjacent control must not bubble into the selectable row.
-      await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
+      // Opening the adjacent control must not toggle the row's native
+      // disclosure button. The static table row intentionally owns no
+      // keyboard or expanded-state semantics.
+      const disclosureButton = offlineRow.getByRole("button", {
+        name: "Expand details for Disaster Recovery B",
+      });
+      expect(await offlineRow.getAttribute("aria-expanded")).toBeNull();
+      await expect(disclosureButton).toHaveAttribute("aria-expanded", "false");
       const webInterfaceUrl = await webInterfaceLink.getAttribute("href");
       expect(webInterfaceUrl).toBeTruthy();
       const popupPromise = page.context().waitForEvent("page");
@@ -273,7 +279,7 @@ test.describe("Offline Proxmox node visibility", () => {
       await popup.waitForLoadState("domcontentloaded");
       expect(popup.url()).toBe(`${webInterfaceUrl}/`);
       await popup.close();
-      await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
+      await expect(disclosureButton).toHaveAttribute("aria-expanded", "false");
     }
 
     const viewportContainment = await page.evaluate(() => ({

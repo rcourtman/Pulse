@@ -2,9 +2,15 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	defaultGeneralAPIRateLimit = 500
+	maxDevGeneralAPIRateLimit  = 100000
 )
 
 // EndpointRateLimitConfig defines rate limiting configuration for different endpoint categories
@@ -41,12 +47,26 @@ func newEndpointRateLimitConfig() *EndpointRateLimitConfig {
 		// WebSocket connections: per-connection limits
 		WebSocketEndpoints: NewRateLimiter(30, 1*time.Minute), // 30 new connections per minute
 
-		// General API: higher limits for normal operations
-		GeneralAPI: NewRateLimiter(500, 1*time.Minute), // 500 requests per minute
+		// General API: higher limits for normal operations. Browser E2E runs can
+		// explicitly raise this in PULSE_DEV because many isolated test sessions
+		// share one Docker bridge address; production always keeps the default.
+		GeneralAPI: NewRateLimiter(generalAPIRateLimit(), 1*time.Minute),
 
 		// Public endpoints: very high limits (health checks, etc.)
 		PublicEndpoints: NewRateLimiter(1000, 1*time.Minute), // 1000 requests per minute
 	}
+}
+
+func generalAPIRateLimit() int {
+	if os.Getenv("PULSE_DEV") != "true" {
+		return defaultGeneralAPIRateLimit
+	}
+
+	configured, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_DEV_GENERAL_API_RATE_LIMIT")))
+	if err != nil || configured < defaultGeneralAPIRateLimit || configured > maxDevGeneralAPIRateLimit {
+		return defaultGeneralAPIRateLimit
+	}
+	return configured
 }
 
 func ensureGlobalRateLimitConfig() *EndpointRateLimitConfig {
