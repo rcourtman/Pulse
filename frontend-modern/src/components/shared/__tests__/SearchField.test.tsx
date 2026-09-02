@@ -42,6 +42,27 @@ describe('SearchField', () => {
     expect(screen.getByPlaceholderText('Search field')).toHaveClass('sm:min-h-10');
   });
 
+  it('forwards combobox ownership and active-option semantics', () => {
+    render(() => (
+      <SearchField
+        value=""
+        onChange={vi.fn()}
+        placeholder="Command search"
+        role="combobox"
+        ariaAutocomplete="list"
+        ariaControls="command-results"
+        ariaExpanded={true}
+        ariaActiveDescendant="command-result-active"
+      />
+    ));
+
+    const input = screen.getByRole('combobox', { name: 'Command search' });
+    expect(input).toHaveAttribute('aria-autocomplete', 'list');
+    expect(input).toHaveAttribute('aria-controls', 'command-results');
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(input).toHaveAttribute('aria-activedescendant', 'command-result-active');
+  });
+
   it('reserves mobile input space for every visible trailing action', () => {
     expect(
       getSearchFieldInputPaddingRightClass({
