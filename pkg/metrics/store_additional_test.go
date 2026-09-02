@@ -618,12 +618,11 @@ func TestStoreFlushMakesQueuedWritesVisible(t *testing.T) {
 func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 	previousHook := startupMaintenanceHook
 
+	// The hook parks the maintenance worker before any startup work runs, so
+	// startup maintenance cannot complete until the test releases it.
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var releaseOnce sync.Once
-	releaseMaintenance := func() {
-		releaseOnce.Do(func() { close(release) })
-	}
 	startupMaintenanceHook = func() {
 		close(started)
 		<-release
@@ -642,11 +641,11 @@ func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 		store, err = NewStore(cfg)
 		close(done)
 	}()
+
+	// Release the worker and wait for NewStore before restoring the hook, so a
+	// failed run never leaks a parked store into the next test.
 	t.Cleanup(func() {
-		// Always unblock and join the worker before restoring the process-wide
-		// hook. Otherwise a failed assertion can leak this worker into the next
-		// test, where it may invoke that test's hook.
-		releaseMaintenance()
+		releaseOnce.Do(func() { close(release) })
 		<-done
 		if store != nil {
 			store.Close()
@@ -654,21 +653,17 @@ func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 		startupMaintenanceHook = previousHook
 	})
 
-	select {
-	case <-started:
-	case <-time.After(5 * time.Second):
-		t.Fatal("startup maintenance was not scheduled")
-	}
-
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("NewStore blocked on startup maintenance")
-	}
-
+	// Deferral is proven by ordering, not by a wall-clock bound: NewStore must
+	// return while the worker is still parked in the hook. If startup
+	// maintenance ever ran inline again, this receive would block until the
+	// package test timeout instead of flaking on a slow CI disk.
+	<-started
+	<-done
 	if err != nil {
 		t.Fatalf("NewStore returned error: %v", err)
 	}
+
+	releaseOnce.Do(func() { close(release) })
 }
 
 func TestStoreWaitForMaintenanceWaitsForQueuedStartupWork(t *testing.T) {
