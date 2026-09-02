@@ -2022,6 +2022,11 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		existing.Impact = f.Impact
 		existing.Recommendation = f.Recommendation
 		existing.Evidence = f.Evidence
+		// The runtime failure finding is re-raised with a fresh cause each run
+		// (provider fault, then budget exhaustion); the cause must follow the
+		// prose it explains, or the Patrol page routes the operator to the
+		// wrong fix after a restart clears the in-memory block state (#1789).
+		existing.FailureCause = f.FailureCause
 		if f.ObjectiveContext != nil {
 			existing.ObjectiveContext = clonePatrolObjectiveContext(f.ObjectiveContext)
 		}

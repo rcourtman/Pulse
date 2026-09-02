@@ -327,4 +327,17 @@ describe('docsLinks', () => {
     },
     runtimeDocsLinkScanTimeoutMs,
   );
+
+  it('ships the Patrol cost preview and model guidance contract', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedApiReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+    for (const reference of [apiReference, shippedApiReference]) {
+      expect(reference).toContain('`GET /api/ai/patrol/cost-preview`');
+      expect(reference).toContain('`GET /api/ai/patrol/model-guidance`');
+      expect(reference).toContain('recommended schedule');
+    }
+  });
 });

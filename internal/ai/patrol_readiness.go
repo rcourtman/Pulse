@@ -46,6 +46,12 @@ const (
 	// or model did. It must never be presented as a model verdict (#1640).
 	PatrolFailureCauseInternalError PatrolFailureCause = "internal_error"
 	PatrolFailureCauseCircuitOpen   PatrolFailureCause = "circuit_open"
+	// PatrolFailureCauseBudgetExhausted marks a run skipped because the
+	// operator's 30-day cost budget is used up. It is a spending decision,
+	// not a provider or model fault: the provider was never called, so it
+	// must not feed the circuit breaker or read as a model verdict, and the
+	// Patrol page must say so instead of leaving the skip in the logs (#1789).
+	PatrolFailureCauseBudgetExhausted PatrolFailureCause = "budget_exhausted"
 )
 
 type PatrolConfigReadiness struct {
