@@ -31,12 +31,17 @@ import {
   type PatrolAssistantApprovalBriefingInput,
   type PatrolAssistantProposedFixBriefingInput,
 } from '@/features/patrol/patrolInvestigationContextModel';
+import { getFlappingPresentation } from '@/features/patrol/patrolHomePresentation';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState, PatrolAutonomyLevel } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
-import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
+import {
+  getFindingAlertIdentifier,
+  hasTriggeringAlert,
+  isAlertMirroredFinding,
+} from '@/utils/findingAlertIdentity';
 import {
   FilterSegmentedControl,
   type FilterSegmentOption,
@@ -457,9 +462,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       return Number.isFinite(due) && due <= nowMs;
     }).length;
   });
+  // Active findings that restate an active alert (backend-stamped mirror).
+  // They are demoted into a collapsed group below the list rather than shown
+  // as separate items: the alert already owns that condition on the Patrol
+  // inbox and the Alerts page.
+  const alertMirroredFindings = createMemo(() =>
+    isPatrolFindingsSource() ? filteredFindings().filter(isAlertMirroredFinding) : [],
+  );
   const patrolFindings = createMemo(() => {
     if (isPatrolFindingsSource()) {
-      return filteredFindings();
+      return filteredFindings().filter((finding) => !isAlertMirroredFinding(finding));
     }
     return filteredFindings().filter(
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
@@ -1064,6 +1076,26 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               >
                 {severityPresentation.label}
               </MetadataBadge>
+              {/* Flapping: the store collapsed repeated open/resolved
+                  transitions into one row; say so instead of letting the
+                  regression counter climb silently. */}
+              <Show when={finding.flapping}>
+                {(flapping) => (
+                  <MetadataBadge
+                    {...FINDING_ROW_BADGE_PROPS}
+                    tone="warning"
+                    title={
+                      getFlappingPresentation(flapping().transition_count, flapping().window_hours)
+                        .detail
+                    }
+                  >
+                    {
+                      getFlappingPresentation(flapping().transition_count, flapping().window_hours)
+                        .label
+                    }
+                  </MetadataBadge>
+                )}
+              </Show>
               {/* Patrol actionable state — plain-language translation of
                   investigation state that the contract allows on the
                   collapsed Patrol row (approval required, investigating,
@@ -2122,7 +2154,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <Card padding="none" class="overflow-hidden">
             {/* Content */}
             <div class="divide-y divide-border-subtle">
-              <Show when={patrolFindingDisplayGroups().length === 0}>
+              <Show
+                when={
+                  patrolFindingDisplayGroups().length === 0 && alertMirroredFindings().length === 0
+                }
+              >
                 <div class="p-6 text-sm text-muted text-center">
                   <Show when={shouldShowRichEmptyState()}>
                     <div class="flex flex-col items-center gap-3">
@@ -2201,6 +2237,25 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   </Show>
                 )}
               </For>
+              <Show when={alertMirroredFindings().length > 0}>
+                <details class="bg-surface-alt/40">
+                  <summary class="flex min-h-11 cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
+                    <span class="font-semibold text-base-content">
+                      {alertMirroredFindings().length}{' '}
+                      {alertMirroredFindings().length === 1 ? 'finding mirrors' : 'findings mirror'}{' '}
+                      an active alert
+                    </span>
+                    <span class="text-muted">
+                      Already shown as alerts; expand to manage the Patrol findings.
+                    </span>
+                  </summary>
+                  <div class="divide-y divide-border-subtle border-t border-border-subtle">
+                    <For each={alertMirroredFindings()}>
+                      {(finding) => renderFindingItem(finding, false)}
+                    </For>
+                  </div>
+                </details>
+              </Show>
             </div>
           </Card>
 

@@ -4,6 +4,7 @@ package ai
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -247,6 +248,21 @@ type Finding struct {
 	// local evidence caused this finding to be assessed. It is durable context
 	// for investigation, not action or approval authority.
 	ObjectiveContext *aicontracts.PatrolObjectiveContext `json:"objective_context,omitempty"`
+	// Flapping is set while the finding's open/resolved state has changed
+	// at least findingFlapThreshold times inside findingFlapWindow. The
+	// store collapses the individual regressed/resolved lifecycle rows into
+	// one flapping row while it is set. Derived: rebuilt from the lifecycle
+	// on the first transition after a restart rather than persisted.
+	Flapping *FindingFlapping `json:"flapping,omitempty"`
+	// MirrorsAlertID names the active alert whose resource and condition
+	// this finding restates (for example a Proxmox guest stopped finding
+	// beside a powered-off alert). Stamped by Patrol after every run and
+	// cleared when the alert resolves; the attention surface folds such
+	// findings under the alert instead of listing them twice.
+	MirrorsAlertID string `json:"mirrors_alert_id,omitempty"`
+	// MirrorsAlertType is the alert type of MirrorsAlertID, so a client
+	// holding the alert projection can join on resource plus kind.
+	MirrorsAlertType string `json:"mirrors_alert_type,omitempty"`
 }
 
 // findingJSON is the marshal mirror of Finding: identical fields, but
@@ -299,6 +315,9 @@ type findingJSON struct {
 	LastRegressionAt           *time.Time                          `json:"last_regression_at,omitempty"`
 	CapacityForecast           *CapacityForecast                   `json:"capacity_forecast,omitempty"`
 	ObjectiveContext           *aicontracts.PatrolObjectiveContext `json:"objective_context,omitempty"`
+	Flapping                   *FindingFlapping                    `json:"flapping,omitempty"`
+	MirrorsAlertID             string                              `json:"mirrors_alert_id,omitempty"`
+	MirrorsAlertType           string                              `json:"mirrors_alert_type,omitempty"`
 }
 
 func (f Finding) MarshalJSON() ([]byte, error) {
@@ -347,6 +366,9 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		LastRegressionAt:           f.LastRegressionAt,
 		CapacityForecast:           f.CapacityForecast,
 		ObjectiveContext:           clonePatrolObjectiveContext(f.ObjectiveContext),
+		Flapping:                   cloneFindingFlapping(f.Flapping),
+		MirrorsAlertID:             f.MirrorsAlertID,
+		MirrorsAlertType:           f.MirrorsAlertType,
 	})
 }
 
@@ -400,6 +422,9 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		LastRegressionAt:           payload.LastRegressionAt,
 		CapacityForecast:           payload.CapacityForecast,
 		ObjectiveContext:           clonePatrolObjectiveContext(payload.ObjectiveContext),
+		Flapping:                   cloneFindingFlapping(payload.Flapping),
+		MirrorsAlertID:             payload.MirrorsAlertID,
+		MirrorsAlertType:           payload.MirrorsAlertType,
 	}
 	return nil
 }
@@ -1337,6 +1362,92 @@ func (s *FindingsStore) appendLifecycleLocked(f *Finding, typ, msg, from, to str
 	}
 }
 
+// recordTransitionLifecycleLocked records an open/resolved transition for f.
+// Below the flapping threshold it appends the ordinary lifecycle row. Once
+// the storm throttler reports the finding is flapping, it stamps f.Flapping
+// and folds the churn into one "flapping" row that carries the transition
+// count, updating that row in place on every further transition instead of
+// appending another regressed/resolved entry. The individual rows recorded
+// before the label applied stay in the log as forensic detail.
+func (s *FindingsStore) recordTransitionLifecycleLocked(f *Finding, typ, msg, from, to string, meta map[string]string) {
+	if f == nil {
+		return
+	}
+	var flapping *FindingFlapping
+	if t := s.stormThrottler; t != nil {
+		flapping = t.observeFlapLocked(f, time.Now())
+	}
+	f.Flapping = flapping
+	if flapping == nil {
+		s.appendLifecycleLocked(f, typ, msg, from, to, meta)
+		return
+	}
+	collapsed := map[string]string{
+		"transition_count":    strconv.Itoa(flapping.TransitionCount),
+		"window_hours":        strconv.Itoa(flapping.WindowHours),
+		"first_transition_at": flapping.FirstTransitionAt.UTC().Format(time.RFC3339),
+		"last_transition":     typ,
+	}
+	message := fmt.Sprintf(
+		"State changed %d times in the last %d hours; individual transitions are collapsed while the finding is flapping",
+		flapping.TransitionCount,
+		flapping.WindowHours,
+	)
+	if n := len(f.Lifecycle); n > 0 && f.Lifecycle[n-1].Type == FindingLifecycleFlapping {
+		last := &f.Lifecycle[n-1]
+		last.At = time.Now()
+		last.Message = message
+		last.From = from
+		last.To = to
+		last.Metadata = collapsed
+		return
+	}
+	s.appendLifecycleLocked(f, FindingLifecycleFlapping, message, from, to, collapsed)
+}
+
+func cloneFindingFlapping(value *FindingFlapping) *FindingFlapping {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
+// findingAlertMirror names the active alert a finding restates.
+type findingAlertMirror struct {
+	AlertID   string
+	AlertType string
+}
+
+// StampAlertMirrors records, for every unresolved finding, which active
+// alert it mirrors (same resource, same condition). Findings absent from
+// the map lose any previous stamp, so a resolved alert releases its
+// finding back to the normal list on the next reconcile. The stamp is a
+// derived read-model annotation and does not schedule a save.
+func (s *FindingsStore) StampAlertMirrors(mirrors map[string]findingAlertMirror) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	changed := 0
+	for id, f := range s.findings {
+		mirror, ok := mirrors[id]
+		if !ok || f.ResolvedAt != nil {
+			if f.MirrorsAlertID != "" || f.MirrorsAlertType != "" {
+				f.MirrorsAlertID = ""
+				f.MirrorsAlertType = ""
+				changed++
+			}
+			continue
+		}
+		if f.MirrorsAlertID != mirror.AlertID || f.MirrorsAlertType != mirror.AlertType {
+			f.MirrorsAlertID = mirror.AlertID
+			f.MirrorsAlertType = mirror.AlertType
+			changed++
+		}
+	}
+	return changed
+}
+
 func isKnownLoopState(v string) bool {
 	switch FindingLoopState(v) {
 	case FindingLoopStateDetected, FindingLoopStateInvestigating, FindingLoopStateRemediationPlanned, FindingLoopStateRemediating, FindingLoopStateRemediationFailed, FindingLoopStateNeedsAttention, FindingLoopStateTimedOut, FindingLoopStateResolved, FindingLoopStateDismissed, FindingLoopStateSnoozed, FindingLoopStateSuppressed:
@@ -1954,7 +2065,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			if hadAcknowledgement {
 				meta["previous_acknowledged"] = "true"
 			}
-			s.appendLifecycleLocked(existing, "regressed", "Finding re-detected after resolution", string(FindingLoopStateResolved), string(FindingLoopStateDetected), meta)
+			s.recordTransitionLifecycleLocked(existing, "regressed", "Finding re-detected after resolution", string(FindingLoopStateResolved), string(FindingLoopStateDetected), meta)
 			if existing.IsActive() {
 				s.activeCounts[existing.Severity]++
 			}
@@ -2099,7 +2210,7 @@ func (s *FindingsStore) Resolve(id string, auto bool) bool {
 	if auto {
 		etype = "auto_resolved"
 	}
-	s.appendLifecycleLocked(f, etype, f.ResolveReason, f.LoopState, string(FindingLoopStateResolved), nil)
+	s.recordTransitionLifecycleLocked(f, etype, f.ResolveReason, f.LoopState, string(FindingLoopStateResolved), nil)
 	s.syncLoopStateLocked(f)
 	s.activeCounts[f.Severity]--
 	s.mu.Unlock()
@@ -2123,7 +2234,7 @@ func (s *FindingsStore) ResolveWithReason(id string, reason string) bool {
 	f.ResolvedAt = &now
 	f.AutoResolved = true
 	f.ResolveReason = reason
-	s.appendLifecycleLocked(f, "auto_resolved", reason, f.LoopState, string(FindingLoopStateResolved), nil)
+	s.recordTransitionLifecycleLocked(f, "auto_resolved", reason, f.LoopState, string(FindingLoopStateResolved), nil)
 	s.syncLoopStateLocked(f)
 	s.activeCounts[f.Severity]--
 	s.mu.Unlock()

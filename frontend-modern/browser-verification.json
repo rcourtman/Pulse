@@ -1,45 +1,57 @@
 {
   "version": 1,
-  "base_sha": "9fba43ffed507f092f876acaf23bef013f0f6fab",
-  "verified_at": "2026-09-02T03:39:02Z",
+  "base_sha": "d7a4dcf8e7c59fc35348236d8aeb3f25dc6062fe",
+  "verified_at": "2026-09-02T05:32:37Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/shared/Dialog.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/api/patrolAttention.ts",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
+    "frontend-modern/src/stores/aiIntelligence.ts",
+    "frontend-modern/src/utils/findingAlertIdentity.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Dialog.tsx": "185f09e185a9e5ccddf73906a81552ea0cc8b07390fb5ab587fbe1b952697735"
+    "frontend-modern/src/api/patrol.ts": "962ddd9eccb31fcfa419cde956c90f319333de3c15f98118d6580b542b1f4825",
+    "frontend-modern/src/api/patrolAttention.ts": "6729696d1966d62a38ebcc52bcc1d0a62479c6e025c1a7d4f23f02ed77c4428f",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "96b31460f3b66a8dacf2a298b6bb9a0caa1978f668cb8ba1adb09b31563955b3",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "431a22391ee441565265e33f161602d8894616c7a92b79e6dbc54b2f13dab585",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "f7fbdc4d43c42e12f08671a78a4b903bb1ed7b2d25d1551c395691c4991f1a40",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "727a440bdee088cd88c64eb6e05659ba92af8cfe2c78d20c114018fa9dd916d5",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "3315bc496e84727449bbb04ab0240bfb60cf4546a0dc2bd9d8f812db08a4e05c",
+    "frontend-modern/src/stores/aiIntelligence.ts": "177859f415e92bcd282844ececf6ef8edfd5d54bda612ae18f100aacc1b40921",
+    "frontend-modern/src/utils/findingAlertIdentity.ts": "7988efd6dbf80c60e4d66312abb5ff95bcae9fc98445af0f57940a7ed3ea358b"
   },
   "routes": [
-    "/settings/infrastructure",
-    "/actions",
-    "/alerts/overview",
-    "/settings/system-general",
     "/patrol",
-    "/"
+    "/patrol?attention=mock-cluster-2-pve10-local-zfs%3A%3Ametric-threshold%3Ausage"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 1400
     },
     {
       "width": 390,
-      "height": 844
-    },
-    {
-      "width": 393,
-      "height": 851
+      "height": 1600
     }
   ],
   "states": [
-    "Add infrastructure dialog open at desktop and narrow widths with reduced motion, a visible labelled heading, accessible description, focused close control, contained panel geometry, and no horizontal document overflow",
-    "Add infrastructure dialog dismissed at desktop and narrow widths with the underlying Infrastructure surface restored",
-    "authenticated Actions, Alerts, Infrastructure, General Settings, and Patrol surfaces with reduced motion and no automatically detectable WCAG A/AA violations",
-    "logged-out welcome surface with reduced motion and no automatically detectable WCAG A/AA violations"
+    "Patrol inbox queue with 47-50 mock decisions and the alert-only detail (no mirrored Patrol finding: Lasting decisions explains there is nothing for Patrol to remember and links alert thresholds)",
+    "Attention detail for east-d-service-pool storage usage with a mirrored Patrol finding: Lifecycle short-term note, Lasting decisions listing Remember as expected, Dismiss: Not an issue, Dismiss: Later, Create rule with one-line explanations",
+    "Inline confirmation form for Remember as expected with optional note",
+    "Remembered-decision state (Remembered as expected, note, Reopen finding) after the dismissal, and the four options again after Reopen",
+    "Activity tab findings list with the collapsed \"1 finding mirrors an active alert\" group, expanded to show the demoted finding with Finding options",
+    "Narrow 390px detail layout with stacked lasting decisions and no horizontal overflow"
   ],
   "interactions": [
-    "opened Add infrastructure from its named trigger at desktop and narrow widths and verified the dialog accessible name and description",
-    "inspected final desktop and 390x844 screenshots for placement, clipping, stacking, scrolling, focus treatment, and responsive layout",
-    "verified the dialog bounds stay inside both viewports and the document has no horizontal overflow",
-    "dismissed the dialog with Escape at desktop and narrow widths and verified focus returned to Add infrastructure",
-    "scanned representative authenticated and logged-out surfaces for WCAG A/AA violations and unexpected reduced-motion effects"
+    "Opened the deep-linked attention detail and read the Lifecycle and Lasting decisions sections",
+    "Clicked Remember as expected, typed a note, confirmed; verified via /api/ai/patrol/findings?include_resolved=1 that the mirrored finding carried dismissed_reason=expected_behavior and the note",
+    "Reloaded the detail and confirmed the Remembered as expected state, then clicked Reopen finding and confirmed the finding returned to active with the four decisions offered again",
+    "Switched to the Activity tab, opened Finding options and history, expanded the mirrored-findings group",
+    "Triggered POST /api/ai/patrol/run and confirmed mirrors_alert_id/mirrors_alert_type stamped on the storage finding"
   ]
 }

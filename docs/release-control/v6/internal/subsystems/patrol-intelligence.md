@@ -2498,3 +2498,42 @@ writes through `@/api/resourceOperatorState`; no alert-local mute document is
 created. `ResourceMonitoringPolicyAction.test.tsx` and the resource operator
 state section tests pin provider copy, expected-offline persistence, retirement,
 and compatibility preservation.
+
+### Lasting decisions live on the attention detail
+
+Two users in a row (discussions #1623 and #1699) could not find the durable
+Patrol outcomes because they sat two levels below the Needs attention detail.
+The selected detail in `PatrolAttentionWorkbench.tsx` now owns a `Lasting
+decisions` section beside the alert lifecycle controls. When a Patrol finding
+mirrors the selected alert (same resource, backend-stamped `mirrorsAlertType`
+equal to the item kind, joined by `getLinkedPatrolFindings` in
+`patrolHomePresentation.ts` over the surface-supplied `findings` accessor),
+the section lists Remember as expected, Dismiss: Not an issue, Dismiss: Later,
+and Create rule, each with one line stating what it does and how long it lasts
+(`PATROL_LASTING_DECISIONS`). Choosing one opens an inline confirmation with an
+optional note, or a required reason for a rule, and writes through the existing
+finding actions (`aiIntelligenceStore.dismissFinding`,
+`createSuppressionRuleFromFinding`); the alert lifecycle above is untouched.
+A finding Patrol already remembers shows the remembered decision and a Reopen
+path instead of re-offering the choice; to make that possible
+`usePatrolIntelligenceState.ts` loads Patrol findings with dismissed and
+resolved history included, because a dismissed finding is absent from the
+active-only default set and the detail would otherwise claim Patrol has
+nothing to remember. An alert with no mirrored finding says
+plainly that Patrol has nothing to remember and points at alert thresholds,
+because the only durable control for a bare alert is the alert configuration.
+The temporary controls state in one visible line that acknowledgement and
+suppression are short-term; the former `More ways to manage this issue`
+disclosure is gone.
+
+Flapping is one item, not many. Queue rows and the detail show the backend
+`flapping` label with the transition count; the detail timeline renders a
+one-line flapping summary and keeps every transition under `Show all N
+transitions`. `FindingsPanel.tsx` shows the same label on findings and demotes
+active findings that mirror an active alert (`isAlertMirroredFinding` in
+`frontend-modern/src/utils/findingAlertIdentity.ts`) into a collapsed `N
+findings mirror an active alert` group below the list, where their finding
+options remain available; dismissed and resolved views keep them in place.
+`PatrolAttentionWorkbench.test.tsx` pins the four decisions and their copy, the
+rule reason requirement, the remembered-decision path, the alert-only
+guidance, and the flapping collapse.

@@ -4247,7 +4247,14 @@ titles: provider alarm messages yield their bounded alarm subject, generic
 resource/storage incident types become plain issue language, and known
 acronyms such as CPU, ZFS, and I/O retain their canonical casing. Clients must
 not receive machine-title-cased placeholders such as `Resource Incident` and
-repair them independently. `internal/ai/patrol_metrics.go` exports only
+repair them independently. The projection also collapses open/resolved churn:
+when a record's timeline holds at least four open-to-resolved or
+resolved-to-open transitions inside the last 24 hours, the item carries a
+`flapping` summary (transition count, window, first and latest transition) and
+clients present one item with that label; the full transition list stays in the
+detail timeline as forensic detail. The window and threshold are the shared
+constants in `internal/ai/findings_storm_throttler.go`, so alerts and Patrol
+findings agree on what flapping means. `internal/ai/patrol_metrics.go` exports only
 low-cardinality lifecycle-state counts, queue age, acknowledgement time, and
 calm-evaluation age; raw resource IDs are forbidden as metric labels.
 

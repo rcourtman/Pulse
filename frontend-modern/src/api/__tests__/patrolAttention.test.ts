@@ -26,6 +26,22 @@ describe('Patrol attention API', () => {
     fetchMock.mockResolvedValue({});
   });
 
+  it('returns the backend flapping summary on attention items unchanged', async () => {
+    const flapping = {
+      transitionCount: 11,
+      windowHours: 24,
+      firstTransitionAt: '2026-08-09T15:00:00Z',
+      lastTransitionAt: '2026-08-10T14:30:00Z',
+    };
+    fetchMock.mockResolvedValue({
+      data: [{ id: 'record-flap', flapping }],
+      summary: {},
+      meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
+    });
+    const response = await getPatrolAttention();
+    expect(response.data[0].flapping).toEqual(flapping);
+  });
+
   it('uses one bounded typed list query', async () => {
     await getPatrolAttention('stale_unknown', 2, 40);
     expect(fetchMock).toHaveBeenCalledWith(

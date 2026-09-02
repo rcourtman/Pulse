@@ -75,6 +75,18 @@ type AttentionResource struct {
 	ResourceID string `json:"resourceId"`
 }
 
+// AttentionFlapping summarises an item whose lifecycle keeps moving between
+// open and resolved. It uses the same window and threshold as finding
+// flapping (findings_storm_throttler.go) so alerts and Patrol findings agree
+// on the label. The full transition list stays in the detail timeline; this
+// is the collapsed operator-facing summary.
+type AttentionFlapping struct {
+	TransitionCount   int       `json:"transitionCount"`
+	WindowHours       int       `json:"windowHours"`
+	FirstTransitionAt time.Time `json:"firstTransitionAt"`
+	LastTransitionAt  time.Time `json:"lastTransitionAt"`
+}
+
 type AttentionItem struct {
 	ID                   string                                `json:"id"`
 	OperationalRecordID  string                                `json:"operationalRecordId"`
@@ -96,6 +108,7 @@ type AttentionItem struct {
 	RecommendedNextStep  string                                `json:"recommendedNextStep,omitempty"`
 	AvailableActions     []AttentionActionOffer                `json:"availableActions"`
 	VerificationState    AttentionVerificationState            `json:"verificationState"`
+	Flapping             *AttentionFlapping                    `json:"flapping,omitempty"`
 }
 
 type AttentionItemDetail struct {
@@ -244,6 +257,7 @@ func projectAttentionAlert(
 		RecommendedNextStep:  record.RecommendedNextStep,
 		AvailableActions:     []AttentionActionOffer{},
 		VerificationState:    AttentionVerificationNotAvailable,
+		Flapping:             attentionFlapping(timeline, now),
 	}
 	return AttentionItemDetail{
 		Item:              item,
@@ -251,6 +265,44 @@ func projectAttentionAlert(
 		Timeline:          timeline,
 		Evidence:          evidence,
 	}, true
+}
+
+// attentionFlapping collapses open/resolved churn in the lifecycle timeline
+// into one summary when it crosses the shared flapping threshold. Only
+// transitions that open or resolve the record count; acknowledgement,
+// suppression, and evidence refreshes are operator or detector bookkeeping,
+// not the condition coming and going.
+func attentionFlapping(
+	timeline []operationaltrust.LifecycleTransition,
+	now time.Time,
+) *AttentionFlapping {
+	transitions := make([]time.Time, 0, len(timeline))
+	for _, transition := range timeline {
+		if !attentionTransitionIsFlap(transition) {
+			continue
+		}
+		transitions = append(transitions, transition.At)
+	}
+	summary := summarizeFlapTransitions(transitions, now)
+	if summary == nil {
+		return nil
+	}
+	return &AttentionFlapping{
+		TransitionCount:   summary.TransitionCount,
+		WindowHours:       summary.WindowHours,
+		FirstTransitionAt: summary.FirstTransitionAt,
+		LastTransitionAt:  summary.LastTransitionAt,
+	}
+}
+
+func attentionTransitionIsFlap(transition operationaltrust.LifecycleTransition) bool {
+	if transition.To == operationaltrust.OperationalResolved {
+		return transition.From != operationaltrust.OperationalResolved
+	}
+	if transition.To == operationaltrust.OperationalOpen {
+		return transition.From == operationaltrust.OperationalResolved
+	}
+	return false
 }
 
 func summarizeAttentionEvidence(
