@@ -115,5 +115,65 @@ describe('SecurityStep', () => {
     expect(storedHandoff.createdAt).toEqual(expect.any(String));
     expect(onComplete).toHaveBeenCalledOnce();
     expect(showErrorMock).not.toHaveBeenCalled();
+    // Usage statistics stay on by default, so setup makes no settings write.
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the usage statistics choice and applies an opt-out after the account exists', async () => {
+    const onComplete = vi.fn();
+
+    render(() => (
+      <SecurityStep
+        state={baseState}
+        updateState={vi.fn()}
+        bootstrapToken="bootstrap-token"
+        onComplete={onComplete}
+        onBack={vi.fn()}
+      />
+    ));
+
+    const toggle = screen.getByRole('button', { name: 'Usage statistics' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/never hostnames, credentials, or IP addresses/)).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: /Create Account & Continue/i }));
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    expect(apiFetchJSONMock.mock.calls[0][0]).toBe('/api/security/quick-setup');
+    const [settingsUrl, settingsInit] = apiFetchJSONMock.mock.calls[1] as [string, RequestInit];
+    expect(settingsUrl).toBe('/api/system/settings/update');
+    expect(settingsInit.method).toBe('POST');
+    expect(JSON.parse(String(settingsInit.body))).toEqual({ telemetryEnabled: false });
+    expect(showErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the account when the opt-out write fails and says so', async () => {
+    const onComplete = vi.fn();
+    apiFetchJSONMock
+      .mockResolvedValueOnce({ success: true })
+      .mockRejectedValueOnce(new Error('settings unavailable'));
+
+    render(() => (
+      <SecurityStep
+        state={baseState}
+        updateState={vi.fn()}
+        bootstrapToken="bootstrap-token"
+        onComplete={onComplete}
+        onBack={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usage statistics' }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Account & Continue/i }));
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(showErrorMock).toHaveBeenCalledWith(
+      'Your admin account was created, but usage statistics could not be turned off. You can turn them off in Settings → System → General.',
+    );
   });
 });

@@ -285,7 +285,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
           <div class="flex flex-wrap gap-2 sm:gap-3">
             <Button
-              variant="secondary"
+              variant="primary"
               size="settingsActionXs"
               disabled={props.loadingTelemetryPreview()}
               onClick={() => void props.handleLoadTelemetryPreview()}

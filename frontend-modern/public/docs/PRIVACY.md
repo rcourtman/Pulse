@@ -22,8 +22,11 @@ While mock/demo fixture mode is enabled, Pulse suppresses outbound telemetry ent
 
 #### How to disable
 
+- During first-run setup, switch off **Usage statistics** on the admin-account step, or
 - **Settings → System → General → Outbound usage telemetry** (toggle off), or
 - Set the environment variable `PULSE_TELEMETRY=false`
+
+The first startup ping is sent about two minutes after Pulse starts. The setup and Settings switches stop every later ping; setting `PULSE_TELEMETRY=false` before the first start prevents the first one as well.
 
 #### How to inspect or rotate it
 
@@ -346,6 +349,16 @@ added.
 - No alert content, AI prompts, chat messages, tool names, tool inputs, tool outputs, command text, action output, or token values
 - No names, email addresses, account identifiers, or other intentionally identifying personal content
 
+#### What it is not used for
+
+- It is not sold, licensed, or shared with anyone else. Pulse's maintainer is the only reader, and the only destination is Pulse's own license server.
+- It is not used for advertising, marketing, or outreach of any kind. Nothing in it can address you.
+- It is not linked to a Pulse account, license key, purchase, or email address. The license server never joins telemetry rows to those records.
+- It is not used to single out an install. Reads are aggregate, and the install ID rotates every 30 days.
+- It is not kept: rows are deleted after 90 days.
+
+If any of this ever changes, that is a change in kind under **Payload changes** above and comes with an in-app notice before it takes effect.
+
 #### Install ID rotation
 
 The telemetry install ID is pseudonymous, is not tied to a Pulse account, and rotates automatically every 30 days.
@@ -358,6 +371,29 @@ first v2 observation time, the first monitored-resource milestone time, and the
 highest activation stage reached. This local state contains no user, account,
 resource, URL, or content identifiers. It exists so daily pings can report
 buckets instead of exporting a sequence of setup events.
+
+#### Payload changes
+
+Every change to the payload bumps the schema version, is listed here with its date, and appears in the release notes of the first release that carries it. Pulse does not interrupt existing installations with an in-app notice for a new counter inside an already-disclosed category; **Preview payload** in Settings always shows the exact current contract. An in-app notice is reserved for a change in kind: a new identifier, a new class of data, or a change to retention or handling.
+
+| Schema | Date | Change |
+|--------|------|--------|
+| 17 | 2026-09-02 | Closed Patrol provider class, effective Patrol autonomy level, coarse 30-day Patrol token buckets, and per-outcome investigation counts |
+| 16 | 2026-08-30 | Four content-free workload-history adoption counters, each counted at most once per browser session |
+| 15 | 2026-08-29 | Notification destination HTTP 5xx failures separated from rejected HTTP 4xx responses |
+| 14 | 2026-08-29 | Identity-free alert quality outcomes in closed severity, age, and resolution-time buckets, with tenant denominators |
+| 13 | 2026-08-29 | Local UI/API service observation plus the immediately previous release observation |
+| 12 | 2026-08-27 | Patrol-origin action funnel counters |
+| 11 | 2026-08-24 | Node connection test attempt and failure counts |
+| 10 | 2026-08-21 | Patrol runtime blocked cause, from a fixed category list |
+| 9 | 2026-08-19 | Refusals with no machine reason code separated from refusals with an unrecognised code |
+| 8 | 2026-08-13 | Agent-side pre-mutation refusals split into target-change, prerequisite, and invalid-contract categories |
+| 7 | 2026-08-05 | `audit_reads_30d` replaces `audit_logging_persistent` and `audit_events_30d` |
+| 6 | 2026-08-05 | Licensed-feature adoption counts; the never-populated Patrol autofix counter removed |
+| 5 | 2026-07-29 | Bounded, content-free notification failure classes |
+| 4 | 2026-07-27 | Complete approved-action outcome accounting, fixed pre-dispatch refusal categories, and verified finding-resolution linkage |
+| 3 | 2026-07-23 | `notification_failures_7d` becomes a terminal-delivery count |
+| 2 | 2026-07-23 | Coarse deployment, lifecycle, and estate-size buckets plus aggregate alert and notification outcome signals |
 
 #### Source code
 

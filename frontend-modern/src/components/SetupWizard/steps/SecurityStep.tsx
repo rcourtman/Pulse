@@ -3,6 +3,8 @@ import { t } from '@/i18n';
 import { showError } from '@/utils/toast';
 import { setApiToken as setApiClientToken, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { SettingsAPI } from '@/api/settings';
+import { Toggle } from '@/components/shared/Toggle';
 import type { WizardState } from '../SetupWizard';
 
 interface SecurityStepProps {
@@ -23,6 +25,11 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [confirmPassword, setConfirmPassword] = createSignal('');
   const [showPassword, setShowPassword] = createSignal(false);
   const [isSettingUp, setIsSettingUp] = createSignal(false);
+  // Outbound usage telemetry stays on by default; this is the first
+  // authenticated moment where the operator can decide, so the choice lives
+  // here instead of as an environment-variable instruction that arrives after
+  // the process has already started.
+  const [shareUsageStatistics, setShareUsageStatistics] = createSignal(true);
 
   const generatePassword = () => {
     const password: string[] = [];
@@ -107,6 +114,17 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           );
         } catch (_err) {
           // Ignore storage errors (private browsing, quota limits, etc.)
+        }
+      }
+
+      if (!shareUsageStatistics()) {
+        // The admin token is already active, so the preference is written
+        // through the canonical system-settings path rather than a setup-only
+        // side channel. The account exists either way; only report the miss.
+        try {
+          await SettingsAPI.updateSystemSettings({ telemetryEnabled: false });
+        } catch {
+          showError(t('setup.security.error.telemetryDisableFailed'));
         }
       }
 
@@ -209,6 +227,15 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           <Show when={!useCustomPassword()}>
             <p class="text-sm text-muted">{t('setup.security.generatedPasswordHelp')}</p>
           </Show>
+        </div>
+
+        <div class="bg-base rounded-md p-4 border border-border text-left">
+          <Toggle
+            checked={shareUsageStatistics()}
+            onChange={() => setShareUsageStatistics(!shareUsageStatistics())}
+            label={t('setup.security.telemetry.title')}
+            description={t('setup.security.telemetry.description')}
+          />
         </div>
 
         <div class="bg-base rounded-md p-4 border border-border text-left">

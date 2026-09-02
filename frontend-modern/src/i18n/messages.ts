@@ -84,6 +84,8 @@ export const EN_MESSAGES = {
   'setup.security.error.passwordRequired': 'Please enter a password',
   'setup.security.error.passwordTooShort': 'Password must be at least 12 characters',
   'setup.security.error.setupFailed': 'Setup failed: {error}',
+  'setup.security.error.telemetryDisableFailed':
+    'Your admin account was created, but usage statistics could not be turned off. You can turn them off in Settings → System → General.',
   'setup.security.generatedPasswordHelp':
     'A secure 20-character password will be generated and shown on the next screen.',
   'setup.security.label.confirmPassword': 'Confirm password',
@@ -99,10 +101,16 @@ export const EN_MESSAGES = {
   'setup.security.placeholder.username': 'admin',
   'setup.security.showPassword.hide': 'Hide',
   'setup.security.showPassword.show': 'Show',
+  'setup.security.telemetry.description':
+    'Send a small daily usage summary so the features and platforms you rely on get priority. It holds counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, or IP addresses. It is never sold or shared and is not linked to a Pulse account. Change this at any time in Settings.',
+  'setup.security.telemetry.title': 'Usage statistics',
   'setup.security.title': 'Create your admin account',
   'setup.step.firstSource': 'First source',
   'setup.step.security': 'Security',
   'setup.step.unlockServer': 'Unlock server',
+  'setup.welcome.telemetryNotice.description':
+    'Pulse sends a small daily usage summary showing which releases are deployed and which features and platforms are in use, so development effort goes where Pulse is actually used. It holds counts and on/off flags with a rotating pseudonymous install ID, never hostnames, credentials, IP addresses, or anything you type. It is never sold, shared, or used for advertising, and it is not linked to a Pulse account or license. It is on by default. You choose on the next step and can change it at any time in Settings.',
+  'setup.welcome.telemetryNotice.title': 'Usage statistics',
   'setup.wizard.ariaLabel': 'Pulse Setup Wizard',
   'alerts.activation.label.enabled': 'Notifications enabled',
   'alerts.activation.label.disabled': 'Notifications paused',
@@ -314,10 +322,7 @@ export const EN_MESSAGES = {
   'setup.welcome.hero.title': 'Welcome to Pulse',
   'setup.welcome.placeholder.bootstrapToken': 'Paste your bootstrap token',
   'setup.welcome.success.commandCopied': 'Command copied to clipboard',
-  'setup.welcome.telemetryNotice.description':
-    'Outbound usage telemetry is on by default. Pulse sends a delayed startup ping and daily heartbeat with a rotating pseudonymous install ID, release/runtime details, aggregate counts, and feature flags. To disable it before any ping, set PULSE_TELEMETRY=false before starting Pulse. You can also turn it off later in Settings.',
   'setup.welcome.telemetryNotice.detailsLink': 'Full details',
-  'setup.welcome.telemetryNotice.title': 'Usage telemetry is enabled by default',
   'setup.welcome.tokenHelp.afterVerify':
     'After Pulse verifies this token, the next step is creating the admin account for this server.',
   'setup.welcome.tokenHelp.docker':
@@ -369,22 +374,14 @@ export const EN_MESSAGES = {
   'settings.general.monitoringCadence.section.description':
     'Control how frequently Pulse polls Proxmox VE nodes.',
   'settings.general.monitoringCadence.section.title': 'Monitoring cadence',
+  'settings.general.telemetry.description':
+    'Help improve Pulse by sharing a daily usage summary. Preview payload shows exactly what would be sent: a rotating pseudonymous install ID, normalized release identity, runtime platform, coarse deployment and lifecycle buckets, aggregate resource and outcome counts, coarse feature flags, content-free Patrol, Assistant, and capability-API usage counters, and four session-deduplicated workload-history adoption counts. It never includes hostnames, credentials, infrastructure identifiers, URLs, paths, locale, raw browser events, an event-level clickstream, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. It is never sold, shared with anyone else, or used for advertising, and it is not linked to a Pulse account or license. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
   'settings.general.temperature.description': 'Display temperatures in Celsius or Fahrenheit.',
   'settings.general.temperature.title': 'Temperature unit',
   'settings.general.telemetry.copyJson': 'Copy JSON',
-  'settings.general.telemetry.description':
-    'Help improve Pulse by sharing outbound usage data: a rotating pseudonymous install ID, normalized release identity, runtime platform, coarse deployment and lifecycle buckets, aggregate resource and outcome counts, coarse feature flags, content-free Patrol, Assistant, and capability-API usage counters, and four session-deduplicated workload-history adoption counts. The payload does not include hostnames, credentials, infrastructure identifiers, URLs, paths, locale, raw browser events, an event-level clickstream, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
   'settings.general.telemetry.disabledPreview':
     'Telemetry is currently disabled. This preview shows the payload Pulse would send if you enable it.',
   'settings.general.telemetry.fullDetails': 'Full details',
-  'settings.general.telemetry.notice.description':
-    'Pulse now adds four content-free, session-deduplicated workload-history adoption counts when outbound usage telemetry is enabled. It still excludes personal details, infrastructure IDs, content, raw browser events, and event-level clickstream data.',
-  'settings.general.telemetry.notice.disable': 'Disable telemetry',
-  'settings.general.telemetry.notice.dismissLabel': 'Dismiss telemetry payload update',
-  'settings.general.telemetry.notice.dismissTitle': 'Dismiss permanently',
-  'settings.general.telemetry.notice.preview': 'Preview payload',
-  'settings.general.telemetry.notice.privacy': 'Privacy details',
-  'settings.general.telemetry.notice.title': 'Telemetry payload updated',
   'settings.general.telemetry.payloadAriaLabel': 'Telemetry payload preview',
   'settings.general.telemetry.payloadTitle': 'Current heartbeat payload',
   'settings.general.telemetry.previewPayload': 'Preview payload',
@@ -578,13 +575,6 @@ export const SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS = [
   'settings.general.telemetry.description',
   'settings.general.telemetry.disabledPreview',
   'settings.general.telemetry.fullDetails',
-  'settings.general.telemetry.notice.description',
-  'settings.general.telemetry.notice.disable',
-  'settings.general.telemetry.notice.dismissLabel',
-  'settings.general.telemetry.notice.dismissTitle',
-  'settings.general.telemetry.notice.preview',
-  'settings.general.telemetry.notice.privacy',
-  'settings.general.telemetry.notice.title',
   'settings.general.telemetry.payloadAriaLabel',
   'settings.general.telemetry.payloadTitle',
   'settings.general.telemetry.previewPayload',
@@ -672,6 +662,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.security.error.passwordRequired',
   'setup.security.error.passwordTooShort',
   'setup.security.error.setupFailed',
+  'setup.security.error.telemetryDisableFailed',
   'setup.security.generatedPasswordHelp',
   'setup.security.label.confirmPassword',
   'setup.security.label.password',
@@ -686,6 +677,8 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.security.placeholder.username',
   'setup.security.showPassword.hide',
   'setup.security.showPassword.show',
+  'setup.security.telemetry.description',
+  'setup.security.telemetry.title',
   'setup.security.title',
   'setup.step.firstSource',
   'setup.step.security',
