@@ -4978,3 +4978,19 @@ boundary. `scripts/check_workflow_trust.py`,
 `scripts/tests/test_workflow_trust.py`, and
 `scripts/installtests/build_release_assets_test.go` pin the policy and the
 release-workflow integration.
+
+### Stable promotion ships the soaked candidate, not the branch tip
+
+The promotion resolver now compares the promoted release candidate's commit
+with the dispatch head. A stable promotion may differ from its candidate only
+in release metadata: `VERSION`, the Helm chart version and README, the compose
+default image, `docs/RELEASE_NOTES.md`, `docs/UPGRADE_v6.md` and its shipped
+docs mirror, `docs/releases/`, release-control records, this contract, and
+`status.json`. Any other path refuses the promotion unless `hotfix_exception`
+names active customer harm, because that content was never soaked. Minor
+releases (`X.Y.0`) additionally require a seven day soak; patches keep 72
+hours. `docs/release-control/control_plane.json` declares `release/v6.5` for
+the first release train so the workflow refuses a v6.5 dispatch from any other
+branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
+allowlist, the drift refusal, the hotfix path, and the minor soak;
+`release_promotion_policy_test.py` pins the policy's Release Train section.

@@ -233,6 +233,53 @@ TLS-unverified receipts leave the claim at `implemented` or
 6. Failed prereleases are fixed forward and replaced with a new prerelease. They are never
    promoted as-is to `stable`.
 
+## Release Train
+
+Adopted 2026-09-01 under the delivery contract
+(`pulse-dev-infra/docs/delivery-contract.md`). The train exists so that a
+stable release is an exact soaked candidate rather than the tip of a branch
+that keeps moving, and so that the always-running maintainer can release
+without the other lanes changing the candidate underneath it.
+
+1. A minor train runs every two weeks. The first candidate is cut on a
+   fixed day and time, Tuesday 09:00 Europe/London, and general availability
+   is the Tuesday one week later; the next train's candidate is cut the
+   Tuesday after that. The first train is v6.5.0: `v6.5.0-rc.1` on
+   2026-09-08, general availability on 2026-09-15, then `v6.6.0-rc.1` on
+   2026-09-22. The cadence follows measured velocity, not preference: at the
+   70 to 150 commits a day `main` received in the week before adoption, a
+   four-week train would put two to four thousand commits into every user
+   upgrade, and a two-week train halves that while keeping a full seven day
+   soak. The release steward reviews the cadence against velocity after
+   every third train and records the decision here.
+2. Each train has its own branch, `release/v6.N`, created from `main` at cut
+   time and declared in `docs/release-control/control_plane.json` so the
+   release workflow refuses a dispatch from any other branch. `main` is never
+   frozen. A fix for something found in the candidate is backported to the
+   release branch through a pull request; each backport produces the next
+   `rc.N` and restarts the soak. After general availability the branch is
+   the patch line for that train.
+3. General availability promotes the candidate's content. The resolver
+   refuses a stable promotion whose tree differs from the promoted candidate
+   in anything but release metadata (version, chart, compose, release notes,
+   upgrade guide, release records) unless `hotfix_exception` names active
+   customer harm. The v6.4.0 promotion, which shipped 64 changed files that
+   `v6.4.0-rc.12` had not soaked, is the case this rule prevents.
+4. A minor release (`X.Y.0`) requires a seven day soak of the promoted
+   candidate; patch releases keep the 72 hour minimum. Patch releases are for
+   a named regression or security issue only.
+5. "Soaked clean" means all of: the soak has elapsed since the candidate's
+   release was published; no open issue labelled `affects-<candidate
+   version>` is at high or critical severity; the maintainer's dogfood
+   instance and the demo server ran the candidate for the whole soak without
+   an incident; and preview-channel telemetry, where it exists, shows no
+   elevated failure rate. The release steward names this evidence in the
+   packet.
+6. Version-bound owner exceptions waived the soak for v6.0.0, v6.1.0,
+   v6.2.0, v6.3.0, and v6.4.0. They remain recorded and bounded; the train
+   does not continue the practice. An exception requires active customer
+   harm and is recorded in the release notes.
+
 ## Paid Pro Artifact Lineage
 
 1. Customer-facing private Pulse Pro archives and private Pulse Pro Docker images

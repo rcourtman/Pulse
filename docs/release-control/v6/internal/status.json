@@ -9975,6 +9975,38 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "release-train-exact-candidate-promotion",
+      "summary": "Stable promotions built whatever the dispatch branch was at that second: the resolver checked that HEAD descends from the promoted RC but not that its content matches, so v6.4.0 shipped 64 changed files that v6.4.0-rc.12 never soaked, and every v6 version was mapped to main, which moves every few minutes under the autonomous maintainer. The release train needs a branch per train declared in the control plane, a resolver rule that refuses stable content beyond release metadata without a recorded hotfix reason, and a seven day soak for minor releases so the two-week cadence carries a real soak.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-09-01",
+      "lane_ids": [
+        "L1"
+      ],
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 5,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/control_plane.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/resolve_release_promotion.py",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
