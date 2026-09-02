@@ -69,6 +69,34 @@ class RootfulAttestationV1Test(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
+    def test_isolated_path_loader_resolves_exact_sibling_validator(self) -> None:
+        module_path = Path(attester.__file__).resolve()
+        probe = """
+import importlib.util
+import pathlib
+import sys
+
+module_path = pathlib.Path(sys.argv[1]).resolve(strict=True)
+spec = importlib.util.spec_from_file_location("rootful_validator", module_path)
+if spec is None or spec.loader is None:
+    raise SystemExit("unable to create rootful validator spec")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+if module.MAX_RECEIPT_BYTES <= 0:
+    raise SystemExit("rootful validator did not load hardened sibling constants")
+"""
+        result = subprocess.run(
+            [sys.executable, "-I", "-c", probe, str(module_path)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_hardened_validator_is_loaded_from_exact_sibling_path(self) -> None:
+        expected = Path(attester.__file__).resolve().with_name("secure_runtime_rootless_attestation_v1.py")
+        self.assertEqual(Path(attester.hardened.__file__).resolve(), expected)
+
     @staticmethod
     def ts(index: int) -> str:
         value = datetime(2026, 9, 1, 10, tzinfo=timezone.utc) + timedelta(minutes=index)
