@@ -10522,3 +10522,23 @@ and registered in `router_routes_ai_relay.go`, listed in
 `route_inventory_test.go`, and documented in `docs/API.md` and its public
 mirror. The frontend client lives in `frontend-modern/src/api/aiPatrolCost.ts`
 with `aiPatrolCost.test.ts` pinning the query encoding.
+
+### Patrol weekly digest is an additive read endpoint
+
+`GET /api/ai/patrol/digest?days=N` (1–30, default 7) is a new `ai:execute`
+scoped read. It returns `generated_at`, `window` (`start`, `end`, `days`,
+`history_complete`, optional `history_since`), `mode`, and the `runs`,
+`findings`, `investigations`, `actions`, `alerts`, and `spend` rollups defined
+in `internal/ai/patrol_digest.go` and mirrored by `PatrolDigest` in
+`frontend-modern/src/api/patrol.ts`. Every count is derived from records Pulse
+already retains; the endpoint persists nothing and adds no telemetry fields.
+A missing AI or Patrol service returns the same zero-valued shape rather than
+an error so clients can render an honest "Patrol has not run" state, and
+`investigations.by_outcome` always serialises as an object. An out-of-range
+`days` returns `400 invalid_patrol_digest_days`. The endpoint is documented in
+`docs/API.md` and its shipped mirror. Proofs:
+`internal/api/ai_patrol_digest_handler_test.go`,
+`internal/api/route_inventory_test.go`,
+`internal/api/security_regression_test.go`,
+`frontend-modern/src/api/__tests__/patrol.test.ts`, and
+`frontend-modern/src/utils/__tests__/docsLinks.test.ts`.

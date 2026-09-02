@@ -10023,52 +10023,6 @@
       ]
     },
     {
-      "id": "ai-provider-guided-setup",
-      "summary": "Paying installs choose a Patrol model and schedule with no guidance on which models work with Patrol or what a schedule costs: 38 of 120 paid installs had no AI provider and 12 more had AI without Patrol in the 2026-09-01 assessment, a Pro customer picked Gemini Flash-Lite to save money and Patrol could not file verdicts, and a mispriced Opus row tripped the 20 USD budget and silently disabled Patrol (issue 1789). The provider settings need recommended, suggested, and caution markers drawn from the qualified set and known failures, a projected monthly Patrol cost from the price table and the install's run history, a cost-model schedule default for per-token providers, and a visible Patrol pause with a budget action when the budget is used up.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-09-02",
-      "lane_ids": [
-        "L6",
-        "L8"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "frontend-primitives",
-        "patrol-intelligence"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/AI_PATROL_QUALIFICATION.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/patrol_cost_projection.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/patrol_model_guidance.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/api/ai_patrol_cost_preview.go",
-          "kind": "file"
-        }
-      ]
-    },
-    {
       "id": "patrol-findings-hygiene-attention-noise",
       "summary": "Two users in a row (discussions #1623 and #1699) could not find Patrol's durable outcomes because Remember as expected, Dismiss: Not an issue, Dismiss: Later, and Create rule sat two levels below the Needs attention detail, which offered only Acknowledge and Suppress. The same screenshot showed an alert with eleven open/resolved transitions in a day rendered as eleven timeline rows, and Patrol findings that restate an active alert (same resource, same condition) listed as separate items. Telemetry on 2026-09-01 showed 4,709 findings across 736 installs but only 255 investigations across 27, so most findings are seen and ignored. Attention needs: alert-mirroring findings folded under the alert, flapping collapsed to one labelled item with a count, and the durable decisions on the detail with one-line explanations.",
       "owner": "project-owner",
@@ -10098,6 +10052,45 @@
         {
           "repo": "pulse",
           "path": "internal/ai/findings_storm_throttler.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "patrol-value-visibility",
+      "summary": "Nothing in Pulse shows a paying customer what Patrol has done for them. Patrol runs roughly 164 times per install per month, raises findings, investigates, proposes and executes fixes, and records model spend, but no surface adds that up: run history is per run, findings are per finding, action audits live under Actions, and spend sits on the AI cost dashboard. The 2026-09-01 assessment found 33 of 175 Pro subscriptions past due and 80 percent of paying installs never seeing the paid loop fire; a customer who cannot see the work stops paying for it. The gap is a read-only rollup over records Pulse already keeps, first as an in-app card on the Patrol page and second as a weekly email through existing notification channels.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-09-02",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 4,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/PATROL_WEEKLY_DIGEST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/cost/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol.go",
           "kind": "file"
         }
       ]
@@ -10194,6 +10187,30 @@
         "telemetry: 2026-09-01 clean basis, 38 of 120 paid installs without an AI provider and 12 more without Patrol",
         "named-bet: cloud starting points are price-driven and labelled unqualified until the install's own readiness pass verifies them"
       ]
+    },
+    {
+      "id": "patrol-weekly-digest",
+      "name": "Patrol Weekly Digest",
+      "summary": "Show paying customers what Patrol did for them: a read-only weekly rollup of runs, findings raised and resolved, investigations, Patrol-origin actions, alerts reviewed, estimated model spend, and the current mode, computed only from records Pulse already retains. The first slice is the aggregation endpoint and an in-app This week card on the Patrol page; the weekly email through existing notification channels is the unscheduled second slice.",
+      "status": "proposed",
+      "recorded_at": "2026-09-02",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L6"
+      ],
+      "coverage_gap_ids": [
+        "patrol-value-visibility"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "demand_evidence": [
+        "named-bet: the 2026-09-01 assessment found nothing in Pulse shows a customer what Patrol did for them while 33 of 175 Pro subscriptions are past due and 80 percent of paying installs never saw the paid loop fire",
+        "product-demand: pulse-pro/FEATURE_REQUESTS.md#patrol-weekly-digest-what-patrol-did-for-you",
+        "design-note: docs/PATROL_WEEKLY_DIGEST.md"
+      ]
     }
   ],
   "work_claims": [
@@ -10208,6 +10225,19 @@
       "work_item": {
         "kind": "candidate-lane",
         "id": "ai-provider-guided-setup"
+      }
+    },
+    {
+      "id": "claude-patrol-digest-candidate-lane-patrol-weekly-digest",
+      "agent_id": "claude-patrol-digest",
+      "summary": "Patrol weekly digest: aggregation endpoint and in-app This week card",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-09-02T05:37:43Z",
+      "heartbeat_at": "2026-09-02T05:37:43Z",
+      "expires_at": "2026-09-02T11:37:43Z",
+      "work_item": {
+        "kind": "candidate-lane",
+        "id": "patrol-weekly-digest"
       }
     }
   ],
