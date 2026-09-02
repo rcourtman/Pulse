@@ -174,7 +174,16 @@ describe('AppLayout navigation icons', () => {
     expect(container.querySelector('.pulse-shell')).toHaveClass('pb-safe-or-14');
     expect(container.querySelector('.pulse-shell')).not.toHaveClass('pb-safe-or-16');
     expect(container.querySelector('.header')).toHaveClass('mb-1', 'sm:mb-3');
-    expect(container.querySelector('main')).toHaveClass('mb-1', 'sm:mb-2');
+    const main = container.querySelector('main');
+    expect(main).toHaveClass('mb-1', 'sm:mb-2');
+    expect(main).toHaveAttribute('id', 'main');
+    expect(main).toHaveAttribute('tabindex', '-1');
+    const skipLink = screen.getByRole('link', { name: 'Skip to main content' });
+    expect(skipLink).toHaveAttribute('href', '#main');
+    fireEvent.click(skipLink);
+    expect(main).toHaveFocus();
+    expect(screen.getByText('Preview')).toHaveClass('bg-orange-700', 'text-white');
+    expect(screen.getByText('Preview')).not.toHaveClass('bg-orange-500');
     expect(container.querySelector('footer')).toHaveClass('pulse-footer', 'px-2', 'sm:px-4');
 
     const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });

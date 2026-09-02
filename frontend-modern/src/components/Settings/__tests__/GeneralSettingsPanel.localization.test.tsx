@@ -86,6 +86,14 @@ describe('GeneralSettingsPanel localization', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Usage data and privacy')).toBeInTheDocument();
     expect(screen.getByText('Outbound usage telemetry')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Full-width mode' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Outbound usage telemetry' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('button', { name: 'Preview payload' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reset ID' })).toBeInTheDocument();
     expect(screen.getByText('Monitoring cadence')).toBeInTheDocument();
