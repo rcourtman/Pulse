@@ -55,7 +55,7 @@ function MobileNavDestinationContent(props: {
                 </span>
               </Show>
               <Show when={badges().warning > 0}>
-                <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-900">
+                <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-800">
                   {badges().warning}
                 </span>
               </Show>
@@ -66,7 +66,7 @@ function MobileNavDestinationContent(props: {
           {(count) => (
             <span
               aria-hidden="true"
-              class="absolute -right-2 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-900"
+              class="absolute -right-2 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-800"
             >
               {count()}
             </span>

@@ -7,6 +7,7 @@ import { SecurityWarning } from './components/SecurityWarning';
 import { Login } from './components/Login';
 import { logger } from './utils/logger';
 import { UpdateBanner } from './components/UpdateBanner';
+import { SkipToContentLink } from './components/shared/SkipToContentLink';
 import { WhatsNewCard } from './components/WhatsNewCard';
 import { DemoBanner } from './components/DemoBanner';
 import { CommercialMigrationBanner } from './components/CommercialMigrationBanner';
@@ -532,6 +533,10 @@ function App() {
                 >
                   <WebSocketContext.Provider value={runtime.enhancedStore()!}>
                     <DarkModeContext.Provider value={runtime.darkMode}>
+                      {/* First focusable element in the document: the skip link
+                          has to precede the banners below, or Tab from the page
+                          start lands on a banner control instead. */}
+                      <SkipToContentLink />
                       {/* Global banners deep-link into settings (security
                           hardening, telemetry preferences, license management),
                           so they are for sessions that can actually reach those

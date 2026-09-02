@@ -11,6 +11,8 @@ import {
   setMockMode,
   getMockMode,
   trackBrowserRequests,
+  primaryNavigation,
+  primaryNavigationLink,
 } from '../helpers';
 
 /**
@@ -142,12 +144,12 @@ test.describe.serial('Journey: Bootstrap → Login → Infrastructure', () => {
 
     await ensureJourneyReady(page);
 
-    // Wait for the primary navigation tablist to render before checking individual
+    // Wait for the primary navigation to render before checking individual
     // tabs. After login redirect, the SPA may still be hydrating the layout.
-    // Target the specific aria-label to avoid matching other tablists (e.g. mobile nav).
+    // Target the specific aria-label to avoid matching other navigation (e.g. mobile nav).
     await expect(
-      page.locator('[role="tablist"][aria-label="Primary navigation"]'),
-      'Primary navigation tablist should render',
+      primaryNavigation(page),
+      'Primary navigation should render',
     ).toBeVisible({ timeout: 15_000 });
 
     // Core navigation tabs. The IA is platform-first: there is no single
@@ -161,7 +163,7 @@ test.describe.serial('Journey: Bootstrap → Login → Infrastructure', () => {
     ];
 
     for (const tabName of expectedTabs) {
-      const tab = page.locator('[role="tab"]').filter({ hasText: tabName }).first();
+      const tab = primaryNavigationLink(page, new RegExp(tabName)).first();
       await expect(
         tab,
         `Navigation tab "${tabName}" should be visible`,
