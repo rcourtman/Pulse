@@ -108,6 +108,7 @@ func TestSecureRuntimeRootfulQualification(t *testing.T) {
 	runtimeKind := strings.TrimSpace(os.Getenv("PULSE_ROOTFUL_RUNTIME"))
 	receiptPath := strings.TrimSpace(os.Getenv("PULSE_ROOTFUL_RECEIPT"))
 	rootfulQualRequireDisposableHost(t, runtimeKind, receiptPath)
+	rootfulQualAssertSystemContainerdDisabled(t)
 
 	collector := secureRuntimeReadArtifact(t, "PULSE_SECURE_RUNTIME_COLLECTOR")
 	collectorSignature := secureRuntimeReadSignature(t, "PULSE_SECURE_RUNTIME_COLLECTOR_SIGNATURE")
@@ -510,6 +511,38 @@ func rootfulQualStopDaemon(t *testing.T, daemon rootfulQualDaemon) {
 	t.Helper()
 	rootlessQualStopUnit(t, daemon.unit)
 	_ = os.Remove(daemon.socket)
+	if daemon.runtime == "docker" {
+		rootfulQualWaitNoContainerd(t, 20*time.Second)
+	}
+}
+
+func rootfulQualAssertSystemContainerdDisabled(t *testing.T) {
+	t.Helper()
+	unitState := rootlessQualCommand(t, 10*time.Second, "systemctl", "show", "containerd.service", "--property=UnitFileState", "--value")
+	activeState := rootlessQualCommand(t, 10*time.Second, "systemctl", "show", "containerd.service", "--property=ActiveState", "--value")
+	if unitState != "masked" || activeState != "inactive" {
+		t.Fatalf("distro containerd service must be masked and inactive: UnitFileState=%q ActiveState=%q", unitState, activeState)
+	}
+	rootfulQualWaitNoContainerd(t, 5*time.Second)
+}
+
+func rootfulQualWaitNoContainerd(t *testing.T, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		output, err := rootlessQualCommandError(3*time.Second, "pgrep", "-x", "containerd")
+		if err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+				return
+			}
+			t.Fatalf("inspect containerd processes: %v\n%s", err, output)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("containerd process remained after explicit Docker daemon stop: %s", strings.TrimSpace(output))
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func rootfulQualRuntimeCommand(t *testing.T, daemon rootfulQualDaemon, timeout time.Duration, args ...string) string {
@@ -731,10 +764,19 @@ func rootfulQualRemoveRuntimeState(t *testing.T, daemon rootfulQualDaemon) {
 			t.Fatalf("remove disposable runtime path %s: %v", path, err)
 		}
 	}
+	if daemon.runtime == "podman" {
+		if err := os.Remove(filepath.Dir(daemon.socket)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("remove disposable Podman socket directory: %v", err)
+		}
+	}
 }
 
 func rootfulQualRuntimeStateClean(daemon rootfulQualDaemon) bool {
-	for _, path := range []string{daemon.socket, daemon.dataRoot, daemon.runRoot, daemon.fixture} {
+	paths := []string{daemon.socket, daemon.dataRoot, daemon.runRoot, daemon.fixture}
+	if daemon.runtime == "podman" {
+		paths = append(paths, filepath.Dir(daemon.socket))
+	}
+	for _, path := range paths {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return false
 		}
@@ -1015,6 +1057,7 @@ func TestRootfulQualificationWrapperInvariants(t *testing.T) {
 		"https://github.com/rcourtman/Pulse.git", "refs/remotes/origin/main", "refs/heads/main",
 		"PULSE_ROOTFUL_UBUNTU_IMAGE", "PULSE_ROOTFUL_BOUND_PROBE_BINARY",
 		"rootful_qualification_systemd_readiness",
+		"containerd.service",
 		"podman-auto-update.service", "podman-auto-update.timer",
 		"podman-clean-transient.service", "podman-restart.service",
 		rootfulQualBoundProbe,
@@ -1039,6 +1082,10 @@ func TestRootfulQualificationSystemdReadiness(t *testing.T) {
 	fakeDocker := filepath.Join(binDir, "docker")
 	fake := `#!/bin/sh
 case "$*" in
+  *"systemctl is-system-running"*)
+    printf '%s\n' "${FAKE_SYSTEMD_MANAGER_STATE:-starting}"
+    [ "${FAKE_SYSTEMD_MANAGER_STATE:-starting}" = running ]
+    ;;
   *"systemctl show --property=ActiveState --value multi-user.target"*)
     printf '%s\n' "${FAKE_SYSTEMD_TARGET_STATE:-inactive}"
     ;;
@@ -1056,21 +1103,26 @@ esac
 	}
 
 	tests := []struct {
-		name        string
-		targetState string
-		failedUnits string
-		wantExit    int
-		wantOutput  string
+		name         string
+		managerState string
+		targetState  string
+		failedUnits  string
+		wantExit     int
+		wantOutput   string
 	}{
-		{name: "target inactive", targetState: "inactive", wantExit: 1},
-		{name: "clean multi-user target", targetState: "active", wantExit: 0},
-		{name: "failed unit", targetState: "active", failedUnits: "podman-restart.service loaded failed failed", wantExit: 2, wantOutput: "podman-restart.service"},
+		{name: "manager starting", managerState: "starting", targetState: "active", wantExit: 1},
+		{name: "target inactive", managerState: "running", targetState: "inactive", wantExit: 1},
+		{name: "clean running manager", managerState: "running", targetState: "active", wantExit: 0},
+		{name: "degraded manager", managerState: "degraded", targetState: "active", wantExit: 2, wantOutput: "degraded"},
+		{name: "maintenance manager", managerState: "maintenance", targetState: "active", wantExit: 2, wantOutput: "maintenance"},
+		{name: "failed unit", managerState: "running", targetState: "active", failedUnits: "podman-restart.service loaded failed failed", wantExit: 2, wantOutput: "podman-restart.service"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cmd := exec.Command("bash", "-c", `source "$1"; rootful_qualification_systemd_readiness fixture`, "bash", runtimeScript)
 			cmd.Env = append(os.Environ(),
 				"PATH="+binDir+":"+os.Getenv("PATH"),
+				"FAKE_SYSTEMD_MANAGER_STATE="+test.managerState,
 				"FAKE_SYSTEMD_TARGET_STATE="+test.targetState,
 				"FAKE_SYSTEMD_FAILED_UNITS="+test.failedUnits,
 			)

@@ -328,9 +328,12 @@ packet. The explicit
 network-isolated Ubuntu/systemd hosts for real rootful Docker and Podman and
 never mounts a host daemon socket. The disposable image masks the distro's
 Docker and Podman service, socket, auto-update, transient-cleanup, and restart
-units before first boot, so strict systemd readiness cannot be confused with
-expected nested-runtime housekeeping failures; each scenario starts only its
-explicit runtime-specific daemon unit. Its standalone schema-v1 receipt binds the
+units plus the distro containerd service before first boot, so exact systemd
+running state cannot be confused with expected nested-runtime housekeeping
+failures. Each scenario starts only its explicit runtime-specific daemon unit,
+rechecks zero failed units before receipt acceptance, proves the explicit
+Docker daemon's child containerd exits, and removes the complete Podman socket
+boundary during cleanup. Its standalone schema-v1 receipt binds the
 exact canonical remote-main commit, immutable Ubuntu base-image digest,
 qualification, collector, helper, installer, every compiled installtests
 package input, source manifest, canonical root-owned socket, summary inventory,

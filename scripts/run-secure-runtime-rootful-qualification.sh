@@ -265,6 +265,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     for unit in \
       docker.service docker.socket \
+      containerd.service \
       podman.service podman.socket \
       podman-auto-update.service podman-auto-update.timer \
       podman-clean-transient.service podman-restart.service; do \
@@ -332,7 +333,7 @@ run_runtime() {
     fi
     if (( readiness_status == 2 )); then
       capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
-      echo "ERROR: ${runtime_name} disposable systemd container reached multi-user.target with failed units" >&2
+      echo "ERROR: ${runtime_name} disposable systemd container entered a terminal non-running state or has failed units" >&2
       return 1
     fi
     if (( SECONDS >= deadline )); then
@@ -374,9 +375,17 @@ run_runtime() {
       -e PULSE_SECURE_RUNTIME_INSTALLER=/opt/pulse/packet/install.sh \
       "${container_id}" /opt/pulse/packet/dockeragent.test \
         -test.run '^TestSecureRuntimeRootfulQualification$' -test.count=1 -test.v -test.timeout=45m \
-        | tee "${OUTPUT_DIR}/${runtime_name}-test.log"; then
+      | tee "${OUTPUT_DIR}/${runtime_name}-test.log"; then
     capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
     chmod 0600 "${OUTPUT_DIR}/${runtime_name}-test.log"
+    return 1
+  fi
+  readiness_status=0
+  rootful_qualification_systemd_readiness "${container_id}" || readiness_status=$?
+  if (( readiness_status != 0 )); then
+    capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
+    chmod 0600 "${OUTPUT_DIR}/${runtime_name}-test.log"
+    echo "ERROR: ${runtime_name} systemd readiness changed before receipt acceptance" >&2
     return 1
   fi
   docker exec "${container_id}" test -f /opt/pulse/result/rootful-receipt.json || {
