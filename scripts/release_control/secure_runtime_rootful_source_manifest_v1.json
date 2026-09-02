@@ -11,6 +11,7 @@
     "pkg/agents/docker/report_limits.go",
     "scripts/install.sh",
     "scripts/release_ldflags.sh",
+    "scripts/installtests/agent_id_recovery_unix_test.go",
     "scripts/installtests/agent_state_dir_lifecycle_test.go",
     "scripts/installtests/backfill_release_assets_test.go",
     "scripts/installtests/build_release_assets_test.go",
