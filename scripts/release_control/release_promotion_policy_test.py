@@ -585,6 +585,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         release_workflow = read(".github/workflows/create-release.yml")
         convergence = read(".github/workflows/release-convergence.yml")
         retry = read(".github/workflows/retry-release-convergence.yml")
+        reconciler = read(
+            "scripts/release_control/reconcile_release_convergence.py"
+        )
         commit_verdict = workflow_job_block(release_workflow, "release_commit_verdict")
         convergence_verdict = workflow_job_block(convergence, "convergence_verdict")
 
@@ -612,10 +615,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn("the committed release remains public", convergence_verdict)
 
         self.assertIn("github.event.workflow_run.conclusion != 'success'", retry)
-        self.assertIn("actions/runs/${RUN_ID}/rerun", retry)
+        self.assertIn("cron: '37 * * * *'", retry)
+        self.assertIn("workflow_dispatch:", retry)
+        self.assertIn("reconcile_release_convergence.py", retry)
+        self.assertIn('--run-id "${RUN_ID}"', retry)
+        self.assertIn("--latest", retry)
         self.assertNotIn("rerun-failed-jobs", retry)
-        self.assertIn("RUN_ATTEMPT >= MAX_ATTEMPTS", retry)
-        self.assertIn("release-activation.json", retry)
+        self.assertIn('actions/runs/{run_id}/rerun', reconciler)
+        self.assertIn('release-convergence.yml/dispatches', reconciler)
+        self.assertIn("attempts >= max_attempts", reconciler)
+        self.assertIn("validate_marker(", reconciler)
 
     def test_mutating_reusable_workflows_have_no_direct_dispatch_lock_bypass(self) -> None:
         convergence = read(".github/workflows/release-convergence.yml")
@@ -805,6 +814,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         release_workflow = read(".github/workflows/create-release.yml")
         convergence = read(".github/workflows/release-convergence.yml")
         retry = read(".github/workflows/retry-release-convergence.yml")
+        reconciler = read(
+            "scripts/release_control/reconcile_release_convergence.py"
+        )
         activation = workflow_job_block(release_workflow, "activate_release")
 
         self.assertIn(
@@ -830,11 +842,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("successor adoption is not yet allowed", await_commit)
         self.assertIn("activation_marker_sha256", await_commit)
 
-        self.assertIn("source_release_run_id=\"${BASH_REMATCH[2]}\"", retry)
-        self.assertIn("actions/runs/${source_release_run_id}", retry)
-        self.assertIn('source_status}" != "completed"', retry)
-        self.assertIn("RUN_ATTEMPT < 50", retry)
-        self.assertIn("renewing the pre-commit convergence owner", retry)
+        self.assertIn("--run-id", retry)
+        self.assertIn("DISPLAY_TITLE = re.compile", reconciler)
+        self.assertIn("source_run_id = int(source_text)", reconciler)
+        self.assertIn('actions/runs/{source_run_id}', reconciler)
+        self.assertIn('source.get("status") != "completed"', reconciler)
+        self.assertIn('< 50', reconciler)
+        self.assertIn("Renewed pre-commit convergence owner", reconciler)
 
         self.assertIn("require_viable_convergence_owner()", activation)
         self.assertEqual(activation.count("require_viable_convergence_owner"), 3)

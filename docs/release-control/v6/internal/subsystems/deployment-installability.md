@@ -1847,7 +1847,7 @@ artifact-selection behaviour.
    the full workflow is retried so it reacquires the lease and safely replays
    all idempotent surfaces.
    The activation marker preserves its original convergence run ID. Once that
-   run is completed, a fresh manual convergence dispatch from fixed workflow
+   run is completed, a fresh successor convergence dispatch from fixed workflow
    code may adopt the same immutable tag, source run, target commit, release ID,
    R2 prefix, and activation-marker digest. Adoption happens only after lease
    acquisition and writes a unique owner record into the exact lease commit.
@@ -1858,6 +1858,21 @@ artifact-selection behaviour.
    publication, while every successor gets immutable, run-scoped Git evidence.
    Reading a floating ref or a clobbered constant record is forbidden because
    cached prior bytes could authorize stale ownership.
+   Convergence retry is a current-control reconciliation, not unconditional
+   replay of the failed run's checkout. A terminal failure delivered through
+   `workflow_run` must be reconciled, and an hourly or manual pass must inspect
+   the current immutable stable and preview channel heads so a missed event
+   cannot strand mutable aliases. Discovery must not fall back behind a mutable
+   channel head. Before mutation, reconciliation must bind the exact mainline
+   workflow-dispatch identity, release, source run, activation marker and
+   original convergence owner; reject malformed marker digests; suppress a
+   newer matching run; and enforce one aggregate attempt budget across reruns
+   and successor runs. If the failed run used the current default-branch commit,
+   the complete run is rerun. If its checkout predates current controls, a fresh
+   default-branch convergence run is dispatched using only immutable identity
+   inputs recovered from the activation marker. Pre-commit owner renewal remains
+   limited to the original run while its exact source release run is active and
+   does not consume the post-commit convergence-debt budget.
    A support-only private Pro prerelease image is a narrower exception for
    customer verification of an already-fixed defect. It may dispatch the private
    `Build Pro Release` workflow with `publish_docker_image=true`,
