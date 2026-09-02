@@ -1051,3 +1051,93 @@ export async function runPatrolModelReadiness(
     signal,
   });
 }
+
+// --- Weekly digest ("what Patrol did for you") ---------------------------
+// Mirrors internal/ai/patrol_digest.go. Every number is a rollup over records
+// Pulse already keeps; see docs/PATROL_WEEKLY_DIGEST.md for sources and limits.
+
+export type PatrolDigestMode = 'monitor' | 'approval' | 'assisted' | 'full';
+
+export interface PatrolDigestWindow {
+  start: string;
+  end: string;
+  days: number;
+  history_complete: boolean;
+  history_since?: string;
+}
+
+export interface PatrolDigestRuns {
+  total: number;
+  scheduled: number;
+  event_triggered: number;
+  manual: number;
+  failed: number;
+  checks: number;
+  resources_covered: number;
+  last_run_at?: string;
+}
+
+export interface PatrolDigestSeverityCounts {
+  critical: number;
+  warning: number;
+  watch: number;
+  info: number;
+}
+
+export interface PatrolDigestFindings {
+  new: number;
+  open_by_severity: PatrolDigestSeverityCounts;
+  resolved: number;
+  auto_resolved: number;
+  dismissed: number;
+  suppressed: number;
+}
+
+export interface PatrolDigestInvestigations {
+  total: number;
+  by_outcome: Record<string, number>;
+}
+
+export interface PatrolDigestActions {
+  proposed: number;
+  approved: number;
+  rejected: number;
+  executed: number;
+  verified: number;
+  failed: number;
+  pending: number;
+}
+
+export interface PatrolDigestAlerts {
+  reviewed: number;
+}
+
+export interface PatrolDigestSpend {
+  estimated_usd: number;
+  pricing_known: boolean;
+  input_tokens: number;
+  output_tokens: number;
+  calls: number;
+}
+
+export interface PatrolDigest {
+  generated_at: string;
+  window: PatrolDigestWindow;
+  mode: PatrolDigestMode;
+  runs: PatrolDigestRuns;
+  findings: PatrolDigestFindings;
+  investigations: PatrolDigestInvestigations;
+  actions: PatrolDigestActions;
+  alerts: PatrolDigestAlerts;
+  spend: PatrolDigestSpend;
+}
+
+export const PATROL_DIGEST_DEFAULT_DAYS = 7;
+
+export async function getPatrolDigest(
+  days: number = PATROL_DIGEST_DEFAULT_DAYS,
+  signal?: AbortSignal,
+): Promise<PatrolDigest> {
+  const search = new URLSearchParams({ days: String(days) });
+  return apiFetchJSON<PatrolDigest>(`/api/ai/patrol/digest?${search.toString()}`, { signal });
+}

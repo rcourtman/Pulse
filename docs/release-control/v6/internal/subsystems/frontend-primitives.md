@@ -7044,3 +7044,16 @@ the settings surface; `useAISettingsState` fetches
 `aiPatrolCostPresentation.ts` owns the copy. `AIModelPicker.test.tsx`,
 `AISettings.test.tsx`, and `settingsArchitecture.test.ts` pin those
 distinctions.
+
+### Patrol weekly digest card is a read-only summary
+
+The Patrol Activity tab gains `PatrolWeeklyDigestCard` ("This week") above
+Verified outcomes. It renders the server-computed `GET /api/ai/patrol/digest`
+rollup as definition-list stat tiles built from the shared `Button` and
+`ButtonLink` primitives and the existing surface, border, and muted text
+tokens; it introduces no new shared primitive, theme token, or layout helper.
+The only navigation it offers is the existing `/actions` route, shown only when
+Patrol-origin fixes are waiting for approval. Loading, failed-load, no-runs,
+and truncated-history states carry distinct copy, and a failed load never
+renders zero counts as if the week were quiet. Browser proof covers the desktop
+and narrow Activity tab in `frontend-modern/browser-verification.json`.

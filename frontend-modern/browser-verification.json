@@ -1,44 +1,42 @@
 {
   "version": 1,
-  "base_sha": "6c5af82b522b437db91ab077c79cee3d59833a34",
-  "verified_at": "2026-09-02T08:58:36Z",
+  "base_sha": "facee87bb4e7b84a0ce682d6e142d35b55be3ace",
+  "verified_at": "2026-09-02T08:55:07Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/SearchInputEnhancements.tsx",
-    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts",
-    "frontend-modern/src/components/shared/useSearchInputEnhancements.ts"
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/SearchInputEnhancements.tsx": "9df1147f092b523655a3503cfe27bbac88fb0572bd3ccb219895d2ffa2f762a7",
-    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts": "b56c756423156cdce3bf1c7f867aa3b6c2751419f070c2d8e5edad91d3c23dec",
-    "frontend-modern/src/components/shared/useSearchInputEnhancements.ts": "15d750671b420d6566749eac60bc4cb6c87db36037e90a4117cebc60c1635dad"
+    "frontend-modern/src/api/patrol.ts": "c411c12d504b53e64b1435c5b336ba953f5051f6909f2bfef3e46067d5b88f34",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "0d46fd5afbbdf8e1b885fa558be070c07203cc6613dda4458e9790fa8f2e4099",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "9a9728f618c502a5379f56e93cad29ea939f5c26e73e3c7d22195308a8087b81"
   },
-  "routes": ["/standalone/machines"],
+  "routes": [
+    "/patrol"
+  ],
   "viewports": [
     {
       "width": 1280,
       "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Empty recent-search menu with explanatory copy at desktop width",
-    "Populated three-entry menu with keyboard focus on its first, removal, and clear actions at desktop width",
-    "Selected search restored from persisted history after reload at desktop and narrow widths",
-    "Populated menu over the filtered no-match Machines state at narrow width",
-    "Menu closed after outside pointer dismissal and Escape at desktop and narrow widths"
+    "Activity tab with the This week card above Verified outcomes, populated from an isolated mock-mode backend (11 runs, 3 new issues, watch-only mode)",
+    "card tiles in single column at 375px with no horizontal overflow",
+    "card refresh in flight and settled",
+    "Verified outcomes empty state and Review and history below the card",
+    "watch-only tile copy for Investigated and Fixes run"
   ],
   "interactions": [
-    "opened the history menu by pointer, ArrowDown, and ArrowUp and verified menu semantics, aria-controls, and expanded state",
-    "moved focus through entry, item-specific removal, and clear actions with ArrowDown, ArrowUp, Home, and End",
-    "selected a history entry and verified the menu closed while the search field received focus and the selected value",
-    "removed the focused first history entry and verified focus moved to the next item-specific removal action",
-    "cleared all history and verified the menu closed, storage emptied, and search focus returned",
-    "committed a search, reloaded the route, and verified the persisted entry remained available",
-    "dismissed the menu by outside pointer action and Escape and verified Escape returned focus to the toggle",
-    "inspected desktop and narrow pixels for placement, clipping, stacking, responsive width, and visible keyboard focus"
+    "clicked the Activity workspace tab",
+    "scrolled the card into view at desktop and narrow widths",
+    "clicked Refresh this week's summary and confirmed the tiles reloaded without an error state",
+    "checked console for card-originated errors (only unrelated dev websocket/update-check noise)"
   ]
 }

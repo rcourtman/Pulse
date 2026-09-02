@@ -7923,3 +7923,12 @@ longer reaches the start of the window. Unknown model pricing is reported as
 `monitor`. `frontend-modern/src/api/patrol.ts` mirrors the payload as
 `PatrolDigest`. Proofs: `internal/ai/patrol_digest_test.go` and
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
+
+### Patrol digest client is the only consumer path
+
+`getPatrolDigest(days)` in `frontend-modern/src/api/patrol.ts` is the single
+client for `GET /api/ai/patrol/digest`; it forwards the `days` window and
+returns the typed `PatrolDigest` payload unchanged. Presentation code must not
+recompute digest counts from run history, findings, or cost events, and must
+not call the endpoint through any other client. Proof:
+`frontend-modern/src/api/__tests__/patrol.test.ts`.

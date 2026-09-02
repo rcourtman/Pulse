@@ -10542,3 +10542,12 @@ an error so clients can render an honest "Patrol has not run" state, and
 `internal/api/security_regression_test.go`,
 `frontend-modern/src/api/__tests__/patrol.test.ts`, and
 `frontend-modern/src/utils/__tests__/docsLinks.test.ts`.
+
+### Patrol digest client mirrors the endpoint exactly
+
+The `PatrolDigest` types and `getPatrolDigest` client in
+`frontend-modern/src/api/patrol.ts` mirror the `GET /api/ai/patrol/digest`
+payload field for field (snake_case, `by_outcome` as an object, optional
+`history_since` and `last_run_at`). New payload fields are additive and the
+client must tolerate their absence. Proof:
+`frontend-modern/src/api/__tests__/patrol.test.ts`.
