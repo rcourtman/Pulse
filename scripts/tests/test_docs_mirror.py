@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -20,6 +21,17 @@ sys.modules[SPEC.name] = docs_mirror
 SPEC.loader.exec_module(docs_mirror)
 
 
+# Background git processes (auto-gc, fsmonitor, maintenance) can still be
+# writing under .git when TemporaryDirectory cleanup runs, which makes rmtree
+# fail with "Directory not empty". Disable them for the throwaway repos and
+# ignore host config so it cannot re-enable them.
+GIT_ENV = {
+    **os.environ,
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_SYSTEM": os.devnull,
+}
+
+
 def run_git(root: Path, *args: str) -> None:
     subprocess.run(
         [
@@ -30,10 +42,17 @@ def run_git(root: Path, *args: str) -> None:
             "user.email=test@example.invalid",
             "-c",
             "user.name=test",
+            "-c",
+            "gc.auto=0",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "maintenance.auto=false",
             *args,
         ],
         check=True,
         capture_output=True,
+        env=GIT_ENV,
     )
 
 
@@ -59,7 +78,7 @@ class DocsMirrorMappingTest(unittest.TestCase):
 
 class DocsMirrorStagedTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._temporary = tempfile.TemporaryDirectory()
+        self._temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self._temporary.cleanup)
         self.root = Path(self._temporary.name)
         run_git(self.root, "init", "-q")
@@ -139,7 +158,7 @@ class DocsMirrorStagedTest(unittest.TestCase):
 
 class DocsMirrorWorktreeTest(unittest.TestCase):
     def test_worktree_drift_and_sync(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             root = Path(temporary)
             write(root, "docs/GUIDE.md", "# Guide v2\n")
             write(root, "frontend-modern/public/docs/GUIDE.md", "# Guide v1\n")
