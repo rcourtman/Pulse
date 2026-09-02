@@ -1,33 +1,31 @@
 {
   "version": 1,
-  "base_sha": "d7a4dcf8e7c59fc35348236d8aeb3f25dc6062fe",
-  "verified_at": "2026-09-02T05:33:34Z",
+  "base_sha": "77bf2a27c6551ce58c31569df607c5ce4ae11825",
+  "verified_at": "2026-09-02T06:10:16Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/shared/Subtabs.tsx"],
+  "changed_paths": ["frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Subtabs.tsx": "b7cb9398a8c39d56cf7db32202c1b99ad6cef7ca3f98ce527ae457ac6d86bd77"
+    "frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx": "a9f3c0dc82e639d9e6fa283cd3ef9b071d322b43bcefb2e760d8ce7e43eeb3bb"
   },
-  "routes": ["/actions"],
+  "routes": ["/settings/infrastructure"],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 393,
+      "height": 851
     }
   ],
   "states": [
-    "Open selected while the unselected History tab has keyboard focus at desktop and narrow widths",
-    "History selected after explicit Enter activation at desktop and narrow widths",
-    "Actions empty state after Open and History selection with reduced motion enabled"
+    "Discovery settings dialog open with Automatic scan selected at desktop and phone widths",
+    "Discovery settings dialog open with Custom subnets selected and keyboard focus retained on that radio at desktop and phone widths"
   ],
   "interactions": [
-    "focused Open and used ArrowRight to move focus to History without changing selection or requesting settled actions",
-    "activated focused History with Enter and verified selection and content changed only after activation",
-    "exercised ArrowLeft and ArrowRight wrapping plus Home and End focus movement",
-    "inspected full-page desktop and narrow screenshots for focus visibility, placement, clipping, scrolling, and responsive layout",
-    "verified the document had no horizontal overflow at desktop or narrow width"
+    "opened Discovery settings from the authenticated Infrastructure discovery band at desktop and phone widths",
+    "focused Automatic scan and pressed ArrowDown to select Custom subnets",
+    "verified focus stayed on Custom subnets after production subnet-field autofocus ran",
+    "verified aria-checked and the single roving tab stop moved from Automatic scan to Custom subnets"
   ]
 }

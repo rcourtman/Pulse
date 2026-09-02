@@ -91,6 +91,31 @@ describe('DiscoverySettingsForm', () => {
     expect(screen.getByRole('button', { name: '192.168.1.0/24' })).toBeInTheDocument();
   });
 
+  it('uses one tab stop and arrow keys to move and select within the scan scope group', async () => {
+    const { discoveryMode, handleDiscoveryModeChange } = renderDiscoverySettingsForm();
+
+    const autoScope = screen.getByRole('radio', { name: /Automatic scan \(full network scope\)/i });
+    const customScope = screen.getByRole('radio', { name: /Custom subnets \(targeted\)/i });
+
+    expect(autoScope).toHaveAttribute('tabindex', '0');
+    expect(customScope).toHaveAttribute('tabindex', '-1');
+
+    autoScope.focus();
+    fireEvent.keyDown(autoScope, { key: 'ArrowDown' });
+
+    await waitFor(() => expect(discoveryMode()).toBe('custom'));
+    expect(customScope).toHaveFocus();
+    expect(handleDiscoveryModeChange).toHaveBeenLastCalledWith('custom');
+    expect(autoScope).toHaveAttribute('tabindex', '-1');
+    expect(customScope).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(customScope, { key: 'ArrowRight' });
+
+    await waitFor(() => expect(discoveryMode()).toBe('auto'));
+    expect(autoScope).toHaveFocus();
+    expect(handleDiscoveryModeChange).toHaveBeenLastCalledWith('auto');
+  });
+
   it('commits a common custom subnet chip from the scan scope control', async () => {
     const { commitDiscoverySubnet, discoverySubnetDraft } = renderDiscoverySettingsForm({
       initialMode: 'custom',
