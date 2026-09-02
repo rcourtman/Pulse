@@ -77,6 +77,70 @@ describe('Subtabs', () => {
     }
   });
 
+  it('moves focus across enabled tabs with standard tab-list keys without changing selection', () => {
+    const onChange = vi.fn();
+    render(() => (
+      <Subtabs
+        value="overview"
+        onChange={onChange}
+        ariaLabel="Resource detail sections"
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'performance', label: 'Performance', disabled: true },
+          { value: 'history', label: 'History' },
+          { value: 'manage', label: 'Manage' },
+        ]}
+      />
+    ));
+
+    const overview = screen.getByRole('tab', { name: 'Overview' });
+    const history = screen.getByRole('tab', { name: 'History' });
+    const manage = screen.getByRole('tab', { name: 'Manage' });
+
+    overview.focus();
+    fireEvent.keyDown(overview, { key: 'ArrowRight' });
+    expect(history).toHaveFocus();
+
+    fireEvent.keyDown(history, { key: 'End' });
+    expect(manage).toHaveFocus();
+
+    fireEvent.keyDown(manage, { key: 'ArrowRight' });
+    expect(overview).toHaveFocus();
+
+    fireEvent.keyDown(overview, { key: 'ArrowLeft' });
+    expect(manage).toHaveFocus();
+
+    fireEvent.keyDown(manage, { key: 'Home' });
+    expect(overview).toHaveFocus();
+    expect(overview).toHaveAttribute('aria-selected', 'true');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps keyboard-focused tabs available for manual activation', () => {
+    const onChange = vi.fn();
+    render(() => (
+      <Subtabs
+        value="overview"
+        onChange={onChange}
+        ariaLabel="Resource detail sections"
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'history', label: 'History' },
+        ]}
+      />
+    ));
+
+    const overview = screen.getByRole('tab', { name: 'Overview' });
+    const history = screen.getByRole('tab', { name: 'History' });
+    overview.focus();
+    fireEvent.keyDown(overview, { key: 'ArrowRight' });
+    fireEvent.click(history);
+
+    expect(history).toHaveFocus();
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith('history');
+  });
+
   it('shows phone scroll affordances when the tab rail is clipped', async () => {
     render(() => (
       <Subtabs

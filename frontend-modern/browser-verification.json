@@ -1,45 +1,33 @@
 {
   "version": 1,
-  "base_sha": "9fba43ffed507f092f876acaf23bef013f0f6fab",
-  "verified_at": "2026-09-02T03:39:02Z",
+  "base_sha": "d7a4dcf8e7c59fc35348236d8aeb3f25dc6062fe",
+  "verified_at": "2026-09-02T05:33:34Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/shared/Dialog.tsx"],
+  "changed_paths": ["frontend-modern/src/components/shared/Subtabs.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Dialog.tsx": "185f09e185a9e5ccddf73906a81552ea0cc8b07390fb5ab587fbe1b952697735"
+    "frontend-modern/src/components/shared/Subtabs.tsx": "b7cb9398a8c39d56cf7db32202c1b99ad6cef7ca3f98ce527ae457ac6d86bd77"
   },
-  "routes": [
-    "/settings/infrastructure",
-    "/actions",
-    "/alerts/overview",
-    "/settings/system-general",
-    "/patrol",
-    "/"
-  ],
+  "routes": ["/actions"],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 390,
       "height": 844
-    },
-    {
-      "width": 393,
-      "height": 851
     }
   ],
   "states": [
-    "Add infrastructure dialog open at desktop and narrow widths with reduced motion, a visible labelled heading, accessible description, focused close control, contained panel geometry, and no horizontal document overflow",
-    "Add infrastructure dialog dismissed at desktop and narrow widths with the underlying Infrastructure surface restored",
-    "authenticated Actions, Alerts, Infrastructure, General Settings, and Patrol surfaces with reduced motion and no automatically detectable WCAG A/AA violations",
-    "logged-out welcome surface with reduced motion and no automatically detectable WCAG A/AA violations"
+    "Open selected while the unselected History tab has keyboard focus at desktop and narrow widths",
+    "History selected after explicit Enter activation at desktop and narrow widths",
+    "Actions empty state after Open and History selection with reduced motion enabled"
   ],
   "interactions": [
-    "opened Add infrastructure from its named trigger at desktop and narrow widths and verified the dialog accessible name and description",
-    "inspected final desktop and 390x844 screenshots for placement, clipping, stacking, scrolling, focus treatment, and responsive layout",
-    "verified the dialog bounds stay inside both viewports and the document has no horizontal overflow",
-    "dismissed the dialog with Escape at desktop and narrow widths and verified focus returned to Add infrastructure",
-    "scanned representative authenticated and logged-out surfaces for WCAG A/AA violations and unexpected reduced-motion effects"
+    "focused Open and used ArrowRight to move focus to History without changing selection or requesting settled actions",
+    "activated focused History with Enter and verified selection and content changed only after activation",
+    "exercised ArrowLeft and ArrowRight wrapping plus Home and End focus movement",
+    "inspected full-page desktop and narrow screenshots for focus visibility, placement, clipping, scrolling, and responsive layout",
+    "verified the document had no horizontal overflow at desktop or narrow width"
   ]
 }
