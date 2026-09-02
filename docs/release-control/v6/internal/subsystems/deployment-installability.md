@@ -326,7 +326,11 @@ Live rootful-runtime proof is also separated from the schema-v7 systemd
 packet. The explicit
 `scripts/run-secure-runtime-rootful-qualification.sh` wrapper creates distinct
 network-isolated Ubuntu/systemd hosts for real rootful Docker and Podman and
-never mounts a host daemon socket. Its standalone schema-v1 receipt binds the
+never mounts a host daemon socket. The disposable image masks the distro's
+Docker and Podman service, socket, auto-update, transient-cleanup, and restart
+units before first boot, so strict systemd readiness cannot be confused with
+expected nested-runtime housekeeping failures; each scenario starts only its
+explicit runtime-specific daemon unit. Its standalone schema-v1 receipt binds the
 exact canonical remote-main commit, immutable Ubuntu base-image digest,
 qualification, collector, helper, installer, every compiled installtests
 package input, source manifest, canonical root-owned socket, summary inventory,

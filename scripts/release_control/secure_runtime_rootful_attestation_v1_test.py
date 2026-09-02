@@ -493,6 +493,7 @@ if module.MAX_RECEIPT_BYTES <= 0:
             "scripts/installtests/secure_runtime_rootless_qualification_test.go",
             "scripts/installtests/secure_runtime_systemd_lab_test.go",
             "scripts/release_control/secure_runtime_rootful_attestation_v1.py",
+            "scripts/secure-runtime-rootful-runtime.sh",
             "scripts/release_control/secure_runtime_rootful_source_manifest_v1.json",
             "scripts/release_control/secure_runtime_rootless_attestation_v1.py",
             "scripts/run-secure-runtime-rootful-qualification.sh",

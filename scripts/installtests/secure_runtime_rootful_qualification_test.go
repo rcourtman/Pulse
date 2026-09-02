@@ -97,6 +97,7 @@ type rootfulQualDaemon struct {
 	unit     string
 	socket   string
 	dataRoot string
+	runRoot  string
 	fixture  string
 }
 
@@ -454,9 +455,9 @@ func rootfulQualRequireDisposableHost(t *testing.T, runtimeKind, receiptPath str
 
 func rootfulQualDaemonFor(runtimeKind string) rootfulQualDaemon {
 	if runtimeKind == "docker" {
-		return rootfulQualDaemon{runtime: runtimeKind, unit: "pulse-rootful-docker", socket: "/var/run/docker.sock", dataRoot: "/var/lib/pulse-rootful-docker", fixture: "/opt/pulse/rootful-fixture"}
+		return rootfulQualDaemon{runtime: runtimeKind, unit: "pulse-rootful-docker", socket: "/var/run/docker.sock", dataRoot: "/var/lib/pulse-rootful-docker", runRoot: "/run/pulse-rootful-docker", fixture: "/opt/pulse/rootful-fixture"}
 	}
-	return rootfulQualDaemon{runtime: runtimeKind, unit: "pulse-rootful-podman", socket: "/run/podman/podman.sock", dataRoot: "/var/lib/containers", fixture: "/opt/pulse/rootful-fixture"}
+	return rootfulQualDaemon{runtime: runtimeKind, unit: "pulse-rootful-podman", socket: "/run/podman/podman.sock", dataRoot: "/var/lib/pulse-rootful-podman", runRoot: "/run/pulse-rootful-podman", fixture: "/opt/pulse/rootful-fixture"}
 }
 
 func rootfulQualPrepareFixture(t *testing.T, daemon rootfulQualDaemon) {
@@ -486,11 +487,23 @@ func rootfulQualStartDaemon(t *testing.T, daemon rootfulQualDaemon) {
 			"--exec-root=/run/pulse-rootful-docker", "--pidfile=/run/pulse-rootful-docker.pid", "--storage-driver=vfs", "--iptables=false", "--bridge=none")
 	} else {
 		rootlessQualCommand(t, 20*time.Second, "systemd-run", "--quiet", "--collect", "--unit", daemon.unit, "--property=Type=exec", "--",
-			"/usr/bin/podman", "system", "service", "--time=0", "unix://"+daemon.socket)
+			"/usr/bin/podman", "--storage-driver=vfs", "--root="+daemon.dataRoot, "--runroot="+daemon.runRoot,
+			"system", "service", "--time=0", "unix://"+daemon.socket)
 	}
 	rootlessQualWaitSocket(t, daemon.socket)
 	rootlessQualCommand(t, 10*time.Second, "chmod", "0660", daemon.socket)
 	rootfulQualRuntimeCommand(t, daemon, 30*time.Second, "info")
+	if driver := rootfulQualRuntimeStorageDriver(t, daemon); driver != "vfs" {
+		t.Fatalf("rootful %s storage driver = %q, want vfs", daemon.runtime, driver)
+	}
+}
+
+func rootfulQualRuntimeStorageDriver(t *testing.T, daemon rootfulQualDaemon) string {
+	t.Helper()
+	if daemon.runtime == "docker" {
+		return rootfulQualRuntimeCommand(t, daemon, 30*time.Second, "info", "--format", "{{.Driver}}")
+	}
+	return rootfulQualRuntimeCommand(t, daemon, 30*time.Second, "info", "--format", "{{.Store.GraphDriverName}}")
 }
 
 func rootfulQualStopDaemon(t *testing.T, daemon rootfulQualDaemon) {
@@ -697,7 +710,7 @@ func rootfulQualRunBoundProbe(t *testing.T, deadline time.Duration) time.Duratio
 
 func rootfulQualRemoveRuntimeState(t *testing.T, daemon rootfulQualDaemon) {
 	t.Helper()
-	roots := []string{daemon.dataRoot, "/run/pulse-rootful-docker"}
+	roots := []string{daemon.dataRoot, daemon.runRoot}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		mountInfo := string(rootlessQualReadFile(t, "/proc/self/mountinfo"))
@@ -713,7 +726,7 @@ func rootfulQualRemoveRuntimeState(t *testing.T, daemon rootfulQualDaemon) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	for _, path := range []string{daemon.dataRoot, "/run/pulse-rootful-docker", daemon.fixture} {
+	for _, path := range []string{daemon.dataRoot, daemon.runRoot, daemon.fixture} {
 		if err := os.RemoveAll(path); err != nil {
 			t.Fatalf("remove disposable runtime path %s: %v", path, err)
 		}
@@ -721,7 +734,7 @@ func rootfulQualRemoveRuntimeState(t *testing.T, daemon rootfulQualDaemon) {
 }
 
 func rootfulQualRuntimeStateClean(daemon rootfulQualDaemon) bool {
-	for _, path := range []string{daemon.socket, daemon.dataRoot, "/run/pulse-rootful-docker", daemon.fixture} {
+	for _, path := range []string{daemon.socket, daemon.dataRoot, daemon.runRoot, daemon.fixture} {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return false
 		}
@@ -1001,6 +1014,9 @@ func TestRootfulQualificationWrapperInvariants(t *testing.T) {
 		"github.com/rcourtman/pulse-go-rewrite/scripts/installtests.test",
 		"https://github.com/rcourtman/Pulse.git", "refs/remotes/origin/main", "refs/heads/main",
 		"PULSE_ROOTFUL_UBUNTU_IMAGE", "PULSE_ROOTFUL_BOUND_PROBE_BINARY",
+		"rootful_qualification_systemd_readiness",
+		"podman-auto-update.service", "podman-auto-update.timer",
+		"podman-clean-transient.service", "podman-restart.service",
 		rootfulQualBoundProbe,
 	} {
 		if !strings.Contains(script, required) {
@@ -1014,5 +1030,65 @@ func TestRootfulQualificationWrapperInvariants(t *testing.T) {
 		if strings.Contains(script, forbidden) {
 			t.Fatalf("rootful qualification wrapper contains forbidden host boundary %q", forbidden)
 		}
+	}
+}
+
+func TestRootfulQualificationSystemdReadiness(t *testing.T) {
+	runtimeScript := repoFile("scripts", "secure-runtime-rootful-runtime.sh")
+	binDir := t.TempDir()
+	fakeDocker := filepath.Join(binDir, "docker")
+	fake := `#!/bin/sh
+case "$*" in
+  *"systemctl show --property=ActiveState --value multi-user.target"*)
+    printf '%s\n' "${FAKE_SYSTEMD_TARGET_STATE:-inactive}"
+    ;;
+  *"systemctl list-units --state=failed --no-legend --no-pager --plain"*)
+    printf '%s' "${FAKE_SYSTEMD_FAILED_UNITS:-}"
+    ;;
+  *)
+    printf 'unexpected docker arguments: %s\n' "$*" >&2
+    exit 99
+    ;;
+esac
+`
+	if err := os.WriteFile(fakeDocker, []byte(fake), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		targetState string
+		failedUnits string
+		wantExit    int
+		wantOutput  string
+	}{
+		{name: "target inactive", targetState: "inactive", wantExit: 1},
+		{name: "clean multi-user target", targetState: "active", wantExit: 0},
+		{name: "failed unit", targetState: "active", failedUnits: "podman-restart.service loaded failed failed", wantExit: 2, wantOutput: "podman-restart.service"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := exec.Command("bash", "-c", `source "$1"; rootful_qualification_systemd_readiness fixture`, "bash", runtimeScript)
+			cmd.Env = append(os.Environ(),
+				"PATH="+binDir+":"+os.Getenv("PATH"),
+				"FAKE_SYSTEMD_TARGET_STATE="+test.targetState,
+				"FAKE_SYSTEMD_FAILED_UNITS="+test.failedUnits,
+			)
+			output, err := cmd.CombinedOutput()
+			gotExit := 0
+			if err != nil {
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) {
+					t.Fatalf("readiness helper failed without an exit status: %v", err)
+				}
+				gotExit = exitErr.ExitCode()
+			}
+			if gotExit != test.wantExit {
+				t.Fatalf("readiness exit = %d, want %d\n%s", gotExit, test.wantExit, output)
+			}
+			if test.wantOutput != "" && !strings.Contains(string(output), test.wantOutput) {
+				t.Fatalf("readiness output missing %q: %s", test.wantOutput, output)
+			}
+		})
 	}
 }

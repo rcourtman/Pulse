@@ -7399,7 +7399,11 @@ the product default.
 `scripts/run-secure-runtime-rootful-qualification.sh` is the destructive,
 explicit entrypoint for real rootful Docker and Podman proof on two distinct
 disposable Ubuntu/systemd hosts. It never mounts a host daemon socket and runs
-the outer containers without a default route. The packet binds exact clean Go
+the outer containers without a default route. The host image masks Docker and
+Podman's distro-managed service, socket, auto-update, transient-cleanup, and
+restart units before first boot; the packet starts only its explicit
+runtime-specific daemon units and requires systemd's strict running state
+before any scenario begins. The packet binds exact clean Go
 artifacts, every compiled installtests package input, the canonical remote-main
 commit, the immutable Ubuntu base-image digest, and governed source hashes,
 then records fresh install, legacy migration with authority reduction,
