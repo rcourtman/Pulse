@@ -1,42 +1,42 @@
 {
   "version": 1,
-  "base_sha": "23b3893ae88b86497f3f103c8972663508555766",
-  "verified_at": "2026-09-02T07:15:12Z",
+  "base_sha": "facee87bb4e7b84a0ce682d6e142d35b55be3ace",
+  "verified_at": "2026-09-02T08:55:07Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/CommandPaletteModal.tsx",
-    "frontend-modern/src/components/shared/SearchField.tsx",
-    "frontend-modern/src/components/shared/searchFieldModel.ts",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts"
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/CommandPaletteModal.tsx": "300030975b76634513d98b9459fe9ae4d07e8d7d03fedffa91f702746a7d3f06",
-    "frontend-modern/src/components/shared/SearchField.tsx": "0c2cc0d002763b59c2c065ceccff134318122aa975fe45ddc31271387cd623ad",
-    "frontend-modern/src/components/shared/searchFieldModel.ts": "3b9ca4ffc6aef0e5910e5094daebb9b03878b2b6ef4c9c7aed165bf7f46097db",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "df4baf2ccba420f0c8d7d67ee7ddeba5a55ddbee8af323d8d7924aa389ad9b3a"
+    "frontend-modern/src/api/patrol.ts": "c411c12d504b53e64b1435c5b336ba953f5051f6909f2bfef3e46067d5b88f34",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "0d46fd5afbbdf8e1b885fa558be070c07203cc6613dda4458e9790fa8f2e4099",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "9a9728f618c502a5379f56e93cad29ea939f5c26e73e3c7d22195308a8087b81"
   },
-  "routes": ["/proxmox"],
+  "routes": [
+    "/patrol"
+  ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
-      "width": 393,
-      "height": 851
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Command palette open with twelve results and the first result selected at desktop and narrow widths",
-    "Command palette scrolled to the last keyboard-selected result at desktop and narrow widths",
-    "Command palette empty result state after a query with no matching commands at desktop and narrow widths",
-    "Command palette closed after Escape and after backdrop dismissal at desktop and narrow widths"
+    "Activity tab with the This week card above Verified outcomes, populated from an isolated mock-mode backend (11 runs, 3 new issues, watch-only mode)",
+    "card tiles in single column at 375px with no horizontal overflow",
+    "card refresh in flight and settled",
+    "Verified outcomes empty state and Review and history below the card",
+    "watch-only tile copy for Investigated and Fixes run"
   ],
   "interactions": [
-    "opened the command palette with Control+K on the authenticated Proxmox route",
-    "verified the search retained DOM focus while pointer hover and Home and End keys updated aria-activedescendant and aria-selected",
-    "verified End scrolled the last selected option fully into the result viewport and Tab did not focus an option",
-    "entered a no-match query and verified the combobox collapsed, cleared its active descendant, and removed the listbox",
-    "dismissed the palette with Escape and reopened and dismissed it through the backdrop"
+    "clicked the Activity workspace tab",
+    "scrolled the card into view at desktop and narrow widths",
+    "clicked Refresh this week's summary and confirmed the tiles reloaded without an error state",
+    "checked console for card-originated errors (only unrelated dev websocket/update-check noise)"
   ]
 }

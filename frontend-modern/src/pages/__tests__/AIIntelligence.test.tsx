@@ -154,6 +154,46 @@ vi.mock('@/api/patrol', () => ({
   triggerPatrolRun: (...args: unknown[]) => triggerPatrolRunMock(...args),
   getPatrolRunHistory: (...args: unknown[]) => getPatrolRunHistoryMock(...args),
   getPatrolObjectives: vi.fn().mockResolvedValue([]),
+  PATROL_DIGEST_DEFAULT_DAYS: 7,
+  getPatrolDigest: vi.fn().mockResolvedValue({
+    generated_at: '2026-09-01T12:00:00Z',
+    window: {
+      start: '2026-08-25T12:00:00Z',
+      end: '2026-09-01T12:00:00Z',
+      days: 7,
+      history_complete: true,
+    },
+    mode: 'monitor',
+    runs: {
+      total: 0,
+      scheduled: 0,
+      event_triggered: 0,
+      manual: 0,
+      failed: 0,
+      checks: 0,
+      resources_covered: 0,
+    },
+    findings: {
+      new: 0,
+      open_by_severity: { critical: 0, warning: 0, watch: 0, info: 0 },
+      resolved: 0,
+      auto_resolved: 0,
+      dismissed: 0,
+      suppressed: 0,
+    },
+    investigations: { total: 0, by_outcome: {} },
+    actions: {
+      proposed: 0,
+      approved: 0,
+      rejected: 0,
+      executed: 0,
+      verified: 0,
+      failed: 0,
+      pending: 0,
+    },
+    alerts: { reviewed: 0 },
+    spend: { estimated_usd: 0, pricing_known: true, input_tokens: 0, output_tokens: 0, calls: 0 },
+  }),
   createPatrolObjective: vi.fn(),
   updatePatrolObjective: vi.fn(),
   deletePatrolObjective: vi.fn(),
@@ -564,12 +604,15 @@ describe('AIIntelligence entitlement gating', () => {
     const attentionIndex = patrolIntelligenceSurfaceSource.indexOf('<PatrolAttentionWorkbench');
     const objectivesIndex = patrolIntelligenceSurfaceSource.indexOf('<PatrolObjectivesPanel');
     const verifiedOutcomesIndex = patrolIntelligenceSurfaceSource.indexOf('<PatrolRecentWorkPanel');
+    const weeklyDigestIndex = patrolIntelligenceSurfaceSource.indexOf('<PatrolWeeklyDigestCard');
     const historyIndex = patrolIntelligenceSurfaceSource.indexOf('Review and history');
 
     expect(attentionIndex).toBeGreaterThan(-1);
     expect(objectivesIndex).toBeGreaterThan(attentionIndex);
     expect(verifiedOutcomesIndex).toBeGreaterThan(attentionIndex);
     expect(historyIndex).toBeGreaterThan(verifiedOutcomesIndex);
+    expect(weeklyDigestIndex).toBeGreaterThan(attentionIndex);
+    expect(weeklyDigestIndex).toBeLessThan(verifiedOutcomesIndex);
   });
 
   it('keeps the advanced Patrol settings drawer out of the old save-spinner path', () => {

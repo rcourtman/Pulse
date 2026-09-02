@@ -13,6 +13,7 @@ import { PatrolIntelligenceWorkspace } from './PatrolIntelligenceWorkspace';
 import { PatrolAttentionWorkbench } from './PatrolAttentionWorkbench';
 import { PatrolObjectivesPanel } from './PatrolObjectivesPanel';
 import { PatrolRecentWorkPanel } from './PatrolRecentWorkPanel';
+import { PatrolWeeklyDigestCard } from './PatrolWeeklyDigestCard';
 import type { AttentionItem } from '@/api/patrolAttention';
 
 type PatrolWorkspaceView = 'inbox' | 'protection' | 'activity';
@@ -131,6 +132,8 @@ export function PatrolIntelligenceSurface() {
           aria-labelledby="patrol-activity-tab"
           class="space-y-4 lg:space-y-5"
         >
+          <PatrolWeeklyDigestCard />
+
           <PatrolRecentWorkPanel />
 
           <section

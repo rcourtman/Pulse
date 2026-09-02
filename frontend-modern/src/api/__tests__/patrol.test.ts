@@ -6,6 +6,7 @@ vi.mock('@/utils/apiClient', () => ({
 
 import {
   getPatrolStatus,
+  getPatrolDigest,
   getPatrolRun,
   getPatrolFindings,
   getPatrolRunHistory,
@@ -581,5 +582,19 @@ describe('triggerPatrolRun scope body', () => {
   it('treats a scope with no real ids as a fleet-wide run', async () => {
     await triggerPatrolRun({ resource_ids: [], resource_types: [] });
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/run', { method: 'POST' });
+  });
+
+  it('reads the weekly digest for the requested window', async () => {
+    const digest = { window: { days: 7 }, runs: { total: 3 } };
+    apiFetchJSONMock.mockResolvedValueOnce(digest as any);
+    await expect(getPatrolDigest()).resolves.toBe(digest);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/digest?days=7', {
+      signal: undefined,
+    });
+
+    await getPatrolDigest(30);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/digest?days=30', {
+      signal: undefined,
+    });
   });
 });
