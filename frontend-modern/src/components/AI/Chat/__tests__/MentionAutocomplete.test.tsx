@@ -179,11 +179,14 @@ describe('MentionAutocomplete', () => {
 
       const listbox = screen.getByRole('listbox', { name: 'Assistant resources' });
       expect(listbox).toBeInTheDocument();
+      expect(listbox.parentElement).toHaveClass('w-[calc(100vw-36px)]');
 
       const firstOption = screen.getByRole('option', {
         name: 'Mention web-server: vm on pve1, running',
       });
       expect(firstOption).toHaveAttribute('aria-selected', 'true');
+      expect(firstOption).toHaveAttribute('id', 'assistant-mention-option-0');
+      expect(firstOption).toHaveAttribute('tabindex', '-1');
 
       fireEvent.keyDown(document, { key: 'ArrowDown' });
 
@@ -194,6 +197,30 @@ describe('MentionAutocomplete', () => {
         }),
       ).toHaveAttribute('aria-selected', 'true');
     });
+
+    it('reports the active descendant and keeps it visible while focus remains in the composer', async () => {
+      const onActiveDescendantChange = vi.fn();
+      renderAutocomplete({ onActiveDescendantChange });
+
+      expect(screen.getByRole('listbox', { name: 'Assistant resources' })).toHaveAttribute(
+        'id',
+        'assistant-mention-listbox',
+      );
+      expect(onActiveDescendantChange).toHaveBeenLastCalledWith('assistant-mention-option-0');
+
+      const secondOption = screen.getByRole('option', {
+        name: 'Mention db-container: system-container on pve2, running',
+      });
+      const scrollIntoView = vi.fn();
+      Object.defineProperty(secondOption, 'scrollIntoView', {
+        configurable: true,
+        value: scrollIntoView,
+      });
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+
+      expect(onActiveDescendantChange).toHaveBeenLastCalledWith('assistant-mention-option-1');
+      await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }));
+    });
   });
 
   describe('click interaction', () => {
@@ -201,7 +228,12 @@ describe('MentionAutocomplete', () => {
       const onSelect = vi.fn();
       renderAutocomplete({ onSelect });
 
-      fireEvent.click(screen.getByText('web-server'));
+      const option = screen.getByText('web-server').closest('button')!;
+      const pointerDown = new Event('pointerdown', { bubbles: true, cancelable: true });
+      option.dispatchEvent(pointerDown);
+      expect(pointerDown.defaultPrevented).toBe(true);
+
+      fireEvent.click(option);
       expect(onSelect).toHaveBeenCalledOnce();
       expect(onSelect).toHaveBeenCalledWith(defaultResources[0]);
     });

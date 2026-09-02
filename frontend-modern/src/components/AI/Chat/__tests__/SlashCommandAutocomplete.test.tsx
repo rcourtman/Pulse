@@ -1,11 +1,64 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { filterAssistantSlashCommands } from '../assistantSlashCommands';
 import { SlashCommandAutocomplete } from '../SlashCommandAutocomplete';
 
 afterEach(cleanup);
 
 describe('SlashCommandAutocomplete', () => {
+  it('prevents pointer selection from taking focus from the composer', () => {
+    const onSelect = vi.fn();
+    render(() => (
+      <SlashCommandAutocomplete
+        query="new"
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={onSelect}
+      />
+    ));
+
+    const option = screen.getByRole('option', { name: /Run \/new/ });
+    const pointerDown = new Event('pointerdown', { bubbles: true, cancelable: true });
+    option.dispatchEvent(pointerDown);
+    expect(pointerDown.defaultPrevented).toBe(true);
+
+    fireEvent.click(option);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ action: 'new' }));
+  });
+
+  it('reports the active option, keeps it visible, and excludes options from the tab order', async () => {
+    const onActiveDescendantChange = vi.fn();
+    render(() => (
+      <SlashCommandAutocomplete
+        query=""
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+        onActiveDescendantChange={onActiveDescendantChange}
+      />
+    ));
+
+    const listbox = screen.getByRole('listbox', { name: 'Assistant commands' });
+    expect(listbox).toHaveAttribute('id', 'assistant-slash-command-listbox');
+    expect(listbox.parentElement).toHaveClass('w-[calc(100vw-36px)]');
+    const options = screen.getAllByRole('option');
+    expect(options[0]).toHaveAttribute('id', 'assistant-slash-command-option-0');
+    expect(options[0]).toHaveAttribute('tabindex', '-1');
+    expect(onActiveDescendantChange).toHaveBeenLastCalledWith('assistant-slash-command-option-0');
+
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(options[1], 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+
+    expect(onActiveDescendantChange).toHaveBeenLastCalledWith('assistant-slash-command-option-1');
+    await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }));
+  });
+
   it('consumes local command navigation keys before later document handlers see them', () => {
     const onClose = vi.fn();
     const onSelect = vi.fn();

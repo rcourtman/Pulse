@@ -1,33 +1,25 @@
 {
   "version": 1,
-  "base_sha": "b5f694b216e7a333c8ce26746b4e218e59c65efc",
-  "verified_at": "2026-09-02T09:53:16Z",
+  "base_sha": "fc0adf7073d99447e8042d5053d331d323b8a372",
+  "verified_at": "2026-09-02T10:25:49Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/UpdateBanner.tsx",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/components/shared/SkipToContentLink.tsx"
+    "frontend-modern/src/components/AI/Chat/MentionAutocomplete.tsx",
+    "frontend-modern/src/components/AI/Chat/SlashCommandAutocomplete.tsx",
+    "frontend-modern/src/components/AI/Chat/index.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "a46918db428d7965d72e5e8a296ea813970472dfe8fd04f4dcae18439fa80375",
-    "frontend-modern/src/AppLayout.tsx": "827b69928bf4b6b2da8b445d0b95bd2a89cc2721c494d624f13d422af2e7ff99",
-    "frontend-modern/src/components/UpdateBanner.tsx": "14f6125638c81b66bf69a7b40231f2187851edfc5f08093e82c4ba3b4f73005e",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "f0aaa04aab89c0de1794d80448cb478e6cc5cac274519fe37a793b530cd6a00f",
-    "frontend-modern/src/components/shared/SkipToContentLink.tsx": "3d89ab42df5b342639af1b87012b173f5965b0a1041785a8b53f32675956b1bc"
+    "frontend-modern/src/components/AI/Chat/MentionAutocomplete.tsx": "fde53ef7a82b0ff854a759087a0fc7dfaafd89e7e8933b68335598100adb8955",
+    "frontend-modern/src/components/AI/Chat/SlashCommandAutocomplete.tsx": "2073d3c388590dad8c291dfc7a0d8a3132e4c18a50014918c0a2a90510401c28",
+    "frontend-modern/src/components/AI/Chat/index.tsx": "010def979665a1db9be3dfa3537ebfa8714125fb7ce9212102fb49465d5d22db"
   },
   "routes": [
-    "/alerts/overview",
-    "/actions",
-    "/patrol",
-    "/settings/infrastructure",
-    "/settings/system-general"
+    "/"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 390,
@@ -35,15 +27,20 @@
     }
   ],
   "states": [
-    "Desktop primary navigation with the Patrol utility link carrying an amber attention-count badge on /alerts/overview",
-    "Phone-width mobile navigation rail with the Patrol destination carrying an amber count badge on /actions",
-    "Update banner showing the Pre-release badge beside the update message",
-    "Skip to main content link revealed at the top-left after the first Tab from the page start, ahead of the update banner controls, at desktop and phone widths"
+    "Closed named Assistant composer with no listbox relationship in desktop docked and narrow overlay layouts",
+    "Open slash-command list with the selected active option and the wrapped final option scrolled into view",
+    "Filtered slash-command empty result with listbox ownership and no stale active descendant",
+    "Slash command selected with Tab and popup closed with composer focus restored",
+    "Open resource mention list with the selected active option and the wrapped final option scrolled into view",
+    "Mention selected by pointer and popup closed with composer focus retained",
+    "Autocomplete closed by Escape and outside pointer dismissal without stale relationships"
   ],
   "interactions": [
-    "ran the axe-core WCAG 2.x A/AA scan on /alerts/overview, /patrol, /settings/infrastructure and /settings/system-general at 1280x720 with the desktop attention badge rendered and confirmed no color-contrast violation remains on the navigation badges",
-    "ran the axe-core WCAG 2.x A/AA scan on /actions at 390x844 with the mobile rail count badge rendered and confirmed no color-contrast violation remains on the badge or the Pre-release label",
-    "read the computed badge colours in the page and confirmed the count text now resolves to an opaque amber-800 instead of the theme's 25 percent alpha amber-900",
-    "reset focus to the document body on /actions at 390x844 with the update banner present, pressed Tab and confirmed the skip link received focus and became visible, then pressed Enter and confirmed focus moved to the main landmark"
+    "opened Pulse Assistant from the current-view launcher and verified the composer accessible name and focus",
+    "opened slash commands and mentions by typing, then checked aria-controls, aria-activedescendant, aria-selected, and option tab exclusion",
+    "moved active options with ArrowDown and wrapped with ArrowUp, hovered options by pointer, and verified active options remained visible",
+    "selected /new with Tab and selected a mention by pointer while verifying focus remained in the composer",
+    "exercised Escape and outside pointer dismissal, including the no-match slash-command state",
+    "inspected desktop and narrow pixels for popup placement, viewport containment, clipping, stacking, scrolling, and visible composer focus"
   ]
 }
