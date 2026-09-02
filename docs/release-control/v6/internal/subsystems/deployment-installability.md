@@ -1445,12 +1445,10 @@ artifact-selection behaviour.
    later installed release. Automatic release communication is limited to a
    compact non-blocking update notice; the detailed changelog may open only
    after explicit operator action. Preparing that notice records the version
-   immediately so a reload cannot turn it into a recurring prompt. When the
-   one-time telemetry disclosure owns the same session, it suppresses the
-   lower-priority release notice instead of creating consecutive notices.
+   immediately so a reload cannot turn it into a recurring prompt.
    `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
-   reservation boundary so the release notice, telemetry disclosure, and
-   GitHub gratitude prompt cannot create a one-two sequence. The post-update
+   reservation boundary so the release notice and the GitHub gratitude prompt
+   cannot create a one-two sequence. The post-update
    surface must not reuse the Highlights summary as its content,
    and must stay silent for a first baseline, malformed or development
    versions, missing releases, and releases without categorized changes.
@@ -1458,14 +1456,14 @@ artifact-selection behaviour.
    keeps it to at most three short plain-text bullets of no more than 140
    characters each, with links, code, issue references, and nested structure
    reserved for the categorized or full release notes.
-   The same post-update communication boundary owns the one-time schema-v2
-   telemetry payload notice. It must use a non-blocking shared notice banner,
-   appear only for existing installations on a published build, stay silent
-   for fresh installs and development/source builds, persist acknowledgement,
-   and provide direct payload-preview, disable, and privacy-disclosure actions.
-   The corresponding next-release disclosure must enumerate the added coarse
-   signal categories and exclusions without inventing a release version before
-   the packet is cut.
+   The post-update communication boundary does not announce telemetry payload
+   changes. Those are disclosed in the dated `Payload changes` section of
+   `docs/PRIVACY.md` and in the release notes of the first release that carries
+   them, so `frontend-modern/src/components/WhatsNewCard.tsx` renders only the
+   release notice and the notice reservation recognizes only the release notice
+   and the GitHub gratitude prompt as owners. A retired payload-update banner
+   paired a disclosure with a one-click disable action; `security-privacy` now
+   owns when an in-app telemetry notice is warranted and forbids that pairing.
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, deterministic dev auth seeding, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/lib/hot-dev-runtime.sh`, `scripts/lib/hot-dev-auth.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
    First-run browser helpers are part of that dev-runtime proof boundary. They
    must preserve the setup-created API token in the shared runtime state, prefer

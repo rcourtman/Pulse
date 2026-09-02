@@ -272,6 +272,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.security.error.passwordRequired': 'Bitte geben Sie ein Passwort ein',
   'setup.security.error.passwordTooShort': 'Das Passwort muss mindestens 12 Zeichen haben',
   'setup.security.error.setupFailed': 'Einrichtung fehlgeschlagen: {error}',
+  'setup.security.error.telemetryDisableFailed':
+    'Ihr Admin-Konto wurde erstellt, aber die Nutzungsstatistiken konnten nicht ausgeschaltet werden. Sie koennen sie unter Einstellungen → System → Allgemein ausschalten.',
   'setup.security.generatedPasswordHelp':
     'Ein sicheres 20-Zeichen-Passwort wird erzeugt und auf dem naechsten Bildschirm angezeigt.',
   'setup.security.label.confirmPassword': 'Passwort bestaetigen',
@@ -288,10 +290,16 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.security.placeholder.username': 'admin',
   'setup.security.showPassword.hide': 'Ausblenden',
   'setup.security.showPassword.show': 'Anzeigen',
+  'setup.security.telemetry.description':
+    'Eine kleine taegliche Nutzungszusammenfassung senden: Zaehler und An/Aus-Flags mit einer rotierenden pseudonymen Installations-ID, niemals Hostnamen, Zugangsdaten oder IP-Adressen. Jederzeit in den Einstellungen aenderbar.',
+  'setup.security.telemetry.title': 'Nutzungsstatistiken',
   'setup.security.title': 'Admin-Konto erstellen',
   'setup.step.firstSource': 'Erste Quelle',
   'setup.step.security': 'Sicherheit',
   'setup.step.unlockServer': 'Server entsperren',
+  'setup.welcome.telemetryNotice.description':
+    'Pulse sendet eine kleine taegliche Nutzungszusammenfassung, damit der Maintainer sehen kann, wie viele Installationen aktiv sind, welche Releases im Einsatz sind und welche Funktionen genutzt werden. Sie enthaelt Zaehler und An/Aus-Flags mit einer rotierenden pseudonymen Installations-ID, niemals Hostnamen, Zugangsdaten, IP-Adressen oder etwas, das Sie eingeben. Sie ist standardmaessig aktiviert. Sie koennen sie im naechsten Schritt oder jederzeit in den Einstellungen ausschalten.',
+  'setup.welcome.telemetryNotice.title': 'Nutzungsstatistiken',
   'setup.wizard.ariaLabel': 'Pulse-Einrichtungsassistent',
   'setup.welcome.action.continueSecurity': 'Weiter zu Sicherheit',
   'setup.welcome.action.verifyToken': 'Bootstrap-Token pruefen',
@@ -330,10 +338,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.welcome.hero.title': 'Willkommen bei Pulse',
   'setup.welcome.placeholder.bootstrapToken': 'Bootstrap-Token einfuegen',
   'setup.welcome.success.commandCopied': 'Befehl in Zwischenablage kopiert',
-  'setup.welcome.telemetryNotice.description':
-    'Ausgehende Nutzungstelemetrie ist standardmaessig aktiviert. Pulse sendet einen verzoegerten Start-Ping und einen taeglichen Heartbeat mit einer rotierenden pseudonymen Installations-ID, Release-/Runtime-Details, aggregierten Zaehlern und Funktionsflags. Um sie vor jedem Ping zu deaktivieren, setzen Sie PULSE_TELEMETRY=false, bevor Sie Pulse starten. Spaeter koennen Sie sie auch in den Einstellungen ausschalten.',
   'setup.welcome.telemetryNotice.detailsLink': 'Details',
-  'setup.welcome.telemetryNotice.title': 'Nutzungstelemetrie ist standardmaessig aktiviert',
   'setup.welcome.tokenHelp.afterVerify':
     'Nachdem Pulse dieses Token geprueft hat, erstellen Sie im naechsten Schritt das Admin-Konto fuer diesen Server.',
   'setup.welcome.tokenHelp.docker':
@@ -386,22 +391,14 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.general.monitoringCadence.section.description':
     'Steuern Sie, wie oft Pulse Proxmox VE-Knoten abfragt.',
   'settings.general.monitoringCadence.section.title': 'Monitoring-Takt',
+  'settings.general.telemetry.description':
+    'Helfen Sie, Pulse zu verbessern, indem Sie eine taegliche Nutzungszusammenfassung teilen. Payload anzeigen zeigt genau, was gesendet wuerde: eine rotierende pseudonyme Installations-ID, normalisierte Release-Identitaet, Laufzeitplattform, grobe Kategorien fuer Bereitstellungsart und Lebenszyklus, aggregierte Ressourcen- und Ergebniszahlen, grobe Funktionsflags, inhaltsfreie Nutzungszaehler fuer Patrol, Assistant und Capability-APIs sowie vier sitzungsdeduplizierte Zaehler zur Nutzung des Workload-Verlaufs. Er enthaelt niemals Hostnamen, Zugangsdaten, Infrastrukturkennungen, URLs, Pfade, Gebietsschema, Browser-Ereignisse, Clickstream-Daten, Prompts, Chatnachrichten, Befehlstexte, Aktionsausgaben, Token-Werte, Namen, E-Mail-Adressen oder IP-Adressen. Telemetriezeilen werden bis zu 90 Tage aufbewahrt, und Anfrage-IP-Adressen werden nur kurzzeitig fuer Rate-Limiting verwendet und nicht in Telemetriezeilen gespeichert.',
   'settings.general.temperature.description': 'Temperaturen in Celsius oder Fahrenheit anzeigen.',
   'settings.general.temperature.title': 'Temperatureinheit',
   'settings.general.telemetry.copyJson': 'JSON kopieren',
-  'settings.general.telemetry.description':
-    'Helfen Sie, Pulse zu verbessern, indem Sie ausgehende Nutzungsdaten teilen: eine rotierende pseudonyme Installations-ID, normalisierte Release-Identitaet, Laufzeitplattform, grobe Kategorien fuer Bereitstellungsart und Lebenszyklus, aggregierte Ressourcen- und Ergebniszahlen, grobe Funktionsflags sowie inhaltsfreie Nutzungszaehler fuer Patrol, Assistant und Capability-APIs. Der Payload enthaelt keine Hostnamen, Zugangsdaten, Infrastrukturkennungen, URLs, Pfade, Gebietsschema, Browser-Ereignisse, Prompts, Chatnachrichten, Befehlstexte, Aktionsausgaben, Token-Werte, Namen, E-Mail-Adressen oder IP-Adressen. Telemetriezeilen werden bis zu 90 Tage aufbewahrt, und Anfrage-IP-Adressen werden nur kurzzeitig fuer Rate-Limiting verwendet und nicht in Telemetriezeilen gespeichert.',
   'settings.general.telemetry.disabledPreview':
     'Telemetrie ist derzeit deaktiviert. Diese Vorschau zeigt den Payload, den Pulse senden wuerde, wenn Sie sie aktivieren.',
   'settings.general.telemetry.fullDetails': 'Details',
-  'settings.general.telemetry.notice.description':
-    'Pulse fuegt jetzt grobe Signale zu Bereitstellung, Lebenszyklus, Bestandsgroesse sowie aggregierte Alarm- und Benachrichtigungsergebnisse hinzu, wenn ausgehende Nutzungstelemetrie aktiviert ist. Persoenliche Daten, Infrastruktur-IDs, Inhalte, Browser-Ereignisse und Clickstream-Daten bleiben ausgeschlossen.',
-  'settings.general.telemetry.notice.disable': 'Telemetrie deaktivieren',
-  'settings.general.telemetry.notice.dismissLabel': 'Hinweis zum Telemetrie-Payload schliessen',
-  'settings.general.telemetry.notice.dismissTitle': 'Dauerhaft schliessen',
-  'settings.general.telemetry.notice.preview': 'Payload anzeigen',
-  'settings.general.telemetry.notice.privacy': 'Datenschutzdetails',
-  'settings.general.telemetry.notice.title': 'Telemetrie-Payload aktualisiert',
   'settings.general.telemetry.payloadAriaLabel': 'Telemetrie-Payload-Vorschau',
   'settings.general.telemetry.payloadTitle': 'Aktueller Heartbeat-Payload',
   'settings.general.telemetry.previewPayload': 'Payload anzeigen',

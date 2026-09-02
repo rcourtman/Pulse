@@ -230,8 +230,6 @@ describe('i18n foundation', () => {
 
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       const telemetryDescription = I18N_MESSAGES[locale]['settings.general.telemetry.description'];
-      const telemetryUpdateNotice =
-        I18N_MESSAGES[locale]['settings.general.telemetry.notice.description'];
 
       expect(I18N_MESSAGES[locale]['settings.general.language.description']).toContain('API');
       expect(telemetryDescription).toContain('Pulse');
@@ -241,8 +239,6 @@ describe('i18n foundation', () => {
       for (const term of telemetryPrivacyTerms[locale]) {
         expect(telemetryDescription, `${locale}:${term}`).toContain(term);
       }
-      expect(telemetryUpdateNotice).toContain('Pulse');
-      expect(telemetryUpdateNotice).not.toMatch(/anonymous/i);
       expect(I18N_MESSAGES[locale]['settings.general.telemetry.copyJson']).toContain('JSON');
       expect(
         t(
@@ -295,9 +291,14 @@ describe('i18n foundation', () => {
       const deploymentChoice = I18N_MESSAGES[locale]['setup.welcome.deploymentHint.choose'];
       const genericTokenHelp = I18N_MESSAGES[locale]['setup.welcome.tokenHelp.generic'];
 
+      const setupTelemetryChoice = I18N_MESSAGES[locale]['setup.security.telemetry.description'];
+
       expect(telemetryNotice).toContain('Pulse');
-      expect(telemetryNotice).toContain('PULSE_TELEMETRY=false');
+      expect(telemetryNotice).toContain('IP');
+      expect(telemetryNotice).not.toContain('PULSE_TELEMETRY');
       expect(telemetryNotice).not.toMatch(/anonymous/i);
+      expect(setupTelemetryChoice).toContain('IP');
+      expect(setupTelemetryChoice).not.toMatch(/anonymous/i);
       expect(deploymentChoice).toContain('Pulse');
       expect(deploymentChoice).not.toContain('Docker');
       expect(deploymentChoice).not.toContain('LXC');

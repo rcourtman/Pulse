@@ -934,10 +934,12 @@ describe('settings architecture guardrails', () => {
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.payloadAriaLabel');
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.resetId');
     expect(generalSettingsPanelSource).toContain('id="usage-telemetry"');
-    expect(settingsSource).toContain("get('telemetryAction')");
-    expect(settingsSource).toContain('systemSettings.handleLoadTelemetryPreview()');
-    expect(settingsSource).toContain('systemSettings.handleTelemetryEnabledChange(false)');
-    expect(settingsSource).toContain("navigate('/settings/system-general#usage-telemetry'");
+    // The payload-update banner and its one-click disable deep link were
+    // retired: payload changes are disclosed in release notes and the dated
+    // PRIVACY.md changelog, and the preference is changed only from the panel.
+    expect(settingsSource).not.toContain('telemetryAction');
+    expect(settingsSource).not.toContain('handleTelemetryEnabledChange(false)');
+    expect(generalSettingsPanelSource).toContain('variant="primary"');
     expect(generalSettingsPanelSource).not.toContain('license_tier');
     expect(generalSettingsPanelSource).not.toContain('api_tokens');
   });
