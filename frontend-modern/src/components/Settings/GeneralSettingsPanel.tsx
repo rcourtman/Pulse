@@ -223,6 +223,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           <Toggle
             checked={layoutStore.isFullWidth()}
             class="shrink-0"
+            ariaLabel={t('settings.general.fullWidth.title')}
             onChange={() => layoutStore.toggle()}
           />
         </div>
@@ -276,6 +277,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <Toggle
               checked={props.telemetryEnabled()}
               class="shrink-0"
+              ariaLabel={t('settings.general.telemetry.title')}
               disabled={props.telemetryEnabledLocked() || props.savingTelemetry()}
               onChange={() => props.handleTelemetryEnabledChange(!props.telemetryEnabled())}
             />
