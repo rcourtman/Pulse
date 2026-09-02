@@ -1,20 +1,17 @@
 {
   "version": 1,
-  "base_sha": "facee87bb4e7b84a0ce682d6e142d35b55be3ace",
-  "verified_at": "2026-09-02T08:55:07Z",
+  "base_sha": "b5f694b216e7a333c8ce26746b4e218e59c65efc",
+  "verified_at": "2026-09-02T10:09:24Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/patrol.ts",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
+    "frontend-modern/src/api/settings.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrol.ts": "c411c12d504b53e64b1435c5b336ba953f5051f6909f2bfef3e46067d5b88f34",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "0d46fd5afbbdf8e1b885fa558be070c07203cc6613dda4458e9790fa8f2e4099",
-    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "9a9728f618c502a5379f56e93cad29ea939f5c26e73e3c7d22195308a8087b81"
+    "frontend-modern/src/api/settings.ts": "6eebcc6d711b8ca26ff435eaa89918567c96c17e8a70fd0c3eb688335f89925c"
   },
   "routes": [
-    "/patrol"
+    "/settings/system-general#usage-telemetry",
+    "/docs/PRIVACY"
   ],
   "viewports": [
     {
@@ -22,21 +19,18 @@
       "height": 800
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Activity tab with the This week card above Verified outcomes, populated from an isolated mock-mode backend (11 runs, 3 new issues, watch-only mode)",
-    "card tiles in single column at 375px with no horizontal overflow",
-    "card refresh in flight and settled",
-    "Verified outcomes empty state and Review and history below the card",
-    "watch-only tile copy for Investigated and Fixes run"
+    "Settings > System > General usage telemetry section with the schema v17 payload preview loaded from a scratch build of this exact tree on main facee87bb4e7 (mock mode, PULSE_MOCK_MODE=true, backend on 7656, Vite on 5174): the pre[aria-label=\"Telemetry payload preview\"] payload reported schema_version 17 and every new field (ai_provider_class=none, pulse_intelligence_patrol_autonomy_level=monitor, both Patrol token buckets=zero, all thirteen pulse_intelligence_patrol_investigation_outcome_*_30d counts=0 summing to pulse_intelligence_patrol_investigations_30d=0) at both viewports, with document.scrollWidth equal to the viewport width (no horizontal overflow) on desktop and narrow.",
+    "Shipped privacy document popup at /docs/PRIVACY opened from the Full details link, carrying the schema version 17 row and the new field rows (tests/integration/tests/19-telemetry-disclosure.spec.ts, chromium project, 2 passed; the mobile projects skip this desktop-only spec by design and were covered by the narrow-viewport manual inspection instead).",
+    "Re-verified after rebasing onto main facee87bb4e7 with the hosted_legacy vocabulary rename: same spec run (2 passed on chromium) and the same two-viewport inspection, schema_version 17, all seventeen fields present, ai_provider_class=none, outcome buckets summing to the investigation count, no horizontal overflow at 390 wide.",
+    "Re-verified again on main b5f694b216e7 (Patrol page and Helm changes landed in between, none touching the settings preview): disclosure spec 2 passed on chromium after one warm-up retry, and the two-viewport inspection again reported schema_version 17, all seventeen fields, buckets summing to the investigation count, no horizontal overflow at 390 wide."
   ],
   "interactions": [
-    "clicked the Activity workspace tab",
-    "scrolled the card into view at desktop and narrow widths",
-    "clicked Refresh this week's summary and confirmed the tiles reloaded without an error state",
-    "checked console for card-originated errors (only unrelated dev websocket/update-check noise)"
+    "Loaded /settings/system-general#usage-telemetry with the harness cookie session at 1280x800 and 390x844, scrolled the Preview payload button into view, clicked it, waited for the payload pre, parsed the JSON, and asserted the seventeen schema v17 keys were present with closed-vocabulary values.",
+    "Ran tests/integration/tests/19-telemetry-disclosure.spec.ts (chromium and mobile-chrome projects) against the scratch build with EXPECTED_TELEMETRY_SCHEMA_VERSION = 17: Full details popup to /docs/PRIVACY, Preview payload click, schema_version and counter assertions, and the install ID reset flow."
   ]
 }
