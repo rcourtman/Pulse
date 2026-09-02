@@ -203,6 +203,7 @@ else
     --workflow-path .github/workflows/create-release.yml \
     --branch "$CURRENT_BRANCH" \
     --require version \
+    --require expected_source_sha \
     --require release_notes \
     --require release_screenshot_plan \
     --require promoted_from_tag \
@@ -219,6 +220,7 @@ else
 
   jq -n \
     --arg version "$VERSION" \
+    --arg expected_source_sha "$LOCAL_SHA" \
     --rawfile release_notes "$NOTES_FILE" \
     --rawfile release_screenshot_plan "$VISUAL_PLAN_FILE" \
     --arg promoted_from_tag "" \
@@ -234,6 +236,7 @@ else
     --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
     '{
       version: $version,
+      expected_source_sha: $expected_source_sha,
       release_notes: $release_notes,
       release_screenshot_plan: $release_screenshot_plan,
       promoted_from_tag: $promoted_from_tag,

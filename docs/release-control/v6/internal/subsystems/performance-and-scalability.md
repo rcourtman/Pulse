@@ -915,6 +915,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     contract: the parent distributes the two rails while they fit and a wrapped
     action rail starts at the leading edge. It must not add resize observers,
     viewport listeners, layout signals, or page-local measurement branches.
+    Keyboard navigation in a long FilterBar option list may reveal the active
+    descendant with one id-based lookup and nearest-edge scroll per active-id
+    transition; it must not scan or measure the option catalog, add a scroll
+    listener, or make consumers duplicate that visibility work.
     Large-estate option counts must reuse one memoized stats pass over the
     unfiltered workload snapshot from `useWorkloadsState`; type and status
     options read that bounded projection and must not rescan resources during

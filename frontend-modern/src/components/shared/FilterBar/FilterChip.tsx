@@ -5,6 +5,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  createUniqueId,
   on,
   onCleanup,
 } from 'solid-js';
@@ -23,17 +24,28 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
   const [activeIndex, setActiveIndex] = createSignal(0);
+  const listboxId = createUniqueId();
+  const popoverId = createUniqueId();
   let containerRef: HTMLDivElement | undefined;
   let searchInputRef: HTMLInputElement | undefined;
+  let triggerRef: HTMLButtonElement | undefined;
+
+  const close = (restoreFocus = false) => {
+    setOpen(false);
+    if (restoreFocus) queueMicrotask(() => triggerRef?.focus());
+  };
 
   const handleClickOutside = (event: MouseEvent) => {
     if (containerRef && !containerRef.contains(event.target as Node)) {
-      setOpen(false);
+      close();
     }
   };
 
   const handleEscape = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') setOpen(false);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close(true);
+    }
   };
 
   createEffect(() => {
@@ -82,7 +94,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     const option = options[index];
     if (!option) return;
     props.filter.setValue(option.value);
-    setOpen(false);
+    close(true);
   };
 
   const handleSearchKeyDown = (event: KeyboardEvent) => {
@@ -101,6 +113,23 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     }
   };
 
+  const activeOptionId = createMemo(() =>
+    filteredOptions().length > 0 ? `${listboxId}-option-${activeIndex()}` : undefined,
+  );
+
+  // aria-activedescendant moves assistive-technology focus without moving DOM
+  // focus. Keep the same option visible for sighted keyboard users when the
+  // value catalog is taller than the scrollable listbox.
+  createEffect(() => {
+    if (!open()) return;
+    const id = activeOptionId();
+    if (!id) return;
+    queueMicrotask(() => {
+      if (!open() || activeOptionId() !== id) return;
+      document.getElementById(id)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    });
+  });
+
   // Seed activeIndex on the currently-selected option when the popover opens
   // so Enter without further typing keeps the existing value (no-op) rather
   // than picking the first option in the list.
@@ -117,11 +146,18 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     <div ref={containerRef} class="relative inline-flex">
       <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-xs dark:border-blue-900 dark:bg-blue-950/40">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen((value) => !value)}
+          onKeyDown={(event) => {
+            if (open() || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+            event.preventDefault();
+            setOpen(true);
+          }}
           aria-haspopup="listbox"
           aria-expanded={open()}
-          class="inline-flex items-center gap-1 rounded-l-full py-0.5 pl-2 pr-1 text-base-content hover:bg-blue-100/70 dark:hover:bg-blue-900/40"
+          aria-controls={open() ? listboxId : undefined}
+          class="inline-flex min-h-6 items-center gap-1 rounded-l-full py-0.5 pl-2 pr-1 text-base-content hover:bg-blue-100/70 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 dark:hover:bg-blue-900/40"
         >
           <span class="text-muted">{props.filter.label}:</span>
           <span class="font-medium">{formatFilterChipValue(props.filter)}</span>
@@ -130,67 +166,89 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
           type="button"
           onClick={() => clearFilter(props.filter)}
           aria-label={`Remove ${props.filter.label} filter`}
-          class="rounded-r-full py-0.5 pr-1.5 pl-1 text-muted hover:bg-blue-100 hover:text-base-content dark:hover:bg-blue-900/50"
+          class="inline-flex min-h-6 min-w-6 items-center justify-center rounded-r-full py-0.5 pr-1.5 pl-1 text-muted hover:bg-blue-100 hover:text-base-content focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 dark:hover:bg-blue-900/50"
         >
-          <XIcon class="h-3 w-3" />
+          <XIcon class="h-3 w-3" aria-hidden="true" />
         </button>
       </div>
 
       <Show when={open()}>
         <div
-          role="listbox"
-          aria-label={props.filter.label}
-          class="absolute left-0 top-[calc(100%+0.25rem)] z-50 w-56 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-surface shadow-lg"
+          id={popoverId}
+          class="absolute bottom-[calc(100%+0.25rem)] left-0 z-50 w-56 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-surface shadow-lg sm:bottom-auto sm:top-[calc(100%+0.25rem)]"
         >
           <div class="border-b border-border-subtle px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
             {props.filter.label}
           </div>
           <div class="relative border-b border-border-subtle">
-            <SearchIcon class="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted" />
+            <SearchIcon
+              class="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted"
+              aria-hidden="true"
+            />
             <input
               ref={searchInputRef}
               type="text"
+              role="combobox"
               value={query()}
-              onInput={(event) => setQuery(event.currentTarget.value)}
+              onInput={(event) => {
+                setActiveIndex(0);
+                setQuery(event.currentTarget.value);
+              }}
               onKeyDown={handleSearchKeyDown}
               placeholder="Filter values..."
               aria-label={`Filter ${props.filter.label} values`}
+              aria-autocomplete="list"
+              aria-controls={listboxId}
+              aria-expanded="true"
+              aria-activedescendant={activeOptionId()}
               class="w-full bg-transparent py-1.5 pl-7 pr-2 text-xs text-base-content placeholder-muted outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded"
             />
           </div>
-          <div class="max-h-64 overflow-y-auto py-1">
-            <Show
-              when={filteredOptions().length > 0}
-              fallback={<div class="px-3 py-2 text-xs text-muted">No values match.</div>}
-            >
-              <For each={filteredOptions()}>
-                {(option, index) => {
-                  const isSelected = () => props.filter.value() === option.value;
-                  const isActive = () => activeIndex() === index();
-                  return (
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected()}
-                      onMouseEnter={() => setActiveIndex(index())}
-                      onClick={() => {
-                        props.filter.setValue(option.value);
-                        setOpen(false);
-                      }}
-                      class={`flex w-full items-center justify-between px-3 py-1.5 text-left text-xs text-base-content hover:bg-surface-hover ${
-                        isActive() ? 'bg-surface-hover' : ''
-                      }`}
-                    >
-                      <span class={isSelected() ? 'font-medium' : ''}>{option.label}</span>
-                      <Show when={isSelected()}>
-                        <CheckIcon class="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                      </Show>
-                    </button>
-                  );
-                }}
-              </For>
-            </Show>
+          <div
+            id={listboxId}
+            role="listbox"
+            aria-label={props.filter.label}
+            class="max-h-64 overflow-y-auto py-1"
+          >
+            <For each={filteredOptions()}>
+              {(option, index) => {
+                const isSelected = () => props.filter.value() === option.value;
+                const isActive = () => activeIndex() === index();
+                return (
+                  <button
+                    id={`${listboxId}-option-${index()}`}
+                    type="button"
+                    role="option"
+                    tabIndex={-1}
+                    aria-selected={isActive()}
+                    aria-label={option.ariaLabel}
+                    onMouseEnter={() => setActiveIndex(index())}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      props.filter.setValue(option.value);
+                      close(true);
+                    }}
+                    class={`flex min-h-6 w-full items-center justify-between px-3 py-1.5 text-left text-xs text-base-content hover:bg-surface-hover ${
+                      isActive() ? 'bg-surface-hover' : ''
+                    }`}
+                  >
+                    <span class={isSelected() ? 'font-medium' : ''}>{option.label}</span>
+                    <Show when={isSelected()}>
+                      <CheckIcon
+                        class="h-3 w-3 text-blue-600 dark:text-blue-400"
+                        aria-hidden="true"
+                      />
+                    </Show>
+                  </button>
+                );
+              }}
+            </For>
           </div>
+          <Show when={filteredOptions().length === 0}>
+            <div role="status" class="px-3 py-2 text-xs text-muted">
+              No values match.
+            </div>
+          </Show>
         </div>
       </Show>
     </div>

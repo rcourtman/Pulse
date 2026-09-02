@@ -8525,6 +8525,7 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).not.toContain('LabeledFilterSelect');
     expect(filterBarSource).not.toContain('LabeledFilterToggleGroup');
     expect(filterBarSource).not.toContain('filterControlsVariant');
+    expect(filterBarSource).toContain('min-h-6 min-w-6');
 
     expect(filterChipSource).toContain('clearFilter,');
     expect(filterChipSource).toContain('formatFilterChipValue,');
@@ -8544,6 +8545,12 @@ describe('shared primitive guardrails', () => {
     expect(filterChipSource).toContain("event.key === 'ArrowUp'");
     expect(filterChipSource).toContain("event.key === 'Enter'");
     expect(filterChipSource).toContain('commitActive');
+    expect(filterChipSource).toContain(
+      "document.getElementById(id)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })",
+    );
+    expect(filterChipSource).toContain('aria-selected={isActive()}');
+    expect(filterChipSource).not.toContain('querySelectorAll');
+    expect(filterChipSource).not.toContain("addEventListener('scroll'");
     expect(filterChipSource).toContain('queueMicrotask(() => searchInputRef?.focus())');
 
     expect(addFilterMenuSource).toContain('isFilterSet,');
