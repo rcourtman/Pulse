@@ -272,6 +272,15 @@ test.describe('Ceph alert thresholds', () => {
     await expect(page).toHaveURL(/\/alerts\/thresholds\/infrastructure/);
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Storage Devices' })).toBeVisible();
+    // Threshold sections open collapsed; the collapsed body is inert and
+    // aria-hidden, so expand it before asserting on the rows it contains.
+    const storageToggle = page
+      .getByRole('heading', { name: 'Storage Devices' })
+      .getByRole('button');
+    if ((await storageToggle.getAttribute('aria-expanded')) === 'false') {
+      await storageToggle.click();
+    }
+    await expect(storageToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByText('ceph-pool', { exact: true })).toBeVisible();
     await expect(page.getByText('data_replication', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Revert to defaults for ceph-pool' })).toBeVisible();

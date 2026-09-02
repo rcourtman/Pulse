@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   Browser,
+  Locator,
   Page,
   Request,
   expect,
@@ -1400,6 +1401,24 @@ export async function getMockMode(page: Page) {
   throw new Error(
     `Failed to read mock mode after 3 attempts: ${lastError?.message}`,
   );
+}
+
+/**
+ * The desktop shell's primary navigation. Since the navigation became links
+ * (`<nav aria-label="Primary navigation">` with one `<a>` per destination),
+ * destinations are addressed by link role; the utility links carry their
+ * count in the accessible name ("Patrol: 2 active attention items"), so pass a
+ * regular expression when the count is not under test.
+ */
+export function primaryNavigation(page: Page): Locator {
+  return page.getByRole("navigation", { name: "Primary navigation" });
+}
+
+export function primaryNavigationLink(page: Page, name: string | RegExp): Locator {
+  return primaryNavigation(page).getByRole("link", {
+    name,
+    exact: typeof name === "string",
+  });
 }
 
 /**
