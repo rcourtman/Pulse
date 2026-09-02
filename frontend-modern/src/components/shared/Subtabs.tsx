@@ -40,7 +40,7 @@ export const subtabsListClass =
 export const subtabsRailClass = 'relative min-w-0 flex-1';
 export const subtabsTrailingRowClass = 'flex flex-wrap items-center justify-between gap-3';
 export const subtabButtonClass =
-  'inline-flex min-h-9 shrink-0 select-none items-center whitespace-nowrap border-b-2 px-1 py-1 text-xs font-medium transition-colors sm:min-h-10 sm:py-2 sm:text-sm';
+  'inline-flex min-h-9 shrink-0 select-none items-center whitespace-nowrap border-b-2 px-1 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:min-h-10 sm:py-2 sm:text-sm';
 export const subtabButtonActiveClass = 'border-blue-600 text-base-content';
 export const subtabButtonInactiveClass = 'border-transparent text-muted hover:text-base-content';
 export const Subtabs: Component<SubtabsProps> = (props) => {
@@ -107,6 +107,36 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
     });
   };
 
+  const focusTab = (currentTab: HTMLButtonElement, key: string) => {
+    const enabledTabs = Array.from(
+      currentTab
+        .closest('[role="tablist"]')
+        ?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)') ?? [],
+    );
+    const currentIndex = enabledTabs.indexOf(currentTab);
+    if (currentIndex < 0 || enabledTabs.length < 2) return;
+
+    let targetIndex: number;
+    switch (key) {
+      case 'ArrowLeft':
+        targetIndex = (currentIndex - 1 + enabledTabs.length) % enabledTabs.length;
+        break;
+      case 'ArrowRight':
+        targetIndex = (currentIndex + 1) % enabledTabs.length;
+        break;
+      case 'Home':
+        targetIndex = 0;
+        break;
+      case 'End':
+        targetIndex = enabledTabs.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    enabledTabs[targetIndex]?.focus();
+  };
+
   const tablist = () => (
     <div class={subtabsRailClass}>
       <div
@@ -126,6 +156,17 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
                 tabIndex={selected() ? 0 : -1}
                 disabled={tab.disabled}
                 onClick={() => local.onChange(tab.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === 'ArrowLeft' ||
+                    event.key === 'ArrowRight' ||
+                    event.key === 'Home' ||
+                    event.key === 'End'
+                  ) {
+                    event.preventDefault();
+                    focusTab(event.currentTarget, event.key);
+                  }
+                }}
                 class={`${subtabButtonClass} ${
                   selected() ? subtabButtonActiveClass : subtabButtonInactiveClass
                 } ${local.tabClass ?? ''}`.trim()}
