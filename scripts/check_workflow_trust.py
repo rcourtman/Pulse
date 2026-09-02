@@ -860,6 +860,10 @@ def _is_hardened_closed_pr_cancellation(path: Path, lines: list[str]) -> bool:
         "  pull-requests: read",
     ]:
         return False
+    if sum(
+        bool(PERMISSIONS_RE.match(line.split("#", 1)[0])) for line in lines
+    ) != 1:
+        return False
 
     if any(RUN_RE.match(line.split("#", 1)[0]) for line in lines):
         return False

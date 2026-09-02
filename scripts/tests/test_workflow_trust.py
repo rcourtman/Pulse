@@ -401,6 +401,22 @@ steps:
             any("pull_request_target is prohibited" in finding for finding in findings)
         )
 
+        excess_permissions = workflow.replace(
+            "    timeout-minutes: 5",
+            "    timeout-minutes: 5\n"
+            "    permissions:\n"
+            "      actions: write\n"
+            "      contents: write\n"
+            "      pull-requests: read",
+        )
+        findings = self.audit(
+            excess_permissions,
+            workflow_trust.SAFE_PULL_REQUEST_TARGET_WORKFLOW,
+        )
+        self.assertTrue(
+            any("pull_request_target is prohibited" in finding for finding in findings)
+        )
+
         findings = self.audit(workflow)
         self.assertTrue(
             any("pull_request_target is prohibited" in finding for finding in findings)
