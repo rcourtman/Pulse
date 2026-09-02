@@ -2131,6 +2131,13 @@ artifact-selection behaviour.
    trigger, promotion resolver, rendered release body, current upgrade guide,
    or current release packet that routes systemd/LXC rollback through the
    Unified Agent installer, and must retain explicit Docker image guidance.
+17. Bind every publishing release dispatch to the exact commit admitted by the
+   caller. `.github/workflows/create-release.yml` must require a full
+   40-character `expected_source_sha` and, before checkout, reject the run
+   unless both `GITHUB_SHA` and `GITHUB_WORKFLOW_SHA` equal that commit.
+   `scripts/trigger-release.sh` and `scripts/trigger-stable-patch.sh` must send
+   the exact remote candidate SHA they already verified; branch ancestry or a
+   later branch tip is not equivalent release admission.
 
 ## Current State
 

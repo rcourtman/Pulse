@@ -120,6 +120,7 @@ python3 scripts/check-workflow-dispatch-inputs.py \
   --workflow-path .github/workflows/create-release.yml \
   --branch "$CURRENT_BRANCH" \
   --require version \
+  --require expected_source_sha \
   --require release_notes \
   --require release_screenshot_plan \
   --require promoted_from_tag \
@@ -372,6 +373,7 @@ echo "Triggering release workflow..."
 if [ -n "$NOTES_FILE" ]; then
   jq -n \
     --arg version "$VERSION" \
+    --arg expected_source_sha "$LOCAL" \
     --rawfile release_notes "$NOTES_FILE" \
     --rawfile release_screenshot_plan "$VISUAL_PLAN_FILE" \
     --arg rollback_version "$ROLLBACK_VERSION" \
@@ -387,6 +389,7 @@ if [ -n "$NOTES_FILE" ]; then
     --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
     '{
       version: $version,
+      expected_source_sha: $expected_source_sha,
       release_notes: $release_notes,
       release_screenshot_plan: $release_screenshot_plan,
       rollback_version: $rollback_version,
