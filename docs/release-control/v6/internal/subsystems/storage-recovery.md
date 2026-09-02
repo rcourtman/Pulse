@@ -997,6 +997,13 @@ recovery scope, or a storage/recovery-owned secret source.
    aggregate milestones and do not represent workload history data, backup
    history, recovery points, retention policy, restore evidence, or storage
    provider state; storage/recovery surfaces must not consume them as such.
+   The schema v17 Patrol posture fields assembled through `internal/api/`
+   (Patrol autonomy level, model route class, coarse token buckets, and
+   investigation outcome counts) are the same kind of adjacent privacy/API
+   telemetry: closed buckets derived from AI configuration, the local usage
+   ledger, and the findings store. They do not represent backup history,
+   recovery points, retention policy, restore evidence, or storage provider
+   state, and storage/recovery surfaces must not consume them as such.
    Commercial migration startup behavior in
    `internal/api/licensing_handlers.go` and `internal/api/licensing_bridge.go`
    remains adjacent cloud-paid/API state. Synthetic mock-license suppression

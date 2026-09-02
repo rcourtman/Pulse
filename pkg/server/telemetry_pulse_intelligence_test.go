@@ -20,8 +20,9 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		{Timestamp: recent, UseCase: "chat"},
 		{Timestamp: recent.Add(-time.Minute), UseCase: "CHAT", ContextScope: "resource_context", ToolCallCount: 3},
 		{Timestamp: recent.Add(-2 * time.Minute), UseCase: "chat", FindingID: "finding-123", ToolCallCount: 2},
-		{Timestamp: recent, UseCase: "patrol"},
-		{Timestamp: recent, UseCase: "unknown", ToolCallCount: 99},
+		{Timestamp: recent, UseCase: "patrol", InputTokens: 6_000_000, OutputTokens: 120_000},
+		{Timestamp: recent, UseCase: "unknown", ToolCallCount: 99, InputTokens: 50_000_000},
+		{Timestamp: recent, UseCase: "patrol_readiness", InputTokens: 50_000_000},
 		{Timestamp: old, UseCase: "chat", ToolCallCount: 99},
 	}); err != nil {
 		t.Fatalf("SaveAIUsageHistory: %v", err)
@@ -39,7 +40,8 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 			LastInvestigatedAt: &recent,
 		},
 		"recent-record-started": {
-			ID: "recent-record-started",
+			ID:                  "recent-record-started",
+			InvestigationStatus: "running",
 			InvestigationRecord: &aicontracts.InvestigationRecord{
 				ID:        "investigation-recent",
 				FindingID: "recent-record-started",
@@ -132,11 +134,49 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		ApprovedActionRefusalsContract30d:      9,
 		ApprovedActionRefusalsOther30d:         10,
 		VerifiedFindingResolutions30d:          1,
+		PatrolAutonomyLevel:                    "assisted",
 	}
 	applyPulseIntelligenceTelemetrySnapshot(&snap, persistence, cfg, actions, now)
 
 	if snap.PulseIntelligenceAssistantAICalls30d != 3 {
 		t.Fatalf("assistant AI calls = %d, want 3", snap.PulseIntelligenceAssistantAICalls30d)
+	}
+	if snap.PulseIntelligencePatrolAutonomyLevel != "assisted" {
+		t.Fatalf("patrol autonomy level = %q, want assisted", snap.PulseIntelligencePatrolAutonomyLevel)
+	}
+	if snap.AIProviderClass != telemetry.AIProviderClassNone {
+		t.Fatalf("provider class default = %q, want none", snap.AIProviderClass)
+	}
+	// Only use_case=patrol tokens count; readiness preflights and unknown use
+	// cases must not inflate the Patrol cost bucket.
+	if snap.PulseIntelligencePatrolInputTokensBucket30d != telemetry.PatrolInputTokens5M20M ||
+		snap.PulseIntelligencePatrolOutputTokensBucket30d != telemetry.PatrolOutputTokens100K500K {
+		t.Fatalf("patrol token buckets = %q/%q, want 5m_20m/100k_500k",
+			snap.PulseIntelligencePatrolInputTokensBucket30d, snap.PulseIntelligencePatrolOutputTokensBucket30d)
+	}
+	outcomeTotal := snap.PulseIntelligencePatrolInvestigationOutcomeFixVerified30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeFixQueued30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeFixExecuted30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeFixRejected30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeFixFailed30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeFixVerificationUnknown30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeResolved30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeNeedsAttention30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeCannotFix30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeTimedOut30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeInProgress30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeFailed30d +
+		snap.PulseIntelligencePatrolInvestigationOutcomeOther30d
+	if outcomeTotal != snap.PulseIntelligencePatrolInvestigations30d {
+		t.Fatalf("outcome buckets sum to %d, want investigations %d", outcomeTotal, snap.PulseIntelligencePatrolInvestigations30d)
+	}
+	if snap.PulseIntelligencePatrolInvestigationOutcomeFixVerified30d != 1 ||
+		snap.PulseIntelligencePatrolInvestigationOutcomeInProgress30d != 1 ||
+		snap.PulseIntelligencePatrolInvestigationOutcomeOther30d != 1 {
+		t.Fatalf("outcome partition = verified %d / in_progress %d / other %d, want 1/1/1",
+			snap.PulseIntelligencePatrolInvestigationOutcomeFixVerified30d,
+			snap.PulseIntelligencePatrolInvestigationOutcomeInProgress30d,
+			snap.PulseIntelligencePatrolInvestigationOutcomeOther30d)
 	}
 	if snap.PulseIntelligenceAssistantContextAICalls30d != 2 {
 		t.Fatalf("assistant context AI calls = %d, want 2", snap.PulseIntelligenceAssistantContextAICalls30d)
@@ -1094,5 +1134,26 @@ func TestApplyPulseIntelligenceTelemetrySnapshotCarriesPatrolBlockedCause(t *tes
 	applyPulseIntelligenceTelemetrySnapshot(snap, nil, nil, actionSnapshot, time.Now().UTC())
 	if snap.PulseIntelligencePatrolBlockedCause != "provider_not_configured" {
 		t.Fatalf("PulseIntelligencePatrolBlockedCause = %q, want provider_not_configured", snap.PulseIntelligencePatrolBlockedCause)
+	}
+}
+
+func TestApplyPulseIntelligenceTelemetrySnapshotSchemaV17DefaultsWithoutPersistence(t *testing.T) {
+	snap := &telemetry.Snapshot{}
+	applyPulseIntelligenceTelemetrySnapshot(snap, nil, nil, telemetry.PulseIntelligenceActionSnapshot{}, time.Now().UTC())
+	if snap.AIProviderClass != telemetry.AIProviderClassNone {
+		t.Fatalf("AIProviderClass = %q, want none", snap.AIProviderClass)
+	}
+	if snap.PulseIntelligencePatrolAutonomyLevel != "monitor" {
+		t.Fatalf("PulseIntelligencePatrolAutonomyLevel = %q, want monitor", snap.PulseIntelligencePatrolAutonomyLevel)
+	}
+	if snap.PulseIntelligencePatrolInputTokensBucket30d != telemetry.PatrolTokenBucketZero ||
+		snap.PulseIntelligencePatrolOutputTokensBucket30d != telemetry.PatrolTokenBucketZero {
+		t.Fatalf("token buckets = %q/%q, want zero/zero", snap.PulseIntelligencePatrolInputTokensBucket30d, snap.PulseIntelligencePatrolOutputTokensBucket30d)
+	}
+	// A pre-existing provider class from the config pass must survive.
+	snap = &telemetry.Snapshot{AIProviderClass: telemetry.AIProviderClassLocal}
+	applyPulseIntelligenceTelemetrySnapshot(snap, nil, nil, telemetry.PulseIntelligenceActionSnapshot{PatrolAutonomyLevel: "garbage"}, time.Now().UTC())
+	if snap.AIProviderClass != telemetry.AIProviderClassLocal || snap.PulseIntelligencePatrolAutonomyLevel != "monitor" {
+		t.Fatalf("provider class/autonomy = %q/%q, want local/monitor", snap.AIProviderClass, snap.PulseIntelligencePatrolAutonomyLevel)
 	}
 }

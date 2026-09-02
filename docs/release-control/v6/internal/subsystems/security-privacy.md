@@ -2410,7 +2410,7 @@ actor, and every audit row read stay on the install.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v16. Schema v8 added content-free
+The active outbound contract is schema v17. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -2429,6 +2429,23 @@ stored only as a bounded UTC-day count, and exported only as a rolling 30-day
 total. The contract forbids raw browser events, event-level clickstream data,
 guest/user identity, routes, selected ranges, cursor coordinates or values,
 interaction timing, and browser identity.
+Schema v17 adds four closed Patrol posture strings and thirteen investigation
+outcome counts so the fleet can be read for local versus cloud model routes,
+approximate Patrol cost, effective autonomy mode, and how investigations end.
+`ai_provider_class` is derived locally from the configured Patrol or default
+model route (`none`, `local`, `cloud_byok`, `cloud_subscription`,
+`hosted_legacy`, `unknown`) with a syntactic private-host check on
+operator-supplied OpenAI-compatible endpoints; it never resolves DNS and never
+carries the provider ID, model name, endpoint, or account.
+`pulse_intelligence_patrol_autonomy_level` is the effective level after
+licence and Autopilot gating, bounded to `monitor`, `approval`, `assisted`, or
+`full`. The two token fields are closed buckets of the existing local usage
+ledger's Patrol events; exact token counts, prices, providers, and models stay
+on the install. The outcome counts partition the same findings already counted
+as investigated, one bucket per finding, and add no finding, resource,
+session, or action identity. The receiver canonicalizes every one of the four
+strings to its released vocabulary or `unknown` and clamps the counts like
+every other counter.
 The earlier draft schema-v8 `business_estate` field was reverted and must not
 remain in the license server's accepted ping struct merely because a private receiver build
 and database migration briefly carried it. Existing deployed databases need no
