@@ -232,3 +232,104 @@ func clusterKeys(tr *findingStormThrottler) []string {
 	}
 	return keys
 }
+
+func TestStormThrottler_FlapBelowThresholdReturnsNil(t *testing.T) {
+	tr := newFindingStormThrottler()
+	base := time.Now()
+	f := newStormFinding("f1", "vm/100", "container exited")
+
+	for i := 0; i < findingFlapThreshold-1; i++ {
+		if got := tr.observeFlapLocked(f, base.Add(time.Duration(i)*time.Hour)); got != nil {
+			t.Fatalf("transition %d below threshold: want nil, got %+v", i+1, got)
+		}
+	}
+}
+
+func TestStormThrottler_FlapAtThresholdSummarisesWindow(t *testing.T) {
+	tr := newFindingStormThrottler()
+	base := time.Now()
+	f := newStormFinding("f1", "vm/100", "container exited")
+
+	var got *FindingFlapping
+	for i := 0; i < findingFlapThreshold; i++ {
+		got = tr.observeFlapLocked(f, base.Add(time.Duration(i)*time.Hour))
+	}
+	if got == nil {
+		t.Fatalf("expected flapping summary at threshold %d", findingFlapThreshold)
+	}
+	if got.TransitionCount != findingFlapThreshold {
+		t.Errorf("TransitionCount = %d, want %d", got.TransitionCount, findingFlapThreshold)
+	}
+	if got.WindowHours != int(findingFlapWindow/time.Hour) {
+		t.Errorf("WindowHours = %d, want %d", got.WindowHours, int(findingFlapWindow/time.Hour))
+	}
+	if !got.FirstTransitionAt.Equal(base) {
+		t.Errorf("FirstTransitionAt = %v, want %v", got.FirstTransitionAt, base)
+	}
+	last := base.Add(time.Duration(findingFlapThreshold-1) * time.Hour)
+	if !got.LastTransitionAt.Equal(last) {
+		t.Errorf("LastTransitionAt = %v, want %v", got.LastTransitionAt, last)
+	}
+}
+
+func TestStormThrottler_FlapWindowEvictionClearsLabel(t *testing.T) {
+	tr := newFindingStormThrottler()
+	base := time.Now()
+	f := newStormFinding("f1", "vm/100", "container exited")
+
+	for i := 0; i < findingFlapThreshold; i++ {
+		tr.observeFlapLocked(f, base.Add(time.Duration(i)*time.Minute))
+	}
+	// One more transition a day and an hour later: every earlier transition
+	// has aged out, so the finding is a single recurrence again.
+	if got := tr.observeFlapLocked(f, base.Add(findingFlapWindow+time.Hour)); got != nil {
+		t.Fatalf("aged-out window still reported flapping: %+v", got)
+	}
+}
+
+func TestStormThrottler_FlapHydratesFromPersistedLifecycle(t *testing.T) {
+	tr := newFindingStormThrottler()
+	base := time.Now()
+	f := newStormFinding("f1", "vm/100", "container exited")
+	f.Lifecycle = []FindingLifecycleEvent{
+		{At: base.Add(-3 * time.Hour), Type: "regressed"},
+		{At: base.Add(-2 * time.Hour), Type: "auto_resolved"},
+		{At: base.Add(-30 * time.Hour), Type: "regressed"}, // outside window
+		{At: base.Add(-time.Hour), Type: FindingLifecycleFlapping, Metadata: map[string]string{"transition_count": "5"}},
+	}
+
+	got := tr.observeFlapLocked(f, base)
+	if got == nil {
+		t.Fatal("expected persisted lifecycle to hydrate the flap window")
+	}
+	// 1 + 1 + 5 hydrated transitions plus the observed one; the 30h-old row is dropped.
+	if got.TransitionCount != 8 {
+		t.Errorf("TransitionCount = %d, want 8", got.TransitionCount)
+	}
+}
+
+func TestStormThrottler_FlapTrackerLRUEvictsAtCap(t *testing.T) {
+	tr := newFindingStormThrottler()
+	tr.flapCap = 2
+	base := time.Now()
+
+	tr.observeFlapLocked(newStormFinding("a", "vm/1", "x"), base)
+	tr.observeFlapLocked(newStormFinding("b", "vm/2", "x"), base.Add(time.Second))
+	tr.observeFlapLocked(newStormFinding("c", "vm/3", "x"), base.Add(2*time.Second))
+	if _, ok := tr.flaps["a"]; ok {
+		t.Fatal("least-recently-touched flap tracker survived the cap")
+	}
+	if len(tr.flaps) != 2 {
+		t.Fatalf("tracker count = %d, want 2", len(tr.flaps))
+	}
+}
+
+func TestStormThrottler_FlapIgnoresEmptyID(t *testing.T) {
+	tr := newFindingStormThrottler()
+	if got := tr.observeFlapLocked(&Finding{}, time.Now()); got != nil {
+		t.Fatalf("empty ID must not be tracked, got %+v", got)
+	}
+	if len(tr.flaps) != 0 {
+		t.Fatalf("empty ID created a tracker")
+	}
+}

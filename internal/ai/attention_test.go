@@ -378,3 +378,75 @@ func attentionTestPosture(
 		EvaluatedAt:       evaluatedAt,
 	}
 }
+
+func TestProjectAttentionItemsCollapsesOpenResolvedChurnIntoFlapping(t *testing.T) {
+	now := time.Date(2026, 8, 10, 15, 0, 0, 0, time.UTC)
+	alert := attentionTestAlert("flapper", operationaltrust.OperationalOpen, operationaltrust.SeverityWarning, now.Add(-2*24*time.Hour), now)
+	from := operationaltrust.OperationalOpen
+	to := operationaltrust.OperationalResolved
+	// Eleven open/resolved transitions in the last day, plus older churn that
+	// must not count, plus acknowledgement bookkeeping that never counts.
+	for i := 0; i < 11; i++ {
+		alert.Transitions = append(alert.Transitions, operationaltrust.LifecycleTransition{
+			ID:                  "t-" + string(rune('a'+i)),
+			OperationalRecordID: "flapper",
+			From:                from,
+			To:                  to,
+			At:                  now.Add(-time.Duration(11-i) * time.Hour),
+			Cause:               operationaltrust.TransitionRecoveryEvidence,
+		})
+		from, to = to, from
+	}
+	alert.Transitions = append(alert.Transitions,
+		operationaltrust.LifecycleTransition{
+			ID: "old", OperationalRecordID: "flapper",
+			From: operationaltrust.OperationalOpen, To: operationaltrust.OperationalResolved,
+			At: now.Add(-30 * time.Hour), Cause: operationaltrust.TransitionRecoveryEvidence,
+		},
+		operationaltrust.LifecycleTransition{
+			ID: "ack", OperationalRecordID: "flapper",
+			From: operationaltrust.OperationalOpen, To: operationaltrust.OperationalAcknowledged,
+			At: now.Add(-20 * time.Minute), Cause: operationaltrust.TransitionAcknowledgement,
+		},
+	)
+
+	projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, now)
+	if len(projected.Details) != 1 {
+		t.Fatalf("details = %d, want 1", len(projected.Details))
+	}
+	item := projected.Details[0].Item
+	if item.Flapping == nil {
+		t.Fatal("eleven open/resolved transitions in a day were not labelled flapping")
+	}
+	if item.Flapping.TransitionCount != 11 {
+		t.Fatalf("TransitionCount = %d, want 11 (older and acknowledgement transitions excluded)", item.Flapping.TransitionCount)
+	}
+	if item.Flapping.WindowHours != 24 {
+		t.Fatalf("WindowHours = %d, want 24", item.Flapping.WindowHours)
+	}
+	if len(projected.Details[0].Timeline) != 13 {
+		t.Fatalf("timeline = %d, want the full forensic list of 13 transitions retained", len(projected.Details[0].Timeline))
+	}
+}
+
+func TestProjectAttentionItemsLeavesSingleRecurrenceUnlabelled(t *testing.T) {
+	now := time.Date(2026, 8, 10, 15, 0, 0, 0, time.UTC)
+	alert := attentionTestAlert("recurred", operationaltrust.OperationalOpen, operationaltrust.SeverityWarning, now.Add(-24*time.Hour), now)
+	alert.Transitions = append(alert.Transitions,
+		operationaltrust.LifecycleTransition{
+			ID: "r1", OperationalRecordID: "recurred",
+			From: operationaltrust.OperationalOpen, To: operationaltrust.OperationalResolved,
+			At: now.Add(-3 * time.Hour), Cause: operationaltrust.TransitionRecoveryEvidence,
+		},
+		operationaltrust.LifecycleTransition{
+			ID: "r2", OperationalRecordID: "recurred",
+			From: operationaltrust.OperationalResolved, To: operationaltrust.OperationalOpen,
+			At: now.Add(-time.Hour), Cause: operationaltrust.TransitionDetectorDecision,
+		},
+	)
+
+	projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, now)
+	if projected.Details[0].Item.Flapping != nil {
+		t.Fatalf("one recurrence was labelled flapping: %+v", projected.Details[0].Item.Flapping)
+	}
+}

@@ -18,7 +18,30 @@ const apiMocks = vi.hoisted(() => ({
   unsuppress: vi.fn(),
   planAction: vi.fn(),
   getAction: vi.fn(),
+  dismissFinding: vi.fn(),
+  reopenFinding: vi.fn(),
+  loadPatrolFindings: vi.fn(),
+  createRule: vi.fn(),
 }));
+
+vi.mock('@/stores/aiIntelligence', () => ({
+  aiIntelligenceStore: {
+    dismissFinding: (...args: unknown[]) => apiMocks.dismissFinding(...args),
+    reopenFinding: (...args: unknown[]) => apiMocks.reopenFinding(...args),
+    loadPatrolFindings: (...args: unknown[]) => apiMocks.loadPatrolFindings(...args),
+    get patrolFindings() {
+      return [];
+    },
+  },
+}));
+
+vi.mock('@/api/patrol', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/api/patrol')>();
+  return {
+    ...original,
+    createSuppressionRuleFromFinding: (...args: unknown[]) => apiMocks.createRule(...args),
+  };
+});
 
 vi.mock('@/api/patrolAttention', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/api/patrolAttention')>();
@@ -73,6 +96,7 @@ import {
   sortPatrolAttentionDecisions,
 } from '../PatrolAttentionWorkbench';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
+import type { UnifiedFinding } from '@/stores/aiIntelligence';
 
 const evaluatedAt = '2026-07-19T08:00:00Z';
 
@@ -121,6 +145,23 @@ const item = (overrides: Partial<AttentionItem> = {}): AttentionItem => ({
   recommendedNextStep: 'Free disk space or expand the volume.',
   availableActions: [],
   verificationState: 'not_available',
+  ...overrides,
+});
+
+const mirroredFinding = (overrides: Partial<UnifiedFinding> = {}): UnifiedFinding => ({
+  id: 'finding-1',
+  source: 'ai-patrol',
+  resourceId: 'pve:vm:101',
+  resourceName: 'Database VM',
+  resourceType: 'vm',
+  category: 'capacity',
+  severity: 'warning',
+  title: 'Disk on Database VM is 95% full',
+  description: 'The root volume has been filling for a week.',
+  detectedAt: '2026-07-19T07:00:00Z',
+  status: 'active',
+  mirrorsAlertId: 'alert-record-1',
+  mirrorsAlertType: 'disk',
   ...overrides,
 });
 
@@ -189,6 +230,10 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.unsuppress.mockReset();
     apiMocks.planAction.mockReset();
     apiMocks.getAction.mockReset();
+    apiMocks.dismissFinding.mockReset();
+    apiMocks.reopenFinding.mockReset();
+    apiMocks.loadPatrolFindings.mockReset();
+    apiMocks.createRule.mockReset();
   });
 
   afterEach(() => {
@@ -686,18 +731,18 @@ describe('PatrolAttentionWorkbench', () => {
     ).toBeInTheDocument();
   });
 
-  it('keeps durable Patrol finding outcomes visible beside alert lifecycle controls', async () => {
+  it('offers every lasting Patrol decision on the finding that mirrors the alert', async () => {
     const active = item();
     apiMocks.getList.mockResolvedValue(
       listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
     );
     apiMocks.getDetail.mockResolvedValue(detail(active));
-    const onOpenFindings = vi.fn();
+    apiMocks.dismissFinding.mockResolvedValue(true);
     render(() => (
       <Router>
         <Route
           path="/patrol"
-          component={() => <PatrolAttentionWorkbench onOpenFindings={onOpenFindings} />}
+          component={() => <PatrolAttentionWorkbench findings={() => [mirroredFinding()]} />}
         />
       </Router>
     ));
@@ -708,43 +753,211 @@ describe('PatrolAttentionWorkbench', () => {
       }),
     );
 
+    expect(await screen.findByText('Lasting decisions')).toBeInTheDocument();
+    expect(screen.getByText(/Patrol also raised/i)).toHaveTextContent(
+      'Disk on Database VM is 95% full',
+    );
+    const decisions = within(screen.getByRole('list', { name: 'Lasting decisions' }));
+    for (const label of [
+      'Remember as expected',
+      'Dismiss: Not an issue',
+      'Dismiss: Later',
+      'Create rule',
+    ]) {
+      expect(decisions.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    expect(decisions.getByText(/stops raising it unless it gets worse/i)).toHaveTextContent(
+      /Lasts until you reopen the finding/i,
+    );
+    expect(decisions.getByText(/Hides this for 7 days/i)).toBeInTheDocument();
     expect(
-      await screen.findByText(/Need a lasting outcome for a Patrol finding on this resource/i),
-    ).toHaveTextContent(/remember expected behavior/i);
-    fireEvent.click(screen.getByRole('button', { name: 'Find lasting options for this resource' }));
-    expect(onOpenFindings).toHaveBeenCalledWith(active);
+      decisions.getByText(/Permanent rule for this resource and category/i),
+    ).toBeInTheDocument();
+    // The temporary controls say so in one line instead of hiding it behind a toggle.
+    expect(screen.getByText(/Both of these are short-term/i)).toBeInTheDocument();
+    expect(screen.queryByText('More ways to manage this issue')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('More ways to manage this issue'));
-    expect(screen.getByText(/Mark reviewed removes this occurrence/i)).toHaveTextContent(
-      /until it resolves or you return it to open/i,
+    fireEvent.click(decisions.getByRole('button', { name: 'Remember as expected' }));
+    const form = screen.getByRole('form', { name: 'Confirm Remember as expected' });
+    fireEvent.input(within(form).getByLabelText(/Note for Patrol/i), {
+      target: { value: 'This VM is a cold standby.' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Confirm: Remember as expected' }));
+
+    await waitFor(() =>
+      expect(apiMocks.dismissFinding).toHaveBeenCalledWith(
+        'finding-1',
+        'expected_behavior',
+        'This VM is a cold standby.',
+      ),
     );
-    expect(screen.getByRole('link', { name: 'adjust alert thresholds' })).toHaveAttribute(
-      'href',
-      '/alerts/thresholds',
-    );
-    expect(
-      screen.queryByRole('button', { name: 'review Patrol findings' }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(/Remember as expected saved/i);
   });
 
-  it('omits the findings pointer when no findings surface is wired', async () => {
+  it('requires a written reason before creating a permanent rule from the detail', async () => {
     const active = item();
     apiMocks.getList.mockResolvedValue(
       listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
     );
     apiMocks.getDetail.mockResolvedValue(detail(active));
-    renderWorkbench();
+    apiMocks.createRule.mockResolvedValue({ success: true, message: 'ok', rule: { id: 'r1' } });
+    apiMocks.loadPatrolFindings.mockResolvedValue(undefined);
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => <PatrolAttentionWorkbench findings={() => [mirroredFinding()]} />}
+        />
+      </Router>
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    const decisions = within(await screen.findByRole('list', { name: 'Lasting decisions' }));
+    fireEvent.click(decisions.getByRole('button', { name: 'Create rule' }));
 
+    const form = screen.getByRole('form', { name: 'Confirm Create rule' });
+    const confirm = within(form).getByRole('button', { name: 'Confirm: Create rule' });
+    expect(confirm).toBeDisabled();
+    fireEvent.input(within(form).getByLabelText(/Why this rule/i), {
+      target: { value: 'Archive volume is meant to run near full.' },
+    });
+    expect(confirm).not.toBeDisabled();
+    fireEvent.click(confirm);
+
+    await waitFor(() =>
+      expect(apiMocks.createRule).toHaveBeenCalledWith({
+        resourceId: 'pve:vm:101',
+        resourceName: 'Database VM',
+        category: 'capacity',
+        description: 'Archive volume is meant to run near full.',
+      }),
+    );
+    expect(apiMocks.loadPatrolFindings).toHaveBeenCalled();
+    expect(await screen.findByRole('status')).toHaveTextContent(/Rule created/i);
+  });
+
+  it('shows the remembered decision and a reopen path instead of re-offering it', async () => {
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    apiMocks.reopenFinding.mockResolvedValue(true);
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => (
+            <PatrolAttentionWorkbench
+              findings={() => [
+                mirroredFinding({
+                  status: 'dismissed',
+                  dismissedReason: 'expected_behavior',
+                  userNote: 'Cold standby.',
+                }),
+              ]}
+            />
+          )}
+        />
+      </Router>
+    ));
     fireEvent.click(
       await screen.findByRole('button', {
         name: 'Open Database VM · Disk pressure',
       }),
     );
 
-    expect(await screen.findByText(/Mark reviewed removes this occurrence/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Remembered as expected/i)).toBeInTheDocument();
+    expect(screen.getByText(/Note: Cold standby/i)).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Lasting decisions' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen finding' }));
+    await waitFor(() => expect(apiMocks.reopenFinding).toHaveBeenCalledWith('finding-1'));
+  });
+
+  it('explains that an alert with no Patrol finding has nothing for Patrol to remember', async () => {
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    const onOpenFindings = vi.fn();
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => (
+            <PatrolAttentionWorkbench findings={() => []} onOpenFindings={onOpenFindings} />
+          )}
+        />
+      </Router>
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+
+    expect(await screen.findByText(/nothing for Patrol to remember here/i)).toHaveTextContent(
+      /turn it off for Database VM under alert thresholds/i,
+    );
+    expect(screen.queryByRole('list', { name: 'Lasting decisions' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Adjust alert thresholds' })).toHaveAttribute(
+      'href',
+      '/alerts/thresholds',
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Browse Patrol findings for this resource' }),
+    );
+    expect(onOpenFindings).toHaveBeenCalledWith(active);
+  });
+
+  it('collapses a flapping item into one label and a summarised timeline', async () => {
+    const flapping = item({
+      id: 'record-flap',
+      operationalRecordId: 'record-flap',
+      kind: 'docker-container-state',
+      title: 'Docker container state on shlink-web-clientX',
+      subjectResourceName: 'shlink-web-clientX',
+      severity: 'warning',
+      flapping: {
+        transitionCount: 11,
+        windowHours: 24,
+        firstTransitionAt: '2026-07-18T09:00:00Z',
+        lastTransitionAt: '2026-07-19T07:30:00Z',
+      },
+    });
+    const flappingDetail = detail(flapping);
+    flappingDetail.timeline = Array.from({ length: 11 }, (_, index) => ({
+      id: `flap-${index}`,
+      operationalRecordId: 'record-flap',
+      from: index % 2 === 0 ? 'open' : 'resolved',
+      to: index % 2 === 0 ? 'resolved' : 'open',
+      at: `2026-07-18T${String(9 + index).padStart(2, '0')}:00:00Z`,
+      cause: index % 2 === 0 ? 'recovery_evidence' : 'detector_decision',
+      causeKey: 'runtime-state',
+      evidenceIds: [],
+    }));
+    apiMocks.getList.mockResolvedValue(
+      listResponse([flapping], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(flappingDetail);
+    renderWorkbench();
+
+    const row = await screen.findByRole('button', {
+      name: 'Open shlink-web-clientX · Docker container state',
+    });
+    expect(within(row).getByText('Flapping · 11 changes in 24h')).toBeInTheDocument();
+    fireEvent.click(row);
+
     expect(
-      screen.queryByRole('button', { name: 'review Patrol findings' }),
-    ).not.toBeInTheDocument();
+      await screen.findByText(/switched between open and resolved 11 times in the last day/i),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Evidence and history'));
+    expect(screen.getByText(/11 open\/resolved changes in the last 24 hours/i)).toBeInTheDocument();
+    expect(screen.getByText('Show all 11 transitions')).toBeInTheDocument();
   });
 
   it('opens the canonical governed action review from an eligible attention item', async () => {

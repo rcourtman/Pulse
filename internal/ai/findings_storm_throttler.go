@@ -10,12 +10,21 @@
 // store mutex held; it owns its own internal mutex so the throttler does
 // not couple to the store's lock-ordering invariants. The observer must
 // NOT call back into FindingsStore.
+//
+// The same throttler owns flap detection (observeFlapLocked): a finding
+// whose open/resolved state changes at least findingFlapThreshold times
+// inside findingFlapWindow is "flapping". The store then collapses those
+// transitions into one lifecycle entry carrying the count instead of
+// appending one regressed/resolved row per change, and the attention
+// projection reads the same constants so alert and finding surfaces agree
+// on what "flapping" means.
 
 package ai
 
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +37,47 @@ const (
 	stormFindingIDPrefix = "finding-storm:"
 	stormClusterCap      = 1024
 	stormResolveReason   = "finding-storm:rate_dropped_below_threshold"
+
+	// findingFlapWindow is the sliding window over which open/resolved
+	// transitions count toward flapping. Twenty-four hours matches the
+	// operator-visible complaint (eleven transitions in a day) rather than
+	// the alert engine's five-minute notification-suppression window.
+	findingFlapWindow = 24 * time.Hour
+	// findingFlapThreshold is the number of open/resolved transitions inside
+	// findingFlapWindow at which an item is labelled flapping. Four means
+	// the condition came back at least twice; a single recurrence is a
+	// regression, not a flap.
+	findingFlapThreshold = 4
+	// findingFlapTrackerCap bounds per-finding transition tracking.
+	findingFlapTrackerCap = 4096
+	// FindingLifecycleFlapping is the collapsed lifecycle event type that
+	// stands in for the individual regressed/resolved rows while a finding
+	// is flapping. Its metadata carries transition_count and window_hours.
+	FindingLifecycleFlapping = "flapping"
 )
+
+// FindingFlapping summarises a finding whose open/resolved state keeps
+// changing. It is stamped by the store while the transition count inside
+// the window is at or above findingFlapThreshold and cleared otherwise.
+type FindingFlapping struct {
+	// TransitionCount is the number of open/resolved transitions observed
+	// inside the window ending at LastTransitionAt.
+	TransitionCount int `json:"transition_count"`
+	// WindowHours is the length of the sliding window in hours.
+	WindowHours int `json:"window_hours"`
+	// FirstTransitionAt is the oldest transition still inside the window.
+	FirstTransitionAt time.Time `json:"first_transition_at"`
+	// LastTransitionAt is the most recent transition.
+	LastTransitionAt time.Time `json:"last_transition_at"`
+}
+
+// findingFlapTracker holds the sliding window of open/resolved transition
+// timestamps for one finding.
+type findingFlapTracker struct {
+	transitions   []time.Time
+	hydrated      bool
+	lastTouchedAt time.Time
+}
 
 // findingStormCluster carries per-clusterKey state: the sliding window of
 // emission timestamps, identity of the storm finding currently emitted for
@@ -55,12 +104,17 @@ type findingStormThrottler struct {
 	mu       sync.Mutex
 	clusters map[string]*findingStormCluster
 	cap      int
+
+	flaps   map[string]*findingFlapTracker
+	flapCap int
 }
 
 func newFindingStormThrottler() *findingStormThrottler {
 	return &findingStormThrottler{
 		clusters: make(map[string]*findingStormCluster),
 		cap:      stormClusterCap,
+		flaps:    make(map[string]*findingFlapTracker),
+		flapCap:  findingFlapTrackerCap,
 	}
 }
 
@@ -239,4 +293,135 @@ func (t *findingStormThrottler) buildStormFindingLocked(cluster *findingStormClu
 		DetectedAt:     now,
 		LastSeenAt:     now,
 	}
+}
+
+// observeFlapLocked records one open/resolved transition for f at now and
+// returns the resulting FindingFlapping summary, or nil while the finding
+// is below the flapping threshold. Like observeLocked it is called with
+// the store mutex held and uses the throttler's own mutex; it never calls
+// back into the store.
+//
+// The first observation of a finding hydrates the window from the
+// finding's persisted lifecycle so a restart does not forget that an item
+// was flapping until the next transition lands.
+func (t *findingStormThrottler) observeFlapLocked(f *Finding, now time.Time) *FindingFlapping {
+	if t == nil || f == nil {
+		return nil
+	}
+	key := strings.TrimSpace(f.ID)
+	if key == "" {
+		return nil
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.flaps == nil {
+		t.flaps = make(map[string]*findingFlapTracker)
+	}
+	tracker, ok := t.flaps[key]
+	if !ok {
+		tracker = &findingFlapTracker{}
+		t.flaps[key] = tracker
+	}
+	if !tracker.hydrated {
+		tracker.transitions = flapTransitionsFromLifecycle(f.Lifecycle, now)
+		tracker.hydrated = true
+	}
+	tracker.lastTouchedAt = now
+	tracker.transitions = append(trimFlapWindow(tracker.transitions, now), now)
+	t.pruneFlapLRULocked(key)
+
+	return summarizeFlapTransitions(tracker.transitions, now)
+}
+
+// pruneFlapLRULocked evicts the least-recently-touched trackers (excluding
+// the one just touched) until the map is at or under flapCap.
+func (t *findingStormThrottler) pruneFlapLRULocked(protectKey string) {
+	if t.flapCap <= 0 || len(t.flaps) <= t.flapCap {
+		return
+	}
+	type entry struct {
+		key string
+		at  time.Time
+	}
+	candidates := make([]entry, 0, len(t.flaps)-1)
+	for k, tracker := range t.flaps {
+		if k == protectKey {
+			continue
+		}
+		candidates = append(candidates, entry{key: k, at: tracker.lastTouchedAt})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].at.Before(candidates[j].at)
+	})
+	excess := len(t.flaps) - t.flapCap
+	for i := 0; i < excess && i < len(candidates); i++ {
+		delete(t.flaps, candidates[i].key)
+	}
+}
+
+// trimFlapWindow drops transitions older than findingFlapWindow before now.
+func trimFlapWindow(transitions []time.Time, now time.Time) []time.Time {
+	cutoff := now.Add(-findingFlapWindow)
+	keep := transitions[:0]
+	for _, ts := range transitions {
+		if !ts.Before(cutoff) {
+			keep = append(keep, ts)
+		}
+	}
+	return keep
+}
+
+// summarizeFlapTransitions returns the flapping summary for a window of
+// transition timestamps, or nil below the threshold. Shared by the finding
+// store and the attention projection so both surfaces agree.
+func summarizeFlapTransitions(transitions []time.Time, now time.Time) *FindingFlapping {
+	inWindow := make([]time.Time, 0, len(transitions))
+	cutoff := now.Add(-findingFlapWindow)
+	for _, ts := range transitions {
+		if !ts.Before(cutoff) {
+			inWindow = append(inWindow, ts)
+		}
+	}
+	if len(inWindow) < findingFlapThreshold {
+		return nil
+	}
+	sort.Slice(inWindow, func(i, j int) bool { return inWindow[i].Before(inWindow[j]) })
+	return &FindingFlapping{
+		TransitionCount:   len(inWindow),
+		WindowHours:       int(findingFlapWindow / time.Hour),
+		FirstTransitionAt: inWindow[0],
+		LastTransitionAt:  inWindow[len(inWindow)-1],
+	}
+}
+
+// flapTransitionsFromLifecycle rebuilds the in-window transition
+// timestamps from a persisted lifecycle log. Individual regressed and
+// resolved rows count once each; a collapsed flapping row contributes its
+// recorded transition_count, spread as repeats of its timestamp so the
+// count survives without inventing intermediate times.
+func flapTransitionsFromLifecycle(lifecycle []FindingLifecycleEvent, now time.Time) []time.Time {
+	cutoff := now.Add(-findingFlapWindow)
+	var transitions []time.Time
+	for _, event := range lifecycle {
+		if event.At.Before(cutoff) || event.At.After(now) {
+			continue
+		}
+		switch event.Type {
+		case "regressed", "resolved", "auto_resolved":
+			transitions = append(transitions, event.At)
+		case FindingLifecycleFlapping:
+			count := 1
+			if raw, ok := event.Metadata["transition_count"]; ok {
+				if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+					count = parsed
+				}
+			}
+			for i := 0; i < count; i++ {
+				transitions = append(transitions, event.At)
+			}
+		}
+	}
+	return transitions
 }

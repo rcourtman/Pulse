@@ -169,6 +169,10 @@ func (p *PatrolService) runDemoPatrolCycleWithStart(trigger TriggerReason, accep
 		}
 	}
 
+	// Demo findings restate mock alerts on purpose (a storage pool near full
+	// beside its usage alert), so fold them the same way a real run does.
+	p.reconcileAlertMirrors()
+
 	// A simulated pass stands in for a healthy provider-backed run: clear any
 	// stale "Provider analysis error" finding left by real runs that failed
 	// before mock mode enabled.
