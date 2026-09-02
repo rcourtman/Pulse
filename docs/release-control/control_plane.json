@@ -17,6 +17,11 @@
       "version_prefix": "6.3.2",
       "prerelease_branch": "release/v6.3.2",
       "stable_branch": "release/v6.3.2"
+    },
+    {
+      "version_prefix": "6.5.",
+      "prerelease_branch": "release/v6.5",
+      "stable_branch": "release/v6.5"
     }
   ],
   "profiles": [

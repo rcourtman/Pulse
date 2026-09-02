@@ -24,6 +24,28 @@ SEMVER_PUBLISHED_PRERELEASE_RE = re.compile(
 )
 SEMVER_RC_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-rc\.(\d+)$")
 MIN_PRERELEASE_OBSERVATION_HOURS = 24
+# Release train (RELEASE_PROMOTION_POLICY.md, "Release Train"): a patch keeps
+# the 72 hour candidate soak; a minor release soaks its candidate for a week.
+MIN_STABLE_SOAK_HOURS = 72
+MIN_MINOR_STABLE_SOAK_HOURS = 168
+RELEASE_TRAIN_MIN_VERSION = (6, 5, 0)
+# Paths a stable promotion may change relative to its promoted candidate.
+# Everything else is content the candidate never soaked, so the resolver
+# refuses it unless hotfix_exception names active customer harm.
+RELEASE_METADATA_PATH_RE = re.compile(
+    r"^(?:"
+    r"VERSION"
+    r"|deploy/helm/pulse/(?:Chart\.yaml|README\.md)"
+    r"|docker-compose\.yml"
+    r"|docs/RELEASE_NOTES\.md"
+    r"|docs/UPGRADE_v6\.md"
+    r"|frontend-modern/public/docs/(?:RELEASE_NOTES|UPGRADE_v6)\.md"
+    r"|docs/releases/.+"
+    r"|docs/release-control/v6/internal/records/.+"
+    r"|docs/release-control/v6/internal/status\.json"
+    r"|docs/release-control/v6/internal/subsystems/deployment-installability\.md"
+    r")$"
+)
 WINDOWS_AUTHENTICODE_AVAILABLE = False
 WINDOWS_AUTHENTICODE_STANDING_UNSIGNED_MIN_VERSION = (6, 3, 2)
 WINDOWS_AUTHENTICODE_UNAVAILABLE_REASON = (
@@ -492,11 +514,37 @@ def resolve_metadata(
             promoted_tag_ts = tag_created_unix_fn(promoted_from_tag)
             soak_hours_value = int((now_unix_fn() - promoted_tag_ts) / 3600)
             soak_hours = str(soak_hours_value)
+            # The release train governs v6.5.0 and later. Earlier lines shipped
+            # under the previous regime and their recorded exceptions stand.
+            train_governed = bool(stable_version and stable_version >= RELEASE_TRAIN_MIN_VERSION)
+            candidate_content_drift: list[str] = []
+            if train_governed:
+                candidate_content_drift = [
+                    path
+                    for path in changed_paths_fn(promoted_from_tag)
+                    if not RELEASE_METADATA_PATH_RE.match(path)
+                ]
 
             if hotfix_exception:
                 if not hotfix_reason:
                     raise ValueError("hotfix_reason is required when hotfix_exception is true.")
-            elif soak_hours_value < 72:
+            elif candidate_content_drift:
+                shown = ", ".join(candidate_content_drift[:10])
+                if len(candidate_content_drift) > 10:
+                    shown += f", and {len(candidate_content_drift) - 10} more"
+                raise ValueError(
+                    f"Stable promotion {tag} would ship content that {promoted_from_tag} never soaked "
+                    f"({len(candidate_content_drift)} paths beyond release metadata: {shown}). "
+                    "Cut another release candidate from the release branch, or use hotfix_exception "
+                    "with a concrete active-customer-harm reason."
+                )
+            elif train_governed and not stable_patch and soak_hours_value < MIN_MINOR_STABLE_SOAK_HOURS:
+                raise ValueError(
+                    f"Minor stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since "
+                    f"{promoted_from_tag}; the release train requires {MIN_MINOR_STABLE_SOAK_HOURS} hours "
+                    "(seven days) for a minor release unless hotfix_exception is true."
+                )
+            elif soak_hours_value < MIN_STABLE_SOAK_HOURS:
                 raise ValueError(
                     f"Stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since {promoted_from_tag}; minimum is 72 hours unless hotfix_exception is true."
                 )
