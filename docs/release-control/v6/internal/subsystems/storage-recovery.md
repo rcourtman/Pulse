@@ -5864,6 +5864,15 @@ explicit commit boundary. Persistence-failure proofs live in
 `internal/api/alerting/notifications_test.go` with API ordering pinned by
 `internal/api/contract_test.go`.
 
+### Patrol cost preview and model guidance reads are not storage or recovery authority
+
+The read-only `GET /api/ai/patrol/cost-preview` and `GET
+/api/ai/patrol/model-guidance` routes under `internal/api/` derive their
+figures from AI usage history, Patrol run history, and the readiness cache
+owned by `ai-runtime`. They read no backup, snapshot, or recovery record,
+write nothing to storage or recovery state, and are not evidence for any
+recovery posture.
+
 ### Mock alert incident notes are not recovery records
 
 The shared `internal/api/alerting/alerts.go` transport now reads and annotates

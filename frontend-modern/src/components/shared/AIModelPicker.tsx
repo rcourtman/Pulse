@@ -40,6 +40,17 @@ export type AIModelPickerModelSection = {
   modelIds: string[];
 };
 
+/**
+ * Per-model marker rendered beside the model name (badge) and under its
+ * description (note). Used for Patrol guidance: verified / recommended /
+ * suggested / caution, with the one-line reason.
+ */
+export type AIModelPickerAnnotation = {
+  badge: string;
+  note?: string;
+  tone?: 'positive' | 'warning' | 'neutral';
+};
+
 export interface AIModelPickerProps {
   models: ModelInfo[];
   selectedModel: string;
@@ -47,6 +58,7 @@ export interface AIModelPickerProps {
   defaultOption?: AIModelPickerDefaultOption;
   extraOptions?: AIModelPickerExtraOption[];
   modelSections?: AIModelPickerModelSection[];
+  modelAnnotations?: Record<string, AIModelPickerAnnotation>;
   emptySelectionLabel?: string;
   selectionBadge?: string;
   title?: string;
@@ -119,6 +131,35 @@ const modelRouteSecondaryId = (entry: ResolvedModelRoute) => {
   return model.id;
 };
 
+const annotationBadgeClass = (tone?: AIModelPickerAnnotation['tone']) => {
+  switch (tone) {
+    case 'warning':
+      return 'shrink-0 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200';
+    case 'positive':
+      return 'shrink-0 rounded border border-green-200 bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-800 dark:border-green-800 dark:bg-green-950/60 dark:text-green-200';
+    default:
+      return 'shrink-0 rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-muted';
+  }
+};
+
+const ModelAnnotationBadge: Component<{ annotation: AIModelPickerAnnotation }> = (props) => (
+  <span class={annotationBadgeClass(props.annotation.tone)}>{props.annotation.badge}</span>
+);
+
+const ModelAnnotationNote: Component<{ annotation: AIModelPickerAnnotation }> = (props) => (
+  <Show when={props.annotation.note}>
+    <div
+      class={`text-[10px] ${
+        props.annotation.tone === 'warning'
+          ? 'text-amber-700 dark:text-amber-300'
+          : 'text-muted'
+      }`}
+    >
+      {props.annotation.note}
+    </div>
+  </Show>
+);
+
 const CurrentSelectionBadge: Component = () => (
   <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
     {' '}
@@ -168,6 +209,14 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   let buttonRef: HTMLButtonElement | undefined;
   let searchInputRef: HTMLInputElement | undefined;
   const pickerId = createUniqueId();
+  const annotationFor = (modelId: string): AIModelPickerAnnotation | undefined =>
+    props.modelAnnotations?.[modelId];
+  // Aria details are joined with ". "; notes are full sentences, so drop the
+  // trailing period to avoid "install.." in the accessible name.
+  const annotationAria = (modelId: string): [string | undefined, string | undefined] => {
+    const annotation = annotationFor(modelId);
+    return [annotation?.badge, annotation?.note?.replace(/\.\s*$/, '')];
+  };
   const optionRefs = new Map<string, HTMLButtonElement>();
   let lastOpenRequest = props.openRequest || 0;
 
@@ -821,7 +870,12 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                           aria-label={optionAriaLabel(
                             modelRouteLabel(entry),
                             isSelectedRoute(entry.id),
-                            [modelRouteDescription(entry), modelRouteSecondaryId(entry)],
+                            [
+                              annotationAria(entry.id)[0],
+                              modelRouteDescription(entry),
+                              annotationAria(entry.id)[1],
+                              modelRouteSecondaryId(entry),
+                            ],
                           )}
                           class={optionClass(isSelectedRoute(entry.id))}
                         >
@@ -829,6 +883,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                             <span class="min-w-0 flex-1 truncate font-medium text-base-content">
                               {modelRouteLabel(entry)}
                             </span>
+                            <Show when={annotationFor(entry.id)}>
+                              {(annotation) => <ModelAnnotationBadge annotation={annotation()} />}
+                            </Show>
                             <Show when={isSelectedRoute(entry.id)}>
                               <CurrentSelectionBadge />
                             </Show>
@@ -837,6 +894,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                             <div class="line-clamp-2 text-[11px] text-muted">
                               {modelRouteDescription(entry)}
                             </div>
+                          </Show>
+                          <Show when={annotationFor(entry.id)}>
+                            {(annotation) => <ModelAnnotationNote annotation={annotation()} />}
                           </Show>
                           <Show when={modelRouteSecondaryId(entry)}>
                             {(modelId) => <div class="text-[10px] text-muted">{modelId()}</div>}
@@ -878,7 +938,12 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                           aria-label={optionAriaLabel(
                             formatAIModelRouteLabel(model),
                             isSelectedRoute(model.id),
-                            [model.description, secondaryModelId()],
+                            [
+                              annotationAria(model.id)[0],
+                              model.description,
+                              annotationAria(model.id)[1],
+                              secondaryModelId(),
+                            ],
                           )}
                           class={optionClass(isSelectedRoute(model.id))}
                         >
@@ -886,6 +951,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                             <span class="min-w-0 flex-1 truncate font-medium text-base-content">
                               {formatAIModelRouteLabel(model)}
                             </span>
+                            <Show when={annotationFor(model.id)}>
+                              {(annotation) => <ModelAnnotationBadge annotation={annotation()} />}
+                            </Show>
                             <Show when={isSelectedRoute(model.id)}>
                               <CurrentSelectionBadge />
                             </Show>
@@ -894,6 +962,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                             <div class="line-clamp-2 text-[11px] text-muted">
                               {model.description}
                             </div>
+                          </Show>
+                          <Show when={annotationFor(model.id)}>
+                            {(annotation) => <ModelAnnotationNote annotation={annotation()} />}
                           </Show>
                           <Show when={secondaryModelId()}>
                             {(modelId) => <div class="text-[10px] text-muted">{modelId()}</div>}

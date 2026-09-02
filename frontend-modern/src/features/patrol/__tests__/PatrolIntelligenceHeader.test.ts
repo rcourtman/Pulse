@@ -16,6 +16,14 @@ const headerSource = readFileSync(
   resolve(__dirname, '..', 'PatrolIntelligenceHeader.tsx'),
   'utf-8',
 );
+const workspaceSource = readFileSync(
+  resolve(__dirname, '..', 'PatrolIntelligenceWorkspace.tsx'),
+  'utf-8',
+);
+const bannersSource = readFileSync(
+  resolve(__dirname, '..', 'PatrolIntelligenceBanners.tsx'),
+  'utf-8',
+);
 
 describe('PatrolIntelligenceHeader', () => {
   it('does not present the server zero-time sentinel as an Autopilot expiry', () => {
@@ -88,7 +96,9 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain('getPatrolSetupAction');
     expect(headerSource).toContain('providerSetupAction().href');
     expect(headerSource).toContain('Fix setup');
-    expect(headerSource).toContain('getPatrolSetupAction(state.patrolReadiness()?.cause)');
+    expect(headerSource).toContain(
+      'resolvePatrolBlockedActionCause(state.blockedCause(), state.patrolReadiness()?.cause)',
+    );
     expect(headerSource).toContain('runButtonDisabled');
     expect(headerSource).not.toContain('!state.canTriggerPatrol() ||');
   });
@@ -310,5 +320,19 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).not.toContain('trust.currently_active');
     expect(headerSource).not.toContain('trust.regressed_at_least_once');
     expect(headerSource).not.toContain('trust.fix_verified');
+  });
+
+  it('routes every Patrol setup action through the runtime block cause (#1789)', () => {
+    // A used-up cost budget blocks Patrol while readiness still reads
+    // "none"; the header, setup card, and paused banner must all resolve the
+    // action from the block cause first so the operator lands on the budget
+    // field instead of the model check.
+    for (const source of [headerSource, workspaceSource, bannersSource]) {
+      expect(source).toContain(
+        'resolvePatrolBlockedActionCause(state.blockedCause(), state.patrolReadiness()?.cause)',
+      );
+      expect(source).not.toContain('getPatrolSetupAction(state.patrolReadiness()?.cause)');
+    }
+    expect(workspaceSource).toContain('getPatrolSetupHint(setupCause())');
   });
 });

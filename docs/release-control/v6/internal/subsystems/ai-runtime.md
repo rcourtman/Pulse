@@ -7871,3 +7871,27 @@ collapsed. `internal/ai/findings_flapping_test.go`,
 `internal/ai/findings_storm_throttler_test.go`, and
 `internal/ai/findings_alert_mirror_test.go` pin the threshold, the collapse,
 the hydration, and the matcher.
+
+### Patrol cost projection, model guidance, and budget refusal are runtime-owned
+
+`internal/ai/patrol_cost_projection.go` owns the Patrol cost preview:
+`ProjectPatrolCost` prices a provider/model and schedule from
+`internal/ai/cost` and the install's own run history (median of the last
+thirty days of priced full runs once three exist, otherwise the measured
+104,528-in / 4,491-out run from issue #1789), separates scheduled from
+observed alert-triggered runs, reports 30-day spend and budget on the same
+basis `enforceBudget` uses, and recommends the slowest schedule preset that
+keeps scheduled runs under half the configured budget (20 USD reference when
+none is set), never faster than the 6-hour default. Every figure carries its
+assumption in the payload; the frontend never re-derives dollars.
+`internal/ai/patrol_model_guidance.go` owns the recommended / suggested /
+caution rules: the Ollama preflight blessing is the only recommended entry,
+Gemini Flash-Lite the only caution (support, 2026-07-20), and cloud starting
+points are labelled price-driven and unqualified; the cached readiness pass
+for the configured Patrol model is surfaced as "verified". Budget refusal is
+the `ErrCostBudgetExceeded` sentinel (`CostBudgetExceededError` carries the
+figures), classified as `PatrolFailureCauseBudgetExhausted`, excluded from
+circuit-breaker accounting, and promoted into the Patrol runtime block state.
+`patrol_cost_projection_test.go` and `patrol_model_guidance_test.go` pin the
+arithmetic, the history/default switch, the recommendation ladder, and the
+guidance matching.
