@@ -2434,7 +2434,7 @@ outcome counts so the fleet can be read for local versus cloud model routes,
 approximate Patrol cost, effective autonomy mode, and how investigations end.
 `ai_provider_class` is derived locally from the configured Patrol or default
 model route (`none`, `local`, `cloud_byok`, `cloud_subscription`,
-`hosted_quickstart`, `unknown`) with a syntactic private-host check on
+`hosted_legacy`, `unknown`) with a syntactic private-host check on
 operator-supplied OpenAI-compatible endpoints; it never resolves DNS and never
 carries the provider ID, model name, endpoint, or account.
 `pulse_intelligence_patrol_autonomy_level` is the effective level after

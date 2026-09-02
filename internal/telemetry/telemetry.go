@@ -197,7 +197,7 @@ const (
 	// Each browser reports each closed milestone at most once per session to a
 	// bounded local daily tally; no event stream or browser identity is sent.
 	// Schema v17 adds the closed Patrol provider class (local, cloud_byok,
-	// cloud_subscription, hosted_quickstart, none), the effective Patrol
+	// cloud_subscription, hosted_legacy, none), the effective Patrol
 	// autonomy level, coarse 30-day Patrol input and output token buckets, and
 	// per-outcome investigation counts. The 2026-09-01 Patrol assessment could
 	// not tell local from cloud installs, estimate what Patrol costs an
@@ -311,7 +311,7 @@ type Ping struct {
 	AIActionsEnabled     bool `json:"ai_actions_enabled"`
 	AlertAIEnabled       bool `json:"alert_ai_enabled"`
 	// AIProviderClass is the closed route class of the Patrol (or default)
-	// model: none, local, cloud_byok, cloud_subscription, hosted_quickstart,
+	// model: none, local, cloud_byok, cloud_subscription, hosted_legacy,
 	// or unknown. Never a provider ID, model name, endpoint, or account.
 	AIProviderClass string `json:"ai_provider_class"`
 	ActiveAlerts    int    `json:"active_alerts"`

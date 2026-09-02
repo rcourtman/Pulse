@@ -18,7 +18,7 @@ const (
 	AIProviderClassLocal             = "local"
 	AIProviderClassCloudBYOK         = "cloud_byok"
 	AIProviderClassCloudSubscription = "cloud_subscription"
-	AIProviderClassHostedQuickstart  = "hosted_quickstart"
+	AIProviderClassHostedLegacy      = "hosted_legacy"
 	AIProviderClassUnknown           = "unknown"
 
 	// Patrol 30-day input token buckets. Boundaries are inclusive lower and
@@ -58,7 +58,7 @@ func AIProviderClassValues() []string {
 		AIProviderClassLocal,
 		AIProviderClassCloudBYOK,
 		AIProviderClassCloudSubscription,
-		AIProviderClassHostedQuickstart,
+		AIProviderClassHostedLegacy,
 		AIProviderClassUnknown,
 	}
 }
@@ -110,7 +110,7 @@ func PatrolInvestigationOutcomeBucketValues() []string {
 //     including a custom OpenAI-compatible endpoint on a public host.
 //   - cloud_subscription: the locally authenticated Codex or Claude CLI
 //     subscription routes, which carry no per-token bill.
-//   - hosted_quickstart: the retired Pulse-hosted route still selected in a
+//   - hosted_legacy: the retired Pulse-hosted route still selected in a
 //     legacy config that has not been normalized yet.
 func ClassifyAIProviderClass(cfg *config.AIConfig) string {
 	if cfg == nil || !cfg.Enabled {
@@ -125,7 +125,7 @@ func ClassifyAIProviderClass(cfg *config.AIConfig) string {
 	}
 	model := config.NormalizeQuickstartModelString(rawModel)
 	if model == "" {
-		return AIProviderClassHostedQuickstart
+		return AIProviderClassHostedLegacy
 	}
 	provider, _ := config.ParseModelString(model)
 	switch strings.ToLower(strings.TrimSpace(provider)) {
@@ -139,7 +139,7 @@ func ClassifyAIProviderClass(cfg *config.AIConfig) string {
 		}
 		return AIProviderClassCloudBYOK
 	case config.AIProviderQuickstart:
-		return AIProviderClassHostedQuickstart
+		return AIProviderClassHostedLegacy
 	case "":
 		return AIProviderClassUnknown
 	}

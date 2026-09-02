@@ -148,8 +148,8 @@ func TestClassifyAIProviderClass(t *testing.T) {
 		{"openrouter", enabled(func(c *config.AIConfig) { c.Model = "openrouter:meta-llama/x" }), AIProviderClassCloudBYOK},
 		{"codex subscription", enabled(func(c *config.AIConfig) { c.Model = "codex-subscription:gpt-x" }), AIProviderClassCloudSubscription},
 		{"claude subscription", enabled(func(c *config.AIConfig) { c.Model = "claude-subscription:claude-x" }), AIProviderClassCloudSubscription},
-		{"retired hosted quickstart alias", enabled(func(c *config.AIConfig) { c.Model = config.DefaultAIModelQuickstart }), AIProviderClassHostedQuickstart},
-		{"retired hosted quickstart provider prefix", enabled(func(c *config.AIConfig) { c.Model = config.AIProviderQuickstart + ":pulse-hosted" }), AIProviderClassHostedQuickstart},
+		{"retired hosted quickstart alias", enabled(func(c *config.AIConfig) { c.Model = config.DefaultAIModelQuickstart }), AIProviderClassHostedLegacy},
+		{"retired hosted quickstart provider prefix", enabled(func(c *config.AIConfig) { c.Model = config.AIProviderQuickstart + ":pulse-hosted" }), AIProviderClassHostedLegacy},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

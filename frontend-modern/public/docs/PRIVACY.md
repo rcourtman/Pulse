@@ -133,7 +133,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notification failures server error 7d (schema v15) | `0` | Count terminal failures classified locally as destination HTTP 5xx server errors without sending response content, destination identity, or provider identity |
 | Notification failures unknown 7d (schema v5) | `0` | Count terminal failures that do not match another fixed class without sending raw errors |
 | Alert AI enabled | `true`/`false` | See whether AI analysis on alert firing is switched on, without sending alert content, resource identifiers, or analysis text |
-| AI provider class | `local` | See one closed bucket for how the Patrol (or default) model is reached: `none`, `local` (Ollama or a private-network OpenAI-compatible endpoint), `cloud_byok` (a hosted provider with your own key), `cloud_subscription` (the Codex or Claude CLI subscription route), or the retired `hosted_quickstart`, without sending the provider, model name, endpoint, or account |
+| AI provider class | `local` | See one closed bucket for how the Patrol (or default) model is reached: `none`, `local` (Ollama or a private-network OpenAI-compatible endpoint), `cloud_byok` (a hosted provider with your own key), `cloud_subscription` (the Codex or Claude CLI subscription route), or `hosted_legacy` (the retired Pulse-hosted route), without sending the provider, model name, endpoint, or account |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
