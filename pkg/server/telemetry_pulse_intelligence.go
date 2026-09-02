@@ -25,6 +25,15 @@ func applyPulseIntelligenceTelemetrySnapshot(
 	now = now.UTC()
 	since := now.Add(-telemetry.PulseIntelligenceTelemetryWindow)
 
+	// Schema v17 closed-vocabulary defaults. A missing usage ledger or AI
+	// service must still export a valid bucket, never an empty string.
+	if snap.AIProviderClass == "" {
+		snap.AIProviderClass = telemetry.AIProviderClassNone
+	}
+	snap.PulseIntelligencePatrolAutonomyLevel = telemetry.NormalizePatrolAutonomyLevelForTelemetry(actionSnapshot.PatrolAutonomyLevel)
+	snap.PulseIntelligencePatrolInputTokensBucket30d = telemetry.PatrolTokenBucketZero
+	snap.PulseIntelligencePatrolOutputTokensBucket30d = telemetry.PatrolTokenBucketZero
+
 	applyPulseIntelligenceAIUsageSnapshot(snap, persistence, since)
 	applyPulseIntelligencePatrolRunSnapshot(snap, persistence, since)
 	applyPulseIntelligenceFindingSnapshot(snap, persistence, since)
@@ -222,6 +231,9 @@ func applyPulseIntelligenceAIUsageSnapshot(snap *telemetry.Snapshot, persistence
 	snap.PulseIntelligenceAssistantContextAICalls30d = evidence.AssistantContextAICalls
 	snap.PulseIntelligenceAssistantToolCalls30d = evidence.AssistantToolCalls
 	snap.PulseIntelligencePatrolAICalls30d = evidence.PatrolAICalls
+	// Exact token totals stay local; only the closed bucket is exported.
+	snap.PulseIntelligencePatrolInputTokensBucket30d = telemetry.PatrolInputTokensBucket(evidence.PatrolInputTokens)
+	snap.PulseIntelligencePatrolOutputTokensBucket30d = telemetry.PatrolOutputTokensBucket(evidence.PatrolOutputTokens)
 }
 
 func applyPulseIntelligencePatrolRunSnapshot(snap *telemetry.Snapshot, persistence *config.ConfigPersistence, since time.Time) {
@@ -259,14 +271,32 @@ func applyPulseIntelligenceFindingSnapshot(snap *telemetry.Snapshot, persistence
 	if err != nil || data == nil {
 		return
 	}
+	var outcomes telemetry.PatrolInvestigationOutcomeCounts
 	for _, finding := range data.Findings {
 		if pulseIntelligenceFindingInvestigatedSince(finding, since) {
 			snap.PulseIntelligencePatrolInvestigations30d++
+			// Partition the same population by its current investigation
+			// state so the outcome buckets always sum to the investigation
+			// count. Only the closed bucket leaves the install.
+			outcomes.Add(finding.InvestigationOutcome, finding.InvestigationStatus)
 		}
 		if pulseIntelligenceFindingResolvedSince(finding, since) {
 			snap.PulseIntelligencePatrolResolvedFindings30d++
 		}
 	}
+	snap.PulseIntelligencePatrolInvestigationOutcomeFixVerified30d = outcomes.FixVerified
+	snap.PulseIntelligencePatrolInvestigationOutcomeFixQueued30d = outcomes.FixQueued
+	snap.PulseIntelligencePatrolInvestigationOutcomeFixExecuted30d = outcomes.FixExecuted
+	snap.PulseIntelligencePatrolInvestigationOutcomeFixRejected30d = outcomes.FixRejected
+	snap.PulseIntelligencePatrolInvestigationOutcomeFixFailed30d = outcomes.FixFailed
+	snap.PulseIntelligencePatrolInvestigationOutcomeFixVerificationUnknown30d = outcomes.FixVerificationUnknown
+	snap.PulseIntelligencePatrolInvestigationOutcomeResolved30d = outcomes.Resolved
+	snap.PulseIntelligencePatrolInvestigationOutcomeNeedsAttention30d = outcomes.NeedsAttention
+	snap.PulseIntelligencePatrolInvestigationOutcomeCannotFix30d = outcomes.CannotFix
+	snap.PulseIntelligencePatrolInvestigationOutcomeTimedOut30d = outcomes.TimedOut
+	snap.PulseIntelligencePatrolInvestigationOutcomeInProgress30d = outcomes.InProgress
+	snap.PulseIntelligencePatrolInvestigationOutcomeFailed30d = outcomes.Failed
+	snap.PulseIntelligencePatrolInvestigationOutcomeOther30d = outcomes.Other
 }
 
 func pulseIntelligenceFindingInvestigatedSince(finding *config.AIFindingRecord, since time.Time) bool {
