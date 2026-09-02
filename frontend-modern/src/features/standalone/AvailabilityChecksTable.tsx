@@ -313,11 +313,7 @@ export const AvailabilityChecksTable: Component<{
                         <TableRow
                           data-availability-check-row={check.id}
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           onClick={() => drawer.toggle(check)}
-                          onKeyDown={drawer.handleActivationKey(check)}
-                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">

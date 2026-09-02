@@ -1585,25 +1585,13 @@ export const AgentsMachinesTable: Component<{
                     const toggleDetails = () => {
                       drawer.toggle(machine);
                     };
-                    const handleDetailsActivationKey: JSX.EventHandler<
-                      HTMLTableRowElement,
-                      KeyboardEvent
-                    > = (event) => {
-                      if (event.key !== 'Enter' && event.key !== ' ') return;
-                      event.preventDefault();
-                      toggleDetails();
-                    };
 
                     return (
                       <>
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-agents-machine-row={machine.id}
                           onClick={toggleDetails}
-                          onKeyDown={handleDetailsActivationKey}
-                          tabIndex={0}
                         >
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} ${machineColumnWidthClass('machine')}`}

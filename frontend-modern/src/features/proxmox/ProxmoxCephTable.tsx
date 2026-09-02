@@ -418,7 +418,6 @@ export const ProxmoxCephTable: Component<{
                         <TableRow
                           {...getPlatformResourceDetailRowInteractionProps({
                             expanded: isOpen(),
-                            detailRowId: detailRowId(),
                             onToggle: () => toggleSelected(cluster.id),
                           })}
                         >

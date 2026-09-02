@@ -315,7 +315,6 @@ export function ProxmoxCoverageTable(props: {
                       <TableRow
                         {...getPlatformResourceDetailRowInteractionProps({
                           expanded: isExpanded(),
-                          detailRowId: detailRowId(),
                           onToggle: () => props.onToggleExpand(row.key),
                         })}
                         data-proxmox-backup-row="coverage"

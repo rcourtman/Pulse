@@ -105,11 +105,16 @@ describe('VsphereAlertsTable', () => {
     const row = screen
       .getByText('Host host-101 has VMware alarm Host connection and power state (red)')
       .closest('tr');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('vsphere-alert-detail'));
     expect(detail.getByText('vSphere health detail')).toBeInTheDocument();
     expect(detail.getByText('Managed object')).toBeInTheDocument();
@@ -122,6 +127,10 @@ describe('VsphereAlertsTable', () => {
     await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('vsphere-alert-detail')).not.toBeInTheDocument();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

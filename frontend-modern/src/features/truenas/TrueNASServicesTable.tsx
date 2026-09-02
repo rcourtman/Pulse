@@ -308,12 +308,8 @@ export const TrueNASServicesTable: Component<{
                       <>
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-truenas-service-row={row.id}
                           onClick={() => detail.toggle(row)}
-                          onKeyDown={detail.handleActivationKey(row)}
-                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">

@@ -197,12 +197,8 @@ export const DockerImagesTable: Component<
                       <>
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-docker-image-row={resource.id}
                           onClick={() => drawer.toggle(resource)}
-                          onKeyDown={drawer.handleActivationKey(resource)}
-                          tabIndex={0}
                         >
                           <DockerResourceNameCell
                             resource={resource}

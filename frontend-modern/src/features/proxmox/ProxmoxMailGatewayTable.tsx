@@ -246,7 +246,6 @@ export const ProxmoxMailGatewayTable: Component<{
                         <TableRow
                           {...getPlatformResourceDetailRowInteractionProps({
                             expanded: isOpen(),
-                            detailRowId: detailRowId(),
                             onToggle: () => detail.toggle(instance),
                           })}
                         >

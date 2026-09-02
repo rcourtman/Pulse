@@ -1229,11 +1229,16 @@ describe('Docker native tables', () => {
     expect(screen.getByText('10.88.0.0/24 via 10.88.0.1')).toBeInTheDocument();
 
     const row = document.querySelector('[data-docker-network-row="network-1"]');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Addressing')).toBeInTheDocument();
     expect(screen.getByText('Flags')).toBeInTheDocument();
     expect(screen.getByText('IPv4')).toBeInTheDocument();
@@ -1711,8 +1716,11 @@ describe('Docker native tables', () => {
 
     const configRow = document.querySelector<HTMLElement>('[data-docker-config-row="config-1"]');
     expect(configRow).not.toBeNull();
-    fireEvent.keyDown(configRow!, { key: 'Enter' });
-    expect(configRow).toHaveAttribute('aria-expanded', 'true');
+    const configDisclosure = configRow!.querySelector<HTMLElement>('[data-row-action="true"]');
+    expect(configDisclosure).not.toBeNull();
+    fireEvent.click(configDisclosure!);
+    expect(configRow).not.toHaveAttribute('aria-expanded');
+    expect(configDisclosure).toHaveAttribute('aria-expanded', 'true');
     expect(
       document.querySelector('[data-inline-docker-config-detail-for="config-1"]'),
     ).not.toBeNull();

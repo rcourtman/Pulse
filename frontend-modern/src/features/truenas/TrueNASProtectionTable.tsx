@@ -510,14 +510,10 @@ export const TrueNASProtectionTable: Component<{
                           <>
                             <TableRow
                               class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                              aria-controls={isExpanded() ? detailRowId() : undefined}
-                              aria-expanded={isExpanded() ? 'true' : 'false'}
                               data-truenas-protection-row={point.id}
                               data-truenas-protection-kind={mapTrueNASProtectionKind(point)}
                               data-truenas-protection-outcome={mapTrueNASProtectionStatus(point)}
                               onClick={() => detail.toggle(point)}
-                              onKeyDown={detail.handleActivationKey(point)}
-                              tabIndex={0}
                             >
                               <TableCell class={getPlatformTableCellClassForKind('name')}>
                                 <DatasetCell
