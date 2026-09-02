@@ -2,6 +2,8 @@
 set -euo pipefail
 
 readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/secure-runtime-rootful-runtime.sh
+source "${REPO_ROOT}/scripts/secure-runtime-rootful-runtime.sh"
 readonly UBUNTU_IMAGE="${PULSE_ROOTFUL_UBUNTU_IMAGE:?set PULSE_ROOTFUL_UBUNTU_IMAGE to an immutable ubuntu@sha256:... Ubuntu 24.04 image}"
 readonly OUTPUT_PARENT="${PULSE_ROOTFUL_QUALIFICATION_OUTPUT_DIR:?set PULSE_ROOTFUL_QUALIFICATION_OUTPUT_DIR to an existing absolute private directory}"
 readonly CONFIRM="${PULSE_ROOTFUL_QUALIFICATION_CONFIRM:-}"
@@ -261,10 +263,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable\n' "\$(dpkg --print-architecture)" >/etc/apt/sources.list.d/docker.list && \
     apt-get update && apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    ln -sf /dev/null /etc/systemd/system/docker.service && \
-    ln -sf /dev/null /etc/systemd/system/docker.socket && \
-    ln -sf /dev/null /etc/systemd/system/podman.service && \
-    ln -sf /dev/null /etc/systemd/system/podman.socket && \
+    for unit in \
+      docker.service docker.socket \
+      containerd.service \
+      podman.service podman.socket \
+      podman-auto-update.service podman-auto-update.timer \
+      podman-clean-transient.service podman-restart.service; do \
+      ln -sf /dev/null "/etc/systemd/system/\${unit}"; \
+    done && \
     install -d -m 0700 /opt/pulse/packet /opt/pulse/result && \
     printf '%s\n' disposable-v1 >/etc/pulse-secure-runtime-rootful-qualification && \
     rm -f /etc/machine-id && touch /etc/machine-id && \
@@ -284,13 +290,19 @@ capture_qualification_container_diagnostics() {
   local runtime_name="$1" container_id="$2"
   docker logs "${container_id}" >"${OUTPUT_DIR}/${runtime_name}-container.log" 2>&1 || true
   docker exec "${container_id}" journalctl --no-pager -n 2000 >"${OUTPUT_DIR}/${runtime_name}-journal.log" 2>&1 || true
-  chmod 0600 "${OUTPUT_DIR}/${runtime_name}-container.log" "${OUTPUT_DIR}/${runtime_name}-journal.log"
+  docker exec "${container_id}" systemctl is-system-running >"${OUTPUT_DIR}/${runtime_name}-systemd-state.log" 2>&1 || true
+  docker exec "${container_id}" systemctl list-units --state=failed --no-legend --no-pager --plain >"${OUTPUT_DIR}/${runtime_name}-failed-units.log" 2>&1 || true
+  chmod 0600 \
+    "${OUTPUT_DIR}/${runtime_name}-container.log" \
+    "${OUTPUT_DIR}/${runtime_name}-journal.log" \
+    "${OUTPUT_DIR}/${runtime_name}-systemd-state.log" \
+    "${OUTPUT_DIR}/${runtime_name}-failed-units.log"
 }
 
 run_runtime() {
   local runtime_name="$1"
   local container_name="pulse-rootful-qual-${runtime_name}-${SOURCE_COMMIT:0:8}-$$"
-  local container_id local_receipt machine_id_file machine_id deadline mounts packet_probe_hash installed_probe_hash
+  local container_id local_receipt machine_id_file machine_id deadline mounts packet_probe_hash installed_probe_hash readiness_status
   local_receipt="${OUTPUT_DIR}/${runtime_name}-receipt.json"
   machine_id_file="${PACKET_DIR}/.machine-id-${runtime_name}"
   machine_id="$(openssl rand -hex 16)"
@@ -313,7 +325,17 @@ run_runtime() {
   docker start "${container_id}" >/dev/null
 
   deadline=$((SECONDS + 60))
-  until docker exec "${container_id}" systemctl is-system-running --wait >/dev/null 2>&1; do
+  while true; do
+    readiness_status=0
+    rootful_qualification_systemd_readiness "${container_id}" || readiness_status=$?
+    if (( readiness_status == 0 )); then
+      break
+    fi
+    if (( readiness_status == 2 )); then
+      capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
+      echo "ERROR: ${runtime_name} disposable systemd container entered a terminal non-running state or has failed units" >&2
+      return 1
+    fi
     if (( SECONDS >= deadline )); then
       capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
       echo "ERROR: ${runtime_name} disposable systemd container did not become ready" >&2
@@ -353,9 +375,17 @@ run_runtime() {
       -e PULSE_SECURE_RUNTIME_INSTALLER=/opt/pulse/packet/install.sh \
       "${container_id}" /opt/pulse/packet/dockeragent.test \
         -test.run '^TestSecureRuntimeRootfulQualification$' -test.count=1 -test.v -test.timeout=45m \
-        | tee "${OUTPUT_DIR}/${runtime_name}-test.log"; then
+      | tee "${OUTPUT_DIR}/${runtime_name}-test.log"; then
     capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
     chmod 0600 "${OUTPUT_DIR}/${runtime_name}-test.log"
+    return 1
+  fi
+  readiness_status=0
+  rootful_qualification_systemd_readiness "${container_id}" || readiness_status=$?
+  if (( readiness_status != 0 )); then
+    capture_qualification_container_diagnostics "${runtime_name}" "${container_id}"
+    chmod 0600 "${OUTPUT_DIR}/${runtime_name}-test.log"
+    echo "ERROR: ${runtime_name} systemd readiness changed before receipt acceptance" >&2
     return 1
   fi
   docker exec "${container_id}" test -f /opt/pulse/result/rootful-receipt.json || {
