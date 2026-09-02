@@ -10551,3 +10551,18 @@ payload field for field (snake_case, `by_outcome` as an object, optional
 `history_since` and `last_run_at`). New payload fields are additive and the
 client must tolerate their absence. Proof:
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
+
+### Report schedules carry a kind; patrol_digest is weekly and email-only
+
+`ReportSchedule` gains `kind`: `resources` (the default, applied to every
+stored schedule without one) or `patrol_digest`. A `patrol_digest` schedule is
+the weekly "what Patrol did for you" email for the whole workspace: the server
+fixes `format` to `email`, empties `scope`, forces email delivery with no
+attachment or disk copy, and rejects a non-weekly cadence
+(`invalid_cadence`), disk delivery (`invalid_delivery`), or an unknown kind
+(`invalid_kind`). Runs render the digest from `AISettingsHandler.BuildPatrolDigest`
+through the tenant email config and record a clear `last_error` when the AI
+service, Patrol, or an email destination is missing; nothing is written to
+disk. The advanced-reporting entitlement gates both kinds. Proofs:
+`internal/api/report_schedules_test.go`, `internal/api/patrol_digest_email_test.go`,
+`internal/api/ai_handlers_more_test.go`.

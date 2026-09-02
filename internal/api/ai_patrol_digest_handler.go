@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,16 +55,29 @@ func (h *AISettingsHandler) HandleGetPatrolDigest(w http.ResponseWriter, r *http
 		days = parsed
 	}
 
+	digest, _ := h.BuildPatrolDigest(r.Context(), days)
+	if err := utils.WriteJSONResponse(w, digest); err != nil {
+		log.Error().Err(err).Msg("Failed to write patrol digest response")
+	}
+}
+
+// BuildPatrolDigest assembles the digest inputs for the tenant in ctx and
+// returns the rollup. The boolean reports whether a Patrol service backed the
+// numbers; a false result is the zero-valued shape a client can still render as
+// "Patrol has not run", while scheduled emails treat it as "not available".
+func (h *AISettingsHandler) BuildPatrolDigest(ctx context.Context, days int) (ai.PatrolDigest, bool) {
+	days = ai.NormalizePatrolDigestDays(days)
 	input := ai.PatrolDigestInput{
 		Now:                time.Now().UTC(),
 		Days:               days,
 		Mode:               config.PatrolAutonomyMonitor,
 		RunHistoryCapacity: ai.MaxPatrolRunHistory,
 	}
-
-	if aiService := h.GetAIService(r.Context()); aiService != nil {
+	available := false
+	if aiService := h.GetAIService(ctx); aiService != nil {
 		input.Mode = aiService.GetEffectivePatrolAutonomyLevel()
 		if patrol := aiService.GetPatrolService(); patrol != nil {
+			available = true
 			input.Runs = patrol.GetRunHistory(ai.MaxPatrolRunHistory)
 			if store := patrol.GetFindings(); store != nil {
 				input.Findings = store.GetAll(nil)
@@ -75,18 +89,14 @@ func (h *AISettingsHandler) HandleGetPatrolDigest(w http.ResponseWriter, r *http
 			input.Usage = costStore.ListEvents(days + 1)
 		}
 	}
-
-	input.Actions = h.patrolDigestActions(r)
-
-	if err := utils.WriteJSONResponse(w, ai.BuildPatrolDigest(input)); err != nil {
-		log.Error().Err(err).Msg("Failed to write patrol digest response")
-	}
+	input.Actions = h.patrolDigestActions(ctx)
+	return ai.BuildPatrolDigest(input), available
 }
 
 // patrolDigestActions reads the canonical action audits the digest summarises.
 // A missing store degrades to an empty action line rather than failing the
 // whole digest: runs, findings, and spend are still worth showing.
-func (h *AISettingsHandler) patrolDigestActions(r *http.Request) []unifiedresources.ActionAuditRecord {
+func (h *AISettingsHandler) patrolDigestActions(ctx context.Context) []unifiedresources.ActionAuditRecord {
 	if h == nil {
 		return nil
 	}
@@ -96,7 +106,7 @@ func (h *AISettingsHandler) patrolDigestActions(r *http.Request) []unifiedresour
 	if provider == nil {
 		return nil
 	}
-	store, err := provider(GetOrgID(r.Context()))
+	store, err := provider(GetOrgID(ctx))
 	if err != nil || store == nil {
 		if err != nil {
 			log.Debug().Err(err).Msg("Failed to resolve resource store for Patrol digest actions")

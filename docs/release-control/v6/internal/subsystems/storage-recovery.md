@@ -5911,3 +5911,10 @@ writes nothing. It creates no backup, snapshot, retention, cleanup, or recovery
 state. Its action counts are a projection of the existing action audit table
 (`GetActionAuditsByStates`, filtered to Patrol origin); no new persistence,
 table, or migration is introduced by the digest.
+
+### Patrol digest schedules write nothing to disk
+
+Unlike resource reports, a `patrol_digest` schedule run produces no generated
+file under the tenant `reports` directory and never calls the retention prune;
+the email body is the only artifact. Recovery and retention state are
+unaffected.
