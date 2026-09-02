@@ -7684,3 +7684,11 @@ install's Patrol run history, and the cached readiness pass. They read no
 agent identity, enrolment, or fleet state, issue no agent commands, and do
 not change the shared agent-install or setup-script boundaries; the
 agent-lifecycle contract keeps its authority over every agent surface.
+
+### Patrol digest does not touch agent authority
+
+The Patrol digest route in `internal/api/router_routes_ai_relay.go` and its
+handler `internal/api/ai_patrol_digest_handler.go` are read-only. They issue no
+agent commands, create no action plans, and do not alter capability, token, or
+binding state. Agent-executed Patrol actions appear in the digest only as
+counts projected from existing action audit records.

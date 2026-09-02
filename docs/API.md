@@ -1138,6 +1138,20 @@ Kubernetes-specific analysis as a standalone plan pillar.
 Runs a focused investigation for an alert payload (used by the UI).
 
 ### Patrol
+- `GET /api/ai/patrol/digest`
+  - Returns the "what Patrol did for you" rollup for the last `days` days
+    (query `days`, 1–30, default 7): the window and whether retained run
+    history covers it, the effective Patrol mode, runs (total, scheduled,
+    event-triggered, manual, failed, checks, resources covered, last run),
+    findings (new, still open by severity, resolved, auto-resolved,
+    dismissed, suppressed), investigations by outcome, Patrol-origin actions
+    (proposed, approved, rejected, executed, verified, failed, pending),
+    alerts Patrol reviewed, and estimated model spend with a pricing-known
+    flag.
+  - Computed from records Pulse already retains (run history, the findings
+    store, canonical action audits, and usage cost events); nothing new is
+    persisted. Requires the `ai:execute` scope. Backs the Patrol page's
+    "This week" card; see `docs/PATROL_WEEKLY_DIGEST.md`.
 - `GET /api/ai/patrol/attention`
   - Returns the typed Patrol attention queue projected from canonical
     operational lifecycle records. This is the active-count and queue source
