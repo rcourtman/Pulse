@@ -9,6 +9,10 @@ on:
         description: 'Version number (e.g., 4.30.0)'
         required: true
         type: string
+      expected_source_sha:
+        description: 'Exact 40-character commit SHA admitted for this release'
+        required: true
+        type: string
       release_notes:
         description: 'Release notes (markdown)'
         required: true
@@ -108,6 +112,22 @@ jobs:
       visual_capture_count: ${{ steps.visual_plan.outputs.capture_count }}
       visual_comparison_tag: ${{ steps.visual_plan.outputs.comparison_tag }}
     steps:
+      - name: Verify admitted source commit
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_source_sha must be an exact 40-character commit SHA"
+            exit 1
+          fi
+          if [[ "${GITHUB_SHA}" != "${EXPECTED_SOURCE_SHA}" || \
+                "${GITHUB_WORKFLOW_SHA}" != "${EXPECTED_SOURCE_SHA}" ]]; then
+            echo "::error::Release dispatch expected ${EXPECTED_SOURCE_SHA}, but GitHub resolved source ${GITHUB_SHA} and workflow ${GITHUB_WORKFLOW_SHA}."
+            exit 1
+          fi
+          echo "[OK] Release dispatch is bound to ${EXPECTED_SOURCE_SHA}"
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
