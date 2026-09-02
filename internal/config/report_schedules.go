@@ -15,6 +15,15 @@ const (
 
 	ReportScheduleFormatPDF = "pdf"
 	ReportScheduleFormatCSV = "csv"
+	// ReportScheduleFormatEmail marks schedules whose output is the email body
+	// itself (no generated file); used by the Patrol digest kind.
+	ReportScheduleFormatEmail = "email"
+
+	// ReportScheduleKindResources is the original multi-resource performance
+	// report; ReportScheduleKindPatrolDigest emails the "what Patrol did"
+	// weekly rollup for the whole workspace.
+	ReportScheduleKindResources    = "resources"
+	ReportScheduleKindPatrolDigest = "patrol_digest"
 
 	ReportScheduleDeliveryEmail = "email"
 	ReportScheduleDeliveryDisk  = "disk"
@@ -33,6 +42,7 @@ type ReportSchedule struct {
 	ID                string                 `json:"id"`
 	Name              string                 `json:"name"`
 	Enabled           bool                   `json:"enabled"`
+	Kind              string                 `json:"kind,omitempty"`
 	Cadence           ReportScheduleCadence  `json:"cadence"`
 	Scope             ReportScheduleScope    `json:"scope"`
 	Window            string                 `json:"window,omitempty"`
@@ -91,6 +101,10 @@ func NormalizeReportScheduleStore(store ReportScheduleStore) ReportScheduleStore
 func NormalizeReportSchedule(schedule ReportSchedule) ReportSchedule {
 	schedule.ID = strings.TrimSpace(schedule.ID)
 	schedule.Name = strings.TrimSpace(schedule.Name)
+	schedule.Kind = strings.ToLower(strings.TrimSpace(schedule.Kind))
+	if schedule.Kind == "" {
+		schedule.Kind = ReportScheduleKindResources
+	}
 	schedule.Cadence.Type = strings.ToLower(strings.TrimSpace(schedule.Cadence.Type))
 	schedule.Cadence.Weekday = strings.ToLower(strings.TrimSpace(schedule.Cadence.Weekday))
 	schedule.Cadence.Time = strings.TrimSpace(schedule.Cadence.Time)

@@ -161,6 +161,12 @@ describe('docsLinks', () => {
     expect(apiReference).toContain('docs/PATROL_WEEKLY_DIGEST.md');
   });
 
+  it('documents the Patrol weekly summary report schedule kind for providers', () => {
+    const mspGuide = readFileSync(path.join(repoRoot, 'docs', 'MSP.md'), 'utf8');
+    expect(mspGuide).toContain('`patrol_digest`');
+    expect(mspGuide).toMatch(/Digest schedules are weekly and\s+email-only/);
+  });
+
   it('ships the readable SSO identity and user deprovisioning contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const rbacGuide = readFileSync(path.join(repoRoot, 'docs', 'RBAC.md'), 'utf8');

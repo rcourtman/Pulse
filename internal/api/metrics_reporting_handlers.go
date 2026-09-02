@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -99,6 +100,19 @@ type ReportingHandlers struct {
 	settingsStore             reportingSystemSettingsStore
 	scheduleRunMu             sync.Mutex
 	commercialLicenseResolver func(ctx context.Context) *licenseService
+	// patrolDigestResolver builds the Patrol digest for the request's tenant.
+	// Nil means the runtime has no AI service and digest schedules fail with a
+	// clear error instead of sending an empty email.
+	patrolDigestResolver func(ctx context.Context, days int) (ai.PatrolDigest, bool)
+}
+
+// SetPatrolDigestResolver wires the per-tenant Patrol digest used by
+// patrol_digest report schedules.
+func (h *ReportingHandlers) SetPatrolDigestResolver(resolver func(ctx context.Context, days int) (ai.PatrolDigest, bool)) {
+	if h == nil {
+		return
+	}
+	h.patrolDigestResolver = resolver
 }
 
 type reportingSystemSettingsStore interface {

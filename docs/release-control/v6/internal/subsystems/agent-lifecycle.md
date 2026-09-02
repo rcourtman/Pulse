@@ -7692,3 +7692,9 @@ handler `internal/api/ai_patrol_digest_handler.go` are read-only. They issue no
 agent commands, create no action plans, and do not alter capability, token, or
 binding state. Agent-executed Patrol actions appear in the digest only as
 counts projected from existing action audit records.
+
+### Patrol digest schedules do not touch agent authority
+
+The `patrol_digest` report schedule kind in `internal/api/report_schedules.go`
+only reads the digest and sends an email. It issues no agent commands, plans
+no actions, and changes no capability, token, or binding state.

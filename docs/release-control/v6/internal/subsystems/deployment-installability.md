@@ -5015,3 +5015,11 @@ the first release train so the workflow refuses a v6.5 dispatch from any other
 branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
 allowlist, the drift refusal, the hotfix path, and the minor soak;
 `release_promotion_policy_test.py` pins the policy's Release Train section.
+
+### Provider docs name the Patrol weekly summary schedule kind
+
+`docs/MSP.md` documents that a report schedule's `kind` is `resources` or
+`patrol_digest`, and that digest schedules are weekly, email-only, fleet-wide
+summaries whose scope, format, and attachments the server fixes. The delivery
+surface (`/api/admin/reports/schedules`) and tenant-local storage are
+unchanged.

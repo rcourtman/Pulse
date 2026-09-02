@@ -804,6 +804,12 @@ func (r *Router) setupRoutes() {
 	// falls back to the heuristic narrators with no findings section.
 	if r.reportingHandlers != nil {
 		settings := r.aiSettingsHandler
+		r.reportingHandlers.SetPatrolDigestResolver(func(ctx context.Context, days int) (ai.PatrolDigest, bool) {
+			if settings == nil {
+				return ai.PatrolDigest{}, false
+			}
+			return settings.BuildPatrolDigest(ctx, days)
+		})
 		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 			if settings == nil {
 				return nil, nil, nil

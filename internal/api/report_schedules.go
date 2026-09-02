@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
@@ -297,6 +298,13 @@ func (h *ReportingHandlers) prepareReportSchedule(ctx context.Context, schedule 
 	if schedule.Name == "" || len(schedule.Name) > 80 {
 		return schedule, reportScheduleValidationError{code: "invalid_name", message: "Schedule name is required and must be 80 characters or fewer"}
 	}
+	switch schedule.Kind {
+	case config.ReportScheduleKindResources:
+	case config.ReportScheduleKindPatrolDigest:
+		return preparePatrolDigestSchedule(schedule, now)
+	default:
+		return schedule, reportScheduleValidationError{code: "invalid_kind", message: "Schedule kind must be resources or patrol_digest"}
+	}
 	if schedule.Format == "" {
 		schedule.Format = config.ReportScheduleFormatPDF
 	}
@@ -462,6 +470,9 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 	if err := h.requireCommercialFeature(ctx, featureAdvancedReportingValue); err != nil {
 		return result, markReportScheduleFailed(schedule, now, fmt.Errorf("advanced reporting entitlement required: %w", err))
 	}
+	if schedule.Kind == config.ReportScheduleKindPatrolDigest {
+		return h.runPatrolDigestSchedule(ctx, persistence, schedule, now)
+	}
 
 	orgID := GetOrgID(ctx)
 	resources, err := h.resolveReportScheduleResources(ctx, orgID, schedule.Scope)
@@ -601,13 +612,16 @@ func pruneGeneratedReports(dir string, retentionCount int) {
 	}
 }
 
-func sendScheduledReportEmail(persistence *config.ConfigPersistence, schedule config.ReportSchedule, report generatedMultiReport, path string) (string, error) {
+// scheduledReportEmailManager builds the email manager for a schedule from the
+// tenant email config. It returns nil, nil when email is not configured or no
+// recipient can be resolved, so callers decide how to report that.
+func scheduledReportEmailManager(persistence *config.ConfigPersistence, schedule config.ReportSchedule) (*notifications.EnhancedEmailManager, error) {
 	emailCfg, err := persistence.LoadEmailConfig()
 	if err != nil {
-		return "", fmt.Errorf("load email config: %w", err)
+		return nil, fmt.Errorf("load email config: %w", err)
 	}
 	if emailCfg == nil || !emailCfg.Enabled {
-		return "saved_to_disk_email_unconfigured", nil
+		return nil, nil
 	}
 	recipients := schedule.Delivery.To
 	if len(recipients) == 0 {
@@ -617,9 +631,8 @@ func sendScheduledReportEmail(persistence *config.ConfigPersistence, schedule co
 		recipients = []string{emailCfg.From}
 	}
 	if len(recipients) == 0 {
-		return "saved_to_disk_email_unconfigured", nil
+		return nil, nil
 	}
-
 	providerConfig := notifications.EmailProviderConfig{
 		EmailConfig: notifications.EmailConfig{
 			Provider:  emailCfg.Provider,
@@ -640,7 +653,17 @@ func sendScheduledReportEmail(persistence *config.ConfigPersistence, schedule co
 		StartTLS:     emailCfg.StartTLS,
 		AuthRequired: emailCfg.Username != "" && emailCfg.Password != "",
 	}
-	manager := notifications.NewEnhancedEmailManager(providerConfig)
+	return notifications.NewEnhancedEmailManager(providerConfig), nil
+}
+
+func sendScheduledReportEmail(persistence *config.ConfigPersistence, schedule config.ReportSchedule, report generatedMultiReport, path string) (string, error) {
+	manager, err := scheduledReportEmailManager(persistence, schedule)
+	if err != nil {
+		return "", err
+	}
+	if manager == nil {
+		return "saved_to_disk_email_unconfigured", nil
+	}
 	subject := "Pulse report: " + schedule.Name
 	htmlBody := "<p>Your scheduled Pulse report is ready.</p>"
 	textBody := "Your scheduled Pulse report is ready."
@@ -937,4 +960,72 @@ func (h *ReportingHandlers) runDueReportSchedulesForOrg(ctx context.Context, org
 			log.Warn().Err(err).Str("org_id", orgID).Msg("report schedules: save statuses")
 		}
 	}
+}
+
+// preparePatrolDigestSchedule validates the Patrol weekly summary kind. The
+// summary is fleet-wide and only makes sense as a weekly email, so scope,
+// format, attachments, and disk delivery are fixed rather than user choices.
+func preparePatrolDigestSchedule(schedule config.ReportSchedule, now time.Time) (config.ReportSchedule, error) {
+	schedule.Format = config.ReportScheduleFormatEmail
+	schedule.Scope = config.ReportScheduleScope{Resources: []config.ReportScheduleResource{}, Tags: []string{}}
+	if schedule.Delivery.Method == "" {
+		schedule.Delivery.Method = config.ReportScheduleDeliveryEmail
+	}
+	if schedule.Delivery.Method != config.ReportScheduleDeliveryEmail {
+		return schedule, reportScheduleValidationError{code: "invalid_delivery", message: "Patrol weekly summaries are delivered by email"}
+	}
+	schedule.Delivery.Attach = false
+	schedule.Delivery.SaveToDisk = false
+	if schedule.Cadence.Type != config.ReportScheduleCadenceWeekly {
+		return schedule, reportScheduleValidationError{code: "invalid_cadence", message: "Patrol weekly summaries use a weekly cadence"}
+	}
+	if err := validateReportScheduleCadence(schedule.Cadence); err != nil {
+		return schedule, err
+	}
+	next, err := nextReportScheduleRunAt(schedule, now)
+	if err != nil {
+		return schedule, err
+	}
+	schedule.NextRunAt = &next
+	return schedule, nil
+}
+
+// runPatrolDigestSchedule emails the last seven days of Patrol work. Nothing is
+// written to disk: the digest is a rollup of records Pulse already keeps, so
+// the email is the only artifact.
+func (h *ReportingHandlers) runPatrolDigestSchedule(ctx context.Context, persistence *config.ConfigPersistence, schedule config.ReportSchedule, now time.Time) (reportScheduleRunResult, config.ReportSchedule) {
+	result := reportScheduleRunResult{}
+	if h == nil || h.patrolDigestResolver == nil {
+		return result, markReportScheduleFailed(schedule, now, errors.New("Patrol weekly summary is unavailable on this server"))
+	}
+	digest, ok := h.patrolDigestResolver(ctx, ai.PatrolDigestDefaultDays)
+	if !ok {
+		return result, markReportScheduleFailed(schedule, now, errors.New("Patrol is not available for this workspace"))
+	}
+	manager, err := scheduledReportEmailManager(persistence, schedule)
+	if err != nil {
+		return result, markReportScheduleFailed(schedule, now, err)
+	}
+	if manager == nil {
+		return result, markReportScheduleFailed(schedule, now, errors.New("email notifications are not configured; add an email destination under Settings > Notifications or list recipients on the schedule"))
+	}
+	subject, htmlBody, textBody := renderPatrolDigestEmail(digest, h.patrolDigestPublicURL())
+	if err := manager.SendEmailWithRetry(subject, htmlBody, textBody); err != nil {
+		return result, markReportScheduleFailed(schedule, now, fmt.Errorf("send Patrol weekly summary: %w", err))
+	}
+	result.email = "sent"
+	schedule.LastRunStatus = config.ReportScheduleLastRunOK
+	schedule.LastError = ""
+	return result, schedule
+}
+
+func (h *ReportingHandlers) patrolDigestPublicURL() string {
+	if h == nil || h.settingsStore == nil {
+		return ""
+	}
+	settings, err := h.settingsStore.LoadSystemSettings()
+	if err != nil || settings == nil {
+		return ""
+	}
+	return strings.TrimRight(strings.TrimSpace(settings.PublicURL), "/")
 }

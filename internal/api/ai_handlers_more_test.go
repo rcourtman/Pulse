@@ -692,3 +692,30 @@ func TestHandleGetPatrolDigest_PayloadContract(t *testing.T) {
 		t.Fatalf("mode = %s, want monitor when no autonomy is configured", payload["mode"])
 	}
 }
+
+// TestBuildPatrolDigestReportsAvailability pins the contract the scheduled
+// Patrol summary relies on: without a Patrol service the digest is the zero
+// shape and reported as unavailable, so a schedule fails clearly instead of
+// emailing an empty week.
+func TestBuildPatrolDigestReportsAvailability(t *testing.T) {
+	t.Parallel()
+	handler := createTestAIHandler(t)
+
+	digest, available := handler.BuildPatrolDigest(context.Background(), 0)
+	if available {
+		t.Fatal("digest must report unavailable without a Patrol service")
+	}
+	if digest.Window.Days != ai.PatrolDigestDefaultDays || digest.Runs.Total != 0 || digest.Mode != config.PatrolAutonomyMonitor {
+		t.Fatalf("zero digest = %+v", digest)
+	}
+	if digest.Investigations.ByOutcome == nil {
+		t.Fatal("by_outcome must stay an object for clients and email rendering")
+	}
+
+	patrol := &ai.PatrolService{}
+	setUnexportedField(t, patrol, "runHistoryStore", ai.NewPatrolRunHistoryStore(10))
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+	if _, available := handler.BuildPatrolDigest(context.Background(), 45); !available {
+		t.Fatal("digest must report available once a Patrol service exists")
+	}
+}

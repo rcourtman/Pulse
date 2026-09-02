@@ -1,8 +1,8 @@
 # Patrol Weekly Digest
 
-Status: building — first slice (aggregation endpoint and in-app "This week"
-card) landing on `main` 2026-09-01; weekly email is the unscheduled second
-slice. Demand ledger: `pulse-pro/FEATURE_REQUESTS.md`, "Patrol weekly digest
+Status: building — endpoint and in-app "This week" card on `main` (PRs #1856
+and #1860, 2026-09-02); the weekly email lands as a `patrol_digest` report
+schedule kind. Demand ledger: `pulse-pro/FEATURE_REQUESTS.md`, "Patrol weekly digest
 (what Patrol did for you)", a named bet under the Patrol operations loop.
 
 ## The job, in the customer's words
@@ -71,12 +71,18 @@ questions are answered. The Inbox stays a decision surface and does not gain a
 summary card.
 
 **Weekly email second.** The past-due population is the population that has
-stopped opening Pulse, so the email is the slice that reaches them. It should
-render the same digest through the existing enhanced email manager
-(`internal/notifications/email_enhanced.go`, `SendEmailWithRetry`) on a weekly
-schedule, respecting the existing notification enable state and email
-destination. Webhook and Apprise channels are not in scope for the first
-email slice. Not scheduled; the ledger entry's decline condition governs it.
+stopped opening Pulse, so the email is the slice that reaches them. It is a
+report schedule kind, `patrol_digest`, on the report schedule API
+(`POST /api/admin/reports/schedules` with `"kind": "patrol_digest"`): the
+existing scheduler, cadence, recipients, and Pro reporting entitlement are
+reused, and the run renders the same digest as plain-language HTML and text
+(`internal/api/patrol_digest_email.go`) through the tenant email config via
+`SendEmailWithRetry`. Digest schedules are weekly and email-only; nothing is
+written to disk. A run without an email destination fails with a message that
+names the missing setting instead of silently doing nothing. Webhook and
+Apprise channels are out of scope. The Settings > Reporting form gains a
+"Report type" selector for the kind in a follow-up; its browser proof needs a
+Pro-licensed instance, which the isolated verification stack does not have.
 
 ## API
 

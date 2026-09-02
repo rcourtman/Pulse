@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
@@ -252,5 +253,105 @@ func TestSaveGeneratedReportUsesHashedScheduleDirectory(t *testing.T) {
 	}
 	if strings.ContainsAny(filepath.Base(path), `/\`) {
 		t.Fatalf("report filename still contains a path separator: %q", filepath.Base(path))
+	}
+}
+
+func TestPreparePatrolDigestScheduleFixesFormatScopeAndDelivery(t *testing.T) {
+	handlers, _ := newTestReportingScheduleHandlers(t)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	base := config.ReportSchedule{
+		ID:      "digest-1",
+		Name:    "Patrol weekly summary",
+		Enabled: true,
+		Kind:    config.ReportScheduleKindPatrolDigest,
+		Cadence: config.ReportScheduleCadence{Type: config.ReportScheduleCadenceWeekly, Weekday: "monday", Time: "08:00", Timezone: "UTC"},
+		// Clients may still send resource-report fields; the digest kind ignores them.
+		Scope:    config.ReportScheduleScope{Tags: []string{"production"}},
+		Format:   config.ReportScheduleFormatPDF,
+		Delivery: config.ReportScheduleDelivery{Method: config.ReportScheduleDeliveryEmail, To: []string{"ops@example.com"}, Attach: true, SaveToDisk: true},
+	}
+
+	prepared, err := handlers.prepareReportSchedule(ctx, base, now, false)
+	if err != nil {
+		t.Fatalf("prepare digest schedule: %v", err)
+	}
+	if prepared.Format != config.ReportScheduleFormatEmail || prepared.Delivery.Attach || prepared.Delivery.SaveToDisk {
+		t.Fatalf("digest schedule must be an email-only summary, got %+v", prepared)
+	}
+	if len(prepared.Scope.Resources) != 0 || len(prepared.Scope.Tags) != 0 {
+		t.Fatalf("digest schedule must not carry a resource scope, got %+v", prepared.Scope)
+	}
+	if prepared.NextRunAt == nil || !prepared.NextRunAt.After(now) {
+		t.Fatalf("digest schedule needs a next run, got %v", prepared.NextRunAt)
+	}
+
+	monthly := base
+	monthly.Cadence = config.ReportScheduleCadence{Type: config.ReportScheduleCadenceMonthly, DayOfMonth: 1, Time: "08:00", Timezone: "UTC"}
+	if _, err := handlers.prepareReportSchedule(ctx, monthly, now, false); err == nil || !strings.Contains(err.Error(), "weekly") {
+		t.Fatalf("monthly digest must be rejected, got %v", err)
+	}
+	disk := base
+	disk.Delivery.Method = config.ReportScheduleDeliveryDisk
+	if _, err := handlers.prepareReportSchedule(ctx, disk, now, false); err == nil || !strings.Contains(err.Error(), "email") {
+		t.Fatalf("disk digest must be rejected, got %v", err)
+	}
+	unknown := base
+	unknown.Kind = "spreadsheet"
+	if _, err := handlers.prepareReportSchedule(ctx, unknown, now, false); err == nil || !strings.Contains(err.Error(), "kind") {
+		t.Fatalf("unknown kind must be rejected, got %v", err)
+	}
+
+	// Legacy schedules without a kind stay resource reports.
+	legacy := validReportSchedulePayload()
+	legacy.ID = "legacy-1"
+	preparedLegacy, err := handlers.prepareReportSchedule(ctx, legacy, now, false)
+	if err != nil {
+		t.Fatalf("prepare legacy schedule: %v", err)
+	}
+	if preparedLegacy.Kind != config.ReportScheduleKindResources || preparedLegacy.Format != config.ReportScheduleFormatPDF {
+		t.Fatalf("legacy schedule = %+v, want resources kind", preparedLegacy)
+	}
+}
+
+func TestRunPatrolDigestScheduleFailsClearlyWithoutDigestOrEmail(t *testing.T) {
+	handlers, persistence := newTestReportingScheduleHandlers(t)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	schedule := config.NormalizeReportSchedule(config.ReportSchedule{
+		ID: "digest-run", Name: "Patrol weekly summary", Enabled: true, Kind: config.ReportScheduleKindPatrolDigest,
+		Cadence:  config.ReportScheduleCadence{Type: config.ReportScheduleCadenceWeekly, Weekday: "monday", Time: "08:00", Timezone: "UTC"},
+		Format:   config.ReportScheduleFormatEmail,
+		Delivery: config.ReportScheduleDelivery{Method: config.ReportScheduleDeliveryEmail},
+	})
+
+	_, withoutResolver := handlers.runReportSchedule(ctx, persistence, schedule, now, true, "")
+	if withoutResolver.LastRunStatus != config.ReportScheduleLastRunFailed || !strings.Contains(withoutResolver.LastError, "unavailable") {
+		t.Fatalf("run without resolver = %+v, want a clear unavailable failure", withoutResolver)
+	}
+
+	handlers.SetPatrolDigestResolver(func(context.Context, int) (ai.PatrolDigest, bool) { return ai.PatrolDigest{}, false })
+	_, notAvailable := handlers.runReportSchedule(ctx, persistence, schedule, now, true, "")
+	if notAvailable.LastRunStatus != config.ReportScheduleLastRunFailed || !strings.Contains(notAvailable.LastError, "not available") {
+		t.Fatalf("run without Patrol = %+v", notAvailable)
+	}
+
+	calls := 0
+	handlers.SetPatrolDigestResolver(func(_ context.Context, days int) (ai.PatrolDigest, bool) {
+		calls++
+		if days != ai.PatrolDigestDefaultDays {
+			t.Fatalf("digest days = %d, want %d", days, ai.PatrolDigestDefaultDays)
+		}
+		return ai.BuildPatrolDigest(ai.PatrolDigestInput{Now: now, Days: days}), true
+	})
+	_, noEmail := handlers.runReportSchedule(ctx, persistence, schedule, now, true, "")
+	if calls != 1 {
+		t.Fatalf("resolver calls = %d, want 1", calls)
+	}
+	if noEmail.LastRunStatus != config.ReportScheduleLastRunFailed || !strings.Contains(noEmail.LastError, "email notifications are not configured") {
+		t.Fatalf("run without email config = %+v, want a failure that names the missing email destination", noEmail)
+	}
+	if noEmail.NextRunAt == nil {
+		t.Fatal("failed digest run must still schedule the next occurrence")
 	}
 }

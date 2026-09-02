@@ -228,6 +228,11 @@ that client's resources:
   `POST /api/admin/reports/schedules/{id}/run`. Schedules can target explicit
   resources and/or comma-separated resource tags, choose weekly or monthly
   cadence, and deliver PDF or CSV output by email or to disk.
+  A schedule's `kind` is `resources` (the default, a PDF or CSV performance
+  report) or `patrol_digest`, which emails the weekly "what Patrol did for you"
+  summary for the whole workspace: runs, new and resolved issues,
+  investigations, fixes, and estimated spend. Digest schedules are weekly and
+  email-only; scope, format, and attachments are fixed by the server.
 
 Report branding (logo + display name) supports a provider-wide default via
 environment (`PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME`,
