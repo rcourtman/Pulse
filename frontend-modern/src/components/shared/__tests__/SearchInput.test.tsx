@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { SearchInput } from '@/components/shared/SearchInput';
@@ -37,6 +37,7 @@ const SearchHarness = (props: {
 describe('SearchInput', () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
   });
 
   it('keeps search input on shell, runtime, and model owners', () => {
@@ -102,9 +103,76 @@ describe('SearchInput', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Show search history' }));
 
-    const historyMenu = screen.getByRole('listbox');
+    const historyMenu = screen.getByRole('menu', { name: 'Recent searches' });
     expect(historyMenu).toHaveClass('w-full', 'max-w-lg');
     expect(historyMenu).not.toHaveClass('right-0');
+  });
+
+  it('exposes recent-search actions as a keyboard-operated menu', async () => {
+    const storageKey = 'pulse:test:search-history-accessibility';
+    window.localStorage.setItem(storageKey, JSON.stringify(['alpha', 'beta']));
+
+    const HistoryHarness = () => {
+      const [value, setValue] = createSignal('');
+      return <SearchInput value={value} onChange={setValue} history={{ storageKey }} />;
+    };
+
+    render(() => <HistoryHarness />);
+
+    const toggle = screen.getByRole('button', { name: 'Show search history' });
+    expect(toggle).toHaveAttribute('aria-haspopup', 'menu');
+
+    fireEvent.keyDown(toggle, { key: 'ArrowDown' });
+
+    const menu = screen.getByRole('menu', { name: 'Recent searches' });
+    expect(toggle).toHaveAttribute('aria-controls', menu.id);
+    const items = within(menu).getAllByRole('menuitem');
+    expect(items.map((item) => item.textContent?.trim())).toEqual([
+      'alpha',
+      '',
+      'beta',
+      '',
+      'Clear history',
+    ]);
+    expect(within(menu).getByRole('menuitem', { name: 'Remove alpha from history' })).toBe(
+      items[1],
+    );
+
+    await waitFor(() => expect(items[0]).toHaveFocus());
+    fireEvent.keyDown(items[0], { key: 'ArrowDown' });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(items[1], { key: 'End' });
+    expect(items[4]).toHaveFocus();
+    fireEvent.keyDown(items[4], { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Recent searches' })).not.toBeInTheDocument();
+    await waitFor(() => expect(toggle).toHaveFocus());
+  });
+
+  it('keeps menu focus stable when a recent search is removed', async () => {
+    const storageKey = 'pulse:test:search-history-delete-focus';
+    window.localStorage.setItem(storageKey, JSON.stringify(['alpha', 'beta']));
+
+    const HistoryHarness = () => {
+      const [value, setValue] = createSignal('');
+      return <SearchInput value={value} onChange={setValue} history={{ storageKey }} />;
+    };
+
+    render(() => <HistoryHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show search history' }));
+
+    const menu = screen.getByRole('menu', { name: 'Recent searches' });
+    const removeAlpha = within(menu).getByRole('menuitem', {
+      name: 'Remove alpha from history',
+    });
+    removeAlpha.focus();
+    fireEvent.click(removeAlpha);
+
+    expect(within(menu).queryByText('alpha')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(menu).getByRole('menuitem', { name: 'Remove beta from history' }),
+      ).toHaveFocus(),
+    );
   });
 
   it('captures typed characters by default when focus is outside the input', async () => {

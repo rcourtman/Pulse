@@ -1,42 +1,44 @@
 {
   "version": 1,
-  "base_sha": "23b3893ae88b86497f3f103c8972663508555766",
-  "verified_at": "2026-09-02T07:15:12Z",
+  "base_sha": "6c5af82b522b437db91ab077c79cee3d59833a34",
+  "verified_at": "2026-09-02T08:58:36Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/CommandPaletteModal.tsx",
-    "frontend-modern/src/components/shared/SearchField.tsx",
-    "frontend-modern/src/components/shared/searchFieldModel.ts",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts"
+    "frontend-modern/src/components/shared/SearchInputEnhancements.tsx",
+    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts",
+    "frontend-modern/src/components/shared/useSearchInputEnhancements.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/CommandPaletteModal.tsx": "300030975b76634513d98b9459fe9ae4d07e8d7d03fedffa91f702746a7d3f06",
-    "frontend-modern/src/components/shared/SearchField.tsx": "0c2cc0d002763b59c2c065ceccff134318122aa975fe45ddc31271387cd623ad",
-    "frontend-modern/src/components/shared/searchFieldModel.ts": "3b9ca4ffc6aef0e5910e5094daebb9b03878b2b6ef4c9c7aed165bf7f46097db",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "df4baf2ccba420f0c8d7d67ee7ddeba5a55ddbee8af323d8d7924aa389ad9b3a"
+    "frontend-modern/src/components/shared/SearchInputEnhancements.tsx": "9df1147f092b523655a3503cfe27bbac88fb0572bd3ccb219895d2ffa2f762a7",
+    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts": "b56c756423156cdce3bf1c7f867aa3b6c2751419f070c2d8e5edad91d3c23dec",
+    "frontend-modern/src/components/shared/useSearchInputEnhancements.ts": "15d750671b420d6566749eac60bc4cb6c87db36037e90a4117cebc60c1635dad"
   },
-  "routes": ["/proxmox"],
+  "routes": ["/standalone/machines"],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
-      "width": 393,
-      "height": 851
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Command palette open with twelve results and the first result selected at desktop and narrow widths",
-    "Command palette scrolled to the last keyboard-selected result at desktop and narrow widths",
-    "Command palette empty result state after a query with no matching commands at desktop and narrow widths",
-    "Command palette closed after Escape and after backdrop dismissal at desktop and narrow widths"
+    "Empty recent-search menu with explanatory copy at desktop width",
+    "Populated three-entry menu with keyboard focus on its first, removal, and clear actions at desktop width",
+    "Selected search restored from persisted history after reload at desktop and narrow widths",
+    "Populated menu over the filtered no-match Machines state at narrow width",
+    "Menu closed after outside pointer dismissal and Escape at desktop and narrow widths"
   ],
   "interactions": [
-    "opened the command palette with Control+K on the authenticated Proxmox route",
-    "verified the search retained DOM focus while pointer hover and Home and End keys updated aria-activedescendant and aria-selected",
-    "verified End scrolled the last selected option fully into the result viewport and Tab did not focus an option",
-    "entered a no-match query and verified the combobox collapsed, cleared its active descendant, and removed the listbox",
-    "dismissed the palette with Escape and reopened and dismissed it through the backdrop"
+    "opened the history menu by pointer, ArrowDown, and ArrowUp and verified menu semantics, aria-controls, and expanded state",
+    "moved focus through entry, item-specific removal, and clear actions with ArrowDown, ArrowUp, Home, and End",
+    "selected a history entry and verified the menu closed while the search field received focus and the selected value",
+    "removed the focused first history entry and verified focus moved to the next item-specific removal action",
+    "cleared all history and verified the menu closed, storage emptied, and search focus returned",
+    "committed a search, reloaded the route, and verified the persisted entry remained available",
+    "dismissed the menu by outside pointer action and Escape and verified Escape returned focus to the toggle",
+    "inspected desktop and narrow pixels for placement, clipping, stacking, responsive width, and visible keyboard focus"
   ]
 }

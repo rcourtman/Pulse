@@ -30,8 +30,10 @@ export const SearchInputTrailingControls: Component<SearchInputTrailingControlsP
         class={getSearchHistoryToggleButtonClass(props.state.isHistoryOpen())}
         onClick={props.state.toggleHistory}
         onMouseDown={props.state.onClearMouseDown}
-        aria-haspopup="listbox"
+        onKeyDown={props.state.handleHistoryToggleKeyDown}
+        aria-haspopup="menu"
         aria-expanded={props.state.isHistoryOpen()}
+        aria-controls={props.state.historyMenuId()}
         title={getSearchHistoryToggleTitle(props.state.searchHistory().length)}
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -61,7 +63,15 @@ interface SearchInputHistoryDropdownProps {
 
 export const SearchInputHistoryDropdown: Component<SearchInputHistoryDropdownProps> = (props) => (
   <Show when={props.state.hasHistory() && props.state.isHistoryOpen()}>
-    <div ref={props.state.setHistoryMenuRef} class={SEARCH_HISTORY_MENU_CLASS} role="listbox">
+    <div
+      id={props.state.historyMenuId()}
+      ref={props.state.setHistoryMenuRef}
+      class={SEARCH_HISTORY_MENU_CLASS}
+      role="menu"
+      aria-label="Recent searches"
+      onKeyDown={props.state.handleHistoryMenuKeyDown}
+      onFocusOut={props.state.handleHistoryMenuFocusOut}
+    >
       <Show
         when={props.state.searchHistory().length > 0}
         fallback={
@@ -71,9 +81,15 @@ export const SearchInputHistoryDropdown: Component<SearchInputHistoryDropdownPro
         <div class="max-h-52 overflow-y-auto py-1">
           <For each={props.state.searchHistory()}>
             {(entry) => (
-              <div class={SEARCH_HISTORY_ROW_CLASS}>
+              <div
+                class={SEARCH_HISTORY_ROW_CLASS}
+                role="group"
+                aria-label={`History item ${entry}`}
+              >
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={-1}
                   class={SEARCH_HISTORY_ENTRY_BUTTON_CLASS}
                   onClick={() => props.state.selectHistoryEntry(entry)}
                   onMouseDown={props.state.onClearMouseDown}
@@ -82,8 +98,11 @@ export const SearchInputHistoryDropdown: Component<SearchInputHistoryDropdownPro
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={-1}
                   class={getSearchHistoryDeleteButtonClass()}
-                  title="Remove from history"
+                  aria-label={`Remove ${entry} from history`}
+                  title={`Remove ${entry} from history`}
                   onClick={() => props.state.deleteHistoryEntry(entry)}
                   onMouseDown={props.state.onClearMouseDown}
                 >
@@ -102,6 +121,8 @@ export const SearchInputHistoryDropdown: Component<SearchInputHistoryDropdownPro
         </div>
         <button
           type="button"
+          role="menuitem"
+          tabIndex={-1}
           class={getSearchHistoryClearButtonClass()}
           onClick={props.state.clearHistory}
           onMouseDown={props.state.onClearMouseDown}
