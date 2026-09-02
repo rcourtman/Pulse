@@ -927,7 +927,15 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    may be named, while hostnames, credentials, infrastructure identifiers,
    URLs, paths, locale, browser events, prompts, chat messages, command text,
    action output, token values, and personal information must stay explicitly
-   excluded.
+   excluded. `Preview payload` is the panel's primary action, because the exact
+   runtime payload is the disclosure an operator can verify; the enable toggle
+   and `Reset ID` stay secondary controls, and the summary copy opens with what
+   the data is for before enumerating categories and exclusions. The shared
+   settings shell no longer accepts a `telemetryAction` deep link that changes
+   the preference on arrival; the preference changes only from the panel.
+   The summary copy also states what the data is never used for (sold,
+   shared, advertising, account or license linkage) in every locale, with the
+   `security-privacy` disclosure as the source of those statements.
 8. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 9. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    These settings panels consume the privileged security-status projection,

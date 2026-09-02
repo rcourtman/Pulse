@@ -1334,3 +1334,35 @@ func TestBuildPingCarriesNodeTestCounts(t *testing.T) {
 		t.Fatalf("node_test_failures_30d = %d, want 4", ping.NodeTestFailures30d)
 	}
 }
+
+// TestTelemetryPrivacyDocsDiscloseSetupChoiceAndPayloadChanges pins the two
+// disclosure surfaces that replaced the in-app payload-update banner: the
+// first-run setup choice and the dated payload changelog. The changelog must
+// carry a row for the current schema so a bump cannot land undisclosed.
+func TestTelemetryPrivacyDocsDiscloseSetupChoiceAndPayloadChanges(t *testing.T) {
+	for _, relativePath := range []string{
+		filepath.Join("..", "..", "docs", "PRIVACY.md"),
+		filepath.Join("..", "..", "frontend-modern", "public", "docs", "PRIVACY.md"),
+	} {
+		raw, err := os.ReadFile(relativePath)
+		if err != nil {
+			t.Fatalf("read %s: %v", relativePath, err)
+		}
+		content := string(raw)
+		for _, required := range []string{
+			"During first-run setup, switch off **Usage statistics** on the admin-account step",
+			"The first startup ping is sent about two minutes after Pulse starts",
+			"#### Payload changes",
+			"Every change to the payload bumps the schema version, is listed here with its date, and appears in the release notes",
+			"An in-app notice is reserved for a change in kind",
+			"#### What it is not used for",
+			"It is not sold, licensed, or shared with anyone else",
+			"It is not linked to a Pulse account, license key, purchase, or email address",
+			fmt.Sprintf("| %d | 2026-", TelemetrySchemaVersion),
+		} {
+			if !strings.Contains(content, required) {
+				t.Errorf("%s must disclose %q", relativePath, required)
+			}
+		}
+	}
+}

@@ -1612,12 +1612,31 @@ That same telemetry trust boundary must remain operator-inspectable in-product:
 the shared system settings surface may preview only the exact runtime payload
 Pulse would send, and it must allow an operator to rotate the local telemetry
 install ID immediately without waiting for the scheduled 30-day window.
-An existing installation's first published schema-v2 upgrade must also receive
-a one-time, non-blocking notice that names the coarse payload expansion and
-links directly to the exact preview, the disable action, and the governed
-privacy disclosure. Fresh installs stay silent because setup already presents
-the current disclosure. Acknowledging the notice may persist locally, but it
-must not change the operator's telemetry preference by itself.
+Payload changes are disclosed through the dated `Payload changes` section of
+that same governed privacy disclosure and through the release notes of the
+first release that carries them, and every change must bump the schema
+version. Existing installations are not interrupted with an in-app notice for
+a new counter inside an already-disclosed category; the Settings payload
+preview is the live disclosure. An in-app notice is reserved for a change in
+kind (a new identifier, a new class of data, or a change to retention or
+handling), and such a notice must not carry a one-click disable action: a
+disable control attached to a disclosure reads as a prompt to opt out rather
+than as information. First-run setup must present the telemetry choice as a
+real control on the first authenticated step, defaulting to enabled and
+applied through the canonical system-settings path once the admin token
+exists; it must not instruct the operator to set an environment variable
+before a process that has already started. That instruction belongs in the
+privacy disclosure and install docs, where the reader can still act on it.
+Setup, disclosure, and Settings copy must say what the data is for before
+saying how to turn it off, and must name concrete exclusions (hostnames,
+credentials, IP addresses) rather than only abstract categories.
+The same copy, and the governed privacy disclosure's `What it is not used
+for` section, must also state the negative uses plainly: not sold or shared,
+not used for advertising or outreach, not linked to a Pulse account, license,
+purchase, or email address, and not used to single out an install. Those are
+statements of fact about the license-server path (which never joins telemetry
+rows to license or customer records), so any change to that path is a change
+in kind that requires the in-app notice above before it takes effect.
 That same governed privacy disclosure must also state the current server-side
 telemetry retention and handling rules plainly. If the license-server path
 retains telemetry rows for a fixed window or uses client IPs transiently for
