@@ -203,12 +203,14 @@ jobs:
           fi
           local_digest="sha256:$(sha256sum "${chart_path}" | cut -d ' ' -f 1)"
 
-          if release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${chart_release}" 2>/dev/null)"; then
+          if existing_prerelease="$(gh release view "${chart_release}" --repo "${GITHUB_REPOSITORY}" \
+              --json isPrerelease --jq '.isPrerelease' 2>/dev/null)"; then
             # Immutable releases refuse asset replacement, so a convergence
             # retry must recognise the exact chart it already published
-            # rather than clobber it (v6.4.3-rc.1 retry, 2026-09-02).
-            existing_digest="$(jq -r --arg name "${chart}" \
-              '[.assets[] | select(.name == $name)] | first | .digest // ""' <<<"${release_json}")"
+            # rather than clobber it (v6.4.3-rc.1 retry, 2026-09-02). The
+            # asset digest is only on the REST payload.
+            existing_digest="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${chart_release}" \
+              --jq "[.assets[] | select(.name == \"${chart}\")] | first | .digest // \"\"")"
             if [[ -z "${existing_digest}" ]]; then
               gh release upload "${chart_release}" "${chart_path}" \
                 --repo "${GITHUB_REPOSITORY}"
@@ -218,7 +220,7 @@ jobs:
               echo "::error::Chart release ${chart_release} holds ${chart} at ${existing_digest}, not the qualified ${local_digest}; refusing to replace a published chart."
               exit 1
             fi
-            if [[ "$(jq -r '.prerelease' <<<"${release_json}")" != "${prerelease}" ]]; then
+            if [[ "${existing_prerelease}" != "${prerelease}" ]]; then
               gh release edit "${chart_release}" --prerelease="${prerelease}" --latest=false \
                 --repo "${GITHUB_REPOSITORY}"
             fi
