@@ -14,6 +14,11 @@ type PulseIntelligenceAIUsageEvidence struct {
 	AssistantContextAICalls int
 	AssistantToolCalls      int
 	PatrolAICalls           int
+	// PatrolInputTokens and PatrolOutputTokens are the exact local Patrol
+	// token totals for the window. They are bucketed before export; the
+	// exact figures never leave the install.
+	PatrolInputTokens  int64
+	PatrolOutputTokens int64
 }
 
 // PulseIntelligenceAIUsageEvidenceFromHistory projects AI usage history into
@@ -39,6 +44,12 @@ func PulseIntelligenceAIUsageEvidenceFromHistory(history *config.AIUsageHistoryD
 			}
 		case "patrol":
 			evidence.PatrolAICalls++
+			if event.InputTokens > 0 {
+				evidence.PatrolInputTokens += int64(event.InputTokens)
+			}
+			if event.OutputTokens > 0 {
+				evidence.PatrolOutputTokens += int64(event.OutputTokens)
+			}
 		}
 	}
 	return evidence

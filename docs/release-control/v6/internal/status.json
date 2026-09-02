@@ -9945,6 +9945,40 @@
       ]
     },
     {
+      "id": "patrol-telemetry-provider-cost-outcome-visibility",
+      "summary": "The 2026-09-01 Patrol assessment could not answer from telemetry which share of Patrol installs run local, cloud, or hosted models, what Patrol costs an install per month (issue 1789 estimates about 104k input tokens per full run at about 5.5 runs a day, above the Pro fee on non-Flash tiers), how the 240 of 255 fleet investigations that produced no plan actually ended, or which effective Patrol autonomy level an install runs. Schema v17 adds a closed provider-class bucket, the effective autonomy level, coarse 30-day Patrol input and output token buckets, and per-outcome investigation counts, all sourced from existing local usage and finding records with no model names, endpoints, prompts, finding IDs, or resource IDs.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-09-01",
+      "lane_ids": [
+        "L6",
+        "L14"
+      ],
+      "subsystem_ids": [
+        "patrol-intelligence",
+        "security-privacy"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/api/telemetry_pulse_intelligence.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/telemetry/telemetry.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/server/telemetry_pulse_intelligence.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
       "id": "release-train-exact-candidate-promotion",
       "summary": "Stable promotions built whatever the dispatch branch was at that second: the resolver checked that HEAD descends from the promoted RC but not that its content matches, so v6.4.0 shipped 64 changed files that v6.4.0-rc.12 never soaked, and every v6 version was mapped to main, which moves every few minutes under the autonomous maintainer. The release train needs a branch per train declared in the control plane, a resolver rule that refuses stable content beyond release metadata without a recorded hotfix reason, and a seven day soak for minor releases so the two-week cadence carries a real soak.",
       "owner": "project-owner",
@@ -9972,52 +10006,6 @@
         {
           "repo": "pulse",
           "path": "scripts/release_control/resolve_release_promotion.py",
-          "kind": "file"
-        }
-      ]
-    },
-    {
-      "id": "ai-provider-guided-setup",
-      "summary": "Paying installs choose a Patrol model and schedule with no guidance on which models work with Patrol or what a schedule costs: 38 of 120 paid installs had no AI provider and 12 more had AI without Patrol in the 2026-09-01 assessment, a Pro customer picked Gemini Flash-Lite to save money and Patrol could not file verdicts, and a mispriced Opus row tripped the 20 USD budget and silently disabled Patrol (issue 1789). The provider settings need recommended, suggested, and caution markers drawn from the qualified set and known failures, a projected monthly Patrol cost from the price table and the install's run history, a cost-model schedule default for per-token providers, and a visible Patrol pause with a budget action when the budget is used up.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-09-02",
-      "lane_ids": [
-        "L6",
-        "L8"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "frontend-primitives",
-        "patrol-intelligence"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "coverage_impact": 3,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/AI_PATROL_QUALIFICATION.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/patrol_cost_projection.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/patrol_model_guidance.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/api/ai_patrol_cost_preview.go",
           "kind": "file"
         }
       ]

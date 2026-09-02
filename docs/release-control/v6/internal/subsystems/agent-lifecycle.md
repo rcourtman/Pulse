@@ -840,6 +840,14 @@ particular agent update, profile rollout, host command, registration, or fleet
 operation succeeded. Lifecycle surfaces must keep reading update readiness and
 continuity from the updater, installer, connection ledger, and agent runtime
 state instead of inferring it from outbound usage telemetry.
+Schema v17 Patrol posture telemetry assembled through `internal/api/` (the
+effective Patrol autonomy level, the Patrol model route class, coarse Patrol
+token buckets, and investigation outcome counts) is likewise
+lifecycle-adjacent adoption analytics only. It reads the AI service, the local
+usage ledger, and the findings store; it does not read, register, authorize,
+configure, or report a Pulse agent, and no agent token, inventory,
+registration state, host command, or command-channel readiness may feed it or
+be inferred from it.
 Scheduled-report route and background-worker wiring in `internal/api/router.go`
 and the reporting handlers is API/reporting ownership, not agent lifecycle.
 The scheduler may enumerate tenant organization IDs so each workspace can run

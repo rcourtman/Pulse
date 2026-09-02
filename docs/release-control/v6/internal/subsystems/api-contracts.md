@@ -10022,6 +10022,23 @@ field names and integer types. The receiver clamps them like every other count.
 No guest, user, route, selected range, cursor coordinate/value, timing, or
 browser identifier is part of either API or heartbeat contract.
 
+### Patrol provider class, autonomy, cost buckets, and outcome counts are a closed contract at schema v17
+
+Schema v17 adds `ai_provider_class`, `pulse_intelligence_patrol_autonomy_level`,
+`pulse_intelligence_patrol_input_tokens_bucket_30d`, and
+`pulse_intelligence_patrol_output_tokens_bucket_30d` as closed strings, plus
+thirteen `pulse_intelligence_patrol_investigation_outcome_*_30d` integers. The
+Go sender, the Settings preview interface, and the Pulse Pro receiver keep the
+same field names and types; `scripts/check_telemetry_schema_parity.py` remains
+the executable proof. The strings are always present (never omitted) so an
+empty value can only mean a pre-v17 sender, which the receiver stores as
+`unknown`. The outcome counters partition
+`pulse_intelligence_patrol_investigations_30d` exactly: every investigated
+finding lands in one bucket chosen by its current investigation outcome, or by
+its investigation status when no outcome is recorded. No provider ID, model
+name, endpoint, account identity, exact token count, finding ID, resource ID,
+or session ID may be added to any of these fields.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
