@@ -631,12 +631,17 @@ describe('ProxmoxNodesTable', () => {
 
     const row = screen.getByText('pve-node-1').closest('tr');
     expect(row).toBeTruthy();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('node-drawer')).toHaveTextContent('pve-node-1');
     expect(nodeDrawerMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -647,7 +652,11 @@ describe('ProxmoxNodesTable', () => {
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();
   });
 });

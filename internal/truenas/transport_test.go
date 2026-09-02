@@ -670,7 +670,7 @@ func TestJSONRPCQueryReturnsCompleteUnpaginatedInventory(t *testing.T) {
 	}
 }
 
-func TestJSONRPCFetchSnapshotKeepsAllModernInventoryOnOneTransport(t *testing.T) {
+func TestJSONRPCFetchSnapshotUsesPublishedTrueNAS26MethodsWithoutREST(t *testing.T) {
 	methodCalls := make(map[string]int)
 	var methodCallsMu sync.Mutex
 	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
@@ -684,7 +684,7 @@ func TestJSONRPCFetchSnapshotKeepsAllModernInventoryOnOneTransport(t *testing.T)
 		case "system.info":
 			return protocolFixtureReply{result: map[string]any{
 				"hostname":       "inventory-nas",
-				"version":        "TrueNAS-SCALE-25.10.4",
+				"version":        "TrueNAS-SCALE-26.0.0-BETA.3",
 				"system_serial":  "INVENTORY-1",
 				"uptime_seconds": 60,
 				"physical_cores": 4,
@@ -745,7 +745,9 @@ func TestJSONRPCFetchSnapshotKeepsAllModernInventoryOnOneTransport(t *testing.T)
 	if err != nil {
 		t.Fatalf("FetchSnapshot() error = %v", err)
 	}
-	if snapshot.System.Hostname != "inventory-nas" || snapshot.System.CPUPercent != 12 {
+	if snapshot.System.Hostname != "inventory-nas" ||
+		snapshot.System.Version != "TrueNAS-SCALE-26.0.0-BETA.3" ||
+		snapshot.System.CPUPercent != 12 {
 		t.Fatalf("unexpected snapshot system: %+v", snapshot.System)
 	}
 

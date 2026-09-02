@@ -42,11 +42,16 @@ describe('TrueNASServicesTable', () => {
 
     const row = screen.getByText('SMB').closest('tr');
     expect(row).toBeTruthy();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('truenas-service-detail'));
     expect(detail.getByText('Service detail')).toBeInTheDocument();
     expect(detail.getByText('Service')).toBeInTheDocument();
@@ -61,6 +66,10 @@ describe('TrueNASServicesTable', () => {
     await fireEvent.click(detail.getByRole('button', { name: `Collapse ${rows[0].id} details` }));
 
     expect(screen.queryByTestId('truenas-service-detail')).not.toBeInTheDocument();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

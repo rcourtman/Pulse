@@ -168,8 +168,15 @@ import {
 import { ChatMessages } from './ChatMessages';
 import { AssistantCommandHelpDialog } from './AssistantCommandHelpDialog';
 import { ModelSelector } from './ModelSelector';
-import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
-import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
+import {
+  ASSISTANT_MENTION_LISTBOX_ID,
+  MentionAutocomplete,
+  type MentionResource,
+} from './MentionAutocomplete';
+import {
+  ASSISTANT_SLASH_COMMAND_LISTBOX_ID,
+  SlashCommandAutocomplete,
+} from './SlashCommandAutocomplete';
 import { getAssistantActiveTurnStatus } from './activeTurnStatus';
 import { selectQuickResumeSessions } from './recentSessionsModel';
 import {
@@ -761,6 +768,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [pastedBlocks, setPastedBlocks] = createSignal<PastedTextBlock[]>([]);
   const [slashCommandActive, setSlashCommandActive] = createSignal(false);
   const [slashCommandQuery, setSlashCommandQuery] = createSignal('');
+  const [mentionActiveDescendant, setMentionActiveDescendant] = createSignal<string>();
+  const [slashCommandActiveDescendant, setSlashCommandActiveDescendant] = createSignal<string>();
   let textareaRef: HTMLTextAreaElement | undefined;
   let transcriptFallbackTextareaRef: HTMLTextAreaElement | undefined;
   let interruptArmTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -5353,6 +5362,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onKeyDown={handleKeyDown}
                   onPaste={handleComposerPaste}
                   placeholder={AI_CHAT_INPUT_PLACEHOLDER}
+                  aria-label="Message Pulse Assistant"
+                  aria-autocomplete="list"
+                  aria-controls={
+                    mentionActive() && mentionActiveDescendant()
+                      ? ASSISTANT_MENTION_LISTBOX_ID
+                      : slashCommandActive()
+                        ? ASSISTANT_SLASH_COMMAND_LISTBOX_ID
+                        : undefined
+                  }
+                  aria-activedescendant={
+                    mentionActive()
+                      ? mentionActiveDescendant()
+                      : slashCommandActive()
+                        ? slashCommandActiveDescendant()
+                        : undefined
+                  }
                   rows={1}
                   class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
                 />
@@ -5364,6 +5389,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     onSelect={handleMentionSelect}
                     onClose={() => setMentionActive(false)}
                     visible={mentionActive()}
+                    onActiveDescendantChange={setMentionActiveDescendant}
                   />
                 </div>
                 <SlashCommandAutocomplete
@@ -5373,6 +5399,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onSelect={handleSlashCommandSelect}
                   onClose={() => closeSlashCommandAutocomplete({ clearTransientDraft: true })}
                   visible={slashCommandActive()}
+                  onActiveDescendantChange={setSlashCommandActiveDescendant}
                 />
                 <div class="absolute bottom-2 right-2 flex items-center gap-1.5">
                   <ActionIconButton

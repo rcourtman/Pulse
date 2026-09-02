@@ -90,7 +90,7 @@ describe('ProxmoxCephTable', () => {
     expect(disclosure).toHaveAccessibleName('Expand details for ceph-main');
   });
 
-  it('exposes complete nested pool values by touch and keyboard', async () => {
+  it('exposes complete nested pool values through the disclosure control', async () => {
     render(() => (
       <ProxmoxCephTable
         resources={[makeCluster('ceph-main')]}
@@ -107,7 +107,7 @@ describe('ProxmoxCephTable', () => {
     expect(detail).toHaveTextContent('1,764,309');
     expect(detail).toHaveTextContent('59.2%');
 
-    await fireEvent.keyDown(disclosure.closest('tr')!, { key: 'Enter' });
+    await fireEvent.click(disclosure);
     expect(document.querySelector('[data-inline-proxmox-ceph-pool-detail-for]')).toBeNull();
   });
 

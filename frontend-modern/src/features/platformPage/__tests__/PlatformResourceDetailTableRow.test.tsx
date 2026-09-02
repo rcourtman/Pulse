@@ -13,7 +13,6 @@ describe('getPlatformResourceDetailRowInteractionProps', () => {
           <TableRow
             {...getPlatformResourceDetailRowInteractionProps({
               expanded: false,
-              detailRowId: 'detail-row',
               onToggle,
             })}
           >
@@ -28,17 +27,17 @@ describe('getPlatformResourceDetailRowInteractionProps', () => {
     return { onToggle, row: screen.getByRole('row'), childAction: screen.getByRole('button') };
   };
 
-  it('owns pointer, focus, keyboard, and aria disclosure semantics', () => {
+  it('keeps whole-row activation as a pointer convenience only', () => {
     const { onToggle, row } = renderRow();
 
-    expect(row).toHaveAttribute('tabindex', '0');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
-    expect(row).toHaveAttribute('aria-controls', 'detail-row');
+    expect(row).not.toHaveAttribute('tabindex');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row).not.toHaveAttribute('aria-controls');
 
     fireEvent.click(row);
     fireEvent.keyDown(row, { key: 'Enter' });
     fireEvent.keyDown(row, { key: ' ' });
-    expect(onToggle).toHaveBeenCalledTimes(3);
+    expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
   it('does not hijack embedded interactive controls', () => {

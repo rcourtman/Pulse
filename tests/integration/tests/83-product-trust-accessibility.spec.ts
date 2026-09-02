@@ -206,6 +206,45 @@ test("representative authenticated surfaces have no automatically detectable WCA
   }
 });
 
+test("populated platform tables expose one named disclosure control per resource", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/truenas/overview", { waitUntil: "domcontentloaded" });
+
+    const row = page.locator("[data-truenas-system-row]").first();
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(row).not.toHaveAttribute("tabindex");
+    await expect(row).not.toHaveAttribute("aria-expanded");
+    await expect(row).not.toHaveAttribute("aria-controls");
+
+    await expect(row.getByRole("button", { name: /Expand details for/ })).toBeAttached();
+    const disclosure = row.locator('button[data-row-action="true"]').first();
+    const detailRowId = await disclosure.getAttribute("aria-controls");
+    expect(detailRowId).toBeTruthy();
+
+    await disclosure.focus();
+    await page.keyboard.press("Enter");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(`#${detailRowId}`)).toBeVisible();
+
+    await page.keyboard.press("Space");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+
+    const rowBox = await row.boundingBox();
+    expect(rowBox).not.toBeNull();
+    await row.click({ position: { x: Math.min(30, rowBox!.width / 2), y: rowBox!.height / 2 } });
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(await scanForWcagViolations(page)).toEqual([]);
+  }
+});
+
 test("the logged-out entry surface has no automatically detectable WCAG A/AA violations", async ({
   browser,
 }, testInfo) => {

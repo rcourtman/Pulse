@@ -522,15 +522,11 @@ export const TrueNASStorageTopologyTable: Component<{
                       <>
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-truenas-storage-row={row.id}
                           data-truenas-storage-kind={row.kind}
                           data-truenas-storage-resource={resource().id}
                           data-truenas-storage-depth={row.depth}
                           onClick={() => drawer.toggle(resource())}
-                          onKeyDown={drawer.handleActivationKey(resource())}
-                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <ResourceCell

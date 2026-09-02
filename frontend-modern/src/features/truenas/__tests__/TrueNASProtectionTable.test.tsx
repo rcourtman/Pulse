@@ -102,11 +102,16 @@ describe('TrueNASProtectionTable', () => {
 
     const row = screen.getByText('tank/apps').closest('tr');
     expect(row).toBeTruthy();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('truenas-protection-detail'));
     expect(detail.getByText('Protection detail')).toBeInTheDocument();
     expect(detail.getByText('Protection')).toBeInTheDocument();
@@ -119,6 +124,10 @@ describe('TrueNASProtectionTable', () => {
     await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
     expect(screen.queryByTestId('truenas-protection-detail')).not.toBeInTheDocument();
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

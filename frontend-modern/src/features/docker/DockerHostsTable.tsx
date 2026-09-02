@@ -372,14 +372,6 @@ export const DockerHostsTable: Component<{
                     const isSelected = () => selectedHostId() === host.id;
                     const toggleDrawer = () =>
                       setSelectedHostId((current) => (current === host.id ? null : host.id));
-                    const handleActivationKey: JSX.EventHandler<
-                      HTMLTableRowElement,
-                      KeyboardEvent
-                    > = (event) => {
-                      if (event.key !== 'Enter' && event.key !== ' ') return;
-                      event.preventDefault();
-                      toggleDrawer();
-                    };
                     const hostAlertStyles = createMemo(() =>
                       getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
                     );
@@ -393,15 +385,11 @@ export const DockerHostsTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`cursor-pointer text-[11px] outline-none sm:text-xs ${
+                          class={`cursor-pointer text-[11px] sm:text-xs ${
                             isSelected() ? 'bg-surface-hover' : hostAlertBg()
-                          } focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
-                          aria-controls={isSelected() ? detailRowId() : undefined}
-                          aria-expanded={isSelected() ? 'true' : 'false'}
+                          }`}
                           data-docker-host-row={host.id}
                           onClick={toggleDrawer}
-                          onKeyDown={handleActivationKey}
-                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">

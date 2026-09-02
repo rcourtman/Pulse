@@ -1,8 +1,9 @@
 name: Retry Release Convergence
-run-name: Retry release convergence run ${{ github.event.workflow_run.id }} attempt ${{ github.event.workflow_run.run_attempt }}
+run-name: Reconcile release convergence debt
 
 # A committed release is never returned to draft because a mutable surface is
-# temporarily unavailable. Re-run the complete convergence workflow so it
+# temporarily unavailable. Re-run current controls, or dispatch them afresh
+# when the failed run predates a repair, so the complete convergence workflow
 # reacquires the global lease and replays every idempotent surface. Successful
 # surfaces are safe to repeat; retrying only failed jobs would bypass the lease.
 on:
@@ -13,80 +14,54 @@ on:
       - completed
     branches:
       - main
+  schedule:
+    # workflow_run delivery is not durable. Reconcile the current stable and
+    # preview channel heads hourly so a dropped event cannot strand aliases.
+    - cron: '37 * * * *'
+  workflow_dispatch:
 
 permissions:
   actions: write
   contents: read
 
+concurrency:
+  group: retry-release-convergence
+  cancel-in-progress: false
+
 jobs:
   retry_committed_convergence:
-    if: ${{ github.event.workflow_run.conclusion != 'success' }}
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Re-run the complete committed convergence
+      - name: Checkout current reconciliation controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Reconcile the failed convergence
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-          DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
-          MAX_ATTEMPTS: "5"
-        run: |
-          set -euo pipefail
-          if [[ ! "${DISPLAY_TITLE}" =~ ^Release\ convergence\ (v[^[:space:]]+)\ source\ ([0-9]+)$ ]]; then
-            echo "::error::Cannot derive the convergence tag from display title ${DISPLAY_TITLE}."
-            exit 1
-          fi
-          tag="${BASH_REMATCH[1]}"
-          source_release_run_id="${BASH_REMATCH[2]}"
-          marker_url="https://github.com/${{ github.repository }}/releases/download/${tag}/release-activation.json"
-          release_state="$(
-            gh api "repos/${{ github.repository }}/releases/tags/${tag}" \
-              --jq '[(.draft | tostring), (.published_at // "")] | @tsv' \
-              2>/dev/null || true
-          )"
-          is_draft="$(awk -F '\t' '{print $1}' <<<"${release_state}")"
-          published_at="$(awk -F '\t' '{print $2}' <<<"${release_state}")"
-          marker="$(mktemp)"
-          committed=false
-          if [ "${is_draft}" = "false" ] && [ -n "${published_at}" ] && \
-             curl -fsSL --retry 2 --retry-delay 2 --retry-all-errors \
-               -o "${marker}" "${marker_url}" && \
-             jq -e \
-               --arg tag "${tag}" \
-               --arg source_release_run_id "${source_release_run_id}" \
-               --arg convergence_run_id "${RUN_ID}" \
-               '.schema_version == 1 and .tag == $tag and .source_release_run_id == $source_release_run_id and .convergence_run_id == $convergence_run_id' \
-               "${marker}" >/dev/null; then
-            committed=true
-          fi
-          if [ "${committed}" != "true" ]; then
-            rm -f "${marker}"
-            source_status="$(
-              gh api "repos/${{ github.repository }}/actions/runs/${source_release_run_id}" \
-                --jq '.status' 2>/dev/null || true
-            )"
-            if [ "${source_status}" != "completed" ] && (( RUN_ATTEMPT < 50 )); then
-              echo "Activation source run ${source_release_run_id} remains ${source_status:-unknown}; renewing the pre-commit convergence owner."
-              gh api \
-                --method POST \
-                -H "Accept: application/vnd.github+json" \
-                -H "X-GitHub-Api-Version: 2026-03-10" \
-                "repos/${{ github.repository }}/actions/runs/${RUN_ID}/rerun"
-              exit 0
-            fi
-            echo "${tag} never crossed the irreversible activation commit and source run ${source_release_run_id} is ${source_status:-unavailable}; convergence will not retry."
-            exit 0
-          fi
-          rm -f "${marker}"
+        run: >-
+          python3 scripts/release_control/reconcile_release_convergence.py
+          --repository "${GITHUB_REPOSITORY}"
+          --run-id "${RUN_ID}"
 
-          if (( RUN_ATTEMPT >= MAX_ATTEMPTS )); then
-            echo "::error::Committed release ${tag} still has convergence debt after ${RUN_ATTEMPT} attempts. Re-run the complete convergence workflow after repairing the failing surface."
-            exit 1
-          fi
-          echo "Re-running complete convergence run ${RUN_ID} for committed ${tag}; next attempt is $((RUN_ATTEMPT + 1))/${MAX_ATTEMPTS}."
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2026-03-10" \
-            "repos/${{ github.repository }}/actions/runs/${RUN_ID}/rerun"
+  reconcile_missed_event:
+    if: ${{ github.event_name != 'workflow_run' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout current reconciliation controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Reconcile current channel heads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 scripts/release_control/reconcile_release_convergence.py
+          --repository "${GITHUB_REPOSITORY}"
+          --latest

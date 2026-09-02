@@ -99,10 +99,15 @@ describe('AvailabilityChecksTable', () => {
     const { container } = renderTable([availabilityResource()]);
     const row = container.querySelector('[data-availability-check-row]');
 
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Expand details for MQTT power meter' }));
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     expect(
       container.querySelector(
         '[data-inline-platform-resource-detail-for="availability:mock-availability-mqtt-meter"]',

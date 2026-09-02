@@ -85,10 +85,15 @@ describe('VsphereDatastoresTable', () => {
     expect(screen.getAllByTestId('stacked-disk-bar').length).toBeGreaterThan(0);
 
     const row = screen.getByText('nvme-primary').closest('tr');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
   });
 });

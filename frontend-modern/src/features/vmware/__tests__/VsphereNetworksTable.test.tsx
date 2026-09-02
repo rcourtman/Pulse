@@ -75,10 +75,15 @@ describe('VsphereNetworksTable', () => {
     expect(screen.getByText('warehouse-api-01, etl-batch-01')).toBeInTheDocument();
 
     const row = screen.getByText('VM Network').closest('tr');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await fireEvent.click(row!);
 
-    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
   });
 });

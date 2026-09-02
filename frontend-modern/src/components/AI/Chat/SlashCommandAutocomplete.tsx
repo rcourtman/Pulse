@@ -27,7 +27,12 @@ interface SlashCommandAutocompleteProps {
   position: { top: number; left: number };
   onClose: () => void;
   onSelect: (command: AssistantSlashCommand) => void;
+  onActiveDescendantChange?: (id: string | undefined) => void;
 }
+
+export const ASSISTANT_SLASH_COMMAND_LISTBOX_ID = 'assistant-slash-command-listbox';
+export const getAssistantSlashCommandOptionId = (index: number) =>
+  `assistant-slash-command-option-${index}`;
 
 export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommandAction }) => {
   switch (props.action) {
@@ -81,6 +86,27 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
     props.query;
     setSelectedIndex(0);
   });
+
+  createEffect(() => {
+    const total = commands().length;
+    setSelectedIndex((index) => (total > 0 ? Math.min(index, total - 1) : 0));
+  });
+
+  createEffect(() => {
+    const options = commands();
+    const activeId =
+      props.visible && options.length > 0
+        ? getAssistantSlashCommandOptionId(selectedIndex())
+        : undefined;
+    props.onActiveDescendantChange?.(activeId);
+    if (activeId) {
+      queueMicrotask(() => {
+        document.getElementById(activeId)?.scrollIntoView?.({ block: 'nearest' });
+      });
+    }
+  });
+
+  onCleanup(() => props.onActiveDescendantChange?.(undefined));
 
   const selectCommand = (command?: AssistantSlashCommand) => {
     if (!command) return;
@@ -140,7 +166,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
   return (
     <Show when={props.visible}>
       <div
-        class="absolute z-50 min-w-[280px] max-w-[420px] overflow-hidden rounded-md border border-border bg-surface shadow-sm"
+        class="absolute z-50 w-[calc(100vw-36px)] min-w-[280px] max-w-[420px] overflow-hidden rounded-md border border-border bg-surface shadow-sm"
         style={{
           bottom: `${props.position.top}px`,
           left: `${props.position.left}px`,
@@ -149,7 +175,12 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
         onClick={(event) => event.stopPropagation()}
       >
         <div class="border-b border-border px-3 py-2 text-xs font-medium text-muted">Commands</div>
-        <div class="max-h-[260px] overflow-y-auto" role="listbox" aria-label="Assistant commands">
+        <div
+          id={ASSISTANT_SLASH_COMMAND_LISTBOX_ID}
+          class="max-h-[260px] overflow-y-auto"
+          role="listbox"
+          aria-label="Assistant commands"
+        >
           <Show
             when={commands().length > 0}
             fallback={
@@ -175,7 +206,9 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                       return (
                         <button
                           type="button"
+                          id={getAssistantSlashCommandOptionId(item.index)}
                           role="option"
+                          tabIndex={-1}
                           aria-selected={item.index === selectedIndex()}
                           aria-disabled={command.disabled ? 'true' : undefined}
                           aria-label={`${
@@ -188,6 +221,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                               ? 'cursor-not-allowed opacity-60'
                               : 'hover:bg-surface-hover'
                           } ${item.index === selectedIndex() ? 'bg-surface-hover' : ''}`}
+                          onPointerDown={(event) => event.preventDefault()}
                           onClick={(event) => {
                             event.stopPropagation();
                             selectCommand(command);

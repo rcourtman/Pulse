@@ -256,12 +256,8 @@ export const KubernetesDeploymentsTable: Component<{
                       <>
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          aria-controls={isExpanded() ? detailRowId() : undefined}
-                          aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-kubernetes-deployment-row={deployment.id}
                           onClick={() => drawer.toggle(deployment)}
-                          onKeyDown={drawer.handleActivationKey(deployment)}
-                          tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
