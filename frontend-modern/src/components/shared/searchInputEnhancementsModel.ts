@@ -4,7 +4,7 @@ export const SEARCH_HISTORY_EMPTY_STATE_CLASS = 'px-3 py-2 text-xs text-muted';
 export const SEARCH_HISTORY_ROW_CLASS =
   'flex items-center justify-between px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900';
 export const SEARCH_HISTORY_ENTRY_BUTTON_CLASS =
-  'flex-1 truncate pr-2 text-left text-sm text-base-content transition-colors hover:text-blue-600 focus:outline-none dark:hover:text-blue-300';
+  'flex-1 truncate rounded pr-2 text-left text-sm text-base-content transition-colors hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:text-blue-300';
 export const SEARCH_HISTORY_CLEAR_LABEL = 'Clear history';
 export function getSearchHistoryToggleButtonClass(isOpen: boolean): string {
   return `flex h-11 w-11 items-center justify-center rounded-md transition-colors sm:h-7 sm:w-7 ${
@@ -19,9 +19,9 @@ export function getSearchHistoryToggleTitle(historyCount: number): string {
 }
 
 export function getSearchHistoryDeleteButtonClass(): string {
-  return 'ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none';
+  return 'ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
 }
 
 export function getSearchHistoryClearButtonClass(): string {
-  return 'flex w-full items-center justify-center gap-2 border-t border-border px-3 py-2 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content';
+  return 'flex w-full items-center justify-center gap-2 border-t border-border px-3 py-2 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500';
 }

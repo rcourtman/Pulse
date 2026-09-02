@@ -543,7 +543,7 @@ describe('AgentsMachinesTable', () => {
 
     const historyToggle = screen.getByTitle('Show recent searches');
     await fireEvent.click(historyToggle);
-    expect(screen.getByRole('button', { name: 'macos' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'macos' })).toBeInTheDocument();
 
     const tipsButton = screen.getByRole('button', { name: 'Search tips' });
     await fireEvent.click(tipsButton);

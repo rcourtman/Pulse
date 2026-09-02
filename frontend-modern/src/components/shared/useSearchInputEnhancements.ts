@@ -1,4 +1,11 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import type { Accessor } from 'solid-js';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 import {
@@ -56,6 +63,7 @@ export interface SearchInputEnhancementsState {
   isSimple: Accessor<boolean>;
   searchHistory: Accessor<string[]>;
   isHistoryOpen: Accessor<boolean>;
+  historyMenuId: Accessor<string>;
   completionSuffix: Accessor<string>;
   emptyHistoryMessage: Accessor<string>;
   tipsPopoverId: Accessor<string>;
@@ -64,6 +72,9 @@ export interface SearchInputEnhancementsState {
   setHistoryToggleRef: (el: HTMLButtonElement | undefined) => void;
   toggleHistory: () => void;
   closeHistory: () => void;
+  handleHistoryMenuKeyDown: (event: KeyboardEvent) => void;
+  handleHistoryMenuFocusOut: (event: FocusEvent) => void;
+  handleHistoryToggleKeyDown: (event: KeyboardEvent) => void;
   clearHistory: () => void;
   deleteHistoryEntry: (term: string) => void;
   selectHistoryEntry: (term: string) => void;
@@ -97,6 +108,7 @@ export const useSearchInputEnhancements = (
   const [isFieldFocused, setIsFieldFocused] = createSignal(false);
   const [showInlineCompletion, setShowInlineCompletion] = createSignal(true);
   const [acceptedSuggestionId, setAcceptedSuggestionId] = createSignal<string>();
+  const historyMenuId = `search-history-${createUniqueId()}`;
 
   const rankedSuggestions = createMemo<SearchInputSuggestion[]>(() => {
     const config = options.suggestions;
@@ -140,6 +152,22 @@ export const useSearchInputEnhancements = (
   let historyToggleRef: HTMLButtonElement | undefined;
   let suppressBlurCommit = false;
 
+  const getHistoryMenuItems = () =>
+    Array.from(historyMenuRef?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+
+  const focusHistoryItem = (position: 'first' | 'last') => {
+    queueMicrotask(() => {
+      const items = getHistoryMenuItems();
+      const item = position === 'first' ? items[0] : items[items.length - 1];
+      item?.focus();
+    });
+  };
+
+  const openHistory = (position: 'first' | 'last' = 'first') => {
+    setIsHistoryOpen(true);
+    focusHistoryItem(position);
+  };
+
   onMount(() => {
     if (historyManager) setSearchHistory(historyManager.read());
   });
@@ -151,18 +179,77 @@ export const useSearchInputEnhancements = (
 
   const deleteHistoryEntry = (term: string) => {
     if (!historyManager) return;
+    const focusedIndex = getHistoryMenuItems().findIndex((item) => item === document.activeElement);
     setSearchHistory(historyManager.remove(term));
+    if (focusedIndex >= 0) {
+      queueMicrotask(() => {
+        const items = getHistoryMenuItems();
+        items[Math.min(focusedIndex, items.length - 1)]?.focus();
+      });
+    }
   };
 
   const closeHistory = () => {
     setIsHistoryOpen(false);
-    queueMicrotask(() => historyToggleRef?.blur());
   };
 
   const clearHistory = () => {
     if (!historyManager) return;
     setSearchHistory(historyManager.clear());
     closeHistory();
+    queueMicrotask(options.focusInput);
+  };
+
+  const handleHistoryMenuKeyDown = (event: KeyboardEvent) => {
+    const items = getHistoryMenuItems();
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    let nextIndex: number | undefined;
+
+    switch (event.key) {
+      case 'ArrowDown':
+        nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        break;
+      case 'ArrowUp':
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = items.length - 1;
+        break;
+      case 'Escape':
+        event.preventDefault();
+        event.stopPropagation();
+        closeHistory();
+        queueMicrotask(() => historyToggleRef?.focus());
+        return;
+      default:
+        return;
+    }
+
+    if (nextIndex === undefined || nextIndex < 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    items[nextIndex]?.focus();
+  };
+
+  const handleHistoryMenuFocusOut = (event: FocusEvent) => {
+    const next = event.relatedTarget as Node | null;
+    if (!next || historyMenuRef?.contains(next) || historyToggleRef?.contains(next)) return;
+    closeHistory();
+  };
+
+  const handleHistoryToggleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      openHistory(event.key === 'ArrowUp' ? 'last' : 'first');
+      return;
+    }
+    if (event.key === 'Escape' && isHistoryOpen()) {
+      event.preventDefault();
+      closeHistory();
+    }
   };
 
   const markSuppressCommit = () => {
@@ -217,6 +304,7 @@ export const useSearchInputEnhancements = (
     isSimple,
     searchHistory,
     isHistoryOpen,
+    historyMenuId: () => historyMenuId,
     completionSuffix,
     emptyHistoryMessage,
     tipsPopoverId,
@@ -228,9 +316,13 @@ export const useSearchInputEnhancements = (
       historyToggleRef = el;
     },
     toggleHistory: () => {
-      setIsHistoryOpen((previous) => !previous);
+      if (isHistoryOpen()) closeHistory();
+      else openHistory();
     },
     closeHistory,
+    handleHistoryMenuKeyDown,
+    handleHistoryMenuFocusOut,
+    handleHistoryToggleKeyDown,
     clearHistory,
     deleteHistoryEntry,
     selectHistoryEntry: (term) => {
@@ -283,7 +375,7 @@ export const useSearchInputEnhancements = (
         event.currentTarget.blur();
       } else if (hasHistory() && event.key === 'ArrowDown' && searchHistory().length > 0) {
         event.preventDefault();
-        setIsHistoryOpen(true);
+        openHistory();
       } else if (event.key === 'ArrowLeft' || event.key === 'Home') {
         setShowInlineCompletion(false);
       }
