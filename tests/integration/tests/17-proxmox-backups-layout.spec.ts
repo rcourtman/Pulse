@@ -1,13 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ensureAuthenticated } from "./helpers";
+import { ensureAuthenticated, primaryNavigationLink } from "./helpers";
 
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 
 async function openProxmoxBackups(page: Page) {
-  const proxmoxTab = page.getByRole("tab", {
-    name: "Proxmox",
-    exact: true,
-  });
+  const proxmoxTab = primaryNavigationLink(page, "Proxmox");
   await expect(proxmoxTab).toBeVisible({ timeout: 30_000 });
   await proxmoxTab.click();
 

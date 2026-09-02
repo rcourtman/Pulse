@@ -63,11 +63,15 @@ test.describe.serial('Core E2E flows', () => {
       test.skip(true, 'Virtualization Hosts section not present (nodes not in unified resources)');
     }
 
-    const sectionToggle = proxmoxNodesHeading.locator('xpath=ancestor::button[1]');
+    // The section heading wraps its toggle button; the toggle's
+    // aria-controls names the collapsible body that holds the rows.
+    const sectionToggle = proxmoxNodesHeading.getByRole('button');
     if ((await sectionToggle.getAttribute('aria-expanded')) === 'false') {
       await sectionToggle.click();
     }
-    const proxmoxNodesSection = sectionToggle.locator('..');
+    const proxmoxNodesSection = page.locator(
+      `#${await sectionToggle.getAttribute('aria-controls')}`,
+    );
     const globalDefaultsContainer = proxmoxNodesSection
       .getByText('Global Defaults', { exact: true })
       .first()
@@ -206,7 +210,7 @@ test.describe.serial('Core E2E flows', () => {
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
     const sectionToggleAfterReload = page
       .getByRole('heading', { name: 'Virtualization Hosts' })
-      .locator('xpath=ancestor::button[1]');
+      .getByRole('button');
     if ((await sectionToggleAfterReload.getAttribute('aria-expanded')) === 'false') {
       await sectionToggleAfterReload.click();
     }

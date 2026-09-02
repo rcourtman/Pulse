@@ -20,7 +20,9 @@ async function openPatrolRecords(page: Page) {
   });
   await expect(activityTab).toBeVisible({ timeout: 60_000 });
   await activityTab.click();
-  const recordsButton = page.getByRole("button", { name: /Patrol records/ });
+  const recordsButton = page.getByRole("button", {
+    name: /Finding options and history/,
+  });
   await expect(recordsButton).toBeVisible({ timeout: 60_000 });
   await recordsButton.click();
 }
@@ -619,13 +621,13 @@ test.describe("Patrol Assistant operator briefing", () => {
     await openPatrolRecords(page);
 
     await page.getByText("High CPU usage").click();
-    const findingReview = page.locator(
-      "#finding-finding-operator-briefing-details",
-    );
-    await findingReview.getByText("Manage", { exact: true }).click();
-    await findingReview
-      .getByRole("button", { name: "Open in Assistant" })
+    // The finding options control and its menu render on the finding card,
+    // outside the details region.
+    await page
+      .getByRole("button", { name: "Finding options for High CPU usage" })
+      .first()
       .click();
+    await page.getByRole("button", { name: "Open in Assistant" }).click();
 
     const assistantContext = page.getByLabel("Assistant context");
     await expect(assistantContext).toBeVisible();
@@ -760,10 +762,11 @@ test.describe("Patrol Assistant operator briefing", () => {
       "#finding-finding-operator-briefing-details",
     );
     await expect(queuedFinding.getByText("details unavailable")).toBeVisible();
-    await queuedFinding.getByText("Manage", { exact: true }).click();
-    await queuedFinding
-      .getByRole("button", { name: "Open in Assistant" })
+    await page
+      .getByRole("button", { name: "Finding options for High CPU usage" })
+      .first()
       .click();
+    await page.getByRole("button", { name: "Open in Assistant" }).click();
 
     const queuedAssistantContext = page.getByLabel("Assistant context");
     await expect(queuedAssistantContext).toBeVisible();
@@ -792,10 +795,11 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(
       expiredFinding.getByText("Action details unavailable"),
     ).toBeVisible();
-    await expiredFinding.getByText("Manage", { exact: true }).click();
-    await expiredFinding
-      .getByRole("button", { name: "Open in Assistant" })
+    await page
+      .getByRole("button", { name: "Finding options for High CPU usage" })
+      .first()
       .click();
+    await page.getByRole("button", { name: "Open in Assistant" }).click();
 
     const hydratedFindingAssistantContext =
       page.getByLabel("Assistant context");

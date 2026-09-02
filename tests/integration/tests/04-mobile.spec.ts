@@ -85,7 +85,7 @@ test.describe("Mobile viewport flows", () => {
     await page.goto("/infrastructure");
     await expect(page.locator("#root")).toBeVisible();
 
-    const bottomNav = page.getByRole("tablist", { name: "Mobile navigation" });
+    const bottomNav = page.getByRole("navigation", { name: "Mobile navigation" });
 
     // Wait for the nav to mount before evaluating (evaluateAll does not auto-wait;
     // WebKit can be slower to render SolidJS components than Chromium).
@@ -116,7 +116,7 @@ test.describe("Mobile viewport flows", () => {
     await page.goto("/infrastructure");
     await expect(page.locator("#root")).toBeVisible();
 
-    const nav = page.getByRole("tablist", { name: "Mobile navigation" });
+    const nav = page.getByRole("navigation", { name: "Mobile navigation" });
     await expect(nav).toBeVisible();
 
     // Verify the safe-area CSS class is applied to the nav. The computed padding-bottom
@@ -200,52 +200,45 @@ test.describe("Mobile viewport flows", () => {
     await expect(table.locator("xpath=..")).toHaveClass(/overflow-x-auto/);
   });
 
-  test("utility destinations stay pinned beside the scrollable platform rail", async ({
+  test("utility destinations stay pinned in the fixed rail", async ({
     page,
   }) => {
     await page.goto("/proxmox/overview");
 
-    const primaryRail = page.locator('[data-mobile-nav-rail="primary"]');
-    const utilityRail = page.locator('[data-mobile-nav-rail="utility"]');
-    await expect(primaryRail).toBeVisible({ timeout: 30_000 });
-    await expect(utilityRail).toBeVisible({ timeout: 30_000 });
+    // The mobile rail no longer scrolls a platform strip: one fixed rail holds
+    // the platform switcher, the pinned utility destinations, and the More
+    // trigger for everything else, so the whole rail must fit the viewport.
+    const rail = page.locator('[data-mobile-nav-rail="fixed"]');
+    await expect(rail).toBeVisible({ timeout: 30_000 });
 
     await expect
       .poll(
         () =>
           page.evaluate(() => {
             const element = document.querySelector<HTMLElement>(
-              '[data-mobile-nav-rail="primary"]',
+              '[data-mobile-nav-rail="fixed"]',
             );
             if (!element) return null;
-            return {
-              hasScrollableOverflow: ["auto", "scroll"].includes(
-                window.getComputedStyle(element).overflowX,
-              ),
-              preservesRailWidth: element.scrollWidth >= element.clientWidth,
-            };
+            return element.scrollWidth <= element.clientWidth + 1;
           }),
         { timeout: 30_000 },
       )
-      .toEqual({
-        hasScrollableOverflow: true,
-        preservesRailWidth: true,
-      });
+      .toBe(true);
 
     const viewportWidth = await getViewportWidth(page);
-    for (const tabId of ["alerts", "ai", "settings"]) {
-      const button = utilityRail.locator(`button[data-tab-id="${tabId}"]`);
-      await expect(button).toBeVisible();
-      let box = await button.boundingBox();
+    for (const tabId of ["platform-switcher", "alerts", "ai", "more"]) {
+      const destination = rail.locator(`[data-tab-id="${tabId}"]`);
+      await expect(destination).toBeVisible();
+      let box = await destination.boundingBox();
       await expect
         .poll(async () => {
-          box = await button.boundingBox();
+          box = await destination.boundingBox();
           return box;
         })
         .not.toBeNull();
       expect(
         box,
-        `${tabId} utility destination should have a layout box`,
+        `${tabId} destination should have a layout box`,
       ).toBeTruthy();
       expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
         viewportWidth + 1,
@@ -421,7 +414,7 @@ test.describe("Mobile viewport flows", () => {
     await page.goto("/infrastructure");
     await expect(page.locator("#root")).toBeVisible();
 
-    const nav = page.getByRole("tablist", { name: "Mobile navigation" });
+    const nav = page.getByRole("navigation", { name: "Mobile navigation" });
     await expect(nav).toBeVisible();
 
     const aiButton = page.getByRole("button", {

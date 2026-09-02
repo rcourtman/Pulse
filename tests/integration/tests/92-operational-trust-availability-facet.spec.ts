@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test as base, expect, type Page, type Route } from "@playwright/test";
-import { createAuthenticatedStorageState } from "./helpers";
+import { createAuthenticatedStorageState, primaryNavigation } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -590,7 +590,7 @@ test.describe("Operational trust availability resource facet", () => {
     const queue = page.getByRole("region", { name: "Patrol decision inbox" });
     await expect(queue).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.getByRole("tab", {
+      primaryNavigation(page).getByRole("link", {
         name: /Patrol: 1 (?:action awaits approval|active attention item)/,
       }),
     ).toBeVisible();

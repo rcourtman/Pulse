@@ -4,6 +4,7 @@ import {
   ensureFirstRunExperience,
   navigateToSettings,
   apiRequest,
+  primaryNavigationLink,
   trackBrowserRequests,
   waitForPulseReady,
 } from "./helpers";
@@ -108,11 +109,8 @@ test.describe.serial("First-session experience", () => {
 
     await ensureAuthenticated(page);
 
-    // The Settings tab is rendered as a div[role="tab"] in the top utility bar.
-    const settingsTab = page
-      .locator('[role="tab"]')
-      .filter({ hasText: "Settings" })
-      .first();
+    // Settings is a link in the primary navigation's utility group.
+    const settingsTab = primaryNavigationLink(page, "Settings");
     await expect(
       settingsTab,
       "Settings tab should be visible in the top nav bar",
