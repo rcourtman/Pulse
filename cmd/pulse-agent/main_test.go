@@ -2454,13 +2454,17 @@ func TestRun_DockerRetry(t *testing.T) {
 	origDocker := newDockerAgent
 	defer func() { newDockerAgent = origDocker }()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	retrySucceeded := make(chan struct{})
+
 	// First call fails, second succeeds
-	calls := 0
+	var calls atomic.Int32
 	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
-		calls++
-		if calls == 1 {
+		if calls.Add(1) == 1 {
 			return nil, errors.New("not available yet")
 		}
+		close(retrySucceeded)
 		return &mockRunnableCloser{mockRunnable: mockRunnable{started: make(chan struct{})}}, nil
 	}
 
@@ -2469,8 +2473,6 @@ func TestRun_DockerRetry(t *testing.T) {
 	retryInitialDelay = 1 * time.Millisecond
 	defer func() { retryInitialDelay = origInitial }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 
@@ -2480,16 +2482,25 @@ func TestRun_DockerRetry(t *testing.T) {
 	}()
 
 	select {
+	case <-retrySucceeded:
+		cancel()
+	case err := <-errCh:
+		t.Fatalf("run returned before Docker retry succeeded: %v", err)
+	case <-ctx.Done():
+		t.Fatalf("Docker retry did not succeed: %v", ctx.Err())
+	}
+
+	select {
 	case err := <-errCh:
 		if err != nil {
 			t.Errorf("expected nil error, got %v", err)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("timeout waiting for run")
+		t.Fatal("timeout waiting for run to stop")
 	}
 
-	if calls < 2 {
-		t.Errorf("expected at least 2 calls to newDockerAgent, got %d", calls)
+	if got := calls.Load(); got != 2 {
+		t.Errorf("newDockerAgent calls = %d, want 2", got)
 	}
 }
 
@@ -2547,13 +2558,17 @@ func TestRun_KubeRetry(t *testing.T) {
 	origKube := newKubeAgent
 	defer func() { newKubeAgent = origKube }()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	retrySucceeded := make(chan struct{})
+
 	// First call fails, second succeeds
-	calls := 0
+	var calls atomic.Int32
 	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
-		calls++
-		if calls == 1 {
+		if calls.Add(1) == 1 {
 			return nil, errors.New("not available yet")
 		}
+		close(retrySucceeded)
 		return &mockRunnable{started: make(chan struct{})}, nil
 	}
 
@@ -2562,8 +2577,6 @@ func TestRun_KubeRetry(t *testing.T) {
 	retryInitialDelay = 1 * time.Millisecond
 	defer func() { retryInitialDelay = origInitial }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 
@@ -2574,16 +2587,25 @@ func TestRun_KubeRetry(t *testing.T) {
 	}()
 
 	select {
+	case <-retrySucceeded:
+		cancel()
+	case err := <-errCh:
+		t.Fatalf("run returned before Kubernetes retry succeeded: %v", err)
+	case <-ctx.Done():
+		t.Fatalf("Kubernetes retry did not succeed: %v", ctx.Err())
+	}
+
+	select {
 	case err := <-errCh:
 		if err != nil {
 			t.Errorf("expected nil error, got %v", err)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("timeout waiting for run")
+		t.Fatal("timeout waiting for run to stop")
 	}
 
-	if calls < 2 {
-		t.Errorf("expected at least 2 calls to newKubeAgent, got %d", calls)
+	if got := calls.Load(); got != 2 {
+		t.Errorf("newKubeAgent calls = %d, want 2", got)
 	}
 }
 

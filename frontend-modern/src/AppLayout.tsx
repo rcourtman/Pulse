@@ -258,6 +258,7 @@ export function AppLayout(props: AppLayoutProps) {
   const [skipLinkFocused, setSkipLinkFocused] = createSignal(false);
   const [primaryRouteMemoryVersion, setPrimaryRouteMemoryVersion] = createSignal(0);
   let headerEl: HTMLDivElement | undefined;
+  let mainContentEl: HTMLElement | undefined;
   let assistantLauncherEl: HTMLButtonElement | undefined;
   let restoreAssistantLauncherFocus = false;
   let headerHideTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -730,6 +731,7 @@ export function AppLayout(props: AppLayoutProps) {
           jump past the chrome straight into the page content. */}
       <a
         href="#main"
+        onClick={() => mainContentEl?.focus()}
         onFocus={() => setSkipLinkFocused(true)}
         onBlur={() => setSkipLinkFocused(false)}
         class={
@@ -814,7 +816,7 @@ export function AppLayout(props: AppLayoutProps) {
                 </span>
               </Show>
               <Show when={props.versionInfo()?.channel === 'rc'}>
-                <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
+                <span class="text-xs px-1.5 py-0.5 bg-orange-700 text-white rounded font-bold">
                   Preview
                 </span>
               </Show>
@@ -980,7 +982,9 @@ export function AppLayout(props: AppLayoutProps) {
       </Show>
 
       <main
+        ref={mainContentEl}
         id="main"
+        tabindex="-1"
         class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow sm:mb-2"
       >
         <div class="pulse-panel">
