@@ -8544,7 +8544,12 @@ describe('shared primitive guardrails', () => {
     expect(filterChipSource).toContain("event.key === 'ArrowDown'");
     expect(filterChipSource).toContain("event.key === 'ArrowUp'");
     expect(filterChipSource).toContain("event.key === 'Enter'");
+    expect(filterChipSource).toContain("event.key === 'Tab'");
+    expect(filterChipSource).toContain('queueMicrotask(() => close())');
     expect(filterChipSource).toContain('commitActive');
+    expect(filterChipSource).toContain('export const shouldPlaceFilterChipPopoverAbove');
+    expect(filterChipSource).toContain('popoverHeight: popoverRef.offsetHeight');
+    expect(filterChipSource).toContain("window.matchMedia?.('(max-width: 639px)')");
     expect(filterChipSource).toContain(
       "document.getElementById(id)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })",
     );

@@ -20,13 +20,35 @@ interface FilterChipProps {
 
 const matchesQuery = (label: string, query: string): boolean => label.toLowerCase().includes(query);
 
+interface FilterChipPopoverPlacement {
+  availableAbove: number;
+  availableBelow: number;
+  popoverHeight: number;
+  preferAbove: boolean;
+}
+
+export const shouldPlaceFilterChipPopoverAbove = ({
+  availableAbove,
+  availableBelow,
+  popoverHeight,
+  preferAbove,
+}: FilterChipPopoverPlacement): boolean => {
+  if (popoverHeight <= 0) return preferAbove;
+  if (preferAbove && availableAbove >= popoverHeight) return true;
+  if (availableBelow >= popoverHeight) return false;
+  if (availableAbove >= popoverHeight) return true;
+  return availableAbove > availableBelow;
+};
+
 export const FilterChip: Component<FilterChipProps> = (props) => {
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
   const [activeIndex, setActiveIndex] = createSignal(0);
+  const [placeAbove, setPlaceAbove] = createSignal(false);
   const listboxId = createUniqueId();
   const popoverId = createUniqueId();
   let containerRef: HTMLDivElement | undefined;
+  let popoverRef: HTMLDivElement | undefined;
   let searchInputRef: HTMLInputElement | undefined;
   let triggerRef: HTMLButtonElement | undefined;
 
@@ -34,6 +56,22 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     setOpen(false);
     if (restoreFocus) queueMicrotask(() => triggerRef?.focus());
   };
+
+  function updatePopoverPlacement() {
+    if (!open() || !containerRef || !popoverRef) return;
+    const triggerBox = containerRef.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const gap = 4;
+    const preferAbove = window.matchMedia?.('(max-width: 639px)').matches ?? false;
+    setPlaceAbove(
+      shouldPlaceFilterChipPopoverAbove({
+        availableAbove: Math.max(0, triggerBox.top - gap),
+        availableBelow: Math.max(0, viewportHeight - triggerBox.bottom - gap),
+        popoverHeight: popoverRef.offsetHeight,
+        preferAbove,
+      }),
+    );
+  }
 
   const handleClickOutside = (event: MouseEvent) => {
     if (containerRef && !containerRef.contains(event.target as Node)) {
@@ -52,9 +90,11 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     if (!open()) return;
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', updatePopoverPlacement);
     onCleanup(() => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', updatePopoverPlacement);
     });
   });
 
@@ -65,6 +105,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
       setQuery('');
       setActiveIndex(0);
       if (isOpen) {
+        queueMicrotask(updatePopoverPlacement);
         queueMicrotask(() => searchInputRef?.focus());
       }
     }),
@@ -110,6 +151,10 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       commitActive();
+    } else if (event.key === 'Tab') {
+      // Let the browser continue sequential focus navigation, but do not
+      // leave a detached combobox popup visible after its input is removed.
+      queueMicrotask(() => close());
     }
   };
 
@@ -174,8 +219,11 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
 
       <Show when={open()}>
         <div
+          ref={popoverRef}
           id={popoverId}
-          class="absolute bottom-[calc(100%+0.25rem)] left-0 z-50 w-56 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-surface shadow-lg sm:bottom-auto sm:top-[calc(100%+0.25rem)]"
+          class={`absolute left-0 z-50 w-56 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-surface shadow-lg ${
+            placeAbove() ? 'bottom-[calc(100%+0.25rem)]' : 'top-[calc(100%+0.25rem)]'
+          }`}
         >
           <div class="border-b border-border-subtle px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
             {props.filter.label}
