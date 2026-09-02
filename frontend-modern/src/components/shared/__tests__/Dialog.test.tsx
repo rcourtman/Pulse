@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
+import type { ComponentProps, JSX } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import dialogSource from '@/components/shared/Dialog.tsx?raw';
@@ -53,10 +54,30 @@ describe('Dialog', () => {
     expect(dialogModelSource).toContain('FOCUSABLE_SELECTOR');
   });
 
+  it('requires exactly one accessible-name strategy at the component boundary', () => {
+    type UnnamedDialogProps = {
+      isOpen: boolean;
+      onClose: () => void;
+      children: JSX.Element;
+    };
+    type DialogComponentProps = ComponentProps<typeof Dialog>;
+
+    expectTypeOf<UnnamedDialogProps>().not.toMatchTypeOf<DialogComponentProps>();
+    expectTypeOf<
+      UnnamedDialogProps & { ariaLabel: string }
+    >().toMatchTypeOf<DialogComponentProps>();
+    expectTypeOf<
+      UnnamedDialogProps & { ariaLabelledBy: string }
+    >().toMatchTypeOf<DialogComponentProps>();
+    expectTypeOf<
+      UnnamedDialogProps & { ariaLabel: string; ariaLabelledBy: string }
+    >().not.toMatchTypeOf<DialogComponentProps>();
+  });
+
   it('renders as a modal dialog and closes on backdrop click', () => {
     const onClose = vi.fn();
     render(() => (
-      <Dialog isOpen={true} onClose={onClose}>
+      <Dialog isOpen={true} onClose={onClose} ariaLabel="Test dialog">
         <div class="p-4">
           <button type="button">Action</button>
         </div>
@@ -76,7 +97,7 @@ describe('Dialog', () => {
   it('closes on Escape and locks body scroll while open', () => {
     const onClose = vi.fn();
     const { unmount } = render(() => (
-      <Dialog isOpen={true} onClose={onClose}>
+      <Dialog isOpen={true} onClose={onClose} ariaLabel="Test dialog">
         <div class="p-4">Body</div>
       </Dialog>
     ));
@@ -96,7 +117,7 @@ describe('Dialog', () => {
     expect(dialogStackHasBlockingDialog()).toBe(false);
 
     const { unmount } = render(() => (
-      <Dialog isOpen={true} onClose={() => undefined}>
+      <Dialog isOpen={true} onClose={() => undefined} ariaLabel="Test dialog">
         <div class="p-4">Body</div>
       </Dialog>
     ));
@@ -112,7 +133,7 @@ describe('Dialog', () => {
     document.body.appendChild(background);
 
     const { unmount } = render(() => (
-      <Dialog isOpen={true} onClose={() => undefined}>
+      <Dialog isOpen={true} onClose={() => undefined} ariaLabel="Test dialog">
         <button type="button">Dialog action</button>
       </Dialog>
     ));
@@ -133,7 +154,7 @@ describe('Dialog', () => {
     document.body.appendChild(background);
 
     const { unmount } = render(() => (
-      <Dialog isOpen={true} onClose={() => undefined}>
+      <Dialog isOpen={true} onClose={() => undefined} ariaLabel="Test dialog">
         <button type="button">Dialog action</button>
       </Dialog>
     ));
@@ -178,7 +199,7 @@ describe('Dialog', () => {
 
   it('makes body-level surfaces added while a dialog is open inert', async () => {
     render(() => (
-      <Dialog isOpen={true} onClose={() => undefined}>
+      <Dialog isOpen={true} onClose={() => undefined} ariaLabel="Test dialog">
         <button type="button">Dialog action</button>
       </Dialog>
     ));
@@ -194,7 +215,7 @@ describe('Dialog', () => {
   it('keeps keyboard focus trapped in the dialog', async () => {
     const onClose = vi.fn();
     render(() => (
-      <Dialog isOpen={true} onClose={onClose}>
+      <Dialog isOpen={true} onClose={onClose} ariaLabel="Test dialog">
         <div class="p-4">
           <button type="button">First</button>
           <button type="button">Last</button>
@@ -294,7 +315,7 @@ describe('Dialog', () => {
 
   it('honors an explicitly requested initial focus target', async () => {
     render(() => (
-      <Dialog isOpen={true} onClose={() => undefined}>
+      <Dialog isOpen={true} onClose={() => undefined} ariaLabel="Test dialog">
         <div class="p-4">
           <button type="button">Close</button>
           <textarea aria-label="Outcome" autofocus />
@@ -313,7 +334,7 @@ describe('Dialog', () => {
         <button type="button" onClick={() => setIsOpen(true)}>
           Open investigation
         </button>
-        <Dialog isOpen={isOpen()} onClose={() => setIsOpen(false)}>
+        <Dialog isOpen={isOpen()} onClose={() => setIsOpen(false)} ariaLabel="Investigation">
           <button type="button" onClick={() => setIsOpen(false)}>
             Close investigation
           </button>
@@ -347,6 +368,7 @@ describe('Dialog', () => {
         </Show>
         <Dialog
           isOpen={isOpen()}
+          ariaLabel="Remove item"
           onClose={() => {
             setShowTrigger(false);
             setIsOpen(false);

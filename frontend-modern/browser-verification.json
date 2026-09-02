@@ -1,20 +1,16 @@
 {
   "version": 1,
-  "base_sha": "44e274e5b386e5e990e9bf09b85b6258043487ba",
-  "verified_at": "2026-09-02T02:59:02Z",
+  "base_sha": "9fba43ffed507f092f876acaf23bef013f0f6fab",
+  "verified_at": "2026-09-02T03:39:02Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/components/shared/Dialog.tsx"],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "be386bcaa58656a9397fed71a9d70147e2540ff6cb4aff53261d9c03e6ca3834",
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx": "f1e1c0630cc841ae2820b15130a887aeef0ec7838cb93f652213ebb8fb278199"
+    "frontend-modern/src/components/shared/Dialog.tsx": "185f09e185a9e5ccddf73906a81552ea0cc8b07390fb5ab587fbe1b952697735"
   },
   "routes": [
+    "/settings/infrastructure",
     "/actions",
     "/alerts/overview",
-    "/settings/infrastructure",
     "/settings/system-general",
     "/patrol",
     "/"
@@ -27,20 +23,23 @@
     {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 393,
+      "height": 851
     }
   ],
   "states": [
-    "authenticated empty Actions surface at phone width with the RC Preview badge visible, no horizontal overflow, and the skip link focused",
-    "authenticated General Settings surface with Full-width mode off and Outbound usage telemetry on, each exposed as a named pressed-state button",
-    "authenticated Alerts, Infrastructure, General Settings, and Patrol surfaces with reduced motion enabled and no automatically detectable WCAG A/AA violations",
-    "Add infrastructure dialog open with its accessible description, close control focused, and underlying shell retained",
-    "logged-out welcome surface with reduced motion enabled and no automatically detectable WCAG A/AA violations"
+    "Add infrastructure dialog open at desktop and narrow widths with reduced motion, a visible labelled heading, accessible description, focused close control, contained panel geometry, and no horizontal document overflow",
+    "Add infrastructure dialog dismissed at desktop and narrow widths with the underlying Infrastructure surface restored",
+    "authenticated Actions, Alerts, Infrastructure, General Settings, and Patrol surfaces with reduced motion and no automatically detectable WCAG A/AA violations",
+    "logged-out welcome surface with reduced motion and no automatically detectable WCAG A/AA violations"
   ],
   "interactions": [
-    "tabbed from the document start to Skip to main content at phone width, activated it with Enter, and confirmed focus moved to the main landmark",
-    "inspected the rendered 390x844 Actions screenshot for badge contrast, placement, clipping, scrolling, and bottom-navigation coherence",
-    "navigated the authenticated desktop routes and scanned their rendered states for WCAG A/AA violations and unexpected reduced-motion effects",
-    "opened Add infrastructure, verified initial close-control focus and dialog description, dismissed it with Escape, and confirmed focus returned to Add infrastructure",
-    "opened the logged-out entry surface and verified its heading, disabled welcome/form motion, and accessibility scan"
+    "opened Add infrastructure from its named trigger at desktop and narrow widths and verified the dialog accessible name and description",
+    "inspected final desktop and 390x844 screenshots for placement, clipping, stacking, scrolling, focus treatment, and responsive layout",
+    "verified the dialog bounds stay inside both viewports and the document has no horizontal overflow",
+    "dismissed the dialog with Escape at desktop and narrow widths and verified focus returned to Add infrastructure",
+    "scanned representative authenticated and logged-out surfaces for WCAG A/AA violations and unexpected reduced-motion effects"
   ]
 }

@@ -9,18 +9,28 @@ import {
 } from './dialogModel';
 import { useDialogState } from './useDialogState';
 
-interface DialogProps {
+interface DialogBaseProps {
   isOpen: boolean;
   onClose: () => void;
   children: JSX.Element;
   panelClass?: string;
   layout?: DialogLayout;
   closeOnBackdrop?: boolean;
-  ariaLabel?: string;
-  ariaLabelledBy?: string;
   ariaDescribedBy?: string;
   returnFocus?: () => HTMLElement | null | undefined;
 }
+
+type DialogProps = DialogBaseProps &
+  (
+    | {
+        ariaLabel: string;
+        ariaLabelledBy?: never;
+      }
+    | {
+        ariaLabel?: never;
+        ariaLabelledBy: string;
+      }
+  );
 
 export const Dialog: Component<DialogProps> = (props) => {
   const state = useDialogState(props);

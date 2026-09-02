@@ -41,6 +41,10 @@ overlay's accessible heading. A reusable panel may suppress its standalone
 title when the owning overlay supplies the canonical title, while preserving
 that title in inline and desktop contexts; the overlay remains responsible for
 one visible heading, its accessible label, dismissal, and focus return.
+The shared `Dialog` component requires exactly one accessible-name strategy at
+its component boundary: consumers provide either `ariaLabelledBy` for a visible
+heading or `ariaLabel` when no visible label is available. Unnamed dialogs and
+consumers that provide both strategies must fail the frontend type boundary.
 The alert schedule's initial-delivery selector composes `SettingsPanel` and
 `FormSelect`, uses the shared alert-configuration presentation vocabulary, and
 exposes the same email, webhook, Apprise, and all-destination labels used by
