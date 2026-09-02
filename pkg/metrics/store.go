@@ -211,6 +211,10 @@ type Store struct {
 	identityMigrationPending   atomic.Bool
 	commercialRetentionSeconds atomic.Int64
 	commercialPurgeEligibleAt  atomic.Int64
+
+	// startupHook is captured once at construction so a store that outlives
+	// the test that built it never invokes a later test's hook.
+	startupHook func()
 }
 
 // SetCommercialHistoryRetention applies a delayed commercial ceiling to the
@@ -303,6 +307,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 		stopCh:            make(chan struct{}),
 		doneCh:            make(chan struct{}),
 		maintenanceDoneCh: make(chan struct{}),
+		startupHook:       startupMaintenanceHook,
 	}
 
 	// Initialize schema
@@ -883,8 +888,8 @@ func (s *Store) WaitForMaintenance(timeout time.Duration) error {
 
 func (s *Store) runStartupMaintenance() {
 	start := time.Now()
-	if startupMaintenanceHook != nil {
-		startupMaintenanceHook()
+	if s.startupHook != nil {
+		s.startupHook()
 	}
 
 	if s.identityMigrationPending.Swap(false) {
