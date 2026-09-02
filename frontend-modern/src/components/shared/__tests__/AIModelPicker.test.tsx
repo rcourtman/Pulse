@@ -802,4 +802,41 @@ describe('AIModelPicker', () => {
     expect(screen.queryByText('Openrouter:')).not.toBeInTheDocument();
     expect(screen.queryByText(/openrouter\.ai/)).not.toBeInTheDocument();
   });
+
+  it('renders Patrol guidance badges and notes in pinned sections and provider groups', () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel=""
+        onModelSelect={vi.fn()}
+        title="Select Patrol model"
+        modelSections={[{ title: 'Suggested for Patrol', modelIds: ['openai:gpt-5.1-mini'] }]}
+        modelAnnotations={{
+          'openai:gpt-5.1-mini': {
+            badge: 'Suggested starting point',
+            note: 'Lowest-cost standard tier for this provider.',
+            tone: 'positive',
+          },
+          'openrouter:minimax/minimax-m2.5': {
+            badge: 'Caution',
+            note: 'Dropped Patrol tool calls on a Pro install.',
+            tone: 'warning',
+          },
+        }}
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select Patrol model'));
+
+    expect(screen.getByText('Suggested for Patrol')).toBeInTheDocument();
+    expect(screen.getByText('Suggested starting point')).toBeInTheDocument();
+    expect(screen.getByText('Lowest-cost standard tier for this provider.')).toBeInTheDocument();
+    expect(screen.getByText('Caution')).toBeInTheDocument();
+    expect(screen.getByText('Dropped Patrol tool calls on a Pro install.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', {
+        name: 'MiniMax: MiniMax M2.5 via OpenRouter. Caution. Current OpenRouter model. Dropped Patrol tool calls on a Pro install. openrouter:minimax/minimax-m2.5',
+      }),
+    ).toBeInTheDocument();
+  });
 });

@@ -568,3 +568,82 @@ export interface AIChatSessionSummary {
   updated_at: string;
   handoff_summary?: AIChatSessionHandoffSummary;
 }
+
+// ============================================
+// Patrol cost preview and model guidance
+// ============================================
+
+export interface PatrolCostIntervalEstimate {
+  interval_minutes: number;
+  scheduled_runs_per_day: number;
+  projected_30d_usd: number;
+}
+
+export type PatrolCostPerRunSource = 'history' | 'default';
+
+export type PatrolCostRecommendationReason =
+  | 'keep'
+  | 'fits_budget_share'
+  | 'exceeds_budget_share_even_daily'
+  | 'not_billed_per_token'
+  | 'pricing_unknown';
+
+/**
+ * Server-computed estimate of what Patrol costs per 30 days on a model and
+ * schedule. Every figure is an estimate from Pulse's price table and a
+ * per-run token estimate; the assumptions travel with the numbers.
+ */
+export interface PatrolCostProjection {
+  provider: string;
+  model: string;
+  model_route: string;
+  billed_per_token: boolean;
+  pricing_known: boolean;
+  pricing_as_of?: string;
+  input_usd_per_mtok: number;
+  output_usd_per_mtok: number;
+  per_run_input_tokens: number;
+  per_run_output_tokens: number;
+  per_run_source: PatrolCostPerRunSource;
+  history_run_count: number;
+  per_run_usd: number;
+  interval_minutes: number;
+  scheduled_runs_per_day: number;
+  triggered_runs_per_day: number;
+  triggered_per_run_usd: number;
+  scheduled_projected_30d_usd: number;
+  projected_30d_usd: number;
+  interval_estimates: PatrolCostIntervalEstimate[];
+  budget_usd_30d: number;
+  spend_30d_usd: number;
+  spend_30d_known: boolean;
+  patrol_spend_30d_usd: number;
+  budget_reached: boolean;
+  recommended_interval_minutes: number;
+  recommendation_reason: PatrolCostRecommendationReason | string;
+  recommendation_target_usd: number;
+}
+
+export type PatrolModelGuidanceLevel = 'verified' | 'recommended' | 'suggested' | 'caution';
+
+export interface PatrolModelGuidanceRule {
+  provider: string;
+  model_prefix: string;
+  model_exact?: boolean;
+  exclude?: string[];
+  level: PatrolModelGuidanceLevel | string;
+  reason: string;
+  evidence?: string;
+}
+
+export interface PatrolModelVerifiedGuidance {
+  provider: string;
+  model: string;
+  max_verified_mode?: string;
+  recorded_at_unix: number;
+}
+
+export interface PatrolModelGuidanceResponse {
+  rules: PatrolModelGuidanceRule[];
+  verified?: PatrolModelVerifiedGuidance | null;
+}

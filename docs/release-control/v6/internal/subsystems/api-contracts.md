@@ -10508,3 +10508,17 @@ container ID, name, image, state, status, and creation summaries. Absence
 retains the existing direct-runtime contract. Clients must treat unknown future
 values defensively and must not infer stats, secondary inventories, update
 checks, or lifecycle authority from a summary-mode report.
+
+### Patrol cost preview and model guidance routes
+
+`GET /api/ai/patrol/cost-preview` (optional `model` as `provider:model`,
+`interval_minutes`; `settings:read`) returns the `ai.PatrolCostProjection`
+payload for the configured or pending Patrol model and schedule, including
+per-run token assumptions, per-preset schedule estimates, 30-day spend
+against budget, and the recommended schedule. `GET
+/api/ai/patrol/model-guidance` (`settings:read`) returns the static
+guidance rules plus this install's cached readiness pass. Both are read-only
+and registered in `router_routes_ai_relay.go`, listed in
+`route_inventory_test.go`, and documented in `docs/API.md` and its public
+mirror. The frontend client lives in `frontend-modern/src/api/aiPatrolCost.ts`
+with `aiPatrolCost.test.ts` pinning the query encoding.

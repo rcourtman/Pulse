@@ -110,6 +110,11 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// Mutation endpoints (run, acknowledge, dismiss, etc.) return 402 to prevent unauthorized actions
 	// SECURITY: Patrol status and stream require ai:execute scope to access findings
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolStatus)))
+	// Cost preview and model guidance for the Patrol model choice. Read-only
+	// and priced from Pulse's own table, but they reveal spend and budget, so
+	// they sit behind the same settings:read scope as the cost summary.
+	r.mux.HandleFunc("/api/ai/patrol/cost-preview", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetPatrolCostPreview)))
+	r.mux.HandleFunc("/api/ai/patrol/model-guidance", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetPatrolModelGuidance)))
 	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolStream)))
 	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.routeAIPatrolFindings))
 	r.mux.HandleFunc("/api/ai/patrol/objectives", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolObjectives)))

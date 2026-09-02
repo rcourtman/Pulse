@@ -24,7 +24,10 @@ import type { PatrolConfigurationFailureInput } from './patrolInvestigationConte
 import { getPatrolAutonomyAvailabilityPresentation } from './patrolAutonomyAvailability';
 import { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 import { PATROL_AUTONOMY_EXPERIENCE } from './patrolHomePresentation';
-import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
+import {
+  resolvePatrolBlockedActionCause,
+  type PatrolIntelligenceState,
+} from './usePatrolIntelligenceState';
 import { PatrolAutopilotAcknowledgementDialog } from './PatrolAutopilotAcknowledgementDialog';
 
 export { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
@@ -79,7 +82,10 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       manualRunBlockedReason: state.triggerPatrolDisabledReason(),
     }),
   );
-  const providerSetupAction = () => getPatrolSetupAction(state.patrolReadiness()?.cause);
+  const providerSetupAction = () =>
+    getPatrolSetupAction(
+      resolvePatrolBlockedActionCause(state.blockedCause(), state.patrolReadiness()?.cause),
+    );
   const runControlBusy = createMemo(
     () =>
       state.isTriggeringPatrol() || state.manualRunRequested() || state.patrolStream.isStreaming(),

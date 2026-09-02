@@ -1,4 +1,4 @@
-import { Component, createMemo, Show } from 'solid-js';
+import { Component, For, createMemo, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { AIChatMaintenanceSection } from '@/components/Settings/AIChatMaintenanceSection';
 import { AISettingsDialogs } from '@/components/Settings/AISettingsDialogs';
@@ -26,6 +26,10 @@ import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesUpgradePrompts,
 } from '@/stores/sessionPresentationPolicy';
+import {
+  getPatrolCostPresentation,
+  getPatrolIntervalCostHint,
+} from '@/utils/aiPatrolCostPresentation';
 import {
   AI_SETTINGS_PANEL_TITLE,
   getAISettingsLoadingState,
@@ -159,9 +163,18 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
           labelClass="text-xs font-medium text-muted"
           selectBaseClass="w-full min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm"
         >
-          {intervalOptions.map((option) => (
-            <option value={option.value}>{option.label}</option>
-          ))}
+          <For each={intervalOptions}>
+            {(option) => {
+              const hint = () =>
+                getPatrolIntervalCostHint(props.state.patrolCostPreview(), option.value);
+              return (
+                <option value={option.value}>
+                  {option.label}
+                  {hint() ? ` (${hint()})` : ''}
+                </option>
+              );
+            }}
+          </For>
         </FormSelect>
 
         <div class="rounded-md border border-border bg-surface-alt p-3">
@@ -169,6 +182,25 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
           <p class="mt-1 text-sm text-muted">
             {formatPatrolInterval(props.state.form.patrolIntervalMinutes)}
           </p>
+          <Show when={getPatrolCostPresentation(props.state.patrolCostPreview())}>
+            {(cost) => (
+              <p class="mt-1 text-xs text-muted" data-testid="patrol-schedule-cost">
+                {cost().headline} with {props.state.effectivePatrolModel()}.
+                <Show when={props.state.patrolCostPreview()?.billed_per_token}>
+                  {' '}
+                  Estimate. The Patrol model section below shows the assumptions.
+                </Show>
+              </p>
+            )}
+          </Show>
+          <Show when={props.state.patrolIntervalAutoAdjust()}>
+            {(adjust) => (
+              <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                Changed from {formatPatrolInterval(adjust().from).toLowerCase()} to keep the
+                per-token bill down. Pick another option above to override it.
+              </p>
+            )}
+          </Show>
         </div>
       </div>
 

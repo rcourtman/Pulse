@@ -19,7 +19,15 @@ export const getPatrolProviderSettingsAction = (): PatrolRuntimeActionPresentati
   ...PATROL_PROVIDER_SETTINGS_ACTION,
 });
 
+// A used-up 30-day cost budget is a spending decision, not a model fault:
+// the fix is the budget field on Provider & Models (or a cheaper model), so
+// "Check Patrol model" would send the operator to a dead end (#1789).
+export const PATROL_BUDGET_EXHAUSTED_CAUSE = 'budget_exhausted';
+
 export const getPatrolSetupAction = (cause?: string): PatrolRuntimeActionPresentation => {
+  if (cause === PATROL_BUDGET_EXHAUSTED_CAUSE) {
+    return { label: 'Raise the cost budget', href: settingsTabPath('system-ai') };
+  }
   if (cause && PATROL_CONFIG_LEVEL_CAUSES.has(cause)) {
     return { label: 'Open Provider & Models', href: settingsTabPath('system-ai') };
   }
@@ -29,6 +37,9 @@ export const getPatrolSetupAction = (cause?: string): PatrolRuntimeActionPresent
 // The tool-check explainer only makes sense once a provider exists; for
 // config-level causes the readiness summary already says what to do.
 export const getPatrolSetupHint = (cause?: string): string => {
+  if (cause === PATROL_BUDGET_EXHAUSTED_CAUSE) {
+    return '';
+  }
   if (cause && PATROL_CONFIG_LEVEL_CAUSES.has(cause)) {
     return '';
   }

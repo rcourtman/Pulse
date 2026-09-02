@@ -9977,6 +9977,98 @@
       ]
     },
     {
+      "id": "ai-provider-guided-setup",
+      "summary": "Paying installs choose a Patrol model and schedule with no guidance on which models work with Patrol or what a schedule costs: 38 of 120 paid installs had no AI provider and 12 more had AI without Patrol in the 2026-09-01 assessment, a Pro customer picked Gemini Flash-Lite to save money and Patrol could not file verdicts, and a mispriced Opus row tripped the 20 USD budget and silently disabled Patrol (issue 1789). The provider settings need recommended, suggested, and caution markers drawn from the qualified set and known failures, a projected monthly Patrol cost from the price table and the install's run history, a cost-model schedule default for per-token providers, and a visible Patrol pause with a budget action when the budget is used up.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-09-02",
+      "lane_ids": [
+        "L6",
+        "L8"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "frontend-primitives",
+        "patrol-intelligence"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/AI_PATROL_QUALIFICATION.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_cost_projection.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_model_guidance.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_patrol_cost_preview.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "ai-provider-guided-setup",
+      "summary": "Paying installs choose a Patrol model and schedule with no guidance on which models work with Patrol or what a schedule costs: 38 of 120 paid installs had no AI provider and 12 more had AI without Patrol in the 2026-09-01 assessment, a Pro customer picked Gemini Flash-Lite to save money and Patrol could not file verdicts, and a mispriced Opus row tripped the 20 USD budget and silently disabled Patrol (issue 1789). The provider settings need recommended, suggested, and caution markers drawn from the qualified set and known failures, a projected monthly Patrol cost from the price table and the install's run history, a cost-model schedule default for per-token providers, and a visible Patrol pause with a budget action when the budget is used up.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-09-02",
+      "lane_ids": [
+        "L6",
+        "L8"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "frontend-primitives",
+        "patrol-intelligence"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/AI_PATROL_QUALIFICATION.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_cost_projection.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_model_guidance.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_patrol_cost_preview.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
       "id": "patrol-findings-hygiene-attention-noise",
       "summary": "Two users in a row (discussions #1623 and #1699) could not find Patrol's durable outcomes because Remember as expected, Dismiss: Not an issue, Dismiss: Later, and Create rule sat two levels below the Needs attention detail, which offered only Acknowledge and Suppress. The same screenshot showed an alert with eleven open/resolved transitions in a day rendered as eleven timeline rows, and Patrol findings that restate an active alert (same resource, same condition) listed as separate items. Telemetry on 2026-09-01 showed 4,709 findings across 736 installs but only 255 investigations across 27, so most findings are seen and ignored. Attention needs: alert-mirroring findings folded under the alert, flapping collapsed to one labelled item with a count, and the durable decisions on the detail with one-line explanations.",
       "owner": "project-owner",
@@ -10074,20 +10166,48 @@
         "product-demand: pulse-pro/FEATURE_REQUESTS.md#fleet-scale-machine-availability-and-service-probes",
         "telemetry: 339 of 6578 active persistent installs configured 2449 availability targets on 2026-08-29; 70 installs had at least 10 targets"
       ]
+    },
+    {
+      "id": "ai-provider-guided-setup",
+      "name": "Guided AI provider setup with cost preview",
+      "summary": "Answer 'which model should I pick and what will it cost' at the point of choice: recommended, suggested, and caution markers on the Patrol model pickers drawn from the qualified set and known failures; a projected monthly Patrol cost next to the model choice from Pulse's price table, the schedule, and the install's own run history; a cost-model schedule default for per-token providers that leaves chosen schedules untouched; 30-day spend against budget in the same place; and budget exhaustion surfaced as a Patrol pause with a budget action instead of a log line and a tripped breaker.",
+      "status": "accepted",
+      "recorded_at": "2026-09-02",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L6",
+        "L8"
+      ],
+      "coverage_gap_ids": [
+        "ai-provider-guided-setup"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "frontend-primitives",
+        "patrol-intelligence"
+      ],
+      "demand_evidence": [
+        "product-demand: pulse-pro/FEATURE_REQUESTS.md#guided-ai-provider-setup-with-cost-preview",
+        "support: 2026-07-20 Pro customer Flash-Lite could not file Patrol verdicts; 2026-07-30 prospect asked which models Pulse recommends",
+        "issue: https://github.com/rcourtman/Pulse/issues/1789 (104k-token full run, mispriced budget trip silently disabled Patrol)",
+        "telemetry: 2026-09-01 clean basis, 38 of 120 paid installs without an AI provider and 12 more without Patrol",
+        "named-bet: cloud starting points are price-driven and labelled unqualified until the install's own readiness pass verifies them"
+      ]
     }
   ],
   "work_claims": [
     {
-      "id": "claude-patrol-findings-hygiene-coverage-gap-patrol-findings-hygiene-attention-noise",
-      "agent_id": "claude-patrol-findings-hygiene",
-      "summary": "Fold alert-mirroring findings under the alert, collapse flapping, surface lasting Patrol decisions on the attention detail",
+      "id": "claude-ai-provider-guided-setup-candidate-lane-ai-provider-guided-setup",
+      "agent_id": "claude-ai-provider-guided-setup",
+      "summary": "Guided AI provider setup with cost preview",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-09-02T03:29:56Z",
-      "heartbeat_at": "2026-09-02T03:29:56Z",
-      "expires_at": "2026-09-02T09:29:56Z",
+      "claimed_at": "2026-09-02T05:31:42Z",
+      "heartbeat_at": "2026-09-02T05:31:42Z",
+      "expires_at": "2026-09-02T09:31:42Z",
       "work_item": {
-        "kind": "coverage-gap",
-        "id": "patrol-findings-hygiene-attention-noise"
+        "kind": "candidate-lane",
+        "id": "ai-provider-guided-setup"
       }
     }
   ],

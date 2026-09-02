@@ -163,6 +163,9 @@ export interface UnifiedFinding {
   previousResolvedFixSummary?: string;
   recommendation?: string;
   evidence?: string;
+  // Patrol runtime failure cause (for example budget_exhausted) carried by
+  // the persisted runtime finding; drives the setup action after a restart.
+  failureCause?: string;
   aiConfidence?: number;
   detectedAt: string;
   lastSeenAt?: string;
@@ -311,6 +314,9 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     previousResolvedFixSummary: item.previous_resolved_fix_summary,
     recommendation: item.recommendation,
     evidence: item.evidence,
+    // The shared Finding type in api/patrol.ts does not declare the wire
+    // field yet, so read it through a narrow local shape.
+    failureCause: (item as { failure_cause?: string }).failure_cause,
     detectedAt: item.detected_at,
     lastSeenAt: item.last_seen_at || item.detected_at,
     resolvedAt: item.resolved_at,

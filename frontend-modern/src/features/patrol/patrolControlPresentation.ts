@@ -50,6 +50,19 @@ export const PATROL_WORKSPACE_SETUP_TITLE = 'Patrol needs setup';
 export const PATROL_WORKSPACE_SETUP_DESCRIPTION =
   'Patrol cannot check infrastructure until its selected model passes the Patrol tool check.';
 
+export const PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION =
+  'Patrol is paused until the 30-day AI cost budget is raised or the 30-day window rolls on.';
+
+/**
+ * The setup workspace subtitle follows the block cause: a used-up cost budget
+ * is a spending decision, not a model that failed the tool check (#1789).
+ */
+export function getPatrolWorkspaceSetupDescription(cause?: string | null): string {
+  return cause === 'budget_exhausted'
+    ? PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION
+    : PATROL_WORKSPACE_SETUP_DESCRIPTION;
+}
+
 export const PATROL_WORKSPACE_QUEUE_TITLE = 'Open work';
 
 export const PATROL_WORKSPACE_RUN_RECORD_TITLE = 'Check details';

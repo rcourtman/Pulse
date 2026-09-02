@@ -1,57 +1,70 @@
 {
   "version": 1,
-  "base_sha": "d7a4dcf8e7c59fc35348236d8aeb3f25dc6062fe",
-  "verified_at": "2026-09-02T06:02:51Z",
+  "base_sha": "fd36b3124c31bde2bea6b916652b9319827f890f",
+  "verified_at": "2026-09-02T06:55:42Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/patrol.ts",
-    "frontend-modern/src/api/patrolAttention.ts",
-    "frontend-modern/src/components/AI/FindingsPanel.tsx",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts",
+    "frontend-modern/src/api/aiPatrolCost.ts",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
+    "frontend-modern/src/components/Settings/AISettings.tsx",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/components/shared/AIModelPicker.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
     "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
     "frontend-modern/src/stores/aiIntelligence.ts",
-    "frontend-modern/src/utils/findingAlertIdentity.ts"
+    "frontend-modern/src/types/ai.ts",
+    "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrol.ts": "962ddd9eccb31fcfa419cde956c90f319333de3c15f98118d6580b542b1f4825",
-    "frontend-modern/src/api/patrolAttention.ts": "6729696d1966d62a38ebcc52bcc1d0a62479c6e025c1a7d4f23f02ed77c4428f",
-    "frontend-modern/src/components/AI/FindingsPanel.tsx": "8a6f65c113e507e4d4016861559f5ca01c962b4173387a42a2140499ae1d3e30",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "ababb1fd31897a9dd7ca518d574d30b21b8b4abeae597f6475937ad93f3ebf59",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "f7fbdc4d43c42e12f08671a78a4b903bb1ed7b2d25d1551c395691c4991f1a40",
-    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "78aa0072e9b6c8bed4bc5fa3a86010bd61c9aa0c2ed98b08accca2c42e5e68de",
-    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "b9632efe1d21f9c125b52795fa950b5f40167c4e11ccff18652f32ac1b3faf49",
-    "frontend-modern/src/stores/aiIntelligence.ts": "177859f415e92bcd282844ececf6ef8edfd5d54bda612ae18f100aacc1b40921",
-    "frontend-modern/src/utils/findingAlertIdentity.ts": "7988efd6dbf80c60e4d66312abb5ff95bcae9fc98445af0f57940a7ed3ea358b"
+    "frontend-modern/src/api/aiPatrolCost.ts": "be947370111a1efb7e2618f344b4b81481262f6b1fd8fc4ed2690a7729a05bff",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "33b63989306752e5b852e5d2438dfcb99c0df78530ba50c1e157b895d7f1a623",
+    "frontend-modern/src/components/Settings/AISettings.tsx": "7103686e133e08d50563bf66da63ea161f73ae0386c59d6c770da78f0bdb78bb",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "841fa917cf7c5a1f7867b992813984bbd1ce6f57ed9f1abe8db2b7183a4596a5",
+    "frontend-modern/src/components/shared/AIModelPicker.tsx": "79abf84c58d6baec0351bea8cfb7d828db8ff00f5bae7ed0fff4079bbef25b91",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx": "085c1d677ed5e15698e32759b4c01a05e0fd038fbf686ded48b390623de41d22",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "69ff486b95aafd445600571c977f8670e9686d9185f2c1285c2a6690e9c2d113",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "cd6d888b620e44fa8ec2125b818e59c8ed802f8aeae0c554c4ce5bd1d40e314f",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "58ad626d6af2472343307c01583621d4cfd742684f36c5583a3b72de75f86929",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "7578f9e010bc36a1d5a3ec932a69a23a077e176755e7207905ec47f5e94d5fae",
+    "frontend-modern/src/stores/aiIntelligence.ts": "8b81de1c09f47555b148415641f9cc42a9db25e0a54cd0bc64bb24d03bb1a0ac",
+    "frontend-modern/src/types/ai.ts": "12473e6f0e6339094689ac77f9a32aa1ffb62def1e81c780f4263cbcf5923474",
+    "frontend-modern/src/utils/aiPatrolCostPresentation.ts": "3d1ffa67e0df24af89ca26bb40e29fe55ef859902145aa958d4331483952a032",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts": "a71f234c2007dafd6e8773542ae238b8cd3cdb9501aaf5f1a403060335fbabd9"
   },
   "routes": [
-    "/patrol",
-    "/patrol?attention=mock-cluster-2-pve10-local-zfs%3A%3Ametric-threshold%3Ausage"
+    "/settings/pulse-intelligence/patrol",
+    "/settings/pulse-intelligence/provider",
+    "/patrol"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 1400
+      "height": 1000
     },
     {
-      "width": 390,
-      "height": 1600
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Patrol inbox queue with 47-50 mock decisions and the alert-only detail (no mirrored Patrol finding: Lasting decisions explains there is nothing for Patrol to remember and links alert thresholds)",
-    "Attention detail for east-d-service-pool storage usage with a mirrored Patrol finding: Lifecycle short-term note, Lasting decisions listing Remember as expected, Dismiss: Not an issue, Dismiss: Later, Create rule with one-line explanations",
-    "Inline confirmation form for Remember as expected with optional note",
-    "Remembered-decision state (Remembered as expected, note, Reopen finding) after the dismissal, and the four options again after Reopen",
-    "Activity tab findings list with the collapsed \"1 finding mirrors an active alert\" group, expanded to show the demoted finding with Finding options",
-    "Narrow 390px detail layout with stacked lasting decisions and no horizontal overflow"
+    "Patrol model picker open with the Suggested for Patrol section and Recommended for Patrol badge (Ollama qwen3:8b)",
+    "estimate box for a local model (no per-token bill) with the 30-day budget line",
+    "estimate box for a per-token model (Anthropic Sonnet 5) with monthly figure, per-run assumption, token explainer, and schedule recommendation",
+    "schedule select priced per preset and current-schedule card after the auto-adjust to once a day",
+    "estimate box with the budget reached line after seeding an over-budget usage history",
+    "Patrol page paused banner with spend, limit, and Raise the cost budget action",
+    "Patrol page setup card after a backend restart: paused subtitle and Raise the cost budget action from the persisted finding cause",
+    "narrow viewport: settings Patrol tab, picker, and Patrol page with no horizontal overflow"
   ],
   "interactions": [
-    "Opened the deep-linked attention detail and read the Lifecycle and Lasting decisions sections",
-    "Clicked Remember as expected, typed a note, confirmed; verified via /api/ai/patrol/findings?include_resolved=1 that the mirrored finding carried dismissed_reason=expected_behavior and the note",
-    "Reloaded the detail and confirmed the Remembered as expected state, then clicked Reopen finding and confirmed the finding returned to active with the four decisions offered again",
-    "Switched to the Activity tab, opened Finding options and history, expanded the mirrored-findings group",
-    "Triggered POST /api/ai/patrol/run and confirmed mirrors_alert_id/mirrors_alert_type stamped on the storage finding"
+    "configured Ollama and a 20 USD budget on Provider & Models and saved",
+    "opened the Patrol model picker, searched a custom route, selected anthropic:claude-sonnet-5 and observed the schedule change to once a day",
+    "triggered a Patrol run against an over-budget usage history and observed the blocked status and finding",
+    "restarted the backend and reloaded the Patrol page",
+    "resized to 375x812 and repeated the settings and Patrol page checks"
   ]
 }
