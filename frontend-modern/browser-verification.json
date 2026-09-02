@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "d9053933deaf282b0f107cf158bc1ac2c3c32087",
-  "verified_at": "2026-09-01T22:44:22Z",
+  "base_sha": "1813f4ec1d8eb3e1aa5a87afa84ab3b0a9a08d16",
+  "verified_at": "2026-09-02T00:22:28Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
     "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "78ff7a3dd13194d92d616ad8f5596f5827844c5bb0c742ba67501b2b9f833809",
-    "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx": "d41c1ec6f22e61a1684ae35893d2dda7aba1f26b59a7df12746709f644f9a3c9"
+    "frontend-modern/src/components/shared/FilterBar/FilterChip.tsx": "7d5dcccd569eb1391f48630b6459a1f53c0665dd4619912c8c3705e490cf0610"
   },
-  "routes": ["/proxmox/overview", "/proxmox/backups/date?type=vm"],
+  "routes": [
+    "/proxmox/overview"
+  ],
   "viewports": [
     {
       "width": 1440,
@@ -23,16 +23,14 @@
     }
   ],
   "states": [
-    "pinned workload search term with focused remove action",
-    "active Node filter with a 51-option searchable value list",
-    "keyboard-active option beyond the listbox's initial visible range",
-    "desktop popover below the chip and phone popover above the chip clear of fixed navigation"
+    "active Node filter with the searchable value list open and its next keyboard option highlighted",
+    "viewport-measured popover opening above a low desktop trigger and above the phone filter chip",
+    "listbox closed after Tab with the saved Node filter unchanged and sequential focus advanced"
   ],
   "interactions": [
-    "committed and keyboard-removed a pinned workload search term and measured its target at 24 pixels or larger",
-    "opened the Node filter, moved 16 options with ArrowDown, and verified one selected active option remained visible inside the listbox",
-    "measured chip, remove, and option targets at 24 pixels or larger",
-    "dismissed with Escape and verified focus return, then reopened and dismissed by outside pointer activation",
-    "checked both viewports for horizontal overflow and ran an Axe WCAG 2.2 A/AA scan of the filter bar with no violations"
+    "selected Node pve1 through Add filter, opened the chip, and moved the active option with ArrowDown",
+    "pressed Tab at both viewports and verified the listbox closed without committing the highlighted option or returning focus to the trigger",
+    "measured the open popover inside each viewport with no page-level horizontal overflow",
+    "inspected final open and closed screenshots at desktop and narrow widths for placement, clipping, stacking, scrolling, and visible focus continuation"
   ]
 }

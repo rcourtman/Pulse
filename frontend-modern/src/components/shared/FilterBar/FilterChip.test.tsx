@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-lib
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { FilterChip } from './FilterChip';
+import { FilterChip, shouldPlaceFilterChipPopoverAbove } from './FilterChip';
 import type { FilterDef } from './filterCatalog';
 
 afterEach(cleanup);
@@ -36,11 +36,7 @@ describe('FilterChip', () => {
     const combobox = screen.getByRole('combobox', { name: 'Filter Node values' });
     const listbox = screen.getByRole('listbox', { name: 'Node' });
     expect(combobox).toHaveFocus();
-    expect(listbox.parentElement).toHaveClass(
-      'bottom-[calc(100%+0.25rem)]',
-      'sm:bottom-auto',
-      'sm:top-[calc(100%+0.25rem)]',
-    );
+    expect(listbox.parentElement).toHaveClass('top-[calc(100%+0.25rem)]');
     expect(combobox).toHaveAttribute('aria-controls', listbox.id);
     expect(combobox).toHaveAttribute(
       'aria-activedescendant',
@@ -91,6 +87,33 @@ describe('FilterChip', () => {
     expect(trigger).toHaveTextContent('pve1');
   });
 
+  it('dismisses on Tab without changing the filter or overriding sequential focus', async () => {
+    render(() => (
+      <>
+        <Harness />
+        <button type="button">Next control</button>
+      </>
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Node: pve1' });
+    fireEvent.click(trigger);
+    await Promise.resolve();
+    const combobox = screen.getByRole('combobox', { name: 'Filter Node values' });
+
+    fireEvent.keyDown(combobox, { key: 'ArrowDown' });
+    fireEvent.keyDown(combobox, { key: 'Tab' });
+    const nextControl = screen.getByRole('button', { name: 'Next control' });
+    nextControl.focus();
+    await Promise.resolve();
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Node: pve1' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(nextControl).toHaveFocus();
+  });
+
   it('announces an empty search and keeps every chip target at least 24px high', async () => {
     render(() => <Harness />);
 
@@ -105,5 +128,40 @@ describe('FilterChip', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('No values match.');
     expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-activedescendant');
+  });
+});
+
+describe('shouldPlaceFilterChipPopoverAbove', () => {
+  it('uses the preferred upper side when it fits on a narrow viewport', () => {
+    expect(
+      shouldPlaceFilterChipPopoverAbove({
+        availableAbove: 400,
+        availableBelow: 400,
+        popoverHeight: 300,
+        preferAbove: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('opens upward when the lower side clips and the upper side fits', () => {
+    expect(
+      shouldPlaceFilterChipPopoverAbove({
+        availableAbove: 700,
+        availableBelow: 100,
+        popoverHeight: 300,
+        preferAbove: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('falls back to the side with more space when neither side fits', () => {
+    expect(
+      shouldPlaceFilterChipPopoverAbove({
+        availableAbove: 250,
+        availableBelow: 150,
+        popoverHeight: 300,
+        preferAbove: false,
+      }),
+    ).toBe(true);
   });
 });
