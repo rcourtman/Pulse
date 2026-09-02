@@ -10196,21 +10196,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "claude-ai-provider-guided-setup-candidate-lane-ai-provider-guided-setup",
-      "agent_id": "claude-ai-provider-guided-setup",
-      "summary": "Guided AI provider setup with cost preview",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-09-02T05:31:42Z",
-      "heartbeat_at": "2026-09-02T05:31:42Z",
-      "expires_at": "2026-09-02T09:31:42Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "ai-provider-guided-setup"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
