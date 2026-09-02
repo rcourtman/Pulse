@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -43,6 +44,10 @@ type OpenAIClient struct {
 	baseURL      string
 	client       *http.Client
 	streamClient *http.Client
+	// completionBudgetLearned records that this endpoint rejected max_tokens
+	// and asked for max_completion_tokens, so every later request sends the
+	// budget in that field without paying another round trip (#1837).
+	completionBudgetLearned atomic.Bool
 	// The configured request timeout bounds how long Pulse waits for the
 	// stream to START (response headers and first chunk). Once deltas flow
 	// there is deliberately no overall wall-clock deadline: reasoning models
@@ -466,16 +471,61 @@ func (c *OpenAIClient) requestMaxTokens(req ChatRequest) int {
 	return 0
 }
 
-// requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens
-// Per OpenAI docs, o1/o3/o4 reasoning models require max_completion_tokens; max_tokens will error.
+// requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens.
+// OpenAI's reasoning models (o-series and the GPT-5 family) reject max_tokens
+// with "Use 'max_completion_tokens' instead", on api.openai.com and on Azure
+// deployments of the same models. Azure deployment names need not carry the
+// model name, so an endpoint that has already rejected max_tokens is also
+// remembered for the life of the client.
 func (c *OpenAIClient) requiresMaxCompletionTokens(model string) bool {
 	if c.isOpenRouter() {
 		return true
 	}
-	if !c.usesOfficialOpenAIEndpoint() {
+	if c.completionBudgetLearned.Load() {
+		return true
+	}
+	if !c.usesOfficialOpenAIEndpoint() && !c.usesAzureOpenAIEndpoint() {
 		return false
 	}
-	return strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
+	return isOpenAIReasoningFamily(model)
+}
+
+func isOpenAIReasoningFamily(model string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(model))
+	for _, prefix := range []string{"o1", "o3", "o4", "gpt-5"} {
+		if strings.HasPrefix(normalized, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// usesAzureOpenAIEndpoint reports whether the openai provider points at an
+// Azure OpenAI or Azure AI Foundry host, which serves official OpenAI models
+// under their official parameter rules.
+func (c *OpenAIClient) usesAzureOpenAIEndpoint() bool {
+	if c.Name() != "openai" {
+		return false
+	}
+	u, err := url.Parse(c.baseURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return strings.HasSuffix(host, ".openai.azure.com") ||
+		strings.HasSuffix(host, ".services.ai.azure.com") ||
+		strings.HasSuffix(host, ".cognitiveservices.azure.com")
+}
+
+// openAIRejectsMaxTokens reports whether a 400 response is the model telling
+// us to send max_completion_tokens instead of max_tokens. The request is
+// then re-sent once in the form the endpoint asked for (#1837).
+func openAIRejectsMaxTokens(status int, errMsg string) bool {
+	if status != http.StatusBadRequest {
+		return false
+	}
+	lower := strings.ToLower(errMsg)
+	return strings.Contains(lower, "max_tokens") && strings.Contains(lower, "max_completion_tokens")
 }
 
 func (c *OpenAIClient) supportsStreamOptions() bool {
@@ -638,9 +688,11 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	var respBody []byte
 	var lastErr error
 	maxRetries := openaiMaxRetries
+	budgetSwitched := false
+	skipBackoff := false
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
+		if attempt > 0 && !skipBackoff {
 			// Exponential backoff: 2s, 4s, 8s
 			backoff := openaiInitialBackoff * time.Duration(1<<(attempt-1))
 			log.Warn().
@@ -662,6 +714,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			case <-backoffTimer.C:
 			}
 		}
+		skipBackoff = false
 
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
 		if err != nil {
@@ -708,11 +761,29 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		// Non-retryable error
 		if resp.StatusCode != http.StatusOK {
 			var errResp openaiError
+			errMsg := string(respBody)
 			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-				errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
-				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+				errMsg = errResp.Error.Message
 			}
-			errMsg := appendRateLimitInfo(string(respBody), resp)
+			errMsg = appendRateLimitInfo(errMsg, resp)
+			if !budgetSwitched && openaiReq.MaxTokens > 0 && openAIRejectsMaxTokens(resp.StatusCode, errMsg) {
+				// The endpoint named the field it wants. Re-send once in that
+				// form and remember it; these models also refuse a non-default
+				// temperature, so it is dropped with the budget field (#1837).
+				openaiReq.MaxCompletionTokens = openaiReq.MaxTokens
+				openaiReq.MaxTokens = 0
+				openaiReq.Temperature = 0
+				if body, err = json.Marshal(openaiReq); err != nil {
+					return nil, fmt.Errorf("failed to marshal request: %w", err)
+				}
+				c.completionBudgetLearned.Store(true)
+				budgetSwitched = true
+				skipBackoff = true
+				attempt--
+				log.Info().Str("provider", c.Name()).Str("model", openaiReq.Model).
+					Msg("endpoint requires max_completion_tokens; re-sending request in that form")
+				continue
+			}
 			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 		}
 
@@ -1030,9 +1101,11 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		streamClient = c.client
 	}
 	maxRetries := openaiStreamMaxRetries
+	budgetSwitched := false
+	skipBackoff := false
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
+		if attempt > 0 && !skipBackoff {
 			backoff := openaiStreamInitialBackoff * time.Duration(1<<(attempt-1))
 			log.Warn().
 				Int("attempt", attempt).
@@ -1053,6 +1126,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			case <-backoffTimer.C:
 			}
 		}
+		skipBackoff = false
 
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
 		if err != nil {
@@ -1092,6 +1166,22 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		errMsg = appendRateLimitInfo(errMsg, resp)
 		lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 		if isRetryableOpenAIStreamStatus(resp.StatusCode) {
+			continue
+		}
+		if !budgetSwitched && openaiReq.MaxTokens > 0 && openAIRejectsMaxTokens(resp.StatusCode, errMsg) {
+			// Same one-shot correction as the buffered path (#1837).
+			openaiReq.MaxCompletionTokens = openaiReq.MaxTokens
+			openaiReq.MaxTokens = 0
+			openaiReq.Temperature = 0
+			if body, err = json.Marshal(openaiReq); err != nil {
+				return fmt.Errorf("failed to marshal request: %w", err)
+			}
+			c.completionBudgetLearned.Store(true)
+			budgetSwitched = true
+			skipBackoff = true
+			attempt--
+			log.Info().Str("provider", c.Name()).Str("model", openaiReq.Model).
+				Msg("endpoint requires max_completion_tokens; re-sending stream request in that form")
 			continue
 		}
 		if openAIStreamingExplicitlyUnsupported(resp.StatusCode, errMsg) {
