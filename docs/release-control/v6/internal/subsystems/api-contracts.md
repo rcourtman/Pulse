@@ -4371,6 +4371,23 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Attention flapping summary and finding alert-mirror fields
+
+`GET /api/ai/patrol/attention` items and `GET /api/ai/patrol/attention/{id}`
+details may carry `flapping` (`transitionCount`, `windowHours`,
+`firstTransitionAt`, `lastTransitionAt`) when the record's timeline holds at
+least four open/resolved transitions inside the last 24 hours; the timeline
+itself is unchanged. `GET /api/ai/patrol/findings` findings may carry
+`flapping` (`transition_count`, `window_hours`, `first_transition_at`,
+`last_transition_at`) under the same rule, plus `mirrors_alert_id` and
+`mirrors_alert_type` naming the active alert the finding restates (same
+canonical resource, same condition class). All four fields are omitted when
+not applicable and are derived read-model annotations, not lifecycle state;
+clients must not treat their absence as evidence of stability.
+`frontend-modern/src/api/patrolAttention.ts` (`AttentionFlapping`) and
+`frontend-modern/src/api/patrol.ts` (`FindingFlapping`, `mirrors_alert_*`)
+are the typed client boundary.
+
 ### Resource-list facets preserve scoped navigation evidence
 
 `GET /api/resources` returns a compact `facets` object beside the paged row

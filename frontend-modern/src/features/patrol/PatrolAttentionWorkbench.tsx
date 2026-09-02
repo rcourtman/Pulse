@@ -1,4 +1,4 @@
-import { A, useLocation } from '@solidjs/router';
+import { useLocation } from '@solidjs/router';
 import {
   type Accessor,
   createEffect,
@@ -20,6 +20,7 @@ import ClockIcon from 'lucide-solid/icons/clock';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import RefreshIcon from 'lucide-solid/icons/refresh-cw';
 import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
+import RepeatIcon from 'lucide-solid/icons/repeat';
 import ShieldOffIcon from 'lucide-solid/icons/shield-off';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
@@ -35,6 +36,7 @@ import {
   unacknowledgePatrolAttention,
   unsuppressPatrolAttention,
 } from '@/api/patrolAttention';
+import { createSuppressionRuleFromFinding } from '@/api/patrol';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink, CopyValueButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -48,6 +50,7 @@ import {
   getPatrolProtectionProviderLabels,
 } from '@/features/patrol/patrolControlPresentation';
 import { aiChatStore } from '@/stores/aiChat';
+import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
   ALERT_THRESHOLDS_PATH,
@@ -63,9 +66,14 @@ import { formatRelativeTime } from '@/utils/format';
 import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
+  getAttentionFlappingPresentation,
+  getLinkedPatrolFindings,
+  getPatrolRememberedDecisionPresentation,
   partitionPatrolAttention,
   PATROL_AUTONOMY_EXPERIENCE,
+  PATROL_LASTING_DECISIONS,
   type PatrolAttentionDecision,
+  type PatrolLastingDecision,
 } from './patrolHomePresentation';
 
 const PRIMARY_EVIDENCE_LIMIT = 3;
@@ -138,6 +146,11 @@ export function PatrolAttentionWorkbench(
     autonomyLocked?: boolean;
     pendingActionCount?: number;
     onOpenFindings?: (item: AttentionItem) => void;
+    /**
+     * Current Patrol findings, so the selected detail can show the finding
+     * that mirrors this alert and offer Patrol's lasting decisions on it.
+     */
+    findings?: () => UnifiedFinding[];
   } = {},
 ) {
   const location = useLocation();
@@ -557,6 +570,7 @@ export function PatrolAttentionWorkbench(
                 })
               }
               onOpenFindings={props.onOpenFindings}
+              findings={props.findings}
             />
           </div>
         </Show>
@@ -676,6 +690,18 @@ function AttentionList(props: {
                             <MetadataBadge tone={severityTone(item)} size="xs" shape="rounded">
                               {formatLabel(item.severity)}
                             </MetadataBadge>
+                            <Show when={getAttentionFlappingPresentation(item.flapping)}>
+                              {(flapping) => (
+                                <MetadataBadge
+                                  tone="warning"
+                                  size="xs"
+                                  shape="rounded"
+                                  title={flapping().detail}
+                                >
+                                  {flapping().label}
+                                </MetadataBadge>
+                              )}
+                            </Show>
                             <Show when={props.view === 'handled'}>
                               <MetadataBadge tone="neutral" size="xs" shape="rounded">
                                 {item.state === 'acknowledged' ? 'Reviewed' : 'Suppressed'}
@@ -809,10 +835,17 @@ function AttentionDetail(props: {
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string) => Promise<void>;
   onOpenFindings?: (item: AttentionItem) => void;
+  findings?: () => UnifiedFinding[];
 }) {
   const [copiedResourceId, setCopiedResourceId] = createSignal('');
   const detail = () => props.detail;
   const item = () => detail()?.item;
+  const linkedFindings = createMemo(() => {
+    const current = detail();
+    const findings = props.findings?.();
+    if (!current || !findings) return [];
+    return getLinkedPatrolFindings(current.item, findings);
+  });
   const orderedEvidence = createMemo(() =>
     [...(detail()?.evidence ?? [])].sort(
       (left, right) => new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime(),
@@ -1002,6 +1035,14 @@ function AttentionDetail(props: {
               <p class="mt-3 text-sm leading-6 text-base-content">
                 {loaded().item.plainLanguageSummary}
               </p>
+              <Show when={getAttentionFlappingPresentation(loaded().item.flapping)}>
+                {(flapping) => (
+                  <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                    <RepeatIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{flapping().detail}</span>
+                  </p>
+                )}
+              </Show>
               <Show when={aiChatStore.enabled === true}>
                 <Button
                   variant="ghost"
@@ -1117,6 +1158,11 @@ function AttentionDetail(props: {
               onUnacknowledge={props.onUnacknowledge}
               onSuppress={props.onSuppress}
               onUnsuppress={props.onUnsuppress}
+            />
+
+            <AttentionLastingDecisions
+              item={loaded().item}
+              linkedFindings={linkedFindings()}
               onOpenFindings={props.onOpenFindings}
             />
 
@@ -1201,26 +1247,33 @@ function AttentionDetail(props: {
                       </p>
                     }
                   >
-                    <ol class="space-y-3">
-                      <For each={loaded().timeline}>
-                        {(transition) => (
-                          <li class="border-l-2 border-border pl-3">
-                            <p class="text-xs font-medium text-base-content">
-                              {formatLabel(transition.from)} to {formatLabel(transition.to)}
-                            </p>
-                            <p class="mt-0.5 text-[11px] text-muted">
-                              {formatRelativeTime(transition.at, { compact: true })} ·{' '}
-                              {formatLabel(transition.cause)}
-                            </p>
-                            <Show when={transition.reason}>
-                              {(reason) => (
-                                <p class="mt-1 text-xs leading-5 text-muted">{reason()}</p>
-                              )}
-                            </Show>
-                          </li>
-                        )}
-                      </For>
-                    </ol>
+                    <Show
+                      when={loaded().item.flapping}
+                      fallback={<AttentionTimelineList timeline={loaded().timeline} />}
+                    >
+                      {(flapping) => (
+                        <>
+                          <p class="text-xs leading-5 text-base-content">
+                            <span class="font-semibold">Flapping.</span>{' '}
+                            {flapping().transitionCount} open/resolved changes in the last{' '}
+                            {flapping().windowHours} hours, first{' '}
+                            {formatRelativeTime(flapping().firstTransitionAt, { compact: true })}{' '}
+                            and latest{' '}
+                            {formatRelativeTime(flapping().lastTransitionAt, { compact: true })}.
+                            The transitions are collapsed here so one noisy issue reads as one
+                            issue.
+                          </p>
+                          <details class="mt-2 rounded-md border border-border-subtle bg-surface-alt/30">
+                            <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
+                              Show all {loaded().timeline.length} transitions
+                            </summary>
+                            <div class="border-t border-border-subtle p-3">
+                              <AttentionTimelineList timeline={loaded().timeline} />
+                            </div>
+                          </details>
+                        </>
+                      )}
+                    </Show>
                   </Show>
                 </DetailSection>
               </div>
@@ -1246,7 +1299,6 @@ function AttentionLifecycleControls(props: {
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string) => Promise<void>;
-  onOpenFindings?: (item: AttentionItem) => void;
 }) {
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
@@ -1343,22 +1395,11 @@ function AttentionLifecycleControls(props: {
             </Button>
           </Show>
         </div>
-        <Show when={props.onOpenFindings}>
-          <div class="mt-3 flex flex-col gap-3 rounded-md border border-border-subtle bg-surface px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p class="text-xs leading-5 text-muted">
-              Need a lasting outcome for a Patrol finding on this resource? Resolve it, dismiss it
-              as not an issue, remember expected behavior, or create a suppression rule.
-            </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              class="min-h-11 shrink-0 sm:min-h-0"
-              onClick={() => props.onOpenFindings?.(props.detail.item)}
-            >
-              Find lasting options for this resource
-            </Button>
-          </div>
-        </Show>
+        <p class="mt-3 text-xs leading-5 text-muted">
+          Both of these are short-term. Mark reviewed hides this occurrence until it resolves or you
+          return it to the inbox; suppression hides it only until the time you pick. Lasting
+          decisions are below.
+        </p>
         <Show when={showSuppression()}>
           <form
             class="mt-3 space-y-3 border-t border-border-subtle pt-3"
@@ -1419,30 +1460,294 @@ function AttentionLifecycleControls(props: {
             {props.error}
           </p>
         </Show>
-        <details class="mt-3 border-t border-border-subtle pt-2 text-xs leading-5 text-muted">
-          <summary class="min-h-11 cursor-pointer py-2 font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
-            More ways to manage this issue
-          </summary>
-          <div class="pb-1">
-            <p>
-              Mark reviewed removes this occurrence from the decision inbox until it resolves or you
-              return it to open. Suppression hides it only until the selected return time. Both
-              remain available under Reviewed and suppressed.
-            </p>
-            <p class="mt-1">
-              For a permanent change,{' '}
-              <A
-                href={ALERT_THRESHOLDS_PATH}
-                class="font-medium text-blue-700 hover:underline dark:text-blue-300"
-              >
-                adjust alert thresholds
-              </A>{' '}
-              to change or turn off this alert for the affected resource.
-            </p>
-          </div>
-        </details>
       </div>
     </DetailSection>
+  );
+}
+
+function AttentionTimelineList(props: { timeline: AttentionItemDetail['timeline'] }) {
+  return (
+    <ol class="space-y-3">
+      <For each={props.timeline}>
+        {(transition) => (
+          <li class="border-l-2 border-border pl-3">
+            <p class="text-xs font-medium text-base-content">
+              {formatLabel(transition.from)} to {formatLabel(transition.to)}
+            </p>
+            <p class="mt-0.5 text-[11px] text-muted">
+              {formatRelativeTime(transition.at, { compact: true })} ·{' '}
+              {formatLabel(transition.cause)}
+            </p>
+            <Show when={transition.reason}>
+              {(reason) => <p class="mt-1 text-xs leading-5 text-muted">{reason()}</p>}
+            </Show>
+          </li>
+        )}
+      </For>
+    </ol>
+  );
+}
+
+/**
+ * Patrol's durable decisions, offered where the operator already is. They act
+ * on the Patrol finding that mirrors this alert: the alert lifecycle above is
+ * reversible bookkeeping, while these teach Patrol what is normal here. An
+ * alert with no Patrol finding attached has nothing for Patrol to remember,
+ * so the section says that and points at alert thresholds instead of
+ * offering buttons that would do nothing.
+ */
+function AttentionLastingDecisions(props: {
+  item: AttentionItem;
+  linkedFindings: UnifiedFinding[];
+  onOpenFindings?: (item: AttentionItem) => void;
+}) {
+  const [pending, setPending] = createSignal<PatrolLastingDecision | null>(null);
+  const [note, setNote] = createSignal('');
+  const [busy, setBusy] = createSignal(false);
+  const [error, setError] = createSignal('');
+  const [notice, setNotice] = createSignal('');
+  const activeFinding = createMemo(() =>
+    props.linkedFindings.find((finding) => finding.status === 'active' && !finding.dismissedReason),
+  );
+  const rememberedFinding = createMemo(() =>
+    props.linkedFindings.find((finding) => Boolean(finding.dismissedReason)),
+  );
+  const cancel = () => {
+    setPending(null);
+    setNote('');
+    setError('');
+  };
+  const choose = (decision: PatrolLastingDecision) => {
+    setPending(decision);
+    setNote('');
+    setError('');
+    setNotice('');
+  };
+  const confirm = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const decision = pending();
+    const finding = activeFinding();
+    if (!decision || !finding || busy()) return;
+    const reason = note().trim();
+    if (decision.requiresReason && !reason) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (decision.kind === 'create_rule') {
+        await createSuppressionRuleFromFinding({
+          resourceId: finding.resourceId,
+          resourceName: finding.resourceName,
+          category: finding.category,
+          description: reason,
+        });
+        await aiIntelligenceStore.loadPatrolFindings();
+        setNotice(
+          `Rule created. Future ${finding.category} findings on ${finding.resourceName} are dismissed automatically.`,
+        );
+      } else {
+        const saved = await aiIntelligenceStore.dismissFinding(
+          finding.id,
+          decision.kind,
+          reason || undefined,
+        );
+        if (!saved) throw new Error('Patrol could not save this decision.');
+        setNotice(`${decision.label} saved. ${decision.explanation}`);
+      }
+      cancel();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The decision could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const reopen = async (finding: UnifiedFinding) => {
+    if (busy()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const reopened = await aiIntelligenceStore.reopenFinding(finding.id);
+      if (!reopened) throw new Error('Patrol could not reopen this finding.');
+      setNotice('Finding reopened. Patrol will raise it again.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The finding could not be reopened.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <DetailSection title="Lasting decisions">
+      <div class="rounded-md border border-border-subtle bg-surface-alt/40 p-3">
+        <Show when={notice()}>
+          {(message) => (
+            <p
+              role="status"
+              class="mb-3 flex items-start gap-2 text-xs leading-5 text-emerald-800 dark:text-emerald-200"
+            >
+              <CheckCircleIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{message()}</span>
+            </p>
+          )}
+        </Show>
+        <Show
+          when={activeFinding()}
+          fallback={
+            <Show
+              when={rememberedFinding()}
+              fallback={
+                <AttentionAlertOnlyGuidance
+                  item={props.item}
+                  onOpenFindings={props.onOpenFindings}
+                />
+              }
+            >
+              {(finding) => {
+                const remembered = () => getPatrolRememberedDecisionPresentation(finding());
+                return (
+                  <div>
+                    <p class="text-xs leading-5 text-base-content">
+                      <span class="font-semibold">{remembered()?.headline}.</span>{' '}
+                      {remembered()?.detail}
+                    </p>
+                    <p class="mt-1 text-xs leading-5 text-muted">
+                      Patrol finding: {finding().title}
+                      <Show when={finding().userNote}>{(value) => <> · Note: {value()}</>}</Show>
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      class="mt-2 min-h-11 sm:min-h-0"
+                      isLoading={busy()}
+                      onClick={() => void reopen(finding())}
+                    >
+                      Reopen finding
+                    </Button>
+                  </div>
+                );
+              }}
+            </Show>
+          }
+        >
+          {(finding) => (
+            <>
+              <p class="text-xs leading-5 text-muted">
+                Patrol also raised{' '}
+                <span class="font-medium text-base-content">{finding().title}</span> for this
+                resource. Decide once here and Patrol remembers it; the alert above keeps its own
+                lifecycle.
+              </p>
+              <ul class="mt-2 divide-y divide-border-subtle" aria-label="Lasting decisions">
+                <For each={PATROL_LASTING_DECISIONS}>
+                  {(decision) => (
+                    <li class="flex flex-col gap-1 py-2 sm:flex-row sm:items-start sm:gap-3">
+                      <Button
+                        variant={decision.kind === 'expected_behavior' ? 'primary' : 'secondary'}
+                        size="sm"
+                        class="min-h-11 shrink-0 justify-start sm:min-h-0 sm:w-48"
+                        disabled={busy()}
+                        aria-pressed={pending()?.kind === decision.kind}
+                        onClick={() => choose(decision)}
+                      >
+                        {decision.label}
+                      </Button>
+                      <p class="text-xs leading-5 text-muted sm:pt-1">{decision.explanation}</p>
+                    </li>
+                  )}
+                </For>
+              </ul>
+              <Show when={pending()}>
+                {(decision) => (
+                  <form
+                    class="mt-3 space-y-3 border-t border-border-subtle pt-3"
+                    onSubmit={confirm}
+                    aria-label={`Confirm ${decision().label}`}
+                  >
+                    <FormTextarea
+                      id={`attention-lasting-note-${props.item.id}`}
+                      label={
+                        decision().requiresReason
+                          ? 'Why this rule? Patrol shows the reason wherever the rule is listed.'
+                          : 'Note for Patrol (optional). Patrol reads it on future checks.'
+                      }
+                      density="compact"
+                      fieldBaseClass="block"
+                      labelClass="text-xs"
+                      textareaClass="mt-1 min-h-20"
+                      value={note()}
+                      maxlength={240}
+                      required={decision().requiresReason}
+                      disabled={busy()}
+                      onInput={(event) => setNote(event.currentTarget.value)}
+                    />
+                    <div class="flex flex-wrap gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        class="min-h-11 sm:min-h-0"
+                        type="submit"
+                        isLoading={busy()}
+                        disabled={decision().requiresReason && !note().trim()}
+                      >
+                        Confirm: {decision().label}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="min-h-11 sm:min-h-0"
+                        disabled={busy()}
+                        onClick={cancel}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </Show>
+            </>
+          )}
+        </Show>
+        <Show when={error()}>
+          <p role="alert" class="mt-3 text-xs leading-5 text-red-700 dark:text-red-300">
+            {error()}
+          </p>
+        </Show>
+      </div>
+    </DetailSection>
+  );
+}
+
+function AttentionAlertOnlyGuidance(props: {
+  item: AttentionItem;
+  onOpenFindings?: (item: AttentionItem) => void;
+}) {
+  return (
+    <div>
+      <p class="text-xs leading-5 text-muted">
+        This is an alert and Patrol has not raised a finding about it, so there is nothing for
+        Patrol to remember here. To change it for good, adjust when this alert fires or turn it off
+        for {props.item.subjectResourceName} under alert thresholds.
+      </p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <ButtonLink
+          href={ALERT_THRESHOLDS_PATH}
+          variant="secondary"
+          size="sm"
+          class="min-h-11 sm:min-h-0"
+        >
+          Adjust alert thresholds
+        </ButtonLink>
+        <Show when={props.onOpenFindings}>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="min-h-11 sm:min-h-0"
+            onClick={() => props.onOpenFindings?.(props.item)}
+          >
+            Browse Patrol findings for this resource
+          </Button>
+        </Show>
+      </div>
+    </div>
   );
 }
 

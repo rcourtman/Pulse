@@ -656,6 +656,14 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 
 	// Count resolved findings: LLM-resolved (via tool) + auto-reconciled stale findings.
 	var resolvedCount int
+	// Fold findings that restate an active alert under that alert. Runs after
+	// both the deterministic watchers and the model have written this cycle's
+	// findings, against the unscoped alert set, so scoped runs cannot release
+	// mirrors outside their scope.
+	if mirrored := p.reconcileAlertMirrors(); mirrored > 0 {
+		log.Debug().Int("changed", mirrored).Msg("AI Patrol: Updated alert-mirror stamps on findings")
+	}
+
 	if runStats.aiAnalysis != nil {
 		resolvedCount = len(runStats.aiAnalysis.ResolvedIDs)
 		if runStats.runtimeResolved {
