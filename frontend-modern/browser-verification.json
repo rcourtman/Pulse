@@ -1,70 +1,42 @@
 {
   "version": 1,
-  "base_sha": "fd36b3124c31bde2bea6b916652b9319827f890f",
-  "verified_at": "2026-09-02T06:55:42Z",
+  "base_sha": "23b3893ae88b86497f3f103c8972663508555766",
+  "verified_at": "2026-09-02T07:15:12Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/aiPatrolCost.ts",
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
-    "frontend-modern/src/components/Settings/AISettings.tsx",
-    "frontend-modern/src/components/Settings/useAISettingsState.ts",
-    "frontend-modern/src/components/shared/AIModelPicker.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
-    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
-    "frontend-modern/src/stores/aiIntelligence.ts",
-    "frontend-modern/src/types/ai.ts",
-    "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
-    "frontend-modern/src/utils/patrolRuntimeActions.ts"
+    "frontend-modern/src/components/shared/CommandPaletteModal.tsx",
+    "frontend-modern/src/components/shared/SearchField.tsx",
+    "frontend-modern/src/components/shared/searchFieldModel.ts",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/aiPatrolCost.ts": "be947370111a1efb7e2618f344b4b81481262f6b1fd8fc4ed2690a7729a05bff",
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "33b63989306752e5b852e5d2438dfcb99c0df78530ba50c1e157b895d7f1a623",
-    "frontend-modern/src/components/Settings/AISettings.tsx": "7103686e133e08d50563bf66da63ea161f73ae0386c59d6c770da78f0bdb78bb",
-    "frontend-modern/src/components/Settings/useAISettingsState.ts": "841fa917cf7c5a1f7867b992813984bbd1ce6f57ed9f1abe8db2b7183a4596a5",
-    "frontend-modern/src/components/shared/AIModelPicker.tsx": "79abf84c58d6baec0351bea8cfb7d828db8ff00f5bae7ed0fff4079bbef25b91",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx": "085c1d677ed5e15698e32759b4c01a05e0fd038fbf686ded48b390623de41d22",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "69ff486b95aafd445600571c977f8670e9686d9185f2c1285c2a6690e9c2d113",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "cd6d888b620e44fa8ec2125b818e59c8ed802f8aeae0c554c4ce5bd1d40e314f",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "58ad626d6af2472343307c01583621d4cfd742684f36c5583a3b72de75f86929",
-    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "7578f9e010bc36a1d5a3ec932a69a23a077e176755e7207905ec47f5e94d5fae",
-    "frontend-modern/src/stores/aiIntelligence.ts": "8b81de1c09f47555b148415641f9cc42a9db25e0a54cd0bc64bb24d03bb1a0ac",
-    "frontend-modern/src/types/ai.ts": "12473e6f0e6339094689ac77f9a32aa1ffb62def1e81c780f4263cbcf5923474",
-    "frontend-modern/src/utils/aiPatrolCostPresentation.ts": "3d1ffa67e0df24af89ca26bb40e29fe55ef859902145aa958d4331483952a032",
-    "frontend-modern/src/utils/patrolRuntimeActions.ts": "a71f234c2007dafd6e8773542ae238b8cd3cdb9501aaf5f1a403060335fbabd9"
+    "frontend-modern/src/components/shared/CommandPaletteModal.tsx": "300030975b76634513d98b9459fe9ae4d07e8d7d03fedffa91f702746a7d3f06",
+    "frontend-modern/src/components/shared/SearchField.tsx": "0c2cc0d002763b59c2c065ceccff134318122aa975fe45ddc31271387cd623ad",
+    "frontend-modern/src/components/shared/searchFieldModel.ts": "3b9ca4ffc6aef0e5910e5094daebb9b03878b2b6ef4c9c7aed165bf7f46097db",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "df4baf2ccba420f0c8d7d67ee7ddeba5a55ddbee8af323d8d7924aa389ad9b3a"
   },
-  "routes": [
-    "/settings/pulse-intelligence/patrol",
-    "/settings/pulse-intelligence/provider",
-    "/patrol"
-  ],
+  "routes": ["/proxmox"],
   "viewports": [
     {
       "width": 1280,
-      "height": 1000
+      "height": 720
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 393,
+      "height": 851
     }
   ],
   "states": [
-    "Patrol model picker open with the Suggested for Patrol section and Recommended for Patrol badge (Ollama qwen3:8b)",
-    "estimate box for a local model (no per-token bill) with the 30-day budget line",
-    "estimate box for a per-token model (Anthropic Sonnet 5) with monthly figure, per-run assumption, token explainer, and schedule recommendation",
-    "schedule select priced per preset and current-schedule card after the auto-adjust to once a day",
-    "estimate box with the budget reached line after seeding an over-budget usage history",
-    "Patrol page paused banner with spend, limit, and Raise the cost budget action",
-    "Patrol page setup card after a backend restart: paused subtitle and Raise the cost budget action from the persisted finding cause",
-    "narrow viewport: settings Patrol tab, picker, and Patrol page with no horizontal overflow"
+    "Command palette open with twelve results and the first result selected at desktop and narrow widths",
+    "Command palette scrolled to the last keyboard-selected result at desktop and narrow widths",
+    "Command palette empty result state after a query with no matching commands at desktop and narrow widths",
+    "Command palette closed after Escape and after backdrop dismissal at desktop and narrow widths"
   ],
   "interactions": [
-    "configured Ollama and a 20 USD budget on Provider & Models and saved",
-    "opened the Patrol model picker, searched a custom route, selected anthropic:claude-sonnet-5 and observed the schedule change to once a day",
-    "triggered a Patrol run against an over-budget usage history and observed the blocked status and finding",
-    "restarted the backend and reloaded the Patrol page",
-    "resized to 375x812 and repeated the settings and Patrol page checks"
+    "opened the command palette with Control+K on the authenticated Proxmox route",
+    "verified the search retained DOM focus while pointer hover and Home and End keys updated aria-activedescendant and aria-selected",
+    "verified End scrolled the last selected option fully into the result viewport and Tab did not focus an option",
+    "entered a no-match query and verified the combobox collapsed, cleared its active descendant, and removed the listbox",
+    "dismissed the palette with Escape and reopened and dismissed it through the backdrop"
   ]
 }

@@ -258,6 +258,56 @@ test.describe("Infrastructure onboarding", () => {
     await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/);
   });
 
+  test("discovery scan scope uses radio-group keyboard navigation", async ({
+    page,
+  }) => {
+    await prepareOnboardingPage(page);
+    await page.route("**/api/system/settings", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const body = await response.json();
+      body.discoveryEnabled = true;
+      body.discoverySubnet = "auto";
+      await route.fulfill({ response, json: body });
+    });
+
+    await page.goto("/settings/infrastructure", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+      timeout: 15_000,
+    });
+
+    const discoveryBand = page.getByRole("region", {
+      name: "Discover Proxmox systems",
+    });
+    await discoveryBand
+      .getByRole("button", { name: "Settings", exact: true })
+      .click();
+
+    const dialog = page.getByRole("dialog", { name: "Discovery settings" });
+    const automaticScope = dialog.getByRole("radio", {
+      name: /Automatic scan \(full network scope\)/i,
+    });
+    const customScope = dialog.getByRole("radio", {
+      name: /Custom subnets \(targeted\)/i,
+    });
+
+    await expect(automaticScope).toHaveAttribute("tabindex", "0");
+    await expect(customScope).toHaveAttribute("tabindex", "-1");
+
+    await automaticScope.focus();
+    await automaticScope.press("ArrowDown");
+
+    await expect(customScope).toBeFocused();
+    await expect(customScope).toHaveAttribute("aria-checked", "true");
+    await expect(customScope).toHaveAttribute("tabindex", "0");
+    await expect(automaticScope).toHaveAttribute("tabindex", "-1");
+  });
+
   test("desktop picker add opens the matching modal", async ({
     page,
   }, testInfo) => {

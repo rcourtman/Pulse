@@ -38,6 +38,9 @@ export interface SearchFieldProps {
   completionSuffix?: string;
   role?: JSX.InputHTMLAttributes<HTMLInputElement>['role'];
   ariaAutocomplete?: JSX.AriaAttributes['aria-autocomplete'];
+  ariaControls?: JSX.AriaAttributes['aria-controls'];
+  ariaExpanded?: JSX.AriaAttributes['aria-expanded'];
+  ariaActiveDescendant?: JSX.AriaAttributes['aria-activedescendant'];
 }
 
 export const shouldShowSearchFieldShortcutHint = (value: string, shortcutHint?: string) =>

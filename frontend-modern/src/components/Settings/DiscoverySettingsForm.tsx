@@ -46,6 +46,28 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
     }
     void props.handleDiscoveryModeChange(mode);
   };
+  const handleScanScopeKeyDown = (
+    event: KeyboardEvent & { currentTarget: HTMLButtonElement },
+    currentMode: 'auto' | 'custom',
+  ) => {
+    const direction =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? 1
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? -1
+          : 0;
+    if (direction === 0) return;
+
+    event.preventDefault();
+    const modes = ['auto', 'custom'] as const;
+    const currentIndex = modes.indexOf(currentMode);
+    const targetMode = modes[(currentIndex + direction + modes.length) % modes.length];
+    const target = event.currentTarget
+      .closest('[role="radiogroup"]')
+      ?.querySelector<HTMLButtonElement>(`[role="radio"][data-scan-scope="${targetMode}"]`);
+    selectDiscoveryMode(targetMode);
+    queueMicrotask(() => target?.focus());
+  };
 
   return (
     <div class="space-y-5">
@@ -111,8 +133,11 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                   type="button"
                   role="radio"
                   aria-checked={props.discoveryMode() === 'auto'}
+                  data-scan-scope="auto"
+                  tabIndex={props.discoveryMode() === 'auto' ? 0 : -1}
                   disabled={scanScopeLocked()}
                   onClick={() => selectDiscoveryMode('auto')}
+                  onKeyDown={(event) => handleScanScopeKeyDown(event, 'auto')}
                   class={scanScopeOptionClass('auto')}
                 >
                   <span class={scanScopeIndicatorClass('auto')} aria-hidden="true">
@@ -132,8 +157,11 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                   type="button"
                   role="radio"
                   aria-checked={props.discoveryMode() === 'custom'}
+                  data-scan-scope="custom"
+                  tabIndex={props.discoveryMode() === 'custom' ? 0 : -1}
                   disabled={scanScopeLocked()}
                   onClick={() => selectDiscoveryMode('custom')}
+                  onKeyDown={(event) => handleScanScopeKeyDown(event, 'custom')}
                   class={scanScopeOptionClass('custom')}
                 >
                   <span class={scanScopeIndicatorClass('custom')} aria-hidden="true">

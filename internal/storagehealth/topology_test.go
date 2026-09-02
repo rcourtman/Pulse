@@ -237,7 +237,8 @@ func TestAssessUnraidStorageTreatsEmptyNoPresentSlotsAsUnprotected(t *testing.T)
 			{Name: "parity", Role: "parity", Status: "missing", RawStatus: "DISK_NP_DSBL"},
 			{Name: "md1p1", Device: "/dev/sde", Status: "online", RawStatus: "DISK_OK", SizeBytes: 5860522532},
 			{Name: "disk5", Role: "data", Status: "missing", RawStatus: "DISK_NP", Slot: 5},
-			{Name: "parity2", Role: "parity", Status: "missing", RawStatus: "DISK_NP_DSBL", Slot: 29},
+			{Name: "disk6", Role: "data", Status: "missing", RawStatus: "DISK_NP", Filesystem: "auto", Slot: 6},
+			{Name: "parity2", Role: "parity", Status: "missing", RawStatus: "DISK_NP_DSBL", Filesystem: "auto", Slot: 29},
 		},
 	})
 
@@ -279,6 +280,27 @@ func TestAssessUnraidStorageUsesDiskStatusesOverAggregateCounters(t *testing.T) 
 			t.Fatalf("unexpected aggregate-count reason when structured disk state is healthy: %+v", assessment.Reasons)
 		}
 	}
+}
+
+func TestAssessUnraidStoragePreservesExplicitMissingMemberWithoutIdentity(t *testing.T) {
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true,
+		Disks: []models.HostUnraidDisk{
+			{Name: "parity", Role: "parity", Status: "online"},
+			{Name: "disk1", Role: "data", Status: "online"},
+			{Name: "disk2", Role: "data", Status: "missing", RawStatus: "DISK_NP_MISSING", Filesystem: "auto"},
+		},
+	})
+
+	if assessment.Level != RiskCritical {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskCritical)
+	}
+	for _, reason := range assessment.Reasons {
+		if reason.Code == "unraid_missing_disks" {
+			return
+		}
+	}
+	t.Fatalf("explicit missing member without identity was not preserved: %+v", assessment.Reasons)
 }
 
 func TestAssessUnraidStoragePreservesGenuineStructuredMissingDisk(t *testing.T) {

@@ -9,8 +9,16 @@ import {
 
 export type { CommandPaletteModalProps } from './useCommandPaletteState';
 
+const COMMAND_PALETTE_RESULTS_ID = 'command-palette-results';
+const getCommandPaletteOptionId = (commandId: string) => `command-palette-option-${commandId}`;
+
 export function CommandPaletteModal(props: CommandPaletteModalProps) {
   const commandPalette = useCommandPaletteState(props);
+
+  const activeOptionId = () => {
+    const command = commandPalette.filteredCommands()[commandPalette.selectedIndex()];
+    return command ? getCommandPaletteOptionId(command.id) : undefined;
+  };
 
   const handleSelect = (command: CommandPaletteModalCommand) => {
     commandPalette.handleSelect(command);
@@ -34,6 +42,11 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
           inputClass="bg-base"
           clearOnFocusedEscape={false}
           shortcutHint="Cmd+K"
+          role="combobox"
+          ariaAutocomplete="list"
+          ariaControls={COMMAND_PALETTE_RESULTS_ID}
+          ariaExpanded={commandPalette.filteredCommands().length > 0}
+          ariaActiveDescendant={activeOptionId()}
         />
       </div>
 
@@ -42,15 +55,22 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
           when={commandPalette.filteredCommands().length > 0}
           fallback={<div class="px-3 py-8 text-center text-sm text-muted">No matches found.</div>}
         >
-          <div role="listbox" aria-label="Command palette results">
+          <div
+            ref={commandPalette.setListboxRef}
+            id={COMMAND_PALETTE_RESULTS_ID}
+            role="listbox"
+            aria-label="Command palette results"
+          >
             <For each={commandPalette.filteredCommands()}>
               {(command, index) => {
                 const selected = () => commandPalette.selectedIndex() === index();
                 return (
                   <button
                     type="button"
+                    id={getCommandPaletteOptionId(command.id)}
                     role="option"
                     aria-selected={selected()}
+                    tabIndex={-1}
                     class={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-base-content outline-none transition-colors hover:bg-surface-hover focus:bg-surface-hover ${
                       selected() ? 'bg-surface-hover' : ''
                     }`}
