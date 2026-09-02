@@ -38,6 +38,7 @@
     "scripts/installtests/umask_unix_test.go",
     "scripts/installtests/uninstall_sensor_proxy_test.go",
     "scripts/release_control/secure_runtime_rootful_attestation_v1.py",
+    "scripts/secure-runtime-rootful-runtime.sh",
     "scripts/release_control/secure_runtime_rootful_source_manifest_v1.json",
     "scripts/release_control/secure_runtime_rootless_attestation_v1.py",
     "scripts/run-secure-runtime-rootful-qualification.sh"
