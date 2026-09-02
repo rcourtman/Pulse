@@ -155,6 +155,11 @@ GENERATED_CODE_ACTION_INPUTS = {
     "azure/cli@": frozenset({"inlinescript"}),
     "azure/powershell@": frozenset({"inlinescript"}),
 }
+SAFE_PULL_REQUEST_TARGET_WORKFLOW = "reclaim-closed-pr-capacity.yml"
+SAFE_PULL_REQUEST_TARGET_ACTIONS = (
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b",
+)
 # v7.0.1 includes checkout's fail-closed fork-PR protection for privileged
 # pull_request_target and workflow_run events. Keep this exact-pin allowlist
 # reviewable: a dependency refresh must not silently discard that boundary.
@@ -822,6 +827,99 @@ def _has_trigger(lines: list[str], event: str) -> bool:
     return False
 
 
+def _is_hardened_closed_pr_cancellation(path: Path, lines: list[str]) -> bool:
+    """Recognise the one metadata-only privileged PR automation we permit."""
+    if path.name != SAFE_PULL_REQUEST_TARGET_WORKFLOW:
+        return False
+
+    significant = [
+        line.rstrip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    try:
+        trigger_index = significant.index("on:")
+        permissions_index = significant.index("permissions:")
+    except ValueError:
+        return False
+    if significant[trigger_index:permissions_index] != [
+        "on:",
+        "  pull_request_target:",
+        "    types: [closed]",
+    ]:
+        return False
+
+    try:
+        jobs_index = significant.index("jobs:")
+    except ValueError:
+        return False
+    if significant[permissions_index:jobs_index] != [
+        "permissions:",
+        "  actions: write",
+        "  contents: read",
+        "  pull-requests: read",
+    ]:
+        return False
+    if sum(
+        bool(PERMISSIONS_RE.match(line.split("#", 1)[0])) for line in lines
+    ) != 1:
+        return False
+
+    if any(RUN_RE.match(line.split("#", 1)[0]) for line in lines):
+        return False
+    dependencies = [
+        match.group(1).strip("'\"")
+        for line in lines
+        if (match := USES_RE.match(line.split("#", 1)[0]))
+    ]
+    if dependencies != list(SAFE_PULL_REQUEST_TARGET_ACTIONS):
+        return False
+    if _has_confidential_secret_reference(lines):
+        return False
+    if any(
+        re.match(r"^\s*(?:container|services|defaults|env)\s*:", line)
+        for line in lines
+    ):
+        return False
+
+    checkout_index = next(
+        index
+        for index, line in enumerate(lines)
+        if (
+            (match := USES_RE.match(line.split("#", 1)[0]))
+            and match.group(1).strip("'\"") == SAFE_PULL_REQUEST_TARGET_ACTIONS[0]
+        )
+    )
+    checkout_block = _action_block(lines, checkout_index)
+    if any(
+        re.match(
+            rf"^\s*(?:{_yaml_key('repository')}|{_yaml_key('ref')}|"
+            rf"{_yaml_key('path')}|{_yaml_key('allow-unsafe-pr-checkout')})\s*:",
+            line,
+        )
+        for _, line in checkout_block
+    ):
+        return False
+
+    # The privileged generated program may only load the sparse, protected
+    # default-branch helper and invoke its metadata reconciliation entry point.
+    script_lines = [
+        script_line.strip()
+        for index, line in enumerate(lines)
+        if (
+            (match := USES_RE.match(line.split("#", 1)[0]))
+            and match.group(1).strip("'\"") == SAFE_PULL_REQUEST_TARGET_ACTIONS[1]
+        )
+        for _, script_line in _action_generated_code_lines(
+            lines, index, frozenset({"script"})
+        )
+    ]
+    return script_lines == [
+        "const cleanup = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/reclaim-closed-pr-capacity.cjs`);",
+        "await cleanup.cancelClosedPullRequestRuns({ github, context, core });",
+    ]
+
+
 def _static_yaml_list(
     lines: list[str], key_index: int, inline_value: str
 ) -> list[str] | None:
@@ -1181,7 +1279,10 @@ def audit_workflow(path: Path) -> list[Finding]:
     findings.extend(_audit_workflow_run_trigger(path, lines))
     has_workflow_run_trigger = _has_trigger(lines, "workflow_run")
 
-    if _has_trigger(lines, "pull_request_target"):
+    if (
+        _has_trigger(lines, "pull_request_target")
+        and not _is_hardened_closed_pr_cancellation(path, lines)
+    ):
         findings.append(
             Finding(
                 path,

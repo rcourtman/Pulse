@@ -24,9 +24,9 @@ CHECKOUT_PIN = next(iter(workflow_trust.PROTECTED_CHECKOUT_PINS))
 
 
 class WorkflowTrustTest(unittest.TestCase):
-    def audit(self, content: str) -> list[str]:
+    def audit(self, content: str, name: str = "test.yml") -> list[str]:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "test.yml"
+            path = Path(temporary_directory) / name
             path.write_text(content, encoding="utf-8")
             return [finding.message for finding in workflow_trust.audit_workflow(path)]
 
@@ -361,6 +361,66 @@ steps:
             any("pull_request_target is prohibited" in finding for finding in findings)
         )
         self.assertTrue(any("must not opt out" in finding for finding in findings))
+
+    def test_only_allows_hardened_closed_pr_target_cancellation(self) -> None:
+        workflow = (
+            REPO_ROOT
+            / ".github"
+            / "workflows"
+            / "reclaim-closed-pr-capacity.yml"
+        ).read_text()
+        findings = self.audit(
+            workflow,
+            workflow_trust.SAFE_PULL_REQUEST_TARGET_WORKFLOW,
+        )
+        self.assertEqual(findings, [])
+
+        unsafe = workflow.replace(
+            "            await cleanup.cancelClosedPullRequestRuns({ github, context, core });",
+            "            require('child_process').exec('git fetch origin pull/1/head');\n"
+            "            await cleanup.cancelClosedPullRequestRuns({ github, context, core });",
+        )
+        findings = self.audit(
+            unsafe,
+            workflow_trust.SAFE_PULL_REQUEST_TARGET_WORKFLOW,
+        )
+        self.assertTrue(
+            any("pull_request_target is prohibited" in finding for finding in findings)
+        )
+
+        unsafe_checkout = workflow.replace(
+            "          persist-credentials: false",
+            "          persist-credentials: false\n"
+            "          repository: ${{ github.event.pull_request.head.repo.full_name }}",
+        )
+        findings = self.audit(
+            unsafe_checkout,
+            workflow_trust.SAFE_PULL_REQUEST_TARGET_WORKFLOW,
+        )
+        self.assertTrue(
+            any("pull_request_target is prohibited" in finding for finding in findings)
+        )
+
+        excess_permissions = workflow.replace(
+            "    timeout-minutes: 5",
+            "    timeout-minutes: 5\n"
+            "    permissions:\n"
+            "      actions: write\n"
+            "      contents: write\n"
+            "      pull-requests: read",
+        )
+        findings = self.audit(
+            excess_permissions,
+            workflow_trust.SAFE_PULL_REQUEST_TARGET_WORKFLOW,
+        )
+        self.assertTrue(
+            any("pull_request_target is prohibited" in finding for finding in findings)
+        )
+
+        findings = self.audit(workflow)
+        self.assertTrue(
+            any("pull_request_target is prohibited" in finding for finding in findings)
+        )
 
     def test_workflow_run_requires_canonical_upstream_code(self) -> None:
         missing_branch = self.audit(

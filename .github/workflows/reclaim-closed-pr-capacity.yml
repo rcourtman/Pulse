@@ -1,0 +1,33 @@
+name: Reclaim closed PR CI capacity
+
+# A closed pull request no longer needs its queued or running verdicts. Run in
+# the base repository context so fork closures can release hosted capacity too;
+# no pull-request code, artifact, cache, or secret enters this privileged job.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  cancel:
+    name: Cancel obsolete pull request runs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the reviewed cancellation helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts/reclaim-closed-pr-capacity.cjs
+          sparse-checkout-cone-mode: false
+
+      - name: Cancel unfinished runs for the closed head
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const cleanup = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/reclaim-closed-pr-capacity.cjs`);
+            await cleanup.cancelClosedPullRequestRuns({ github, context, core });
