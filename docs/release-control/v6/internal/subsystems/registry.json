@@ -1288,6 +1288,14 @@
       ]
     },
     {
+      "path": "scripts/run-secure-runtime-rootful-qualification.sh",
+      "rationale": "the rootful runtime qualification wrapper is both an agent lifecycle typed-helper provider-boundary proof entry point and a deployment installability proof harness",
+      "subsystems": [
+        "agent-lifecycle",
+        "deployment-installability"
+      ]
+    },
+    {
       "path": "scripts/run-secure-runtime-rootless-qualification.sh",
       "rationale": "the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness",
       "subsystems": [
@@ -1397,6 +1405,7 @@
         "scripts/installtests/windows_agent_lifecycle.ps1",
         "scripts/installtests/windowslifecycleserver/main.go",
         "scripts/run-native-pve-action-qualification.sh",
+        "scripts/run-secure-runtime-rootful-qualification.sh",
         "scripts/run-secure-runtime-rootless-qualification.sh",
         "tests/integration/tests/84-docker-restart-real-lab-artifact.spec.ts"
       ],
@@ -1479,6 +1488,20 @@
             "exact_files": [
               "internal/hostagent/proxmox_guest_lifecycle_pve_linux_test.go",
               "scripts/installtests/native_pve_action_qualification_test.go"
+            ]
+          },
+          {
+            "id": "rootful-container-runtime-qualification",
+            "label": "disposable rootful Docker and Podman typed-helper lifecycle qualification proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/run-secure-runtime-rootful-qualification.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/secure_runtime_rootful_qualification_test.go",
+              "scripts/release_control/secure_runtime_rootful_attestation_v1_test.py"
             ]
           },
           {
@@ -4513,6 +4536,8 @@
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_control/secure_runtime_attestation_v6.py",
         "scripts/release_control/secure_runtime_attestation_v7.py",
+        "scripts/release_control/secure_runtime_rootful_attestation_v1.py",
+        "scripts/release_control/secure_runtime_rootful_source_manifest_v1.json",
         "scripts/release_control/secure_runtime_rootless_attestation_v1.py",
         "scripts/release_control/secure_runtime_rootless_source_manifest_v1.json",
         "scripts/release_control/secure_runtime_source_manifest_v6.json",
@@ -4522,6 +4547,7 @@
         "scripts/release_update_key.go",
         "scripts/run-release-backend-tests.sh",
         "scripts/run-release-preflight.sh",
+        "scripts/run-secure-runtime-rootful-qualification.sh",
         "scripts/run-secure-runtime-rootless-qualification.sh",
         "scripts/run_cloud_public_signup_smoke.sh",
         "scripts/run_demo_public_browser_smoke.sh",
@@ -4755,6 +4781,22 @@
             "scripts/installtests/safe_profile_migration_test.go",
             "scripts/release_control/secure_runtime_attestation_v6_test.py",
             "scripts/release_control/secure_runtime_attestation_v7_test.py"
+            ]
+          },
+          {
+            "id": "rootful-runtime-qualification-tooling",
+            "label": "standalone rootful Docker and Podman typed-helper qualification packet proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/release_control/secure_runtime_rootful_attestation_v1.py",
+              "scripts/release_control/secure_runtime_rootful_source_manifest_v1.json",
+              "scripts/run-secure-runtime-rootful-qualification.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/secure_runtime_rootful_qualification_test.go",
+              "scripts/release_control/secure_runtime_rootful_attestation_v1_test.py"
             ]
           },
           {

@@ -322,6 +322,22 @@ Failed runtime tests must retain the disposable systemd journal and container
 log before nonce-bound cleanup; absence of a receipt is not a replacement for
 the causal failure record.
 
+Live rootful-runtime proof is also separated from the schema-v7 systemd
+packet. The explicit
+`scripts/run-secure-runtime-rootful-qualification.sh` wrapper creates distinct
+network-isolated Ubuntu/systemd hosts for real rootful Docker and Podman and
+never mounts a host daemon socket. Its standalone schema-v1 receipt binds the
+exact canonical remote-main commit, immutable Ubuntu base-image digest,
+qualification, collector, helper, installer, every compiled installtests
+package input, source manifest, canonical root-owned socket, summary inventory,
+migration, restart, loss, recovery,
+bounded operation, update-preservation, authority-isolation, and cleanup
+evidence before the independent validator can emit a local artifact-bound
+self-attestation. All Go artifacts require exact clean VCS metadata and all
+retained outputs use a private mode-`0700` host directory. Checking in the
+tooling or passing its contract tests is not live qualification, published
+release proof, default-profile authorization, or independent review.
+
 Release builds and archives carry both helper and runner binaries for the five
 Linux targets (`amd64`, `arm64`, `armv7`, `armv6`, and `386`) with checksum,
 Ed25519, and SSH signature sidecars. Exact archive/container-context validation
@@ -899,7 +915,9 @@ artifact-selection behaviour.
    `NoNewPrivileges=false` exception above: it restores only the privilege
    `lxc-attach` needs and leaves the rest of the sandbox intact.
 
-9. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `agent-lifecycle`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
+9. `scripts/run-secure-runtime-rootful-qualification.sh` shared with `agent-lifecycle`: the rootful runtime qualification wrapper is both an agent lifecycle typed-helper provider-boundary proof entry point and a deployment installability proof harness.
+
+10. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `agent-lifecycle`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
 
 ## Extension Points
 
