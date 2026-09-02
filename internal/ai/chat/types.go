@@ -1352,6 +1352,29 @@ func (rc *ResolvedContext) GetResolvedResourceByAlias(alias string) (tools.Resol
 	return res, true
 }
 
+// ListResolvedResources returns every live resource the session has resolved,
+// ordered by canonical ID. It does not touch LRU state: enumeration is
+// evidence gathering for the advertised-action gate, not user access.
+func (rc *ResolvedContext) ListResolvedResources() []tools.ResolvedResourceInfo {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	rc.evictExpired()
+
+	ids := make([]string, 0, len(rc.ResourcesByID))
+	for id, res := range rc.ResourcesByID {
+		if res != nil {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	resources := make([]tools.ResolvedResourceInfo, 0, len(ids))
+	for _, id := range ids {
+		resources = append(resources, rc.ResourcesByID[id])
+	}
+	return resources
+}
+
 // ValidateResourceID checks if a resource ID exists in this context
 // and returns the resource if valid
 func (rc *ResolvedContext) ValidateResourceID(resourceID string) (*ResolvedResource, error) {

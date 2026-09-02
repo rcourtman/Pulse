@@ -7796,3 +7796,78 @@ Menu-opening controls remain buttons, and the mobile bar continues to own
 `--pulse-mobile-nav-height`; Assistant overlay containment and action approval
 boundaries are unchanged. Mobile navigation and AppLayout tests pin the route
 and focus behavior.
+
+### Advertised lifecycle actions are submitted, never narrated
+
+When an operator asks the Assistant to perform a lifecycle action (start,
+stop, shutdown, reboot/restart) and a canonical resource the session has
+resolved advertises that capability, the Assistant submits `pulse_control`
+for each target and lets the shared action lifecycle decide availability
+through planning, approval, execution, and verification. It may report a
+limitation only from a tool result in the current turn; an assumed
+prerequisite (QEMU guest agent, "discovery binding", "session state") or a
+manual `qm`/`pct` instruction for an action Pulse offers is a contract
+violation (GitHub issue #1782). Three structural guarantees enforce this:
+
+- `pulse_control` binds its `resource_id` to the canonical unified resource.
+  Session context is consulted first; a reference absent from the session
+  that resolves uniquely in the unified inventory is registered and planned,
+  an ambiguous name is refused with the candidate canonical ids, and a
+  lookup miss names the exact `pulse_query` recovery call. The plan request
+  carries the canonical unified id (never the session-scoped
+  `kind:host:uid`), and the legacy per-executor action list is not a gate:
+  whether the action exists is the action lifecycle's decision from the
+  resource's advertised capabilities (`internal/ai/tools/control_targets.go`).
+  A capability the resource does not advertise comes back as
+  `ACTION_NOT_ALLOWED` tool evidence listing the currently advertised
+  capabilities.
+- Recoverable ordering blocks (the RESOLVING FSM state, a strict-resolution
+  miss) name the read-only step to take first and state that they are not a
+  limitation to report; the shared operating instructions say the same and
+  require the governed action tool for advertised capabilities.
+- The agentic loop's advertised-action gate refuses, once per run, a
+  tool-free final answer when the operator's message requests a lifecycle
+  action, `pulse_control` was offered, no `pulse_control` call reached
+  execution, and at least one session-resolved resource currently advertises
+  the action. The refusal is a provider-only user-role correction naming the
+  exact calls per target; it fails open on the next prose answer so a model
+  with tool-evidenced reasons not to act is never livelocked
+  (`internal/ai/chat/agentic_action_gate.go`).
+
+Proofs: `internal/ai/tools/control_targets_test.go`,
+`internal/ai/chat/agentic_action_gate_test.go` (the #1782 transcript against
+a scripted provider), `internal/agentcapabilities/governance_prompt_test.go`,
+and the live eval `ProxmoxBulkLifecycleActionScenario` in
+`internal/ai/eval/scenarios.go`.
+
+### Alert-mirroring findings fold under the alert; flapping collapses to one row
+
+Real-time alerts own down, threshold, and age conditions, but Patrol's
+deterministic watchers and the model can still emit a finding for the same
+resource and condition. `internal/ai/findings_alert_mirror.go` is the single
+matcher: a finding mirrors an alert when it carries the alert's identifier or
+when both name the same canonical resource and the same condition class
+(down, restart loop, container health, disk capacity, memory, CPU, backup age,
+snapshot age, temperature). Unknown alert types and free-form findings never
+match. `PatrolService.reconcileAlertMirrors` runs at the end of every real and
+demo patrol cycle against the unscoped active-alert snapshot and stamps
+`mirrors_alert_id` and `mirrors_alert_type` on unresolved findings through
+`FindingsStore.StampAlertMirrors`, clearing the stamp once the alert resolves.
+The stamp is a derived read-model annotation: it is not persisted and is not a
+reason to drop the finding. Surfaces demote stamped findings under the alert
+instead of listing the same problem twice.
+
+Flapping is owned by the existing storm throttler rather than a parallel
+mechanism. `FindingsStore.recordTransitionLifecycleLocked` routes every
+regressed, resolved, and auto_resolved transition through
+`findingStormThrottler.observeFlapLocked`, which keeps a 24-hour sliding window
+per finding (hydrated from the persisted lifecycle on first sight so a restart
+does not forget). At four or more transitions the finding carries `flapping`
+(count, window, first and latest transition) and the store maintains one
+`flapping` lifecycle row whose metadata carries the count, updating it in place
+instead of appending a row per transition; below the threshold the ordinary
+rows return and the label clears. Regression counters keep counting while
+collapsed. `internal/ai/findings_flapping_test.go`,
+`internal/ai/findings_storm_throttler_test.go`, and
+`internal/ai/findings_alert_mirror_test.go` pin the threshold, the collapse,
+the hydration, and the matcher.
