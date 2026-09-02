@@ -7013,3 +7013,25 @@ zero update state or offer an action that the reporting collector cannot
 execute. Unknown or absent values preserve the direct-runtime presentation.
 Component and browser proofs cover the warning, action omission, mode
 transition, and desktop/narrow containment.
+
+### Patrol model choice carries guidance and a cost preview
+
+The Pulse Intelligence settings surface answers "which model should I pick
+and what will it cost" at the point of choice instead of after the budget
+trips. The shared `AIModelPicker` accepts per-model annotations (badge, note,
+tone) rendered beside the model name and under its description in both
+pinned sections and provider groups, with the badge and note folded into the
+accessible option name. The Patrol model field and the shared default field
+(when no Patrol override is set) pin guided models in a "Suggested for
+Patrol" section, repeat the selected model's marker under the closed picker,
+and render the server-computed Patrol cost preview: monthly estimate,
+per-run assumption with tokens explained once, 30-day spend against budget,
+and the schedule recommendation. The Patrol schedule select prices each
+preset from the same projection and the schedule card explains a schedule
+that Pulse slowed for a per-token model; a schedule the install already
+chose is never changed. Dollars and prices never derive from model names in
+the settings surface; `useAISettingsState` fetches
+`/api/ai/patrol/cost-preview` and `/api/ai/patrol/model-guidance` and
+`aiPatrolCostPresentation.ts` owns the copy. `AIModelPicker.test.tsx`,
+`AISettings.test.tsx`, and `settingsArchitecture.test.ts` pin those
+distinctions.

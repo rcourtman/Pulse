@@ -6,6 +6,7 @@ package ai
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -632,6 +633,7 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 			failure := patrolRuntimeFailureFromError(aiErr)
 			runStats.errorSummary = failure.Summary
 			runStats.errorDetail = failure.Detail
+			p.blockOnExhaustedBudget(aiErr, failure)
 
 			// Create a finding to surface this error to the user
 			errorFinding := newPatrolRuntimeFailureFinding(failure, time.Now())
@@ -1149,6 +1151,7 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 			failure := patrolRuntimeFailureFromError(aiErr)
 			runStats.errorSummary = failure.Summary
 			runStats.errorDetail = failure.Detail
+			p.blockOnExhaustedBudget(aiErr, failure)
 			errorFinding := newPatrolRuntimeFailureFinding(failure, time.Now())
 			if p.recordFinding(errorFinding) {
 				runStats.newFindings++
@@ -1304,6 +1307,11 @@ func recordPatrolCircuitResult(breaker *circuit.Breaker, attempted bool, errorCo
 	}
 	if runErr == nil {
 		runErr = fmt.Errorf("patrol completed with %d errors", errorCount)
+	}
+	if errors.Is(runErr, ErrCostBudgetExceeded) {
+		// Pulse declined to spend; the provider was never called, so there
+		// is no provider failure to count (#1789).
+		return
 	}
 	breaker.RecordFailureWithCategory(runErr, circuit.CategorizeError(runErr))
 }

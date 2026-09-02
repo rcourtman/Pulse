@@ -2537,3 +2537,20 @@ options remain available; dismissed and resolved views keep them in place.
 `PatrolAttentionWorkbench.test.tsx` pins the four decisions and their copy, the
 rule reason requirement, the remembered-decision path, the alert-only
 guidance, and the flapping collapse.
+
+### A used-up cost budget pauses Patrol visibly
+
+Patrol distinguishes "Pulse declined to spend" from "the provider failed".
+A 30-day budget refusal is the `ErrCostBudgetExceeded` sentinel with the
+spent and limit figures, classified as the `budget_exhausted` failure cause,
+never counted against the provider circuit breaker, and promoted into the
+runtime block state so `/api/ai/patrol/status` reports `blocked` with a
+`blocked_reason` that names the spend, the limit, and where to fix it. The
+Patrol page's paused banner, header run control, and setup card resolve
+their action from the block cause before the readiness cause, so an exhausted
+budget lands on "Raise the cost budget" (Provider & Models) instead of the
+model check, and the setup card subtitle says the pause is about spending,
+not a failed tool check. `patrolRuntimeActions.test.ts`,
+`usePatrolIntelligenceState.test.ts`, `PatrolIntelligenceHeader.test.ts`,
+`patrolControlPresentation.test.ts`, and the `internal/ai` projection tests
+pin those distinctions (issue #1789).

@@ -10,6 +10,7 @@ import {
   recordPatrolWorkflowStarterActivity,
   resolvePatrolAutonomyLevelForSave,
   resolvePatrolAutonomySettingsForSave,
+  resolvePatrolBlockedActionCause,
 } from '../usePatrolIntelligenceState';
 import patrolIntelligenceStateSource from '../usePatrolIntelligenceState.ts?raw';
 import type { AIChatContext } from '@/stores/aiChat';
@@ -398,5 +399,17 @@ describe('usePatrolIntelligenceState', () => {
         blockedCause: undefined,
       });
     });
+  });
+
+  it('lets the runtime block cause drive the blocked-banner action (#1789)', () => {
+    expect(resolvePatrolBlockedActionCause('budget_exhausted', 'none')).toBe('budget_exhausted');
+    expect(resolvePatrolBlockedActionCause('none', 'model_unsupported_tools')).toBe(
+      'model_unsupported_tools',
+    );
+    expect(resolvePatrolBlockedActionCause(undefined, ' provider_not_configured ')).toBe(
+      'provider_not_configured',
+    );
+    expect(resolvePatrolBlockedActionCause('', '')).toBeUndefined();
+    expect(patrolIntelligenceStateSource).toContain('blockedCause: patrolStatus()?.blocked_cause');
   });
 });

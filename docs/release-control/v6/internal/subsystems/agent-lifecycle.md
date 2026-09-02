@@ -7634,3 +7634,13 @@ native lifecycle workflow proof together, so lifecycle qualification cannot
 silently execute under a weaker checkout boundary.
 `scripts/check_workflow_trust.py`, `scripts/tests/test_workflow_trust.py`, and
 `scripts/installtests/install_ps1_test.go` pin that relationship.
+
+### Patrol cost preview and model guidance reads are not agent lifecycle authority
+
+The read-only `GET /api/ai/patrol/cost-preview` and `GET
+/api/ai/patrol/model-guidance` routes under `internal/api/` price the Patrol
+schedule and mark Patrol model choices from Pulse's price table, the
+install's Patrol run history, and the cached readiness pass. They read no
+agent identity, enrolment, or fleet state, issue no agent commands, and do
+not change the shared agent-install or setup-script boundaries; the
+agent-lifecycle contract keeps its authority over every agent surface.
