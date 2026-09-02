@@ -191,20 +191,46 @@ jobs:
           chart_release="helm-chart-${VERSION}"
           chart_release_url="https://github.com/${{ github.repository }}/releases/download/${chart_release}"
 
-          if gh release view "${chart_release}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "${chart_release}" "${chart_path}" --clobber \
-              --repo "${GITHUB_REPOSITORY}"
+          # A chart release is a prerelease exactly when its version is one;
+          # stable chart releases were being published as prereleases
+          # (helm-chart-6.4.0, 6.4.1 and every earlier stable chart), which
+          # the release steward reports as an incident. Never "latest": that
+          # pointer belongs to the Pulse release itself.
+          if [[ "${VERSION}" == *-* ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+          local_digest="sha256:$(sha256sum "${chart_path}" | cut -d ' ' -f 1)"
+
+          if release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${chart_release}" 2>/dev/null)"; then
+            # Immutable releases refuse asset replacement, so a convergence
+            # retry must recognise the exact chart it already published
+            # rather than clobber it (v6.4.3-rc.1 retry, 2026-09-02).
+            existing_digest="$(jq -r --arg name "${chart}" \
+              '[.assets[] | select(.name == $name)] | first | .digest // ""' <<<"${release_json}")"
+            if [[ -z "${existing_digest}" ]]; then
+              gh release upload "${chart_release}" "${chart_path}" \
+                --repo "${GITHUB_REPOSITORY}"
+            elif [[ "${existing_digest}" == "${local_digest}" ]]; then
+              echo "Chart release ${chart_release} already holds ${chart} at ${local_digest}."
+            else
+              echo "::error::Chart release ${chart_release} holds ${chart} at ${existing_digest}, not the qualified ${local_digest}; refusing to replace a published chart."
+              exit 1
+            fi
+            if [[ "$(jq -r '.prerelease' <<<"${release_json}")" != "${prerelease}" ]]; then
+              gh release edit "${chart_release}" --prerelease="${prerelease}" --latest=false \
+                --repo "${GITHUB_REPOSITORY}"
+            fi
           else
             gh release create "${chart_release}" "${chart_path}" \
               --repo "${GITHUB_REPOSITORY}" \
               --target "${TARGET_COMMITISH}" \
               --title "Helm chart ${VERSION}" \
               --notes "Helm chart for Pulse ${VERSION}." \
-              --prerelease \
+              --prerelease="${prerelease}" \
               --latest=false
           fi
-          gh release edit "${chart_release}" --prerelease --latest=false \
-            --repo "${GITHUB_REPOSITORY}"
 
           git -C gh-pages config user.name "$GITHUB_ACTOR"
           git -C gh-pages config user.email "$GITHUB_ACTOR@users.noreply.github.com"
