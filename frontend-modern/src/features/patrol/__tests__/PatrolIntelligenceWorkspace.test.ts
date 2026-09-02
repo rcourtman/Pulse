@@ -42,7 +42,7 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).not.toContain('showInvestigationContext');
     expect(workspaceSource).not.toContain('shouldSurfaceInvestigationContext');
     expect(workspaceSource).toContain('PATROL_WORKSPACE_SETUP_TITLE');
-    expect(workspaceSource).toContain('PATROL_WORKSPACE_SETUP_DESCRIPTION');
+    expect(workspaceSource).toContain('getPatrolWorkspaceSetupDescription(setupCause())');
     expect(workspaceSource).toContain('buildPatrolFindingDisplayGroups');
     expect(workspaceSource).not.toContain('getPatrolQueueBadgeLabel');
     expect(workspaceSource).toContain('queueIssueCount');

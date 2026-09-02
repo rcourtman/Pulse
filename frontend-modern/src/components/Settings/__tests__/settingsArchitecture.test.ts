@@ -116,6 +116,19 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('keeps the Patrol cost preview on the canonical cost-preview API and presentation helper', () => {
+    // The price table and the install's run history live on the server; the
+    // settings surface must not re-derive dollars from model names.
+    expect(aiSettingsStateSource).toContain("from '@/api/aiPatrolCost'");
+    expect(aiSettingsStateSource).toContain('getPatrolCostPreview({ model, intervalMinutes }');
+    expect(aiSettingsStateSource).toContain('getPatrolIntervalAutoAdjust(projection, {');
+    expect(aiModelSelectionSectionSource).toContain('getPatrolCostPresentation(state.patrolCostPreview())');
+    expect(aiModelSelectionSectionSource).toContain('resolvePatrolModelGuidance(models(), state.patrolModelGuidance())');
+    expect(aiSettingsSource).toContain('getPatrolIntervalCostHint(props.state.patrolCostPreview(), option.value)');
+    expect(aiSettingsSource).not.toMatch(/usd_per_mtok|per_million/i);
+    expect(aiModelSelectionSectionSource).not.toMatch(/usd_per_mtok/i);
+  });
+
   it('keeps the audit log filter bar free of a saved-views affordance', () => {
     // A saved view was only the page's URL query string; bookmarks already
     // cover that and survive a new browser, so the control was removed.

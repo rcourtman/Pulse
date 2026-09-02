@@ -11,13 +11,26 @@ import {
   getMonitorContextPatrolProtectionPosture,
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
+  getPatrolWorkspaceSetupDescription,
   getPatrolWorkspaceWorkGroups,
   isPatrolCoverageStale,
   PATROL_AUTONOMY_POLICY_PRESENTATION,
+  PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION,
   PATROL_WORKSPACE_QUEUE_TITLE,
+  PATROL_WORKSPACE_SETUP_DESCRIPTION,
 } from '../patrolControlPresentation';
 
 describe('patrolControlPresentation', () => {
+  it('describes a budget pause as spending, not a failed model check (#1789)', () => {
+    expect(getPatrolWorkspaceSetupDescription('budget_exhausted')).toBe(
+      PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION,
+    );
+    expect(PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION).not.toMatch(/tool check/);
+    for (const cause of ['model_unsupported_tools', 'none', undefined, null]) {
+      expect(getPatrolWorkspaceSetupDescription(cause)).toBe(PATROL_WORKSPACE_SETUP_DESCRIPTION);
+    }
+  });
+
   it.each([
     ['fresh', 'complete', 'Evidence current', 'Evidence current', 'success'],
     ['stale', 'complete', 'Evidence out of date', 'Evidence out of date', 'warning'],

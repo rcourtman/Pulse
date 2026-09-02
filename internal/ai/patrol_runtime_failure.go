@@ -298,6 +298,13 @@ func patrolRuntimeFailureFromErrorCtx(ctx context.Context, err error) patrolRunt
 		failure.Cause = PatrolFailureCauseInterrupted
 		failure.Description = "The Patrol run was cancelled before the provider finished, either by an operator cancel or because the client connection closed mid-analysis. An interrupted run is not evidence about the provider or model."
 		failure.Recommendation = "Run the analysis again when you are ready. If you did not cancel it, check for reverse proxies or load balancers that close long-running requests."
+	case errors.Is(err, ErrCostBudgetExceeded):
+		// The provider was never called: Pulse itself declined to spend.
+		failure.Title = "Pulse Patrol: 30-day cost budget reached"
+		failure.Summary = "30-day cost budget reached"
+		failure.Cause = PatrolFailureCauseBudgetExhausted
+		failure.Description = "Pulse Patrol skipped its analysis because estimated spend on AI providers reached the 30-day budget you set. Nothing was sent to the provider, so this says nothing about the model."
+		failure.Recommendation = "Raise the 30-day budget under Pulse Intelligence › Provider & Models, choose a cheaper Patrol model or a slower schedule, or wait for the 30-day window to roll on. Patrol resumes on its next scheduled run once spend is back under budget."
 	case setupFailure:
 		failure.Title = "Pulse Patrol: Local " + setup.displayName + " CLI not ready"
 		failure.Summary = "Local " + setup.displayName + " CLI not ready"
@@ -567,12 +574,23 @@ func newPatrolRuntimeFailureFinding(failure patrolRuntimeFailure, now time.Time)
 	}
 }
 
+// patrolRuntimeResolveReasonPreflight is the resolve reason a successful
+// provider preflight reports; see patrol_preflight.go.
+const patrolRuntimeResolveReasonPreflight = "patrol_preflight_success"
+
 func (p *PatrolService) resolvePatrolRuntimeFailureFinding(reason string) bool {
 	if p == nil || p.findings == nil {
 		return false
 	}
 	errorFindingID := generateFindingID(patrolRuntimeResourceID, "reliability", patrolRuntimeFindingKey)
-	if existing := p.findings.Get(errorFindingID); existing == nil || existing.IsResolved() {
+	existing := p.findings.Get(errorFindingID)
+	if existing == nil || existing.IsResolved() {
+		return false
+	}
+	// A healthy provider preflight says nothing about spend: a budget pause
+	// stays until a run actually gets past the budget check (#1789).
+	if reason == patrolRuntimeResolveReasonPreflight && existing.FailureCause == string(PatrolFailureCauseBudgetExhausted) {
+		log.Debug().Str("reason", reason).Msg("AI Patrol: Keeping budget-exhausted runtime finding despite provider preflight success")
 		return false
 	}
 

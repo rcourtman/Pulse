@@ -109,6 +109,36 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
+  it('keeps the Patrol runtime failure cause on unified findings (#1789)', async () => {
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce([
+      {
+        id: 'patrol-runtime',
+        key: 'ai-patrol-error',
+        severity: 'warning',
+        category: 'reliability',
+        resource_id: 'pulse-patrol-service',
+        resource_name: 'Pulse Patrol Service',
+        resource_type: 'service',
+        title: 'Pulse Patrol: 30-day cost budget reached',
+        description: 'Pulse Patrol skipped its analysis because spend reached the budget.',
+        detected_at: '2026-09-01T00:00:00Z',
+        last_seen_at: '2026-09-01T00:05:00Z',
+        auto_resolved: false,
+        times_raised: 2,
+        suppressed: false,
+        investigation_attempts: 0,
+        failure_cause: 'budget_exhausted',
+      } as never,
+    ]);
+
+    await aiIntelligenceStore.loadPatrolFindings();
+
+    expect(aiIntelligenceStore.patrolFindings[0]).toMatchObject({
+      id: 'patrol-runtime',
+      failureCause: 'budget_exhausted',
+    });
+  });
+
   it('loads direct Patrol findings for Patrol surfaces', async () => {
     vi.mocked(getPatrolFindings).mockResolvedValueOnce([
       {

@@ -232,6 +232,22 @@ export function buildPatrolSettingsReadinessFailure({
   };
 }
 
+/**
+ * The blocked banner's action must follow the runtime block cause when there
+ * is one: a used-up cost budget is fixed on Provider & Models, while the
+ * readiness cause (often "none" while blocked) would send the operator to
+ * the model check (#1789).
+ */
+export function resolvePatrolBlockedActionCause(
+  blockedCause?: string | null,
+  readinessCause?: string | null,
+): string | undefined {
+  const blocked = blockedCause?.trim();
+  if (blocked && blocked !== 'none') return blocked;
+  const readiness = readinessCause?.trim();
+  return readiness || undefined;
+}
+
 export function usePatrolIntelligenceState() {
   const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
@@ -512,6 +528,7 @@ export function usePatrolIntelligenceState() {
     normalizePatrolRuntimeBlockedReason(patrolStatus()?.blocked_reason),
   );
   const blockedAt = createMemo(() => patrolStatus()?.blocked_at);
+  const blockedCause = createMemo(() => patrolStatus()?.blocked_cause);
   const patrolReadiness = createMemo(() => patrolStatus()?.readiness ?? null);
   // Pulse records the last preflight result on AISettings.patrol_preflight
   // (provider/model/duration/recommendation) so we can surface a concrete
@@ -1048,6 +1065,7 @@ export function usePatrolIntelligenceState() {
     autoFixCapabilityBlock,
     autoFixLocked,
     blockedAt,
+    blockedCause,
     blockedReason,
     canTriggerPatrol,
     circuitBreakerStatus,

@@ -1,45 +1,70 @@
 {
   "version": 1,
-  "base_sha": "9fba43ffed507f092f876acaf23bef013f0f6fab",
-  "verified_at": "2026-09-02T03:39:02Z",
+  "base_sha": "d7a4dcf8e7c59fc35348236d8aeb3f25dc6062fe",
+  "verified_at": "2026-09-02T06:06:15Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/shared/Dialog.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/api/aiPatrolCost.ts",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
+    "frontend-modern/src/components/Settings/AISettings.tsx",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/components/shared/AIModelPicker.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
+    "frontend-modern/src/stores/aiIntelligence.ts",
+    "frontend-modern/src/types/ai.ts",
+    "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Dialog.tsx": "185f09e185a9e5ccddf73906a81552ea0cc8b07390fb5ab587fbe1b952697735"
+    "frontend-modern/src/api/aiPatrolCost.ts": "be947370111a1efb7e2618f344b4b81481262f6b1fd8fc4ed2690a7729a05bff",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "de3c1069957ea555215d3f5d37ec1b79b65453e36c0165433b139855abbe1505",
+    "frontend-modern/src/components/Settings/AISettings.tsx": "7103686e133e08d50563bf66da63ea161f73ae0386c59d6c770da78f0bdb78bb",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "2c9c6a3b641fe6a655a6199eb19b306e3bcdb4a241bb3d23d37f2e1a865e5c58",
+    "frontend-modern/src/components/shared/AIModelPicker.tsx": "3a6eb8dc7131bef1404d20a9d6ffa34c7ca4874cd8753f09c873381a99ef6cf3",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx": "085c1d677ed5e15698e32759b4c01a05e0fd038fbf686ded48b390623de41d22",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "69ff486b95aafd445600571c977f8670e9686d9185f2c1285c2a6690e9c2d113",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "cd6d888b620e44fa8ec2125b818e59c8ed802f8aeae0c554c4ce5bd1d40e314f",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "58ad626d6af2472343307c01583621d4cfd742684f36c5583a3b72de75f86929",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "6a69d33398a5bab1489996737c7f8d4fe5d0e1be1038f5f9cfd74e4477bc3776",
+    "frontend-modern/src/stores/aiIntelligence.ts": "f8755ec8355f746e99250b734650808668f70fc0bc7a24e951cfd91967468be1",
+    "frontend-modern/src/types/ai.ts": "12473e6f0e6339094689ac77f9a32aa1ffb62def1e81c780f4263cbcf5923474",
+    "frontend-modern/src/utils/aiPatrolCostPresentation.ts": "ea5ed729a7700d61a1e0fb091aa9cd45da9f5ee473941c8a7111bf84c76414ae",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts": "a71f234c2007dafd6e8773542ae238b8cd3cdb9501aaf5f1a403060335fbabd9"
   },
   "routes": [
-    "/settings/infrastructure",
-    "/actions",
-    "/alerts/overview",
-    "/settings/system-general",
-    "/patrol",
-    "/"
+    "/settings/pulse-intelligence/patrol",
+    "/settings/pulse-intelligence/provider",
+    "/patrol"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 1000
     },
     {
-      "width": 390,
-      "height": 844
-    },
-    {
-      "width": 393,
-      "height": 851
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Add infrastructure dialog open at desktop and narrow widths with reduced motion, a visible labelled heading, accessible description, focused close control, contained panel geometry, and no horizontal document overflow",
-    "Add infrastructure dialog dismissed at desktop and narrow widths with the underlying Infrastructure surface restored",
-    "authenticated Actions, Alerts, Infrastructure, General Settings, and Patrol surfaces with reduced motion and no automatically detectable WCAG A/AA violations",
-    "logged-out welcome surface with reduced motion and no automatically detectable WCAG A/AA violations"
+    "Patrol model picker open with the Suggested for Patrol section and Recommended for Patrol badge (Ollama qwen3:8b)",
+    "estimate box for a local model (no per-token bill) with the 30-day budget line",
+    "estimate box for a per-token model (Anthropic Sonnet 5) with monthly figure, per-run assumption, token explainer, and schedule recommendation",
+    "schedule select priced per preset and current-schedule card after the auto-adjust to once a day",
+    "estimate box with the budget reached line after seeding an over-budget usage history",
+    "Patrol page paused banner with spend, limit, and Raise the cost budget action",
+    "Patrol page setup card after a backend restart: paused subtitle and Raise the cost budget action from the persisted finding cause",
+    "narrow viewport: settings Patrol tab, picker, and Patrol page with no horizontal overflow"
   ],
   "interactions": [
-    "opened Add infrastructure from its named trigger at desktop and narrow widths and verified the dialog accessible name and description",
-    "inspected final desktop and 390x844 screenshots for placement, clipping, stacking, scrolling, focus treatment, and responsive layout",
-    "verified the dialog bounds stay inside both viewports and the document has no horizontal overflow",
-    "dismissed the dialog with Escape at desktop and narrow widths and verified focus returned to Add infrastructure",
-    "scanned representative authenticated and logged-out surfaces for WCAG A/AA violations and unexpected reduced-motion effects"
+    "configured Ollama and a 20 USD budget on Provider & Models and saved",
+    "opened the Patrol model picker, searched a custom route, selected anthropic:claude-sonnet-5 and observed the schedule change to once a day",
+    "triggered a Patrol run against an over-budget usage history and observed the blocked status and finding",
+    "restarted the backend and reloaded the Patrol page",
+    "resized to 375x812 and repeated the settings and Patrol page checks"
   ]
 }
