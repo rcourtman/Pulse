@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test as base, type Page } from '@playwright/test';
-import { createAuthenticatedStorageState, ensureAuthenticated, trackBrowserRequests } from './helpers';
+import {
+  createAuthenticatedStorageState,
+  ensureAuthenticated,
+  primaryNavigationLink,
+  trackBrowserRequests,
+} from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -101,10 +106,10 @@ async function getVisibleSettingsNavigation(
   projectName: string,
 ) {
   if (projectName.startsWith('mobile-')) {
-    await page
-      .getByRole('tablist', { name: 'Mobile navigation' })
-      .getByRole('button', { name: 'Settings', exact: true })
-      .click();
+    // Settings lives in the mobile rail's overflow menu, behind More navigation.
+    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+    await mobileNavigation.getByRole('button', { name: 'More navigation' }).click();
+    await mobileNavigation.getByRole('menuitem', { name: /^Settings/ }).click();
     const settingsDrawerButton = page
       .getByRole('main')
       .getByRole('button', { name: 'Settings', exact: true });
@@ -355,10 +360,7 @@ base.describe('Demo mode commercial boundary', () => {
     await expect(page.getByText('Pro Trial:', { exact: false })).toHaveCount(0);
     await expect(page.getByText('Monitored systems: 16/5', { exact: true })).toHaveCount(0);
     await expect(
-      page
-        .locator('[role="tab"]')
-        .filter({ hasText: 'Settings' })
-        .getByText('Pro', { exact: true }),
+      primaryNavigationLink(page, 'Settings').getByText('Pro', { exact: true }),
     ).toHaveCount(0);
 
     expect(licenseStatusRequests, 'demo settings route should not read license status').toBe(0);
@@ -473,10 +475,7 @@ base.describe('Managed demo runtime commercial boundary', () => {
         await expect(page.getByText('Pro Trial:', { exact: false })).toHaveCount(0);
         await expect(page.getByText(/Monitored systems:\s*\d+\/\d+/)).toHaveCount(0);
         await expect(
-          page
-            .locator('[role="tab"]')
-            .filter({ hasText: 'Settings' })
-            .getByText('Pro', { exact: true }),
+          primaryNavigationLink(page, 'Settings').getByText('Pro', { exact: true }),
         ).toHaveCount(0);
 
         expect(

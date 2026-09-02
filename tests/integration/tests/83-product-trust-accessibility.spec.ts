@@ -105,6 +105,10 @@ test("Actions remains named, directly reachable, keyboard accessible, and free o
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  // Scan the settled surface: the update banner slides in over 300ms and
+  // axe would otherwise sample its controls mid-fade and report blended
+  // colours as contrast failures.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("**/api/actions?*", (route) =>
     route.fulfill({
       status: 200,

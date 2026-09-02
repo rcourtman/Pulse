@@ -1,6 +1,11 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import { apiRequest, ensureAuthenticated, trackBrowserRequests } from "./helpers";
+import {
+  apiRequest,
+  ensureAuthenticated,
+  primaryNavigationLink,
+  trackBrowserRequests,
+} from "./helpers";
 
 const PATROL_BLOCK_REASON =
   "Connect a provider to power Pulse Assistant and Patrol.";
@@ -580,7 +585,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     entitlementsRequests.clear();
     await mockBlockedPatrolRuntimeState(page);
 
-    await page.getByRole("tab", { name: "Patrol" }).click();
+    await primaryNavigationLink(page, /Patrol/).click();
     await expect(page).toHaveURL(/\/patrol/);
 
     // Banner and badge both use sentence case now.
