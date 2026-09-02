@@ -2737,3 +2737,11 @@ unprefixed record, preserving their existing payload and access boundaries.
 `internal/logging/logging_test.go` pins both the level-to-priority mapping and
 that sink isolation. Deployments that do not explicitly opt in—including
 containers and interactive terminals—must retain their unprefixed output.
+
+### Patrol digest emails carry counts, not infrastructure detail
+
+The weekly Patrol summary email contains aggregate counts, mode copy, and an
+optional link to the configured public URL. It never includes resource names,
+finding text, commands, evidence, or model names, and it uses the tenant's
+existing email configuration and recipients under the admin-only report
+schedule routes.

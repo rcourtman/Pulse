@@ -3009,3 +3009,11 @@ poll, query, websocket subscription, history series, cache, per-row scan, or
 responsive signal. The Docker drawer evaluates the one bounded string only for
 the selected host, and summary-only helper collection omits the existing
 stats-dependent and secondary-inventory work at the agent.
+
+### Patrol digest schedule runs are bounded reads
+
+A `patrol_digest` run performs the same bounded reads as
+`GET /api/ai/patrol/digest` (retained run history, in-memory findings, a
+capped action-audit page, and cost events for the window) once per weekly
+occurrence, under the existing schedule run mutex. It adds no polling, no
+per-resource fan-out, and no new persistence.
