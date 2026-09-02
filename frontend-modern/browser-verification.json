@@ -1,42 +1,49 @@
 {
   "version": 1,
-  "base_sha": "facee87bb4e7b84a0ce682d6e142d35b55be3ace",
-  "verified_at": "2026-09-02T08:55:07Z",
+  "base_sha": "b5f694b216e7a333c8ce26746b4e218e59c65efc",
+  "verified_at": "2026-09-02T09:53:16Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/patrol.ts",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/UpdateBanner.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/components/shared/SkipToContentLink.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrol.ts": "c411c12d504b53e64b1435c5b336ba953f5051f6909f2bfef3e46067d5b88f34",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "0d46fd5afbbdf8e1b885fa558be070c07203cc6613dda4458e9790fa8f2e4099",
-    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "9a9728f618c502a5379f56e93cad29ea939f5c26e73e3c7d22195308a8087b81"
+    "frontend-modern/src/App.tsx": "a46918db428d7965d72e5e8a296ea813970472dfe8fd04f4dcae18439fa80375",
+    "frontend-modern/src/AppLayout.tsx": "827b69928bf4b6b2da8b445d0b95bd2a89cc2721c494d624f13d422af2e7ff99",
+    "frontend-modern/src/components/UpdateBanner.tsx": "14f6125638c81b66bf69a7b40231f2187851edfc5f08093e82c4ba3b4f73005e",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "f0aaa04aab89c0de1794d80448cb478e6cc5cac274519fe37a793b530cd6a00f",
+    "frontend-modern/src/components/shared/SkipToContentLink.tsx": "3d89ab42df5b342639af1b87012b173f5965b0a1041785a8b53f32675956b1bc"
   },
   "routes": [
-    "/patrol"
+    "/alerts/overview",
+    "/actions",
+    "/patrol",
+    "/settings/infrastructure",
+    "/settings/system-general"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Activity tab with the This week card above Verified outcomes, populated from an isolated mock-mode backend (11 runs, 3 new issues, watch-only mode)",
-    "card tiles in single column at 375px with no horizontal overflow",
-    "card refresh in flight and settled",
-    "Verified outcomes empty state and Review and history below the card",
-    "watch-only tile copy for Investigated and Fixes run"
+    "Desktop primary navigation with the Patrol utility link carrying an amber attention-count badge on /alerts/overview",
+    "Phone-width mobile navigation rail with the Patrol destination carrying an amber count badge on /actions",
+    "Update banner showing the Pre-release badge beside the update message",
+    "Skip to main content link revealed at the top-left after the first Tab from the page start, ahead of the update banner controls, at desktop and phone widths"
   ],
   "interactions": [
-    "clicked the Activity workspace tab",
-    "scrolled the card into view at desktop and narrow widths",
-    "clicked Refresh this week's summary and confirmed the tiles reloaded without an error state",
-    "checked console for card-originated errors (only unrelated dev websocket/update-check noise)"
+    "ran the axe-core WCAG 2.x A/AA scan on /alerts/overview, /patrol, /settings/infrastructure and /settings/system-general at 1280x720 with the desktop attention badge rendered and confirmed no color-contrast violation remains on the navigation badges",
+    "ran the axe-core WCAG 2.x A/AA scan on /actions at 390x844 with the mobile rail count badge rendered and confirmed no color-contrast violation remains on the badge or the Pre-release label",
+    "read the computed badge colours in the page and confirmed the count text now resolves to an opaque amber-800 instead of the theme's 25 percent alpha amber-900",
+    "reset focus to the document body on /actions at 390x844 with the update banner present, pressed Tab and confirmed the skip link received focus and became visible, then pressed Enter and confirmed focus moved to the main landmark"
   ]
 }

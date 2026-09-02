@@ -255,10 +255,8 @@ export function AppLayout(props: AppLayoutProps) {
   const browserBrandName = createMemo(() => customBrandName() || 'Pulse');
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
-  const [skipLinkFocused, setSkipLinkFocused] = createSignal(false);
   const [primaryRouteMemoryVersion, setPrimaryRouteMemoryVersion] = createSignal(0);
   let headerEl: HTMLDivElement | undefined;
-  let mainContentEl: HTMLElement | undefined;
   let assistantLauncherEl: HTMLButtonElement | undefined;
   let restoreAssistantLauncherFocus = false;
   let headerHideTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -726,22 +724,8 @@ export function AppLayout(props: AppLayoutProps) {
     <div
       class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-14 xl:pb-0' : ''}`}
     >
-      {/* Skip-to-content link: visually hidden until focused, then
-          appears as a button at the top-left. Lets keyboard users
-          jump past the chrome straight into the page content. */}
-      <a
-        href="#main"
-        onClick={() => mainContentEl?.focus()}
-        onFocus={() => setSkipLinkFocused(true)}
-        onBlur={() => setSkipLinkFocused(false)}
-        class={
-          skipLinkFocused()
-            ? 'absolute left-2 top-2 z-[100] rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-lg outline outline-2 outline-offset-2 outline-white'
-            : 'sr-only'
-        }
-      >
-        Skip to main content
-      </a>
+      {/* The skip-to-content link renders in App ahead of the global
+          banners; #main below is its target. */}
       <Show when={kioskMode()}>
         <div
           class="fixed top-0 left-0 right-0 z-40 h-4 bg-transparent"
@@ -944,7 +928,7 @@ export function AppLayout(props: AppLayoutProps) {
                                   </span>
                                 )}
                                 {tab.breakdown && tab.breakdown.warning > 0 && (
-                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-800 dark:text-slate-900 bg-amber-200 dark:bg-amber-400 rounded-full">
                                     {tab.breakdown.warning}
                                   </span>
                                 )}
@@ -952,7 +936,7 @@ export function AppLayout(props: AppLayoutProps) {
                             );
                           }
                           return (
-                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-800 dark:text-slate-900 bg-amber-200 dark:bg-amber-400 rounded-full">
                               {total}
                             </span>
                           );
@@ -982,7 +966,6 @@ export function AppLayout(props: AppLayoutProps) {
       </Show>
 
       <main
-        ref={mainContentEl}
         id="main"
         tabindex="-1"
         class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow sm:mb-2"
