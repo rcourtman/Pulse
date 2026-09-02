@@ -617,12 +617,13 @@ func TestStoreFlushMakesQueuedWritesVisible(t *testing.T) {
 
 func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 	previousHook := startupMaintenanceHook
-	defer func() {
-		startupMaintenanceHook = previousHook
-	}()
 
 	started := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseMaintenance := func() {
+		releaseOnce.Do(func() { close(release) })
+	}
 	startupMaintenanceHook = func() {
 		close(started)
 		<-release
@@ -641,35 +642,44 @@ func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 		store, err = NewStore(cfg)
 		close(done)
 	}()
+	t.Cleanup(func() {
+		// Always unblock and join the worker before restoring the process-wide
+		// hook. Otherwise a failed assertion can leak this worker into the next
+		// test, where it may invoke that test's hook.
+		releaseMaintenance()
+		<-done
+		if store != nil {
+			store.Close()
+		}
+		startupMaintenanceHook = previousHook
+	})
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("startup maintenance was not scheduled")
+	}
 
 	select {
 	case <-done:
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fatal("NewStore blocked on startup maintenance")
 	}
 
 	if err != nil {
 		t.Fatalf("NewStore returned error: %v", err)
 	}
-
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("startup maintenance was not scheduled")
-	}
-
-	close(release)
-	defer store.Close()
 }
 
 func TestStoreWaitForMaintenanceWaitsForQueuedStartupWork(t *testing.T) {
 	previousHook := startupMaintenanceHook
-	defer func() {
-		startupMaintenanceHook = previousHook
-	}()
 
 	started := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseMaintenance := func() {
+		releaseOnce.Do(func() { close(release) })
+	}
 	startupMaintenanceHook = func() {
 		close(started)
 		<-release
@@ -680,14 +690,20 @@ func TestStoreWaitForMaintenanceWaitsForQueuedStartupWork(t *testing.T) {
 	cfg.FlushInterval = time.Hour
 
 	store, err := NewStore(cfg)
+	t.Cleanup(func() {
+		releaseMaintenance()
+		if store != nil {
+			store.Close()
+		}
+		startupMaintenanceHook = previousHook
+	})
 	if err != nil {
 		t.Fatalf("NewStore returned error: %v", err)
 	}
-	defer store.Close()
 
 	select {
 	case <-started:
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("startup maintenance did not start")
 	}
 
@@ -696,13 +712,28 @@ func TestStoreWaitForMaintenanceWaitsForQueuedStartupWork(t *testing.T) {
 		waitDone <- store.WaitForMaintenance(time.Second)
 	}()
 
+	// Wait until the barrier is observably queued behind the blocked startup
+	// work, then assert it has not completed. This tests ordering rather than
+	// relying on a scheduler-sensitive sleep.
+	queueDeadline := time.NewTimer(5 * time.Second)
+	defer queueDeadline.Stop()
+	for len(store.maintenanceCh) == 0 {
+		select {
+		case err := <-waitDone:
+			t.Fatalf("WaitForMaintenance returned before queuing its barrier: %v", err)
+		case <-queueDeadline.C:
+			t.Fatal("WaitForMaintenance did not queue its maintenance barrier")
+		case <-time.After(time.Millisecond):
+		}
+	}
+
 	select {
 	case err := <-waitDone:
 		t.Fatalf("WaitForMaintenance returned before startup maintenance completed: %v", err)
-	case <-time.After(100 * time.Millisecond):
+	default:
 	}
 
-	close(release)
+	releaseMaintenance()
 
 	select {
 	case err := <-waitDone:
@@ -773,24 +804,27 @@ func TestStartupMaintenanceDoesNotBlockIngestionWorker(t *testing.T) {
 	release := func() {
 		releaseOnce.Do(func() { close(releaseMaintenance) })
 	}
-	t.Cleanup(release)
-
 	previousHook := startupMaintenanceHook
 	startupMaintenanceHook = func() {
 		close(maintenanceEntered)
 		<-releaseMaintenance
 	}
-	t.Cleanup(func() { startupMaintenanceHook = previousHook })
 
 	config := DefaultConfig(t.TempDir())
 	config.WriteBufferSize = 1
 	config.FlushInterval = time.Hour
 
 	store, err := NewStore(config)
+	t.Cleanup(func() {
+		release()
+		if store != nil {
+			store.Close()
+		}
+		startupMaintenanceHook = previousHook
+	})
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	defer store.Close()
 
 	select {
 	case <-maintenanceEntered:
