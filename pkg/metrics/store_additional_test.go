@@ -617,12 +617,12 @@ func TestStoreFlushMakesQueuedWritesVisible(t *testing.T) {
 
 func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 	previousHook := startupMaintenanceHook
-	defer func() {
-		startupMaintenanceHook = previousHook
-	}()
 
+	// The hook parks the maintenance worker before any startup work runs, so
+	// startup maintenance cannot complete until the test releases it.
 	started := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
 	startupMaintenanceHook = func() {
 		close(started)
 		<-release
@@ -642,24 +642,28 @@ func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 		close(done)
 	}()
 
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("NewStore blocked on startup maintenance")
-	}
+	// Release the worker and wait for NewStore before restoring the hook, so a
+	// failed run never leaks a parked store into the next test.
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		<-done
+		if store != nil {
+			store.Close()
+		}
+		startupMaintenanceHook = previousHook
+	})
 
+	// Deferral is proven by ordering, not by a wall-clock bound: NewStore must
+	// return while the worker is still parked in the hook. If startup
+	// maintenance ever ran inline again, this receive would block until the
+	// package test timeout instead of flaking on a slow CI disk.
+	<-started
+	<-done
 	if err != nil {
 		t.Fatalf("NewStore returned error: %v", err)
 	}
 
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("startup maintenance was not scheduled")
-	}
-
-	close(release)
-	defer store.Close()
+	releaseOnce.Do(func() { close(release) })
 }
 
 func TestStoreWaitForMaintenanceWaitsForQueuedStartupWork(t *testing.T) {
