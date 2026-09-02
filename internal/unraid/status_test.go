@@ -35,3 +35,26 @@ func TestIsExplicitMissingMember(t *testing.T) {
 		}
 	}
 }
+
+func TestHasFilesystemEvidence(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{input: "", want: false},
+		{input: "  ", want: false},
+		{input: "auto", want: false},
+		{input: " AUTO ", want: false},
+		{input: "xfs", want: true},
+		{input: "luks:xfs", want: true},
+		{input: "btrfs", want: true},
+	}
+
+	for _, test := range tests {
+		if got := HasFilesystemEvidence(test.input); got != test.want {
+			t.Errorf("HasFilesystemEvidence(%q) = %v, want %v", test.input, got, test.want)
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unraidstatus "github.com/rcourtman/pulse-go-rewrite/internal/unraid"
 )
 
 func AssessHostRAIDArray(array models.HostRAIDArray) Assessment {
@@ -346,13 +347,16 @@ func unraidDiskStateCounts(storage models.HostUnraidStorage) (disabled, invalid,
 func isUnraidEmptySlot(disk models.HostUnraidDisk) bool {
 	rawStatus := strings.ToUpper(strings.TrimSpace(disk.RawStatus))
 	status := strings.ToLower(strings.TrimSpace(disk.Status))
+	if unraidstatus.IsExplicitMissingMember(rawStatus) {
+		return false
+	}
 	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
 		return false
 	}
 	return strings.TrimSpace(disk.Device) == "" &&
 		strings.TrimSpace(disk.Model) == "" &&
 		strings.TrimSpace(disk.Serial) == "" &&
-		strings.TrimSpace(disk.Filesystem) == "" &&
+		!unraidstatus.HasFilesystemEvidence(disk.Filesystem) &&
 		disk.SizeBytes == 0
 }
 

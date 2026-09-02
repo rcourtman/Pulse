@@ -154,6 +154,7 @@ diskNumber.5=5
 diskName.5=disk5
 diskSize.5=0
 diskId.5=ata-_
+diskFsType.5=auto
 rdevStatus.5=DISK_NP
 rdevName.5=
 rdevId.5=ata-_
@@ -185,6 +186,7 @@ mdNumMissing=1
 diskName.6=disk6
 diskSize.6=0
 diskId.6=ata-_
+diskFsType.6=auto
 rdevStatus.6=DISK_NP_MISSING
 rdevName.6=
 rdevId.6=ata-_
@@ -282,10 +284,10 @@ fsUsed="166957852"
 idx="6"
 name="disk6"
 device=""
-id="ata-_"
 size="0"
 status="DISK_NP"
 type="Data"
+fsType="auto"
 ["parity2"]
 idx="29"
 name="parity2"
@@ -294,6 +296,7 @@ id="ata-_"
 size="0"
 status="DISK_NP_DSBL"
 type="Parity"
+fsType="auto"
 `
 
 	disks := parseUnraidDisksINI(input)

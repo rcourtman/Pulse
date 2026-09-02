@@ -4147,7 +4147,7 @@ func isLegacyUnraidEmptySlot(disk agentshost.UnraidDisk, normalizedStatus string
 	}
 	return strings.TrimSpace(disk.Device) == "" &&
 		!unraidstatus.HasMeaningfulIdentity(disk.Model, disk.Serial) &&
-		strings.TrimSpace(disk.Filesystem) == "" &&
+		!unraidstatus.HasFilesystemEvidence(disk.Filesystem) &&
 		disk.SizeBytes == 0
 }
 

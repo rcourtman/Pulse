@@ -37,3 +37,16 @@ func HasMeaningfulIdentity(model, serial string) bool {
 func IsExplicitMissingMember(rawStatus string) bool {
 	return strings.EqualFold(strings.TrimSpace(rawStatus), "DISK_NP_MISSING")
 }
+
+// HasFilesystemEvidence reports whether a slot's filesystem value shows that a
+// disk was assigned. Unraid seeds every configured slot with fsType "auto",
+// including slots that have never held a device, so "auto" is slot
+// configuration rather than membership evidence.
+func HasFilesystemEvidence(filesystem string) bool {
+	switch strings.ToLower(strings.TrimSpace(filesystem)) {
+	case "", "auto":
+		return false
+	default:
+		return true
+	}
+}

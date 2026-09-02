@@ -2589,6 +2589,7 @@ func TestApplyHostReportFiltersLegacyUnraidEmptySlots(t *testing.T) {
 				{Name: "parity", Device: "/dev/sdb", Role: "parity", RawStatus: "DISK_OK", SizeBytes: 5860522532},
 				{Name: "disk1", Device: "/dev/sde", Role: "data", RawStatus: "DISK_OK", SizeBytes: 5860522532},
 				{Name: "disk6", Role: "data", RawStatus: "DISK_NP", Model: "ata -", Serial: "ata-_", Slot: 6},
+				{Name: "disk7", Role: "data", RawStatus: "DISK_NP", Filesystem: "auto", Slot: 7},
 				{Name: "parity2", Role: "parity", RawStatus: "DISK_NP_DSBL", Model: "ata -", Serial: "ata-_", Slot: 29},
 			},
 		},
