@@ -17,7 +17,11 @@ interface MentionAutocompleteProps {
   onSelect: (resource: MentionResource) => void;
   onClose: () => void;
   visible: boolean;
+  onActiveDescendantChange?: (id: string | undefined) => void;
 }
+
+export const ASSISTANT_MENTION_LISTBOX_ID = 'assistant-mention-listbox';
+export const getAssistantMentionOptionId = (index: number) => `assistant-mention-option-${index}`;
 
 export function MentionAutocomplete(props: MentionAutocompleteProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
@@ -35,6 +39,27 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     props.query; // Track query
     setSelectedIndex(0);
   });
+
+  createEffect(() => {
+    const total = filteredResources().length;
+    setSelectedIndex((index) => (total > 0 ? Math.min(index, total - 1) : 0));
+  });
+
+  createEffect(() => {
+    const resources = filteredResources();
+    const activeId =
+      props.visible && resources.length > 0
+        ? getAssistantMentionOptionId(selectedIndex())
+        : undefined;
+    props.onActiveDescendantChange?.(activeId);
+    if (activeId) {
+      queueMicrotask(() => {
+        document.getElementById(activeId)?.scrollIntoView?.({ block: 'nearest' });
+      });
+    }
+  });
+
+  onCleanup(() => props.onActiveDescendantChange?.(undefined));
 
   const consumeMentionKey = (e: KeyboardEvent) => {
     e.preventDefault();
@@ -159,7 +184,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
   return (
     <Show when={props.visible && filteredResources().length > 0}>
       <div
-        class="absolute z-50 bg-surface border border-border rounded-md shadow-sm overflow-hidden min-w-[280px] max-w-[400px]"
+        class="absolute z-50 w-[calc(100vw-36px)] min-w-[280px] max-w-[400px] overflow-hidden rounded-md border border-border bg-surface shadow-sm"
         style={{
           bottom: `${props.position.top}px`,
           left: `${props.position.left}px`,
@@ -168,12 +193,19 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
         onClick={(event) => event.stopPropagation()}
       >
         <div class="px-3 py-2 border-b border-border text-xs font-medium text-muted">Resources</div>
-        <div class="max-h-[240px] overflow-y-auto" role="listbox" aria-label="Assistant resources">
+        <div
+          id={ASSISTANT_MENTION_LISTBOX_ID}
+          class="max-h-[240px] overflow-y-auto"
+          role="listbox"
+          aria-label="Assistant resources"
+        >
           <For each={filteredResources()}>
             {(resource, index) => (
               <button
                 type="button"
+                id={getAssistantMentionOptionId(index())}
                 role="option"
+                tabIndex={-1}
                 aria-selected={index() === selectedIndex()}
                 aria-label={`Mention ${resource.label}: ${resource.type}${
                   resource.node ? ` on ${resource.node}` : ''
@@ -181,6 +213,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
                 class={`w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-surface-hover transition-colors ${
                   index() === selectedIndex() ? 'bg-surface-hover' : ''
                 }`}
+                onPointerDown={(event) => event.preventDefault()}
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onSelect(resource);

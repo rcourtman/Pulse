@@ -1,19 +1,21 @@
 {
   "version": 1,
-  "base_sha": "6c5af82b522b437db91ab077c79cee3d59833a34",
-  "verified_at": "2026-09-02T08:58:36Z",
+  "base_sha": "fc0adf7073d99447e8042d5053d331d323b8a372",
+  "verified_at": "2026-09-02T10:25:49Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/SearchInputEnhancements.tsx",
-    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts",
-    "frontend-modern/src/components/shared/useSearchInputEnhancements.ts"
+    "frontend-modern/src/components/AI/Chat/MentionAutocomplete.tsx",
+    "frontend-modern/src/components/AI/Chat/SlashCommandAutocomplete.tsx",
+    "frontend-modern/src/components/AI/Chat/index.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/SearchInputEnhancements.tsx": "9df1147f092b523655a3503cfe27bbac88fb0572bd3ccb219895d2ffa2f762a7",
-    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts": "b56c756423156cdce3bf1c7f867aa3b6c2751419f070c2d8e5edad91d3c23dec",
-    "frontend-modern/src/components/shared/useSearchInputEnhancements.ts": "15d750671b420d6566749eac60bc4cb6c87db36037e90a4117cebc60c1635dad"
+    "frontend-modern/src/components/AI/Chat/MentionAutocomplete.tsx": "fde53ef7a82b0ff854a759087a0fc7dfaafd89e7e8933b68335598100adb8955",
+    "frontend-modern/src/components/AI/Chat/SlashCommandAutocomplete.tsx": "2073d3c388590dad8c291dfc7a0d8a3132e4c18a50014918c0a2a90510401c28",
+    "frontend-modern/src/components/AI/Chat/index.tsx": "010def979665a1db9be3dfa3537ebfa8714125fb7ce9212102fb49465d5d22db"
   },
-  "routes": ["/standalone/machines"],
+  "routes": [
+    "/"
+  ],
   "viewports": [
     {
       "width": 1280,
@@ -25,20 +27,20 @@
     }
   ],
   "states": [
-    "Empty recent-search menu with explanatory copy at desktop width",
-    "Populated three-entry menu with keyboard focus on its first, removal, and clear actions at desktop width",
-    "Selected search restored from persisted history after reload at desktop and narrow widths",
-    "Populated menu over the filtered no-match Machines state at narrow width",
-    "Menu closed after outside pointer dismissal and Escape at desktop and narrow widths"
+    "Closed named Assistant composer with no listbox relationship in desktop docked and narrow overlay layouts",
+    "Open slash-command list with the selected active option and the wrapped final option scrolled into view",
+    "Filtered slash-command empty result with listbox ownership and no stale active descendant",
+    "Slash command selected with Tab and popup closed with composer focus restored",
+    "Open resource mention list with the selected active option and the wrapped final option scrolled into view",
+    "Mention selected by pointer and popup closed with composer focus retained",
+    "Autocomplete closed by Escape and outside pointer dismissal without stale relationships"
   ],
   "interactions": [
-    "opened the history menu by pointer, ArrowDown, and ArrowUp and verified menu semantics, aria-controls, and expanded state",
-    "moved focus through entry, item-specific removal, and clear actions with ArrowDown, ArrowUp, Home, and End",
-    "selected a history entry and verified the menu closed while the search field received focus and the selected value",
-    "removed the focused first history entry and verified focus moved to the next item-specific removal action",
-    "cleared all history and verified the menu closed, storage emptied, and search focus returned",
-    "committed a search, reloaded the route, and verified the persisted entry remained available",
-    "dismissed the menu by outside pointer action and Escape and verified Escape returned focus to the toggle",
-    "inspected desktop and narrow pixels for placement, clipping, stacking, responsive width, and visible keyboard focus"
+    "opened Pulse Assistant from the current-view launcher and verified the composer accessible name and focus",
+    "opened slash commands and mentions by typing, then checked aria-controls, aria-activedescendant, aria-selected, and option tab exclusion",
+    "moved active options with ArrowDown and wrapped with ArrowUp, hovered options by pointer, and verified active options remained visible",
+    "selected /new with Tab and selected a mention by pointer while verifying focus remained in the composer",
+    "exercised Escape and outside pointer dismissal, including the no-match slash-command state",
+    "inspected desktop and narrow pixels for popup placement, viewport containment, clipping, stacking, scrolling, and visible composer focus"
   ]
 }

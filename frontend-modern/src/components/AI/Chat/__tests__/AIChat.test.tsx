@@ -2179,7 +2179,12 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: '/mo' } });
 
       expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: /Run \/models/ })).toBeInTheDocument();
+      const selectedOption = screen.getByRole('option', { name: /Run \/models/ });
+      expect(selectedOption).toBeInTheDocument();
+      expect(textarea).toHaveAccessibleName('Message Pulse Assistant');
+      expect(textarea).toHaveAttribute('aria-autocomplete', 'list');
+      expect(textarea).toHaveAttribute('aria-controls', 'assistant-slash-command-listbox');
+      expect(textarea).toHaveAttribute('aria-activedescendant', selectedOption.id);
 
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
@@ -2187,6 +2192,8 @@ describe('AIChat', () => {
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
       });
       expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+      expect(textarea).not.toHaveAttribute('aria-controls');
+      expect(textarea).not.toHaveAttribute('aria-activedescendant');
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
