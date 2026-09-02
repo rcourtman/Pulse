@@ -7674,3 +7674,11 @@ native lifecycle workflow proof together, so lifecycle qualification cannot
 silently execute under a weaker checkout boundary.
 `scripts/check_workflow_trust.py`, `scripts/tests/test_workflow_trust.py`, and
 `scripts/installtests/install_ps1_test.go` pin that relationship.
+
+### Patrol digest does not touch agent authority
+
+The Patrol digest route in `internal/api/router_routes_ai_relay.go` and its
+handler `internal/api/ai_patrol_digest_handler.go` are read-only. They issue no
+agent commands, create no action plans, and do not alter capability, token, or
+binding state. Agent-executed Patrol actions appear in the digest only as
+counts projected from existing action audit records.

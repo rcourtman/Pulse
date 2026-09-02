@@ -7871,3 +7871,21 @@ collapsed. `internal/ai/findings_flapping_test.go`,
 `internal/ai/findings_storm_throttler_test.go`, and
 `internal/ai/findings_alert_mirror_test.go` pin the threshold, the collapse,
 the hydration, and the matcher.
+
+### Patrol digest is a pure rollup of retained runtime records
+
+`internal/ai/patrol_digest.go` builds the weekly "what Patrol did" digest from
+run history (`PatrolRunRecord`), the findings store (lifecycle events for
+dismissals, suppressions, and investigation outcomes, plus still-open findings
+by severity), Patrol-origin action audits, and `internal/ai/cost` usage events
+with `use_case = patrol`. It is a pure function over those inputs: it starts no
+run, calls no provider, spends no tokens, and mutates no store. New-finding and
+resolution totals come from run records because resolved findings are purged
+from the store after 24 hours, and the payload reports
+`history_complete=false` with `history_since` when the bounded run history no
+longer reaches the start of the window. Unknown model pricing is reported as
+`pricing_known=false`, never as zero known spend. The effective mode comes from
+`Service.GetEffectivePatrolAutonomyLevel`, so an unlicensed install reads as
+`monitor`. `frontend-modern/src/api/patrol.ts` mirrors the payload as
+`PatrolDigest`. Proofs: `internal/ai/patrol_digest_test.go` and
+`frontend-modern/src/api/__tests__/patrol.test.ts`.
