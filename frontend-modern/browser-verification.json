@@ -1,49 +1,25 @@
 {
   "version": 1,
-  "base_sha": "fd36b3124c31bde2bea6b916652b9319827f890f",
-  "verified_at": "2026-09-02T06:55:42Z",
+  "base_sha": "40a371ac48bba94de15f4e1723cb159f17d95e69",
+  "verified_at": "2026-09-02T08:39:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/aiPatrolCost.ts",
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
-    "frontend-modern/src/components/Settings/AISettings.tsx",
-    "frontend-modern/src/components/Settings/useAISettingsState.ts",
-    "frontend-modern/src/components/shared/AIModelPicker.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
-    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
-    "frontend-modern/src/stores/aiIntelligence.ts",
-    "frontend-modern/src/types/ai.ts",
-    "frontend-modern/src/utils/aiPatrolCostPresentation.ts",
-    "frontend-modern/src/utils/patrolRuntimeActions.ts"
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/aiPatrolCost.ts": "be947370111a1efb7e2618f344b4b81481262f6b1fd8fc4ed2690a7729a05bff",
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "33b63989306752e5b852e5d2438dfcb99c0df78530ba50c1e157b895d7f1a623",
-    "frontend-modern/src/components/Settings/AISettings.tsx": "7103686e133e08d50563bf66da63ea161f73ae0386c59d6c770da78f0bdb78bb",
-    "frontend-modern/src/components/Settings/useAISettingsState.ts": "841fa917cf7c5a1f7867b992813984bbd1ce6f57ed9f1abe8db2b7183a4596a5",
-    "frontend-modern/src/components/shared/AIModelPicker.tsx": "79abf84c58d6baec0351bea8cfb7d828db8ff00f5bae7ed0fff4079bbef25b91",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx": "085c1d677ed5e15698e32759b4c01a05e0fd038fbf686ded48b390623de41d22",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "69ff486b95aafd445600571c977f8670e9686d9185f2c1285c2a6690e9c2d113",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "cd6d888b620e44fa8ec2125b818e59c8ed802f8aeae0c554c4ce5bd1d40e314f",
-    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "58ad626d6af2472343307c01583621d4cfd742684f36c5583a3b72de75f86929",
-    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "7578f9e010bc36a1d5a3ec932a69a23a077e176755e7207905ec47f5e94d5fae",
-    "frontend-modern/src/stores/aiIntelligence.ts": "8b81de1c09f47555b148415641f9cc42a9db25e0a54cd0bc64bb24d03bb1a0ac",
-    "frontend-modern/src/types/ai.ts": "12473e6f0e6339094689ac77f9a32aa1ffb62def1e81c780f4263cbcf5923474",
-    "frontend-modern/src/utils/aiPatrolCostPresentation.ts": "3d1ffa67e0df24af89ca26bb40e29fe55ef859902145aa958d4331483952a032",
-    "frontend-modern/src/utils/patrolRuntimeActions.ts": "a71f234c2007dafd6e8773542ae238b8cd3cdb9501aaf5f1a403060335fbabd9"
+    "frontend-modern/src/api/patrol.ts": "c411c12d504b53e64b1435c5b336ba953f5051f6909f2bfef3e46067d5b88f34",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "0d46fd5afbbdf8e1b885fa558be070c07203cc6613dda4458e9790fa8f2e4099",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "9a9728f618c502a5379f56e93cad29ea939f5c26e73e3c7d22195308a8087b81"
   },
   "routes": [
-    "/settings/pulse-intelligence/patrol",
-    "/settings/pulse-intelligence/provider",
     "/patrol"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 1000
+      "height": 800
     },
     {
       "width": 375,
@@ -51,20 +27,16 @@
     }
   ],
   "states": [
-    "Patrol model picker open with the Suggested for Patrol section and Recommended for Patrol badge (Ollama qwen3:8b)",
-    "estimate box for a local model (no per-token bill) with the 30-day budget line",
-    "estimate box for a per-token model (Anthropic Sonnet 5) with monthly figure, per-run assumption, token explainer, and schedule recommendation",
-    "schedule select priced per preset and current-schedule card after the auto-adjust to once a day",
-    "estimate box with the budget reached line after seeding an over-budget usage history",
-    "Patrol page paused banner with spend, limit, and Raise the cost budget action",
-    "Patrol page setup card after a backend restart: paused subtitle and Raise the cost budget action from the persisted finding cause",
-    "narrow viewport: settings Patrol tab, picker, and Patrol page with no horizontal overflow"
+    "Activity tab with the This week card above Verified outcomes, populated from an isolated mock-mode backend (11 runs, 3 new issues, watch-only mode)",
+    "card tiles in single column at 375px with no horizontal overflow",
+    "card refresh in flight and settled",
+    "Verified outcomes empty state and Review and history below the card",
+    "watch-only tile copy for Investigated and Fixes run"
   ],
   "interactions": [
-    "configured Ollama and a 20 USD budget on Provider & Models and saved",
-    "opened the Patrol model picker, searched a custom route, selected anthropic:claude-sonnet-5 and observed the schedule change to once a day",
-    "triggered a Patrol run against an over-budget usage history and observed the blocked status and finding",
-    "restarted the backend and reloaded the Patrol page",
-    "resized to 375x812 and repeated the settings and Patrol page checks"
+    "clicked the Activity workspace tab",
+    "scrolled the card into view at desktop and narrow widths",
+    "clicked Refresh this week's summary and confirmed the tiles reloaded without an error state",
+    "checked console for card-originated errors (only unrelated dev websocket/update-check noise)"
   ]
 }
