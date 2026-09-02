@@ -69,6 +69,27 @@ export interface Finding {
   // urgency signal. Present only for capacity-relevant findings whose resource
   // has enough utilization history to compute a trend.
   capacity_forecast?: CapacityForecast;
+  // flapping is present while the finding's open/resolved state has changed
+  // at least four times inside the last 24 hours. The store collapses those
+  // transitions into one lifecycle row; this summary carries the count.
+  flapping?: FindingFlapping;
+  // mirrors_alert_id / mirrors_alert_type name the active alert this finding
+  // restates (same resource, same condition). Patrol stamps them after every
+  // run so the UI can fold the finding under the alert instead of listing the
+  // same problem twice.
+  mirrors_alert_id?: string;
+  mirrors_alert_type?: string;
+}
+
+/**
+ * FindingFlapping summarises open/resolved churn on one finding. Mirrors
+ * internal/ai FindingFlapping on the wire.
+ */
+export interface FindingFlapping {
+  transition_count: number;
+  window_hours: number;
+  first_transition_at: string;
+  last_transition_at: string;
 }
 
 /**

@@ -5,6 +5,7 @@ import HistoryIcon from 'lucide-solid/icons/history';
 import { ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { actionInboxStore } from '@/stores/actionInbox';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { usePatrolIntelligenceState } from './usePatrolIntelligenceState';
 import { PatrolIntelligenceHeader } from './PatrolIntelligenceHeader';
 import { PatrolIntelligenceBanners } from './PatrolIntelligenceBanners';
@@ -111,6 +112,7 @@ export function PatrolIntelligenceSurface() {
               autonomyLocked={state.autoFixLocked()}
               pendingActionCount={actionInboxStore.pendingActionCount}
               onOpenFindings={openFindings}
+              findings={() => aiIntelligenceStore.patrolFindings}
             />
           </Show>
         </div>

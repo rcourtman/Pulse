@@ -20,6 +20,7 @@ import {
   getPatrolFindings,
   type Finding as PatrolFinding,
   type CapacityForecast,
+  type FindingFlapping,
 } from '@/api/patrol';
 import type { ResourceCriticality } from '@/api/resourceOperatorState';
 import type {
@@ -215,6 +216,15 @@ export interface UnifiedFinding {
   // independently of the model prose. Surfaced as a first-class urgency
   // signal on capacity-relevant findings.
   capacityForecast?: CapacityForecast;
+  // flapping is set while the finding keeps switching between open and
+  // resolved (four or more transitions in 24 hours). The lifecycle log holds
+  // one collapsed "flapping" row instead of one row per transition.
+  flapping?: FindingFlapping;
+  // mirrorsAlertId / mirrorsAlertType identify the active alert this finding
+  // restates. Surfaces fold such findings under the alert rather than listing
+  // the same problem twice.
+  mirrorsAlertId?: string;
+  mirrorsAlertType?: string;
 }
 
 const [unifiedFindings, setUnifiedFindings] = createSignal<UnifiedFinding[]>([]);
@@ -323,6 +333,9 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     regressionCount: item.regression_count || 0,
     lastRegressionAt: item.last_regression_at || undefined,
     capacityForecast: item.capacity_forecast,
+    flapping: item.flapping,
+    mirrorsAlertId: item.mirrors_alert_id || undefined,
+    mirrorsAlertType: item.mirrors_alert_type || undefined,
   };
 }
 
