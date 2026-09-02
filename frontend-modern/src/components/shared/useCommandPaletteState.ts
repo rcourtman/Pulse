@@ -28,6 +28,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const location = useLocation();
   const [query, setQuery] = createSignal('');
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+  const [listboxRef, setListboxRef] = createSignal<HTMLDivElement>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
 
@@ -129,6 +130,16 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
   });
 
   createEffect(() => {
+    selectedIndex();
+    filteredCommands();
+    queueMicrotask(() => {
+      listboxRef()
+        ?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
+        ?.scrollIntoView?.({ block: 'nearest' });
+    });
+  });
+
+  createEffect(() => {
     if (props.isOpen) {
       setQuery('');
       setSelectedIndex(0);
@@ -148,6 +159,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
     selectedIndex,
     setSelectedIndex,
     setInputRef,
+    setListboxRef,
     setQuery,
   };
 }

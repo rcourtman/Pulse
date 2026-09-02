@@ -4683,6 +4683,11 @@ route-path wiring, and command selection, and
 owns canonical command construction plus query normalization and filtering
 policy. Future command-palette work should extend those owners instead of
 pushing route construction or search policy back into the shared shell.
+The palette search composes `SearchField` as an editable list-autocomplete
+combobox: DOM focus remains on the search input while arrow-key selection is
+exposed through `aria-activedescendant`, and the active listbox option remains
+scrolled into view. Palette options stay outside the Tab sequence; filtering
+to an empty result collapses the combobox and clears its active descendant.
 The OpenCode reference for this interaction is
 `packages/opencode/src/cli/cmd/run/footer.command.tsx` at `origin/dev`
 `e82542b8023a8374f29c23b70ec019c8f256354e`, where `RunCommandMenuBody`

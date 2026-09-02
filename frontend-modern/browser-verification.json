@@ -1,13 +1,21 @@
 {
   "version": 1,
-  "base_sha": "77bf2a27c6551ce58c31569df607c5ce4ae11825",
-  "verified_at": "2026-09-02T06:10:16Z",
+  "base_sha": "23b3893ae88b86497f3f103c8972663508555766",
+  "verified_at": "2026-09-02T07:15:12Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/shared/CommandPaletteModal.tsx",
+    "frontend-modern/src/components/shared/SearchField.tsx",
+    "frontend-modern/src/components/shared/searchFieldModel.ts",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx": "a9f3c0dc82e639d9e6fa283cd3ef9b071d322b43bcefb2e760d8ce7e43eeb3bb"
+    "frontend-modern/src/components/shared/CommandPaletteModal.tsx": "300030975b76634513d98b9459fe9ae4d07e8d7d03fedffa91f702746a7d3f06",
+    "frontend-modern/src/components/shared/SearchField.tsx": "0c2cc0d002763b59c2c065ceccff134318122aa975fe45ddc31271387cd623ad",
+    "frontend-modern/src/components/shared/searchFieldModel.ts": "3b9ca4ffc6aef0e5910e5094daebb9b03878b2b6ef4c9c7aed165bf7f46097db",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "df4baf2ccba420f0c8d7d67ee7ddeba5a55ddbee8af323d8d7924aa389ad9b3a"
   },
-  "routes": ["/settings/infrastructure"],
+  "routes": ["/proxmox"],
   "viewports": [
     {
       "width": 1280,
@@ -19,13 +27,16 @@
     }
   ],
   "states": [
-    "Discovery settings dialog open with Automatic scan selected at desktop and phone widths",
-    "Discovery settings dialog open with Custom subnets selected and keyboard focus retained on that radio at desktop and phone widths"
+    "Command palette open with twelve results and the first result selected at desktop and narrow widths",
+    "Command palette scrolled to the last keyboard-selected result at desktop and narrow widths",
+    "Command palette empty result state after a query with no matching commands at desktop and narrow widths",
+    "Command palette closed after Escape and after backdrop dismissal at desktop and narrow widths"
   ],
   "interactions": [
-    "opened Discovery settings from the authenticated Infrastructure discovery band at desktop and phone widths",
-    "focused Automatic scan and pressed ArrowDown to select Custom subnets",
-    "verified focus stayed on Custom subnets after production subnet-field autofocus ran",
-    "verified aria-checked and the single roving tab stop moved from Automatic scan to Custom subnets"
+    "opened the command palette with Control+K on the authenticated Proxmox route",
+    "verified the search retained DOM focus while pointer hover and Home and End keys updated aria-activedescendant and aria-selected",
+    "verified End scrolled the last selected option fully into the result viewport and Tab did not focus an option",
+    "entered a no-match query and verified the combobox collapsed, cleared its active descendant, and removed the listbox",
+    "dismissed the palette with Escape and reopened and dismissed it through the backdrop"
   ]
 }

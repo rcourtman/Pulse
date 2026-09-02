@@ -157,17 +157,21 @@ describe('CommandPaletteModal', () => {
     ));
 
     const input = screen.getByPlaceholderText('Type a command or search...');
-    expect(screen.getByRole('option', { name: /Ask about Proxmox/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    const firstOption = screen.getByRole('option', { name: /Ask about Proxmox/ });
+    expect(input).toHaveAttribute('role', 'combobox');
+    expect(input).toHaveAttribute('aria-autocomplete', 'list');
+    expect(input).toHaveAttribute('aria-controls', 'command-palette-results');
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(firstOption).toHaveAttribute('aria-selected', 'true');
+    expect(firstOption).toHaveAttribute('tabindex', '-1');
+    expect(input).toHaveAttribute('aria-activedescendant', firstOption.id);
 
     await fireEvent.keyDown(input, { key: 'ArrowDown' });
 
-    expect(screen.getByRole('option', { name: /Show Assistant commands/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    const secondOption = screen.getByRole('option', { name: /Show Assistant commands/ });
+    expect(secondOption).toHaveAttribute('aria-selected', 'true');
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute('aria-activedescendant', secondOption.id);
 
     await fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -176,6 +180,48 @@ describe('CommandPaletteModal', () => {
       expect(requestCommand).toHaveBeenCalledWith('help');
     });
     expect(openAssistant).not.toHaveBeenCalled();
+  });
+
+  it('keeps the active command visible while keyboard focus remains on the combobox', async () => {
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={vi.fn()}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    const input = screen.getByRole('combobox', { name: 'Type a command or search...' });
+    const secondOption = screen.getByRole('option', { name: /Show Assistant commands/ });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(secondOption, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    input.focus();
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }));
+    expect(input).toHaveFocus();
+  });
+
+  it('clears active-option semantics when filtering produces no matches', async () => {
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={vi.fn()}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    const input = screen.getByRole('combobox', { name: 'Type a command or search...' });
+    fireEvent.input(input, { target: { value: 'definitely-no-command-matches-this' } });
+
+    await waitFor(() => expect(screen.getByText('No matches found.')).toBeInTheDocument());
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(input).not.toHaveAttribute('aria-activedescendant');
+    expect(screen.queryByRole('listbox')).toBeNull();
   });
 
   it('keeps the selected command across command-list recomputes before Enter selection', async () => {
