@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib.util
 import json
 import re
 import stat
@@ -19,7 +20,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import secure_runtime_rootless_attestation_v1 as hardened
+
+def _load_hardened_validator() -> Any:
+    module_path = Path(__file__).resolve().with_name("secure_runtime_rootless_attestation_v1.py")
+    spec = importlib.util.spec_from_file_location("secure_runtime_rootless_attestation_v1", module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"unable to load hardened receipt validator from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+hardened = _load_hardened_validator()
 
 
 RECEIPT_SCHEMA_VERSION = 1
