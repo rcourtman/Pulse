@@ -157,6 +157,14 @@ type cancellableRequestKey struct {
 type cancellableRequestState struct {
 	cancel   context.CancelFunc
 	canceled bool
+	// done closes when the request releases its slot, so a replay of the same
+	// request id that arrives while the previous handler is still finishing
+	// can wait for it instead of being dropped.
+	done chan struct{}
+}
+
+func newCancellableRequestState() *cancellableRequestState {
+	return &cancellableRequestState{done: make(chan struct{})}
 }
 
 // NewCommandClient creates a new command execution client
@@ -618,13 +626,39 @@ func computeReconnectDelay(failures int) time.Duration {
 func (c *CommandClient) launchCancellableRequest(conn *websocket.Conn, requestID, operation string, handle func()) {
 	state := c.noteCancellableRequest(conn, requestID)
 	if state == nil {
-		c.logger.Warn().Str("request_id", requestID).Str("operation", operation).Msg("Dropping duplicate, invalid, or over-capacity cancellable request")
+		// The server replays a request id it already dispatched when it wants
+		// the durable receipt again, and that replay can arrive on the reader
+		// before the previous handler goroutine has released its slot. Wait for
+		// that handler instead of dropping the replay, which would leave the
+		// server waiting out its full timeout for a result that already exists.
+		if inflight := c.inflightCancellableRequest(conn, requestID); inflight != nil {
+			go func() {
+				<-inflight.done
+				c.launchCancellableRequest(conn, requestID, operation, handle)
+			}()
+			return
+		}
+		c.logger.Warn().Str("request_id", requestID).Str("operation", operation).Msg("Dropping invalid or over-capacity cancellable request")
 		return
 	}
 	go func() {
 		defer c.finishCancellableRequest(conn, requestID, state)
 		handle()
 	}()
+}
+
+// inflightCancellableRequest returns the state currently registered for a
+// request id on this connection, or nil when the slot is free or the id is
+// invalid.
+func (c *CommandClient) inflightCancellableRequest(conn *websocket.Conn, requestID string) *cancellableRequestState {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" || len(requestID) > 128 {
+		return nil
+	}
+	key := cancellableRequestKey{connection: conn, requestID: requestID}
+	c.activeCommandsMu.Lock()
+	defer c.activeCommandsMu.Unlock()
+	return c.cancellableRequests[key]
 }
 
 func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn) error {
@@ -1277,7 +1311,7 @@ func (c *CommandClient) noteCancellableRequest(conn *websocket.Conn, requestID s
 	if _, exists := c.cancellableRequests[key]; exists || len(c.cancellableRequests) >= maxCancellableRequestsPerConnection {
 		return nil
 	}
-	state := &cancellableRequestState{}
+	state := newCancellableRequestState()
 	c.cancellableRequests[key] = state
 	return state
 }
@@ -1298,7 +1332,7 @@ func (c *CommandClient) registerActiveCommand(conn *websocket.Conn, requestID st
 			cancel()
 			return nil, false
 		}
-		state = &cancellableRequestState{}
+		state = newCancellableRequestState()
 		c.cancellableRequests[key] = state
 	}
 	if state.cancel != nil {
@@ -1319,10 +1353,15 @@ func (c *CommandClient) registerActiveCommand(conn *websocket.Conn, requestID st
 func (c *CommandClient) finishCancellableRequest(conn *websocket.Conn, requestID string, state *cancellableRequestState) {
 	key := cancellableRequestKey{connection: conn, requestID: strings.TrimSpace(requestID)}
 	c.activeCommandsMu.Lock()
+	released := false
 	if current := c.cancellableRequests[key]; state != nil && current == state {
 		delete(c.cancellableRequests, key)
+		released = true
 	}
 	c.activeCommandsMu.Unlock()
+	if released && state.done != nil {
+		close(state.done)
+	}
 }
 
 func (c *CommandClient) clearCancellableRequests(conn *websocket.Conn) {
