@@ -1,41 +1,40 @@
 {
   "version": 1,
-  "base_sha": "54d58a74062ffb15c14510a24223f21fa6ec2fd3",
-  "verified_at": "2026-09-03T20:15:00Z",
+  "base_sha": "93c765a7eca670c46d93684e37af76ea9232686d",
+  "verified_at": "2026-09-03T21:29:58Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
+    "frontend-modern/src/components/shared/Subtabs.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "186324f5ede149574cebe2d758b4984077c9105c5ae926721e262cc26a5e2502"
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "e3150f2bb67a6e4324bdc2b5cc6fa9915d4a17a059ace5a4571551169b203e36",
+    "frontend-modern/src/components/shared/Subtabs.tsx": "0f92b5a0be6904c717c6520ec9576beca02c3db4fb6a54b640d4513e8f3ba28b"
   },
   "routes": [
-    "/settings/infrastructure (managed local backend with deterministic Proxmox connection-ledger and node fixtures)"
+    "/proxmox/backups (managed local backend with deterministic Proxmox and PBS fixtures)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 900
+      "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 393,
+      "height": 727
     }
   ],
   "states": [
-    "Manage Proxmox VE dialog with Username & Password selected and an unsaved username at desktop width",
-    "Desktop dialog after a 15-second connection-ledger poll replaced lastSeen and endpoint: live description updated, local endpoint and unsaved username remained unchanged",
-    "Manage Proxmox VE dialog with a distinct unsaved username at narrow width",
-    "Narrow dialog after a second 15-second ledger replacement: live description updated, local endpoint and unsaved username remained unchanged",
-    "Scrollable dialog body with visible header and close control, reachable Save changes footer, and no document-width overflow at both widths",
-    "Closed dialog with focus returned to the originating Manage button at both widths"
+    "Expanded PBS server row with Overview selected at desktop and narrow widths",
+    "Expanded PBS server row with Manage selected at desktop and narrow widths",
+    "Backup health content in view while the expanded drawer tab strip remained above the viewport",
+    "Collapsed PBS detail after focus restoration at desktop and narrow widths"
   ],
   "interactions": [
-    "Opened Manage for a configured Proxmox VE source",
-    "Selected Username & Password and entered a non-secret unsaved username",
-    "Waited for the real 15-second ledger poll and observed endpoint/lastSeen replacement without form remount or value loss",
-    "Scrolled to and verified the Save changes footer remained reachable, then returned to the edited field",
-    "Pressed Escape and verified dialog dismissal and focus return to Manage",
-    "Repeated the complete edit, poll, scroll, dismissal, and focus-return journey at 390x844"
+    "Opened a PBS server detail row from the Backups table",
+    "Selected Manage and returned to Overview while the drawer was visible",
+    "Moved below the expanded drawer, selected Manage programmatically, and verified no vertical scrollIntoView request occurred",
+    "Closed the drawer from focused tab content and verified focus restoration used preventScroll",
+    "Inspected Overview, Manage, and below-drawer screenshots for placement, clipping, overflow, and fixed-navigation overlap at both widths"
   ]
 }

@@ -51,7 +51,12 @@ export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
       const disclosure = Array.from(
         document.querySelectorAll<HTMLButtonElement>('button[aria-controls]'),
       ).find((button) => button.getAttribute('aria-controls') === cellId);
-      disclosure?.focus();
+      // Closing or replacing a detail row can happen while the surrounding
+      // live table is well below the top of the page. Restore keyboard focus
+      // without letting the browser scroll the disclosure into view: the
+      // caller owns any deliberate reveal, while polling must not move the
+      // operator's viewport.
+      disclosure?.focus({ preventScroll: true });
     });
   });
 

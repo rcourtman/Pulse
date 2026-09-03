@@ -334,4 +334,132 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(rows.filter({ hasText: "lxc-gamma" })).toHaveCount(0);
     await expect(detailRow).toBeVisible();
   });
+
+  test("does not request vertical scrolling when an off-screen Backups drawer changes or closes", async ({
+    page,
+  }, testInfo) => {
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
+    const serversTable = page.locator('[data-proxmox-backups-table="servers"]');
+    await expect(serversTable).toBeVisible({ timeout: 60_000 });
+
+    const disclosure = serversTable.locator("button[aria-controls]").first();
+    const summaryRow = disclosure.locator("xpath=ancestor::tr");
+    await summaryRow.click();
+
+    const detailRow = serversTable.locator(
+      "tr[data-inline-platform-resource-detail-for]",
+    );
+    await expect(detailRow).toBeVisible();
+    const manageTab = detailRow.getByRole("tab", {
+      name: "Manage",
+      exact: true,
+    });
+    const overviewTab = detailRow.getByRole("tab", {
+      name: "Overview",
+      exact: true,
+    });
+    const closeButton = detailRow.getByRole("button", {
+      name: /^Collapse .* details$/,
+    });
+    const viewportAnchor = page.getByText("Backup health", { exact: true });
+    await expect(viewportAnchor).toBeVisible();
+
+    await page.screenshot({
+      path: testInfo.outputPath("pbs-detail-overview.png"),
+    });
+    await manageTab.click();
+    await expect(manageTab).toHaveAttribute("aria-selected", "true");
+    await page.screenshot({
+      path: testInfo.outputPath("pbs-detail-manage.png"),
+    });
+    await overviewTab.click();
+    await expect(overviewTab).toHaveAttribute("aria-selected", "true");
+
+    // Put the section beneath the expanded drawer in view so the drawer tabs
+    // are above the viewport, matching an operator reading backup evidence
+    // below a server row. Tab selection must only move its horizontal rail.
+    const nextScrollTop = await viewportAnchor.evaluate((element) => {
+      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+      if (shell && shell.contains(element)) {
+        const shellRect = shell.getBoundingClientRect();
+        return Math.max(
+          0,
+          shell.scrollTop +
+            element.getBoundingClientRect().top -
+            shellRect.top -
+            180,
+        );
+      }
+      return Math.max(
+        0,
+        window.scrollY + element.getBoundingClientRect().top - 180,
+      );
+    });
+    await page.evaluate((top) => {
+      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+      if (shell) shell.scrollTop = top;
+      else window.scrollTo(0, top);
+    }, nextScrollTop);
+    await page.waitForTimeout(150);
+
+    await page.evaluate(() => {
+      const state = window as Window & {
+        __pulseScrollIntoViewCalls?: number;
+      };
+      state.__pulseScrollIntoViewCalls = 0;
+      Element.prototype.scrollIntoView = () => {
+        state.__pulseScrollIntoViewCalls =
+          (state.__pulseScrollIntoViewCalls ?? 0) + 1;
+      };
+    });
+    await manageTab.evaluate((element) => (element as HTMLElement).click());
+    await expect(manageTab).toHaveAttribute("aria-selected", "true");
+    await page.waitForTimeout(150);
+    expect(
+      await page.evaluate(
+        () =>
+          (window as Window & { __pulseScrollIntoViewCalls?: number })
+            .__pulseScrollIntoViewCalls ?? 0,
+      ),
+    ).toBe(0);
+
+    await page.screenshot({
+      path: testInfo.outputPath("pbs-detail-anchor.png"),
+    });
+
+    // Closing from focused drawer content returns focus to the disclosure,
+    // but that restoration must not scroll the summary row back into view.
+    await manageTab.evaluate((element) =>
+      (element as HTMLElement).focus({ preventScroll: true }),
+    );
+    await disclosure.evaluate((element) => {
+      const state = window as Window & {
+        __pulseDisclosureFocusOptions?: FocusOptions;
+      };
+      const disclosureElement = element as HTMLElement;
+      const originalFocus = disclosureElement.focus.bind(disclosureElement);
+      disclosureElement.focus = (options?: FocusOptions) => {
+        state.__pulseDisclosureFocusOptions = options;
+        originalFocus(options);
+      };
+    });
+    await closeButton.evaluate((element) => (element as HTMLElement).click());
+    await expect(detailRow).toHaveCount(0);
+    await page.waitForTimeout(150);
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __pulseDisclosureFocusOptions?: FocusOptions;
+            }
+          ).__pulseDisclosureFocusOptions,
+      ),
+    ).toEqual({ preventScroll: true });
+    if (!testInfo.project.name.startsWith("mobile-")) {
+      await expect(disclosure).toBeFocused();
+    }
+  });
 });
