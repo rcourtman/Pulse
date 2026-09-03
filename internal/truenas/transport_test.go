@@ -331,6 +331,40 @@ func TestTransportNegotiationAllowsOnlyRecognizedLegacyREST(t *testing.T) {
 		}
 	})
 
+	t.Run("legacy core 12 version without product name", func(t *testing.T) {
+		var poolRESTCalls atomic.Int32
+		server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			switch request.URL.Path {
+			case "/api/current":
+				http.NotFound(writer, request)
+			case "/api/v2.0/system/info":
+				_, _ = writer.Write([]byte(`{"hostname":"core-12","version":"TrueNAS-12.0-U5","uptime_seconds":1}`))
+			case "/api/v2.0/pool":
+				poolRESTCalls.Add(1)
+				_, _ = writer.Write([]byte(`[{"id":1,"name":"core-12-tank","status":"ONLINE"}]`))
+			default:
+				http.NotFound(writer, request)
+			}
+		}))
+		t.Cleanup(server.Close)
+
+		client := protocolFixtureClient(t, server.URL, ClientConfig{APIKey: "legacy-core-12-key"})
+		pools, err := client.GetPools(context.Background())
+		if err != nil {
+			t.Fatalf("GetPools() CORE 12 error = %v", err)
+		}
+		if len(pools) != 1 || pools[0].Name != "core-12-tank" {
+			t.Fatalf("unexpected CORE 12 pools: %+v", pools)
+		}
+		if poolRESTCalls.Load() != 1 {
+			t.Fatalf("CORE 12 pool REST calls = %d, want 1", poolRESTCalls.Load())
+		}
+		if status := client.TransportStatus(); status.Mode != TransportLegacyREST ||
+			status.ApplianceVersion != "TrueNAS-12.0-U5" {
+			t.Fatalf("unexpected CORE 12 status: %+v", status)
+		}
+	})
+
 	t.Run("legacy core https redirect", func(t *testing.T) {
 		var poolRESTCalls atomic.Int32
 		server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

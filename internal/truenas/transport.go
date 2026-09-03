@@ -507,8 +507,10 @@ func supportsLegacyREST(version string) bool {
 		major, minor, ok := trueNASYearRelease(normalized)
 		return ok && (major < 25 || (major == 25 && minor < 4))
 	}
-	// TrueNAS CORE 13 does not expose the versioned JSON-RPC 2.0 endpoint.
-	return strings.Contains(normalized, "CORE") || strings.HasPrefix(normalized, "TRUENAS-13") || strings.HasPrefix(normalized, "FREENAS-")
+	// TrueNAS CORE 12 and 13 do not expose the versioned JSON-RPC 2.0 endpoint.
+	// CORE 12 reports versions such as "TrueNAS-12.0-U5" without the CORE
+	// product name, so keep that historical version family explicit.
+	return strings.Contains(normalized, "CORE") || strings.HasPrefix(normalized, "TRUENAS-12.") || strings.HasPrefix(normalized, "TRUENAS-13") || strings.HasPrefix(normalized, "FREENAS-")
 }
 
 func trueNASYearRelease(version string) (int, int, bool) {
