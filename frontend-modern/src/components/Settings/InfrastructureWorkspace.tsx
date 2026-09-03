@@ -321,7 +321,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           (element) =>
             element.getAttribute('data-infrastructure-manage-id') === focusReturnConnectionId,
         );
-        focusTarget?.focus();
+        // The shared dialog restores its captured trigger without scrolling,
+        // but this delayed lookup covers rows recreated while the dialog was
+        // open. Keep that fallback from pulling a lower infrastructure row
+        // into view after the operator closes Manage.
+        focusTarget?.focus({ preventScroll: true });
       }, 250);
     }
   };

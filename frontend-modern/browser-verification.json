@@ -1,18 +1,16 @@
 {
   "version": 1,
-  "base_sha": "562607f7a2dcc3f90c3e5839786bee74c8f6c9d9",
-  "verified_at": "2026-09-03T23:44:40Z",
+  "base_sha": "fbedb2d50d07f870f1e3030cb12262e812ea476a",
+  "verified_at": "2026-09-04T00:31:34Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
-    "frontend-modern/src/components/shared/Subtabs.tsx"
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "e3150f2bb67a6e4324bdc2b5cc6fa9915d4a17a059ace5a4571551169b203e36",
-    "frontend-modern/src/components/shared/Subtabs.tsx": "c8f42929ac4fa6db25fbef5b4d46dd30aeb929a8bb2ccfa3ca5c80f1d92d3f80"
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "ed65c454d88801bf7a24d8d063bea38fca248c4b90b29f083b81ba51ba4181bb"
   },
   "routes": [
-    "/proxmox/backups (managed local backend with deterministic Proxmox and PBS fixtures)"
+    "/settings/infrastructure (managed local backend with deterministic Proxmox cluster and connection-ledger fixtures)"
   ],
   "viewports": [
     {
@@ -25,16 +23,16 @@
     }
   ],
   "states": [
-    "Expanded PBS server row with Overview selected at desktop and narrow widths",
-    "Expanded PBS server row with Manage selected at desktop and narrow widths",
-    "Backup health content in view while the expanded drawer tab strip remained above the viewport",
-    "Collapsed PBS detail after focus restoration at desktop and narrow widths"
+    "Expanded Proxmox cluster members with the production cluster Manage trigger visible at desktop and narrow widths",
+    "Manage production dialog showing endpoint and cluster-member fields at desktop and narrow widths",
+    "Infrastructure workspace after dialog dismissal with focus returned to Manage at both widths",
+    "Reopened Manage dialog with the display-name save path available at both widths"
   ],
   "interactions": [
-    "Opened a PBS server detail row from the Backups table",
-    "Selected Manage and returned to Overview while the drawer was visible",
-    "Moved below the expanded drawer, selected Manage programmatically, and verified no vertical scrollIntoView request occurred",
-    "Closed the drawer from focused tab content and verified focus restoration used preventScroll",
-    "Inspected Overview, Manage, and below-drawer screenshots for placement, clipping, overflow, and fixed-navigation overlap at both widths"
+    "Expanded the deterministic Proxmox cluster and opened its Manage dialog",
+    "Closed Manage and verified both the shared dialog and delayed stable-row focus restorations used preventScroll",
+    "Verified the application scroll offset did not change and keyboard focus returned to the originating Manage trigger",
+    "Reopened Manage, edited a cluster member display name, and saved through the immutable node identity path",
+    "Inspected open and dismissed screenshots for placement, clipping, overflow, focus indication, and fixed-navigation overlap at both widths"
   ]
 }

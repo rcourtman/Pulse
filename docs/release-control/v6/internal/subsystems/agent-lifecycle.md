@@ -2987,6 +2987,12 @@ explicitly mapped administrator reaches the lifecycle handlers.
    scrolling just to reach primary controls. Dedicated collection and
    last-activity columns may return only once the workspace has enough width
    to show the full ledger without clipping headers or row actions.
+   Closing a connection's governed Manage dialog must return keyboard focus to
+   the originating ledger action without moving the infrastructure viewport.
+   If ledger refresh replaces the original row while the dialog is open,
+   `InfrastructureWorkspace.tsx` may resolve the stable replacement action,
+   but that delayed fallback must also focus with `preventScroll` rather than
+   revealing the row through an implicit or explicit page scroll.
 10. Keep post-install lifecycle completion explicit inside
     `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
     and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
