@@ -235,8 +235,10 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 // names are commonly short and repeat across independent standalone sites, so
 // a shared name is deliberately absent here. Distinct configured instances
 // may share a host only when provider-owned evidence says they are the same
-// (the same node identity, named cluster, or exact configured endpoint), or
+// (the same node identity or exact configured endpoint), or
 // when both views independently match the trusted host's full endpoint/IP.
+// A cluster name is only an operator-chosen display label and may be reused
+// by independent estates, so equality is not provider identity evidence.
 func proxmoxProviderNodesProveSameMachine(left, right models.Node, host *models.Host) bool {
 	if leftID, rightID := strings.TrimSpace(left.ID), strings.TrimSpace(right.ID); leftID != "" && leftID == rightID {
 		return true
@@ -247,11 +249,6 @@ func proxmoxProviderNodesProveSameMachine(left, right models.Node, host *models.
 	leftInstance := strings.TrimSpace(strings.ToLower(left.Instance))
 	rightInstance := strings.TrimSpace(strings.ToLower(right.Instance))
 	if leftInstance != "" && leftInstance == rightInstance {
-		return true
-	}
-	leftCluster := strings.TrimSpace(strings.ToLower(left.ClusterName))
-	rightCluster := strings.TrimSpace(strings.ToLower(right.ClusterName))
-	if leftCluster != "" && leftCluster == rightCluster {
 		return true
 	}
 	leftEndpoint := strings.TrimSpace(strings.ToLower(extractHostname(left.Host)))
