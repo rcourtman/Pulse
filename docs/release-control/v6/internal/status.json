@@ -10128,6 +10128,38 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "telemetry-test-binary-production-pings",
+      "summary": "Go test binaries reported themselves to the production telemetry receiver as live installations. pkg/server tests boot the real server through Run() with the version literal \"test-version\", which internal/updates normalizes to 0.0.0-test-version, and each test runs against its own t.TempDir(), so every run minted a fresh install ID. The startup ping waits two minutes and never fired in a short test, but the service-health failure reporter added on 2026-08-29 sends synchronously from a deferred handler as soon as Run() returns an error, so every CI shard containing pkg/server posted one ping. The receiver recorded 317 single-ping installs between 2026-08-29 and 2026-09-03, 311 from linux/amd64 CI runners and 3 from a maintainer workstation, still arriving at roughly 60 a day. The canonical clean denominator excludes single-ping installs and was unaffected, but raw install counts and the operator-evidence Patrol blocked-cause read counted them as real installations. Resolved by refusing production-endpoint sends from a test binary in internal/telemetry, opting the server tests and the CI test job out of telemetry, and excluding development builds from the operator-evidence read.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-09-03",
+      "lane_ids": [
+        "L14"
+      ],
+      "subsystem_ids": [
+        "security-privacy"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/telemetry/telemetry.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/server/server.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/server/server_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
