@@ -7731,6 +7731,7 @@ describe('shared primitive guardrails', () => {
     expect(inlineDetailTableRowSource).toContain('min-w-0');
     expect(inlineDetailTableRowSource).toContain('lg:overflow-x-visible');
     expect(inlineDetailTableRowSource).toContain('event.stopPropagation()');
+    expect(inlineDetailTableRowSource).toContain('.focus({ preventScroll: true })');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       expect.arrayContaining([
         'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',

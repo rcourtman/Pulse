@@ -43,6 +43,8 @@ describe('FilterHeader', () => {
     expect(subtabsSource).toContain('scrollTabs(-1)');
     expect(subtabsSource).toContain('scrollTabs(1)');
     expect(subtabsSource).toContain('sm:hidden');
+    expect(subtabsSource).toContain('useActiveHorizontalRailItemVisibility');
+    expect(subtabsSource).not.toContain('.scrollIntoView');
   });
 
   it('keeps segmented controls on value callbacks while forwarding div attributes', async () => {

@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "base_sha": "b4a00e1ca503f66346c104ab2734b03b9b93389c",
-  "verified_at": "2026-09-03T20:57:39Z",
+  "base_sha": "562607f7a2dcc3f90c3e5839786bee74c8f6c9d9",
+  "verified_at": "2026-09-03T23:44:40Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
+    "frontend-modern/src/components/shared/Subtabs.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "186324f5ede149574cebe2d758b4984077c9105c5ae926721e262cc26a5e2502"
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "e3150f2bb67a6e4324bdc2b5cc6fa9915d4a17a059ace5a4571551169b203e36",
+    "frontend-modern/src/components/shared/Subtabs.tsx": "c8f42929ac4fa6db25fbef5b4d46dd30aeb929a8bb2ccfa3ca5c80f1d92d3f80"
   },
   "routes": [
-    "/settings/infrastructure (authenticated managed release-line runtime with deterministic Proxmox connection-ledger and node fixtures)"
+    "/proxmox/backups (managed local backend with deterministic Proxmox and PBS fixtures)"
   ],
   "viewports": [
     {
@@ -18,22 +20,21 @@
       "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 393,
+      "height": 727
     }
   ],
   "states": [
-    "Manage Proxmox VE dialog with Username & Password selected and an unsaved username at desktop width",
-    "Desktop dialog after a connection-ledger poll advanced lastSeen and endpoint: live description updated and the unsaved username remained unchanged",
-    "Manage Proxmox VE dialog with a distinct unsaved username at narrow width",
-    "Narrow dialog after a connection-ledger poll advanced lastSeen and endpoint: live description updated and the unsaved username remained unchanged",
-    "Closed dialog with focus returned to the originating Manage button at both widths"
+    "Expanded PBS server row with Overview selected at desktop and narrow widths",
+    "Expanded PBS server row with Manage selected at desktop and narrow widths",
+    "Backup health content in view while the expanded drawer tab strip remained above the viewport",
+    "Collapsed PBS detail after focus restoration at desktop and narrow widths"
   ],
   "interactions": [
-    "Opened Manage for a configured Proxmox VE source",
-    "Entered a non-secret unsaved username",
-    "Allowed the connection-ledger response to change on the real polling interval and observed endpoint and lastSeen replacement without value loss",
-    "Pressed Escape and verified dialog dismissal and focus return to Manage",
-    "Repeated the edit, poll, dismissal, and focus-return journey at 390x844"
+    "Opened a PBS server detail row from the Backups table",
+    "Selected Manage and returned to Overview while the drawer was visible",
+    "Moved below the expanded drawer, selected Manage programmatically, and verified no vertical scrollIntoView request occurred",
+    "Closed the drawer from focused tab content and verified focus restoration used preventScroll",
+    "Inspected Overview, Manage, and below-drawer screenshots for placement, clipping, overflow, and fixed-navigation overlap at both widths"
   ]
 }

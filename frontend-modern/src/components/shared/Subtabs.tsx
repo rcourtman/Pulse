@@ -11,6 +11,7 @@ import {
   Show,
   splitProps,
 } from 'solid-js';
+import { useActiveHorizontalRailItemVisibility } from './useActiveHorizontalRailItemVisibility';
 
 export interface SubtabOption {
   value: string;
@@ -58,15 +59,19 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
     'tabClass',
     'trailing',
   ]);
+  const activeItemVisibility = useActiveHorizontalRailItemVisibility({
+    active: () => local.value,
+    rail: () => tablistRef,
+    activeSelector: '[role="tab"][aria-selected="true"]',
+  });
 
   createEffect(() => {
-    // Keep the selected tab discoverable when a narrow, horizontally scrolling
-    // tablist is opened through a deep link or changed programmatically.
+    // Selection changes can alter the overflow controls after the shared rail
+    // helper has moved horizontally. Do not use scrollIntoView here: it also
+    // scrolls vertical ancestors and can pull an open inline drawer upwards
+    // when live data recreates its tab strip.
     void local.value;
     queueMicrotask(() => {
-      tablistRef
-        ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
-        ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
       updateScrollControls();
     });
   });
@@ -101,6 +106,7 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
   const scrollTabs = (direction: -1 | 1) => {
     const rail = tablistRef;
     if (!rail) return;
+    activeItemVisibility.markManualScrollIntent();
     rail.scrollBy({
       left: direction * Math.max(120, Math.round(rail.clientWidth * 0.7)),
       behavior: 'smooth',
