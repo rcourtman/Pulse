@@ -619,6 +619,21 @@ func TestCoalescePresentationHostResourcesKeepsStandaloneProviderScopesApart(t *
 		}
 	})
 
+	t.Run("equal cluster display labels do not collapse provider scopes", func(t *testing.T) {
+		staging := nodeRow("staging-pve", "hema-staging", "https://pve.hemastaging.hot:8006", "Tripper Staging", "host-staging")
+		staging.Proxmox.ClusterName = "homelab"
+		staging.Sources = append(staging.Sources, SourceAgent)
+		staging.Agent = &AgentData{AgentID: "host-staging", Hostname: "pve", MachineID: "machine-staging"}
+		staging.Identity.MachineID = "machine-staging"
+		production := nodeRow("production-pve", "hema-production", "https://pve.hemaproduction.hot:8006", "VV Staging", "")
+		production.Proxmox.ClusterName = "homelab"
+
+		got := CoalescePresentationHostResources([]Resource{staging, production})
+		if len(got) != 2 {
+			t.Fatalf("equal cluster display labels collapsed distinct provider scopes: %#v", got)
+		}
+	})
+
 	t.Run("single site still merges its node and agent rows", func(t *testing.T) {
 		resources := []Resource{
 			nodeRow("home-pve", "home", "https://pve.home.lan:8006", "home", ""),

@@ -86,6 +86,11 @@ then leaves the top-level monitored-system projection exactly once so usage and
 licensing do not count a decommissioned member. Proxmox platform consumers must
 scope equal cluster labels and node names by provider instance when grouping,
 searching, and assigning guests or storage.
+That provider scope also governs node-to-agent link inference and host
+presentation coalescing. A repeated cluster label is operator-authored
+grouping metadata, not same-machine evidence; cross-instance equality requires
+the same node identity, the exact configured endpoint, or independently
+corroborated host evidence.
 The same boundary carries cluster-node presentation without weakening
 canonical identity. `ProxmoxData` preserves the immutable connection-scoped
 node identity, current native node name, prior native-name aliases, and
