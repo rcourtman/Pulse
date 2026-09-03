@@ -83,6 +83,32 @@ func TestInferLinkedHostsForProxmoxNodesKeepsStandaloneProviderScopesApart(t *te
 	}
 }
 
+func TestInferLinkedHostsForProxmoxNodesDoesNotTrustRepeatedClusterLabel(t *testing.T) {
+	staging := models.Node{
+		ID: "staging-pve", NodeIdentity: "staging-pve", Name: "pve",
+		ClusterName: "homelab", Instance: "staging", Host: "https://pve.staging.example:8006",
+		LinkedAgentID: "host-staging",
+	}
+	production := models.Node{
+		ID: "production-pve", NodeIdentity: "production-pve", Name: "pve",
+		ClusterName: "homelab", Instance: "production", Host: "https://pve.production.example:8006",
+	}
+	host := &models.Host{
+		ID: "host-staging", Hostname: "pve", LinkedNodeID: "staging-pve",
+	}
+
+	got := inferLinkedHostsForProxmoxNodes(
+		[]models.Node{staging, production},
+		map[string]*models.Host{host.ID: host},
+	)
+	if got[staging.ID] == nil || got[staging.ID].ID != host.ID {
+		t.Fatalf("trusted staging link was lost: %+v", got)
+	}
+	if got[production.ID] != nil {
+		t.Fatalf("repeated display label leaked staging host into production provider: %+v", got)
+	}
+}
+
 func TestProxmoxProviderNodesProveSameMachineAcrossDuplicateConnections(t *testing.T) {
 	base := models.Node{
 		ID: "site-a-pve", NodeIdentity: "node-pve", Name: "pve",
@@ -91,7 +117,6 @@ func TestProxmoxProviderNodesProveSameMachineAcrossDuplicateConnections(t *testi
 
 	for name, candidate := range map[string]models.Node{
 		"node identity": {ID: "site-b-pve", NodeIdentity: "node-pve", Name: "pve", Instance: "site-b", Host: "https://other.example:8006"},
-		"cluster":       {ID: "site-b-pve", Name: "pve", Instance: "site-b", ClusterName: "prod", Host: "https://other.example:8006"},
 		"endpoint":      {ID: "site-b-pve", Name: "pve", Instance: "site-b", Host: "https://pve.example:8006"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -111,5 +136,15 @@ func TestProxmoxProviderNodesProveSameMachineAcrossDuplicateConnections(t *testi
 	}
 	if proxmoxProviderNodesProveSameMachine(base, distinct, nil) {
 		t.Fatalf("shared native hostname proved distinct standalone providers equal: left=%+v right=%+v", base, distinct)
+	}
+
+	leftCluster := base
+	leftCluster.NodeIdentity = ""
+	leftCluster.ClusterName = "homelab"
+	rightCluster := distinct
+	rightCluster.NodeIdentity = ""
+	rightCluster.ClusterName = "homelab"
+	if proxmoxProviderNodesProveSameMachine(leftCluster, rightCluster, nil) {
+		t.Fatalf("equal cluster display labels proved distinct provider scopes equal: left=%+v right=%+v", leftCluster, rightCluster)
 	}
 }

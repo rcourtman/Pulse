@@ -298,6 +298,11 @@ func TestMonitorAdapterKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {
 	if got := MonitoredSystemCount(adapter); got != 2 {
 		t.Fatalf("same-name provider monitored-system count = %d, want 2", got)
 	}
+
+	presented := CoalescePresentationHostResources(resources)
+	if len(presented) != 2 {
+		t.Fatalf("repeated cluster label collapsed provider-scoped presentation rows: %+v", presented)
+	}
 }
 
 func TestResourceRegistryAvailabilityLinkedResourceResolvesSourceReference(t *testing.T) {

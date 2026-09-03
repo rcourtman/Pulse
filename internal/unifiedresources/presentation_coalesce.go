@@ -231,8 +231,10 @@ func presentationHostIdentitiesDistinct(left, right Resource) bool {
 // two hand-added sites are commonly just "pve" (#1753), so a shared short
 // hostname must not fold one site's node row into the other's. The proof
 // mirrors the state-layer rule: the same connection instance, the same node
-// identity, the same non-empty cluster, or the same endpoint host still
-// merge; anything less keeps the rows apart.
+// identity, or the same endpoint host still merge; anything less keeps the
+// rows apart. Cluster names are operator-chosen display labels and are not
+// globally unique, so an equal label across provider instances is not
+// same-machine proof.
 func presentationProxmoxNodeScopesDistinct(left, right *ProxmoxData) bool {
 	if left == nil || right == nil {
 		return false
@@ -244,9 +246,6 @@ func presentationProxmoxNodeScopesDistinct(left, right *ProxmoxData) bool {
 		return false
 	}
 	if presentationIdentityValuesEqual(left.NodeIdentity, right.NodeIdentity) {
-		return false
-	}
-	if presentationIdentityValuesEqual(left.ClusterName, right.ClusterName) {
 		return false
 	}
 	if presentationIdentityValuesEqual(extractHostname(left.HostURL), extractHostname(right.HostURL)) {
