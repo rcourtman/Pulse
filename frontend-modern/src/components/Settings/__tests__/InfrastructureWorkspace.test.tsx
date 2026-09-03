@@ -1024,8 +1024,11 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Manage zeus')).toBeInTheDocument();
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
 
+    const focusSpy = vi.spyOn(manageButton, 'focus');
     fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
-    await waitFor(() => expect(manageButton).toHaveFocus());
+    await waitFor(() => expect(focusSpy).toHaveBeenCalledTimes(2));
+    expect(focusSpy.mock.calls).toEqual([[{ preventScroll: true }], [{ preventScroll: true }]]);
+    expect(manageButton).toHaveFocus();
   });
 
   it('keeps the mounted node editor across connection-ledger refreshes', async () => {
