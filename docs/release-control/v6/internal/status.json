@@ -10128,6 +10128,48 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "patrol-investigation-rate-metric-invalid",
+      "summary": "The Patrol investigation rate (pulse_intelligence_patrol_investigations_30d over pulse_intelligence_patrol_new_findings_30d), which TELEMETRY_SIGNALS.md instructs every reader to report, is not a rate and must not be trended. Four independent reasons, all verified in pkg/server/telemetry_pulse_intelligence.go: the denominator sums run.NewFindings over history.Runs, which SavePatrolRunHistory caps at MaxPatrolRunHistory (100), so it covers at most the last hundred runs rather than thirty days and silently under-reports for any install patrolling faster than that (355 of 449 Patrol-enabled installs in the 6.4 upgrade cohort on 2026-09-03); the numerator instead scans the current findings store and counts surviving finding records investigated in-window, including findings created before it, which is how the paid cohort read 128.57 percent in the week to 2026-08-25; the populations are disjoint because Finding.ShouldInvestigate returns false at monitor autonomy and effective autonomy is licence-gated, so free installs produced 4384 findings and 1 investigation (0.02 percent) in the week to 2026-09-03 while 67 paid installs produced 242; and only 29 clean installs reported any investigation at all, one of which swung the fleet total by 38. The three-week decline that prompted this (7.2 to 5.0 percent) is composition, not regression: the rate is flat in version-stable installs (3.48, 3.39, 3.78), fleet investigations rose once that single install is excluded (170, 213, 225), finding-detection code is identical between v6.3.2 and v6.4.1, and the patrol interval is unchanged at 360 minutes across 6.1 through 6.4. The reported run growth is likewise the 63c40ebe5e daily tally back-filling, not more patrolling. This also corrects the telemetry inference in patrol-findings-hygiene-attention-noise: findings are not mostly 'seen and ignored', they are raised on installs that are licence-gated out of investigating at all, which leaves that gap's independently evidenced UX work (discussions 1623 and 1699) standing on its own footing. Two defects follow: new_findings_30d saturates on the very history cap that 63c40ebe5e fixed for runs_30d in the same function, needing a per-day findings tally alongside DailyRuns; and the blessed doc tells every reader to compute the invalid ratio. The real signal the ratio was hiding is that paid Patrol installs fell from 76 to 67 while free Patrol grew from 888 to 962.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-09-03",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "patrol-intelligence"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 2,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/ai/findings.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/server/telemetry_pulse_intelligence.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/server/telemetry_pulse_intelligence_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "docs/TELEMETRY_SIGNALS.md",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [

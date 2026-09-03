@@ -1123,6 +1123,53 @@ func TestApplyPulseIntelligencePatrolRunSnapshotIgnoresHistoryCap(t *testing.T) 
 	}
 }
 
+// PulseIntelligencePatrolNewFindings30d is summed over the retained run list,
+// which SavePatrolRunHistory caps at MaxPatrolRunHistory, while
+// PulseIntelligencePatrolRuns30d rides the uncapped daily tally that
+// TestApplyPulseIntelligencePatrolRunSnapshotIgnoresHistoryCap pins. An
+// install patrolling faster than the cap therefore reports every run but only
+// the findings from the most recent hundred, so the two counters cover
+// different spans and no ratio between findings and any other counter is a
+// rate. Pinned so the asymmetry stays a known bound rather than a silent one;
+// see coverage gap patrol-investigation-rate-metric-invalid.
+func TestApplyPulseIntelligencePatrolRunSnapshotTruncatesNewFindingsAtHistoryCap(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	now := time.Now().UTC()
+	since := now.AddDate(0, 0, -30)
+
+	const historyCap = 100
+	total := 0
+	runs := make([]config.PatrolRunRecord, 0, historyCap)
+	for at := now.AddDate(0, 0, -2); at.Before(now); at = at.Add(10 * time.Minute) {
+		runs = append([]config.PatrolRunRecord{{
+			ID:          at.Format(time.RFC3339Nano),
+			StartedAt:   at,
+			CompletedAt: at,
+			NewFindings: 1,
+		}}, runs...)
+		if len(runs) > historyCap {
+			runs = runs[:historyCap]
+		}
+		total++
+		if err := persistence.SavePatrolRunHistory(runs); err != nil {
+			t.Fatalf("SavePatrolRunHistory: %v", err)
+		}
+	}
+	if total <= historyCap {
+		t.Fatalf("test needs more runs than the cap, got %d", total)
+	}
+
+	snap := &telemetry.Snapshot{}
+	applyPulseIntelligencePatrolRunSnapshot(snap, persistence, since)
+	if snap.PulseIntelligencePatrolRuns30d != total {
+		t.Fatalf("PulseIntelligencePatrolRuns30d = %d, want %d", snap.PulseIntelligencePatrolRuns30d, total)
+	}
+	if snap.PulseIntelligencePatrolNewFindings30d != historyCap {
+		t.Fatalf("PulseIntelligencePatrolNewFindings30d = %d, want %d (one per retained run, not one per run in the window)",
+			snap.PulseIntelligencePatrolNewFindings30d, historyCap)
+	}
+}
+
 // The Patrol blocked cause must ride the router snapshot into the outbound
 // ping unchanged, so a blocked install is distinguishable in the fleet from
 // one whose Patrol runs and finds nothing.
