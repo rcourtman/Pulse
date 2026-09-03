@@ -183,7 +183,7 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('Proxmox cluster node display names', () => {
   test.setTimeout(180_000);
 
-  test('keeps native diagnostics while saving by immutable identity', async ({ page }) => {
+  test('keeps native diagnostics while saving by immutable identity', async ({ page }, testInfo) => {
     let updatePayload: Record<string, unknown> | undefined;
     await routeClusterNodeDisplayNames(page, (payload) => {
       updatePayload = payload;
@@ -197,7 +197,8 @@ test.describe('Proxmox cluster node display names', () => {
     await expect(page.getByText('Render East', { exact: true })).toBeVisible();
     await expect(page.getByText('Production Cluster (pve1)', { exact: true })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Manage', exact: true }).click();
+    const manageButton = page.getByRole('button', { name: 'Manage', exact: true });
+    await manageButton.click();
     await expect(
       page.getByText(
         'Give each node an optional display name for Pulse. This never changes its Proxmox name, identity, credentials, or connection address.',
@@ -206,6 +207,53 @@ test.describe('Proxmox cluster node display names', () => {
     ).toBeVisible();
     await expect(page.getByText('Proxmox node: pve1', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Display name for pve1')).toHaveValue('Render East');
+
+    await page.screenshot({ path: testInfo.outputPath('manage-dialog.png') });
+    const scrollTopBeforeClose = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>('.app-scroll-shell');
+      return shell?.scrollTop ?? window.scrollY;
+    });
+    await manageButton.evaluate((element) => {
+      const state = window as Window & { __infrastructureManageFocusCalls?: FocusOptions[] };
+      state.__infrastructureManageFocusCalls = [];
+      const target = element as HTMLButtonElement;
+      const originalFocus = target.focus.bind(target);
+      target.focus = (options?: FocusOptions) => {
+        state.__infrastructureManageFocusCalls?.push(options ?? {});
+        originalFocus(options);
+      };
+    });
+    await page.getByRole('button', { name: 'Close edit infrastructure dialog' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (window as Window & { __infrastructureManageFocusCalls?: FocusOptions[] })
+                .__infrastructureManageFocusCalls?.length ?? 0,
+          ),
+        { timeout: 2_000 },
+      )
+      .toBe(2);
+    expect(
+      await page.evaluate(
+        () =>
+          (window as Window & { __infrastructureManageFocusCalls?: FocusOptions[] })
+            .__infrastructureManageFocusCalls,
+      ),
+    ).toEqual([{ preventScroll: true }, { preventScroll: true }]);
+    expect(
+      await page.evaluate(() => {
+        const shell = document.querySelector<HTMLElement>('.app-scroll-shell');
+        return shell?.scrollTop ?? window.scrollY;
+      }),
+    ).toBe(scrollTopBeforeClose);
+    await expect(manageButton).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath('manage-dialog-closed.png') });
+
+    await manageButton.click();
+    await expect(page.getByRole('dialog')).toBeVisible();
 
     // Equal display labels are intentionally valid presentation. The write
     // target remains the second member's immutable identity.

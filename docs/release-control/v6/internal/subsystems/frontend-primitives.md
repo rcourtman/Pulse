@@ -1066,6 +1066,11 @@ shell listeners before it closes. Feature-owned
 dialogs may provide a stable fallback target when their original virtual row
 has unmounted, but they must use the same scroll-neutral focus contract rather
 than compensating with page-level scroll writes.
+`InfrastructureWorkspace.tsx` exercises that extension point after its shared
+Manage dialog closes: both the shared captured-trigger restoration and its
+delayed stable-row fallback must use `preventScroll`, preserve the app scroll
+offset, and leave focus on the originating Manage action at desktop and narrow
+viewports.
 
 Assistant shell entry changes must keep Assistant contextual rather than
 generic: `AppLayout.tsx` and the command palette may expose a compact launcher,
