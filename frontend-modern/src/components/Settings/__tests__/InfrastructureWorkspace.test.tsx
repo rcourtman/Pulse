@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
 import type {
@@ -11,10 +12,27 @@ const routeState = vi.hoisted(() => ({
   pathname: '/settings/infrastructure',
   search: '',
 }));
-const connectionState = vi.hoisted(() => ({
-  connections: [] as Connection[],
-  rows: null as InfrastructureSystemRow[] | null,
-}));
+const connectionState = vi.hoisted(() => {
+  let connections: Connection[] = [];
+  let observe = () => {};
+  let notifyChanged = () => {};
+  return {
+    get connections() {
+      observe();
+      return connections;
+    },
+    set connections(value: Connection[]) {
+      connections = value;
+    },
+    rows: null as InfrastructureSystemRow[] | null,
+    setObserver(nextObserve: () => void, nextNotifyChanged: () => void) {
+      observe = nextObserve;
+      notifyChanged = nextNotifyChanged;
+    },
+    notifyChanged: () => notifyChanged(),
+  };
+});
+const nodeCredentialSlotState = vi.hoisted(() => ({ mountCount: 0 }));
 const emptyFleetRow = vi.hoisted(
   () =>
     ({
@@ -169,11 +187,14 @@ vi.mock('../InfrastructureInstallerSection', () => ({
 }));
 
 vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
-  NodeCredentialSlot: (props: { nodeType: string }) => (
-    <div data-testid="proxmox-section" data-node-type={props.nodeType}>
-      proxmox
-    </div>
-  ),
+  NodeCredentialSlot: (props: { nodeType: string }) => {
+    nodeCredentialSlotState.mountCount += 1;
+    return (
+      <div data-testid="proxmox-section" data-node-type={props.nodeType}>
+        <input aria-label="Authentication method" value="api" />
+      </div>
+    );
+  },
 }));
 
 vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', () => ({
@@ -287,6 +308,11 @@ describe('InfrastructureWorkspace', () => {
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
     connectionState.rows = null;
+    connectionState.setObserver(
+      () => {},
+      () => {},
+    );
+    nodeCredentialSlotState.mountCount = 0;
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       writable: true,
@@ -1000,6 +1026,35 @@ describe('InfrastructureWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
     await waitFor(() => expect(manageButton).toHaveFocus());
+  });
+
+  it('keeps the mounted node editor across connection-ledger refreshes', async () => {
+    const [revision, setRevision] = createSignal(0);
+    connectionState.setObserver(revision, () => setRevision((value) => value + 1));
+    renderWorkspace({
+      pveNodes: () => [{ id: 'pve-0', type: 'pve', name: 'zeus' } as any],
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Manage$/i }));
+    const method = await screen.findByRole('textbox', { name: 'Authentication method' });
+    fireEvent.input(method, { target: { value: 'agent' } });
+    expect(method).toHaveValue('agent');
+
+    connectionState.connections = [
+      connectionFixture({
+        address: 'https://10.0.0.2:8006',
+        lastSeen: new Date(Date.now() + 15_000).toISOString(),
+      }),
+    ];
+    connectionState.notifyChanged();
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Authentication method' })).toHaveValue('agent'),
+    );
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
+      'Proxmox VE · https://10.0.0.2:8006',
+    );
+    expect(nodeCredentialSlotState.mountCount).toBe(1);
   });
 
   it('shows standalone agent identity in the landing row and the agent detail drawer', async () => {

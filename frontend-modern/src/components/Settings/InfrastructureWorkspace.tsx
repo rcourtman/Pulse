@@ -7,6 +7,7 @@ import {
   createMemo,
   createSignal,
   onCleanup,
+  untrack,
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import X from 'lucide-solid/icons/x';
@@ -711,7 +712,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     onSaved: () => void;
   }) => {
     if (context.mode === 'edit') {
-      const connection = editingConnection();
+      // Connection-ledger polls replace otherwise identical connection
+      // snapshots (for example when lastSeen advances). Do not make the
+      // credential-slot owner depend on those snapshots: recreating the slot
+      // discards its local form state before the operator can save. The
+      // selected source identity remains owned by editingRowSource until this
+      // flow closes, while the live row and attached-agent details continue
+      // to update elsewhere in the dialog.
+      const connection = untrack(editingConnection);
       if (!connection) {
         return (
           <div
