@@ -620,11 +620,23 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("reconcile_release_convergence.py", retry)
         self.assertIn('--run-id "${RUN_ID}"', retry)
         self.assertIn("--latest", retry)
+        self.assertEqual(2, retry.count("PRO_REPOSITORY_TOKEN: ${{ secrets.WORKFLOW_PAT }}"))
         self.assertNotIn("rerun-failed-jobs", retry)
         self.assertIn('actions/runs/{run_id}/rerun', reconciler)
         self.assertIn('release-convergence.yml/dispatches', reconciler)
         self.assertIn("attempts >= max_attempts", reconciler)
         self.assertIn("validate_marker(", reconciler)
+
+        canonical = read(".github/workflows/canonical-governance.yml")
+        self.assertIn(
+            "python3 scripts/release_control/reconcile_release_convergence_test.py",
+            canonical,
+        )
+        precommit = read(".husky/pre-commit")
+        self.assertIn(
+            "show :scripts/release_control/reconcile_release_convergence_test.py",
+            precommit,
+        )
 
     def test_mutating_reusable_workflows_have_no_direct_dispatch_lock_bypass(self) -> None:
         convergence = read(".github/workflows/release-convergence.yml")
