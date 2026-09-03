@@ -934,9 +934,15 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
     deprecated REST bridge. Only an unsupported-endpoint WebSocket handshake
     may trigger a REST `/system/info` version probe, and REST may then be
     selected only for recognized SCALE releases before 25.04 or TrueNAS
-    CORE/FreeNAS. Unknown or current versions fail closed. The decision and
-    persistent socket belong to one configured client, so reconnects or
-    legacy negotiation for one appliance cannot alter another appliance.
+    CORE/FreeNAS. The legacy probe recognizes the `TrueNAS-12.` and
+    `TrueNAS-13` prefixes, versions carrying an explicit `CORE` marker, and
+    the `FreeNAS-` prefix; this includes CORE 12 maintenance releases such as
+    `TrueNAS-12.0-U5` without admitting an unknown numeric family. Unknown or
+    current versions fail closed. The decision and persistent socket belong
+    to one configured client, so reconnects or legacy negotiation for one
+    appliance cannot alter another appliance. Regression coverage for the
+    exact CORE 12 and CORE 13 HTTPS redirect/version paths lives in
+    `internal/truenas/transport_test.go`.
     On a connection already configured as HTTPS, an `/api/current` handshake
     that redirects to the same appliance's HTTPS web UI is unsupported-endpoint
     evidence, not successful JSON-RPC negotiation. It may open only the bounded
