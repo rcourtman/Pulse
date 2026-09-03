@@ -246,6 +246,131 @@ class FakeGitHub:
     def post(self, endpoint, payload=None):
         self.posts.append((endpoint, payload))
 
+    def unchanged_credential_containment_block(self, run_id):
+        self.containment_probe = run_id
+        return False
+
+
+class CredentialContainmentTests(unittest.TestCase):
+    def github(
+        self,
+        *,
+        current_head=None,
+        containment="failure",
+        containment_log=subject.CREDENTIAL_BLOCK_MARKER,
+        containment_state_changed=False,
+    ):
+        private_run_id = 700
+        paid_job_id = 800
+        private_head = "d" * 40
+        current_head = current_head or private_head
+        github = subject.GitHub(
+            "rcourtman/Pulse", "gh", mutate=False, private_token="private-token"
+        )
+
+        def pages(endpoint, *, token=""):
+            if endpoint == (
+                "repos/rcourtman/Pulse/actions/runs/100/jobs?per_page=100"
+            ):
+                self.assertEqual("", token)
+                return [
+                    {
+                        "jobs": [
+                            {
+                                "id": paid_job_id,
+                                "name": subject.PAID_RUNTIME_JOB,
+                                "conclusion": "failure",
+                            }
+                        ]
+                    }
+                ]
+            if endpoint == (
+                f"repos/rcourtman/Pulse/check-runs/{paid_job_id}/annotations?per_page=100"
+            ):
+                self.assertEqual("", token)
+                return [
+                    [
+                        {
+                            "message": "private Pro live promotion failed: "
+                            f"https://github.com/rcourtman/pulse-pro/actions/runs/{private_run_id}"
+                        }
+                    ]
+                ]
+            if endpoint == (
+                f"repos/{subject.PRIVATE_REPOSITORY}/actions/runs/{private_run_id}/jobs?per_page=100"
+            ):
+                self.assertEqual("private-token", token)
+                return [
+                    {
+                        "jobs": [
+                            {
+                                "id": 900,
+                                "name": subject.CREDENTIAL_CONTAINMENT_JOB,
+                                "conclusion": containment,
+                            }
+                        ]
+                    }
+                ]
+            raise AssertionError(endpoint)
+
+        def api(endpoint, *, token=""):
+            self.assertEqual("private-token", token)
+            if endpoint == f"repos/{subject.PRIVATE_REPOSITORY}/actions/runs/{private_run_id}":
+                return {
+                    "repository": {"full_name": subject.PRIVATE_REPOSITORY},
+                    "path": subject.PRIVATE_PROMOTION_PATH,
+                    "event": "workflow_dispatch",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "head_sha": private_head,
+                }
+            if endpoint == f"repos/{subject.PRIVATE_REPOSITORY}/commits/main":
+                return {"sha": current_head}
+            content_prefix = f"repos/{subject.PRIVATE_REPOSITORY}/contents/"
+            if endpoint.startswith(content_prefix):
+                path, ref = endpoint.removeprefix(content_prefix).split("?ref=", 1)
+                blob = "1" * 40 if path == subject.CREDENTIAL_CONTAINMENT_PATHS[0] else "2" * 40
+                if containment_state_changed and ref == current_head:
+                    blob = "3" * 40
+                return {"type": "file", "sha": blob}
+            raise AssertionError(endpoint)
+
+        github.pages = pages
+        github.api = api
+        github.job_log = lambda repository, job_id, token="": (
+            containment_log
+            if (repository, job_id, token)
+            == (subject.PRIVATE_REPOSITORY, 900, "private-token")
+            else self.fail((repository, job_id, token))
+        )
+        return github
+
+    def test_recognises_unchanged_private_credential_block(self):
+        self.assertTrue(self.github().unchanged_credential_containment_block(100))
+
+    def test_private_change_rearms_convergence(self):
+        github = self.github(
+            current_head="e" * 40, containment_state_changed=True
+        )
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_unrelated_private_change_does_not_rearm_convergence(self):
+        github = self.github(current_head="e" * 40)
+        self.assertTrue(github.unchanged_credential_containment_block(100))
+
+    def test_other_private_failure_remains_retriable(self):
+        github = self.github(containment="success")
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_containment_job_error_without_block_marker_remains_retriable(self):
+        github = self.github(containment_log="checkout failed")
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_missing_private_token_cannot_weaken_retry(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh", mutate=False)
+        github.pages = lambda endpoint: self.fail(endpoint)
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
 
 class ReconciliationTests(unittest.TestCase):
     def test_stale_failed_run_dispatches_current_controls_with_bound_inputs(self):
@@ -279,6 +404,22 @@ class ReconciliationTests(unittest.TestCase):
         github.runs.append(github.run(101, github.old_sha, attempt=2))
         with self.assertRaisesRegex(subject.ReconciliationError, "after 5 attempts"):
             subject.reconcile(github, 101, 5)
+        self.assertEqual([], github.posts)
+
+    def test_attempt_budget_resets_for_repaired_controls(self):
+        github = FakeGitHub()
+        github.runs[0]["run_attempt"] = 5
+        github.runs.append(github.run(101, github.main_sha))
+        subject.reconcile(github, 101, 5)
+        self.assertEqual(
+            [(f"repos/{github.repository}/actions/runs/101/rerun", None)],
+            github.posts,
+        )
+
+    def test_unchanged_credential_block_is_not_retried(self):
+        github = FakeGitHub(current_controls=True)
+        github.unchanged_credential_containment_block = lambda run_id: True
+        subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
     def test_precommit_owner_is_renewed_without_using_committed_budget(self):

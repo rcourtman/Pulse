@@ -18,6 +18,18 @@ from typing import Any, Iterable
 CONVERGENCE_PATH = ".github/workflows/release-convergence.yml"
 CREATE_RELEASE_PATH = ".github/workflows/create-release.yml"
 DISPLAY_TITLE = re.compile(r"^Release convergence (v[^\s]+) source ([1-9][0-9]*)$")
+PRIVATE_PROMOTION_RUN = re.compile(
+    r"https://github\.com/rcourtman/pulse-pro/actions/runs/([1-9][0-9]*)"
+)
+PRIVATE_REPOSITORY = "rcourtman/pulse-pro"
+PRIVATE_PROMOTION_PATH = ".github/workflows/promote-paid-runtime-release.yml"
+PAID_RUNTIME_JOB = "Converge paid-runtime broker / promote"
+CREDENTIAL_CONTAINMENT_JOB = "Require credential containment"
+CREDENTIAL_BLOCK_MARKER = "credential containment gate: BLOCKED"
+CREDENTIAL_CONTAINMENT_PATHS = (
+    "scripts/check_credential_containment.py",
+    "docs/security-rotation.md",
+)
 RELEASE_TAG = re.compile(
     r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
     r"(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?$"
@@ -176,17 +188,36 @@ def latest_failed_runs(
 
 
 class GitHub:
-    def __init__(self, repository: str, gh: str, *, mutate: bool = True) -> None:
+    def __init__(
+        self,
+        repository: str,
+        gh: str,
+        *,
+        mutate: bool = True,
+        private_token: str = "",
+    ) -> None:
         self.repository = repository
         self.gh = gh
         self.mutate = mutate
+        self.private_token = private_token
 
-    def _run(self, arguments: list[str], *, output: bool = True) -> str:
+    def _run(
+        self,
+        arguments: list[str],
+        *,
+        output: bool = True,
+        token: str = "",
+    ) -> str:
+        env = None
+        if token:
+            env = os.environ.copy()
+            env["GH_TOKEN"] = token
         result = subprocess.run(
             [self.gh, *arguments],
             check=False,
             capture_output=output,
             text=True,
+            env=env,
         )
         if result.returncode != 0:
             detail = result.stderr.strip().splitlines() if output else []
@@ -198,7 +229,7 @@ class GitHub:
             raise ReconciliationError(f"GitHub command failed ({' '.join(arguments[:3])}){suffix}")
         return result.stdout if output else ""
 
-    def api(self, endpoint: str) -> dict[str, Any]:
+    def api(self, endpoint: str, *, token: str = "") -> dict[str, Any]:
         try:
             value = json.loads(
                 self._run(
@@ -209,7 +240,8 @@ class GitHub:
                         "-H",
                         "X-GitHub-Api-Version: 2026-03-10",
                         endpoint,
-                    ]
+                    ],
+                    token=token,
                 )
             )
         except json.JSONDecodeError as exc:
@@ -218,8 +250,8 @@ class GitHub:
             raise ReconciliationError(f"GitHub returned a non-object for {endpoint}")
         return value
 
-    def pages(self, endpoint: str) -> list[object]:
-        output = self._run(["api", "--paginate", endpoint])
+    def pages(self, endpoint: str, *, token: str = "") -> list[object]:
+        output = self._run(["api", "--paginate", endpoint], token=token)
         decoder = json.JSONDecoder()
         value: list[object] = []
         offset = 0
@@ -290,6 +322,118 @@ class GitHub:
         if not isinstance(value, dict):
             raise ReconciliationError("downloaded activation marker is not an object")
         return value
+
+    def job_log(self, repository: str, job_id: int, *, token: str = "") -> str:
+        return self._run(
+            [
+                "api",
+                "-H",
+                "Accept: application/vnd.github+json",
+                "-H",
+                "X-GitHub-Api-Version: 2026-03-10",
+                f"repos/{repository}/actions/jobs/{job_id}/logs",
+            ],
+            token=token,
+        )
+
+    def unchanged_credential_containment_block(self, run_id: int) -> bool:
+        """Whether the paid-runtime failure is an unchanged operator-owned block."""
+        if not self.private_token:
+            return False
+        jobs = flatten_pages(
+            self.pages(
+                f"repos/{self.repository}/actions/runs/{run_id}/jobs?per_page=100"
+            ),
+            "jobs",
+        )
+        paid_jobs = [
+            value
+            for value in jobs
+            if isinstance(value, dict)
+            and value.get("name") == PAID_RUNTIME_JOB
+            and value.get("conclusion") == "failure"
+        ]
+        if len(paid_jobs) != 1:
+            return False
+        paid_job_id = positive_int(paid_jobs[0].get("id"), "paid-runtime job ID")
+        annotations = flatten_pages(
+            self.pages(
+                f"repos/{self.repository}/check-runs/{paid_job_id}/annotations?per_page=100"
+            )
+        )
+        private_run_ids = {
+            int(match.group(1))
+            for value in annotations
+            if isinstance(value, dict) and isinstance(value.get("message"), str)
+            for match in PRIVATE_PROMOTION_RUN.finditer(value["message"])
+        }
+        if len(private_run_ids) != 1:
+            return False
+        private_run_id = private_run_ids.pop()
+        private_run = self.api(
+            f"repos/{PRIVATE_REPOSITORY}/actions/runs/{private_run_id}",
+            token=self.private_token,
+        )
+        if (
+            private_run.get("repository", {}).get("full_name") != PRIVATE_REPOSITORY
+            or private_run.get("path") != PRIVATE_PROMOTION_PATH
+            or private_run.get("event") != "workflow_dispatch"
+            or private_run.get("status") != "completed"
+            or private_run.get("conclusion") != "failure"
+        ):
+            return False
+        private_jobs = flatten_pages(
+            self.pages(
+                f"repos/{PRIVATE_REPOSITORY}/actions/runs/{private_run_id}/jobs?per_page=100",
+                token=self.private_token,
+            ),
+            "jobs",
+        )
+        containment_jobs = [
+            value
+            for value in private_jobs
+            if isinstance(value, dict)
+            and value.get("name") == CREDENTIAL_CONTAINMENT_JOB
+            and value.get("conclusion") == "failure"
+        ]
+        if len(containment_jobs) != 1:
+            return False
+        containment_job_id = positive_int(
+            containment_jobs[0].get("id"), "credential-containment job ID"
+        )
+        containment_log = self.job_log(
+            PRIVATE_REPOSITORY, containment_job_id, token=self.private_token
+        )
+        if CREDENTIAL_BLOCK_MARKER not in containment_log:
+            return False
+        blocked_head = private_run.get("head_sha")
+        current_head = self.api(
+            f"repos/{PRIVATE_REPOSITORY}/commits/main", token=self.private_token
+        ).get("sha")
+        if (
+            not isinstance(blocked_head, str)
+            or EXACT_SHA.fullmatch(blocked_head) is None
+            or not isinstance(current_head, str)
+            or EXACT_SHA.fullmatch(current_head) is None
+        ):
+            raise ReconciliationError("private repository head is not an exact commit")
+
+        def containment_state(ref: str) -> tuple[str, ...]:
+            blobs: list[str] = []
+            for path in CREDENTIAL_CONTAINMENT_PATHS:
+                value = self.api(
+                    f"repos/{PRIVATE_REPOSITORY}/contents/{path}?ref={ref}",
+                    token=self.private_token,
+                )
+                blob = value.get("sha")
+                if value.get("type") != "file" or not isinstance(blob, str) or not blob:
+                    raise ReconciliationError(
+                        f"private credential-containment input is invalid: {path}"
+                    )
+                blobs.append(blob)
+            return tuple(blobs)
+
+        return containment_state(blocked_head) == containment_state(current_head)
 
 
 def flatten_pages(pages: Iterable[object], key: str | None = None) -> list[object]:
@@ -386,8 +530,20 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         print(f"{tag} has no immutable activation commit; no convergence retry was dispatched.")
         return
 
+    if github.unchanged_credential_containment_block(run_id):
+        print(
+            f"Convergence run {run_id} is held by unchanged private credential containment; "
+            "no unattended retry was dispatched."
+        )
+        return
+
+    # A new control revision is itself a repair candidate. Bound churn for the
+    # exact revision without allowing failures from superseded controls to make
+    # current controls permanently unretriable.
     attempts = sum(
-        positive_int(item.get("run_attempt"), "run attempt") for item in matching_runs
+        positive_int(item.get("run_attempt"), "run attempt")
+        for item in matching_runs
+        if item.get("head_sha") == run.get("head_sha")
     )
     if attempts >= max_attempts:
         raise ReconciliationError(
@@ -491,7 +647,12 @@ def main() -> int:
         print("max attempts must be between 1 and 20", file=sys.stderr)
         return 2
     gh = os.environ.get("GH_BIN", "gh")
-    github = GitHub(args.repository, gh, mutate=not args.dry_run)
+    github = GitHub(
+        args.repository,
+        gh,
+        mutate=not args.dry_run,
+        private_token=os.environ.get("PRO_REPOSITORY_TOKEN", ""),
+    )
     try:
         run_ids = discover(github) if args.latest else [args.run_id]
         if not run_ids:

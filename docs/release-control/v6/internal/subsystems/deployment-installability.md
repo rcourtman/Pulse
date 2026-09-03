@@ -1871,6 +1871,18 @@ artifact-selection behaviour.
    inputs recovered from the activation marker. Pre-commit owner renewal remains
    limited to the original run while its exact source release run is active and
    does not consume the post-commit convergence-debt budget.
+   An immutable release blocked only by the private paid-runtime credential-
+   containment gate must not consume attempts through unattended replay while
+   the failed private run's containment checker and operator checklist are
+   byte-identical to their current private-main versions. That terminal
+   classification requires authenticated private-repository evidence tying the
+   public paid-runtime job to exactly one canonical failed private promotion run,
+   exactly one failed containment job, and the explicit blocked marker in that
+   job's log. Missing, inaccessible, malformed, or ambiguous evidence remains a
+   normal fail-closed convergence failure. A change to either private
+   containment input or to the public default-branch controls rearms the bounded
+   retry budget for that control revision; it never weakens the containment gate
+   or marks the customer surface converged.
    A support-only private Pro prerelease image is a narrower exception for
    customer verification of an already-fixed defect. It may dispatch the private
    `Build Pro Release` workflow with `publish_docker_image=true`,
