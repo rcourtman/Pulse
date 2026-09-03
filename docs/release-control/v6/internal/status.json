@@ -10128,6 +10128,44 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "notification-delivery-terminal-failure-diagnosis",
+      "summary": "Terminal notification failures are 36% of resolved delivery outcomes fleet-wide (126,337 dead-lettered against 224,692 delivered, week to 2026-09-03, 6,668 clean installs), and the failure breakdown could not explain why. Two causes, one fixed here. First, the delivery failure class was inferred from Go error prose, so any failure whose text carried no recognised token fell to unknown (31,218, the modal bucket) and the destination's own response body could steer the class, letting a 500 whose body says 'rate limit' be recorded as rate_limited; senders now declare the class and SMTP reply codes, DNS, x509 and timeout errors classify structurally. Second, the shape is concentration, not breadth: only 400 of 6,668 installs report any failure, the top 10 carry 73,276 (58%), the median failing install has 13, and 72 installs that delivered nothing at all in seven days account for 62,615 failures (50%). Pulse retries a permanently broken destination three times per notification forever and never tells the operator the destination has never once succeeded, so the worst install burned 20,312 dead letters against 36 deliveries. Still open: back off or disable a destination with no successful delivery, surface that state on the destinations surface, and add server_error guidance to the delivery health card, which currently falls through to the unknown copy for a class the client already emits.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-09-03",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "alerts",
+        "notifications"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/notifications/failure_class.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/notifications/queue.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "docs/TELEMETRY_SIGNALS.md",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [

@@ -1695,7 +1695,7 @@ func configJSONForNotificationDeliveryJob(job notificationDeliveryJob) ([]byte, 
 		return json.Marshal(*job.WebhookConfig)
 	case "apprise":
 		if job.AppriseConfig == nil {
-			return nil, fmt.Errorf("missing apprise config")
+			return nil, FailfWithClass(NotificationFailureConfiguration, "missing apprise config")
 		}
 		return json.Marshal(*job.AppriseConfig)
 	default:
@@ -1853,7 +1853,7 @@ func (n *NotificationManager) deliverNotificationJob(job notificationDeliveryJob
 		return n.sendGroupedWebhook(*job.WebhookConfig, job.Alerts)
 	case "apprise":
 		if job.AppriseConfig == nil {
-			return fmt.Errorf("missing apprise config")
+			return FailfWithClass(NotificationFailureConfiguration, "missing apprise config")
 		}
 		if job.Event == eventResolved {
 			return n.sendResolvedApprise(*job.AppriseConfig, job.Alerts, job.ResolvedAt)
@@ -1919,7 +1919,7 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 
 	cfg := NormalizeAppriseConfig(config)
 	if !cfg.Enabled {
-		return fmt.Errorf("apprise not enabled")
+		return FailfWithClass(NotificationFailureConfiguration, "apprise not enabled")
 	}
 
 	title, body, notifyType := buildApprisePayload(alertList, n.publicURL)
@@ -2089,7 +2089,7 @@ func resolveAppriseNotificationType(alertList []*alerts.Alert) string {
 
 func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body string) error {
 	if len(cfg.Targets) == 0 {
-		return fmt.Errorf("no Apprise targets configured for CLI delivery")
+		return FailfWithClass(NotificationFailureConfiguration, "no Apprise targets configured for CLI delivery")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
@@ -2216,9 +2216,9 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if len(respBody) > 0 {
-			return fmt.Errorf("apprise server returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+			return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "apprise server returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 		}
-		return fmt.Errorf("apprise server returned HTTP %d", resp.StatusCode)
+		return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "apprise server returned HTTP %d", resp.StatusCode)
 	}
 
 	if len(respBody) > 0 {
@@ -2239,7 +2239,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 
 	cfg := NormalizeAppriseConfig(config)
 	if !cfg.Enabled {
-		return fmt.Errorf("apprise not enabled")
+		return FailfWithClass(NotificationFailureConfiguration, "apprise not enabled")
 	}
 
 	title, _, body := buildResolvedNotificationContent(alertList, resolvedAt, n.publicURL)
@@ -2813,7 +2813,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 		Int("status", resp.StatusCode).
 		Str("response", respBody.String()).
 		Msg("resolved ntfy webhook returned non-success status")
-	return fmt.Errorf("ntfy webhook returned HTTP %d: %s", resp.StatusCode, respBody.String())
+	return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "ntfy webhook returned HTTP %d: %s", resp.StatusCode, respBody.String())
 }
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
@@ -2981,7 +2981,7 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return result, fmt.Errorf("webhook returned HTTP %d: %s", resp.StatusCode, result.body)
+		return result, FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "webhook returned HTTP %d: %s", resp.StatusCode, result.body)
 	}
 
 	return result, nil
@@ -3049,7 +3049,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Int("status", result.statusCode).
 			Str("response", result.body).
 			Msg("webhook returned non-success status")
-		return fmt.Errorf("webhook returned HTTP %d: %s", result.statusCode, result.body)
+		return FailfWithClass(ClassFromHTTPStatus(result.statusCode), "webhook returned HTTP %d: %s", result.statusCode, result.body)
 	}
 }
 

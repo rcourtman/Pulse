@@ -1456,8 +1456,34 @@ func (nq *NotificationQueue) notifyDeliveryHealthChanged() {
 	}
 }
 
-// RecordAudit records a notification delivery attempt in the audit log
+// RecordAudit records a notification delivery attempt in the audit log,
+// deriving the failure class from the error text. Prefer RecordAuditError,
+// which keeps the class the sender declared.
 func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool, errorMsg string) error {
+	failureClass := NotificationFailureClass("")
+	if !success {
+		failureClass = ClassifyNotificationFailure(errorMsg)
+	}
+	return nq.recordAudit(notif, success, errorMsg, failureClass)
+}
+
+// RecordAuditError records a delivery attempt from the send error itself, so a
+// class the sender declared reaches the audit row instead of being re-derived
+// from the message. This is what keeps a destination's response body out of the
+// classification decision.
+func (nq *NotificationQueue) RecordAuditError(notif *QueuedNotification, success bool, sendErr error) error {
+	errorMsg := ""
+	failureClass := NotificationFailureClass("")
+	if !success {
+		if sendErr != nil {
+			errorMsg = sendErr.Error()
+		}
+		failureClass = ClassifyNotificationFailureError(sendErr)
+	}
+	return nq.recordAudit(notif, success, errorMsg, failureClass)
+}
+
+func (nq *NotificationQueue) recordAudit(notif *QueuedNotification, success bool, errorMsg string, failureClass NotificationFailureClass) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
@@ -1477,10 +1503,6 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	failureClass := ""
-	if !success {
-		failureClass = string(ClassifyNotificationFailure(errorMsg))
-	}
 	_, err = nq.db.Exec(query,
 		notif.ID,
 		notif.Type,
@@ -1492,7 +1514,7 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		notif.Attempts,
 		success,
 		errorMsg,
-		failureClass,
+		string(failureClass),
 		strings.TrimSpace(notif.DestinationID),
 		notif.PayloadBytes,
 		time.Now().Unix(),
@@ -1853,7 +1875,7 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	} else {
 		notif.Links = persistedLinks
 	}
-	if auditErr := nq.RecordAudit(notif, success, errorMsg); auditErr != nil {
+	if auditErr := nq.RecordAuditError(notif, success, err); auditErr != nil {
 		log.Error().
 			Err(auditErr).
 			Str("component", "notification_queue").

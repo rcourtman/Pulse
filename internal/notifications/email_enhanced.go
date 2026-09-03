@@ -55,7 +55,7 @@ func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 	case "password:":
 		return []byte(a.password), nil
 	default:
-		return nil, fmt.Errorf("unexpected LOGIN prompt: %s", fromServer)
+		return nil, FailfWithClass(NotificationFailureAuthentication, "unexpected LOGIN prompt: %s", fromServer)
 	}
 }
 
@@ -75,7 +75,7 @@ func (a *plainAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
 
 func (a *plainAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 	if more {
-		return nil, fmt.Errorf("unexpected server challenge")
+		return nil, FailfWithClass(NotificationFailureAuthentication, "unexpected server challenge")
 	}
 	return nil, nil
 }
@@ -95,14 +95,14 @@ type resolvedEmailAddresses struct {
 func resolveEmailAddress(fieldName, value string) (*mail.Address, error) {
 	addr, err := mail.ParseAddress(strings.TrimSpace(value))
 	if err != nil {
-		return nil, fmt.Errorf("invalid %s address %q: %w", fieldName, value, err)
+		return nil, FailfWithClass(NotificationFailureConfiguration, "invalid %s address %q: %w", fieldName, value, err)
 	}
 	return addr, nil
 }
 
 func resolveRecipientAddresses(values []string) ([]*mail.Address, error) {
 	if len(values) == 0 {
-		return nil, fmt.Errorf("at least one recipient address is required")
+		return nil, FailfWithClass(NotificationFailureConfiguration, "at least one recipient address is required")
 	}
 
 	resolved := make([]*mail.Address, 0, len(values))
