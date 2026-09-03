@@ -52,6 +52,7 @@ or displayed a notification.
 9. `internal/notifications/tag_routing.go`
 10. `internal/notifications/delivery_health.go`
 11. `internal/notifications/deadman_config.go`
+12. `internal/notifications/failure_class.go`
 
 ## Shared Boundaries
 
@@ -525,3 +526,29 @@ content and destination identity never leave Pulse.
 
 `internal/notifications/queue_test.go` pins the local classification order and
 the terminal-only retry/dead-letter accounting boundary.
+
+### Delivery failure class is declared by the sender, never read from a response
+
+The failure class is authoritative where the sender knows it and heuristic only
+where nobody does. `internal/notifications/failure_class.go` owns that order:
+a class declared by the sender through `NotificationFailureError` wins, then
+Go's own error types decide (`*textproto.Error` carries the SMTP reply code,
+x509 and TLS errors mean `tls`, `net.DNSError` and timeouts mean
+`connectivity`), and only then is the error message text consulted.
+
+Two rules follow and are not optional. A destination's response body must never
+determine its own failure class: every site that builds an error from an HTTP
+status classifies from the status code, so the body is retained for the
+operator's audit row but cannot make a 500 that says "rate limit" record as
+`rate_limited`. And an SMTP reply code is not read like an HTTP status: a 5xx
+reply is the destination refusing the message (`rejected`, or `authentication`
+for 530/534/535/538 and `configuration` for the 500-504 syntax replies), while
+only the transient 4xx replies are `server_error`.
+
+`RecordAuditError` is the canonical audit entry point because it is the one
+that preserves a declared class; `RecordAudit` re-derives from text and is
+retained only for callers that never had the error value.
+
+`internal/notifications/failure_class_test.go` pins the precedence order, the
+SMTP reply-code mapping, and the rule that response-body text cannot steer the
+recorded class.
