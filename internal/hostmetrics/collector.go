@@ -3,6 +3,8 @@ package hostmetrics
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -11,6 +13,7 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rs/zerolog/log"
+	gopsutilcommon "github.com/shirou/gopsutil/v4/common"
 	gocpu "github.com/shirou/gopsutil/v4/cpu"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 	goload "github.com/shirou/gopsutil/v4/load"
@@ -25,12 +28,51 @@ var (
 	cpuTimes       = gocpu.TimesWithContext
 	loadAvg        = goload.AvgWithContext
 	virtualMemory  = gomem.VirtualMemoryWithContext
-	diskPartitions = godisk.PartitionsWithContext
+	diskPartitions = partitionsVisibleToAgent
 	diskUsage      = godisk.UsageWithContext
 	diskIOCounters = godisk.IOCountersWithContext
 	netInterfaces  = gonet.InterfacesWithContext
 	netIOCounters  = gonet.IOCountersWithContext
 )
+
+// partitionsVisibleToAgent asks gopsutil to enumerate the mount namespace the
+// collector actually runs in. gopsutil otherwise prefers /proc/1/mountinfo on
+// Linux. A systemd service with PrivateTmp (as installed by Pulse) has its own
+// mount namespace, so PID 1 can omit mounts that the collector can access and
+// that an operator explicitly selected with --disk-include.
+//
+// Containerised collectors can deliberately point gopsutil at host procfs.
+// Preserve either form of that override rather than replacing it with the
+// container process's namespace.
+func partitionsVisibleToAgent(ctx context.Context, all bool) ([]godisk.PartitionStat, error) {
+	return godisk.PartitionsWithContext(mountEnumerationContext(ctx), all)
+}
+
+func mountEnumerationContext(ctx context.Context) context.Context {
+	if runtime.GOOS != "linux" || hasConfiguredHostProc(ctx) {
+		return ctx
+	}
+	env := cloneGopsutilEnv(ctx)
+	env[gopsutilcommon.HostProcMountinfo] = "/proc/self/mountinfo"
+	return context.WithValue(ctx, gopsutilcommon.EnvKey, env)
+}
+
+func hasConfiguredHostProc(ctx context.Context) bool {
+	if strings.TrimSpace(os.Getenv("HOST_PROC")) != "" || strings.TrimSpace(os.Getenv("HOST_PROC_MOUNTINFO")) != "" {
+		return true
+	}
+	env, _ := ctx.Value(gopsutilcommon.EnvKey).(gopsutilcommon.EnvMap)
+	return strings.TrimSpace(env[gopsutilcommon.HostProcEnvKey]) != "" || strings.TrimSpace(env[gopsutilcommon.HostProcMountinfo]) != ""
+}
+
+func cloneGopsutilEnv(ctx context.Context) gopsutilcommon.EnvMap {
+	cloned := make(gopsutilcommon.EnvMap)
+	env, _ := ctx.Value(gopsutilcommon.EnvKey).(gopsutilcommon.EnvMap)
+	for key, value := range env {
+		cloned[key] = value
+	}
+	return cloned
+}
 
 // diskUsageTimeout bounds a single mountpoint usage syscall. statfs on a
 // healthy filesystem answers in microseconds; a hard-mounted network
