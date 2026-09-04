@@ -80,42 +80,50 @@ func cloneGopsutilEnv(ctx context.Context) gopsutilcommon.EnvMap {
 // kernel wait, which would otherwise freeze the whole reporting cycle.
 var diskUsageTimeout = 5 * time.Second
 
-// stuckDiskMounts tracks mountpoints whose usage syscall has not returned
-// yet. The blocked goroutine cannot be cancelled, so the mount is skipped
-// on later cycles until its original call finally comes back.
+// stuckDiskMounts tracks all in-flight usage calls, including calls that have
+// not timed out yet. Host and Docker collectors share the same mount probes.
 var stuckDiskMounts sync.Map
 
-// guardedDiskUsage runs the usage syscall off the collection goroutine and
-// gives up after diskUsageTimeout, leaving at most one in-flight call per
-// mountpoint.
+type diskUsageCall struct {
+	done     chan struct{}
+	deadline time.Time
+	usage    *godisk.UsageStat
+	err      error
+}
+
+// guardedDiskUsage bounds the wait for a mount probe and leaves at most one
+// syscall in flight per mountpoint, even when reporting loops overlap.
 func guardedDiskUsage(ctx context.Context, mountpoint string) (*godisk.UsageStat, error) {
-	if _, stuck := stuckDiskMounts.Load(mountpoint); stuck {
-		return nil, fmt.Errorf("mountpoint %s skipped: previous usage call has not returned", mountpoint)
+	call := &diskUsageCall{
+		done:     make(chan struct{}),
+		deadline: time.Now().Add(diskUsageTimeout),
+	}
+	actual, loaded := stuckDiskMounts.LoadOrStore(mountpoint, call)
+	if loaded {
+		call = actual.(*diskUsageCall)
+	} else {
+		go func() {
+			call.usage, call.err = diskUsage(ctx, mountpoint)
+			// Publish the result before admitting a new probe.
+			close(call.done)
+			stuckDiskMounts.Delete(mountpoint)
+			if time.Now().After(call.deadline) {
+				log.Info().Str("mount", mountpoint).Msg("disk: stalled usage call returned, mount re-included")
+			}
+		}()
 	}
 
-	type usageResult struct {
-		usage *godisk.UsageStat
-		err   error
-	}
-	resultCh := make(chan usageResult, 1)
-	go func() {
-		usage, err := diskUsage(ctx, mountpoint)
-		resultCh <- usageResult{usage: usage, err: err}
-	}()
-
-	timer := time.NewTimer(diskUsageTimeout)
+	timer := time.NewTimer(time.Until(call.deadline))
 	defer timer.Stop()
 	select {
-	case result := <-resultCh:
-		return result.usage, result.err
+	case <-call.done:
+		return call.usage, call.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-timer.C:
-		stuckDiskMounts.Store(mountpoint, struct{}{})
-		log.Warn().Str("mount", mountpoint).Dur("timeout", diskUsageTimeout).Msg("disk: usage call did not answer, excluding mount until it does (unresponsive network mount?)")
-		go func() {
-			<-resultCh
-			stuckDiskMounts.Delete(mountpoint)
-			log.Info().Str("mount", mountpoint).Msg("disk: stalled usage call returned, mount re-included")
-		}()
+		if !loaded {
+			log.Warn().Str("mount", mountpoint).Dur("timeout", diskUsageTimeout).Msg("disk: usage call did not answer, excluding mount until it does (unresponsive network mount?)")
+		}
 		return nil, fmt.Errorf("usage call for %s did not answer within %s", mountpoint, diskUsageTimeout)
 	}
 }
