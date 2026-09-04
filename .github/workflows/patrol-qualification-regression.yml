@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - ".github/workflows/patrol-qualification-regression.yml"
-      - ".github/workflows/patrol-qualification-live.yml"
       - "cmd/patrol-qualify/**"
       - "internal/ai/qualification/**"
       - "internal/ai/patrol*.go"
@@ -14,11 +13,12 @@ on:
       - "internal/api/ai_handlers_patrol_actions_additional_test.go"
       - "tests/qualification/patrol/**"
       - "docs/AI_PATROL_QUALIFICATION.md"
+      - "docs/release-control/v6/internal/subsystems/ai-runtime.md"
+      - "frontend-modern/public/docs/AI_PATROL_QUALIFICATION.md"
   push:
     branches: [main]
     paths:
       - ".github/workflows/patrol-qualification-regression.yml"
-      - ".github/workflows/patrol-qualification-live.yml"
       - "cmd/patrol-qualify/**"
       - "internal/ai/qualification/**"
       - "internal/ai/patrol*.go"
@@ -27,6 +27,9 @@ on:
       - "internal/api/ai_handlers.go"
       - "internal/api/ai_handlers_patrol_actions_additional_test.go"
       - "tests/qualification/patrol/**"
+      - "docs/AI_PATROL_QUALIFICATION.md"
+      - "docs/release-control/v6/internal/subsystems/ai-runtime.md"
+      - "frontend-modern/public/docs/AI_PATROL_QUALIFICATION.md"
   schedule:
     - cron: "23 3 * * *"
   workflow_dispatch:

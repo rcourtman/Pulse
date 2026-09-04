@@ -63,6 +63,12 @@ dependency caches, direct Actions caches, and external BuildKit cache imports:
 cache contents are unsigned mutable build input, while provenance only records
 what the workflow produced. Read-only jobs may still cache locked dependencies.
 
+Those privileged jobs also run only on a reviewed, literal GitHub-hosted image.
+Persistent self-hosted runners can retain executable state from an earlier job,
+and dynamic runner expressions can silently move a credential boundary. Local
+self-hosted acceleration therefore remains free of repository secrets and
+read-only.
+
 Passing data through `env` does not make it safe to append to the runner's
 `GITHUB_OUTPUT`, `GITHUB_ENV`, `GITHUB_PATH`, or `GITHUB_STATE` command files.
 The audit follows workflow data and values read from the event payload through

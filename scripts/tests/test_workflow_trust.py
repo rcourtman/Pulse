@@ -204,6 +204,53 @@ jobs:
             any("trusted delivery identity" in finding for finding in findings)
         )
 
+    def test_secrets_and_write_permissions_require_hosted_runner(self) -> None:
+        for privileged in (
+            """permissions: {}
+jobs:
+  privileged:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    env:
+      TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: echo safe
+""",
+            """permissions:
+  contents: write
+jobs:
+  privileged:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 10
+    steps:
+      - run: echo safe
+""",
+        ):
+            with self.subTest(privileged=privileged):
+                findings = self.audit(privileged)
+                self.assertTrue(
+                    any("retain credentials or code" in finding for finding in findings)
+                )
+
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  privileged:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: echo safe
+  accelerated:
+    runs-on: [self-hosted, Linux, X64, build]
+    timeout-minutes: 10
+    steps:
+      - run: echo credential-free
+"""
+        )
+        self.assertEqual(findings, [])
+
     def test_reusable_workflow_caller_owns_oidc_runner_boundary(self) -> None:
         findings = self.audit(
             """permissions: {}
