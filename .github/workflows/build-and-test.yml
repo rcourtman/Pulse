@@ -71,6 +71,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -88,8 +89,9 @@ jobs:
             base="${{ github.event.before }}"
           fi
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$base" 2>/dev/null; then
-            echo "Base commit unavailable; assuming code changed."
+            echo "Base commit unavailable; assuming code and dependencies changed."
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "frontend_deps=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "$base" "${{ github.sha }}")
@@ -102,6 +104,17 @@ jobs:
             code=false
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
+          # Whether this change moves the frontend dependency graph. It decides
+          # what an unreachable npm advisory endpoint means: unknown answer
+          # (must block) versus the base commit's already-passing answer. A
+          # change to the audit runner itself also demands a real result, so it
+          # can never be relaxed under cover of its own tolerant mode.
+          if printf '%s\n' "$changed" | grep -qE '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$'; then
+            frontend_deps=true
+          else
+            frontend_deps=false
+          fi
+          echo "frontend_deps=$frontend_deps" >> "$GITHUB_OUTPUT"
 
   frontend:
     name: Frontend
@@ -129,13 +142,20 @@ jobs:
         working-directory: frontend-modern
         run: npm ci
 
+      # npm audit exits 1 both for a real advisory and for an unreachable
+      # advisory endpoint. The runner keeps the advisory verdict exactly as
+      # strict and only retries the endpoint being down; see the script header.
       - name: Audit complete frontend dependency graph
         working-directory: frontend-modern
-        run: npm audit
+        env:
+          NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}
+        run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all
 
       - name: Audit production frontend dependencies
         working-directory: frontend-modern
-        run: npm audit --omit=dev
+        env:
+          NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}
+        run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production
 
       # Whole-tree, not staged-only: the pre-commit formatter only ever sees
       # staged files, so drift in untouched files is invisible to it. This is
