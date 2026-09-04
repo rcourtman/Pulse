@@ -1,39 +1,36 @@
 {
   "version": 1,
-  "base_sha": "53ea86983c7c6786eb1a6fe1f3681e4566bc237e",
-  "verified_at": "2026-09-04T00:29:07Z",
+  "base_sha": "74c553aae330d2b8a0bfecc22124b40ef10c95d3",
+  "verified_at": "2026-09-04T02:18:06Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/types/resource.ts",
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"],
   "content_sha256": {
-    "frontend-modern/src/types/resource.ts": "c43048a9796babd38f338cff14c21ed2b6dbbf8b16f2bb1fddf89529ef5a65f5",
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "328efccc8b88b8e590bef9e56568b2f969a06df314d464b5f44b757a2acb189f"
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "508b628748732e42dee19775fa3e0571fee0617dad8c2d28633bf7201887f904"
   },
   "routes": [
-    "/proxmox (managed hot-dev mock with two provider-scoped standalone sites sharing the native node name pve)"
+    "/settings/infrastructure (managed local backend with a two-node Proxmox cluster fixture)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 393,
+      "height": 727
     }
   ],
   "states": [
-    "Initial Proxmox overview showing Nodes 2 and two standalone rows named pve with distinct provider endpoint links",
-    "Proxmox overview after six mock websocket update intervals with both provider-scoped rows still present",
-    "Reloaded Proxmox overview with both same-native-name rows restored from the REST bootstrap snapshot",
-    "Narrow Proxmox overview showing Nodes 2 and two separate pve rows without clipping or navigation overlap"
+    "Manage dialog open for an expanded two-node Proxmox cluster at desktop and narrow widths",
+    "Unsaved node name, Host Telemetry Agent section and certificate checkbox retained after a 15-second connection-ledger poll",
+    "Manage dialog closed with the settings scroll position preserved and deliberate onward focus retained beyond the delayed fallback",
+    "Manage dialog reopened and a duplicate presentation label saved against the second node's immutable identity"
   ],
   "interactions": [
-    "Authenticated to the managed development runtime and navigated to the Proxmox overview",
-    "Verified both distinct provider endpoints and waited 12 seconds across repeated realtime updates",
-    "Reloaded the route and rechecked both resource rows",
-    "Resized from 1280 by 800 to 390 by 844 and inspected full-page screenshots for row count, clipping, overflow, and fixed-navigation overlap"
+    "Expanded the cluster members, opened Manage, inspected the dialog pixels and native-node diagnostics",
+    "Edited fields, changed the active section and advanced the polling clock while checking the mounted editor state",
+    "Closed Manage, claimed Add infrastructure focus without scrolling, waited beyond the 250ms fallback and checked focus plus scroll position",
+    "Reopened Manage, saved the second member's display label and verified the PUT payload retained the cluster host and immutable node identity",
+    "Inspected the narrow open dialog and the closed desktop and narrow states for placement, clipping, scrolling, fixed-navigation overlap and responsive layout"
   ]
 }

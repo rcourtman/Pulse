@@ -321,11 +321,20 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           (element) =>
             element.getAttribute('data-infrastructure-manage-id') === focusReturnConnectionId,
         );
+        const activeElement = document.activeElement;
+        const focusReturnIsStillPending =
+          !activeElement ||
+          activeElement === document.body ||
+          activeElement === document.documentElement ||
+          !document.contains(activeElement);
         // The shared dialog restores its captured trigger without scrolling,
         // but this delayed lookup covers rows recreated while the dialog was
-        // open. Keep that fallback from pulling a lower infrastructure row
-        // into view after the operator closes Manage.
-        focusTarget?.focus({ preventScroll: true });
+        // open. Only use that fallback while focus remains unclaimed: the
+        // operator may already have moved to another control during the delay.
+        // Keep the fallback from pulling a lower infrastructure row into view.
+        if (focusReturnIsStillPending) {
+          focusTarget?.focus({ preventScroll: true });
+        }
       }, 250);
     }
   };
