@@ -24,8 +24,9 @@ class VerifyReleaseHelmChartTests(unittest.TestCase):
         expected_digest: str = "",
         gh_exit: int = 0,
         gh_version: str = "2.97.0",
+        output_chart: bool = False,
         source_sha: str = SOURCE_SHA,
-    ) -> tuple[subprocess.CompletedProcess[str], str]:
+    ) -> tuple[subprocess.CompletedProcess[str], str, bool]:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
             bin_path = temp_path / "bin"
@@ -70,8 +71,11 @@ class VerifyReleaseHelmChartTests(unittest.TestCase):
                 }
             )
             args = [str(SCRIPT), "v6.4.1", source_sha, "rcourtman/Pulse"]
-            if expected_digest:
+            if expected_digest or output_chart:
                 args.append(expected_digest)
+            output_path = temp_path / "recovered.tgz"
+            if output_chart:
+                args.append(str(output_path))
             result = subprocess.run(
                 args,
                 cwd=ROOT,
@@ -80,10 +84,14 @@ class VerifyReleaseHelmChartTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
-            return result, gh_log.read_text(encoding="utf-8") if gh_log.exists() else ""
+            return (
+                result,
+                gh_log.read_text(encoding="utf-8") if gh_log.exists() else "",
+                output_path.is_file(),
+            )
 
     def test_emits_digest_after_exact_hosted_provenance_verification(self) -> None:
-        result, calls = self.run_verifier()
+        result, calls, _ = self.run_verifier()
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), f"chart_digest={DIGEST}")
@@ -100,32 +108,41 @@ class VerifyReleaseHelmChartTests(unittest.TestCase):
 
     def test_rejects_a_chart_that_moved_after_activation(self) -> None:
         expected = "sha256:" + "c" * 64
-        result, calls = self.run_verifier(expected_digest=expected)
+        result, calls, _ = self.run_verifier(expected_digest=expected)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Exact-version Helm chart moved", result.stderr)
         self.assertEqual(calls, "")
 
     def test_rejects_missing_or_malformed_registry_digest(self) -> None:
-        result, calls = self.run_verifier(digest="unknown")
+        result, calls, _ = self.run_verifier(digest="unknown")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("did not report one exact OCI digest", result.stderr)
         self.assertEqual(calls, "")
 
     def test_rejects_unsafe_github_cli_before_registry_resolution(self) -> None:
-        result, calls = self.run_verifier(gh_version="2.96.1")
+        result, calls, _ = self.run_verifier(gh_version="2.96.1")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("too old for release attestation policy enforcement", result.stderr)
         self.assertEqual(calls, "")
 
     def test_rejects_invalid_source_identity(self) -> None:
-        result, calls = self.run_verifier(source_sha="main")
+        result, calls, _ = self.run_verifier(source_sha="main")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Invalid release source SHA", result.stderr)
         self.assertEqual(calls, "")
+
+    def test_preserves_the_verified_oci_package_for_promotion(self) -> None:
+        result, _, output_exists = self.run_verifier(
+            expected_digest=DIGEST,
+            output_chart=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(output_exists)
 
 
 if __name__ == "__main__":

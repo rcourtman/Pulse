@@ -2098,8 +2098,7 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`Require activated GitHub release and source run`,
 		`release-activation.json`,
 		`.github/workflows/create-release.yml`,
-		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
-		`--name "pulse-chart-${VERSION}"`,
+		`"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"`,
 		`qualified chart metadata does not match the activated release`,
 		`name: Publish chart release and merge Pages index`,
 		`gh release create "${chart_release}" "${chart_path}"`,
@@ -2116,6 +2115,7 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"workflow_run:",
+		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
 		`Smoke test with kind`,
 		`Install helm-docs`,
 		`helm package deploy/helm/pulse`,

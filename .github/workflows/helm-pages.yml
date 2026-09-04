@@ -4,7 +4,9 @@ run-name: Release Helm Chart ${{ inputs.chart_version }}
 # Called only from release-convergence.yml while it holds the global customer-
 # promotion lease. Chart lint, packaging, OCI publication, and the exact-
 # candidate install/upgrade smoke complete before activation. This workflow
-# verifies and promotes that immutable source-run artifact after activation.
+# recovers the digest-bound, attested OCI package and promotes the same package
+# after activation. Actions artifacts are deliberately not a recovery boundary:
+# they expire before an operator-owned convergence block necessarily clears.
 on:
   workflow_call:
     inputs:
@@ -106,25 +108,12 @@ jobs:
           python3 scripts/write_github_output.py version "${validated_version}"
           python3 scripts/write_github_output.py release_tag "${release_tag}"
 
-      - name: Download immutable qualified chart
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.identity.outputs.version }}
-          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          gh run download "${SOURCE_RELEASE_RUN_ID}" \
-            --repo "${{ github.repository }}" \
-            --name "pulse-chart-${VERSION}" \
-            --dir dist
-
       - name: Set up Helm
         uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
         with:
           version: v3.15.2
 
-      - name: Verify immutable chart identity
+      - name: Recover immutable qualified chart
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.identity.outputs.version }}
@@ -134,13 +123,21 @@ jobs:
           CHART_DIGEST: ${{ inputs.chart_digest }}
         run: |
           set -euo pipefail
+          mkdir -p dist
           proof="$(./scripts/verify-release-helm-chart.sh \
             "${RELEASE_TAG}" "${TARGET_COMMITISH}" \
-            "${GITHUB_REPOSITORY}" "${CHART_DIGEST}")"
+            "${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}")"
           if [ "${proof}" != "chart_digest=${CHART_DIGEST}" ]; then
             echo "::error::Activated Helm OCI provenance did not produce the committed digest."
             exit 1
           fi
+
+      - name: Verify recovered chart metadata
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          CHART_PATH: dist/pulse-${{ steps.identity.outputs.version }}.tgz
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
           import os
           import pathlib

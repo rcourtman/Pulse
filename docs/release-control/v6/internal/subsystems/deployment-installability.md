@@ -1082,10 +1082,12 @@ artifact-selection behaviour.
    source-built and exact-candidate images must recreate and qualify all three;
    otherwise the download handler rejects the local Windows agent and falls
    through to a release asset with the wrong filename identity.
-   Helm Pages convergence must promote the immutable chart artifact produced
-   and qualified by the exact create-release run. It must bind that artifact
-   to the activated source run, tag, commit, and activation marker, and must
-   not repeat chart packaging or the pre-activation kind install/upgrade smoke.
+   Helm Pages convergence must recover the immutable chart package from the
+   OCI digest produced and qualified by the exact create-release run. It must
+   verify that digest's hosted-workflow provenance and bind the package to the
+   activated source run, tag, commit, and activation marker; a transient
+   Actions artifact is not a recovery boundary. It must not repeat chart
+   packaging or the pre-activation kind install/upgrade smoke.
    Release-to-convergence and cross-repository child-run observation should
    use short bounded polls so GitHub indexing cannot add tens of seconds after
    a required exact run or activation marker has already completed.

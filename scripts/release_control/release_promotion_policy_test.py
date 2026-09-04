@@ -2376,7 +2376,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("validate_artifact_release_line.py", helm)
         self.assertIn(".github/workflows/create-release.yml", helm_pages)
         self.assertIn("release-activation.json", helm_pages)
-        self.assertIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
+        self.assertNotIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
+        self.assertIn('"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"', helm_pages)
         self.assertIn("release_branch_for_version", artifact_validator)
         self.assertIn("matching prerelease tag", artifact_validator)
         self.assertIn("previous stable tag", artifact_validator)
@@ -2392,8 +2393,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('qualified chart metadata does not match the activated release', helm_pages)
         self.assertIn("workflow_call:", helm_pages)
         self.assertNotIn("workflow_run:", helm_pages)
-        self.assertIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
-        self.assertIn('--name "pulse-chart-${VERSION}"', helm_pages)
+        self.assertNotIn('gh run download "${SOURCE_RELEASE_RUN_ID}"', helm_pages)
+        self.assertIn('"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"', helm_pages)
         self.assertIn("release-activation.json", helm_pages)
         self.assertIn(".github/workflows/create-release.yml", helm_pages)
         self.assertNotIn('git pull --rebase origin "$REQUIRED_BRANCH"', helm_pages)
@@ -2430,7 +2431,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("verify-release-helm-chart.sh", helm_pages)
         self.assertRegex(
             helm_pages,
-            r"(?s)- name: Verify immutable chart identity\n\s+env:\n\s+GH_TOKEN: \$\{\{ github\.token \}\}",
+            r"(?s)- name: Recover immutable qualified chart\n\s+env:\n\s+GH_TOKEN: \$\{\{ github\.token \}\}",
         )
         self.assertIn(
             "chart_digest: ${{ needs.acquire_customer_promotion_lease.outputs.helm_chart_digest }}",
