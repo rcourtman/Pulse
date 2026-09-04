@@ -445,6 +445,15 @@ the `white_label` branding entitlement.
    runs per event so runtime mock toggles take effect immediately — because a
    mock-mode snapshot describes the synthetic fixture fleet rather than a real
    installation.
+   A Go test binary is the same kind of suppression boundary: while
+   `testing.Testing()` reports true, `internal/telemetry` must not post to the
+   production receiver on any path, including the synchronous service-health
+   failure event `pkg/server.Run` sends from its deferred handler. A test that
+   boots the real server runs against a throwaway data directory, so it mints
+   a fresh install ID on every run and the receiver counts it as a distinct
+   live installation. The guard compares the resolved endpoint against
+   `productionPingEndpoint`, so tests that redirect `pingEndpoint` at a local
+   server keep asserting on real ping content.
    Pulse Intelligence external-agent/MCP telemetry may expose only content-free
    adapter-origin usage and capability-class counters for context, event
    stream, provisioning, operator state, finding, and action requests. It must
