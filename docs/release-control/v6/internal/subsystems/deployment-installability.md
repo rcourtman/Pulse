@@ -3141,6 +3141,16 @@ strings into normalized release identity fields for browser preview payloads
 and operator telemetry reporting, so unpublished `git describe` / manual / dev
 builds cannot pollute published stable or RC adoption reads just because they
 share a semver-looking prefix.
+The development flag in that identity is defined by the `0.0.0` sentinel, not
+by prerelease spelling. `normalizeVersionString` assigns `0.0.0-<sanitized>` to
+every build string it cannot parse as a release version, so any version whose
+major, minor, and patch are all zero must report `version_channel` `dev` and
+`version_is_development` true, and must never simultaneously report as a
+published release — including a sentinel that happens to spell a preview stage,
+such as `0.0.0-rc.1`. Matching only the prerelease texts `dev` and `dev.*` left
+`0.0.0-test-version`, `0.0.0-dev-pro`, and `0.0.0-qual-*` reporting as ordinary
+prereleases with the development flag clear, so a receiver-side read that
+filtered on that flag alone kept counting them as real installations.
 That release-build metadata path is now explicit too: `scripts/release_ldflags.sh`
 is the canonical owner for server and agent build ldflags, and release artifact
 assembly must route through it instead of hand-writing overlapping `main.Version`,
