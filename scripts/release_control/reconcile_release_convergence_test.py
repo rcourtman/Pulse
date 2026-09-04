@@ -259,6 +259,8 @@ class CredentialContainmentTests(unittest.TestCase):
         containment="failure",
         containment_log=subject.CREDENTIAL_BLOCK_MARKER,
         containment_state_changed=False,
+        extra_public_job=None,
+        verdict="failure",
     ):
         private_run_id = 700
         paid_job_id = 800
@@ -279,8 +281,16 @@ class CredentialContainmentTests(unittest.TestCase):
                             {
                                 "id": paid_job_id,
                                 "name": subject.PAID_RUNTIME_JOB,
+                                "status": "completed",
                                 "conclusion": "failure",
-                            }
+                            },
+                            {
+                                "id": paid_job_id + 1,
+                                "name": subject.CONVERGENCE_VERDICT_JOB,
+                                "status": "completed",
+                                "conclusion": verdict,
+                            },
+                            *([extra_public_job] if extra_public_job else []),
                         ]
                     }
                 ]
@@ -360,6 +370,53 @@ class CredentialContainmentTests(unittest.TestCase):
 
     def test_other_private_failure_remains_retriable(self):
         github = self.github(containment="success")
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_other_public_surface_failure_remains_retriable(self):
+        github = self.github(
+            extra_public_job={
+                "id": 802,
+                "name": "Converge Helm Pages / release",
+                "status": "completed",
+                "conclusion": "failure",
+            }
+        )
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_interrupted_public_job_remains_retriable(self):
+        github = self.github(
+            extra_public_job={
+                "id": 802,
+                "name": "Release global customer-promotion lease",
+                "status": "completed",
+                "conclusion": "cancelled",
+            }
+        )
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_missing_failed_aggregate_verdict_remains_retriable(self):
+        github = self.github(verdict="success")
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_duplicate_failed_aggregate_verdict_remains_retriable(self):
+        github = self.github(
+            extra_public_job={
+                "id": 802,
+                "name": subject.CONVERGENCE_VERDICT_JOB,
+                "status": "completed",
+                "conclusion": "failure",
+            }
+        )
+        self.assertFalse(github.unchanged_credential_containment_block(100))
+
+    def test_malformed_public_job_remains_retriable(self):
+        github = self.github(
+            extra_public_job={
+                "id": 802,
+                "status": "completed",
+                "conclusion": "failure",
+            }
+        )
         self.assertFalse(github.unchanged_credential_containment_block(100))
 
     def test_containment_job_error_without_block_marker_remains_retriable(self):

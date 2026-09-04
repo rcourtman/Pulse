@@ -24,6 +24,7 @@ PRIVATE_PROMOTION_RUN = re.compile(
 PRIVATE_REPOSITORY = "rcourtman/pulse-pro"
 PRIVATE_PROMOTION_PATH = ".github/workflows/promote-paid-runtime-release.yml"
 PAID_RUNTIME_JOB = "Converge paid-runtime broker / promote"
+CONVERGENCE_VERDICT_JOB = "Customer Promotion Convergence Verdict"
 CREDENTIAL_CONTAINMENT_JOB = "Require credential containment"
 CREDENTIAL_BLOCK_MARKER = "credential containment gate: BLOCKED"
 CREDENTIAL_CONTAINMENT_PATHS = (
@@ -354,6 +355,26 @@ class GitHub:
             and value.get("conclusion") == "failure"
         ]
         if len(paid_jobs) != 1:
+            return False
+        # Containment may explain the paid-runtime failure and the aggregate
+        # verdict it necessarily makes red. It cannot explain another failed
+        # customer surface, an interrupted finalizer, or incomplete job
+        # evidence; those remain ordinary convergence debt and must retain the
+        # unattended retry path.
+        expected_failures = sorted((PAID_RUNTIME_JOB, CONVERGENCE_VERDICT_JOB))
+        if any(
+            not isinstance(value, dict)
+            or not isinstance(value.get("name"), str)
+            or not value.get("name")
+            or value.get("status") != "completed"
+            or value.get("conclusion") not in {"success", "failure", "skipped"}
+            for value in jobs
+        ):
+            return False
+        failed_jobs = sorted(
+            value["name"] for value in jobs if value["conclusion"] == "failure"
+        )
+        if failed_jobs != expected_failures:
             return False
         paid_job_id = positive_int(paid_jobs[0].get("id"), "paid-runtime job ID")
         annotations = flatten_pages(
