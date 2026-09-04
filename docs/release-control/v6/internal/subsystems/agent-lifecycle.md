@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Portable installer lifecycle ownership
+
+The shared shell installer lifecycle directory (outside the least-privilege
+profile) and atomic lifecycle-file staging use numeric UID/GID `0:0` when
+running as root. They must not depend on a group named `root`, which is absent
+on macOS. The least-privilege directory retains its dedicated collector group
+and 0750 mode; ordinary root lifecycle directories retain 0700 mode.
+Ownership failure aborts directory preparation or file installation before
+replacement of the saved installer. The runtime shell fixture
+`TestInstallSHLifecyclePortableRootOwnership` in
+`scripts/installtests/install_sh_test.go` rejects named ownership and proves
+that a failed chown leaves the previously saved installer intact. This fixture
+is not native macOS upgrade qualification.
+
+
 `models.PBSBackup` may carry monitoring-owned write-activity evidence for an
 incomplete PBS snapshot. `inProgress` means the snapshot has no completed
 manifest; `writeActivityObserved` and `writeActive` distinguish a successfully
