@@ -197,6 +197,71 @@ func TestGetLatestReleaseForChannelRejectsStreamingOversizedResponse(t *testing.
 	}
 }
 
+func TestGetLatestReleaseForChannelFallsBackWhenGitHubMetadataExceedsLimit(t *testing.T) {
+	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
+
+	const feed = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Pulse v6.4.3-rc.1</title>
+    <updated>2026-09-02T03:05:16Z</updated>
+  </entry>
+  <entry>
+    <title>v6.4.2</title>
+    <updated>2026-08-31T19:08:45Z</updated>
+  </entry>
+</feed>`
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		status := http.StatusNotFound
+		body := "not found"
+		contentLength := int64(len(body))
+		header := http.Header{"Content-Type": []string{"text/plain"}}
+		switch req.URL.String() {
+		case "https://api.github.com/repos/rcourtman/Pulse/releases":
+			status = http.StatusOK
+			body = `[{"tag_name":"v6.4.3-rc.1","body":"` + strings.Repeat("x", int(maxReleaseMetadataBytes)) + `"}]`
+			// GitHub's live releases response is streamed without a declared
+			// Content-Length, so exercise the bounded reader rather than only
+			// the early header rejection.
+			contentLength = -1
+			header.Set("Content-Type", "application/json")
+		case "https://github.com/rcourtman/Pulse/releases.atom":
+			status = http.StatusOK
+			body = feed
+			contentLength = int64(len(body))
+			header.Set("Content-Type", "application/atom+xml")
+		}
+		return &http.Response{
+			StatusCode:    status,
+			Status:        http.StatusText(status),
+			Body:          io.NopCloser(strings.NewReader(body)),
+			ContentLength: contentLength,
+			Header:        header,
+			Request:       req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	currentVer, err := ParseVersion("6.4.1")
+	if err != nil {
+		t.Fatalf("ParseVersion: %v", err)
+	}
+
+	release, err := manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
+	if err != nil {
+		t.Fatalf("getLatestReleaseForChannel error: %v", err)
+	}
+	if release.TagName != "v6.4.2" {
+		t.Fatalf("release tag = %q, want v6.4.2", release.TagName)
+	}
+	if len(release.Assets) != 1 || release.Assets[0].BrowserDownloadURL == "" {
+		t.Fatalf("fallback release assets = %#v, want synthesized runtime asset", release.Assets)
+	}
+}
+
 func TestGetLatestReleaseForChannelRateLimitFallbackIncludesRuntimeAsset(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
 	withBuildVersion(t, "6.4.0-rc.10")
