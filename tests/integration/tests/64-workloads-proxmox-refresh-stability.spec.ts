@@ -387,10 +387,11 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
   });
 
-  test("does not request vertical scrolling when an off-screen Backups drawer changes or closes", async ({
+  test("does not request vertical scrolling when an off-screen Backups drawer changes, refreshes or closes", async ({
     page,
   }, testInfo) => {
     await ensureMockModeEnabled(page);
+    await page.routeWebSocket("**/ws*", () => {});
 
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
     const serversTable = page.locator('[data-proxmox-backups-table="servers"]');
@@ -476,6 +477,34 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
             .__pulseScrollIntoViewCalls ?? 0,
       ),
     ).toBe(0);
+
+    const scrollTopBeforeRefresh = await readPrimaryViewportScrollTop(page);
+    const refreshResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === "/api/resources" &&
+        url.searchParams.get("type") === "pbs" &&
+        url.searchParams.get("source") === "pbs"
+      );
+    });
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "pbs", metadataId: "refresh-proof" },
+        }),
+      );
+    });
+
+    const completedRefreshResponse = await refreshResponse;
+    expect(completedRefreshResponse.ok()).toBe(true);
+    await completedRefreshResponse.finished();
+    await page.waitForTimeout(100);
+
+    await expect(detailRow).toBeVisible();
+    await expect(manageTab).toHaveAttribute("aria-selected", "true");
+    expect(await readPrimaryViewportScrollTop(page)).toBe(
+      scrollTopBeforeRefresh,
+    );
 
     await page.screenshot({
       path: testInfo.outputPath("pbs-detail-anchor.png"),
