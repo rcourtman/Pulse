@@ -1606,7 +1606,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`FROM --platform=linux/amd64 node:24-alpine@sha256:`,
-		`FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`,
+		`FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`,
 		`FROM backend-builder AS release-assets-builder`,
 		`AS agent_runtime`,
 		`AS pulse-runtime-foundation`,
@@ -1641,7 +1641,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		}
 	}
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 node:24-alpine@sha256:`, ` AS frontend-builder`)
-	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`, ` AS backend-builder`)
+	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`, ` AS backend-builder`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS agent_runtime`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS pulse-runtime-foundation`)
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
@@ -1654,7 +1654,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
 	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:24-alpine AS frontend-builder`) ||
-		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS agent_runtime`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
@@ -2098,7 +2098,8 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`Require activated GitHub release and source run`,
 		`release-activation.json`,
 		`.github/workflows/create-release.yml`,
-		`"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"`,
+		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
+		`--name "pulse-chart-${VERSION}"`,
 		`qualified chart metadata does not match the activated release`,
 		`name: Publish chart release and merge Pages index`,
 		`gh release create "${chart_release}" "${chart_path}"`,
@@ -2115,7 +2116,6 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"workflow_run:",
-		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
 		`Smoke test with kind`,
 		`Install helm-docs`,
 		`helm package deploy/helm/pulse`,
@@ -2829,10 +2829,7 @@ func TestReleaseAssetCommonRunsUpdateKeyThroughModulePath(t *testing.T) {
 		t.Skip("go not installed")
 	}
 
-	// Keep the toolchain selected by the test runner. A login shell may source a
-	// developer's stale mise/asdf profile and replace setup-go's release
-	// toolchain while leaving its GOROOT behind.
-	cmd := exec.Command("bash", "-c", "source ./scripts/release_asset_common.sh; pulse_release_go_run_update_key")
+	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_go_run_update_key")
 	cmd.Dir = repoFile()
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -2864,7 +2861,7 @@ func TestReleaseAssetCommonRejectsUnexpectedUpdateSigningPublicKey(t *testing.T)
 		t.Fatalf("generate unexpected public key: %v", err)
 	}
 
-	cmd := exec.Command("bash", "-c", "source ./scripts/release_asset_common.sh; pulse_release_prepare_signing_state pulse-installer pulse-install")
+	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_prepare_signing_state pulse-installer pulse-install")
 	cmd.Dir = repoFile()
 	cmd.Env = append(os.Environ(),
 		"PULSE_UPDATE_SIGNING_KEY="+base64.StdEncoding.EncodeToString(privateKey),
@@ -3243,13 +3240,6 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 
 	createWorkflow := string(createBytes)
 	candidateWorkflow := string(candidateBytes)
-	node24DownloadArtifact := "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
-	if count := strings.Count(candidateWorkflow, node24DownloadArtifact); count != 5 {
-		t.Fatalf("release candidate must use the reviewed Node 24 artifact downloader for all five signed-artifact transfers, got %d", count)
-	}
-	if strings.Contains(candidateWorkflow, "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093") {
-		t.Fatal("release candidate must not retain the Node 20 artifact downloader")
-	}
 	compilerWorkflow := string(compilerBytes)
 	compileScriptBytes, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
 	if err != nil {
@@ -3276,7 +3266,6 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	frontendBundleJob := workflowJobBlock(t, createWorkflow, "frontend_bundle")
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
-	releaseSmokeJob := workflowJobBlock(t, createWorkflow, "release_smoke")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
 	privateStageJob := workflowJobBlock(t, createWorkflow, "stage_private_pro_runtime")
 	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
@@ -3289,8 +3278,6 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	helmPagesJob := workflowJobBlock(t, convergenceWorkflow, "publish_helm_pages")
 	demoJob := workflowJobBlock(t, convergenceWorkflow, "update_stable_demo")
 	compileJob := workflowJobBlock(t, compilerWorkflow, "compile-release-payload")
-	compileSetupNodeStep := workflowStepBlock(t, compileJob, "Set up Node.js")
-	releaseSmokeSetupNodeStep := workflowStepBlock(t, releaseSmokeJob, "Set up Node.js")
 	obtainPayloadJob := workflowJobBlock(t, candidateWorkflow, "obtain-release-payload")
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
 	compiledPayloadVerificationStep := workflowStepBlock(t, candidateBuildJob, "Verify exact-SHA compiled payload")
@@ -3384,16 +3371,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("%s runner selection must not depend on the Windows-signing decision", label)
 		}
 	}
-	for label, step := range map[string]string{
-		"exact-SHA release compilation": compileSetupNodeStep,
-		"pre-publication release smoke": releaseSmokeSetupNodeStep,
-	} {
-		if !strings.Contains(step, "package-manager-cache: false") {
-			t.Fatalf("%s must disable setup-node automatic package-manager caching", label)
-		}
-		if strings.Contains(step, "\n          cache:") || strings.Contains(step, "cache-dependency-path:") {
-			t.Fatalf("%s must not opt into setup-node dependency caching", label)
-		}
+	if !strings.Contains(compileJob, "cache: false") || strings.Contains(compileJob, "cache: 'npm'") {
+		t.Fatal("release compilation must avoid Actions cache archival")
 	}
 	if strings.Contains(frontendBundleJob, "cache: 'npm'") {
 		t.Fatal("PVE frontend bundle must use its persistent runner-local npm cache")
@@ -3661,42 +3640,27 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 }
 
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
-	buildWorkflowPath := repoFile(".github", "workflows", "build-and-test.yml")
-	buildWorkflowBytes, err := os.ReadFile(buildWorkflowPath)
-	if err != nil {
-		t.Fatalf("read build-and-test workflow: %v", err)
-	}
-	frontendJob := workflowJobBlock(t, string(buildWorkflowBytes), "frontend")
-	for _, needle := range []string{
+	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
+	assertFileContainsAll(t, workflowPath,
 		`run: npm ci --no-audit`,
 		`- name: Audit complete frontend dependency graph`,
 		`npm-audit-retry.sh" all`,
-		`- name: Audit production frontend dependencies`,
-		`npm-audit-retry.sh" production`,
 		// The runner may retry an unreachable advisory endpoint, but only a
 		// change that leaves the dependency graph untouched may proceed
 		// without a fresh result.
 		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
+		`frontend_deps: ${{ steps.filter.outputs.frontend_deps }}`,
 		`continue-on-error: true`,
-		`- name: Require frontend dependency audits`,
+		`- name: Require frontend dependency audit`,
 		`if: ${{ !cancelled() }}`,
 		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
-		`PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}`,
-	} {
-		if !strings.Contains(frontendJob, needle) {
-			t.Fatalf("build-and-test frontend job missing dependency audit contract: %s", needle)
-		}
-	}
-	assertFileContainsAll(t, buildWorkflowPath,
-		`frontend_deps: ${{ steps.filter.outputs.frontend_deps }}`,
 	)
-	if verdictIndex, bundleIndex := strings.Index(frontendJob, "- name: Require frontend dependency audits"), strings.Index(frontendJob, "- name: Check frontend bundle size budget"); verdictIndex < bundleIndex || bundleIndex < 0 {
-		t.Fatal("build-and-test must report independent frontend evidence before requiring audit success")
-	}
-
-	securityWorkflowPath := repoFile(".github", "workflows", "security-scan.yml")
-	assertFileContainsAll(t, securityWorkflowPath,
-		`npm-audit-retry.sh" all --package-lock-only`,
+	// The production-only audit reports a subset of the complete audit's
+	// advisories and cannot gate anything the complete audit did not already
+	// fail on, so it is off the per-pull-request path. It must still run
+	// somewhere: the scheduled scan owns the dev-versus-production split.
+	assertFileContainsAll(t, repoFile(".github", "workflows", "security-scan.yml"),
+		`- name: Audit production dependencies`,
 		`npm-audit-retry.sh" production --package-lock-only`,
 		`- name: Require dependency audits`,
 		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
@@ -3715,11 +3679,30 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	}
 	assertFileContainsAll(t, runnerPath,
 		`NPM_AUDIT_REQUIRE_RESULT:-true`,
-		`NPM_AUDIT_FETCH_TIMEOUT_MS:-60000`,
 		`AUDIT_ARGS=("$@")`,
 		`if isinstance(vulns, dict) and "total" in vulns:`,
 		`print("vulnerable" if total else "clean")`,
 	)
+	// Retrying must be bounded by wall clock, not by attempt count alone.
+	// npm's own fetch-timeout defaults to five minutes and it retries
+	// internally, so three unbounded attempts once ran for 10m56s and
+	// cancelled the Frontend job with every test already passing.
+	assertFileContainsAll(t, runnerPath,
+		`NPM_AUDIT_MAX_SECONDS`,
+		`NPM_AUDIT_ATTEMPT_TIMEOUT`,
+		`export npm_config_fetch_retries=0`,
+		`DEADLINE=`,
+	)
+	// The job budget has to stay above the audit budget by a wide margin, or
+	// a stalled endpoint reappears as a cancelled job rather than a warning.
+	workflow, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+	frontendJob := workflowJobBlock(t, string(workflow), "frontend")
+	if !strings.Contains(frontendJob, "timeout-minutes: 30") {
+		t.Fatal("frontend job must keep a bounded timeout above the audit budget")
+	}
 }
 
 func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {

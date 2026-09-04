@@ -240,3 +240,114 @@ func TestRecordAuditErrorPersistsDeclaredClass(t *testing.T) {
 		t.Errorf("unknown = %d, want 0", stats.FailureClasses.Unknown)
 	}
 }
+
+func TestFailureClassRetryable(t *testing.T) {
+	cases := map[NotificationFailureClass]bool{
+		NotificationFailureAuthentication: false,
+		NotificationFailureConfiguration:  false,
+		NotificationFailureRejected:       false,
+		NotificationFailureConnectivity:   true,
+		NotificationFailureRateLimited:    true,
+		NotificationFailureServerError:    true,
+		NotificationFailureTLS:            true,
+		NotificationFailureUnknown:        true,
+		NotificationFailureClass(""):      true,
+	}
+	for class, want := range cases {
+		if got := class.Retryable(); got != want {
+			t.Errorf("%q.Retryable() = %v, want %v", class, got, want)
+		}
+	}
+}
+
+// A deterministic failure must dead-letter on the first attempt rather than
+// spend the whole ladder re-asking a question that already has an answer.
+func TestProcessNotificationDeadLettersDeterministicFailureImmediately(t *testing.T) {
+	cases := []struct {
+		name          string
+		sendErr       error
+		wantStatus    NotificationQueueStatus
+		wantCallCount int
+	}{
+		{
+			name:          "authentication does not retry",
+			sendErr:       FailWithClass(NotificationFailureAuthentication, errors.New("smtp 535 authentication failed")),
+			wantStatus:    QueueStatusDLQ,
+			wantCallCount: 1,
+		},
+		{
+			name:          "configuration does not retry",
+			sendErr:       FailWithClass(NotificationFailureConfiguration, errors.New("no Apprise targets configured for CLI delivery")),
+			wantStatus:    QueueStatusDLQ,
+			wantCallCount: 1,
+		},
+		{
+			name:          "rejection does not retry",
+			sendErr:       FailfWithClass(ClassFromHTTPStatus(422), "webhook returned HTTP 422: unprocessable"),
+			wantStatus:    QueueStatusDLQ,
+			wantCallCount: 1,
+		},
+		{
+			name:          "connectivity still retries",
+			sendErr:       FailWithClass(NotificationFailureConnectivity, errors.New("dial tcp: connection refused")),
+			wantStatus:    QueueStatusPending,
+			wantCallCount: 1,
+		},
+		{
+			name:          "server error still retries",
+			sendErr:       FailfWithClass(ClassFromHTTPStatus(503), "webhook returned HTTP 503: unavailable"),
+			wantStatus:    QueueStatusPending,
+			wantCallCount: 1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			nq, err := NewNotificationQueue(t.TempDir())
+			if err != nil {
+				t.Fatalf("NewNotificationQueue: %v", err)
+			}
+			defer func() { _ = nq.Stop() }()
+
+			futureRetry := time.Now().Add(time.Hour)
+			notif := &QueuedNotification{
+				ID:          "deterministic-failure",
+				Type:        "webhook",
+				Status:      QueueStatusPending,
+				MaxAttempts: 3,
+				Config:      []byte(`{}`),
+				NextRetryAt: &futureRetry,
+			}
+			if err := nq.Enqueue(notif); err != nil {
+				t.Fatalf("enqueue: %v", err)
+			}
+
+			calls := 0
+			nq.SetProcessor(func(*QueuedNotification) error {
+				calls++
+				return tc.sendErr
+			})
+
+			nq.processNotification(notif)
+
+			if calls != tc.wantCallCount {
+				t.Errorf("processor calls = %d, want %d", calls, tc.wantCallCount)
+			}
+
+			if notif.Status != tc.wantStatus {
+				t.Errorf("status = %q, want %q", notif.Status, tc.wantStatus)
+			}
+			if notif.Attempts != 1 {
+				t.Errorf("attempts = %d, want 1 (one delivery attempt was made)", notif.Attempts)
+			}
+
+			stats, err := nq.GetQueueStats()
+			if err != nil {
+				t.Fatalf("GetQueueStats: %v", err)
+			}
+			if stats[string(tc.wantStatus)] != 1 {
+				t.Errorf("persisted queue stats = %#v, want one row in %q", stats, tc.wantStatus)
+			}
+		})
+	}
+}

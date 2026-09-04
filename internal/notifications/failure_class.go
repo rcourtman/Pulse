@@ -170,3 +170,30 @@ func ClassifyNotificationFailureError(err error) NotificationFailureClass {
 
 	return ClassifyNotificationFailure(err.Error())
 }
+
+// Retryable reports whether another delivery attempt could plausibly succeed.
+//
+// Authentication, configuration and rejection are verdicts about the request
+// itself: the same payload, sent again to the same destination with the same
+// credentials, gets the same answer. Retrying them spends attempts, delays the
+// dead letter the operator needs to see, and learns nothing. Connectivity,
+// rate limiting and server errors describe conditions that clear on their own,
+// and an unclassified failure is retried because nothing proves it will not
+// succeed.
+//
+// This generalises to every destination type the decision webhook delivery
+// already made for HTTP 4xx in isRetryableWebhookError.
+//
+// A dead letter is not the end of the road: once the operator fixes the
+// credentials or the configuration, RetryTerminalFailures returns retained
+// terminal failures to the queue with a fresh budget.
+func (class NotificationFailureClass) Retryable() bool {
+	switch class {
+	case NotificationFailureAuthentication,
+		NotificationFailureConfiguration,
+		NotificationFailureRejected:
+		return false
+	default:
+		return true
+	}
+}

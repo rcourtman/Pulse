@@ -1767,8 +1767,10 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 
 	success := err == nil
 	errorMsg := ""
+	failureClass := NotificationFailureClass("")
 	if err != nil {
 		errorMsg = err.Error()
+		failureClass = ClassifyNotificationFailureError(err)
 	}
 
 	if success {
@@ -1801,8 +1803,12 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			Int("maxAttempts", notif.MaxAttempts).
 			Msg("Notification sent successfully")
 	} else {
-		// Check if we should retry or move to DLQ
-		if notif.Attempts >= notif.MaxAttempts {
+		// Check if we should retry or move to DLQ. A deterministic failure
+		// class is dead-lettered on the spot: retrying an authentication,
+		// configuration, or rejection verdict cannot change the answer, and
+		// only delays the dead letter the operator needs to act on.
+		retryable := failureClass.Retryable()
+		if notif.Attempts >= notif.MaxAttempts || !retryable {
 			// Move to DLQ
 			if dlqErr := nq.MoveToDLQ(notif.ID, errorMsg); dlqErr != nil {
 				log.Error().
@@ -1823,6 +1829,10 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 					operationaltrust.NotificationDeadLetter,
 					completedAt,
 				)
+				deadLetterReason := "max_retries_exhausted"
+				if !retryable {
+					deadLetterReason = "failure_class_not_retryable"
+				}
 				log.Warn().
 					Str("component", "notification_queue").
 					Str("action", "move_to_dlq").
@@ -1830,8 +1840,10 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 					Str("type", notif.Type).
 					Int("attempts", notif.Attempts).
 					Int("maxAttempts", notif.MaxAttempts).
+					Str("failureClass", string(failureClass)).
+					Str("deadLetterReason", deadLetterReason).
 					Str("error", errorMsg).
-					Msg("notification moved to DLQ after max retries")
+					Msg("notification moved to DLQ")
 			}
 		} else {
 			// Schedule retry

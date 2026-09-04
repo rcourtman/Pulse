@@ -1082,12 +1082,10 @@ artifact-selection behaviour.
    source-built and exact-candidate images must recreate and qualify all three;
    otherwise the download handler rejects the local Windows agent and falls
    through to a release asset with the wrong filename identity.
-   Helm Pages convergence must recover the immutable chart package from the
-   OCI digest produced and qualified by the exact create-release run. It must
-   verify that digest's hosted-workflow provenance and bind the package to the
-   activated source run, tag, commit, and activation marker; a transient
-   Actions artifact is not a recovery boundary. It must not repeat chart
-   packaging or the pre-activation kind install/upgrade smoke.
+   Helm Pages convergence must promote the immutable chart artifact produced
+   and qualified by the exact create-release run. It must bind that artifact
+   to the activated source run, tag, commit, and activation marker, and must
+   not repeat chart packaging or the pre-activation kind install/upgrade smoke.
    Release-to-convergence and cross-repository child-run observation should
    use short bounded polls so GitHub indexing cannot add tens of seconds after
    a required exact run or activation marker has already completed.
@@ -1873,18 +1871,6 @@ artifact-selection behaviour.
    inputs recovered from the activation marker. Pre-commit owner renewal remains
    limited to the original run while its exact source release run is active and
    does not consume the post-commit convergence-debt budget.
-   An immutable release blocked only by the private paid-runtime credential-
-   containment gate must not consume attempts through unattended replay while
-   the failed private run's containment checker and operator checklist are
-   byte-identical to their current private-main versions. That terminal
-   classification requires authenticated private-repository evidence tying the
-   public paid-runtime job to exactly one canonical failed private promotion run,
-   exactly one failed containment job, and the explicit blocked marker in that
-   job's log. Missing, inaccessible, malformed, or ambiguous evidence remains a
-   normal fail-closed convergence failure. A change to either private
-   containment input or to the public default-branch controls rearms the bounded
-   retry budget for that control revision; it never weakens the containment gate
-   or marks the customer surface converged.
    A support-only private Pro prerelease image is a narrower exception for
    customer verification of an already-fixed defect. It may dispatch the private
    `Build Pro Release` workflow with `publish_docker_image=true`,
@@ -2141,16 +2127,6 @@ artifact-selection behaviour.
    secrets, and attacker-controlled event metadata must enter generated runner
    scripts through explicit environment variables; `${{ }}` interpolation in
    a `run` program is not an acceptable data boundary.
-   Exact-SHA payload compilation and pre-publication release smoke jobs must
-   explicitly disable setup-node automatic package-manager caching and must not
-   opt into setup-node dependency caching. Those jobs consume or qualify the
-   candidate at a release trust boundary, so mutable cache contents must not
-   become an undeclared release input.
-   Release-candidate artifact transfers must use the reviewed Node 24
-   `actions/download-artifact` v8.0.1 pin. Issue automation must use the
-   reviewed Node 24 `actions/github-script` v8.0.0 pin. The workflow trust
-   audit must reject older pins after GitHub's announced Node 20 removal so a
-   release cannot become unbuildable through action-runtime retirement.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.
@@ -2196,21 +2172,6 @@ artifact-selection behaviour.
    `scripts/trigger-release.sh` and `scripts/trigger-stable-patch.sh` must send
    the exact remote candidate SHA they already verified; branch ancestry or a
    later branch tip is not equivalent release admission.
-18. Keep frontend dependency security checks fail-closed without discarding
-   independent build evidence. Push-time and scheduled complete/production
-   dependency audits may retry only explicit registry transport or endpoint
-   failures, with a bounded request timeout and attempt count; an advisory
-   finding must fail immediately, and exhausted service failures must remain a
-   failed check. If npm emits an advisory report together with a transport
-   marker, the advisory result takes precedence and must not be retried. In
-   `.github/workflows/build-and-test.yml`, the aggregate audit
-   verdict must run after formatting, lint, tests, type-checking, the production
-   build, and the bundle-size check so an unavailable advisory service cannot
-   suppress those results. The preceding `npm ci` must disable its duplicate
-   best-effort audit request because the explicit checks own the security
-   verdict. Keep this boundary covered in
-   `scripts/installtests/build_release_assets_test.go` whenever its workflow or
-   helper wiring changes.
 
 ## Current State
 
@@ -3224,15 +3185,15 @@ vulnerabilities in the current patch level, the canonical fix is to advance the
 governed release toolchain and immutable Go builder digest together, not to
 suppress the scanner or produce release artifacts with an older patched-over
 runtime.
-As of 2026-09-04, the governed release floor is Go `1.26.8`, the current
-supported `1.26` patch release. It retains the security corrections that made
-`1.26.7` the previous floor and adds the upstream compiler, runtime, cgo,
-`debug/elf`, and `os` fixes shipped in `1.26.8`. Source-built Alpine container
-stages pin the Docker Official Images manifest list
-`sha256:ce864e7223ac17b1775e6fd0b4c0db580c2eb50e7953a427916379e4b92a1628`;
+As of 2026-08-27, the governed release floor is Go `1.26.7`. It supersedes
+`1.26.5`, whose standard library is reachable through seven vulnerable Pulse
+call paths reported by `govulncheck`, including HTTP/TLS, URL parsing, SAML XML
+decoding, HTML templating, and public-key parsing. Both source-built container
+stages pin the Docker Official Images Linux amd64 manifest
+`sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468`;
 the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
-cannot silently reintroduce a superseded runtime.
+cannot silently reintroduce the vulnerable runtime.
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration
@@ -4051,27 +4012,45 @@ resolved package version and integrity that the release build will actually
 consume.
 Frontend dependency-security changes use their own proof route rather than
 borrowing the local dev-runtime orchestration tests. The canonical
-`.github/workflows/build-and-test.yml` frontend job must run both the complete
-`npm audit` and the production-only `npm audit --omit=dev` after a clean
-install, through `scripts/npm-audit-retry.sh`. That runner exists because
+`.github/workflows/build-and-test.yml` frontend job must run the complete
+`npm audit` after a clean install, through `scripts/npm-audit-retry.sh`. The
+production-only `npm audit --omit=dev` is deliberately not on that
+per-pull-request path: it audits a subset of the same packages, so it can only
+report a subset of the same advisories, and because the complete audit fails
+the job on any finding, the production step could only ever execute in the
+cases where it was already guaranteed clean. The dev-versus-production split
+is reported instead by the scheduled `npm-audit` job in
+`.github/workflows/security-scan.yml`, which covers every npm workspace and
+informs rather than blocks delivery. That runner exists because
 `npm audit` exits non-zero both for a real advisory and for an unreachable
 advisory endpoint: on 2026-09-03 registry.npmjs.org returned 503s and timeouts
 for over an hour and no pull request could land, including changes that touch
 no JavaScript. It separates the two and nothing else. A conclusive result is
 acted on immediately and any vulnerability at any severity still fails, even
 if the same response also carries a transport error, so a severity threshold
-must never be introduced; only an unreachable endpoint is retried through
-bounded one-minute attempts. When retries are exhausted, the run fails if the change touches
+must never be introduced; only an unreachable endpoint is
+retried. Retrying is bounded by wall clock and not by attempt count alone,
+because npm's own `fetch-timeout` defaults to five minutes and it retries
+internally: on 2026-09-04 three attempts against a hanging endpoint ran for
+10m56s and cancelled the Frontend job at its own timeout with every test
+already passing, so a green run was reported as a failed required check. Each
+attempt is therefore bounded, npm's internal retry loop is disabled in favour
+of the runner's own, and the sequence stops at a total deadline. That budget
+must stay well inside the job timeout; it may never be raised to the point
+where an unreachable endpoint can consume the job. When retries are exhausted,
+by attempt count or by budget, the run fails if the change touches
 `frontend-modern/package.json`, `frontend-modern/package-lock.json`, or the
 runner itself, because then the answer is genuinely unknown and the runner may
 never be relaxed under cover of its own tolerant mode, and warns without
-failing when it does not, because the dependency graph is then identical to
-the base commit that already produced a passing answer. Advisories published later against
-unchanged dependencies are the responsibility of Dependabot security updates,
-not of a per-pull-request audit. `scripts/tests/test-npm-audit-retry.sh` pins
+failing when it does not, because the dependency graph is then identical to the base commit that
+already produced a passing answer. Advisories published later against
+unchanged dependencies are the responsibility of Dependabot security updates
+and the scheduled scan, not of a per-pull-request audit.
+`scripts/tests/test-npm-audit-retry.sh` pins
 that split, including that a real advisory fails even when the tolerant mode
-is active and that an unparseable or unrecognised report is never read as
-clean. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
+is active, that an unparseable or unrecognised report is never read as
+clean, and that neither a hung attempt nor an exhausted budget can outlive
+its bound. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
 pins the known safe floors for advisories remediated by commit `6ba85a185`,
 including DOMPurify `GHSA-55q2-fjhq-7xh7`, brace-expansion
 `GHSA-mh99-v99m-4gvg` and `GHSA-rgw5-rvv9-x895`, and nanoid
@@ -5072,21 +5051,11 @@ Every repository checkout in build, packaging, publication, qualification,
 recovery, and deployment automation uses the reviewed immutable
 `actions/checkout` v7.0.1 pin. That baseline refuses fork pull-request checkout
 on privileged events unless a workflow explicitly opts out; Pulse prohibits
-that opt-out. The sole `pull_request_target` exception is the machine-checked,
-metadata-only closed-PR capacity reclaimer: it runs only the protected
-default-branch helper and has no secret, checkout, cache, artifact, container,
-or shell ingress. Pull-request workflows may not reference repository secrets,
-including values treated as public configuration. Exact-SHA compilation and
-pre-publication release smoke explicitly disable setup-node's automatic npm
-cache and do not request dependency caches, preventing mutable cache state from
-becoming release input. Candidate artifact downloads use the reviewed Node 24
-`actions/download-artifact` v8.0.1 pin, and issue automation uses the reviewed
-Node 24 `actions/github-script` v8.0.0 pin; older runtime pins are rejected
-before GitHub's 23 September 2026 Node 20 removal. Dependency refreshes must
+that opt-out and the `pull_request_target` trigger. Dependency refreshes must
 update the central workflow-trust allowlist and its regression proof together,
 so a routine pin change cannot silently remove this release-automation trust
-boundary.
-`scripts/check_workflow_trust.py`, `scripts/tests/test_workflow_trust.py`, and
+boundary. `scripts/check_workflow_trust.py`,
+`scripts/tests/test_workflow_trust.py`, and
 `scripts/installtests/build_release_assets_test.go` pin the policy and the
 release-workflow integration.
 

@@ -52,6 +52,8 @@ run_case() {
   out="$(NPM_AUDIT_CMD="${npm_bin}" \
          NPM_AUDIT_RETRY_DELAY=0 \
          NPM_AUDIT_ATTEMPTS="${NPM_AUDIT_ATTEMPTS:-3}" \
+         NPM_AUDIT_ATTEMPT_TIMEOUT="${NPM_AUDIT_ATTEMPT_TIMEOUT:-60}" \
+         NPM_AUDIT_MAX_SECONDS="${NPM_AUDIT_MAX_SECONDS:-240}" \
          NPM_AUDIT_REQUIRE_RESULT="${require}" \
          bash "${SCRIPT}" all 2>&1)"
   status=$?
@@ -116,6 +118,54 @@ run_case "empty output is not treated as clean" 1 \
 run_case "unknown payload shape is not treated as clean" 1 \
   "$(make_fake_npm npm-shape '{"metadata":{}}')" true \
   "could not reach the advisory endpoint"
+
+# A hung endpoint must be cut off per attempt rather than inheriting npm's
+# own five-minute fetch timeout. This is the regression that cancelled the
+# Frontend job on 2026-09-04: three "attempts" ran for eleven minutes.
+hanging_npm="${WORK_DIR}/npm-hang"
+cat > "${hanging_npm}" <<'SH'
+#!/usr/bin/env bash
+sleep 300
+SH
+chmod +x "${hanging_npm}"
+
+started=$(date +%s)
+NPM_AUDIT_ATTEMPT_TIMEOUT=1 NPM_AUDIT_MAX_SECONDS=10 \
+  run_case "a hung audit is stopped at the per-attempt limit" 1 \
+  "${hanging_npm}" true "was stopped" "could not reach the advisory endpoint"
+elapsed=$(( $(date +%s) - started ))
+if [ "${elapsed}" -gt 30 ]; then
+  echo "FAIL: hung audit took ${elapsed}s; the per-attempt limit did not bound it"
+  failures=$((failures + 1))
+else
+  echo "ok: hung audit bounded in ${elapsed}s"
+fi
+
+# The total budget, not just the attempt count, has to end the sequence, and
+# an exhausted budget must still respect the fail-closed/fail-open split.
+started=$(date +%s)
+NPM_AUDIT_ATTEMPTS=50 NPM_AUDIT_ATTEMPT_TIMEOUT=1 NPM_AUDIT_MAX_SECONDS=3 \
+  run_case "the wall-clock budget ends the retry sequence" 1 \
+  "${hanging_npm}" true "retry budget exhausted"
+elapsed=$(( $(date +%s) - started ))
+if [ "${elapsed}" -gt 25 ]; then
+  echo "FAIL: 50 attempts under a 3s budget took ${elapsed}s; the budget did not bound them"
+  failures=$((failures + 1))
+else
+  echo "ok: wall-clock budget bounded 50 attempts in ${elapsed}s"
+fi
+
+# An exhausted budget is still tolerated when the dependency graph is unchanged.
+NPM_AUDIT_ATTEMPTS=50 NPM_AUDIT_ATTEMPT_TIMEOUT=1 NPM_AUDIT_MAX_SECONDS=3 \
+  run_case "an exhausted budget warns when dependencies unchanged" 0 \
+  "${hanging_npm}" false "::warning::" "retry budget"
+
+# A real advisory must still fail even under a tight budget: the bound may
+# only ever change what happens to an unreachable endpoint.
+NPM_AUDIT_ATTEMPT_TIMEOUT=1 NPM_AUDIT_MAX_SECONDS=3 \
+  run_case "a vulnerability still fails under a tight budget" 1 \
+  "$(make_fake_npm npm-vuln-budget "${VULN}")" false \
+  "vulnerabilities present"
 
 if [ "${failures}" -ne 0 ]; then
   echo "${failures} test(s) failed"
