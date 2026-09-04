@@ -121,7 +121,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # The two npm audit steps retry through registry outages (they burned
+    # 14m34s on 2026-09-04), which no longer fits a 25 minute budget: the job
+    # was cancelled mid type-check with all 1183 test files already passing.
+    timeout-minutes: 40
     env:
       FRONTEND_DIR: frontend-modern
 
