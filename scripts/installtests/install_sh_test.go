@@ -7885,3 +7885,32 @@ func TestInstallSHTypedPrivilegedHelperProtectsCredentialsAfterStateChown(t *tes
 		}
 	}
 }
+
+// macOS has no root group. Exercise both shared lifecycle writes with a
+// chown stub that accepts only portable numeric superuser ownership.
+func TestInstallSHLifecyclePortableRootOwnership(t *testing.T) {
+	script := `set -euo pipefail
+LEAST_PRIVILEGE=false
+TMP_FILES=()
+id() { echo 0; }
+chown() { [[ "$1" == "0:0" ]]; }
+sync_lifecycle_path() { :; }
+` + extractInstallShellFunction(t, "prepare_installer_lifecycle_dir") + "\n" +
+		extractInstallShellFunction(t, "install_lifecycle_file_atomically") + `
+prepare_installer_lifecycle_dir "$PWD/state"
+printf 'saved installer\n' > "$PWD/source"
+install_lifecycle_file_atomically "$PWD/source" "$PWD/state/install.sh" 700
+cmp "$PWD/source" "$PWD/state/install.sh"
+# A failed ownership operation must still prevent replacement.
+chown() { return 1; }
+if prepare_installer_lifecycle_dir "$PWD/rejected"; then exit 10; fi
+printf 'replacement\n' > "$PWD/source"
+if install_lifecycle_file_atomically "$PWD/source" "$PWD/state/install.sh" 700; then exit 11; fi
+grep -qx 'saved installer' "$PWD/state/install.sh"
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Dir = t.TempDir()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("lifecycle ownership: %v\n%s", err, out)
+	}
+}
