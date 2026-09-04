@@ -3099,7 +3099,8 @@ prepare_installer_lifecycle_dir() {
             chown "root:${LEAST_PRIVILEGE_USER}" "$lifecycle_dir" || return 1
             chmod 0750 "$lifecycle_dir" || return 1
         else
-            chown root:root "$lifecycle_dir" || return 1
+            # Numeric IDs also work on macOS, whose group 0 is wheel, not root.
+            chown 0:0 "$lifecycle_dir" || return 1
             chmod 0700 "$lifecycle_dir" || return 1
         fi
     else
@@ -3123,7 +3124,7 @@ install_lifecycle_file_atomically() {
     cp "$source_path" "$target_tmp" || return 1
     chmod "$target_mode" "$target_tmp" || return 1
     if [[ "$(id -u)" == "0" ]]; then
-        chown root:root "$target_tmp" || return 1
+        chown 0:0 "$target_tmp" || return 1
     fi
     sync_lifecycle_path "$target_tmp" || return 1
     mv -f "$target_tmp" "$target_path" || return 1
