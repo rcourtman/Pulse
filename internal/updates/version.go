@@ -296,7 +296,10 @@ func DescribeUsageDataVersion(raw string) UsageDataVersionIdentity {
 	identity.Build = parsed.Build
 	identity.Channel = usageDataVersionChannel(parsed)
 	identity.IsDevelopment = identity.Channel == "dev"
-	identity.IsPublishedRelease = parsed.IsPublishedReleaseAssetVersion()
+	// A development build is never a published release. Without this the 0.0.0
+	// sentinel "0.0.0-rc.1" would satisfy IsPublishedReleaseAssetVersion and
+	// report both flags at once, which no real install can be.
+	identity.IsPublishedRelease = !identity.IsDevelopment && parsed.IsPublishedReleaseAssetVersion()
 	return identity
 }
 
@@ -431,12 +434,25 @@ func detectChannelFromVersion(version string) string {
 	return "stable"
 }
 
+// developmentSentinelVersion reports whether a version carries the 0.0.0
+// sentinel normalizeVersionString assigns to any build string it cannot parse
+// as a release version: a branch name, an ad-hoc test or qualification label,
+// or an empty VERSION file. Pulse never publishes a 0.0.0 release, so such a
+// build is a development build whatever its prerelease text happens to spell,
+// and the check has to precede the prerelease classification rather than fall
+// through to it.
+func developmentSentinelVersion(version *Version) bool {
+	return version != nil && version.Major == 0 && version.Minor == 0 && version.Patch == 0
+}
+
 func usageDataVersionChannel(version *Version) string {
 	if version == nil {
 		return "unknown"
 	}
 	switch {
 	case version.Build != "":
+		return "dev"
+	case developmentSentinelVersion(version):
 		return "dev"
 	case version.IsPreviewPrerelease():
 		return version.PreviewStage()
