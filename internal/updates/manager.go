@@ -932,6 +932,25 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 
 	var releases []ReleaseInfo
 	if err := decodeReleaseMetadata(resp, &releases); err != nil {
+		// The GitHub collection embeds every asset for every returned release,
+		// so a valid response can outgrow the metadata limit as history grows.
+		// Retain the bound and use GitHub's separately bounded Atom feed only for
+		// that typed condition. A custom update server must not be silently
+		// replaced by github.com, and malformed metadata remains a hard failure.
+		if securityutil.IsResponseBodyTooLarge(err) && strings.TrimSpace(os.Getenv("PULSE_UPDATE_SERVER")) == "" {
+			log.Warn().
+				Str("channel", channel).
+				Int64("limitBytes", maxReleaseMetadataBytes).
+				Msg("GitHub release metadata exceeds safety limit, trying Atom fallback")
+			feedRelease, feedErr := m.getLatestReleaseFromFeed(ctx, channel)
+			if feedErr == nil {
+				log.Info().
+					Str("version", feedRelease.TagName).
+					Msg("Got release info from Atom fallback")
+				return feedRelease, nil
+			}
+			return nil, fmt.Errorf("failed to decode releases: %w; release feed fallback failed: %v", err, feedErr)
+		}
 		return nil, fmt.Errorf("failed to decode releases: %w", err)
 	}
 
@@ -1075,7 +1094,9 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 	if len(feed.Entries) == 0 {
 		return nil, fmt.Errorf("no version tags found in feed")
 	}
-	versionTitleRegex := regexp.MustCompile(`^Pulse (v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)$`)
+	// GitHub uses the release name when present ("Pulse v6.4.1") and otherwise
+	// falls back to the bare tag ("v6.4.2") for Atom entry titles.
+	versionTitleRegex := regexp.MustCompile(`^(?:Pulse )?(v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)$`)
 
 	// Pick the highest version matching the channel rather than the first
 	// entry: the feed is publication-ordered and v5-line maintenance releases
