@@ -2186,6 +2186,19 @@ artifact-selection behaviour.
    `scripts/trigger-release.sh` and `scripts/trigger-stable-patch.sh` must send
    the exact remote candidate SHA they already verified; branch ancestry or a
    later branch tip is not equivalent release admission.
+18. Keep frontend dependency security checks fail-closed without discarding
+   independent build evidence. Push-time and scheduled complete/production
+   dependency audits may retry only explicit registry transport or endpoint
+   failures, with a bounded request timeout and attempt count; an advisory
+   finding must fail immediately, and exhausted service failures must remain a
+   failed check. In `.github/workflows/build-and-test.yml`, the aggregate audit
+   verdict must run after formatting, lint, tests, type-checking, the production
+   build, and the bundle-size check so an unavailable advisory service cannot
+   suppress those results. The preceding `npm ci` must disable its duplicate
+   best-effort audit request because the explicit checks own the security
+   verdict. Keep this boundary covered in
+   `scripts/installtests/build_release_assets_test.go` whenever its workflow or
+   helper wiring changes.
 
 ## Current State
 
