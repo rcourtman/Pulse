@@ -35,7 +35,7 @@ if [[ -z "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ]]; then
     exit 3
 fi
 
-required_go="go1.26.7"
+required_go="go1.26.8"
 go_version="$(go env GOVERSION 2>/dev/null || true)"
 if [[ "${go_version}" != "${required_go}" ]]; then
     echo "Error: Go toolchain must be ${required_go} (got ${go_version:-unknown})." >&2

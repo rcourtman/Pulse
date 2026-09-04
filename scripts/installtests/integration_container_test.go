@@ -13,7 +13,7 @@ func TestIntegrationContainersUseGovernedImmutableBases(t *testing.T) {
 		t.Fatalf("read mock GitHub Dockerfile: %v", err)
 	}
 	dockerfile := string(dockerfileBytes)
-	assertDigestPinnedDockerStage(t, dockerfile, `FROM golang:1.26.7-alpine@sha256:`, ` AS builder`)
+	assertDigestPinnedDockerStage(t, dockerfile, `FROM golang:1.26.8-alpine@sha256:`, ` AS builder`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ``)
 
 	composeBytes, err := os.ReadFile(repoFile("tests", "integration", "docker-compose.test.yml"))
