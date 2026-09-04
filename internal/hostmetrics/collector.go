@@ -402,29 +402,34 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 		// - Virtual/pseudo filesystems (tmpfs, devtmpfs, cgroup, etc.)
 		// - Container overlay paths (Docker/Podman layers on ZFS, including TrueNAS .ix-apps)
 		// See issues #505, #690, #718, #790.
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used); shouldSkip && !explicitlyIncluded {
+		automaticallyFiltered, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used)
+		if automaticallyFiltered && !explicitlyIncluded {
 			continue
 		}
 
-		// Deduplicate by device + total bytes (issue #953).
-		// Synology NAS and similar systems create multiple "shared folders" as bind mounts
-		// or BTRFS subvolumes that all report the same device and total capacity.
-		// Only count each unique device+total combination once.
-		deviceKey := fmt.Sprintf("%s:%d", part.Device, usage.Total)
-		if existingMount, exists := deviceTotals[deviceKey]; exists {
-			// Prefer shorter/shallower mountpoints (e.g., /volume1 over /volume1/docker)
-			if len(part.Mountpoint) >= len(existingMount) {
-				continue
-			}
-			// This mountpoint is shallower - remove the old entry and use this one
-			for i := len(disks) - 1; i >= 0; i-- {
-				if disks[i].Mountpoint == existingMount {
-					disks = append(disks[:i], disks[i+1:]...)
-					break
+		// Deduplicate normally visible storage by device + total bytes (issue
+		// #953). Synology NAS and similar systems create multiple shared folders
+		// that report the same underlying capacity. Automatically filtered
+		// filesystems are different: generic sources such as "tmpfs" can name
+		// multiple independent mounts with equal capacity, and these entries are
+		// present only because the operator explicitly selected each one.
+		if !automaticallyFiltered {
+			deviceKey := fmt.Sprintf("%s:%d", part.Device, usage.Total)
+			if existingMount, exists := deviceTotals[deviceKey]; exists {
+				// Prefer shorter/shallower mountpoints (e.g., /volume1 over /volume1/docker)
+				if len(part.Mountpoint) >= len(existingMount) {
+					continue
+				}
+				// This mountpoint is shallower - remove the old entry and use this one
+				for i := len(disks) - 1; i >= 0; i-- {
+					if disks[i].Mountpoint == existingMount {
+						disks = append(disks[:i], disks[i+1:]...)
+						break
+					}
 				}
 			}
+			deviceTotals[deviceKey] = part.Mountpoint
 		}
-		deviceTotals[deviceKey] = part.Mountpoint
 
 		disks = append(disks, agentshost.Disk{
 			Device:     part.Device,

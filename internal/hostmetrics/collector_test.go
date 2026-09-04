@@ -225,6 +225,42 @@ func TestCollectDisksIncludesExplicitTmpfsMount(t *testing.T) {
 	}
 }
 
+func TestCollectDisksKeepsDistinctExplicitTmpfsMountsWithEqualCapacity(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	t.Cleanup(func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+	})
+
+	diskPartitions = func(context.Context, bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "tmpfs", Mountpoint: "/var/log", Fstype: "tmpfs"},
+			{Device: "tmpfs", Mountpoint: "/mnt/ramdisk/plex-transcode", Fstype: "tmpfs"},
+		}, nil
+	}
+	diskUsage = func(_ context.Context, path string) (*godisk.UsageStat, error) {
+		return &godisk.UsageStat{
+			Path:        path,
+			Total:       1024,
+			Used:        768,
+			Free:        256,
+			UsedPercent: 75,
+		}, nil
+	}
+
+	disks := collectDisksWithIncludes(context.Background(), nil, []string{
+		"/var/log",
+		"/mnt/ramdisk/plex-transcode",
+	})
+	if len(disks) != 2 {
+		t.Fatalf("distinct explicitly included tmpfs mounts were deduplicated: %+v", disks)
+	}
+	if disks[0].Mountpoint != "/mnt/ramdisk/plex-transcode" || disks[1].Mountpoint != "/var/log" {
+		t.Fatalf("explicit tmpfs mounts = %+v", disks)
+	}
+}
+
 func TestCollectDisksExplicitExcludeWinsOverInclude(t *testing.T) {
 	origPartitions := diskPartitions
 	origUsage := diskUsage
