@@ -6669,6 +6669,14 @@ baseline before fault injection. The Watch correlation and Pro investigation
 fixtures use Alpine's `nc` applet for the disposable HTTP dependency; a missing
 optional daemon must fail baseline convergence and never be scored as a model
 miss.
+Repository Actions may validate the Patrol catalogue and replay recorded
+qualification evidence only on a fresh GitHub-hosted runner. Live and release
+qualification require private-lab credentials, fault authority, and reports
+that can contain private resource identity, so they must run directly from a
+disposable canary-lab host at a pinned Pulse revision, never from a persistent
+self-hosted Actions runner. Keep raw artifacts outside the working tree in an
+access-controlled root with checksums, and execute the reviewed Watch scenarios
+sequentially so model overrides and run association cannot race.
 Governed Docker remediation qualification must not define a deliberate
 container stop as a required Watch finding. Patrol intentionally suppresses an
 ordinary stopped workload unless independent evidence establishes that it was

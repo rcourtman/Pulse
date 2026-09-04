@@ -512,26 +512,22 @@ the provider exposes them.
 
 - Pull requests: schema/catalog validation, unit tests, strict parsing,
   scorer replay, transcript replay, and no credentials or homelab access.
-- Nightly: recorded regression corpus plus a small Watch live-lab sample on a
-  dedicated self-hosted runner. Results are diagnostic until the required
-  repeat count is complete.
-- Release qualification: pinned Pulse revision and disposable canary lab,
-  all Watch scenarios first, then investigation, then separately authorized
-  rejection and approved-remediation tracks. Artifacts must be retained
-  outside the working tree with checksums.
+- Nightly: recorded regression corpus on a fresh GitHub-hosted runner. No
+  private-lab credential or live fault capability enters repository Actions.
+- Live and release qualification: pinned Pulse revision and disposable canary
+  lab, all Watch scenarios first, then investigation, then separately
+  authorized rejection and approved-remediation tracks. Artifacts must be
+  retained outside the working tree with checksums.
 - Production: observation only. Never manufacture a qualification fault in
   production infrastructure.
 
-`.github/workflows/patrol-qualification-live.yml` implements the opt-in
-nightly Watch lab. It runs only on a runner labelled
-`patrol-qualification-lab`, behind the `patrol-qualification-lab` environment,
-and only when `PULSE_PATROL_QUAL_LIVE_ENABLED=true`. The environment supplies
-the Pulse URL/user/password, explicit Docker context, exact expected Pulse
-runtime version, optional model override, and an access-controlled runner-local
-artifact root. Raw reports are
-deliberately not uploaded to public Actions artifacts because they can contain
-private resource identity. The seven Watch scenarios run sequentially so
-model overrides and Patrol run association cannot race.
+Run live qualification directly from a disposable canary-lab host with the
+Pulse URL/user/password, explicit Docker context, exact expected Pulse runtime
+version, optional model override, and an access-controlled artifact root. The
+repository does not schedule this work on a self-hosted Actions runner: a
+persistent runner can retain executable state between jobs, and the live
+reports can contain private resource identity. Keep the seven Watch scenarios
+sequential so model overrides and Patrol run association cannot race.
 
 ## Product decisions
 

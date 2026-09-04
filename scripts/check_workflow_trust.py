@@ -198,11 +198,11 @@ NONEMPTY_FLOW_MAPPING_RE = re.compile(
     r'''^\s*(?:-\s*)?(?:[A-Za-z0-9_.-]+|"[^"]+"|'[^']+')'''
     r"\s*:\s*\{(?!\s*\}\s*$)"
 )
-# OIDC-backed delivery identity is only trusted when GitHub owns the runner
+# Secrets and delivery identity are only trusted when GitHub owns the runner
 # lifecycle. Keep the accepted image labels explicit and reviewable so a job
 # cannot move to persistent or dynamically selected compute without changing
-# this contract. These are the hosted images used by Pulse's attestation jobs.
-TRUSTED_OIDC_RUNNER_LABELS = frozenset(
+# this contract.
+TRUSTED_PRIVILEGED_RUNNER_LABELS = frozenset(
     {"ubuntu-24.04", "windows-2025", "macos-15"}
 )
 
@@ -1107,7 +1107,7 @@ def _audit_oidc_runner_trust(path: Path, lines: list[str]) -> list[Finding]:
             continue
         if (
             len(runner_declarations) != 1
-            or runner_declarations[0][1] not in TRUSTED_OIDC_RUNNER_LABELS
+            or runner_declarations[0][1] not in TRUSTED_PRIVILEGED_RUNNER_LABELS
         ):
             finding_index = (
                 runner_declarations[0][0] if runner_declarations else job_index
@@ -1119,6 +1119,89 @@ def _audit_oidc_runner_trust(path: Path, lines: list[str]) -> list[Finding]:
                     "id-token write jobs must use exactly one reviewed literal "
                     "GitHub-hosted runner label; dynamic or self-hosted runners "
                     "cannot mint trusted delivery identity",
+                )
+            )
+
+    return findings
+
+
+def _audit_privileged_runner_trust(path: Path, lines: list[str]) -> list[Finding]:
+    """Keep secrets and repository write authority off mutable runner boundaries."""
+    findings: list[Finding] = []
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if JOBS_RE.match(line.split("#", 1)[0])
+        ),
+        len(lines),
+    )
+    jobs_end = (
+        _mapping_end_index(lines, jobs_index)
+        if jobs_index < len(lines)
+        else len(lines)
+    )
+    top_level_write = any(
+        not match.group(1)
+        and _permission_mapping_has_write(lines, index)
+        for index, line in enumerate(lines)
+        if (match := PERMISSIONS_RE.match(line.split("#", 1)[0]))
+    )
+    top_level_secret = _has_secret_reference(
+        lines[:jobs_index] + lines[jobs_end:]
+    )
+
+    for job_index, end_index, _ in _runner_job_ranges(lines):
+        job_lines = lines[job_index:end_index]
+        direct_indent = _direct_mapping_indent(lines, job_index, end_index)
+        if direct_indent is None:
+            continue
+        permission_indexes = [
+            index
+            for index in range(job_index + 1, end_index)
+            if (
+                (match := PERMISSIONS_RE.match(lines[index].split("#", 1)[0]))
+                and len(match.group(1)) == direct_indent
+            )
+        ]
+        job_write = (
+            any(
+                _permission_mapping_has_write(lines, index, end_index)
+                for index in permission_indexes
+            )
+            if permission_indexes
+            else top_level_write
+        )
+        if not (top_level_secret or _has_secret_reference(job_lines) or job_write):
+            continue
+
+        runner_declarations: list[tuple[int, str]] = []
+        for index in range(job_index + 1, end_index):
+            code = lines[index].split("#", 1)[0]
+            match = re.match(
+                rf"^(\s*){_yaml_key('runs-on')}\s*:\s*(.*?)\s*$", code
+            )
+            if match and len(match.group(1)) == direct_indent:
+                runner_declarations.append(
+                    (index, match.group(2).strip().strip("'\""))
+                )
+
+        # A reusable-workflow caller cannot choose compute. Its called local
+        # jobs are audited independently, including inherited secrets and
+        # permissions at their actual runner boundary.
+        if not runner_declarations:
+            continue
+        if (
+            len(runner_declarations) != 1
+            or runner_declarations[0][1] not in TRUSTED_PRIVILEGED_RUNNER_LABELS
+        ):
+            findings.append(
+                Finding(
+                    path,
+                    runner_declarations[0][0] + 1,
+                    "secret- or write-capable jobs must use exactly one reviewed "
+                    "literal GitHub-hosted runner label; persistent, dynamic, or "
+                    "self-hosted runners can retain credentials or code between jobs",
                 )
             )
 
@@ -1269,6 +1352,7 @@ def audit_workflow(path: Path) -> list[Finding]:
     findings = _audit_yaml_trust_shape(path, lines)
     findings.extend(_audit_runner_job_timeouts(path, lines))
     findings.extend(_audit_oidc_runner_trust(path, lines))
+    findings.extend(_audit_privileged_runner_trust(path, lines))
     findings.extend(_audit_privileged_job_caches(path, lines))
     findings.extend(_audit_workflow_run_trigger(path, lines))
     has_workflow_run_trigger = _has_trigger(lines, "workflow_run")
