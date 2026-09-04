@@ -3269,6 +3269,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	frontendBundleJob := workflowJobBlock(t, createWorkflow, "frontend_bundle")
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
+	releaseSmokeJob := workflowJobBlock(t, createWorkflow, "release_smoke")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
 	privateStageJob := workflowJobBlock(t, createWorkflow, "stage_private_pro_runtime")
 	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
@@ -3281,6 +3282,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	helmPagesJob := workflowJobBlock(t, convergenceWorkflow, "publish_helm_pages")
 	demoJob := workflowJobBlock(t, convergenceWorkflow, "update_stable_demo")
 	compileJob := workflowJobBlock(t, compilerWorkflow, "compile-release-payload")
+	compileSetupNodeStep := workflowStepBlock(t, compileJob, "Set up Node.js")
+	releaseSmokeSetupNodeStep := workflowStepBlock(t, releaseSmokeJob, "Set up Node.js")
 	obtainPayloadJob := workflowJobBlock(t, candidateWorkflow, "obtain-release-payload")
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
 	compiledPayloadVerificationStep := workflowStepBlock(t, candidateBuildJob, "Verify exact-SHA compiled payload")
@@ -3374,8 +3377,16 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("%s runner selection must not depend on the Windows-signing decision", label)
 		}
 	}
-	if !strings.Contains(compileJob, "cache: false") || strings.Contains(compileJob, "cache: 'npm'") {
-		t.Fatal("release compilation must avoid Actions cache archival")
+	for label, step := range map[string]string{
+		"exact-SHA release compilation": compileSetupNodeStep,
+		"pre-publication release smoke": releaseSmokeSetupNodeStep,
+	} {
+		if !strings.Contains(step, "package-manager-cache: false") {
+			t.Fatalf("%s must disable setup-node automatic package-manager caching", label)
+		}
+		if strings.Contains(step, "\n          cache:") || strings.Contains(step, "cache-dependency-path:") {
+			t.Fatalf("%s must not opt into setup-node dependency caching", label)
+		}
 	}
 	if strings.Contains(frontendBundleJob, "cache: 'npm'") {
 		t.Fatal("PVE frontend bundle must use its persistent runner-local npm cache")

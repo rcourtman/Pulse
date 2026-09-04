@@ -109,8 +109,6 @@ jobs:
         run: |
           docker build -t pulse:test --target e2e_runtime --build-arg GO_BUILD_TAGS="" .
           docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
-        env:
-          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Start test containers
         working-directory: tests/integration
@@ -259,8 +257,6 @@ jobs:
         run: |
           docker build -t pulse:test --target e2e_runtime --build-arg GO_BUILD_TAGS="" .
           docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
-        env:
-          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Start non-mock test container
         working-directory: tests/integration

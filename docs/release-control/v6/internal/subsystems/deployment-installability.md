@@ -2141,6 +2141,11 @@ artifact-selection behaviour.
    secrets, and attacker-controlled event metadata must enter generated runner
    scripts through explicit environment variables; `${{ }}` interpolation in
    a `run` program is not an acceptable data boundary.
+   Exact-SHA payload compilation and pre-publication release smoke jobs must
+   explicitly disable setup-node automatic package-manager caching and must not
+   opt into setup-node dependency caching. Those jobs consume or qualify the
+   candidate at a release trust boundary, so mutable cache contents must not
+   become an undeclared release input.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.
@@ -5034,11 +5039,17 @@ Every repository checkout in build, packaging, publication, qualification,
 recovery, and deployment automation uses the reviewed immutable
 `actions/checkout` v7.0.1 pin. That baseline refuses fork pull-request checkout
 on privileged events unless a workflow explicitly opts out; Pulse prohibits
-that opt-out and the `pull_request_target` trigger. Dependency refreshes must
-update the central workflow-trust allowlist and its regression proof together,
-so a routine pin change cannot silently remove this release-automation trust
-boundary. `scripts/check_workflow_trust.py`,
-`scripts/tests/test_workflow_trust.py`, and
+that opt-out. The sole `pull_request_target` exception is the machine-checked,
+metadata-only closed-PR capacity reclaimer: it runs only the protected
+default-branch helper and has no secret, checkout, cache, artifact, container,
+or shell ingress. Pull-request workflows may not reference repository secrets,
+including values treated as public configuration. Exact-SHA compilation and
+pre-publication release smoke explicitly disable setup-node's automatic npm
+cache and do not request dependency caches, preventing mutable cache state from
+becoming release input. Dependency refreshes must update the central
+workflow-trust allowlist and its regression proof together, so a routine pin
+change cannot silently remove this release-automation trust boundary.
+`scripts/check_workflow_trust.py`, `scripts/tests/test_workflow_trust.py`, and
 `scripts/installtests/build_release_assets_test.go` pin the policy and the
 release-workflow integration.
 
