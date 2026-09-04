@@ -14,6 +14,7 @@ const buildPveNode = (overrides: Partial<NodeConfig> = {}): NodeConfig =>
     name: 'enacon',
     host: 'https://192.168.16.70:8006',
     user: '',
+    fingerprint: 'AA:BB:CC:DD',
     verifySSL: true,
     monitorVMs: true,
     monitorContainers: true,
@@ -64,13 +65,17 @@ describe('useNodeModalState poll refresh vs unsaved edits', () => {
     expect(state.formData().name).toBe('enacon');
 
     state.updateField('name', 'renamed-cluster');
+    state.updateField('setupMode', 'agent');
+    state.updateField('verifySSL', false);
+    state.updateField('fingerprint', '');
     state.updateClusterNodeDisplayName('enacon-pve01', 'steinboeck-pve01');
 
     // Adoption progress: the poll delivers a refreshed snapshot of the SAME
     // connection with a new cluster member. Before the fix this rebuilt the
-    // form and wiped both edits.
+    // form and wiped these edits.
     setNode(
       buildPveNode({
+        fingerprint: '11:22:33:44',
         clusterEndpoints: [
           {
             NodeID: 'node/pve01',
@@ -91,6 +96,9 @@ describe('useNodeModalState poll refresh vs unsaved edits', () => {
     );
 
     expect(state.formData().name).toBe('renamed-cluster');
+    expect(state.formData().setupMode).toBe('agent');
+    expect(state.formData().verifySSL).toBe(false);
+    expect(state.formData().fingerprint).toBe('');
     expect(state.formData().clusterNodeDisplayNames['enacon-pve01']).toBe('steinboeck-pve01');
 
     dispose();
