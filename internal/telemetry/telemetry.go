@@ -96,6 +96,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -106,9 +107,16 @@ import (
 
 // pingEndpoint is the URL that receives outbound usage telemetry pings.
 // It is a var (not const) so that tests can redirect it to a local server.
-var pingEndpoint = "https://license.pulserelay.pro/v1/telemetry/ping"
+// productionPingEndpoint is the live receiver for outbound usage telemetry.
+const productionPingEndpoint = "https://license.pulserelay.pro/v1/telemetry/ping"
+
+var pingEndpoint = productionPingEndpoint
 
 var errInstallIDUnavailable = errors.New("telemetry install id unavailable")
+
+// errProductionEndpointUnderTest reports a ping suppressed because a test
+// binary tried to reach the live receiver.
+var errProductionEndpointUnderTest = errors.New("telemetry: refusing to post to the production endpoint from a test binary")
 
 const (
 	// heartbeatInterval is the base interval between daily pings.
@@ -1657,6 +1665,15 @@ func buildPingAt(cfg Config, event string, now time.Time) (Ping, error) {
 // send posts a ping to the telemetry endpoint. Errors are observable in debug
 // logs but never affect normal Pulse operation.
 func send(ctx context.Context, ping Ping) error {
+	// A test binary is not a real installation. Any test that boots the real
+	// server (pkg/server.Run and anything like it) runs against a throwaway
+	// data directory, so it mints a fresh install ID per run and would be
+	// counted as a distinct live install. Telemetry's own tests redirect
+	// pingEndpoint at a local server and are unaffected by this guard.
+	if testing.Testing() && pingEndpoint == productionPingEndpoint {
+		return errProductionEndpointUnderTest
+	}
+
 	body, err := json.Marshal(ping)
 	if err != nil {
 		return err
