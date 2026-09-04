@@ -67,6 +67,9 @@ class ReleaseContinuityTest(unittest.TestCase):
         command: str,
         release: object,
         activation: object | None = None,
+        stable_refs: object | None = None,
+        releases: object | None = None,
+        registries: list[object] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object], str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -83,13 +86,32 @@ class ReleaseContinuityTest(unittest.TestCase):
                 str(release_path),
                 "--diagnostic",
                 str(diagnostic),
-                "--github-output",
-                str(output),
             ]
+            if command != "frontier":
+                args.extend(["--github-output", str(output)])
             if command == "activation":
                 activation_path = root / "activation.json"
                 activation_path.write_bytes(encoded(activation))
                 args.extend(["--activation-json", str(activation_path)])
+            if command == "frontier":
+                stable_refs_path = root / "stable-refs.json"
+                releases_path = root / "releases.json"
+                stable_refs_path.write_text(json.dumps(stable_refs), encoding="utf-8")
+                releases_path.write_text(json.dumps(releases), encoding="utf-8")
+                args.extend(
+                    [
+                        "--stable-refs-json",
+                        str(stable_refs_path),
+                        "--releases-json",
+                        str(releases_path),
+                    ]
+                )
+                for index, registry in enumerate(
+                    registries or [{"name": "registry.example/pulse", "tags": []}]
+                ):
+                    registry_path = root / f"registry-{index}.json"
+                    registry_path.write_text(json.dumps(registry), encoding="utf-8")
+                    args.extend(["--registry-tags-json", str(registry_path)])
             result = subprocess.run(
                 args,
                 cwd=ROOT,
@@ -271,6 +293,102 @@ class ReleaseContinuityTest(unittest.TestCase):
                 "activation_asset_digest_mismatch",
             ],
         )
+
+    def test_frontier_accepts_tags_at_or_behind_advertised_release(self) -> None:
+        release = valid_release()
+        result, diagnostic, output = self.run_command(
+            "frontier",
+            release,
+            stable_refs=[
+                {"ref": "refs/tags/v6.4.1"},
+                {"ref": "refs/tags/v6.4.2"},
+                {"ref": "refs/tags/v6.4.3-rc.1"},
+            ],
+            releases=[release],
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(diagnostic["status"], "success")
+        self.assertEqual(diagnostic["identity"]["newer_stable_tags"], "")
+        self.assertEqual(output, "")
+
+    def test_frontier_rejects_newer_stable_tag_without_release_packet(self) -> None:
+        release = valid_release()
+        result, diagnostic, _ = self.run_command(
+            "frontier",
+            release,
+            stable_refs=[[{"ref": "refs/tags/v6.4.2"}, {"ref": "refs/tags/v6.4.3"}]],
+            releases=[[release]],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(
+            [item["code"] for item in diagnostic["violations"]],
+            ["stable_tag_without_release"],
+        )
+        self.assertEqual(diagnostic["identity"]["orphaned_stable_tags"], "v6.4.3")
+        self.assertIn("orphaned version", result.stderr)
+
+    def test_frontier_rejects_public_registry_version_beyond_latest(self) -> None:
+        release = valid_release()
+        result, diagnostic, _ = self.run_command(
+            "frontier",
+            release,
+            stable_refs=[{"ref": "refs/tags/v6.4.2"}],
+            releases=[release],
+            registries=[
+                {
+                    "name": "docker.io/rcourtman/pulse",
+                    "tags": ["latest", "6.4", "6.4.2", "v6.4.3"],
+                },
+                {
+                    "name": "ghcr.io/rcourtman/pulse",
+                    "tags": ["v6.4.3", "6.4.3-rc.1"],
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(
+            [item["code"] for item in diagnostic["violations"]],
+            ["registry_stable_tag_beyond_latest"],
+        )
+        self.assertEqual(
+            diagnostic["identity"]["registry_stable_tags_beyond_latest"],
+            "v6.4.3",
+        )
+        self.assertIn("docker.io/rcourtman/pulse", diagnostic["violations"][0]["actual"])
+        self.assertIn("ghcr.io/rcourtman/pulse", diagnostic["violations"][0]["actual"])
+
+    def test_frontier_rejects_published_stable_release_beyond_latest(self) -> None:
+        release = valid_release()
+        newer = {**release, "id": 67890, "tag_name": "v6.4.3"}
+        result, diagnostic, _ = self.run_command(
+            "frontier",
+            release,
+            stable_refs=[{"ref": "refs/tags/v6.4.3"}],
+            releases=[release, newer],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(
+            [item["code"] for item in diagnostic["violations"]],
+            ["newer_stable_release_not_advertised"],
+        )
+
+    def test_frontier_allows_in_progress_draft_beyond_latest(self) -> None:
+        release = valid_release()
+        draft = {
+            **release,
+            "id": 67890,
+            "tag_name": "v6.4.3",
+            "draft": True,
+            "published_at": None,
+        }
+        result, diagnostic, _ = self.run_command(
+            "frontier",
+            release,
+            stable_refs=[{"ref": "refs/tags/v6.4.3"}],
+            releases=[release, draft],
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(diagnostic["status"], "success")
 
 
 if __name__ == "__main__":
