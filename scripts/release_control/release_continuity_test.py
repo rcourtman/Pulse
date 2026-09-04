@@ -372,6 +372,26 @@ class ReleaseContinuityTest(unittest.TestCase):
             ["newer_stable_release_not_advertised"],
         )
 
+    def test_frontier_checks_published_releases_without_a_matching_ref(self) -> None:
+        release = valid_release()
+        newer = {**release, "id": 67890, "tag_name": "v6.4.3"}
+        result, diagnostic, _ = self.run_command(
+            "frontier",
+            release,
+            stable_refs=[{"ref": "refs/tags/v6.4.2"}],
+            releases=[release, newer],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(diagnostic["identity"]["newer_stable_tags"], "")
+        self.assertEqual(
+            diagnostic["identity"]["unadvertised_published_stable_tags"],
+            "v6.4.3",
+        )
+        self.assertEqual(
+            [item["code"] for item in diagnostic["violations"]],
+            ["newer_stable_release_not_advertised"],
+        )
+
     def test_frontier_allows_in_progress_draft_beyond_latest(self) -> None:
         release = valid_release()
         draft = {

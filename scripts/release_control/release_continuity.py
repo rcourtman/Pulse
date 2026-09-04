@@ -397,14 +397,21 @@ def frontier_violations(
         key=stable_version,
     )
     orphaned = [tag for tag in newer_tags if tag not in releases_by_tag]
-    unadvertised = [
-        tag
-        for tag in newer_tags
-        if tag in releases_by_tag
-        and releases_by_tag[tag].get("draft") is False
-        and isinstance(releases_by_tag[tag].get("published_at"), str)
-        and bool(releases_by_tag[tag]["published_at"])
-    ]
+    # Release inventory is an independent public surface. Do not make this
+    # check conditional on the corresponding Git ref still appearing in the
+    # matching-refs response: a published packet remains customer-visible
+    # even if its source tag has subsequently been removed.
+    unadvertised = sorted(
+        (
+            tag
+            for tag, release in releases_by_tag.items()
+            if stable_version(tag) > latest_version
+            and release.get("draft") is False
+            and isinstance(release.get("published_at"), str)
+            and bool(release["published_at"])
+        ),
+        key=stable_version,
+    )
     registry_tags: dict[str, set[str]] = {}
     for registry in registry_payloads:
         if (
