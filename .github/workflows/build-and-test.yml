@@ -121,10 +121,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    # The two npm audit steps retry through registry outages (they burned
-    # 14m34s on 2026-09-04), which no longer fits a 25 minute budget: the job
-    # was cancelled mid type-check with all 1183 test files already passing.
-    timeout-minutes: 40
+    # Everything except the audit runs in ~11m. The audit is now bounded to a
+    # 4 minute wall-clock budget, so 30 leaves real headroom while staying a
+    # meaningful ceiling: an unbounded 40 would have absorbed the 2026-09-04
+    # stall instead of reporting it.
+    timeout-minutes: 30
     env:
       FRONTEND_DIR: frontend-modern
 
@@ -148,17 +149,19 @@ jobs:
       # npm audit exits 1 both for a real advisory and for an unreachable
       # advisory endpoint. The runner keeps the advisory verdict exactly as
       # strict and only retries the endpoint being down; see the script header.
+      #
+      # Only the complete graph is audited here. `--omit=dev` audits a subset
+      # of these packages, so it can only report a subset of these advisories;
+      # and because the complete audit fails the job on any finding, the
+      # production step could only ever run in the cases where it was already
+      # guaranteed clean. The dev-versus-production split is still reported
+      # for every workspace by the scheduled npm-audit job in
+      # security-scan.yml, where it informs rather than blocks delivery.
       - name: Audit complete frontend dependency graph
         working-directory: frontend-modern
         env:
           NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}
         run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all
-
-      - name: Audit production frontend dependencies
-        working-directory: frontend-modern
-        env:
-          NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}
-        run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production
 
       # Whole-tree, not staged-only: the pre-commit formatter only ever sees
       # staged files, so drift in untouched files is invisible to it. This is

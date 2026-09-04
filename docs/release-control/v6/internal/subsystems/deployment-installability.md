@@ -4002,26 +4002,44 @@ resolved package version and integrity that the release build will actually
 consume.
 Frontend dependency-security changes use their own proof route rather than
 borrowing the local dev-runtime orchestration tests. The canonical
-`.github/workflows/build-and-test.yml` frontend job must run both the complete
-`npm audit` and the production-only `npm audit --omit=dev` after a clean
-install, through `scripts/npm-audit-retry.sh`. That runner exists because
+`.github/workflows/build-and-test.yml` frontend job must run the complete
+`npm audit` after a clean install, through `scripts/npm-audit-retry.sh`. The
+production-only `npm audit --omit=dev` is deliberately not on that
+per-pull-request path: it audits a subset of the same packages, so it can only
+report a subset of the same advisories, and because the complete audit fails
+the job on any finding, the production step could only ever execute in the
+cases where it was already guaranteed clean. The dev-versus-production split
+is reported instead by the scheduled `npm-audit` job in
+`.github/workflows/security-scan.yml`, which covers every npm workspace and
+informs rather than blocks delivery. That runner exists because
 `npm audit` exits non-zero both for a real advisory and for an unreachable
 advisory endpoint: on 2026-09-03 registry.npmjs.org returned 503s and timeouts
 for over an hour and no pull request could land, including changes that touch
 no JavaScript. It separates the two and nothing else. A conclusive result is
 acted on immediately and any vulnerability at any severity still fails, so a
 severity threshold must never be introduced; only an unreachable endpoint is
-retried. When retries are exhausted, the run fails if the change touches
+retried. Retrying is bounded by wall clock and not by attempt count alone,
+because npm's own `fetch-timeout` defaults to five minutes and it retries
+internally: on 2026-09-04 three attempts against a hanging endpoint ran for
+10m56s and cancelled the Frontend job at its own timeout with every test
+already passing, so a green run was reported as a failed required check. Each
+attempt is therefore bounded, npm's internal retry loop is disabled in favour
+of the runner's own, and the sequence stops at a total deadline. That budget
+must stay well inside the job timeout; it may never be raised to the point
+where an unreachable endpoint can consume the job. When retries are exhausted,
+by attempt count or by budget, the run fails if the change touches
 `frontend-modern/package.json`, `frontend-modern/package-lock.json`, or the
 runner itself, because then the answer is genuinely unknown and the runner may
 never be relaxed under cover of its own tolerant mode, and warns without
 failing when it does not, because the dependency graph is then identical to the base commit that
 already produced a passing answer. Advisories published later against
-unchanged dependencies are the responsibility of Dependabot security updates,
-not of a per-pull-request audit. `scripts/tests/test-npm-audit-retry.sh` pins
+unchanged dependencies are the responsibility of Dependabot security updates
+and the scheduled scan, not of a per-pull-request audit.
+`scripts/tests/test-npm-audit-retry.sh` pins
 that split, including that a real advisory fails even when the tolerant mode
-is active and that an unparseable or unrecognised report is never read as
-clean. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
+is active, that an unparseable or unrecognised report is never read as
+clean, and that neither a hung attempt nor an exhausted budget can outlive
+its bound. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
 pins the known safe floors for advisories remediated by commit `6ba85a185`,
 including DOMPurify `GHSA-55q2-fjhq-7xh7`, brace-expansion
 `GHSA-mh99-v99m-4gvg` and `GHSA-rgw5-rvv9-x895`, and nanoid
