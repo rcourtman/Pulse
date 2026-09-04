@@ -163,10 +163,10 @@ class DependabotConfigTest(unittest.TestCase):
         self.assertEqual(
             audit_commands,
             [
-                '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" '
-                "--package-lock-only",
-                '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" '
-                "--package-lock-only --omit=dev",
+                'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" '
+                "all --package-lock-only",
+                'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" '
+                "production --package-lock-only",
             ],
         )
 
