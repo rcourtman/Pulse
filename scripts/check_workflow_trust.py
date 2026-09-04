@@ -142,9 +142,6 @@ WRITE_PERMISSION_RE = re.compile(
     r'''^\s+(?:[A-Za-z-]+|"[A-Za-z-]+"|'[A-Za-z-]+')\s*:\s*'''
     r'''(?:write|"write"|'write')\s*$'''
 )
-# This value is intentionally public and only uses secret storage as a legacy
-# configuration mechanism. Confidential credentials have no PR exception.
-NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
 # These action inputs are programs, not ordinary data. GitHub's Actions
 # CodeQL models treat the same actions as code-injection sinks: expression
@@ -714,15 +711,12 @@ def _is_untrusted_expression(value: str) -> bool:
     )
 
 
-def _has_confidential_secret_reference(lines: list[str]) -> bool:
-    """Return whether workflow lines can resolve a confidential secret."""
+def _has_secret_reference(lines: list[str]) -> bool:
+    """Return whether workflow lines can resolve any repository secret."""
     for line in lines:
         for expression in EXPRESSION_RE.findall(line.split("#", 1)[0]):
             static_references = list(SECRET_CONTEXT_RE.finditer(expression))
-            secret_names = {
-                match.group(1) or match.group(3) for match in static_references
-            }
-            if secret_names - NON_CONFIDENTIAL_PULL_REQUEST_SECRETS:
+            if static_references:
                 return True
             if len(SECRET_CONTEXT_TOKEN_RE.findall(expression)) != len(
                 static_references
@@ -874,7 +868,7 @@ def _is_hardened_closed_pr_cancellation(path: Path, lines: list[str]) -> bool:
     ]
     if dependencies != list(SAFE_PULL_REQUEST_TARGET_ACTIONS):
         return False
-    if _has_confidential_secret_reference(lines):
+    if _has_secret_reference(lines):
         return False
     if any(
         re.match(r"^\s*(?:container|services|defaults|env)\s*:", line)
@@ -1153,7 +1147,7 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
         for index, line in enumerate(lines)
         if (match := PERMISSIONS_RE.match(line.split("#", 1)[0]))
     )
-    top_level_confidential_secret = _has_confidential_secret_reference(
+    top_level_secret = _has_secret_reference(
         lines[:jobs_index] + lines[jobs_end:]
     )
 
@@ -1176,8 +1170,8 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
         )
         privileged = (
             top_level_write
-            or top_level_confidential_secret
-            or _has_confidential_secret_reference(job_lines)
+            or top_level_secret
+            or _has_secret_reference(job_lines)
             or job_write
         )
         if not privileged:
@@ -1294,13 +1288,13 @@ def audit_workflow(path: Path) -> list[Finding]:
 
     if _has_trigger(lines, "pull_request"):
         for index, line in enumerate(lines):
-            if _has_confidential_secret_reference([line]):
+            if _has_secret_reference([line]):
                 findings.append(
                     Finding(
                         path,
                         index + 1,
-                        "pull_request workflows must not reference confidential "
-                        "repository secrets; isolate privileged work in a non-PR workflow",
+                        "pull_request workflows must not reference repository "
+                        "secrets; isolate privileged work in a non-PR workflow",
                     )
                 )
 

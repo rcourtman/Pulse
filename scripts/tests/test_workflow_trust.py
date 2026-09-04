@@ -1119,7 +1119,7 @@ jobs:
             3,
         )
 
-    def test_pull_request_workflows_cannot_receive_confidential_secrets(self) -> None:
+    def test_pull_request_workflows_cannot_receive_repository_secrets(self) -> None:
         findings = self.audit(
             """on:
   push:
@@ -1140,8 +1140,8 @@ jobs:
 """
         )
         self.assertEqual(
-            sum("must not reference confidential repository secrets" in finding for finding in findings),
-            4,
+            sum("must not reference repository secrets" in finding for finding in findings),
+            6,
         )
 
         trusted_push = self.audit(
