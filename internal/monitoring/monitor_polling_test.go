@@ -592,6 +592,79 @@ func TestSyncUnifiedAppContainerMetricsRecordsTrueNASHistory(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedStorageMetricsUsesPBSObservationTimeAcrossRegistryRebuilds(t *testing.T) {
+	observedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateFromSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-main",
+			Name:     "pbs-main",
+			Status:   "online",
+			LastSeen: observedAt,
+			Datastores: []models.PBSDatastore{{
+				Name:   "backups",
+				Status: "available",
+				Total:  1000,
+				Used:   400,
+				Free:   600,
+				Usage:  40,
+			}},
+		}},
+	})
+
+	var targetID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Storage == nil || resource.Storage.Platform != "pbs" {
+			continue
+		}
+		target := resourceStore.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "storage" {
+			t.Fatalf("unexpected PBS datastore metrics target: %+v", target)
+		}
+		targetID = target.ResourceID
+		break
+	}
+	if targetID == "" {
+		t.Fatal("expected a PBS datastore in the unified resource store")
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   persistentStore,
+	}
+
+	// PVE node completions and read-side refreshes can rebuild the registry
+	// repeatedly without a new PBS poll. They must not invent fresh samples.
+	monitor.syncUnifiedStorageMetrics(resourceStore)
+	monitor.syncUnifiedStorageMetrics(resourceStore)
+
+	inMemory := monitor.GetStorageMetrics(targetID, time.Hour)["usage"]
+	if len(inMemory) != 1 {
+		t.Fatalf("in-memory PBS usage points = %d, want one per source observation: %+v", len(inMemory), inMemory)
+	}
+	if !inMemory[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("in-memory PBS usage timestamp = %s, want source observation %s", inMemory[0].Timestamp, observedAt)
+	}
+
+	persisted, err := persistentStore.Query("storage", targetID, "usage", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted PBS usage: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("persisted PBS usage points = %d, want one per source observation: %+v", len(persisted), persisted)
+	}
+	if !persisted[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("persisted PBS usage timestamp = %s, want source observation %s", persisted[0].Timestamp, observedAt)
+	}
+}
+
 func TestSyncUnifiedAppContainerMetricsSkipsMockOwnedTrueNASHistoryWhenMockEnabled(t *testing.T) {
 	previousFeature := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
