@@ -3643,9 +3643,28 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,
 		`- name: Audit complete frontend dependency graph`,
-		`run: npm audit`,
+		`npm-audit-retry.sh" all`,
 		`- name: Audit production frontend dependencies`,
-		`run: npm audit --omit=dev`,
+		`npm-audit-retry.sh" production`,
+		// The runner may retry an unreachable advisory endpoint, but only a
+		// change that leaves the dependency graph untouched may proceed
+		// without a fresh result.
+		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
+		`frontend_deps: ${{ steps.filter.outputs.frontend_deps }}`,
+	)
+	// The gate itself must stay strict. An unreachable endpoint may be
+	// retried, but no severity threshold may be introduced that lets a real
+	// advisory through, and any vulnerability total must still fail.
+	runnerPath := repoFile("scripts", "npm-audit-retry.sh")
+	runner, err := os.ReadFile(runnerPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", runnerPath, err)
+	}
+	if strings.Contains(string(runner), "--audit-level") {
+		t.Fatalf("%s must not weaken the audit with a severity threshold", runnerPath)
+	}
+	assertFileContainsAll(t, runnerPath,
+		`print("vulnerable" if total else "clean")`,
 	)
 }
 

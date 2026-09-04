@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -1364,5 +1365,63 @@ func TestTelemetryPrivacyDocsDiscloseSetupChoiceAndPayloadChanges(t *testing.T) 
 				t.Errorf("%s must disclose %q", relativePath, required)
 			}
 		}
+	}
+}
+
+// The production telemetry receiver must be unreachable from a Go test binary.
+// A test that boots the real server runs against a throwaway data directory,
+// so it mints a fresh install ID on every run and lands at the receiver as a
+// distinct live installation. Regression guard for the 317 single-ping
+// 0.0.0-test-version installs that pkg/server tests reported between
+// 2026-08-29 and 2026-09-03.
+func TestSendRefusesProductionEndpointUnderTest(t *testing.T) {
+	if pingEndpoint != productionPingEndpoint {
+		t.Fatalf("pingEndpoint = %q, want the production endpoint by default", pingEndpoint)
+	}
+
+	err := send(context.Background(), Ping{Event: "startup"})
+	if !errors.Is(err, errProductionEndpointUnderTest) {
+		t.Fatalf("send() to the production endpoint = %v, want errProductionEndpointUnderTest", err)
+	}
+}
+
+// SendServiceHealthEvent is the path pkg/server.Run takes when startup fails,
+// and it sends synchronously rather than after the two-minute startup delay,
+// which is why the failing server tests reported and the passing ones did not.
+func TestSendServiceHealthEventRefusesProductionEndpointUnderTest(t *testing.T) {
+	cfg := Config{
+		Version: "test-version",
+		DataDir: t.TempDir(),
+		Enabled: true,
+	}
+
+	err := SendServiceHealthEvent(context.Background(), cfg, "startup", ServiceHealthObservation{
+		Observed:        true,
+		FailureCategory: ServiceHealthFailureListener,
+	})
+	if !errors.Is(err, errProductionEndpointUnderTest) {
+		t.Fatalf("SendServiceHealthEvent() = %v, want errProductionEndpointUnderTest", err)
+	}
+}
+
+// A redirected endpoint is how telemetry's own tests assert on ping content,
+// so the guard must not block it.
+func TestSendAllowsRedirectedEndpointUnderTest(t *testing.T) {
+	var received atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	origEndpoint := pingEndpoint
+	pingEndpoint = ts.URL
+	defer func() { pingEndpoint = origEndpoint }()
+
+	if err := send(context.Background(), Ping{Event: "startup"}); err != nil {
+		t.Fatalf("send() to a redirected endpoint: %v", err)
+	}
+	if got := received.Load(); got != 1 {
+		t.Fatalf("redirected endpoint received %d pings, want 1", got)
 	}
 }

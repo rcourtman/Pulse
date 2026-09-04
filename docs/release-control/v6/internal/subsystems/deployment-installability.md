@@ -3102,6 +3102,16 @@ strings into normalized release identity fields for browser preview payloads
 and operator telemetry reporting, so unpublished `git describe` / manual / dev
 builds cannot pollute published stable or RC adoption reads just because they
 share a semver-looking prefix.
+The development flag in that identity is defined by the `0.0.0` sentinel, not
+by prerelease spelling. `normalizeVersionString` assigns `0.0.0-<sanitized>` to
+every build string it cannot parse as a release version, so any version whose
+major, minor, and patch are all zero must report `version_channel` `dev` and
+`version_is_development` true, and must never simultaneously report as a
+published release — including a sentinel that happens to spell a preview stage,
+such as `0.0.0-rc.1`. Matching only the prerelease texts `dev` and `dev.*` left
+`0.0.0-test-version`, `0.0.0-dev-pro`, and `0.0.0-qual-*` reporting as ordinary
+prereleases with the development flag clear, so a receiver-side read that
+filtered on that flag alone kept counting them as real installations.
 That release-build metadata path is now explicit too: `scripts/release_ldflags.sh`
 is the canonical owner for server and agent build ldflags, and release artifact
 assembly must route through it instead of hand-writing overlapping `main.Version`,
@@ -4004,7 +4014,24 @@ Frontend dependency-security changes use their own proof route rather than
 borrowing the local dev-runtime orchestration tests. The canonical
 `.github/workflows/build-and-test.yml` frontend job must run both the complete
 `npm audit` and the production-only `npm audit --omit=dev` after a clean
-install. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
+install, through `scripts/npm-audit-retry.sh`. That runner exists because
+`npm audit` exits non-zero both for a real advisory and for an unreachable
+advisory endpoint: on 2026-09-03 registry.npmjs.org returned 503s and timeouts
+for over an hour and no pull request could land, including changes that touch
+no JavaScript. It separates the two and nothing else. A conclusive result is
+acted on immediately and any vulnerability at any severity still fails, so a
+severity threshold must never be introduced; only an unreachable endpoint is
+retried. When retries are exhausted, the run fails if the change touches
+`frontend-modern/package.json`, `frontend-modern/package-lock.json`, or the
+runner itself, because then the answer is genuinely unknown and the runner may
+never be relaxed under cover of its own tolerant mode, and warns without
+failing when it does not, because the dependency graph is then identical to the base commit that
+already produced a passing answer. Advisories published later against
+unchanged dependencies are the responsibility of Dependabot security updates,
+not of a per-pull-request audit. `scripts/tests/test-npm-audit-retry.sh` pins
+that split, including that a real advisory fails even when the tolerant mode
+is active and that an unparseable or unrecognised report is never read as
+clean. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
 pins the known safe floors for advisories remediated by commit `6ba85a185`,
 including DOMPurify `GHSA-55q2-fjhq-7xh7`, brace-expansion
 `GHSA-mh99-v99m-4gvg` and `GHSA-rgw5-rvv9-x895`, and nanoid
