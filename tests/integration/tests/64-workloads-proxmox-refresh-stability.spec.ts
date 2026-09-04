@@ -179,7 +179,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     }
   });
 
-  test("keeps an expanded Proxmox VM on the History tab across workload polling", async ({
+  test("keeps an expanded Proxmox VM on the History tab across a canonical refresh", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -189,8 +189,13 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
 
     await ensureMockModeEnabled(page);
 
+    // Make the canonical REST refresh below the only live-data input. A
+    // timer-only wait is not a refresh proof now that this surface reconciles
+    // snapshots in response to realtime metadata events.
+    await page.routeWebSocket("**/ws*", () => {});
+
     // Workloads are owned by the Proxmox workloads sub-route; preserve the
-    // canonical type/platform scope while exercising its polling behavior.
+    // canonical type/platform scope while exercising its refresh behavior.
     await page.goto("/proxmox/workloads?type=vm&platform=proxmox-pve", {
       waitUntil: "domcontentloaded",
     });
@@ -227,18 +232,41 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
       .poll(() => readGuestDrawerActiveTab(detailRow))
       .toBe("history");
 
-    const beforePollScrollTop = await readPrimaryViewportScrollTop(page);
+    const beforeRefreshScrollTop = await readPrimaryViewportScrollTop(page);
 
-    await page.waitForTimeout(7_500);
+    const refreshResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === "/api/resources" &&
+        url.searchParams.get("type") ===
+          "agent,vm,system-container,oci-container" &&
+        url.searchParams.get("source") === "proxmox"
+      );
+    });
+    await page.evaluate((metadataId) => {
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "guest", metadataId },
+        }),
+      );
+    }, guestId);
+
+    const completedRefreshResponse = await refreshResponse;
+    expect(completedRefreshResponse.ok()).toBe(true);
+    await completedRefreshResponse.finished();
+
+    // Let the fetch continuation reconcile the completed response before
+    // observing the drawer. The old sleep did not establish this ordering.
+    await page.waitForTimeout(100);
 
     await expect(detailRow).toBeVisible();
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow), { timeout: 15_000 })
       .toBe("history");
 
-    const afterPollScrollTop = await readPrimaryViewportScrollTop(page);
-    expect(afterPollScrollTop).toBeGreaterThanOrEqual(
-      Math.max(10, beforePollScrollTop - 80),
+    const afterRefreshScrollTop = await readPrimaryViewportScrollTop(page);
+    expect(afterRefreshScrollTop).toBeGreaterThanOrEqual(
+      Math.max(10, beforeRefreshScrollTop - 80),
     );
   });
 
