@@ -491,6 +491,7 @@ type UnraidStorage struct {
 	SyncAction   string       `json:"syncAction,omitempty"`
 	SyncProgress float64      `json:"syncProgress,omitempty"`
 	SyncErrors   int64        `json:"syncErrors,omitempty"`
+	NumDisks     *int         `json:"numDisks,omitempty"` // nil means the agent did not report an array disk count.
 	NumProtected int          `json:"numProtected,omitempty"`
 	NumDisabled  int          `json:"numDisabled,omitempty"`
 	NumInvalid   int          `json:"numInvalid,omitempty"`

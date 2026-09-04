@@ -3896,6 +3896,7 @@ func hostUnraidFromReadStateView(unraid *unifiedresources.HostUnraidMeta) *model
 		SyncAction:   unraid.SyncAction,
 		SyncProgress: unraid.SyncProgress,
 		SyncErrors:   unraid.SyncErrors,
+		NumDisks:     unraid.NumDisks,
 		NumProtected: unraid.NumProtected,
 		NumDisabled:  unraid.NumDisabled,
 		NumInvalid:   unraid.NumInvalid,

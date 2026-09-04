@@ -1969,3 +1969,14 @@ func TestResourceFromGuestSetsProxmoxGuestKey(t *testing.T) {
 		t.Fatalf("keyless VM must not carry a guest key, got %q", keyless.ProxmoxGuestKey)
 	}
 }
+
+func TestUnraidArrayDiskCountAdapters(t *testing.T) {
+	for _, count := range []*int{nil, new(int), func() *int { n := 3; return &n }()} {
+		host := models.Host{ID: "pool-only", Hostname: "pool-only", Unraid: &models.HostUnraidStorage{NumDisks: count}}
+		resource, _ := resourceFromHost(host)
+		storage, _ := resourceFromHostUnraidStorage(host)
+		if !reflect.DeepEqual(resource.Agent.Unraid.NumDisks, count) || !reflect.DeepEqual(storage.Storage.NumDisks, count) {
+			t.Fatalf("adapters lost disk count %v", count)
+		}
+	}
+}

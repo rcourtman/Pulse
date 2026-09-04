@@ -554,3 +554,37 @@ func TestWearoutUnreportedSentinelIsNegativeOne(t *testing.T) {
 		t.Fatal("the unreported sentinel must not fall inside the real 0-100 reporting range")
 	}
 }
+
+func TestUnraidDiskCountJSONAndIdentity(t *testing.T) {
+	host := models.Host{ID: "pool-only", Hostname: "pool-only", Unraid: &models.HostUnraidStorage{}}
+	_, unknownIdentity := resourceFromHostUnraidStorage(host)
+	zero := 0
+	host.Unraid.NumDisks = &zero
+	resource, zeroIdentity := resourceFromHostUnraidStorage(host)
+	if unknownIdentity.MachineID != zeroIdentity.MachineID {
+		t.Fatal("disk count changed storage identity")
+	}
+	data, err := json.Marshal(resource.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"numDisks":0`) {
+		t.Fatalf("explicit zero lost: %s", data)
+	}
+	var restored StorageMeta
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.NumDisks == nil || *restored.NumDisks != 0 {
+		t.Fatal("zero lost in round trip")
+	}
+	host.Unraid.NumDisks = nil
+	resource, _ = resourceFromHostUnraidStorage(host)
+	data, err = json.Marshal(resource.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"numDisks"`) {
+		t.Fatalf("unknown count became known: %s", data)
+	}
+}

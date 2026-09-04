@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -384,3 +385,54 @@ func TestCollectUnraidStorageUsesResolvedMdcmd(t *testing.T) {
 		t.Fatalf("CollectUnraidStorage() = %#v, want populated storage", storage)
 	}
 }
+
+func TestParseUnraidStatusArrayDiskCount(t *testing.T) {
+	for _, tc := range []struct {
+		name, field string
+		want        *int
+	}{
+		{"pool-only", "mdNumDisks=0", newIntForArrayCount(0)},
+		{"array", "mdNumDisks=3", newIntForArrayCount(3)},
+		{"missing", "", nil},
+		{"invalid", "mdNumDisks=unknown", nil},
+		{"negative", "mdNumDisks=-1", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storage, err := parseUnraidStatusOutput("mdState=STARTED\n" + tc.field + "\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == nil {
+				if storage.NumDisks != nil {
+					t.Fatalf("unexpected count %d", *storage.NumDisks)
+				}
+			} else if storage.NumDisks == nil || *storage.NumDisks != *tc.want {
+				t.Fatalf("count = %v, want %d", storage.NumDisks, *tc.want)
+			}
+			if !storage.ArrayStarted {
+				t.Fatal("disk count must not change service state")
+			}
+			wire, err := json.Marshal(storage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(wire, &fields); err != nil {
+				t.Fatal(err)
+			}
+			count, present := fields["numDisks"]
+			if present != (tc.want != nil) {
+				t.Fatalf("count presence in %s", wire)
+			}
+			if tc.want != nil {
+				var got int
+				if err := json.Unmarshal(count, &got); err != nil || got != *tc.want {
+					t.Fatalf("wire count = %s", count)
+				}
+			}
+
+		})
+	}
+}
+
+func newIntForArrayCount(n int) *int { return &n }

@@ -185,6 +185,11 @@ func parseUnraidStatusOutput(output string) (*agentshost.UnraidStorage, error) {
 		NumMissing:   parseUnraidIntField(fields, "mdNumMissing"),
 	}
 
+	// Zero is meaningful for pool-only systems; missing or invalid is unknown.
+	if count, err := strconv.Atoi(strings.TrimSpace(fields["mdNumDisks"])); err == nil && count >= 0 {
+		storage.NumDisks = &count
+	}
+
 	indexes := collectUnraidIndexes(fields)
 	disks := make([]agentshost.UnraidDisk, 0, len(indexes))
 	for _, idx := range indexes {

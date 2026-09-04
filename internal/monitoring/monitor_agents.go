@@ -3415,6 +3415,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			SyncAction:   syncAction,
 			SyncProgress: syncProgress,
 			SyncErrors:   report.Unraid.SyncErrors,
+			NumDisks:     report.Unraid.NumDisks,
 			NumProtected: numProtected,
 			NumDisabled:  numDisabled,
 			NumInvalid:   numInvalid,
