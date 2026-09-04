@@ -1026,9 +1026,53 @@ describe('InfrastructureWorkspace', () => {
 
     const focusSpy = vi.spyOn(manageButton, 'focus');
     fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
-    await waitFor(() => expect(focusSpy).toHaveBeenCalledTimes(2));
-    expect(focusSpy.mock.calls).toEqual([[{ preventScroll: true }], [{ preventScroll: true }]]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(focusSpy).toHaveBeenCalledTimes(1);
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     expect(manageButton).toHaveFocus();
+  });
+
+  it('does not steal focus back to Manage after the operator moves on', async () => {
+    renderWorkspace({
+      pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
+    });
+
+    const manageButton = await screen.findByRole('button', { name: /^Manage$/i });
+    fireEvent.click(manageButton);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
+    const nextAction = screen.getByRole('button', { name: /^Add infrastructure$/i });
+    nextAction.focus();
+
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(nextAction).toHaveFocus();
+  });
+
+  it('returns focus to a Manage control recreated by a connection poll', async () => {
+    const [revision, setRevision] = createSignal(0);
+    connectionState.setObserver(revision, () => setRevision((value) => value + 1));
+    renderWorkspace({
+      pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
+    });
+
+    const originalManageButton = await screen.findByRole('button', { name: /^Manage$/i });
+    fireEvent.click(originalManageButton);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    connectionState.connections = [
+      connectionFixture({ lastSeen: new Date(Date.now() + 15_000).toISOString() }),
+    ];
+    connectionState.notifyChanged();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Manage$/i })).not.toBe(originalManageButton),
+    );
+    const replacementManageButton = screen.getByRole('button', { name: /^Manage$/i });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(replacementManageButton).toHaveFocus();
   });
 
   it('keeps the mounted node editor across connection-ledger refreshes', async () => {

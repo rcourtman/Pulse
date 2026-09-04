@@ -284,21 +284,26 @@ test.describe('Proxmox cluster node display names', () => {
           ),
         { timeout: 2_000 },
       )
-      .toBe(2);
+      .toBe(1);
+    // The row-stability fallback runs later than the shared dialog cleanup.
+    // Moving on during that window must not pull focus back to Manage.
+    const nextAction = page.getByRole('button', { name: 'Add infrastructure', exact: true });
+    await nextAction.evaluate((element) => element.focus({ preventScroll: true }));
+    await page.waitForTimeout(350);
     expect(
       await page.evaluate(
         () =>
           (window as Window & { __infrastructureManageFocusCalls?: FocusOptions[] })
             .__infrastructureManageFocusCalls,
       ),
-    ).toEqual([{ preventScroll: true }, { preventScroll: true }]);
+    ).toEqual([{ preventScroll: true }]);
     expect(
       await page.evaluate(() => {
         const shell = document.querySelector<HTMLElement>('.app-scroll-shell');
         return shell?.scrollTop ?? window.scrollY;
       }),
     ).toBe(scrollTopBeforeClose);
-    await expect(manageButton).toBeFocused();
+    await expect(nextAction).toBeFocused();
     await page.screenshot({ path: testInfo.outputPath('manage-dialog-closed.png') });
 
     await manageButton.click();
