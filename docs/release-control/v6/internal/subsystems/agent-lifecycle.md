@@ -15,6 +15,8 @@
 
 ## Purpose
 
+Unraid collection preserves optional nonnegative `mdNumDisks` as `numDisks` through the host report. Explicit zero survives JSON encoding; absent, negative, or malformed source counts remain unknown. This telemetry does not change enrollment or command authority; older agents retain unknown-count behaviour.
+
 ### Portable installer lifecycle ownership
 
 The shared shell installer lifecycle directory (outside the least-privilege

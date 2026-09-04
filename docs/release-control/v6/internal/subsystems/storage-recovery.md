@@ -21,6 +21,8 @@
 
 ## Purpose
 
+Unraid `StorageMeta.numDisks` is optional source evidence: zero denotes an explicitly empty parity array, not proof that pools are protected or that a recovery point exists. Suppressing the no-parity warning for zero must not erase disk-failure evidence or grant storage/recovery authority.
+
 A manifestless PBS snapshot never becomes a successful recovery point and
 never advances backup age. Recovery mapping reports it as running while a live
 writer accounts for it or current-task visibility is unavailable; after a

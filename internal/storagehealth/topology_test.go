@@ -382,3 +382,38 @@ func TestAssessPBSDatastoreHighUsage(t *testing.T) {
 		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
 	}
 }
+
+func TestAssessUnraidStoragePoolOnlyParity(t *testing.T) {
+	zero, three := 0, 3
+	for _, tc := range []struct {
+		name        string
+		count       *int
+		wantWarning bool
+	}{
+		{"explicit pool-only", &zero, false},
+		{"array without parity", &three, true},
+		{"legacy unknown count", nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assessment := AssessUnraidStorage(models.HostUnraidStorage{
+				ArrayStarted: true, NumDisks: tc.count,
+				Disks: []models.HostUnraidDisk{{Name: "cache", Role: "cache", Status: "online"}},
+			})
+			found := false
+			for _, reason := range assessment.Reasons {
+				if reason.Code == "unraid_no_parity" {
+					found = true
+				}
+			}
+			if found != tc.wantWarning {
+				t.Fatalf("no-parity warning = %v; reasons %+v", found, assessment.Reasons)
+			}
+		})
+	}
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true, NumDisks: &zero, NumDisabled: 1,
+	})
+	if assessment.Level != RiskCritical {
+		t.Fatalf("zero count masked disk failure: %+v", assessment)
+	}
+}
