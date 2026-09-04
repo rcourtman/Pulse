@@ -17,12 +17,11 @@ SCRIPT = ROOT / "scripts" / "npm-audit-retry.sh"
 
 
 class NpmAuditRetryTest(unittest.TestCase):
-    def run_check(self, mode: str, *arguments: str):
+    def run_check(self, mode: str, *arguments: str, require: str = "true"):
         with tempfile.TemporaryDirectory() as directory:
             fake_bin = Path(directory)
             count = fake_bin / "count"
             calls = fake_bin / "calls"
-            sleep_calls = fake_bin / "sleep-calls"
             count.write_text("0\n", encoding="utf-8")
             fake_npm = fake_bin / "npm"
             fake_npm.write_text(
@@ -33,36 +32,37 @@ class NpmAuditRetryTest(unittest.TestCase):
                     count=$((count + 1))
                     printf '%s\n' "$count" > "$FAKE_NPM_COUNT"
                     printf '%s\n' "$*" >> "$FAKE_NPM_CALLS"
+                    clean='{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0,"total":0}}}'
+                    unavailable='{"error":{"code":"ENOAUDIT","summary":"503 Service Unavailable"}}'
+                    vulnerable='{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":1,"critical":0,"total":1}}}'
+                    vulnerable_with_error='{"error":{"code":"ETIMEDOUT"},"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":1,"critical":0,"total":1}}}'
                     case "$FAKE_NPM_MODE" in
                       success)
-                        echo 'found 0 vulnerabilities'
+                        printf '%s\n' "$clean"
                         exit 0
                         ;;
                       transient-success)
                         if [ "$count" -eq 1 ]; then
-                          echo 'npm warn audit network timeout at: https://registry.npmjs.org/-/npm/v1/security/advisories/bulk'
-                          echo 'npm error audit endpoint returned an error'
+                          printf '%s\n' "$unavailable"
                           exit 1
                         fi
-                        echo 'found 0 vulnerabilities'
+                        printf '%s\n' "$clean"
                         exit 0
                         ;;
                       transient-failure)
-                        echo 'npm error code ETIMEDOUT'
-                        echo 'npm error audit endpoint returned an error'
+                        printf '%s\n' "$unavailable"
                         exit 42
                         ;;
                       vulnerability)
-                        echo '# npm audit report'
-                        echo 'example  <2.0.0'
-                        echo '1 high severity vulnerability'
+                        printf '%s\n' "$vulnerable"
                         exit 1
                         ;;
-                      vulnerability-and-transient)
-                        echo '# npm audit report'
-                        echo 'example  <2.0.0'
-                        echo '1 high severity vulnerability'
-                        echo 'npm error code ETIMEDOUT'
+                      vulnerability-with-error)
+                        printf '%s\n' "$vulnerable_with_error"
+                        exit 1
+                        ;;
+                      garbage)
+                        echo 'not json'
                         exit 1
                         ;;
                     esac
@@ -72,20 +72,16 @@ class NpmAuditRetryTest(unittest.TestCase):
                 encoding="utf-8",
             )
             fake_npm.chmod(0o755)
-            fake_sleep = fake_bin / "sleep"
-            fake_sleep.write_text(
-                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_SLEEP_CALLS\"\n",
-                encoding="utf-8",
-            )
-            fake_sleep.chmod(0o755)
             env = os.environ.copy()
             env.update(
                 {
                     "FAKE_NPM_CALLS": str(calls),
                     "FAKE_NPM_COUNT": str(count),
                     "FAKE_NPM_MODE": mode,
-                    "FAKE_SLEEP_CALLS": str(sleep_calls),
-                    "PATH": f"{directory}:{env['PATH']}",
+                    "NPM_AUDIT_ATTEMPTS": "3",
+                    "NPM_AUDIT_CMD": str(fake_npm),
+                    "NPM_AUDIT_REQUIRE_RESULT": require,
+                    "NPM_AUDIT_RETRY_DELAY": "0",
                 }
             )
             result = subprocess.run(
@@ -101,91 +97,111 @@ class NpmAuditRetryTest(unittest.TestCase):
                 if calls.exists()
                 else []
             )
-            recorded_sleeps = (
-                sleep_calls.read_text(encoding="utf-8").splitlines()
-                if sleep_calls.exists()
-                else []
-            )
-            return result, recorded_calls, recorded_sleeps
+            return result, recorded_calls
 
-    def test_passes_a_clean_audit_without_retry(self) -> None:
-        result, calls, sleeps = self.run_check("success", "--omit=dev")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ["audit --fetch-timeout=60000 --omit=dev"])
-        self.assertEqual(sleeps, [])
-
-    def test_retries_a_transient_audit_endpoint_failure(self) -> None:
-        result, calls, sleeps = self.run_check(
-            "transient-success", "--package-lock-only"
+    def test_passes_a_clean_production_audit_and_forwards_arguments(self) -> None:
+        result, calls = self.run_check(
+            "success", "production", "--package-lock-only"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             calls,
-            [
-                "audit --fetch-timeout=60000 --package-lock-only",
-                "audit --fetch-timeout=60000 --package-lock-only",
-            ],
+            ["audit --json --fetch-timeout=60000 --package-lock-only --omit=dev"],
         )
-        self.assertEqual(sleeps, ["5"])
-        self.assertIn("retrying", result.stderr)
+
+    def test_retries_an_unavailable_audit_endpoint(self) -> None:
+        result, calls = self.run_check("transient-success", "all")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            calls,
+            ["audit --json --fetch-timeout=60000"] * 2,
+        )
+        self.assertIn("retrying", result.stdout)
 
     def test_does_not_retry_a_vulnerability_report(self) -> None:
-        result, calls, sleeps = self.run_check("vulnerability")
+        result, calls = self.run_check("vulnerability", "all")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(calls, ["audit --fetch-timeout=60000"])
-        self.assertEqual(sleeps, [])
-        self.assertIn("1 high severity vulnerability", result.stdout)
-        self.assertNotIn("retrying", result.stderr)
+        self.assertEqual(
+            calls,
+            [
+                "audit --json --fetch-timeout=60000",
+                "audit --fetch-timeout=60000",
+            ],
+        )
+        self.assertIn("vulnerabilities present", result.stdout)
+        self.assertNotIn("retrying", result.stdout)
 
-    def test_vulnerability_report_takes_precedence_over_transport_marker(
-        self,
-    ) -> None:
-        result, calls, sleeps = self.run_check("vulnerability-and-transient")
+    def test_vulnerability_verdict_precedes_a_transport_error(self) -> None:
+        result, calls = self.run_check("vulnerability-with-error", "all")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(calls, ["audit --fetch-timeout=60000"])
-        self.assertEqual(sleeps, [])
-        self.assertIn("1 high severity vulnerability", result.stdout)
-        self.assertNotIn("retrying", result.stderr)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("vulnerabilities present", result.stdout)
+        self.assertNotIn("retrying", result.stdout)
 
-    def test_persistent_registry_failure_remains_fatal(self) -> None:
-        result, calls, sleeps = self.run_check("transient-failure")
-        self.assertEqual(result.returncode, 42)
-        self.assertEqual(len(calls), 3)
-        self.assertEqual(sleeps, ["5", "5"])
-        self.assertIn("failed after 3 attempts", result.stderr)
+    def test_persistent_outage_fails_when_a_result_is_required(self) -> None:
+        result, calls = self.run_check("transient-failure", "all")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(calls, ["audit --json --fetch-timeout=60000"] * 3)
+        self.assertIn("could not reach", result.stdout)
+
+    def test_persistent_outage_warns_for_an_unchanged_dependency_graph(self) -> None:
+        result, calls = self.run_check(
+            "transient-failure", "all", require="false"
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(calls, ["audit --json --fetch-timeout=60000"] * 3)
+        self.assertIn("::warning::", result.stdout)
+
+    def test_unparseable_output_never_passes_as_clean(self) -> None:
+        result, calls = self.run_check("garbage", "all")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(calls, ["audit --json --fetch-timeout=60000"] * 3)
+
+    def test_rejects_an_unknown_scope(self) -> None:
+        result, calls = self.run_check("success", "unknown")
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(calls, [])
 
     def test_all_workflow_audits_use_the_retry_boundary(self) -> None:
-        for relative, job_name in (
-            (".github/workflows/build-and-test.yml", "frontend"),
-            (".github/workflows/security-scan.yml", "npm-audit"),
-        ):
+        expected = {
+            ".github/workflows/build-and-test.yml": {
+                "job": "frontend",
+                "runs": [
+                    'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all',
+                    'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production',
+                ],
+                "require_env": True,
+            },
+            ".github/workflows/security-scan.yml": {
+                "job": "npm-audit",
+                "runs": [
+                    'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all --package-lock-only',
+                    'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production --package-lock-only',
+                ],
+                "require_env": False,
+            },
+        }
+        for relative, contract in expected.items():
             with self.subTest(workflow=relative):
                 workflow = yaml.safe_load(
                     (ROOT / relative).read_text(encoding="utf-8")
                 )
-                steps = workflow["jobs"][job_name]["steps"]
-                if job_name == "frontend":
-                    install = next(
-                        step
-                        for step in steps
-                        if step.get("name") == "Install frontend dependencies"
-                    )
-                    self.assertEqual(install["run"], "npm ci --no-audit")
+                steps = workflow["jobs"][contract["job"]]["steps"]
                 audits = [
                     step
                     for step in steps
                     if step.get("id") in {"audit-complete", "audit-production"}
                 ]
-                self.assertEqual(len(audits), 2)
+                self.assertEqual([step["run"] for step in audits], contract["runs"])
                 self.assertTrue(
-                    all(
-                        step["run"].startswith(
-                            '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh"'
-                        )
-                        and step.get("continue-on-error") is True
-                        for step in audits
-                    )
+                    all(step.get("continue-on-error") is True for step in audits)
                 )
+                for step in audits:
+                    env = step.get("env", {})
+                    self.assertEqual(
+                        "NPM_AUDIT_REQUIRE_RESULT" in env,
+                        contract["require_env"],
+                    )
                 verdict = steps[-1]
                 self.assertIn("Require", verdict["name"])
                 self.assertEqual(verdict["if"], "${{ !cancelled() }}")

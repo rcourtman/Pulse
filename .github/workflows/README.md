@@ -105,12 +105,15 @@ failed release-trust check still permits activation-marker inspection when the
 tag, numeric release ID, and exact source SHA are structurally valid. This
 exposes independent marker damage in the same evidence packet; it never admits
 the release or enables later delivery checks unless both trust checks pass.
-Scheduled and push-time npm audits use one-minute registry attempts and retry
-only explicit network or audit-endpoint failures. Advisory findings still fail
-without retry, and three unavailable registry responses remain a failed check.
-Audit steps defer their aggregate verdict so an unavailable advisory endpoint
-cannot suppress independent frontend checks or the production bundle build;
-the preceding clean install disables npm's duplicate best-effort audit request.
+Scheduled and push-time npm audits classify JSON results, use one-minute
+registry attempts, and retry an unavailable audit endpoint. Advisory findings
+still fail immediately, even if the same response contains a transport error. The
+scheduled security scan and dependency-changing builds fail if three attempts
+produce no result; a build with an unchanged dependency graph warns and uses
+the base commit's passing answer. Audit steps defer their aggregate verdict so
+an unavailable endpoint cannot suppress independent frontend checks or the
+production bundle build; the preceding clean install disables npm's duplicate
+best-effort audit request.
 Activation inspection also requires exactly one uploaded marker and compares
 the downloaded byte count and SHA-256 value with GitHub's release-asset
 metadata, so a valid-looking JSON response cannot silently replace or truncate

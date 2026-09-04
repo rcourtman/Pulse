@@ -386,13 +386,13 @@ jobs:
         id: audit-complete
         continue-on-error: true
         working-directory: ${{ matrix.directory }}
-        run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --package-lock-only'
+        run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all --package-lock-only
 
       - name: Audit production dependencies
         id: audit-production
         continue-on-error: true
         working-directory: ${{ matrix.directory }}
-        run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --package-lock-only --omit=dev'
+        run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production --package-lock-only
 
       - name: Require dependency audits
         if: ${{ !cancelled() }}
