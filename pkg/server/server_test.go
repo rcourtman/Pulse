@@ -294,6 +294,9 @@ func waitForHTTPStatus(t *testing.T, url string, want int) {
 func TestServerRun_Shutdown(t *testing.T) {
 	// Setup minimal environment
 	tmpDir := t.TempDir()
+	// Run() reports startup failures over outbound telemetry; a test boot is
+	// not an installation, so opt this process out at the config layer too.
+	t.Setenv("PULSE_TELEMETRY", "false")
 	t.Setenv("PULSE_DATA_DIR", tmpDir)
 	t.Setenv("PULSE_CONFIG_PATH", tmpDir)
 	t.Setenv("BIND_ADDRESS", "127.0.0.1")
@@ -325,6 +328,9 @@ func TestServerRun_Shutdown(t *testing.T) {
 }
 
 func TestServerRunFailsFastWhenFrontendPortIsAlreadyBound(t *testing.T) {
+	// Run() reports startup failures over outbound telemetry; a test boot is
+	// not an installation, so opt this process out at the config layer too.
+	t.Setenv("PULSE_TELEMETRY", "false")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -347,6 +353,9 @@ func TestServerRunFailsFastWhenFrontendPortIsAlreadyBound(t *testing.T) {
 }
 
 func TestServerRunKeepsFrontendWhenMetricsPortConflicts(t *testing.T) {
+	// Run() reports startup failures over outbound telemetry; a test boot is
+	// not an installation, so opt this process out at the config layer too.
+	t.Setenv("PULSE_TELEMETRY", "false")
 	port := availableTCPPort(t)
 
 	tmpDir := t.TempDir()
@@ -381,6 +390,9 @@ func TestServerRunKeepsFrontendWhenMetricsPortConflicts(t *testing.T) {
 
 func TestServerRun_RejectsWildcardTrustedProxyCIDR(t *testing.T) {
 	tmpDir := t.TempDir()
+	// Run() reports startup failures over outbound telemetry; a test boot is
+	// not an installation, so opt this process out at the config layer too.
+	t.Setenv("PULSE_TELEMETRY", "false")
 	t.Setenv("PULSE_DATA_DIR", tmpDir)
 	t.Setenv("PULSE_CONFIG_PATH", tmpDir)
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "0.0.0.0/0")
