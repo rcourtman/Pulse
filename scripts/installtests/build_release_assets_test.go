@@ -1619,7 +1619,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`FROM --platform=linux/amd64 node:24-alpine@sha256:`,
-		`FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`,
+		`FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`,
 		`FROM backend-builder AS release-assets-builder`,
 		`AS agent_runtime`,
 		`AS pulse-runtime-foundation`,
@@ -1654,7 +1654,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		}
 	}
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 node:24-alpine@sha256:`, ` AS frontend-builder`)
-	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`, ` AS backend-builder`)
+	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`, ` AS backend-builder`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS agent_runtime`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS pulse-runtime-foundation`)
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
@@ -1667,7 +1667,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
 	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:24-alpine AS frontend-builder`) ||
-		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS agent_runtime`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
@@ -2111,8 +2111,7 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`Require activated GitHub release and source run`,
 		`release-activation.json`,
 		`.github/workflows/create-release.yml`,
-		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
-		`--name "pulse-chart-${VERSION}"`,
+		`"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"`,
 		`qualified chart metadata does not match the activated release`,
 		`name: Publish chart release and merge Pages index`,
 		`gh release create "${chart_release}" "${chart_path}"`,
@@ -2129,6 +2128,7 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"workflow_run:",
+		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
 		`Smoke test with kind`,
 		`Install helm-docs`,
 		`helm package deploy/helm/pulse`,
@@ -2842,7 +2842,10 @@ func TestReleaseAssetCommonRunsUpdateKeyThroughModulePath(t *testing.T) {
 		t.Skip("go not installed")
 	}
 
-	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_go_run_update_key")
+	// Keep the toolchain selected by the test runner. A login shell may source a
+	// developer's stale mise/asdf profile and replace setup-go's release
+	// toolchain while leaving its GOROOT behind.
+	cmd := exec.Command("bash", "-c", "source ./scripts/release_asset_common.sh; pulse_release_go_run_update_key")
 	cmd.Dir = repoFile()
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -2874,7 +2877,7 @@ func TestReleaseAssetCommonRejectsUnexpectedUpdateSigningPublicKey(t *testing.T)
 		t.Fatalf("generate unexpected public key: %v", err)
 	}
 
-	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_prepare_signing_state pulse-installer pulse-install")
+	cmd := exec.Command("bash", "-c", "source ./scripts/release_asset_common.sh; pulse_release_prepare_signing_state pulse-installer pulse-install")
 	cmd.Dir = repoFile()
 	cmd.Env = append(os.Environ(),
 		"PULSE_UPDATE_SIGNING_KEY="+base64.StdEncoding.EncodeToString(privateKey),
