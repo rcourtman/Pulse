@@ -2191,7 +2191,9 @@ artifact-selection behaviour.
    dependency audits may retry only explicit registry transport or endpoint
    failures, with a bounded request timeout and attempt count; an advisory
    finding must fail immediately, and exhausted service failures must remain a
-   failed check. In `.github/workflows/build-and-test.yml`, the aggregate audit
+   failed check. If npm emits an advisory report together with a transport
+   marker, the advisory result takes precedence and must not be retried. In
+   `.github/workflows/build-and-test.yml`, the aggregate audit
    verdict must run after formatting, lint, tests, type-checking, the production
    build, and the bundle-size check so an unavailable advisory service cannot
    suppress those results. The preceding `npm ci` must disable its duplicate

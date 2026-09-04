@@ -3680,6 +3680,7 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 		`readonly max_attempts=3`,
 		`readonly fetch_timeout_ms=60000`,
 		`npm audit --fetch-timeout="${fetch_timeout_ms}" "$@"`,
+		`grep -Fq '# npm audit report'`,
 		`if ! grep -Eiq`,
 		`if (( attempt == max_attempts )); then`,
 	)

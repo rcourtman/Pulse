@@ -58,6 +58,13 @@ class NpmAuditRetryTest(unittest.TestCase):
                         echo '1 high severity vulnerability'
                         exit 1
                         ;;
+                      vulnerability-and-transient)
+                        echo '# npm audit report'
+                        echo 'example  <2.0.0'
+                        echo '1 high severity vulnerability'
+                        echo 'npm error code ETIMEDOUT'
+                        exit 1
+                        ;;
                     esac
                     exit 64
                     """
@@ -124,6 +131,16 @@ class NpmAuditRetryTest(unittest.TestCase):
 
     def test_does_not_retry_a_vulnerability_report(self) -> None:
         result, calls, sleeps = self.run_check("vulnerability")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(calls, ["audit --fetch-timeout=60000"])
+        self.assertEqual(sleeps, [])
+        self.assertIn("1 high severity vulnerability", result.stdout)
+        self.assertNotIn("retrying", result.stderr)
+
+    def test_vulnerability_report_takes_precedence_over_transport_marker(
+        self,
+    ) -> None:
+        result, calls, sleeps = self.run_check("vulnerability-and-transient")
         self.assertEqual(result.returncode, 1)
         self.assertEqual(calls, ["audit --fetch-timeout=60000"])
         self.assertEqual(sleeps, [])

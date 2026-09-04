@@ -20,6 +20,12 @@ while (( attempt <= max_attempts )); do
     exit 0
   fi
 
+  # An advisory result takes precedence if npm also emits a transport warning.
+  # Never turn a real vulnerability finding into a retryable service failure.
+  if grep -Fq '# npm audit report' "${output}"; then
+    exit "${status}"
+  fi
+
   # npm audit uses a registry POST. npm's fetch retries cover idempotent reads,
   # so a transient timeout or audit endpoint error otherwise consumes the full
   # default five-minute timeout and fails the check without another attempt.
