@@ -1,10 +1,29 @@
 package securityutil
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 )
+
+// ResponseBodyTooLargeError reports that an HTTP response exceeded its
+// caller-defined byte limit. The concrete type lets callers choose a bounded
+// fallback without treating malformed or truncated responses the same way.
+type ResponseBodyTooLargeError struct {
+	Limit int64
+}
+
+func (e *ResponseBodyTooLargeError) Error() string {
+	return fmt.Sprintf("response body exceeds %d bytes", e.Limit)
+}
+
+// IsResponseBodyTooLarge reports whether err was caused by a response crossing
+// the limit enforced by LimitResponseBody.
+func IsResponseBodyTooLarge(err error) bool {
+	var target *ResponseBodyTooLargeError
+	return errors.As(err, &target)
+}
 
 // LimitResponseBody bounds the bytes a caller can read from an HTTP response.
 // It closes responses whose declared size already exceeds the limit. Responses
@@ -18,7 +37,7 @@ func LimitResponseBody(resp *http.Response, limit int64) error {
 	}
 	if resp.ContentLength > limit {
 		_ = resp.Body.Close()
-		return fmt.Errorf("response body exceeds %d bytes", limit)
+		return &ResponseBodyTooLargeError{Limit: limit}
 	}
 
 	resp.Body = &limitedResponseBody{
@@ -41,7 +60,7 @@ func (r *limitedResponseBody) Read(p []byte) (int, error) {
 		return 0, nil
 	}
 	if r.exceeded {
-		return 0, fmt.Errorf("response body exceeds %d bytes", r.limit)
+		return 0, &ResponseBodyTooLargeError{Limit: r.limit}
 	}
 	if r.remaining > 0 {
 		if int64(len(p)) > r.remaining {
@@ -58,7 +77,7 @@ func (r *limitedResponseBody) Read(p []byte) (int, error) {
 	n, err := r.body.Read(probe[:])
 	if n > 0 {
 		r.exceeded = true
-		return 0, fmt.Errorf("response body exceeds %d bytes", r.limit)
+		return 0, &ResponseBodyTooLargeError{Limit: r.limit}
 	}
 	return 0, err
 }
