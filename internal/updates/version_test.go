@@ -324,12 +324,63 @@ func TestDescribeUsageDataVersion(t *testing.T) {
 			wantPublished:   false,
 		},
 		{
-			name:            "source branch falls back to prerelease dev identity",
+			name:            "source branch is a development build",
 			input:           "feature/new-usage-report",
 			wantVersion:     "0.0.0-feature-new-usage-report",
 			wantRaw:         "feature/new-usage-report",
-			wantChannel:     "prerelease",
-			wantDevelopment: false,
+			wantChannel:     "dev",
+			wantDevelopment: true,
+			wantPublished:   false,
+		},
+		{
+			// The literal pkg/server tests passed to Run(). It reported
+			// version_is_development = 0 for 317 installs before the 0.0.0
+			// sentinel was classified as development.
+			name:            "ad-hoc test label is a development build",
+			input:           "test-version",
+			wantVersion:     "0.0.0-test-version",
+			wantRaw:         "test-version",
+			wantChannel:     "dev",
+			wantDevelopment: true,
+			wantPublished:   false,
+		},
+		{
+			// "dev-pro" is not "dev" and does not start with "dev.", so the
+			// prerelease-text rules alone never caught it.
+			name:            "dev-pro label is a development build",
+			input:           "dev-pro",
+			wantVersion:     "0.0.0-dev-pro",
+			wantRaw:         "dev-pro",
+			wantChannel:     "dev",
+			wantDevelopment: true,
+			wantPublished:   false,
+		},
+		{
+			name:            "qualification label is a development build",
+			input:           "qual-87699dfff-810aae8d2",
+			wantVersion:     "0.0.0-qual-87699dfff-810aae8d2",
+			wantRaw:         "qual-87699dfff-810aae8d2",
+			wantChannel:     "dev",
+			wantDevelopment: true,
+			wantPublished:   false,
+		},
+		{
+			// The sentinel outranks the preview-stage rule: a 0.0.0 build is
+			// never a published release asset, so it must not report as both.
+			name:            "sentinel outranks a preview prerelease spelling",
+			input:           "rc.1",
+			wantVersion:     "0.0.0-rc.1",
+			wantRaw:         "rc.1",
+			wantChannel:     "dev",
+			wantDevelopment: true,
+			wantPublished:   false,
+		},
+		{
+			name:            "empty version is a development build",
+			input:           "",
+			wantVersion:     "0.0.0-dev",
+			wantChannel:     "dev",
+			wantDevelopment: true,
 			wantPublished:   false,
 		},
 		{
