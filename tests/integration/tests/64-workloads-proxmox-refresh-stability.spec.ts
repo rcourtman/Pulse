@@ -105,7 +105,7 @@ async function positionElementNearViewportBottom(
   return locator.evaluate((element) => element.getBoundingClientRect().top);
 }
 
-// The drawer tab strip (Overview | History | Discovery) marks the active tab
+// The drawer tab strip marks the active tab
 // with aria-selected, so read that instead of panel order.
 async function readGuestDrawerActiveTab(detailRow: Locator): Promise<string> {
   const buttons = detailRow.locator("[aria-selected]");
@@ -179,7 +179,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     }
   });
 
-  test("keeps an expanded Proxmox VM on the Discovery tab across workload polling", async ({
+  test("keeps an expanded Proxmox VM on the History tab across a canonical refresh", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -189,8 +189,13 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
 
     await ensureMockModeEnabled(page);
 
+    // Make the canonical REST refresh below the only live-data input. A
+    // timer-only wait is not a refresh proof now that this surface reconciles
+    // snapshots in response to realtime metadata events.
+    await page.routeWebSocket("**/ws*", () => {});
+
     // Workloads are owned by the Proxmox workloads sub-route; preserve the
-    // canonical type/platform scope while exercising its polling behavior.
+    // canonical type/platform scope while exercising its refresh behavior.
     await page.goto("/proxmox/workloads?type=vm&platform=proxmox-pve", {
       waitUntil: "domcontentloaded",
     });
@@ -213,33 +218,59 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
 
     // The drawer tab strip exposes proper tab roles.
-    const discoveryButton = detailRow.getByRole("tab", {
-      name: "Discovery",
+    // History is always present and is the tab users reported being reset by
+    // live refreshes. Discovery is optional and must not be a hidden fixture
+    // prerequisite for this polling regression proof.
+    const historyButton = detailRow.getByRole("tab", {
+      name: "History",
       exact: true,
     });
-    await expect(discoveryButton).toBeVisible();
-    await discoveryButton.click();
+    await expect(historyButton).toBeVisible();
+    await historyButton.click();
 
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow))
-      .toBe("discovery");
+      .toBe("history");
 
-    const beforePollScrollTop = await readPrimaryViewportScrollTop(page);
+    const beforeRefreshScrollTop = await readPrimaryViewportScrollTop(page);
 
-    await page.waitForTimeout(7_500);
+    const refreshResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === "/api/resources" &&
+        url.searchParams.get("type") ===
+          "agent,vm,system-container,oci-container" &&
+        url.searchParams.get("source") === "proxmox"
+      );
+    });
+    await page.evaluate((metadataId) => {
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "guest", metadataId },
+        }),
+      );
+    }, guestId);
+
+    const completedRefreshResponse = await refreshResponse;
+    expect(completedRefreshResponse.ok()).toBe(true);
+    await completedRefreshResponse.finished();
+
+    // Let the fetch continuation reconcile the completed response before
+    // observing the drawer. The old sleep did not establish this ordering.
+    await page.waitForTimeout(100);
 
     await expect(detailRow).toBeVisible();
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow), { timeout: 15_000 })
-      .toBe("discovery");
+      .toBe("history");
 
-    const afterPollScrollTop = await readPrimaryViewportScrollTop(page);
-    expect(afterPollScrollTop).toBeGreaterThanOrEqual(
-      Math.max(10, beforePollScrollTop - 80),
+    const afterRefreshScrollTop = await readPrimaryViewportScrollTop(page);
+    expect(afterRefreshScrollTop).toBeGreaterThanOrEqual(
+      Math.max(10, beforeRefreshScrollTop - 80),
     );
   });
 
-  test("retains LXC rows through warning health projections and removes a confirmed deletion", async ({
+  test("retains LXC rows through warning health refreshes and removes a confirmed deletion", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -254,15 +285,18 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     let deletionResponses = 0;
     let publishDeletion = false;
 
-    // The REST sequence is the contract under test. Prevent live inventory
-    // frames from replacing it while polling is exercised.
+    // The Proxmox surface owns a source-scoped canonical resource snapshot.
+    // Intercept that REST sequence and prevent live inventory frames from
+    // replacing it while snapshot refresh is exercised.
     await page.routeWebSocket("**/ws*", () => {});
 
     await page.route("**/api/resources?**", async (route) => {
       const url = new URL(route.request().url());
       if (
         url.pathname !== "/api/resources" ||
-        url.searchParams.get("type") !== "vm,system-container,app-container,pod"
+        url.searchParams.get("type") !==
+          "agent,vm,system-container,oci-container" ||
+        url.searchParams.get("source") !== "proxmox"
       ) {
         await route.continue();
         return;
@@ -318,6 +352,17 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     );
     await expect(detailRow).toBeVisible();
 
+    // The Proxmox surface now reconciles its canonical snapshot from realtime
+    // frames rather than a timer-driven REST poll. Use the same forced
+    // canonical refresh event as an in-app metadata update so this remains a
+    // deterministic snapshot-reconciliation proof with WebSockets blocked.
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "guest", metadataId: "lab:node-a:102" },
+        }),
+      ),
+    );
     await expect
       .poll(() => staleProjectionResponses, { timeout: 15_000 })
       .toBeGreaterThan(0);
@@ -327,6 +372,13 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
 
     publishDeletion = true;
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "guest", metadataId: "lab:node-a:102" },
+        }),
+      ),
+    );
     await expect
       .poll(() => deletionResponses, { timeout: 15_000 })
       .toBeGreaterThan(0);
