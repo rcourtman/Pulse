@@ -3644,13 +3644,19 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	assertFileContainsAll(t, workflowPath,
 		`- name: Audit complete frontend dependency graph`,
 		`npm-audit-retry.sh" all`,
-		`- name: Audit production frontend dependencies`,
-		`npm-audit-retry.sh" production`,
 		// The runner may retry an unreachable advisory endpoint, but only a
 		// change that leaves the dependency graph untouched may proceed
 		// without a fresh result.
 		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
 		`frontend_deps: ${{ steps.filter.outputs.frontend_deps }}`,
+	)
+	// The production-only audit reports a subset of the complete audit's
+	// advisories and cannot gate anything the complete audit did not already
+	// fail on, so it is off the per-pull-request path. It must still run
+	// somewhere: the scheduled scan owns the dev-versus-production split.
+	assertFileContainsAll(t, repoFile(".github", "workflows", "security-scan.yml"),
+		`- name: Audit production dependencies`,
+		`npm audit --package-lock-only --omit=dev`,
 	)
 	// The gate itself must stay strict. An unreachable endpoint may be
 	// retried, but no severity threshold may be introduced that lets a real
@@ -3666,6 +3672,26 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	assertFileContainsAll(t, runnerPath,
 		`print("vulnerable" if total else "clean")`,
 	)
+	// Retrying must be bounded by wall clock, not by attempt count alone.
+	// npm's own fetch-timeout defaults to five minutes and it retries
+	// internally, so three unbounded attempts once ran for 10m56s and
+	// cancelled the Frontend job with every test already passing.
+	assertFileContainsAll(t, runnerPath,
+		`NPM_AUDIT_MAX_SECONDS`,
+		`NPM_AUDIT_ATTEMPT_TIMEOUT`,
+		`export npm_config_fetch_retries=0`,
+		`DEADLINE=`,
+	)
+	// The job budget has to stay above the audit budget by a wide margin, or
+	// a stalled endpoint reappears as a cancelled job rather than a warning.
+	workflow, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+	frontendJob := workflowJobBlock(t, string(workflow), "frontend")
+	if !strings.Contains(frontendJob, "timeout-minutes: 30") {
+		t.Fatal("frontend job must keep a bounded timeout above the audit budget")
+	}
 }
 
 func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
