@@ -552,3 +552,30 @@ retained only for callers that never had the error value.
 `internal/notifications/failure_class_test.go` pins the precedence order, the
 SMTP reply-code mapping, and the rule that response-body text cannot steer the
 recorded class.
+
+### The retry ladder is gated on the failure class
+
+Delivery retries are for conditions that can clear. `authentication`,
+`configuration`, and `rejected` are verdicts about the request itself: the same
+payload, sent again to the same destination with the same credentials, gets the
+same answer. Those three dead-letter on the attempt that produced them, without
+consuming the remaining ladder. `connectivity`, `rate_limited`, `server_error`,
+`tls`, and an unclassified failure keep the full ladder, because nothing about
+them proves a later attempt fails. TLS is deliberately on the retrying side: a
+handshake can fail transiently during rotation, and the cost of one wasted
+ladder is lower than the cost of dropping a recoverable notification.
+
+`NotificationFailureClass.Retryable` is the single owner of that split. Neither
+the queue nor any destination type may keep its own list. This generalises to
+every destination the decision webhook delivery already made for HTTP 4xx in
+`isRetryableWebhookError`.
+
+Dead-lettering early must not lose the notification: `RetryTerminalFailures`
+remains the operator's recovery path, returning retained terminal failures to
+the queue with a fresh budget once the credentials or configuration are fixed.
+A dead-letter row records `failureClass` and a `deadLetterReason` of
+`failure_class_not_retryable` or `max_retries_exhausted` so the two are
+distinguishable in local logs.
+
+`internal/notifications/failure_class_test.go` pins the retryable split and
+that a deterministic failure dead-letters on its first attempt.
