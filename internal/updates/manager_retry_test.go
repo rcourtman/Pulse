@@ -357,6 +357,11 @@ func TestGetLatestReleaseForChannelDoesNotMaskMalformedMetadata(t *testing.T) {
 func TestGetLatestReleaseForChannelFallsBackWhenGitHubMetadataExceedsLimit(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
 
+	expectedAsset, supported := updateReleaseAssetForRuntime("v6.4.2")
+	if !supported {
+		t.Skipf("no release asset mapping for %s", runtime.GOARCH)
+	}
+
 	const feed = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <entry>
@@ -376,6 +381,12 @@ func TestGetLatestReleaseForChannelFallsBackWhenGitHubMetadataExceedsLimit(t *te
 		contentLength := int64(len(body))
 		header := http.Header{"Content-Type": []string{"text/plain"}}
 		switch req.URL.String() {
+		case expectedAsset.BrowserDownloadURL:
+			if req.Method != http.MethodHead {
+				t.Errorf("asset probe method = %s, want HEAD", req.Method)
+			}
+			status = http.StatusFound
+			header.Set("Location", "https://release-assets.githubusercontent.com/test-archive")
 		case "https://api.github.com/repos/rcourtman/Pulse/releases":
 			status = http.StatusOK
 			body = `[{"tag_name":"v6.4.3-rc.1","body":"` + strings.Repeat("x", int(maxReleaseMetadataBytes)) + `"}]`
