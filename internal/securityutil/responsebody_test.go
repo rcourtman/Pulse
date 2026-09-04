@@ -26,6 +26,9 @@ func TestLimitResponseBody(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "response body exceeds 8 bytes") {
 			t.Fatalf("LimitResponseBody() error = %v", err)
 		}
+		if !IsResponseBodyTooLarge(err) {
+			t.Fatalf("IsResponseBodyTooLarge(%v) = false, want true", err)
+		}
 		if !body.closed {
 			t.Fatal("oversized response body was not closed")
 		}
@@ -61,6 +64,9 @@ func TestLimitResponseBody(t *testing.T) {
 		got, err := io.ReadAll(resp.Body)
 		if err == nil || !strings.Contains(err.Error(), "response body exceeds 8 bytes") {
 			t.Fatalf("ReadAll() error = %v", err)
+		}
+		if !IsResponseBodyTooLarge(err) {
+			t.Fatalf("IsResponseBodyTooLarge(%v) = false, want true", err)
 		}
 		if string(got) != "12345678" {
 			t.Fatalf("ReadAll() returned bytes beyond limit: %q", got)

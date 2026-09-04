@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 func setRetrySettingsForTest(t *testing.T, attempts int, backoff, maxBackoff time.Duration) {
@@ -172,10 +172,74 @@ func TestGetLatestReleaseForChannelRetriesTransientStatus(t *testing.T) {
 	}
 }
 
-func TestGetLatestReleaseForChannelRejectsStreamingOversizedResponse(t *testing.T) {
+func TestGetLatestReleaseForChannelFallsBackWhenReleaseMetadataIsOversized(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	feed := `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Pulse v6.4.0-rc.11</title>
+    <updated>2026-08-28T12:52:29Z</updated>
+  </entry>
+  <entry>
+    <title>v6.4.2</title>
+    <updated>2026-08-31T19:08:45Z</updated>
+  </entry>
+</feed>`
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		status := http.StatusNotFound
+		body := "not found"
+		header := http.Header{"Content-Type": []string{"text/plain"}}
+		switch req.URL.String() {
+		case "https://api.github.com/repos/rcourtman/Pulse/releases":
+			status = http.StatusOK
+			body = `[{"tag_name":"v9.9.9","body":"` +
+				strings.Repeat("x", int(maxReleaseMetadataBytes)) + `"}]`
+			header.Set("Content-Type", "application/json")
+		case "https://github.com/rcourtman/Pulse/releases.atom":
+			status = http.StatusOK
+			body = feed
+			header.Set("Content-Type", "application/atom+xml")
+		}
+		return &http.Response{
+			StatusCode:    status,
+			Status:        http.StatusText(status),
+			Body:          io.NopCloser(strings.NewReader(body)),
+			ContentLength: -1,
+			Header:        header,
+			Request:       req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	currentVer, err := ParseVersion("6.4.1")
+	if err != nil {
+		t.Fatalf("ParseVersion: %v", err)
+	}
+
+	release, err := manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
+	if err != nil {
+		t.Fatalf("getLatestReleaseForChannel error: %v", err)
+	}
+	if release.TagName != "v6.4.2" {
+		t.Fatalf("release tag = %q, want bare-tag feed release v6.4.2", release.TagName)
+	}
+	expectedAsset, supported := updateReleaseAssetForRuntime(release.TagName)
+	if !supported {
+		t.Fatalf("test runner architecture %q must map to a release asset", runtime.GOARCH)
+	}
+	if len(release.Assets) != 1 || release.Assets[0] != expectedAsset {
+		t.Fatalf("release assets = %+v, want %+v", release.Assets, expectedAsset)
+	}
+}
+
+func TestGetLatestReleaseForChannelDoesNotReplaceCustomOversizedMetadata(t *testing.T) {
+	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.(http.Flusher).Flush()
 		_, _ = io.WriteString(w, `[{"tag_name":"v9.9.9","body":"`)
@@ -186,14 +250,52 @@ func TestGetLatestReleaseForChannelRejectsStreamingOversizedResponse(t *testing.
 
 	t.Setenv("PULSE_UPDATE_SERVER", server.URL)
 	manager := NewManager(&config.Config{UpdateChannel: "stable"})
-	currentVer, err := ParseVersion("1.0.0")
+	currentVer, err := ParseVersion("6.4.1")
 	if err != nil {
 		t.Fatalf("ParseVersion: %v", err)
 	}
 
 	_, err = manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
-	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("response body exceeds %d bytes", maxReleaseMetadataBytes)) {
-		t.Fatalf("getLatestReleaseForChannel error = %v, want response size rejection", err)
+	if !securityutil.IsResponseBodyTooLarge(err) {
+		t.Fatalf("getLatestReleaseForChannel error = %v, want typed response size rejection", err)
+	}
+}
+
+func TestGetLatestReleaseForChannelDoesNotMaskMalformedMetadata(t *testing.T) {
+	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
+
+	var feedHits atomic.Int32
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		body := "{"
+		status := http.StatusOK
+		if req.URL.String() == "https://github.com/rcourtman/Pulse/releases.atom" {
+			feedHits.Add(1)
+			body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Pulse v9.9.9</title></entry></feed>`
+		}
+		return &http.Response{
+			StatusCode:    status,
+			Status:        http.StatusText(status),
+			Body:          io.NopCloser(strings.NewReader(body)),
+			ContentLength: int64(len(body)),
+			Header:        make(http.Header),
+			Request:       req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	currentVer, err := ParseVersion("6.4.1")
+	if err != nil {
+		t.Fatalf("ParseVersion: %v", err)
+	}
+
+	_, err = manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
+	if err == nil || !strings.Contains(err.Error(), "failed to decode releases") {
+		t.Fatalf("getLatestReleaseForChannel error = %v, want JSON decode failure", err)
+	}
+	if got := feedHits.Load(); got != 0 {
+		t.Fatalf("Atom feed requests = %d, want 0 for malformed metadata", got)
 	}
 }
 
