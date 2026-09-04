@@ -116,6 +116,50 @@ describe('NodeCredentialSlot', () => {
     );
   });
 
+  it('keeps the selected authentication strategy across polls but resets for another node', async () => {
+    const settings = createSettings();
+    const initialNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: true,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+    const [editingNode, setEditingNode] = createSignal(initialNode);
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode()}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Host Telemetry Agent$/i }));
+    const agentPanel = screen.getByText('Host telemetry agent');
+    for (let poll = 1; poll <= 2; poll += 1) {
+      setEditingNode({ ...initialNode, host: `https://poll-${poll}.local:8006` });
+      await waitFor(() => {
+        expect(screen.getByText('Host telemetry agent')).toBe(agentPanel);
+        expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue(initialNode.host);
+      });
+    }
+
+    // A genuinely different edit target must not inherit the previous strategy.
+    setEditingNode({ ...initialNode, id: 'pve-1', host: 'https://pve2.local:8006' });
+    await waitFor(() => {
+      expect(screen.queryByText('Host telemetry agent')).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://pve2.local:8006');
+    });
+    expect(settings.saveNode).not.toHaveBeenCalled();
+  });
+
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {
     render(() => (
       <NodeCredentialSlot
