@@ -3204,15 +3204,15 @@ vulnerabilities in the current patch level, the canonical fix is to advance the
 governed release toolchain and immutable Go builder digest together, not to
 suppress the scanner or produce release artifacts with an older patched-over
 runtime.
-As of 2026-08-27, the governed release floor is Go `1.26.7`. It supersedes
-`1.26.5`, whose standard library is reachable through seven vulnerable Pulse
-call paths reported by `govulncheck`, including HTTP/TLS, URL parsing, SAML XML
-decoding, HTML templating, and public-key parsing. Both source-built container
-stages pin the Docker Official Images Linux amd64 manifest
-`sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468`;
+As of 2026-09-04, the governed release floor is Go `1.26.8`, the current
+supported `1.26` patch release. It retains the security corrections that made
+`1.26.7` the previous floor and adds the upstream compiler, runtime, cgo,
+`debug/elf`, and `os` fixes shipped in `1.26.8`. Source-built Alpine container
+stages pin the Docker Official Images manifest list
+`sha256:ce864e7223ac17b1775e6fd0b4c0db580c2eb50e7953a427916379e4b92a1628`;
 the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
-cannot silently reintroduce the vulnerable runtime.
+cannot silently reintroduce a superseded runtime.
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration
