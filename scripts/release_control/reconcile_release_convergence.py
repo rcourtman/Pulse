@@ -558,19 +558,6 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         )
         return
 
-    # A new control revision is itself a repair candidate. Bound churn for the
-    # exact revision without allowing failures from superseded controls to make
-    # current controls permanently unretriable.
-    attempts = sum(
-        positive_int(item.get("run_attempt"), "run attempt")
-        for item in matching_runs
-        if item.get("head_sha") == run.get("head_sha")
-    )
-    if attempts >= max_attempts:
-        raise ReconciliationError(
-            f"{title} still has convergence debt after {attempts} attempts"
-        )
-
     with tempfile.TemporaryDirectory(prefix="release-convergence-") as raw:
         marker = github.download_marker(tag, Path(raw))
     owner_run_id = validate_marker(
@@ -591,6 +578,21 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
     if not isinstance(default_commit, str) or EXACT_SHA.fullmatch(default_commit) is None:
         raise ReconciliationError("default branch did not resolve to an exact commit")
     if run.get("head_sha") == default_commit:
+        # Exhaustion is a terminal state of the retry policy, not a failure of
+        # the reconciler itself. The failed convergence run remains the durable
+        # debt signal; scheduled reconciliation must not recreate the same
+        # operational failure forever.
+        attempts = sum(
+            positive_int(item.get("run_attempt"), "run attempt")
+            for item in matching_runs
+            if item.get("head_sha") == run.get("head_sha")
+        )
+        if attempts >= max_attempts:
+            print(
+                f"{title} remains failed after the {attempts}-attempt retry budget; "
+                "no unchanged-control retry was dispatched."
+            )
+            return
         github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
         print(f"Re-ran current-control convergence {run_id} for committed {tag}.")
         return

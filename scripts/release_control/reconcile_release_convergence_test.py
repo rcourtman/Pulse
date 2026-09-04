@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import unittest
 
 import reconcile_release_convergence as subject
@@ -455,13 +457,26 @@ class ReconciliationTests(unittest.TestCase):
         subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
-    def test_attempt_budget_counts_distinct_runs_and_reruns(self):
-        github = FakeGitHub()
+    def test_exhausted_current_controls_are_a_stable_noop(self):
+        github = FakeGitHub(current_controls=True)
         github.runs[0]["run_attempt"] = 3
         github.runs.append(github.run(101, github.old_sha, attempt=2))
-        with self.assertRaisesRegex(subject.ReconciliationError, "after 5 attempts"):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
             subject.reconcile(github, 101, 5)
         self.assertEqual([], github.posts)
+        self.assertIn(
+            "remains failed after the 5-attempt retry budget", output.getvalue()
+        )
+
+    def test_repaired_controls_rearm_exhausted_stale_debt(self):
+        github = FakeGitHub()
+        github.runs[0]["run_attempt"] = 5
+        subject.reconcile(github, github.run_id, 5)
+        self.assertEqual(1, len(github.posts))
+        endpoint, payload = github.posts[0]
+        self.assertTrue(endpoint.endswith("release-convergence.yml/dispatches"))
+        self.assertEqual("main", payload["ref"])
 
     def test_attempt_budget_resets_for_repaired_controls(self):
         github = FakeGitHub()
