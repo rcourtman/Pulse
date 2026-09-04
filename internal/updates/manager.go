@@ -91,6 +91,7 @@ const (
 	defaultUpdateAPIBaseURL  string = "https://api.github.com"
 	maxReleaseFeedBytes      int64  = 1 << 20   // 1 MiB
 	maxReleaseMetadataBytes  int64  = 1 << 20   // 1 MiB
+	maxReleaseFeedCandidates int    = 20        // Bound asset probes from a feed.
 	maxChecksumFileBytes     int64  = 1 << 20   // 1 MiB
 	maxUpdateDownloadBytes   int64  = 512 << 20 // 512 MiB
 	minUpdateTempFreeBytes   int64  = 128 << 20 // 128 MiB
@@ -901,6 +902,14 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 
 	if resp.StatusCode == http.StatusForbidden {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(body))
+		if detail == "" {
+			detail = resp.Status
+		}
+		if strings.TrimSpace(os.Getenv("PULSE_UPDATE_SERVER")) != "" {
+			return nil, fmt.Errorf("update server returned status %d: %s", resp.StatusCode, detail)
+		}
+
 		log.Warn().
 			Str("channel", channel).
 			Str("rateLimitRemaining", resp.Header.Get("X-RateLimit-Remaining")).
@@ -911,11 +920,6 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		if feedRelease, err := m.getLatestReleaseFromFeed(ctx, channel); err == nil {
 			log.Info().Str("version", feedRelease.TagName).Msg("Got release info from RSS feed fallback")
 			return feedRelease, nil
-		}
-
-		detail := strings.TrimSpace(string(body))
-		if detail == "" {
-			detail = resp.Status
 		}
 
 		return nil, fmt.Errorf("%w: %s", errGitHubRateLimited, detail)
@@ -1098,11 +1102,16 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 	// falls back to the bare tag ("v6.4.2") for Atom entry titles.
 	versionTitleRegex := regexp.MustCompile(`^(?:Pulse )?(v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)$`)
 
-	// Pick the highest version matching the channel rather than the first
-	// entry: the feed is publication-ordered and v5-line maintenance releases
-	// interleave with v6 releases in the same repo.
-	var best *ReleaseInfo
-	var bestVer *Version
+	// Pick by version rather than feed order: v5-line maintenance releases
+	// interleave with v6 releases in the same repo. Keep candidates until their
+	// runtime asset has been checked. GitHub's feed can retain an entry for a
+	// deleted release tag, so synthesising a URL from the first matching title
+	// alone can advertise a retracted build whose download now returns 404.
+	type feedCandidate struct {
+		release ReleaseInfo
+		version *Version
+	}
+	candidates := make([]feedCandidate, 0, len(feed.Entries))
 	for _, entry := range feed.Entries {
 		match := versionTitleRegex.FindStringSubmatch(strings.TrimSpace(entry.Title))
 		if len(match) < 2 {
@@ -1123,9 +1132,6 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 			continue
 		}
 
-		if best != nil && !ver.IsNewerThan(bestVer) {
-			continue
-		}
 		publishedAt := time.Time{}
 		for _, rawTimestamp := range []string{entry.Published, entry.Updated} {
 			if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(rawTimestamp)); err == nil {
@@ -1133,34 +1139,85 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 				break
 			}
 		}
-		assets := []ReleaseAsset{}
-		if asset, ok := updateReleaseAssetForRuntime(tagName); ok {
-			assets = append(assets, asset)
-		}
-		best = &ReleaseInfo{
+		candidates = append(candidates, feedCandidate{release: ReleaseInfo{
 			TagName:     tagName,
 			Name:        "Pulse " + tagName,
 			Prerelease:  isPrerelease,
 			PublishedAt: publishedAt,
-			// Atom does not list release assets. Published Pulse versions have a
-			// deterministic runtime archive name, so synthesize only the exact
-			// current-platform URL; ApplyUpdate still verifies its SSHSIG and
-			// checksum before installing anything.
-			Assets: assets,
-		}
-		bestVer = ver
+		}, version: ver})
 	}
 
-	if best != nil {
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].version.IsNewerThan(candidates[j].version)
+	})
+	if len(candidates) > maxReleaseFeedCandidates {
+		candidates = candidates[:maxReleaseFeedCandidates]
+	}
+
+	for i := range candidates {
+		candidate := &candidates[i].release
+		asset, ok := updateReleaseAssetForRuntime(candidate.TagName)
+		if !ok {
+			continue
+		}
+		available, err := m.releaseAssetAvailable(ctx, asset)
+		if err != nil {
+			return nil, fmt.Errorf("verify feed release %s: %w", candidate.TagName, err)
+		}
+		if !available {
+			log.Warn().
+				Str("tag", candidate.TagName).
+				Msg("Skipping release feed entry without a published runtime asset")
+			continue
+		}
+
+		// Atom does not list release assets. Published Pulse versions have a
+		// deterministic runtime archive name; expose only the exact asset just
+		// proven to exist. ApplyUpdate still verifies its SSHSIG and checksum.
+		candidate.Assets = []ReleaseAsset{asset}
 		log.Debug().
-			Str("tag", best.TagName).
-			Bool("prerelease", best.Prerelease).
+			Str("tag", candidate.TagName).
+			Bool("prerelease", candidate.Prerelease).
 			Str("channel", channel).
 			Msg("Found release from feed")
-		return best, nil
+		return candidate, nil
 	}
 
 	return nil, fmt.Errorf("no suitable release found for channel %s", channel)
+}
+
+// releaseAssetAvailable verifies a deterministic GitHub release URL without
+// downloading the archive. Redirects are deliberately not followed: GitHub's
+// release route returns a redirect only after resolving a published asset,
+// whereas stale feed entries return 404.
+func (m *Manager) releaseAssetAvailable(ctx context.Context, asset ReleaseAsset) (bool, error) {
+	target, err := validateApplyDownloadURL(asset.BrowserDownloadURL)
+	if err != nil {
+		return false, err
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := m.requestWithRetry(ctx, client, http.MethodHead, target, map[string]string{
+		"User-Agent": "Pulse-Update-Checker",
+	}, "verify GitHub release asset")
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return true, nil
+	case http.StatusNotFound, http.StatusGone:
+		return false, nil
+	default:
+		return false, fmt.Errorf("release asset returned status %d", resp.StatusCode)
+	}
 }
 
 func (m *Manager) createHistoryEntry(ctx context.Context, entry UpdateHistoryEntry) string {
@@ -1322,6 +1379,10 @@ func sleepWithContext(ctx context.Context, delay time.Duration) error {
 }
 
 func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, target *url.URL, headers map[string]string, operation string) (*http.Response, error) {
+	return m.requestWithRetry(ctx, client, http.MethodGet, target, headers, operation)
+}
+
+func (m *Manager) requestWithRetry(ctx context.Context, client *http.Client, method string, target *url.URL, headers map[string]string, operation string) (*http.Response, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -1335,7 +1396,7 @@ func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, target 
 
 	targetURL := target.String()
 	for attempt := 1; attempt <= updateHTTPAttempts; attempt++ {
-		req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodGet, target, nil)
+		req, err := securityutil.NewValidatedRequestWithContext(ctx, method, target, nil)
 		if err != nil {
 			return nil, err
 		}
