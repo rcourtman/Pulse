@@ -127,15 +127,21 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend-modern
-        run: npm ci
+        # The explicit bounded audits below own the advisory verdict. Avoid
+        # npm ci's duplicate best-effort audit POST and its five-minute timeout.
+        run: npm ci --no-audit
 
       - name: Audit complete frontend dependency graph
+        id: audit-complete
+        continue-on-error: true
         working-directory: frontend-modern
-        run: npm audit
+        run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh"'
 
       - name: Audit production frontend dependencies
+        id: audit-production
+        continue-on-error: true
         working-directory: frontend-modern
-        run: npm audit --omit=dev
+        run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --omit=dev'
 
       # Whole-tree, not staged-only: the pre-commit formatter only ever sees
       # staged files, so drift in untouched files is invisible to it. This is
@@ -170,6 +176,20 @@ jobs:
       - name: Check frontend bundle size budget
         working-directory: frontend-modern
         run: npm run check:bundlesize
+
+      # Audit service failures and real advisories stay gating, but neither may
+      # suppress formatting, tests, type-checking, or the production build.
+      - name: Require frontend dependency audits
+        if: ${{ !cancelled() }}
+        env:
+          COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}
+          PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}
+        run: |
+          if [ "${COMPLETE_AUDIT_RESULT}" != success ] || \
+             [ "${PRODUCTION_AUDIT_RESULT}" != success ]; then
+            echo "::error::One or more frontend dependency audits failed."
+            exit 1
+          fi
 
   backend:
     name: Backend tests (${{ matrix.shard }})

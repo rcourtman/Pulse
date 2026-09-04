@@ -3640,12 +3640,48 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 }
 
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
-	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
-	assertFileContainsAll(t, workflowPath,
+	buildWorkflowPath := repoFile(".github", "workflows", "build-and-test.yml")
+	buildWorkflowBytes, err := os.ReadFile(buildWorkflowPath)
+	if err != nil {
+		t.Fatalf("read build-and-test workflow: %v", err)
+	}
+	frontendJob := workflowJobBlock(t, string(buildWorkflowBytes), "frontend")
+	for _, needle := range []string{
+		`run: npm ci --no-audit`,
 		`- name: Audit complete frontend dependency graph`,
-		`run: npm audit`,
+		`run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh"'`,
 		`- name: Audit production frontend dependencies`,
-		`run: npm audit --omit=dev`,
+		`run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --omit=dev'`,
+		`continue-on-error: true`,
+		`- name: Require frontend dependency audits`,
+		`if: ${{ !cancelled() }}`,
+		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
+		`PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}`,
+	} {
+		if !strings.Contains(frontendJob, needle) {
+			t.Fatalf("build-and-test frontend job missing dependency audit contract: %s", needle)
+		}
+	}
+	if verdictIndex, bundleIndex := strings.Index(frontendJob, "- name: Require frontend dependency audits"), strings.Index(frontendJob, "- name: Check frontend bundle size budget"); verdictIndex < bundleIndex || bundleIndex < 0 {
+		t.Fatal("build-and-test must report independent frontend evidence before requiring audit success")
+	}
+
+	securityWorkflowPath := repoFile(".github", "workflows", "security-scan.yml")
+	assertFileContainsAll(t, securityWorkflowPath,
+		`run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --package-lock-only'`,
+		`run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --package-lock-only --omit=dev'`,
+		`- name: Require dependency audits`,
+		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
+		`PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}`,
+	)
+
+	auditHelperPath := repoFile("scripts", "npm-audit-retry.sh")
+	assertFileContainsAll(t, auditHelperPath,
+		`readonly max_attempts=3`,
+		`readonly fetch_timeout_ms=60000`,
+		`npm audit --fetch-timeout="${fetch_timeout_ms}" "$@"`,
+		`if ! grep -Eiq`,
+		`if (( attempt == max_attempts )); then`,
 	)
 }
 

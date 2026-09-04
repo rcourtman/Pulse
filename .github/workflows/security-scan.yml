@@ -383,9 +383,25 @@ jobs:
           node-version: '24'
 
       - name: Audit complete dependency graph
+        id: audit-complete
+        continue-on-error: true
         working-directory: ${{ matrix.directory }}
-        run: npm audit --package-lock-only
+        run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --package-lock-only'
 
       - name: Audit production dependencies
+        id: audit-production
+        continue-on-error: true
         working-directory: ${{ matrix.directory }}
-        run: npm audit --package-lock-only --omit=dev
+        run: '"${GITHUB_WORKSPACE}/scripts/npm-audit-retry.sh" --package-lock-only --omit=dev'
+
+      - name: Require dependency audits
+        if: ${{ !cancelled() }}
+        env:
+          COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}
+          PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}
+        run: |
+          if [ "${COMPLETE_AUDIT_RESULT}" != success ] || \
+             [ "${PRODUCTION_AUDIT_RESULT}" != success ]; then
+            echo "::error::One or more dependency audits failed."
+            exit 1
+          fi
