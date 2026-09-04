@@ -433,8 +433,24 @@ func TestPatrolHTTPJSONObserverUsesScopedDiscoveryOriginSecretReferenceAndWakes(
 	case <-time.After(3 * time.Second):
 		t.Fatal("HTTP JSON observer did not execute")
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for tm.GetPendingCount() != 1 && time.Now().Before(deadline) {
+	// The HTTP sample runs on its own goroutine and persists the health lease
+	// strictly after it queues the wake, so the lease is the one side effect
+	// that orders the whole sample against these assertions. Gating on the wake
+	// instead let a loaded runner read a half-applied sample: a queued trigger
+	// with a still-nil lease, reported as degraded/observer_health_unknown.
+	// Coverage is evaluated at a fixed instant derived from the sample time so
+	// the verdict never depends on how long the goroutine took to get there.
+	evaluatedAt := now.Add(2 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
+	var installed PatrolObjective
+	for {
+		installed, _ = store.Get(objective.ID, evaluatedAt)
+		if installed.Observer != nil && installed.Observer.ValidUntil != nil {
+			break
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("HTTP JSON observer never persisted a health lease: %+v", installed.Observer)
+		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	if tm.GetPendingCount() != 1 {
@@ -444,8 +460,7 @@ func TestPatrolHTTPJSONObserverUsesScopedDiscoveryOriginSecretReferenceAndWakes(
 	if queued.ObjectiveContext == nil || !strings.Contains(queued.ObjectiveContext.Evidence, "buffering_sessions") || !strings.Contains(queued.ObjectiveContext.Evidence, "actual_1") {
 		t.Fatalf("HTTP JSON objective evidence = %+v", queued.ObjectiveContext)
 	}
-	installed, _ := store.Get(objective.ID, time.Now().UTC())
-	if installed.Observer == nil || installed.Observer.State != PatrolObserverInstalled || installed.Coverage.State != PatrolObjectiveCovered {
+	if installed.Observer.State != PatrolObserverInstalled || installed.Coverage.State != PatrolObjectiveCovered || installed.Coverage.ReasonCode != "observer_healthy" {
 		t.Fatalf("HTTP observer coverage = %+v / %+v", installed.Observer, installed.Coverage)
 	}
 }
