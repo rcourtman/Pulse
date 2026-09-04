@@ -155,7 +155,7 @@ GENERATED_CODE_ACTION_INPUTS = {
 SAFE_PULL_REQUEST_TARGET_WORKFLOW = "reclaim-closed-pr-capacity.yml"
 SAFE_PULL_REQUEST_TARGET_ACTIONS = (
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b",
+    "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd",
 )
 # v7.0.1 includes checkout's fail-closed fork-PR protection for privileged
 # pull_request_target and workflow_run events. Keep this exact-pin allowlist
@@ -163,6 +163,18 @@ SAFE_PULL_REQUEST_TARGET_ACTIONS = (
 PROTECTED_CHECKOUT_PINS = frozenset(
     {"3d3c42e5aac5ba805825da76410c181273ba90b1"}
 )
+# GitHub removes Node 20 from hosted runners on 2026-09-23. These JavaScript
+# actions had Node 20 pins in this repository, so keep their reviewed Node 24
+# replacements explicit rather than allowing a dependency refresh to restore
+# an action runtime that the release path can no longer execute.
+REVIEWED_NODE24_ACTION_PINS = {
+    "actions/download-artifact@": frozenset(
+        {"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"}
+    ),
+    "actions/github-script@": frozenset(
+        {"ed597411d8f924073f98dfc5c65a23a2325f34cd"}
+    ),
+}
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
 PERMISSIONS_RE = re.compile(
     rf"^(\s*){_yaml_key('permissions')}\s*:\s*(.*?)\s*$"
@@ -1520,6 +1532,23 @@ def audit_workflow(path: Path) -> list[Finding]:
                 )
             )
             continue
+
+        reviewed_runtime_pins = next(
+            (
+                pins
+                for prefix, pins in REVIEWED_NODE24_ACTION_PINS.items()
+                if dependency_lower.startswith(prefix)
+            ),
+            None,
+        )
+        if reviewed_runtime_pins is not None and ref not in reviewed_runtime_pins:
+            findings.append(
+                Finding(
+                    path,
+                    line_number,
+                    "action pin is outside the reviewed Node 24 runtime baseline",
+                )
+            )
 
         # GitHub repository names are case-insensitive, so normalize before
         # applying checkout-specific credential controls.

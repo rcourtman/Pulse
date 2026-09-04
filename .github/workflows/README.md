@@ -22,6 +22,13 @@ That exception can only run the protected default-branch helper, has no shell,
 cache, artifact, container, secret, or pull-request checkout ingress, and is
 machine-checked down to its permissions, dependencies, and generated program.
 
+JavaScript action pins that previously selected Node 20 also belong to a
+reviewed Node 24 allowlist. Release-candidate artifact downloads use
+`actions/download-artifact` v8.0.1 and issue automation uses
+`actions/github-script` v8.0.0; the audit rejects a return to their Node 20
+pins before GitHub removes that runtime from hosted runners on 23 September
+2026.
+
 `workflow_run` is also a privileged trigger. Every handler must filter its
 upstream workflow to the literal canonical branch `main`, and checkout steps
 must not select code through triggering-run head metadata. These handlers also

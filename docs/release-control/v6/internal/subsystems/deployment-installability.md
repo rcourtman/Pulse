@@ -2146,6 +2146,11 @@ artifact-selection behaviour.
    opt into setup-node dependency caching. Those jobs consume or qualify the
    candidate at a release trust boundary, so mutable cache contents must not
    become an undeclared release input.
+   Release-candidate artifact transfers must use the reviewed Node 24
+   `actions/download-artifact` v8.0.1 pin. Issue automation must use the
+   reviewed Node 24 `actions/github-script` v8.0.0 pin. The workflow trust
+   audit must reject older pins after GitHub's announced Node 20 removal so a
+   release cannot become unbuildable through action-runtime retirement.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.
@@ -5064,9 +5069,13 @@ or shell ingress. Pull-request workflows may not reference repository secrets,
 including values treated as public configuration. Exact-SHA compilation and
 pre-publication release smoke explicitly disable setup-node's automatic npm
 cache and do not request dependency caches, preventing mutable cache state from
-becoming release input. Dependency refreshes must update the central
-workflow-trust allowlist and its regression proof together, so a routine pin
-change cannot silently remove this release-automation trust boundary.
+becoming release input. Candidate artifact downloads use the reviewed Node 24
+`actions/download-artifact` v8.0.1 pin, and issue automation uses the reviewed
+Node 24 `actions/github-script` v8.0.0 pin; older runtime pins are rejected
+before GitHub's 23 September 2026 Node 20 removal. Dependency refreshes must
+update the central workflow-trust allowlist and its regression proof together,
+so a routine pin change cannot silently remove this release-automation trust
+boundary.
 `scripts/check_workflow_trust.py`, `scripts/tests/test_workflow_trust.py`, and
 `scripts/installtests/build_release_assets_test.go` pin the policy and the
 release-workflow integration.

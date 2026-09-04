@@ -3243,6 +3243,13 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 
 	createWorkflow := string(createBytes)
 	candidateWorkflow := string(candidateBytes)
+	node24DownloadArtifact := "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
+	if count := strings.Count(candidateWorkflow, node24DownloadArtifact); count != 5 {
+		t.Fatalf("release candidate must use the reviewed Node 24 artifact downloader for all five signed-artifact transfers, got %d", count)
+	}
+	if strings.Contains(candidateWorkflow, "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093") {
+		t.Fatal("release candidate must not retain the Node 20 artifact downloader")
+	}
 	compilerWorkflow := string(compilerBytes)
 	compileScriptBytes, err := os.ReadFile(repoFile("scripts", "build-release-binaries.sh"))
 	if err != nil {

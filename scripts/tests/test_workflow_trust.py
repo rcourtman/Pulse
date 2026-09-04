@@ -21,6 +21,12 @@ SPEC.loader.exec_module(workflow_trust)
 PIN = "a" * 40
 DIGEST = "b" * 64
 CHECKOUT_PIN = next(iter(workflow_trust.PROTECTED_CHECKOUT_PINS))
+GITHUB_SCRIPT_PIN = next(
+    iter(workflow_trust.REVIEWED_NODE24_ACTION_PINS["actions/github-script@"])
+)
+DOWNLOAD_ARTIFACT_PIN = next(
+    iter(workflow_trust.REVIEWED_NODE24_ACTION_PINS["actions/download-artifact@"])
+)
 
 
 class WorkflowTrustTest(unittest.TestCase):
@@ -64,6 +70,40 @@ jobs:
         self.assertTrue(any("mutable hosted runner" in finding for finding in findings))
         self.assertTrue(any("full commit SHA" in finding for finding in findings))
         self.assertTrue(any("sha256 digest" in finding for finding in findings))
+
+    def test_requires_reviewed_node24_action_pins(self) -> None:
+        accepted = self.audit(
+            f"""permissions: {{}}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@{DOWNLOAD_ARTIFACT_PIN}
+      - uses: actions/github-script@{GITHUB_SCRIPT_PIN}
+        with:
+          script: return true
+"""
+        )
+        self.assertEqual(accepted, [])
+
+        findings = self.audit(
+            """permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: return true
+"""
+        )
+        self.assertEqual(
+            2,
+            sum("Node 24 runtime baseline" in finding for finding in findings),
+        )
 
     def test_requires_bounded_literal_runner_job_timeout(self) -> None:
         missing = self.audit(
@@ -550,7 +590,7 @@ steps:
     branches: [main]
 permissions: {{}}
 steps:
-  - uses: actions/download-artifact@{PIN}
+  - uses: actions/download-artifact@{DOWNLOAD_ARTIFACT_PIN}
   - run: gh run download "$RUN_ID"
   - run: gh pr checkout 17
   - run: git fetch origin refs/pull/17/head
@@ -894,7 +934,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/github-script@{PIN}
+      - uses: actions/github-script@{GITHUB_SCRIPT_PIN}
         with:
           script: |
             const title = '${{{{ github.event.issue.title }}}}';
@@ -910,7 +950,7 @@ jobs:
         with:
           script: |2- # explicit indentation remains generated source
             const body = '${{{{ github.event.comment.body }}}}';
-        uses: actions/github-script@{PIN}
+        uses: actions/github-script@{GITHUB_SCRIPT_PIN}
 """
         )
         self.assertEqual(
@@ -925,7 +965,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/github-script@{PIN}
+      - uses: actions/github-script@{GITHUB_SCRIPT_PIN}
         env:
           TITLE: ${{{{ github.event.issue.title }}}}
         with:
