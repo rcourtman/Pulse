@@ -174,6 +174,14 @@ func TestGetLatestReleaseForChannelRetriesTransientStatus(t *testing.T) {
 
 func TestGetLatestReleaseForChannelFallsBackWhenReleaseMetadataIsOversized(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
+	staleAsset, supported := updateReleaseAssetForRuntime("v6.4.2")
+	if !supported {
+		t.Skipf("no release asset mapping for %s", runtime.GOARCH)
+	}
+	publishedAsset, supported := updateReleaseAssetForRuntime("v6.4.1")
+	if !supported {
+		t.Skipf("no release asset mapping for %s", runtime.GOARCH)
+	}
 
 	feed := `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -184,6 +192,10 @@ func TestGetLatestReleaseForChannelFallsBackWhenReleaseMetadataIsOversized(t *te
   <entry>
     <title>v6.4.2</title>
     <updated>2026-08-31T19:08:45Z</updated>
+  </entry>
+  <entry>
+    <title>Pulse v6.4.1</title>
+    <updated>2026-08-29T11:06:45Z</updated>
   </entry>
 </feed>`
 
@@ -202,6 +214,16 @@ func TestGetLatestReleaseForChannelFallsBackWhenReleaseMetadataIsOversized(t *te
 			status = http.StatusOK
 			body = feed
 			header.Set("Content-Type", "application/atom+xml")
+		case staleAsset.BrowserDownloadURL:
+			if req.Method != http.MethodHead {
+				t.Errorf("stale asset probe method = %s, want HEAD", req.Method)
+			}
+			status = http.StatusNotFound
+		case publishedAsset.BrowserDownloadURL:
+			if req.Method != http.MethodHead {
+				t.Errorf("published asset probe method = %s, want HEAD", req.Method)
+			}
+			status = http.StatusFound
 		}
 		return &http.Response{
 			StatusCode:    status,
@@ -224,15 +246,11 @@ func TestGetLatestReleaseForChannelFallsBackWhenReleaseMetadataIsOversized(t *te
 	if err != nil {
 		t.Fatalf("getLatestReleaseForChannel error: %v", err)
 	}
-	if release.TagName != "v6.4.2" {
-		t.Fatalf("release tag = %q, want bare-tag feed release v6.4.2", release.TagName)
+	if release.TagName != "v6.4.1" {
+		t.Fatalf("release tag = %q, want published release v6.4.1 after stale v6.4.2", release.TagName)
 	}
-	expectedAsset, supported := updateReleaseAssetForRuntime(release.TagName)
-	if !supported {
-		t.Fatalf("test runner architecture %q must map to a release asset", runtime.GOARCH)
-	}
-	if len(release.Assets) != 1 || release.Assets[0] != expectedAsset {
-		t.Fatalf("release assets = %+v, want %+v", release.Assets, expectedAsset)
+	if len(release.Assets) != 1 || release.Assets[0] != publishedAsset {
+		t.Fatalf("release assets = %+v, want %+v", release.Assets, publishedAsset)
 	}
 }
 
@@ -258,6 +276,43 @@ func TestGetLatestReleaseForChannelDoesNotReplaceCustomOversizedMetadata(t *test
 	_, err = manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
 	if !securityutil.IsResponseBodyTooLarge(err) {
 		t.Fatalf("getLatestReleaseForChannel error = %v, want typed response size rejection", err)
+	}
+}
+
+func TestGetLatestReleaseForChannelDoesNotReplaceForbiddenCustomUpdateServer(t *testing.T) {
+	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
+
+	var feedHits atomic.Int32
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host == "github.com" {
+			feedHits.Add(1)
+		}
+		body := `{"message":"forbidden"}`
+		return &http.Response{
+			StatusCode:    http.StatusForbidden,
+			Status:        http.StatusText(http.StatusForbidden),
+			Body:          io.NopCloser(strings.NewReader(body)),
+			ContentLength: int64(len(body)),
+			Header:        make(http.Header),
+			Request:       req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	t.Setenv("PULSE_UPDATE_SERVER", "https://updates.example.test")
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	currentVer, err := ParseVersion("6.4.1")
+	if err != nil {
+		t.Fatalf("ParseVersion: %v", err)
+	}
+
+	_, err = manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
+	if err == nil || !strings.Contains(err.Error(), "update server returned status 403") {
+		t.Fatalf("getLatestReleaseForChannel error = %v, want custom server rejection", err)
+	}
+	if got := feedHits.Load(); got != 0 {
+		t.Fatalf("public GitHub feed requests = %d, want 0 for custom update server", got)
 	}
 }
 
@@ -302,6 +357,10 @@ func TestGetLatestReleaseForChannelDoesNotMaskMalformedMetadata(t *testing.T) {
 func TestGetLatestReleaseForChannelRateLimitFallbackIncludesRuntimeAsset(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
 	withBuildVersion(t, "6.4.0-rc.10")
+	expectedAsset, supported := updateReleaseAssetForRuntime("v6.4.0-rc.11")
+	if !supported {
+		t.Skipf("no release asset mapping for %s", runtime.GOARCH)
+	}
 
 	releaseTime := time.Date(2026, 8, 28, 12, 52, 29, 0, time.UTC)
 	feed := `<?xml version="1.0" encoding="UTF-8"?>
@@ -326,6 +385,11 @@ func TestGetLatestReleaseForChannelRateLimitFallbackIncludesRuntimeAsset(t *test
 			status = http.StatusOK
 			body = feed
 			header.Set("Content-Type", "application/atom+xml")
+		case expectedAsset.BrowserDownloadURL:
+			if req.Method != http.MethodHead {
+				t.Errorf("asset probe method = %s, want HEAD", req.Method)
+			}
+			status = http.StatusFound
 		}
 		return &http.Response{
 			StatusCode: status,
@@ -344,10 +408,6 @@ func TestGetLatestReleaseForChannelRateLimitFallbackIncludesRuntimeAsset(t *test
 	}
 	if !info.Available || info.LatestVersion != "6.4.0-rc.11" {
 		t.Fatalf("fallback update = %+v, want available v6.4.0-rc.11", info)
-	}
-	expectedAsset, supported := updateReleaseAssetForRuntime("v6.4.0-rc.11")
-	if !supported {
-		t.Fatalf("test runner architecture %q must map to a release asset", runtime.GOARCH)
 	}
 	if info.DownloadURL != expectedAsset.BrowserDownloadURL {
 		t.Fatalf("fallback DownloadURL = %q, want %q", info.DownloadURL, expectedAsset.BrowserDownloadURL)
