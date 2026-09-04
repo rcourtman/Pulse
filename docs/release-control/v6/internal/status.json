@@ -10130,8 +10130,46 @@
       ]
     },
     {
+      "id": "notification-delivery-terminal-failure-diagnosis",
+      "summary": "Terminal notification failures are 36% of resolved delivery outcomes fleet-wide (126,337 dead-lettered against 224,692 delivered, week to 2026-09-03, 6,668 clean installs), and the failure breakdown could not explain why. Two causes, one fixed here. First, the delivery failure class was inferred from Go error prose, so any failure whose text carried no recognised token fell to unknown (31,218, the modal bucket) and the destination's own response body could steer the class, letting a 500 whose body says 'rate limit' be recorded as rate_limited; senders now declare the class and SMTP reply codes, DNS, x509 and timeout errors classify structurally. Second, the shape is concentration, not breadth: only 400 of 6,668 installs report any failure, the top 10 carry 73,276 (58%), the median failing install has 13, and 72 installs that delivered nothing at all in seven days account for 62,615 failures (50%). Pulse retries a permanently broken destination three times per notification forever and never tells the operator the destination has never once succeeded, so the worst install burned 20,312 dead letters against 36 deliveries. Still open: back off or disable a destination with no successful delivery, surface that state on the destinations surface, and add server_error guidance to the delivery health card, which currently falls through to the unknown copy for a class the client already emits.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-09-03",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "alerts",
+        "notifications"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 3,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/notifications/failure_class.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/notifications/queue.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "docs/TELEMETRY_SIGNALS.md",
+          "kind": "file"
+        }
+      ]
+    },
+    {
       "id": "telemetry-test-binary-production-pings",
-      "summary": "Go test binaries reported themselves to the production telemetry receiver as live installations. pkg/server tests boot the real server through Run() with the version literal \"test-version\", which internal/updates normalizes to 0.0.0-test-version, and each test runs against its own t.TempDir(), so every run minted a fresh install ID. The startup ping waits two minutes and never fired in a short test, but the service-health failure reporter added on 2026-08-29 sends synchronously from a deferred handler as soon as Run() returns an error, so every CI shard containing pkg/server posted one ping. The receiver recorded 317 single-ping installs between 2026-08-29 and 2026-09-03, 311 from linux/amd64 CI runners and 3 from a maintainer workstation, still arriving at roughly 60 a day. The canonical clean denominator excludes single-ping installs and was unaffected, but raw install counts and the operator-evidence Patrol blocked-cause read counted them as real installations. Resolved by refusing production-endpoint sends from a test binary in internal/telemetry, opting the server tests and the CI test job out of telemetry, and excluding development builds from the operator-evidence read.",
+      "summary": "Go test binaries reported themselves to the production telemetry receiver as live installations. pkg/server tests boot the real server through Run() with the version literal \"test-version\", which internal/updates normalizes to 0.0.0-test-version, and each test runs against its own t.TempDir(), so every run minted a fresh install ID. The startup ping waits two minutes and never fired in a short test, but the service-health failure reporter added on 2026-08-29 sends synchronously from a deferred handler as soon as Run() returns an error, so every test run that exercised a startup failure posted one ping. The receiver recorded 317 single-ping installs between 2026-08-29 and 2026-09-03, 311 from linux/amd64 hosts (dominated by the autonomous maintainer fleet running ad-hoc go test, not GitHub Actions, which ran twice in the final 24h) and 3 from a maintainer workstation. The canonical clean denominator excludes single-ping installs and was unaffected, but raw install counts and the operator-evidence Patrol blocked-cause read counted them as real installations. Resolved by refusing production-endpoint sends from a test binary in internal/telemetry, opting the server tests out of telemetry, and putting the operator-evidence read on the production-ping basis. Note the receiver cannot filter these on version_is_development: the emitter sets that flag only for git build metadata or a prerelease of exactly dev or dev.*, so 0.0.0-test-version arrives with it clear and only version_is_published_release excludes it.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-09-03",
