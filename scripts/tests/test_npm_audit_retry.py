@@ -106,7 +106,7 @@ class NpmAuditRetryTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             calls,
-            ["audit --json --fetch-timeout=60000 --package-lock-only --omit=dev"],
+            ["audit --json --package-lock-only --omit=dev"],
         )
 
     def test_retries_an_unavailable_audit_endpoint(self) -> None:
@@ -114,7 +114,7 @@ class NpmAuditRetryTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             calls,
-            ["audit --json --fetch-timeout=60000"] * 2,
+            ["audit --json"] * 2,
         )
         self.assertIn("retrying", result.stdout)
 
@@ -124,8 +124,8 @@ class NpmAuditRetryTest(unittest.TestCase):
         self.assertEqual(
             calls,
             [
-                "audit --json --fetch-timeout=60000",
-                "audit --fetch-timeout=60000",
+                "audit --json",
+                "audit",
             ],
         )
         self.assertIn("vulnerabilities present", result.stdout)
@@ -141,7 +141,7 @@ class NpmAuditRetryTest(unittest.TestCase):
     def test_persistent_outage_fails_when_a_result_is_required(self) -> None:
         result, calls = self.run_check("transient-failure", "all")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(calls, ["audit --json --fetch-timeout=60000"] * 3)
+        self.assertEqual(calls, ["audit --json"] * 3)
         self.assertIn("could not reach", result.stdout)
 
     def test_persistent_outage_warns_for_an_unchanged_dependency_graph(self) -> None:
@@ -149,13 +149,13 @@ class NpmAuditRetryTest(unittest.TestCase):
             "transient-failure", "all", require="false"
         )
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(calls, ["audit --json --fetch-timeout=60000"] * 3)
+        self.assertEqual(calls, ["audit --json"] * 3)
         self.assertIn("::warning::", result.stdout)
 
     def test_unparseable_output_never_passes_as_clean(self) -> None:
         result, calls = self.run_check("garbage", "all")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(calls, ["audit --json --fetch-timeout=60000"] * 3)
+        self.assertEqual(calls, ["audit --json"] * 3)
 
     def test_rejects_an_unknown_scope(self) -> None:
         result, calls = self.run_check("success", "unknown")
@@ -168,9 +168,11 @@ class NpmAuditRetryTest(unittest.TestCase):
                 "job": "frontend",
                 "runs": [
                     'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all',
-                    'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production',
                 ],
                 "require_env": True,
+                "verdict_env": {
+                    "COMPLETE_AUDIT_RESULT": "${{ steps.audit-complete.outcome }}",
+                },
             },
             ".github/workflows/security-scan.yml": {
                 "job": "npm-audit",
@@ -179,6 +181,10 @@ class NpmAuditRetryTest(unittest.TestCase):
                     'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production --package-lock-only',
                 ],
                 "require_env": False,
+                "verdict_env": {
+                    "COMPLETE_AUDIT_RESULT": "${{ steps.audit-complete.outcome }}",
+                    "PRODUCTION_AUDIT_RESULT": "${{ steps.audit-production.outcome }}",
+                },
             },
         }
         for relative, contract in expected.items():
@@ -207,10 +213,7 @@ class NpmAuditRetryTest(unittest.TestCase):
                 self.assertEqual(verdict["if"], "${{ !cancelled() }}")
                 self.assertEqual(
                     verdict["env"],
-                    {
-                        "COMPLETE_AUDIT_RESULT": "${{ steps.audit-complete.outcome }}",
-                        "PRODUCTION_AUDIT_RESULT": "${{ steps.audit-production.outcome }}",
-                    },
+                    contract["verdict_env"],
                 )
 
 
