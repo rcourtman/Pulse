@@ -4975,6 +4975,12 @@ surface:
 `NodeModalBasicInfoSection.tsx`, `NodeModalClusterMembersSection.tsx`,
 `NodeModalAuthenticationSection.tsx`, `NodeModalMonitoringSection.tsx`,
 `NodeModalStatusFooter.tsx`, `nodeModalModel.ts`, and `useNodeModalState.ts`.
+Because the infrastructure ledger continues polling while that editor remains
+mounted, `NodeCredentialSlot.tsx` must pass the current configured node and
+security/temperature settings into `useNodeModalState.ts` as reactive
+accessors rather than mount-time snapshots. An untouched form adopts a newer
+server snapshot; the modal state's dirty guard remains the authority that
+prevents a refresh from replacing operator edits in progress.
 The cluster members section is the canonical manual override surface for
 per-member connection addresses on an existing PVE cluster: it writes only
 `ClusterEndpoints[n].IPOverride` through the write-only

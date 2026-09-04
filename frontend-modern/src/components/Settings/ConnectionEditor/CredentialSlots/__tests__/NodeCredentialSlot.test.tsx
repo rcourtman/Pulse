@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
 import type { NodeConfigWithStatus } from '@/types/nodes';
@@ -20,6 +21,48 @@ const createSettings = (): InfrastructurePlatformSettingsProps =>
 
 describe('NodeCredentialSlot', () => {
   afterEach(() => cleanup());
+
+  it('syncs an untouched mounted editor to a refreshed node snapshot', async () => {
+    const settings = createSettings();
+    const initialNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: false,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+    const [editingNode, setEditingNode] = createSignal(initialNode);
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode()}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://pve1.local:8006');
+    expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).not.toBeChecked();
+
+    setEditingNode({
+      ...initialNode,
+      host: 'https://pve1-refreshed.local:8006',
+      verifySSL: true,
+    } as NodeConfigWithStatus);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue(
+        'https://pve1-refreshed.local:8006',
+      );
+      expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+    });
+  });
 
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {
     render(() => (

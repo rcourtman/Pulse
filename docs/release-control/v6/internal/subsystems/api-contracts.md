@@ -8352,6 +8352,13 @@ setup surface
 canonical validation errors
 directly rather than collapsing one node-type pane back to generic
 copy-generation failure.
+That extracted consumer also remains live against the canonical configured-node
+projection while the infrastructure ledger polls: `NodeCredentialSlot.tsx`
+must expose the current node and shared security/temperature settings to
+`useNodeModalState.ts` as reactive accessors, not copied modal properties.
+Untouched API-backed fields therefore adopt a refreshed server projection,
+while the state owner's dirty guard continues to protect in-progress edits
+from polling updates.
 Hosted organization-route gating now also falls under this API payload
 boundary: when hosted tenants hit organization membership or billing surfaces
 through `internal/api/org_handlers.go` and `internal/api/router.go`, inactive

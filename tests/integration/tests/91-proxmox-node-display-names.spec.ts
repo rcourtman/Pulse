@@ -230,6 +230,7 @@ test.describe('Proxmox cluster node display names', () => {
     await expect(nodeName).toHaveValue('Unsaved cluster label');
     await expect(dialog.getByText('Host telemetry agent', { exact: true })).toBeVisible();
     await expect(verifyCertificate).toBeChecked();
+    await page.screenshot({ path: test.info().outputPath('manage-dialog-poll-retained.png') });
   });
 
   test('keeps native diagnostics while saving by immutable identity', async ({ page }, testInfo) => {
