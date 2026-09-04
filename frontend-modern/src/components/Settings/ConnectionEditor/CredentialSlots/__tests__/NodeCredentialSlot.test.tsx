@@ -64,6 +64,58 @@ describe('NodeCredentialSlot', () => {
     });
   });
 
+  it('preserves unsaved connection edits across polls and saves to the refreshed edit target', async () => {
+    const settings = createSettings();
+    const onSaved = vi.fn();
+    const initialNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: true,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+    const [editingNode, setEditingNode] = createSignal(initialNode);
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode()}
+        onCancel={vi.fn()}
+        onSaved={onSaved}
+      />
+    ));
+
+    const endpoint = screen.getByLabelText(/^Endpoint URL/);
+    const verifySSL = screen.getByRole('checkbox', { name: 'Verify SSL certificate' });
+    fireEvent.input(endpoint, { target: { value: 'https://operator-edit.local:8006' } });
+    fireEvent.click(verifySSL);
+
+    for (let poll = 1; poll <= 2; poll += 1) {
+      setEditingNode({
+        ...initialNode,
+        host: `https://server-poll-${poll}.local:8006`,
+      });
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^Endpoint URL/)).toBe(endpoint);
+        expect(endpoint).toHaveValue('https://operator-edit.local:8006');
+        expect(verifySSL).not.toBeChecked();
+      });
+    }
+
+    expect(settings.saveNode).not.toHaveBeenCalled();
+    fireEvent.submit(endpoint.closest('form')!);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(settings.saveNode).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ host: 'https://operator-edit.local:8006', verifySSL: false }),
+      editingNode(),
+    );
+  });
+
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {
     render(() => (
       <NodeCredentialSlot
