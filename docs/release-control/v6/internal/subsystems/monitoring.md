@@ -1852,6 +1852,20 @@ metrics into persisted history, it must append in-memory history first and
 flush the backing store through one `metrics.WriteBatchSync` batch per sync
 sweep instead of per-metric async writes, so canonical chart history cannot
 race itself into partial persisted windows.
+
+### Unified storage rebuilds preserve source observation time
+
+Canonical resource-store rebuilds are projections, not fresh storage polls.
+When `internal/monitoring/monitor.go` syncs a non-native storage metric into
+in-memory and persisted history, every metric in that projected observation
+must use the selected metric source's `SourceStatus.LastSeen`. If that source
+timestamp is unavailable, the resource `LastSeen` is the continuity fallback;
+wall-clock sync time is used only when neither observation timestamp exists.
+Repeated registry rebuilds of one unchanged PBS datastore observation must
+therefore replace the same timestamped history point rather than create a new
+raw point for each unrelated provider completion. This does not change the
+native Proxmox storage writer exclusion or canonical storage target selection.
+
 That same chart boundary now also owns long-range in-memory coverage
 selection. `internal/monitoring/metrics_history.go` must expose guest and node
 coverage spans for the requested metric families, and

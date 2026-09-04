@@ -7578,6 +7578,16 @@ monitor select loop is progressing; agent report success or failure cannot
 independently assert that Pulse is healthy. Agent-lifecycle behavior and proof
 routes remain unchanged.
 
+### Unified storage history does not alter agent lifecycle state
+
+`internal/monitoring/monitor.go` may preserve a unified storage metric's source
+observation time while projecting it into history, but that shared monitoring
+path has no host enrollment authority. A storage-history sync must not clear or
+rewrite durable host-removal entries, admit a report from a denied credential,
+or create agent continuity evidence. The removal lifecycle proof keeps a
+removed host blocked across a PBS storage sync so metric timestamp maintenance
+cannot become an accidental re-enrollment transition.
+
 ### Deploy enrollment swaps credentials as one durable transition
 
 A deploy bootstrap token remains the live credential until Pulse can durably
