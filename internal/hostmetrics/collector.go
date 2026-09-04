@@ -131,9 +131,24 @@ type Snapshot struct {
 	Network         []agentshost.NetworkInterface
 }
 
+// Collector owns the CPU baseline for one reporting loop. Its zero value is
+// ready to use. Retain it across reports; do not copy it after first use.
+type Collector struct {
+	cpu cpuUsageTracker
+}
+
+// Collect gathers metrics using this reporting loop's CPU baseline.
+func (c *Collector) Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
+	return c.CollectWithDiskFilters(ctx, diskExclude, nil)
+}
+
+var defaultCollector Collector
+
 // Collect gathers a point-in-time snapshot of host resource utilisation.
 // diskExclude contains user-defined patterns for devices or mount points to
 // exclude. It preserves the original API for callers that do not need includes.
+// Package-level calls share a baseline; independent reporting loops must use
+// their own retained Collector.
 func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	return CollectWithDiskFilters(ctx, diskExclude, nil)
 }
@@ -142,6 +157,12 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 // and includes. Includes opt matching filesystems back in after Pulse's
 // automatic pseudo-filesystem filtering. Explicit exclusions always win.
 func CollectWithDiskFilters(ctx context.Context, diskExclude, diskInclude []string) (Snapshot, error) {
+	return defaultCollector.CollectWithDiskFilters(ctx, diskExclude, diskInclude)
+}
+
+// CollectWithDiskFilters gathers metrics with this loop's CPU baseline and
+// applies the same disk filtering as the package-level convenience function.
+func (c *Collector) CollectWithDiskFilters(ctx context.Context, diskExclude, diskInclude []string) (Snapshot, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -153,7 +174,7 @@ func CollectWithDiskFilters(ctx context.Context, diskExclude, diskInclude []stri
 		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu count")
 	}
 
-	if cpuUsage, err := collectCPUUsage(collectCtx); err == nil {
+	if cpuUsage, err := c.cpu.collect(collectCtx); err == nil {
 		snapshot.CPUUsagePercent = cpuUsage
 	} else {
 		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu usage")
@@ -255,13 +276,10 @@ type cpuUsageTracker struct {
 	hasPrev bool
 }
 
-// defaultCPUUsage backs Collect. The state is process-wide by design: every
-// consumer of Collect reports a busy average over the window since the
-// previous collection, which stays correct even if collections interleave.
-var defaultCPUUsage = &cpuUsageTracker{}
-
+// collectCPUUsage preserves the package-level convenience path. Independent
+// reporting loops must retain their own Collector instead.
 func collectCPUUsage(ctx context.Context) (float64, error) {
-	return defaultCPUUsage.collect(ctx)
+	return defaultCollector.cpu.collect(ctx)
 }
 
 func (t *cpuUsageTracker) collect(ctx context.Context) (float64, error) {

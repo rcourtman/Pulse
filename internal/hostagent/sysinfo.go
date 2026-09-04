@@ -60,7 +60,9 @@ func NewDefaultCollector() SystemCollector {
 	return &defaultCollector{}
 }
 
-type defaultCollector struct{}
+type defaultCollector struct {
+	metrics hostmetrics.Collector
+}
 
 func (c *defaultCollector) HostInfo(ctx context.Context) (*gohost.InfoStat, error) {
 	return gohost.InfoWithContext(ctx)
@@ -71,11 +73,11 @@ func (c *defaultCollector) HostUptime(ctx context.Context) (uint64, error) {
 }
 
 func (c *defaultCollector) Metrics(ctx context.Context, exclude []string) (hostmetrics.Snapshot, error) {
-	return hostmetrics.Collect(ctx, exclude)
+	return c.metrics.Collect(ctx, exclude)
 }
 
 func (c *defaultCollector) MetricsWithDiskFilters(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
-	return hostmetrics.CollectWithDiskFilters(ctx, exclude, include)
+	return c.metrics.CollectWithDiskFilters(ctx, exclude, include)
 }
 
 func (c *defaultCollector) SensorsLocal(ctx context.Context) (string, error) {

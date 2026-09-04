@@ -7728,3 +7728,21 @@ counts projected from existing action audit records.
 The `patrol_digest` report schedule kind in `internal/api/report_schedules.go`
 only reads the digest and sends an email. It issues no agent commands, plans
 no actions, and changes no capability, token, or binding state.
+
+### Independent module CPU sampling baselines
+
+The host default system collector retains its own `hostmetrics.Collector` for
+its lifetime. `Metrics` and `MetricsWithDiskFilters` use that same retained
+baseline; independent host collectors and the Docker module do not consume
+one another's CPU counters. Docker retains a separate module-scoped collector,
+not one per arbitrary Docker Agent instance. The first observation keeps the
+existing spot-sample fallback; subsequent observations measure the owning
+collector's reporting interval. Package-level hostmetrics convenience calls
+remain shared and must not be used for independent module reporting loops.
+
+`TestDefaultCollectorIndependentCPUBaselines` in
+`internal/hostagent/agent_metrics_test.go` exercises both host entry points
+against interleaved Linux procfs counters.
+`internal/hostmetrics/issue1894_interleaved_collectors_test.go` independently
+pins isolated collector deltas and startup fallback. This changes telemetry
+sampling only, not report schemas, identity, enrollment or command authority.
