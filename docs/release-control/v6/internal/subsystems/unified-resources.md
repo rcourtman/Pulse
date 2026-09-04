@@ -91,6 +91,12 @@ presentation coalescing. A repeated cluster label is operator-authored
 grouping metadata, not same-machine evidence; cross-instance equality requires
 the same node identity, the exact configured endpoint, or independently
 corroborated host evidence.
+Frontend REST and realtime resource mirrors must retain the canonical
+`hostnames`, `machineId`, and `dmiUuid` evidence used for that decision. When
+independent Proxmox connections expose the same native node hostname, browser
+compatibility coalescing must preserve the server-authored provider split; in
+an ambiguous hostname bucket, a separate agent row may join a provider node
+only through its explicit linked-agent identity rather than hostname alone.
 The same boundary carries cluster-node presentation without weakening
 canonical identity. `ProxmoxData` preserves the immutable connection-scoped
 node identity, current native node name, prior native-name aliases, and

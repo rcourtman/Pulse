@@ -714,6 +714,98 @@ describe('resourceStateAdapters nodeFromResource', () => {
     }
   });
 
+  it('keeps same-hostname standalone Proxmox provider rows separate across realtime merges', () => {
+    const providerRow = (
+      id: string,
+      displayName: string,
+      instance: string,
+      host: string,
+      agentId?: string,
+    ): Resource =>
+      ({
+        id,
+        type: 'agent',
+        name: displayName,
+        displayName,
+        platformId: 'pve',
+        platformType: 'proxmox-pve',
+        sourceType: agentId ? 'hybrid' : 'api',
+        sources: agentId ? ['proxmox', 'agent'] : ['proxmox'],
+        status: 'online',
+        lastSeen: Date.now(),
+        canonicalIdentity: {
+          displayName,
+          hostname: 'pve',
+          platformId: 'pve',
+        },
+        identity: {
+          hostnames: ['pve'],
+          ...(agentId ? { machineId: `machine-${agentId}` } : {}),
+        },
+        proxmox: {
+          sourceId: id,
+          nodeIdentity: id,
+          nodeName: 'pve',
+          nodeDisplayName: displayName,
+          instance,
+          host,
+        },
+        ...(agentId
+          ? {
+              agent: {
+                agentId,
+                hostname: 'pve',
+                machineId: `machine-${agentId}`,
+              },
+            }
+          : {}),
+      }) as Resource;
+
+    // Mirrors #1753 after one same-name site's agent has authenticated while
+    // the other is still represented by its independent provider poll. The
+    // browser must not undo the server's provider-scoped split on a later
+    // realtime reconciliation.
+    const staging = providerRow(
+      'staging-pve',
+      'Tripper Staging',
+      'hema-staging',
+      'https://pve.hemastaging.hot:8006',
+      'host-staging',
+    );
+    const production = providerRow(
+      'production-pve',
+      'VV Staging',
+      'hema-production',
+      'https://pve.hemaproduction.hot:8006',
+    );
+
+    const full = mergeCanonicalResourceSnapshot([staging, production], []);
+    expect(full).toHaveLength(2);
+    expect(full.map((resource) => resource.displayName).sort()).toEqual([
+      'Tripper Staging',
+      'VV Staging',
+    ]);
+
+    const delta = mergeCanonicalResourceDeltaSnapshot(
+      [structuredClone(staging), structuredClone(production)],
+      full,
+      new Set(['production-pve']),
+    );
+    expect(delta).toHaveLength(2);
+    expect(delta.map((resource) => resource.proxmox?.instance).sort()).toEqual([
+      'hema-production',
+      'hema-staging',
+    ]);
+
+    const duplicateEndpoint = providerRow(
+      'duplicate-pve',
+      'Duplicate connection',
+      'duplicate-instance',
+      'pve.hemastaging.hot:8006',
+    );
+    expect(mergeCanonicalResourceSnapshot([staging, duplicateEndpoint], [])).toHaveLength(1);
+  });
+
   it('does not coalesce same-name agent-only records without a platform source bridge', () => {
     const resources = mergeCanonicalResourceSnapshot(
       [

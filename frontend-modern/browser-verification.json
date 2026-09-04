@@ -1,38 +1,39 @@
 {
   "version": 1,
-  "base_sha": "fa006785c59a442da1f988d4f916bd97286d564d",
-  "verified_at": "2026-09-03T23:23:14Z",
+  "base_sha": "53ea86983c7c6786eb1a6fe1f3681e4566bc237e",
+  "verified_at": "2026-09-04T00:29:07Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "ed65c454d88801bf7a24d8d063bea38fca248c4b90b29f083b81ba51ba4181bb"
+    "frontend-modern/src/types/resource.ts": "c43048a9796babd38f338cff14c21ed2b6dbbf8b16f2bb1fddf89529ef5a65f5",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "328efccc8b88b8e590bef9e56568b2f969a06df314d464b5f44b757a2acb189f"
   },
   "routes": [
-    "/settings/infrastructure (managed local backend with deterministic Proxmox cluster and connection-ledger fixtures)"
+    "/proxmox (managed hot-dev mock with two provider-scoped standalone sites sharing the native node name pve)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
-      "width": 393,
-      "height": 727
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Expanded Proxmox cluster members with the production cluster Manage trigger visible at desktop and narrow widths",
-    "Manage production dialog showing endpoint and cluster-member fields at desktop and narrow widths",
-    "Infrastructure workspace after dialog dismissal with focus returned to Manage at both widths",
-    "Reopened Manage dialog with the display-name save path available at both widths"
+    "Initial Proxmox overview showing Nodes 2 and two standalone rows named pve with distinct provider endpoint links",
+    "Proxmox overview after six mock websocket update intervals with both provider-scoped rows still present",
+    "Reloaded Proxmox overview with both same-native-name rows restored from the REST bootstrap snapshot",
+    "Narrow Proxmox overview showing Nodes 2 and two separate pve rows without clipping or navigation overlap"
   ],
   "interactions": [
-    "Expanded the deterministic Proxmox cluster and opened its Manage dialog",
-    "Closed Manage and verified both the shared dialog and delayed stable-row focus restorations used preventScroll",
-    "Verified the application scroll offset did not change and keyboard focus returned to the originating Manage trigger",
-    "Reopened Manage, edited a cluster member display name, and saved through the immutable node identity path",
-    "Inspected open and dismissed screenshots for placement, clipping, overflow, focus indication, and fixed-navigation overlap at both widths"
+    "Authenticated to the managed development runtime and navigated to the Proxmox overview",
+    "Verified both distinct provider endpoints and waited 12 seconds across repeated realtime updates",
+    "Reloaded the route and rechecked both resource rows",
+    "Resized from 1280 by 800 to 390 by 844 and inspected full-page screenshots for row count, clipping, overflow, and fixed-navigation overlap"
   ]
 }

@@ -164,7 +164,9 @@ export interface ResourceIncident {
 // Identity information for deduplication
 export interface ResourceIdentity {
   hostname?: string;
+  hostnames?: string[];
   machineId?: string;
+  dmiUuid?: string;
   ips?: string[];
   clusterName?: string;
 }
