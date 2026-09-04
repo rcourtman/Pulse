@@ -7689,3 +7689,21 @@ native lifecycle workflow proof together, so lifecycle qualification cannot
 silently execute under a weaker checkout boundary.
 `scripts/check_workflow_trust.py`, `scripts/tests/test_workflow_trust.py`, and
 `scripts/installtests/install_ps1_test.go` pin that relationship.
+
+### Independent module CPU sampling baselines
+
+The host default system collector retains its own `hostmetrics.Collector` for
+its lifetime. `Metrics` and `MetricsWithDiskFilters` use that same retained
+baseline; independent host collectors and the Docker module do not consume
+one another's CPU counters. Docker retains a separate module-scoped collector,
+not one per arbitrary Docker Agent instance. The first observation keeps the
+existing spot-sample fallback; subsequent observations measure the owning
+collector's reporting interval. Package-level hostmetrics convenience calls
+remain shared and must not be used for independent module reporting loops.
+
+`TestDefaultCollectorIndependentCPUBaselines` in
+`internal/hostagent/agent_metrics_test.go` exercises both host entry points
+against interleaved Linux procfs counters.
+`internal/hostmetrics/issue1894_interleaved_collectors_test.go` independently
+pins isolated collector deltas and startup fallback. This changes telemetry
+sampling only, not report schemas, identity, enrollment or command authority.
