@@ -1,14 +1,16 @@
 {
   "version": 1,
-  "base_sha": "74c553aae330d2b8a0bfecc22124b40ef10c95d3",
-  "verified_at": "2026-09-04T02:18:06Z",
+  "base_sha": "485e19600f8bb8b9126fd4f2ab7e9fa2f525d808",
+  "verified_at": "2026-09-04T14:39:20Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "508b628748732e42dee19775fa3e0571fee0617dad8c2d28633bf7201887f904"
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "24ea681203713d0ddeeb75f49509876c38bfec73fddaaabe730f9b0ad69e0cf4"
   },
   "routes": [
-    "/settings/infrastructure (managed local backend with a two-node Proxmox cluster fixture)"
+    "/settings/infrastructure (managed local backend with a routed two-node Proxmox cluster fixture)"
   ],
   "viewports": [
     {
@@ -18,19 +20,22 @@
     {
       "width": 393,
       "height": 727
+    },
+    {
+      "width": 390,
+      "height": 664
     }
   ],
   "states": [
-    "Manage dialog open for an expanded two-node Proxmox cluster at desktop and narrow widths",
-    "Unsaved node name, Host Telemetry Agent section and certificate checkbox retained after a 15-second connection-ledger poll",
-    "Manage dialog closed with the settings scroll position preserved and deliberate onward focus retained beyond the delayed fallback",
-    "Manage dialog reopened and a duplicate presentation label saved against the second node's immutable identity"
+    "Manage dialog with unsaved node name, Host Telemetry Agent strategy and SSL verification retained after a 15-second connection-ledger poll",
+    "Expanded two-node Proxmox cluster editor open at desktop, Pixel and iPhone widths",
+    "Manage dialog dismissed with the infrastructure workspace scroll position and deliberate onward focus retained",
+    "Manage dialog reopened with immutable cluster-member display-name save targeting"
   ],
   "interactions": [
-    "Expanded the cluster members, opened Manage, inspected the dialog pixels and native-node diagnostics",
-    "Edited fields, changed the active section and advanced the polling clock while checking the mounted editor state",
-    "Closed Manage, claimed Add infrastructure focus without scrolling, waited beyond the 250ms fallback and checked focus plus scroll position",
-    "Reopened Manage, saved the second member's display label and verified the PUT payload retained the cluster host and immutable node identity",
-    "Inspected the narrow open dialog and the closed desktop and narrow states for placement, clipping, scrolling, fixed-navigation overlap and responsive layout"
+    "Edited the node name, changed setup strategy, enabled certificate verification and advanced the production polling clock while checking retained state and refreshed dialog context",
+    "Inspected desktop, Pixel and iPhone captures for placement, clipping, wrapping, scrolling, backdrop containment and close-control reachability",
+    "Closed Manage, moved focus to Add infrastructure without scrolling and waited beyond the delayed row-focus fallback",
+    "Reopened Manage, changed the second member display label and verified the PUT remained scoped to its immutable identity"
   ]
 }
