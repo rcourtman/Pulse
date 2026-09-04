@@ -117,6 +117,7 @@ const nodesFixture = [
 async function routeClusterNodeDisplayNames(
   page: Page,
   onUpdate: (payload: Record<string, unknown>) => void,
+  getConnectionsFixture: () => typeof connectionsFixture = () => connectionsFixture,
 ) {
   await page.routeWebSocket('**/ws*', () => {});
   await page.route('**/api/connections*', async (route) => {
@@ -127,7 +128,7 @@ async function routeClusterNodeDisplayNames(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(connectionsFixture),
+      body: JSON.stringify(getConnectionsFixture()),
     });
   });
   await page.route('**/api/config/nodes**', async (route) => {
@@ -182,6 +183,54 @@ const test = base.extend<{}, WorkerFixtures>({
 
 test.describe('Proxmox cluster node display names', () => {
   test.setTimeout(180_000);
+
+  test('keeps unsaved infrastructure edits across a connection-ledger poll', async ({ page }) => {
+    let publishRefreshedConnection = false;
+    let refreshedConnectionResponses = 0;
+    const refreshedConnectionsFixture: typeof connectionsFixture = {
+      ...connectionsFixture,
+      connections: connectionsFixture.connections.map((connection) => ({
+        ...connection,
+        address: 'https://pve-refresh.example.test:8006',
+        lastSeen: '2026-09-04T00:15:00Z',
+      })),
+    };
+
+    await page.clock.install();
+    await routeClusterNodeDisplayNames(
+      page,
+      () => {},
+      () => {
+        if (!publishRefreshedConnection) return connectionsFixture;
+        refreshedConnectionResponses += 1;
+        return refreshedConnectionsFixture;
+      },
+    );
+
+    await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Manage', exact: true }).click();
+
+    const dialog = page.getByRole('dialog');
+    const nodeName = dialog.getByLabel('Node Name');
+    const verifyCertificate = dialog.getByRole('checkbox', {
+      name: 'Verify SSL certificate',
+    });
+    await nodeName.fill('Unsaved cluster label');
+    await dialog.getByRole('button', { name: 'Host Telemetry Agent', exact: true }).click();
+    await verifyCertificate.check();
+    await expect(dialog.getByText('Host telemetry agent', { exact: true })).toBeVisible();
+
+    publishRefreshedConnection = true;
+    await page.clock.fastForward(15_000);
+    await expect.poll(() => refreshedConnectionResponses).toBeGreaterThan(0);
+
+    await expect(dialog).toHaveAccessibleDescription(
+      'Proxmox VE cluster · Production Cluster (https://pve-refresh.example.test:8006)',
+    );
+    await expect(nodeName).toHaveValue('Unsaved cluster label');
+    await expect(dialog.getByText('Host telemetry agent', { exact: true })).toBeVisible();
+    await expect(verifyCertificate).toBeChecked();
+  });
 
   test('keeps native diagnostics while saving by immutable identity', async ({ page }, testInfo) => {
     let updatePayload: Record<string, unknown> | undefined;
