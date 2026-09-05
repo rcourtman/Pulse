@@ -249,6 +249,7 @@ class FakeGitHub:
 
     def post(self, endpoint, payload=None):
         self.posts.append((endpoint, payload))
+        return True
 
     def unchanged_credential_containment_block(self, run_id):
         self.containment_probe = run_id
@@ -460,6 +461,39 @@ class CredentialContainmentTests(unittest.TestCase):
 
 
 class ReconciliationTests(unittest.TestCase):
+    def test_post_reports_submission_only_after_success(self):
+        for payload in (None, {"ref": "main"}):
+            for code in (0, 1):
+                with self.subTest(payload=payload, code=code):
+                    github = subject.GitHub("rcourtman/Pulse", "gh")
+                    result = subprocess.CompletedProcess([], code, stdout="", stderr="failed" if code else "")
+                    with patch.object(subject.subprocess, "run", return_value=result) as command:
+                        if code:
+                            with self.assertRaises(subject.ReconciliationError):
+                                github.post("repos/rcourtman/Pulse/test", payload)
+                        else:
+                            self.assertIs(True, github.post("repos/rcourtman/Pulse/test", payload))
+                    command.assert_called_once()
+
+    def test_dry_run_receipts_never_claim_a_mutation(self):
+        cases = [
+            ({}, "Would dispatch", "Dispatched"),
+            ({"current_controls": True}, "Would re-run", "Re-ran"),
+            ({"committed": False}, "Would renew", "Renewed"),
+        ]
+        for options, expected, forbidden in cases:
+            with self.subTest(options=options):
+                github = FakeGitHub(**options)
+                transport = subject.GitHub(github.repository, "gh", mutate=False)
+                github.post = transport.post
+                output = io.StringIO()
+                with patch.object(subject.subprocess, "run") as command, contextlib.redirect_stdout(output):
+                    subject.reconcile(github, github.run_id, 5)
+                command.assert_not_called()
+                self.assertIn("DRY RUN: " + expected, output.getvalue())
+                self.assertNotIn(forbidden, output.getvalue())
+                self.assertEqual([], github.posts)
+
     def test_stale_failed_run_dispatches_current_controls_with_bound_inputs(self):
         github = FakeGitHub()
         subject.reconcile(github, github.run_id, 5)
