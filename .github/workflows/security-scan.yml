@@ -44,13 +44,13 @@ jobs:
 
       - name: Set up Helm
         if: ${{ github.event.schedule != '17 */6 * * *' }}
-        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.15.2
 
       - name: Set up Docker Buildx
         if: ${{ github.event.schedule != '17 */6 * * *' }}
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Resolve the advertised stable release
         id: release
