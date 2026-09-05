@@ -10,6 +10,11 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# The outer process owns credentials and waits for all browser descendants.
+if [ "${1:-}" != --owned-run ]; then
+    exec python3 "$SCRIPT_DIR/owned-run.py" "${BASH_SOURCE[0]}" "$@"
+fi
+shift
 SUITE="${1:-all}"
 
 # Colors for output
@@ -28,7 +33,7 @@ REPO_ROOT="$(cd "$TEST_ROOT/../.." && pwd)"
 
 # Unique per invocation, including simultaneous runs of the same checkout.
 # Never inherit another runner's project, image tags or fixed host ports.
-export PULSE_E2E_RUN_ID="pulse-e2e-$(node -e "process.stdout.write(require('crypto').randomBytes(16).toString('hex'))")"
+: "${PULSE_E2E_RUN_ID:?owned-run supervisor required}"
 export PULSE_E2E_SERVER_IMAGE="pulse:$PULSE_E2E_RUN_ID"
 export PULSE_E2E_MOCK_IMAGE="pulse-mock-github:$PULSE_E2E_RUN_ID"
 export PULSE_E2E_SERVER_CONTAINER="$PULSE_E2E_RUN_ID-server"

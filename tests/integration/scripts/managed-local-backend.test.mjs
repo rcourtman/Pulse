@@ -3,6 +3,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { runInNewContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -425,4 +428,28 @@ test('normal stable configuration retains multi-tenant quarantine', () => {
   const result = list('playwright.config.ts', 'stable');
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /Total: 0 tests/);
+});
+
+
+test('owned cookie state selects the supervisor path without changing direct-run fallback', async () => {
+  const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');
+  const declaration = helpers.match(/const sharedCookieStatePath = [\s\S]*?;\n/);
+  assert.ok(declaration, 'cookie path resolver must remain inspectable');
+  const source = declaration[0].replace('(): string', '()') + '\nsharedCookieStatePath();';
+  const resolve = value => runInNewContext(source, {
+    path, helpersDir: path.join(integrationRoot, 'tests'),
+    process: { env: { PULSE_E2E_COOKIE_STATE_PATH: value } },
+  });
+  assert.equal(resolve(' /invocation-owned/cookies.json '), '/invocation-owned/cookies.json');
+  for (const value of [undefined, '', '   ']) {
+    assert.equal(resolve(value), path.join(integrationRoot, 'tmp/playwright-auth/shared-cookie-session.json'));
+  }
+});
+
+test('owned runner orchestration proves reaping, signal cleanup and concurrent isolation', { timeout: 30000 }, async () => {
+  const run = promisify(execFile);
+  // Registry-recognised orchestration proof executes the behavioural fixtures;
+  // neither a source-string match nor a fixture result is browser acceptance.
+  await run('python3', [path.join(scriptsDir, 'owned-run.test.py')], { timeout: 20000 });
+  await run(process.execPath, ['--test', path.join(scriptsDir, 'run-tests-interruption.test.mjs')], { timeout: 15000 });
 });

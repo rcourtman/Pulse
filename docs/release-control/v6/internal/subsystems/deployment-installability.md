@@ -26,6 +26,19 @@ installed-customer or release qualification. The executable discovery and
 tier-refusal checks in `tests/integration/scripts/managed-local-backend.test.mjs`
 protect this boundary without launching a browser.
 
+The shell entrypoint requires Linux child-subreaper support, Python 3 and
+`/proc`; unsupported platforms fail closed. Its supervisor owns a unique
+0700 cookie directory and overrides inherited cookie paths. Normal completion
+reaps writers and removes cookies while retaining reports for inspection.
+TERM/INT/HUP stop and reap descendants, including adopted detached writers,
+before removing only that invocation's cookies, reports and results. Writers
+ignoring TERM receive KILL after five seconds; inability to reap within fifteen
+seconds fails cleanup and retains artifacts rather than racing writers.
+Supervisor SIGKILL and host failure still require manual scoped cleanup.
+`tests/integration/scripts/managed-local-backend.test.mjs` verifies helper path
+selection and executes the supervisor and shell interruption fixtures. These
+are process/fixture proofs, not real-browser or container-cleanup receipts.
+
 The cross-organisation sharing diagnostic must use cookie-session authentication,
 not the primary API-token shortcut: the restricted token is correctly refused
 when the browser selects another organisation. It asserts the absence of a
