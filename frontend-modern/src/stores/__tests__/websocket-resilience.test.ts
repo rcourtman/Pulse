@@ -161,6 +161,55 @@ describe('websocket store resilience', () => {
     }
   });
 
+  it('recovers after a heartbeat close without letting retired callbacks disconnect the new socket', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    apiFetchJSONMock.mockResolvedValue([]);
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const silentSocket = currentInstance!;
+      expect(store.connected()).toBe(true);
+
+      vi.advanceTimersByTime(90_000);
+      expect(silentSocket.close).toHaveBeenCalledWith(4000, 'Heartbeat timeout');
+      // Model the browser completing the close handshake; the mock does not
+      // emit close events automatically.
+      silentSocket.readyState = MockWebSocketClass.CLOSED;
+      silentSocket.onclose?.({ code: 4000, reason: 'Heartbeat timeout' } as CloseEvent);
+      expect(store.connected()).toBe(false);
+      expect(store.reconnecting()).toBe(true);
+
+      vi.advanceTimersByTime(1_001);
+      expect(instances).toHaveLength(2);
+      expect(store.connected()).toBe(true);
+      expect(store.reconnecting()).toBe(false);
+
+      silentSocket.onclose?.({ code: 1006, reason: '' } as CloseEvent);
+      expect(store.connected()).toBe(true);
+      expect(store.reconnecting()).toBe(false);
+      vi.advanceTimersByTime(2_000);
+      expect(instances).toHaveLength(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not let malformed messages postpone detection of a silent server', async () => {
+    apiFetchJSONMock.mockResolvedValue([]);
+    const { dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const socket = currentInstance!;
+      vi.advanceTimersByTime(89_000);
+      socket.onmessage?.({ data: '{invalid JSON' } as MessageEvent);
+      socket.onmessage?.({ data: new Blob(['pong']) } as MessageEvent);
+      vi.advanceTimersByTime(1_000);
+      expect(socket.close).toHaveBeenCalledWith(4000, 'Heartbeat timeout');
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps the websocket open when server activity arrives before heartbeat timeout', async () => {
     const { dispose } = await createStoreHarness();
     try {
