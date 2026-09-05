@@ -669,6 +669,17 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 ## Shared Boundaries
 
+PBS polling owns the internal `PBSInstance.NodeMetricsUnavailable` discriminator:
+each poll starts unavailable and only a successful non-nil node-status result
+clears it. A denied or failed node-status endpoint does not invalidate successful
+connectivity or independently accessible datastore inventory. In-process state
+copies preserve this evidence; JSON deliberately does not carry it. The
+zero-value compatibility default is not persisted availability evidence.
+Proof: `internal/models/metrics_types_test.go` and
+`internal/monitoring/monitor_pbs_coverage_test.go`. The latter exercises real
+HTTP polling through normal alert-manager publication, not destination delivery.
+
+
 1. `internal/config/host_continuity.go` shared with `agent-lifecycle`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
 2. `internal/kubernetesagent/agent.go` shared with `agent-lifecycle`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
 3. `internal/mock/fixture_graph.go` shared with `performance-and-scalability`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.

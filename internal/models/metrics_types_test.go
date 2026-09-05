@@ -343,3 +343,40 @@ func TestPBSGuestConfirmationEvidenceStaysOutOfSerializedState(t *testing.T) {
 		t.Fatal("PBS guest confirmation evidence must not appear in snapshots")
 	}
 }
+
+// PBS poll evidence survives in-process copying but is not an agent wire input.
+func TestPBSNodeMetricAvailabilityModelBoundary(t *testing.T) {
+	state := NewState()
+	state.UpdatePBSInstance(PBSInstance{
+		ID: "pbs-availability", Name: "pbs", Status: "online",
+		NodeMetricsUnavailable: true,
+	})
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 1 || !snapshot.PBSInstances[0].NodeMetricsUnavailable {
+		t.Fatal("snapshot lost unavailable-node-metrics evidence")
+	}
+	snapshot.PBSInstances[0].NodeMetricsUnavailable = false
+	if !state.GetSnapshot().PBSInstances[0].NodeMetricsUnavailable {
+		t.Fatal("snapshot mutation changed authoritative poll evidence")
+	}
+	missing := state.GetSnapshot().PBSInstances[0]
+	wire, err := json.Marshal(missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing.NodeMetricsUnavailable = false
+	availableWire, err := json.Marshal(missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(wire) != string(availableWire) {
+		t.Fatal("internal availability evidence changed the public wire contract")
+	}
+	var decoded PBSInstance
+	if err := json.Unmarshal([]byte(`{"id":"pbs","NodeMetricsUnavailable":true,"nodeMetricsUnavailable":true}`), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.NodeMetricsUnavailable {
+		t.Fatal("wire input asserted monitoring-owned availability evidence")
+	}
+}

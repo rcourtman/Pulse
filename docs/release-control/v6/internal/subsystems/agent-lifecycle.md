@@ -618,6 +618,14 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+The shared `PBSInstance.NodeMetricsUnavailable` field belongs exclusively to
+provider polling and alert evaluation. It is retained by in-process state copies
+but excluded from JSON; it neither grants nor revokes host-agent identity,
+enrolment, removal or command authority. No agent lifecycle decision may infer
+host removal or re-enrolment from a PBS node-status failure. The shared-model
+boundary is verified in `internal/models/metrics_types_test.go`; this is not
+new host-agent removal or installed re-enrolment qualification.
+
 `internal/models/models.go` and `internal/monitoring/monitor.go` also carry
 monitoring-owned Proxmox cluster node identity and membership-confirmation
 state. Provider instances with equal cluster/member display names must not
