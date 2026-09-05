@@ -1,0 +1,72 @@
+[
+  {
+    "title": "populated navigation survives socket loss at 1440px (admission failure: false)",
+    "outcome": "expected",
+    "duration": 14988,
+    "startTime": "2026-09-05T21:41:31.466Z",
+    "retry": 0
+  },
+  {
+    "title": "populated navigation survives socket loss at 1100px (admission failure: false)",
+    "outcome": "expected",
+    "duration": 8345,
+    "startTime": "2026-09-05T21:41:46.567Z",
+    "retry": 0
+  },
+  {
+    "title": "populated navigation survives socket loss at 390px (admission failure: false)",
+    "outcome": "expected",
+    "duration": 20390,
+    "startTime": "2026-09-05T21:41:54.929Z",
+    "retry": 0
+  },
+  {
+    "title": "populated navigation survives socket loss at 320px (admission failure: false)",
+    "outcome": "expected",
+    "duration": 19410,
+    "startTime": "2026-09-05T21:42:15.330Z",
+    "retry": 0
+  },
+  {
+    "title": "populated navigation survives socket loss at 1440px (admission failure: true)",
+    "outcome": "expected",
+    "duration": 8215,
+    "startTime": "2026-09-05T21:42:34.752Z",
+    "retry": 0
+  },
+  {
+    "title": "populated navigation survives socket loss at 1100px (admission failure: true)",
+    "outcome": "expected",
+    "duration": 7265,
+    "startTime": "2026-09-05T21:42:42.978Z",
+    "retry": 0
+  },
+  {
+    "title": "populated navigation survives socket loss at 390px (admission failure: true)",
+    "outcome": "expected",
+    "duration": 17578,
+    "startTime": "2026-09-05T21:42:50.252Z",
+    "retry": 0
+  },
+  {
+    "title": "populated navigation survives socket loss at 320px (admission failure: true)",
+    "outcome": "expected",
+    "duration": 15298,
+    "startTime": "2026-09-05T21:43:07.838Z",
+    "retry": 0
+  },
+  {
+    "title": "changed backend incidents recover without reload at 1440px",
+    "outcome": "expected",
+    "duration": 13297,
+    "startTime": "2026-09-05T21:43:23.147Z",
+    "retry": 0
+  },
+  {
+    "title": "changed backend incidents recover without reload at 320px",
+    "outcome": "expected",
+    "duration": 15969,
+    "startTime": "2026-09-05T21:43:36.453Z",
+    "retry": 0
+  }
+]
