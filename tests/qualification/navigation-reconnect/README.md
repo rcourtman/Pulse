@@ -110,3 +110,58 @@ the repaired runtime source bytes; baseline artifacts are retained locally in
 `tmp/navigation-admission-baseline/`, repaired artifacts in
 `tests/integration/test-results/` and `tests/integration/playwright-report/`.
 These local artifacts are not release qualification or automatic CI admission.
+
+## Superseded organisation admission — responsive qualification
+
+The isolated main-derived base `58413ebdf6af81018bce15ff4023ca9824c0cdae`
+allows an outstanding outgoing organisation admission response to restore its
+platform destinations after switching organisations. This is a separate
+request-ordering defect, not evidence that #1899 involves organisation switching
+or that resource data crosses tenant boundaries.
+
+The repair permits only the latest admission request to update navigation.
+A newer failed request still supersedes an older successful response; a newer
+successful all-false response remains authoritative. There is no API, entitlement,
+navigation design, retry or polling change.
+
+Repeat the bounded full-app experiment after locked dependency installation in
+`frontend-modern` and `tests/integration`:
+
+```sh
+pulse-heavy-run -- bash -c '
+  for width in 390 1440; do
+    for mode in failure success reverse; do
+      PULSE_PROOF_WIDTH=$width PULSE_PROOF_MODE=$mode \
+        node scripts/check-navigation-admission-race.mjs || exit
+    done
+  done
+'
+```
+
+This uses local Vite, fresh Chromium contexts, synthetic HTTP responses for two
+organisations and a cold synthetic socket. It invokes the production reconnect
+subscriber and real organisation selector, not a replacement application store.
+It is deliberately a frontend ordering experiment, not real-backend tenancy or
+production-build qualification.
+
+Six repaired cases pass at 390×900 and 1440×900 in Chromium 141.0.7390.37
+at default zoom: newer admission fails, newer admission succeeds with no
+platforms, and the outgoing response completes before the pending newer success.
+All cases retain system navigation and restore platform navigation on a subsequent
+successful switch without document reload. Narrow cases open More, dismiss with
+Escape, reopen and follow Settings, then switch to Docker after recovery.
+The synthetic inventory is empty; this proves route/control access, not loaded
+resource rendering or alert acknowledgement.
+
+Per-case screenshots, request sequences and exact runtime SHA-256 receipts are
+written to `tmp/navigation-admission-race/repaired-<width>-<mode>/`.
+Run the failure mode on the base source with `PULSE_PROOF_PHASE=baseline`
+to retain separate baseline artifacts. Desktop and narrow baseline failure occurs
+after the outgoing response restores platform navigation. Three focused ordering
+regressions also discriminate the base; repaired runtime/architecture checks total
+59 passes, and frontend typecheck passes.
+
+This completes the missing narrow synthetic-browser coverage from the withdrawn
+ordering proposal. Exact-candidate backend operation, reporter browser/proxy
+behaviour, resource isolation, external alert delivery and release soak remain
+unqualified. No released fix or issue closure is implied.
