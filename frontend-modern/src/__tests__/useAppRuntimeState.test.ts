@@ -77,6 +77,7 @@ describe('useAppRuntimeState', () => {
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
   let websocketInitialDataReceived: boolean;
+  let websocketResourceSnapshotReceived: boolean;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -148,6 +149,7 @@ describe('useAppRuntimeState', () => {
     websocketConnected = false;
     websocketReconnecting = false;
     websocketInitialDataReceived = false;
+    websocketResourceSnapshotReceived = false;
 
     vi.doMock('@/stores/websocket-global', () => ({
       getGlobalWebSocketStore: () => ({
@@ -155,7 +157,7 @@ describe('useAppRuntimeState', () => {
         connected: () => websocketConnected,
         reconnecting: () => websocketReconnecting,
         initialDataReceived: () => websocketInitialDataReceived,
-        resourceSnapshotReceived: () => websocketInitialDataReceived,
+        resourceSnapshotReceived: () => websocketResourceSnapshotReceived,
         reconnect: vi.fn(),
         switchUrl: vi.fn(),
       }),
@@ -700,11 +702,26 @@ describe('useAppRuntimeState', () => {
     websocketState = makeWebSocketState({ activeAlerts: [{ id: 'recovered-alert' } as State['activeAlerts'][number]] });
     websocketConnected = false;
     websocketReconnecting = true;
-    websocketInitialDataReceived = false;
+    websocketInitialDataReceived = true;
+    websocketResourceSnapshotReceived = false;
     const { hookState, dispose } = mountHook();
     await waitFor(() => expect(hookState.enhancedStore()).not.toBeNull());
     expect(hookState.state().activeAlerts).toHaveLength(1);
     expect(hookState.runtimeStateResolved()).toBe(false);
+    dispose();
+  });
+
+  it('retains explicit empty resource admission while transport hydration resets', async () => {
+    websocketState = makeWebSocketState();
+    websocketConnected = false;
+    websocketReconnecting = true;
+    websocketInitialDataReceived = false;
+    websocketResourceSnapshotReceived = true;
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.enhancedStore()).not.toBeNull());
+    expect(hookState.state().resources).toHaveLength(0);
+    expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
+    expect(hookState.runtimeStateResolved()).toBe(true);
     dispose();
   });
 

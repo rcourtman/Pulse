@@ -40,3 +40,12 @@ binds this run to the release-line base and runtime source hashes.
 
 Existing critical-transition and stable-identity recovery tests also passed
 three race repetitions on this base with the backport applied.
+
+Follow-up hook coverage on 5 September separates the mocked resource-snapshot
+flag from general hydration. Alert-only hydration now explicitly reports
+initialDataReceived=true with resourceSnapshotReceived=false; the inverse case
+retains an authoritative empty resource snapshot during reconnect. All 88 tests
+in the three focused files above pass. Temporarily substituting
+initialDataReceived for resourceSnapshotReceived in runtimeStateResolved makes
+both boundary tests fail (two failures, 21 skipped); the mutation was removed.
+This verifies regression sensitivity, not installed browser or soak readiness.
