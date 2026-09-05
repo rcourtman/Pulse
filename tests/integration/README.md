@@ -289,3 +289,24 @@ Response behavior can be controlled via environment variables:
 
 - ✅ Core E2E flows pass reliably in CI
 - ✅ Update flow remains covered via API integration test + smoke UI check
+
+### Quarantined multi-tenant diagnostic
+
+From the repository root, run:
+
+```sh
+pulse-heavy-run -- bash tests/integration/scripts/run-tests.sh multi-tenant
+```
+
+This shell-owned run builds isolated images and allocates loopback ports. Its
+dedicated `playwright.multi-tenant-diagnostic.config.ts` selects only the seven
+desktop multi-tenant scenarios, including known failing scenarios. It refuses
+a non-empty `PULSE_E2E_TIER`: unset that variable explicitly for diagnostics.
+The normal stable/probation configuration and quarantine are unchanged.
+A diagnostic pass is not a stable-gate, installed-customer or release receipt.
+
+Reports remain under the invocation-specific report/result directories for
+inspection; treat browser artifacts as potentially sensitive. Direct npm,
+setup and helper invocations do not inherit the shell runner's isolation
+guarantees. The existing seven scenarios do not establish the delayed admission
+and reconnect recovery matrix.

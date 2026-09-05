@@ -29,7 +29,7 @@ test('integration setup pins the governed Node.js major', async () => {
 
 test('buildManagedLocalBackendState uses deterministic defaults', () => {
   const state = buildManagedLocalBackendState({});
-  assert.equal(state.repoRoot.endsWith('/repos/pulse'), true);
+  assert.equal(state.repoRoot, path.resolve(integrationRoot, '../..'));
   assert.equal(state.backendVariant, 'core');
   assert.equal(state.baseURL, 'http://127.0.0.1:8765');
   assert.equal(state.metricsPort, '0');
@@ -70,7 +70,7 @@ test('buildManagedLocalBackendState supports enterprise variant with sibling rep
   );
   assert.deepEqual(state.binaryBuildArgs, ['build', '-buildvcs=false', '-o', '__OUTPUT__', './cmd/pulse-enterprise']);
   assert.ok(state.binarySourceRoots.some((root) => root.endsWith(path.join('pulse-enterprise', 'internal'))));
-  assert.ok(state.binarySourceRoots.some((root) => root.endsWith(path.join('repos', 'pulse', 'internal'))));
+  assert.ok(state.binarySourceRoots.includes(path.join(state.repoRoot, 'internal')));
 });
 
 test('buildManagedLocalBackendEnv seeds auth, bootstrap token, and billing path', () => {
@@ -169,7 +169,8 @@ test('multi-tenant release auth reuses storage state and classifies login rate l
   assert.match(multiTenantSpec, /createAuthenticatedStorageState/);
   assert.match(multiTenantSpec, /storageState:\s*async\s*\(\{\s*authStorageStatePath\s*\},\s*use\)/);
   assert.match(multiTenantSpec, /authStorageStatePath:\s*\[/);
-  assert.match(multiTenantSpec, /multi-tenant-\$\{workerInfo\.project\.name\}\.json/);
+  assert.match(multiTenantSpec, /fs\.mkdtempSync\(path\.join\(authRoot, 'multi-tenant-'\)\)/);
+  assert.match(multiTenantSpec, /finally\s*\{\s*fs\.rmSync\(authDir, \{ recursive: true, force: true \}\)/);
   assert.match(multiTenantSpec, /\{\s*scope:\s*'worker'\s*\}/);
 
   assert.match(helpers, /new URL\(response\.url\(\)\)\.pathname === "\/api\/login"/);
@@ -385,4 +386,32 @@ test('shouldBuildManagedLocalBackendFrontend skips rebuild when embedded fronten
     await shouldBuildManagedLocalBackendFrontend({ frontendRoot, embeddedFrontendDistPath }),
     false,
   );
+});
+
+// Diagnostic orchestration must not impersonate a stable runtime gate.
+import { spawnSync } from 'node:child_process';
+
+function list(config, tier = '') {
+  return spawnSync(process.execPath, [
+    'node_modules/@playwright/test/cli.js', 'test',
+    '--config', config, 'tests/03-multi-tenant.spec.ts', '--list',
+  ], { cwd: integrationRoot, env: { ...process.env, PULSE_E2E_TIER: tier }, encoding: 'utf8' });
+}
+test('explicit diagnostic discovers only the seven desktop multi-tenant scenarios', () => {
+  const result = list('playwright.multi-tenant-diagnostic.config.ts');
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Total: 7 tests in 1 file/);
+  assert.doesNotMatch(result.stdout, /mobile-chrome|mobile-safari/);
+});
+for (const tier of ['stable', 'probation']) {
+  test(`diagnostic refuses ${tier} gate identity`, () => {
+    const result = list('playwright.multi-tenant-diagnostic.config.ts', tier);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /diagnostics cannot run as an E2E tier/);
+  });
+}
+test('normal stable configuration retains multi-tenant quarantine', () => {
+  const result = list('playwright.config.ts', 'stable');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /Total: 0 tests/);
 });

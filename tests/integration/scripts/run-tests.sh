@@ -190,7 +190,7 @@ run_suite() {
             npx playwright test "tests/06-theme-visual.spec.ts" --project=chromium --reporter=list
             ;;
         multi-tenant)
-            npx playwright test "tests/03-multi-tenant.spec.ts" --project=chromium --reporter=list
+            npx playwright test --config=playwright.multi-tenant-diagnostic.config.ts --project=chromium
             ;;
         retired-trial-acquisition)
             npx playwright test "tests/07-retired-trial-acquisition.spec.ts" --project=chromium --reporter=list
