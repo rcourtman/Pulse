@@ -410,8 +410,8 @@ jobs:
           INITIAL_STATE="${WORKFLOW_OUTPUT_1}"
           if [ "$INITIAL_STATE" = "true" ]; then
               HEADER_LINE="## ✅ Release Asset Validation: PASSED"
-              STATUS_LINE="**Status**: Ready for publication ✅"
-              INTRO_LINE="All release assets have been validated successfully!"
+              STATUS_LINE="**Status**: Release asset checks passed ✅"
+              INTRO_LINE="The required release asset checks passed."
           else
               HEADER_LINE="## ✅ Release Asset Validation (Post-Publish): PASSED"
               STATUS_LINE="**Status**: Live release assets re-validated ✅"
@@ -449,6 +449,9 @@ jobs:
           - Checksums verified ✓
           - Version strings correct ✓
           - Binary architectures validated ✓
+
+          Asset validation alone does not establish installed-service health,
+          release convergence, clean soak or approval for stable publication.
 
           <!-- VALIDATION_STATUS_END -->
           EOF

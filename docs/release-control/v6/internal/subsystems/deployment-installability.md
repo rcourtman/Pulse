@@ -449,6 +449,13 @@ may delete invalid assets and rewrite validation annotations only while a
 release is still a draft. A post-publication edit is observation, not authority
 to mutate or destroy an immutable release; failed revalidation records a
 failing status and requires an explicit corrective release path.
+Asset-validation banners report asset checks only, never publication readiness.
+Both draft and post-publication banners must explicitly distinguish asset checks
+from installed-service health, release convergence, clean soak and stable
+publication approval, while retaining the individual check summary.
+`scripts/release_control/render_release_body_test.py` executes the workflow
+wording branch for both states and verifies these reporting limits; this local
+proof does not qualify an installed service or authorise release mutation.
 The activation marker is part of that complete draft packet: its stored digest
 must be checked before publication, and customer convergence is forbidden until
 GitHub reports the release immutable and its signed release attestation verifies.

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import textwrap
 import tempfile
 import unittest
 from pathlib import Path
@@ -812,6 +814,54 @@ Rollback details.
         self.assertIn("Read", blurb)
         self.assertIn("Write", blurb)
         self.assertIn("Push", blurb)
+
+
+class AssetValidationWordingTest(unittest.TestCase):
+    def render_banner(self, draft: bool) -> str:
+        source = (_REPO_ROOT / ".github/workflows/validate-release-assets.yml").read_text(encoding="utf-8")
+        # Execute only the actual local wording branch and banner heredoc,
+        # never the workflow's GitHub reads/writes or release mutation code.
+        branch = source.split('          if [ "$INITIAL_STATE" = "true" ]; then\n', 1)[1]
+        branch = 'if [ "$INITIAL_STATE" = "true" ]; then\n' + branch.split(
+            "\n          fi", 1
+        )[0] + "\nfi\n"
+        template = textwrap.dedent(source.split(
+            "          read -r -d '' VALIDATION_BLOCK <<'EOF' || true\n", 1
+        )[1].split("\n          EOF", 1)[0])
+        result = subprocess.run(
+            ["bash", "-eu", "-c", 'INITIAL_STATE="$1"\n' + branch
+             + "printf '%s\\n' \"$HEADER_LINE\" \"$INTRO_LINE\" \"$STATUS_LINE\"",
+             "wording-test", str(draft).lower()],
+            check=True, capture_output=True, text=True, timeout=5,
+        )
+        header, intro, status = result.stdout.splitlines()
+        return template.replace("HEADER_PLACEHOLDER", header).replace(
+            "INTRO_PLACEHOLDER", intro
+        ).replace("STATUS_PLACEHOLDER", status)
+
+    def test_draft_reports_asset_checks_not_publication_readiness(self) -> None:
+        banner = self.render_banner(True)
+        self.assertIn("**Status**: Release asset checks passed", banner)
+        self.assertNotIn("Ready for publication", banner)
+        self.assertIn("## ✅ Release Asset Validation: PASSED", banner)
+
+    def test_published_release_still_reports_revalidation(self) -> None:
+        banner = self.render_banner(False)
+        self.assertIn("Release Asset Validation (Post-Publish): PASSED", banner)
+        self.assertIn("Live release assets re-validated", banner)
+        self.assertNotIn("Ready for publication", banner)
+
+    def test_both_banners_explain_limits_without_losing_check_summary(self) -> None:
+        for draft in (True, False):
+            with self.subTest(draft=draft):
+                banner = self.render_banner(draft)
+                self.assertIn("Asset validation alone does not establish installed-service health,", banner)
+                self.assertIn("release convergence, clean soak or approval for stable publication.", banner)
+                for check in ("All required assets present", "Checksums verified",
+                              "Version strings correct", "Binary architectures validated"):
+                    self.assertIn(check, banner)
+                self.assertIn("<!-- VALIDATION_STATUS_START -->", banner)
+                self.assertIn("<!-- VALIDATION_STATUS_END -->", banner)
 
 
 if __name__ == "__main__":
