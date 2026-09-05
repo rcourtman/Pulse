@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
@@ -493,6 +493,31 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
     expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+  });
+
+  it('keeps coverage evidence expanded across repeated workload snapshots', async () => {
+    mockBackupAPIs();
+    const [workloads, setWorkloads] = createSignal<readonly Resource[]>([workloadResource]);
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
+    ));
+
+    await screen.findAllByText('pbs-docker');
+    await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+
+    for (let snapshot = 1; snapshot <= 3; snapshot += 1) {
+      const name = `pbs-docker-snapshot-${snapshot}`;
+      setWorkloads([{ ...workloadResource, name, displayName: name }]);
+
+      // Assert the new snapshot reached the rendered table, rather than merely
+      // checking that a stale expanded row survived.
+      await screen.findAllByText(name);
+      expect(screen.getByRole('columnheader', { name: /posture/i })).toBeInTheDocument();
+      expect(screen.getByText('Restore evidence')).toBeInTheDocument();
+      expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+    }
   });
 
   it('filters the backup feed by search term', async () => {
