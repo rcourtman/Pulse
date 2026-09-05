@@ -172,6 +172,44 @@ Installed customer journeys, scheduled health outcomes and notification
 receipt/recovery evidence remain separate checks. This procedure grants no
 publication or deployment authority.
 
+### When mutable stable and newer orphan tags coexist
+
+Retain the continuity run's release, frontier and activation diagnostics together.
+A mutable advertised release, a newer source tag without a release packet, and
+missing activation digests are independent failures. Fixing one does not clear
+the others. Record the exact orphan versions and registry names, not just the
+latest RC; an immutable RC does not replace the advertised stable identity.
+
+Use this decision sequence within the existing release authority:
+
+1. Inspect the failed publication and convergence owners before proposing a
+   retry. Retry convergence only for an already verified immutable activation
+   packet with its original identities. It cannot supply missing assets or
+   digests to a published packet, or turn an orphan tag into a qualified release.
+2. For a replacement, choose an unused stable version newer than the exposed
+   orphan stable versions, with its own qualified candidate. Preserve the old
+   evidence; do not delete or retag the orphan merely to turn the scan green.
+   Frontier validation compares versions against advertised stable: after a
+   later replacement, older orphan tags no longer fail that specific check.
+   This is supersession, not evidence that the old publication was successful
+   or that customers pinned to its container version have migrated.
+3. Keep patch scope to named regression/security fixes. A changed patch RC
+   restarts 72 hours of clean soak; an older immutable RC or green main cannot
+   lend its qualification to changed bytes. Retain the exact candidate packet
+   for founder approval before stable publication.
+4. After authorised publication and convergence, require all release, frontier,
+   activation and provenance checks for the newly advertised identity. A
+   passing frontier alone can coexist with a mutable release and is not
+   admission. Retain exact digest/alias readbacks and installed upgrade,
+   rollback, health and receiver evidence separately; neither source tests nor
+   tag supersession prove those journeys.
+
+If a previously qualified stable target is available, any authorised pointer
+rollback is containment only: newer orphan tags can still fail frontier
+validation. If no qualified fallback exists, record that dependency rather
+than presenting the old mutable release as trusted. Do not bypass the check
+to unblock unrelated security results; skipped checks remain unproved.
+
 Future release candidates also carry
 `release-build-provenance.sigstore.json`, produced by the hosted
 `build-release-candidate.yml` job after complete candidate validation. The
