@@ -98,7 +98,7 @@ func TestPBSPartialMetricsWebhookLifecycle(t *testing.T) {
 	}
 	incident := firing.Alerts[0]
 	waitSent(1)
-	for _, mode := range []pbsHealthTestMode{pbsHealthTestNodeDenied, pbsHealthTestNodeGatewayFailure, pbsHealthTestNullNodeStatus} {
+	for _, mode := range []pbsHealthTestMode{pbsHealthTestNodeDenied, pbsHealthTestNodeGatewayFailure, pbsHealthTestNullNodeStatus, pbsHealthTestIncompleteNodeStatus} {
 		fixture.setMode(mode)
 		for range 5 {
 			poll()

@@ -27,6 +27,7 @@ const (
 	pbsHealthTestUnavailable
 	pbsHealthTestLowMemory
 	pbsHealthTestNullNodeStatus
+	pbsHealthTestIncompleteNodeStatus
 )
 
 type pbsHealthTestServer struct {
@@ -67,6 +68,10 @@ func newPBSHealthTestServer(t *testing.T) *pbsHealthTestServer {
 				"data": map[string]any{"version": "3.4.2"},
 			})
 		case "/api2/json/nodes/localhost/status":
+			if mode == pbsHealthTestIncompleteNodeStatus {
+				_, _ = w.Write([]byte(`{"data":{"cpu":0.15,"memory":{"total":1024}}}`))
+				return
+			}
 			if mode == pbsHealthTestNullNodeStatus {
 				_, _ = w.Write([]byte(`{"data":null}`))
 				return

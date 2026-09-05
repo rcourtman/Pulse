@@ -836,7 +836,7 @@ func TestClient_GetNodeStatus_PermissionOutageRecovery(t *testing.T) {
 			_, _ = w.Write([]byte("permission denied: upstream authentication error"))
 			return
 		}
-		_, _ = w.Write([]byte(`{"data":{"cpu":0.25}}`))
+		_, _ = w.Write([]byte(`{"data":{"cpu":0.25,"memory":{"used":500,"total":1000}}}`))
 	}))
 	defer server.Close()
 	client, err := NewClient(ClientConfig{
@@ -881,6 +881,46 @@ func TestClient_GetNodeStatus_MissingData(t *testing.T) {
 			status, err := client.GetNodeStatus(context.Background())
 			if status != nil || err == nil {
 				t.Fatalf("absent metrics = (%+v, %v), want nil status and error", status, err)
+			}
+		})
+	}
+}
+
+// Missing measurements must not be indistinguishable from measured zero usage.
+func TestClient_GetNodeStatus_MetricCompleteness(t *testing.T) {
+	for _, tc := range []struct {
+		name, data string
+		valid      bool
+	}{
+		{"empty", `{}`, false},
+		{"cpu only", `{"cpu":0}`, false},
+		{"missing cpu", `{"memory":{"used":0,"total":1000}}`, false},
+		{"null cpu", `{"cpu":null,"memory":{"used":0,"total":1000}}`, false},
+		{"null memory", `{"cpu":0,"memory":null}`, false},
+		{"missing used", `{"cpu":0,"memory":{"total":1000}}`, false},
+		{"null used", `{"cpu":0,"memory":{"used":null,"total":1000}}`, false},
+		{"missing total", `{"cpu":0,"memory":{"used":0}}`, false},
+		{"null total", `{"cpu":0,"memory":{"used":0,"total":null}}`, false},
+		{"zero total", `{"cpu":0,"memory":{"used":0,"total":0}}`, false},
+		{"negative total", `{"cpu":0,"memory":{"used":0,"total":-1}}`, false},
+		{"negative used", `{"cpu":0,"memory":{"used":-1,"total":1000}}`, false},
+		{"negative cpu", `{"cpu":-1,"memory":{"used":0,"total":1000}}`, false},
+		{"wrong type", `{"cpu":0,"memory":{"used":"0","total":1000}}`, false},
+		{"measured zero", `{"cpu":0,"memory":{"used":0,"total":1000}}`, true},
+		{"extra fields", `{"cpu":0.2,"memory":{"used":500,"total":1000,"free":500},"future":true}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(`{"data":` + tc.data + `}`))
+			})
+			defer server.Close()
+			status, err := client.GetNodeStatus(context.Background())
+			if tc.valid {
+				if err != nil || status == nil {
+					t.Fatalf("valid measurements = (%+v, %v)", status, err)
+				}
+			} else if err == nil || status != nil {
+				t.Fatalf("incomplete/invalid measurements = (%+v, %v), want nil status and error", status, err)
 			}
 		})
 	}
