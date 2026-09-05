@@ -14,14 +14,22 @@ for (const suite of ['core', 'all']) {
       const dir = mkdtempSync(path.join(tmpdir(), 'pulse-cleanup-test-'));
       try {
         const stubs = {
-          docker: `if [ "$1 $2 $4" = "compose -f down" ]; then exit ${cleanupStatus}; fi
+          docker: `if [ "$1" = compose ]; then
+  case " $* " in
+    *" down -v "*) exit ${cleanupStatus} ;;
+    *" port pulse-test 7655 "*) echo 127.0.0.1:17655; exit 0 ;;
+    *" port pulse-test 7656 "*) echo 127.0.0.1:17656; exit 0 ;;
+    *" port mock-github 8080 "*) echo 127.0.0.1:18080; exit 0 ;;
+  esac
+fi
   case "$1 $2" in
     'inspect -f') echo true ;;
   esac
   exit 0`,
           curl: 'exit 0',
           go: 'exit 0',
-          node: 'exit 0',
+          node: `if [ "$1" = -e ]; then printf '%s' 0123456789abcdef0123456789abcdef; fi
+exit 0`,
           npx: `echo test >> '${dir}/tests-run'\nexit 0`,
         };
         for (const [name, body] of Object.entries(stubs)) {
