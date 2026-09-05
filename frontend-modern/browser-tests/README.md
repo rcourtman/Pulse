@@ -21,3 +21,55 @@ This covers #1869's refresh stability at the coverage-table boundary. It does
 **not** qualify the full application resource provider/WebSocket path, PBS drawer,
 By date view, virtualised large tables, Settings editing, or Brave. A passing
 result is not grounds to close #1869 or claim the reported top-of-page jump fixed.
+
+## Application refresh boundary
+
+```sh
+pulse-heavy-run -- node scripts/check-backup-app-refresh.mjs
+pulse-heavy-run -- env PULSE_BROWSER_WIDTH=390 node scripts/check-backup-app-refresh.mjs
+```
+
+This separate runner loads the actual application entry point, authentication
+bootstrap, router, scoped/paginated resource queries, WebSocket store and PBS
+resource drawer. Authentication and all API/socket data are synthetic; no live
+Pulse server or credentials are used. The browser blocks off-origin HTTP traffic.
+It supplies 240 workloads and a hybrid PBS resource with a metrics-history target.
+Three replacement `rawData` frames per view change rendered names, rather than
+merely waiting on a timer with unchanged content.
+
+Assertions cover:
+- Coverage: fewer rendered rows than the inventory (windowing enabled), non-zero
+  scroll, expanded restore evidence, focused expansion button and route retained.
+- By date: changed workload name, non-zero scroll, focused navigation link and route
+  retained. This view has no per-artifact expansion toggle.
+- PBS: real History panel remains visible and selected, with its tab focused and
+  route/scroll retained while the PBS name changes. Its baseline scroll is zero;
+  this checks drawer state, not a non-zero drawer-scroll regression.
+- No uncaught page errors or error-level browser console messages.
+
+Printed samples record scroll offsets and active controls. The fixed 500ms waits
+allow initial layout/scroll synchronisation; each refresh waits for changed text.
+The backup artifact HTTP payload itself is static after initial loading: this is
+resource-provider/socket replacement qualification, not backup API refetch proof.
+Narrow-width interaction is keyboard-driven, not touch or Brave qualification.
+The test does not cover Settings Manage editing, Authentication strategy selection,
+expansion padding, arbitrary inventory churn/reordering, or a deployed release.
+Passing is not grounds to close the mixed report #1869.
+
+## CI and release evidence
+
+These standalone runners are manual qualification commands: the current GitHub
+workflows do not invoke them. A green Frontend or Core E2E check therefore does
+not establish that either runner passed on the checked commit. Record the exact
+source revision, command, viewport and output when using their results for
+release review; retained JSON samples describe their recorded run, not later
+commits or distributed images.
+
+The separate integration spec
+`tests/integration/tests/64-workloads-proxmox-refresh-stability.spec.ts` covers
+workload History, LXC refresh/deletion and off-screen PBS drawer scrolling. It is
+currently listed in `PROBATION_SPECS` in `tests/integration/e2e-tiering.mjs`:
+its failures are reported but do not fail the Core E2E gate. Inspect the probation
+report as well as the aggregate check. It is not a substitute for these runners'
+Coverage/By date assertions. Promotion remains subject to the existing ten-clean-
+executed-main-runs rule; a local pass is not grounds to bypass it.

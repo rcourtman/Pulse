@@ -3048,12 +3048,11 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 // cannot return.
 
 func TestInstallShSmokeWorkflowPresent(t *testing.T) {
-	workflowPath := repoFile(".github", "workflows", "install-sh-smoke.yml")
+	workflowPath := repoFile(".github", "workflows", "install-sh-smoke-body.yml")
 	assertFileContainsAll(t, workflowPath,
 		// Inputs and triggers.
-		`name: install.sh Smoke (Release Assets)`,
+		`name: install.sh Smoke Body (Caller Permissions)`,
 		`workflow_call:`,
-		`workflow_dispatch:`,
 		`asset_source:`,
 		`release_id:`,
 		// Staged cuts use authenticated draft assets; manual verification can
@@ -3087,12 +3086,18 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 
 	workflowBytes, err := os.ReadFile(workflowPath)
 	if err != nil {
-		t.Fatalf("read install-sh-smoke workflow: %v", err)
+		t.Fatal(err)
 	}
-	smokeJob := workflowJobBlock(t, string(workflowBytes), "smoke")
-	if !strings.Contains(smokeJob, "contents: write") {
-		t.Fatal("install-sh-smoke.yml smoke job must grant contents: write to read unpublished draft release assets")
+	if strings.Contains(string(workflowBytes), "permissions:") {
+		t.Fatal("shared smoke body must inherit its caller budget, not request elevated permissions")
 	}
+	assertFileContainsAll(t, repoFile(".github", "workflows", "install-sh-smoke.yml"),
+		`workflow_dispatch:`,
+		`workflow_call:`,
+		`contents: write`,
+		`uses: ./.github/workflows/install-sh-smoke-body.yml`,
+		`release_id: ${{ inputs.release_id }}`,
+	)
 }
 
 func TestStableInstallContinuityReinstallsLatestReleaseReadOnly(t *testing.T) {
@@ -3106,7 +3111,7 @@ func TestStableInstallContinuityReinstallsLatestReleaseReadOnly(t *testing.T) {
 		`"repos/${REPOSITORY}/releases/latest"`,
 		`scripts/release_control/release_continuity.py release`,
 		`version=${tag#v}`,
-		`uses: ./.github/workflows/install-sh-smoke.yml`,
+		`uses: ./.github/workflows/install-sh-smoke-body.yml`,
 		`tag: ${{ needs.resolve.outputs.tag }}`,
 		`version: ${{ needs.resolve.outputs.version }}`,
 		`asset_source: published`,

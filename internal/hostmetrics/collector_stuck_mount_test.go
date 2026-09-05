@@ -2,6 +2,7 @@ package hostmetrics
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func TestCollectDisks_UnresponsiveMountDoesNotBlockCycle(t *testing.T) {
 	close(release)
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, stuck := stuckDiskMounts.Load("/mnt/slow"); !stuck {
+		if _, stuck := loadDiskUsageCall("/mnt/slow"); !stuck {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -176,7 +177,7 @@ func TestGuardedDiskUsage_ConcurrentCollectorsShareCall(t *testing.T) {
 	close(release)
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, ok := stuckDiskMounts.Load(mount); !ok {
+		if _, ok := loadDiskUsageCall(mount); !ok {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -199,8 +200,14 @@ func TestGuardedDiskUsage_SharedResult(t *testing.T) {
 		done:     make(chan struct{}),
 		deadline: time.Now().Add(time.Second),
 	}
-	stuckDiskMounts.Store(mount, call)
-	defer stuckDiskMounts.Delete(mount)
+	stuckDiskMounts.Lock()
+	stuckDiskMounts.calls[mount] = call
+	stuckDiskMounts.Unlock()
+	defer func() {
+		stuckDiskMounts.Lock()
+		delete(stuckDiskMounts.calls, mount)
+		stuckDiskMounts.Unlock()
+	}()
 	go func() {
 		call.usage = want
 		close(call.done)
@@ -217,14 +224,97 @@ func TestGuardedDiskUsage_CancelledWaitKeepsProbe(t *testing.T) {
 		done:     make(chan struct{}),
 		deadline: time.Now().Add(time.Hour),
 	}
-	stuckDiskMounts.Store(mount, call)
-	defer stuckDiskMounts.Delete(mount)
+	stuckDiskMounts.Lock()
+	stuckDiskMounts.calls[mount] = call
+	stuckDiskMounts.Unlock()
+	defer func() {
+		stuckDiskMounts.Lock()
+		delete(stuckDiskMounts.calls, mount)
+		stuckDiskMounts.Unlock()
+	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := guardedDiskUsage(ctx, mount); err != context.Canceled {
 		t.Fatalf("cancelled wait = %v", err)
 	}
-	if actual, ok := stuckDiskMounts.Load(mount); !ok || actual != call {
+	if actual, ok := loadDiskUsageCall(mount); !ok || actual != call {
 		t.Fatal("cancelling a waiter must not admit a duplicate probe")
+	}
+}
+
+// loadDiskUsageCall inspects the registry without racing a probe's cleanup.
+func loadDiskUsageCall(mount string) (*diskUsageCall, bool) {
+	stuckDiskMounts.Lock()
+	defer stuckDiskMounts.Unlock()
+	call, ok := stuckDiskMounts.calls[mount]
+	return call, ok
+}
+
+// Exercise registry insertion/removal from overlapping collectors, both on a
+// shared mount and on independent mounts. A result must belong to its mount.
+func TestGuardedDiskUsage_ConcurrentHealthyMounts(t *testing.T) {
+	origUsage := diskUsage
+	diskUsage = func(_ context.Context, mount string) (*godisk.UsageStat, error) {
+		return &godisk.UsageStat{Path: mount, Total: 123}, nil
+	}
+	defer func() { diskUsage = origUsage }()
+
+	const workers = 16
+	done := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		go func(i int) {
+			for j := 0; j < 100; j++ {
+				mount := fmt.Sprintf("/test/healthy-%d", i%4)
+				usage, err := guardedDiskUsage(context.Background(), mount)
+				if err != nil {
+					done <- err
+					return
+				}
+				if usage == nil || usage.Path != mount || usage.Total != 123 {
+					done <- fmt.Errorf("mount %s received result %+v", mount, usage)
+					return
+				}
+			}
+			done <- nil
+		}(i)
+	}
+	for i := 0; i < workers; i++ {
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+// A cancelled collection must not start a syscall which may ignore its context
+// and remain stuck in the kernel after the caller has already gone away.
+func TestGuardedDiskUsage_AlreadyCancelledDoesNotStartProbe(t *testing.T) {
+	const mount = "/test/already-cancelled"
+	origUsage := diskUsage
+	var calls atomic.Int32
+	diskUsage = func(context.Context, string) (*godisk.UsageStat, error) {
+		calls.Add(1)
+		return nil, nil
+	}
+	defer func() { diskUsage = origUsage }()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := guardedDiskUsage(ctx, mount)
+	// Wait for any incorrectly admitted probe to finish before restoring the
+	// shared stub; registry removal follows the syscall.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, ok := loadDiskUsageCall(mount); !ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("probe did not drain")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if err != context.Canceled {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("cancelled collection started %d probes, want none", got)
 	}
 }

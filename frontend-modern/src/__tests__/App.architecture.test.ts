@@ -152,6 +152,31 @@ describe('App platform navigation admission', () => {
     expect(admission.visibility).toMatchObject({ docker: true, truenas: true, standalone: true });
   });
 
+  it('does not let retained reconnect admission override an explicit empty resource snapshot', () => {
+    const retainedFacet = {
+      proxmox: true,
+      docker: true,
+      kubernetes: false,
+      truenas: false,
+      vmware: false,
+      standalone: false,
+    };
+    expect(resolvePlatformNavigationAdmission([], false, retainedFacet).visibility.docker).toBe(
+      true,
+    );
+    const authoritativeEmpty = resolvePlatformNavigationAdmission([], true, retainedFacet);
+    expect(authoritativeEmpty.resolved).toBe(true);
+    expect(Object.values(authoritativeEmpty.visibility)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(getDefaultWorkspaceRoute(authoritativeEmpty.visibility, false)).toBe('/alerts');
+  });
+
   it('stays unresolved when neither the facet nor runtime state is available', () => {
     const admission = resolvePlatformNavigationAdmission([], false, null);
 
@@ -864,6 +889,21 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("label: 'Patrol'");
     expect(appLayoutSource).toContain('countLabel: patrolAttentionCountLabel()');
     expect(appLayoutSource).toContain("label: 'Actions'");
+  });
+
+  it('keeps alert hydration separate from tenant resource admission', () => {
+    const start = appRuntimeStateSource.indexOf('const runtimeStateResolved');
+    const predicate = appRuntimeStateSource.slice(
+      start,
+      appRuntimeStateSource.indexOf('const state =', start),
+    );
+    expect(start).toBeGreaterThan(-1);
+    expect(predicate).toContain('resourceSnapshotReceived()');
+    expect(predicate).not.toContain('initialDataReceived()');
+    expect(predicate).not.toContain('hasRuntimeStatePayload');
+    const storeSource = readFileSync(join(process.cwd(), 'src/stores/websocket.ts'), 'utf8');
+    const reset = storeSource.slice(storeSource.indexOf('setResourceSnapshotReceived(false)'));
+    expect(reset).toContain("setActiveAlertsHydrationStatus('pending')");
   });
 
   it('drops platform admission when the tenant changes', () => {

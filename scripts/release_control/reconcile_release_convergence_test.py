@@ -5,6 +5,8 @@ from __future__ import annotations
 import contextlib
 import io
 import unittest
+from unittest.mock import patch
+import subprocess
 
 import reconcile_release_convergence as subject
 
@@ -251,6 +253,32 @@ class FakeGitHub:
     def unchanged_credential_containment_block(self, run_id):
         self.containment_probe = run_id
         return False
+
+
+class JobLogTests(unittest.TestCase):
+    def test_uses_captured_sanitised_job_reader_with_private_auth(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh", mutate=False)
+        log = "Require credential containment\tcheck\tcredential containment gate: BLOCKED\n"
+        with patch.object(subject.subprocess, "run", return_value=subprocess.CompletedProcess(
+            [], 0, stdout=log, stderr=""
+        )) as command, contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(log, github.job_log(
+                subject.PRIVATE_REPOSITORY, 123, token="test-private-token"
+            ))
+        self.assertEqual("", output.getvalue())
+        args, kwargs = command.call_args
+        self.assertEqual(["gh", "run", "view", "--repo", subject.PRIVATE_REPOSITORY,
+                          "--job", "123", "--log"], args[0])
+        self.assertTrue(kwargs["capture_output"])
+        self.assertEqual("test-private-token", kwargs["env"]["GH_TOKEN"])
+
+    def test_unavailable_job_logs_fail_closed(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh", mutate=False)
+        with patch.object(subject.subprocess, "run", return_value=subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="log unavailable"
+        )):
+            with self.assertRaisesRegex(subject.ReconciliationError, "log unavailable"):
+                github.job_log(subject.PRIVATE_REPOSITORY, 123)
 
 
 class CredentialContainmentTests(unittest.TestCase):

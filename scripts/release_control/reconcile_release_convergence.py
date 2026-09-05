@@ -325,14 +325,19 @@ class GitHub:
         return value
 
     def job_log(self, repository: str, job_id: int, *, token: str = "") -> str:
+        # Actions logs routinely contain ANSI colour sequences. gh api refuses
+        # those bytes for terminal safety; use the dedicated log reader, which
+        # neutralises control sequences, rather than disabling that protection.
+        # Keep captured private logs internal: callers inspect only a marker.
         return self._run(
             [
-                "api",
-                "-H",
-                "Accept: application/vnd.github+json",
-                "-H",
-                "X-GitHub-Api-Version: 2026-03-10",
-                f"repos/{repository}/actions/jobs/{job_id}/logs",
+                "run",
+                "view",
+                "--repo",
+                repository,
+                "--job",
+                str(job_id),
+                "--log",
             ],
             token=token,
         )

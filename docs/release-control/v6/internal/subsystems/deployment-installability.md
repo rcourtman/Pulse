@@ -5097,3 +5097,19 @@ allowlist, the drift refusal, the hotfix path, and the minor soak;
 summaries whose scope, format, and attachments the server fixes. The delivery
 surface (`/api/admin/reports/schedules`) and tenant-local storage are
 unchanged.
+
+### Convergence log-reader compatibility (5 September 2026)
+
+Scheduled reconciliation run 33939926237 failed when `gh api` refused terminal
+escape sequences in an Actions job log. Credential-containment evidence now
+uses `gh run view --repo … --job … --log`, whose dedicated log reader neutralises
+terminal controls. It does not enable `--allow-escape-sequences`. Private logs
+remain captured for marker inspection, not printed; authentication and log-read
+failures retain the existing fail-closed behaviour. This changes evidence
+transport only, not containment, retry budgets or promotion authority.
+
+Verification: 27 reconciliation tests and 46 release-promotion-policy tests
+passed. A read-only probe of job 101235205647 retained the expected failure text
+without ESC bytes. Private containment classification and successful scheduled
+reconciliation still require post-integration evidence; this is not customer
+convergence or release qualification.

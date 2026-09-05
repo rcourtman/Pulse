@@ -82,7 +82,13 @@ var diskUsageTimeout = 5 * time.Second
 
 // stuckDiskMounts tracks all in-flight usage calls, including calls that have
 // not timed out yet. Host and Docker collectors share the same mount probes.
-var stuckDiskMounts sync.Map
+// Entries are inserted and deleted on every healthy probe. A locked, typed map
+// avoids sync.Map's per-entry bookkeeping for this short-lived workload.
+// Never hold the lock across a syscall or a wait.
+var stuckDiskMounts = struct {
+	sync.Mutex
+	calls map[string]*diskUsageCall
+}{calls: make(map[string]*diskUsageCall)}
 
 type diskUsageCall struct {
 	done     chan struct{}
@@ -94,19 +100,28 @@ type diskUsageCall struct {
 // guardedDiskUsage bounds the wait for a mount probe and leaves at most one
 // syscall in flight per mountpoint, even when reporting loops overlap.
 func guardedDiskUsage(ctx context.Context, mountpoint string) (*godisk.UsageStat, error) {
-	call := &diskUsageCall{
-		done:     make(chan struct{}),
-		deadline: time.Now().Add(diskUsageTimeout),
+	// Do not admit potentially uninterruptible work for an expired collection.
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	actual, loaded := stuckDiskMounts.LoadOrStore(mountpoint, call)
-	if loaded {
-		call = actual.(*diskUsageCall)
-	} else {
+	stuckDiskMounts.Lock()
+	call, loaded := stuckDiskMounts.calls[mountpoint]
+	if !loaded {
+		call = &diskUsageCall{
+			done:     make(chan struct{}),
+			deadline: time.Now().Add(diskUsageTimeout),
+		}
+		stuckDiskMounts.calls[mountpoint] = call
+	}
+	stuckDiskMounts.Unlock()
+	if !loaded {
 		go func() {
 			call.usage, call.err = diskUsage(ctx, mountpoint)
 			// Publish the result before admitting a new probe.
 			close(call.done)
-			stuckDiskMounts.Delete(mountpoint)
+			stuckDiskMounts.Lock()
+			delete(stuckDiskMounts.calls, mountpoint)
+			stuckDiskMounts.Unlock()
 			if time.Now().After(call.deadline) {
 				log.Info().Str("mount", mountpoint).Msg("disk: stalled usage call returned, mount re-included")
 			}

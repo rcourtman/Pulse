@@ -684,8 +684,21 @@ func TestMonitor_HandleAlertResolved_SendsRecoveryForGuestPoweredOffState(t *tes
 	alertMgr.CheckGuest(vm, vm.Instance)
 	alertMgr.CheckGuest(vm, vm.Instance)
 
+	// Firing uses the grouped envelope even with a zero grouping window.
+	var firingPayload struct {
+		Grouped bool `json:"grouped"`
+		Alerts  []struct {
+			ID string `json:"id"`
+		} `json:"alerts"`
+	}
 	select {
-	case <-received:
+	case body := <-received:
+		if err := json.Unmarshal(body, &firingPayload); err != nil {
+			t.Fatalf("failed to parse firing webhook payload: %v", err)
+		}
+		if !firingPayload.Grouped || len(firingPayload.Alerts) != 1 {
+			t.Fatalf("expected one grouped firing alert, got %+v", firingPayload)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timed out waiting for initial powered-off notification webhook")
 	}
@@ -695,6 +708,9 @@ func TestMonitor_HandleAlertResolved_SendsRecoveryForGuestPoweredOffState(t *tes
 		t.Fatalf("expected one active powered-off alert, got %#v", activeAlerts)
 	}
 	alertID := activeAlerts[0].ID
+	if firingPayload.Alerts[0].ID != alertID {
+		t.Fatalf("expected firing webhook alert ID=%q, got %q", alertID, firingPayload.Alerts[0].ID)
+	}
 	if activeAlerts[0].LastNotified == nil {
 		t.Fatalf("expected powered-off alert %q to record firing notification time", alertID)
 	}

@@ -833,6 +833,40 @@ def _has_trigger(lines: list[str], event: str) -> bool:
     return False
 
 
+def _is_workflow_call_only(lines: list[str]) -> bool:
+    """Return whether a workflow can run only with its caller's token budget."""
+    for index, line in enumerate(lines):
+        code = line.split("#", 1)[0]
+        match = re.match(rf"^{_yaml_key('on')}\s*:\s*(.*)$", code)
+        if not match:
+            continue
+
+        inline = match.group(1).strip()
+        if inline:
+            return inline in {"workflow_call", "[workflow_call]"}
+
+        direct_indent = _direct_mapping_indent(lines, index)
+        if direct_indent is None:
+            return False
+        trigger_re = re.compile(
+            rf"^(\s*)({_yaml_key('workflow_call')})\s*:"
+        )
+        direct_triggers = []
+        for trigger_line in lines[index + 1 :]:
+            trigger_code = trigger_line.split("#", 1)[0]
+            if not trigger_code.strip():
+                continue
+            indent = _indent(trigger_code)
+            if indent == 0:
+                break
+            if indent != direct_indent:
+                continue
+            trigger_match = trigger_re.match(trigger_code)
+            direct_triggers.append(bool(trigger_match))
+        return direct_triggers == [True]
+    return False
+
+
 def _is_hardened_closed_pr_cancellation(path: Path, lines: list[str]) -> bool:
     """Recognise the one metadata-only privileged PR automation we permit."""
     if path.name != SAFE_PULL_REQUEST_TARGET_WORKFLOW:
@@ -1404,12 +1438,16 @@ def audit_workflow(path: Path) -> list[Finding]:
         for index, match in permission_declarations
         if not match.group(1)
     ]
-    if len(top_level_permissions) != 1:
+    inherits_caller_permissions = (
+        not permission_declarations and _is_workflow_call_only(lines)
+    )
+    if len(top_level_permissions) != 1 and not inherits_caller_permissions:
         findings.append(
             Finding(
                 path,
                 1,
-                "workflow must declare top-level permissions explicitly exactly once",
+                "workflow must declare top-level permissions explicitly exactly once "
+                "unless it is workflow_call-only and inherits its caller budget",
             )
         )
     for index, match in permission_declarations:

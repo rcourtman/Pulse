@@ -200,10 +200,9 @@ export const useAppRuntimeState = () => {
   const [backendHealthy, setBackendHealthy] = createSignal(false);
   const runtimeStateResolved = (): boolean => {
     const store = wsStore();
-    // Deliberately not "some payload arrived": a bootstrap that carried no
-    // resources would still read as resolved and navigation would classify an
-    // empty estate, hiding every platform tab.
-    return Boolean(store?.initialDataReceived()) || hasRuntimeStatePayload(store?.state);
+    // Alert REST recovery can populate state before the first resource frame.
+    // It must not replace valid admission with an invented empty estate.
+    return Boolean(store?.resourceSnapshotReceived()) || (store?.state.resources.length ?? 0) > 0;
   };
   const state = (): State => {
     const store = wsStore();
@@ -307,10 +306,11 @@ export const useAppRuntimeState = () => {
       );
       setPlatformAdmission(normalizePlatformAdmission(payload?.aggregations?.platformAdmission));
     } catch (error) {
-      // Older servers do not report the facet; navigation keeps its previous
-      // behaviour rather than hiding platforms the estate really has.
+      // A failed refresh says nothing about which platforms still exist.
+      // Keep the last valid facet until a successful response replaces it.
+      // First-load failures remain unresolved; org switches clear it before
+      // requesting the new tenant, so this cannot retain outgoing admission.
       logger.debug('[useAppRuntimeState] platform admission unavailable', error);
-      setPlatformAdmission(null);
     }
   };
 

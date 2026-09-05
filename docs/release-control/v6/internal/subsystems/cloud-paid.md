@@ -3449,3 +3449,16 @@ they do not enable a platform, grant an entitlement, select an organization,
 change hosted mode, or bypass a server capability check. An unconfigured
 platform still resolves to infrastructure settings, and paid destinations
 continue to render and authorize from the existing runtime entitlement state.
+
+### Resource admission remains tenant scoped during reconnect
+
+The authenticated shell retains its platform admission facet until resource
+snapshot evidence arrives; alert-only recovery is not resource evidence.
+Resource snapshot receipt survives a transport reconnect but resets when the
+WebSocket organisation URL changes. The no-op pre-auth store reports no resource
+snapshot. Outgoing tenant admission must not authorise incoming tenant tabs.
+
+A failed reconnect admission request retains the current tenant's last valid
+facet. The synchronous organisation-switch reset still clears outgoing
+admission before requesting the new tenant, including when that request fails.
+This is navigation continuity, not an authorization or entitlement decision.

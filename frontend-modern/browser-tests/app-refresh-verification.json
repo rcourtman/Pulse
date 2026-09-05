@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "verified_at": "2026-09-05T00:55:39.636242+00:00",
+  "application_source_sha": "0c4486102e918a6800fb317166232224fd092a0d",
+  "runner": "scripts/check-backup-app-refresh.mjs",
+  "runner_sha256": "0b1868aa9f2f288fb07153e10abb3622140357a4c1600d1ed40b59f1c3b22b3d",
+  "result": "passed",
+  "environment": "Headless Playwright Chromium; synthetic scoped REST and replacement WebSocket snapshots; actual application entry point",
+  "runs": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "coverage": {
+        "baseline": {
+          "y": 775,
+          "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+        },
+        "samples": [
+          {
+            "generation": 1,
+            "y": 775,
+            "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+          },
+          {
+            "generation": 2,
+            "y": 775,
+            "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+          },
+          {
+            "generation": 3,
+            "y": 775,
+            "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+          }
+        ],
+        "visibleCoverageRows": 140,
+        "pageErrors": [],
+        "consoleErrors": []
+      },
+      "other_views": [
+        {
+          "view": "date",
+          "baseline": {
+            "y": 989,
+            "url": "http://127.0.0.1:5198/proxmox/backups/date",
+            "active": "By date"
+          },
+          "samples": [
+            {
+              "y": 989,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "By date"
+            },
+            {
+              "y": 989,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "By date"
+            },
+            {
+              "y": 989,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "By date"
+            }
+          ]
+        },
+        {
+          "view": "PBS History",
+          "baseline": {
+            "y": 0,
+            "url": "http://127.0.0.1:5198/proxmox/backups/date",
+            "active": "History"
+          },
+          "samples": [
+            {
+              "y": 0,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "History"
+            },
+            {
+              "y": 0,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "History"
+            },
+            {
+              "y": 0,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "History"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "coverage": {
+        "baseline": {
+          "y": 636,
+          "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+        },
+        "samples": [
+          {
+            "generation": 1,
+            "y": 636,
+            "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+          },
+          {
+            "generation": 2,
+            "y": 636,
+            "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+          },
+          {
+            "generation": 3,
+            "y": 636,
+            "url": "http://127.0.0.1:5198/proxmox/backups/coverage"
+          }
+        ],
+        "visibleCoverageRows": 36,
+        "pageErrors": [],
+        "consoleErrors": []
+      },
+      "other_views": [
+        {
+          "view": "date",
+          "baseline": {
+            "y": 900,
+            "url": "http://127.0.0.1:5198/proxmox/backups/date",
+            "active": "By date"
+          },
+          "samples": [
+            {
+              "y": 900,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "By date"
+            },
+            {
+              "y": 900,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "By date"
+            },
+            {
+              "y": 900,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "By date"
+            }
+          ]
+        },
+        {
+          "view": "PBS History",
+          "baseline": {
+            "y": 0,
+            "url": "http://127.0.0.1:5198/proxmox/backups/date",
+            "active": "History"
+          },
+          "samples": [
+            {
+              "y": 0,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "History"
+            },
+            {
+              "y": 0,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "History"
+            },
+            {
+              "y": 0,
+              "url": "http://127.0.0.1:5198/proxmox/backups/date",
+              "active": "History"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Not a deployed release or reporter Brave retest; Brave executable not available on PATH",
+    "Keyboard interaction at narrow width, not touch",
+    "Static backup-artifact API after initial load; replacement resource snapshots only",
+    "PBS History baseline scroll is zero; no non-zero drawer-scroll proof",
+    "No Settings Manage editing, Authentication strategy or expansion-padding qualification",
+    "No full repository suite or build run; no product code changed"
+  ]
+}
