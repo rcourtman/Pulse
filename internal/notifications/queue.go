@@ -3,6 +3,7 @@ package notifications
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -18,6 +19,10 @@ import (
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
+
+// ErrNotificationDeliverySkipped distinguishes a policy cancellation from a
+// successful provider delivery. Queue processors must not report skips as nil.
+var ErrNotificationDeliverySkipped = errors.New("notification delivery disabled")
 
 // defaultQueueMaxAttempts is the default number of delivery attempts
 // before a notification is moved to the dead-letter queue. With the
@@ -1737,7 +1742,13 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		return
 	}
 	releaseDeliveryGates := nq.acquireAlertDeliveryGates(alertIdentifiersFromAlerts(notif.Alerts), false)
-	defer releaseDeliveryGates()
+	healthChanged := false
+	defer func() {
+		releaseDeliveryGates()
+		if healthChanged {
+			nq.notifyDeliveryHealthChanged()
+		}
+	}()
 
 	// Atomically claim the pending row. A concurrent resolution may have
 	// cancelled it while it was waiting for its per-alert delivery gate.
@@ -1772,6 +1783,21 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	}
 
 	err = processor(notif)
+
+	if errors.Is(err, ErrNotificationDeliverySkipped) {
+		// No provider attempt occurred. Preserve the cancellation and its reason,
+		// but do not manufacture a successful (or failed) delivery audit entry.
+		// Reconcile health only after releasing the per-alert gate.
+		nq.mu.Lock()
+		cancelErr := nq.updateNotificationStatusNoLock(notif.ID, QueueStatusCancelled, err.Error(), time.Now())
+		nq.mu.Unlock()
+		if cancelErr != nil {
+			log.Error().Err(cancelErr).Str("id", notif.ID).Msg("Failed to cancel skipped notification")
+		} else {
+			healthChanged = true
+		}
+		return
+	}
 
 	success := err == nil
 	errorMsg := ""

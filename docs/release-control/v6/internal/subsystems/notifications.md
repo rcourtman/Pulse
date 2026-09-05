@@ -611,3 +611,19 @@ preservation of unrelated grouped firing and recovery jobs, retained failed
 attempts, callback lock release and committed-state visibility, and the
 per-item retry eligibility matrix. These are component proofs, not installed
 receiver receipts or exactly-once delivery guarantees.
+
+### Disabled delivery is cancellation, not a receipt
+
+At processing time, globally disabled delivery or a disabled/removed destination
+returns `ErrNotificationDeliverySkipped`. The queue persists that job as
+cancelled with the policy reason and cancelled operational links. It does not
+write a provider-attempt audit, a successful receipt, or a delivery failure, and
+operator retry does not replay the cancelled job. Existing attempt history is
+retained. Queue health reconciliation runs after releasing the database mutex
+and alert delivery gates.
+
+`queue_disabled_delivery_test.go` exercises the real manager/queue boundary for
+email, webhook and Apprise, firing and recovery, and global versus destination
+disablement. This corrects false successful queue/audit records; it does not
+establish maintenance-window expiry, stop an already-started provider request,
+or repair historical false-success records.
