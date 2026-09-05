@@ -275,6 +275,10 @@ jobs:
           set -euo pipefail
           public_repo="https://rcourtman.github.io/Pulse"
           public_ready=false
+          public_work="$(mktemp -d)"
+          trap 'rm -rf "${public_work}"' EXIT
+          qualified_chart="dist/pulse-${VERSION}.tgz"
+          test -f "${qualified_chart}"
           for attempt in $(seq 1 30); do
             public_index="$(mktemp)"
             if curl -fsSL --retry 2 --retry-delay 1 --retry-all-errors \
@@ -283,7 +287,17 @@ jobs:
               helm repo remove pulse-public >/dev/null 2>&1 || true
               helm repo add pulse-public "${public_repo}" --force-update
               helm repo update pulse-public
-              if helm show chart pulse-public/pulse --version "${VERSION}" >/dev/null; then
+              # Metadata readability is not an exact-artifact receipt. Pull via
+              # the consumer index and compare with the OCI-qualified package,
+              # not the OCI manifest digest (which hashes a different object).
+              rm -f "${public_work}/pulse-${VERSION}.tgz"
+              if helm pull pulse-public/pulse --version "${VERSION}" --destination "${public_work}" && \
+                 helm show chart "${public_work}/pulse-${VERSION}.tgz" >/dev/null; then
+                if ! cmp -s "${qualified_chart}" "${public_work}/pulse-${VERSION}.tgz"; then
+                  echo "::error::Public Helm chart bytes differ from the qualified package; refusing a successful convergence receipt."
+                  rm -f "${public_index}"
+                  exit 1
+                fi
                 public_ready=true
                 rm -f "${public_index}"
                 break
@@ -297,4 +311,4 @@ jobs:
             echo "::error::Public Helm repository did not expose chart ${VERSION}."
             exit 1
           fi
-          echo "[OK] Public Helm repository serves pulse ${VERSION}."
+          echo "[OK] Public Helm repository serves the exact qualified pulse ${VERSION} package."

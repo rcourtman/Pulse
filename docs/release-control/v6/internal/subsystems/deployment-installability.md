@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Public Helm exact-package receipt
+
+The post-activation public Pages verification in `.github/workflows/helm-pages.yml`
+must pull the requested chart version through the consumer repository and compare
+its archive bytes with the package already recovered through OCI qualification.
+Readable chart metadata alone is not a successful convergence receipt. The OCI
+manifest digest hashes a different object and must not be compared directly with
+the archive. A byte mismatch fails immediately; unavailable downloads retain the
+bounded retry, with previous downloaded files removed before each attempt.
+Activation bindings, publication authority and containment remain prerequisites.
+The executed-shell fixtures in `scripts/release_control/helm_pages_retry_test.py`
+cover matching, mismatched, missing and unavailable public packages without
+network or publication writes. They are not installed Helm qualification or proof
+that any historical published chart was wrong or has been repaired.
+
+
 The shell-owned multi-tenant integration suite uses a dedicated desktop-only
 Playwright configuration selecting the seven multi-tenant scenarios. It must
 reject any non-empty E2E tier identity rather than impersonating stable or
