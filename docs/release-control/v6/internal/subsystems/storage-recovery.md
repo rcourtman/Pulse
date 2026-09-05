@@ -253,6 +253,22 @@ command-capable profile.
 34. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
+### Shared Docker-update verification boundary
+
+The shared API result converter classifies independent Docker update readback
+using replacement identity, state/running agreement and running health, rather
+than identity alone. Both immediate execution and durable receipt reconciliation
+use this converter. Contradictory observations affect verification only;
+missing agent readback is inconclusive. Execution and compensation records
+remain unchanged: container backup-rename compensation is not a storage backup,
+recovery point, or independently verified restore. No storage selection,
+retention or recovery authority is added. The focused
+`TestDockerContainerUpdateIndependentObservationMustMatchState` in
+`internal/api/docker_container_action_result_test.go` asserts that independent
+verification changes never rewrite successful execution history, including
+stopped replacements and missing readback.
+
+
 
 The Patrol action broker and shared policy-writer wiring under `internal/api/`
 remain API/action-lifecycle authority even when the target is storage-related.
