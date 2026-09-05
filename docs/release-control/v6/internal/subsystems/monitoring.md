@@ -17,6 +17,22 @@
 
 ## Purpose
 
+Direct PBS backup polling classifies typed API and authentication failures by
+the response status exposed by `pbs.HTTPStatus`, including wrapped errors.
+A 5xx gateway or server response remains transient even when its body quotes
+an upstream “API error 403” or “API error 404”; that text must not erase the
+last known backup inventory. Genuine 4xx responses remain terminal under the
+existing cache policy. The legacy untyped-error fallback is unchanged.
+Retaining cached inventory does not establish a successful poll or fresh
+backup evidence.
+
+Verification: `TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
+`TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError` in
+`internal/monitoring/monitor_backups_readstate_test.go` exercise actual HTTP
+fixtures for 500, 502 quoting 403, 503 quoting 404, and genuine 401/403/404.
+These tests prove cache retention/removal, not installed PBS wake, service
+restart, or notification receipt.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.

@@ -331,7 +331,9 @@ func (e *apiHTTPError) Error() string {
 	return message
 }
 
-func pbsHTTPStatus(err error) (int, bool) {
+// HTTPStatus returns the response status from a PBS API or authentication error,
+// including wrapped errors. The response body is never used for classification.
+func HTTPStatus(err error) (int, bool) {
 	var apiErr *apiHTTPError
 	if errors.As(err, &apiErr) {
 		return apiErr.status, true
@@ -346,12 +348,12 @@ func pbsHTTPStatus(err error) (int, bool) {
 }
 
 func isPBSPermissionError(err error) bool {
-	status, ok := pbsHTTPStatus(err)
+	status, ok := HTTPStatus(err)
 	return ok && (status == http.StatusUnauthorized || status == http.StatusForbidden)
 }
 
 func isPBSNotFoundError(err error) bool {
-	status, ok := pbsHTTPStatus(err)
+	status, ok := HTTPStatus(err)
 	return ok && status == http.StatusNotFound
 }
 
