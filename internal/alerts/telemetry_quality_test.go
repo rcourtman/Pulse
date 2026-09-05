@@ -236,3 +236,67 @@ func TestPBSMissingMetricsDoNotResolve(t *testing.T) {
 		}
 	}
 }
+
+// Availability must gate utilisation evidence, not explicit policy or the
+// independent connectivity lifecycle. Seed real incidents rather than map entries.
+func TestPBSMissingMetricsPreservePolicyAndOutagePrecedence(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		configure   func(*AlertConfig)
+		status      string
+		health      string
+		wantMetrics int
+		wantOffline bool
+	}{
+		{name: "partial failure", status: "online", wantMetrics: 2},
+		{name: "connectivity disabled", status: "online", wantMetrics: 2,
+			configure: func(c *AlertConfig) { c.DisableAllPBSOffline = true }},
+		{name: "all PBS disabled", status: "online",
+			configure: func(c *AlertConfig) { c.DisableAllPBS = true }},
+		{name: "resource disabled", status: "online",
+			configure: func(c *AlertConfig) { c.Overrides = map[string]ThresholdConfig{"pbs-precedence": {Disabled: true}} }},
+		{name: "full outage", status: "offline", wantOffline: true},
+		{name: "unhealthy connection", status: "online", health: "unhealthy", wantOffline: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newUnifiedEvalParityManager(t)
+			m.UpdateConfig(AlertConfig{Enabled: true, PBSDefaults: ThresholdConfig{
+				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+			}})
+			disableTestTimeThresholds(m)
+			p := models.PBSInstance{ID: "pbs-precedence", Name: "backup", Status: "online", CPU: 95, Memory: 95}
+			m.CheckPBS(p)
+			if len(m.GetActiveAlerts()) != 2 {
+				t.Fatal("expected two utilisation incidents")
+			}
+			// Apply policy at the observation boundary without UpdateConfig's
+			// independent reevaluation clearing incidents before CheckPBS runs.
+			if tc.configure != nil {
+				m.mu.Lock()
+				tc.configure(&m.config)
+				m.mu.Unlock()
+			}
+			p.NodeMetricsUnavailable = true
+			p.CPU, p.Memory = 0, 0
+			p.Status, p.ConnectionHealth = tc.status, tc.health
+			for range 5 {
+				m.CheckPBS(p)
+			}
+			metrics, offline := 0, false
+			for _, a := range m.GetActiveAlerts() {
+				switch a.Type {
+				case "cpu", "memory":
+					metrics++
+				case "offline":
+					offline = true
+				default:
+					t.Fatalf("unexpected alert type %q", a.Type)
+				}
+			}
+			if metrics != tc.wantMetrics || offline != tc.wantOffline {
+				t.Fatalf("metrics=%d offline=%v, want metrics=%d offline=%v", metrics, offline, tc.wantMetrics, tc.wantOffline)
+			}
+		})
+	}
+}
