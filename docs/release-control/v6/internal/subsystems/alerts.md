@@ -373,6 +373,15 @@ default construction path still restores.
 
 ## Shared Boundaries
 
+PBS node-status availability is distinct from connectivity. While a connected
+PBS carries monitoring-owned `NodeMetricsUnavailable` evidence, CPU and memory
+evaluation must not treat zero-valued placeholders as recovery. Existing
+policy suppression and full-outage handling retain precedence. Valid low
+measurements resume normal recovery, including callbacks and recent history.
+Regression proof lives in `internal/alerts/telemetry_quality_test.go` and the
+HTTP-to-manager lifecycle in `internal/monitoring/monitor_pbs_coverage_test.go`.
+
+
 1. `frontend-modern/src/stores/websocket.ts` shared with `performance-and-scalability`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
    That shared store normalizes slimmed broadcast resources at ingestion —
    expanding `capabilitiesRef` through the state `capabilityCatalog` and

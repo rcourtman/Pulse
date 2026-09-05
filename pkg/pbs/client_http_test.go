@@ -580,7 +580,7 @@ func TestClient_GetNodeName_SuperuserPermissionFailureRetries(t *testing.T) {
 			if firstErr == nil {
 				t.Fatal("first GetNodeName: expected error")
 			}
-			if got, ok := pbsHTTPStatus(firstErr); !ok || got != status {
+			if got, ok := HTTPStatus(firstErr); !ok || got != status {
 				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, status, firstErr)
 			}
 			name, err := client.GetNodeName(context.Background())
@@ -632,7 +632,7 @@ func TestClient_GetNodeName_TransientHTTPFailuresRetryAndRecover(t *testing.T) {
 			if firstErr == nil {
 				t.Fatal("first GetNodeName: expected error")
 			}
-			if got, ok := pbsHTTPStatus(firstErr); !ok || got != tc.status {
+			if got, ok := HTTPStatus(firstErr); !ok || got != tc.status {
 				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, tc.status, firstErr)
 			}
 			name, err := client.GetNodeName(context.Background())
@@ -795,7 +795,7 @@ func TestClient_GetNodeName_ConcurrentTransientFailureIsSingleFlight(t *testing.
 		if err == nil {
 			t.Fatal("concurrent GetNodeName: expected transient error")
 		}
-		if got, ok := pbsHTTPStatus(err); !ok || got != http.StatusServiceUnavailable {
+		if got, ok := HTTPStatus(err); !ok || got != http.StatusServiceUnavailable {
 			t.Fatalf("concurrent GetNodeName status = (%d, %v), want (503, true): %v", got, ok, err)
 		}
 	}
@@ -815,5 +815,20 @@ func TestClient_GetNodeName_ConcurrentTransientFailureIsSingleFlight(t *testing.
 	}
 	if got := nodesCalls.Load(); got != 2 {
 		t.Fatalf("/nodes hit %d times after recovery and cache read, want 2", got)
+	}
+}
+func TestClient_GetNodeStatus_MissingData(t *testing.T) {
+	for _, body := range []string{`{"data":null}`, `{}`, `null`} {
+		t.Run(body, func(t *testing.T) {
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			})
+			defer server.Close()
+			status, err := client.GetNodeStatus(context.Background())
+			if status != nil || err == nil {
+				t.Fatalf("absent metrics = (%+v, %v), want nil status and error", status, err)
+			}
+		})
 	}
 }

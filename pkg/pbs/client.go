@@ -331,7 +331,9 @@ func (e *apiHTTPError) Error() string {
 	return message
 }
 
-func pbsHTTPStatus(err error) (int, bool) {
+// HTTPStatus returns the response status from a PBS API or authentication error,
+// including wrapped errors. The response body is never used for classification.
+func HTTPStatus(err error) (int, bool) {
 	var apiErr *apiHTTPError
 	if errors.As(err, &apiErr) {
 		return apiErr.status, true
@@ -346,12 +348,12 @@ func pbsHTTPStatus(err error) (int, bool) {
 }
 
 func isPBSPermissionError(err error) bool {
-	status, ok := pbsHTTPStatus(err)
+	status, ok := HTTPStatus(err)
 	return ok && (status == http.StatusUnauthorized || status == http.StatusForbidden)
 }
 
 func isPBSNotFoundError(err error) bool {
-	status, ok := pbsHTTPStatus(err)
+	status, ok := HTTPStatus(err)
 	return ok && status == http.StatusNotFound
 }
 
@@ -769,14 +771,20 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	log.Debug().Str("response", string(body)).Msg("PBS node status response")
 
 	var statusResult struct {
-		Data NodeStatus `json:"data"`
+		Data *NodeStatus `json:"data"`
 	}
 
 	if err := json.Unmarshal(body, &statusResult); err != nil {
 		return nil, fmt.Errorf("failed to decode status response: %w", err)
 	}
 
-	return &statusResult.Data, nil
+	// A successful HTTP response is not evidence of available metrics.
+	// Missing/null data must not become zero usage and resolve active alerts.
+	if statusResult.Data == nil {
+		return nil, fmt.Errorf("node status response contains no data")
+	}
+
+	return statusResult.Data, nil
 }
 
 // GetDatastores returns all datastores with their status.

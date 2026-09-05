@@ -241,14 +241,15 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 	// Initialize PBS instance with default values
 	pbsInst = models.PBSInstance{
-		ID:               PBSMonitorResourceID(instanceName),
-		Name:             instanceName,
-		Host:             instanceCfg.Host,
-		GuestURL:         instanceCfg.GuestURL,
-		Status:           "offline",
-		Version:          "unknown",
-		ConnectionHealth: "unhealthy",
-		LastSeen:         time.Now(),
+		NodeMetricsUnavailable: true,
+		ID:                     PBSMonitorResourceID(instanceName),
+		Name:                   instanceName,
+		Host:                   instanceCfg.Host,
+		GuestURL:               instanceCfg.GuestURL,
+		Status:                 "offline",
+		Version:                "unknown",
+		ConnectionHealth:       "unhealthy",
+		LastSeen:               time.Now(),
 	}
 	publishResult = true
 
@@ -336,6 +337,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			log.Debug().Err(err).Str("instance", instanceName).Msg("could not get PBS node status (may need Sys.Audit permission)")
 		}
 	} else if nodeStatus != nil {
+		pbsInst.NodeMetricsUnavailable = false
 		pbsInst.CPU = nodeStatus.CPU
 		if nodeStatus.Memory.Total > 0 {
 			pbsInst.Memory = float64(nodeStatus.Memory.Used) / float64(nodeStatus.Memory.Total) * 100
