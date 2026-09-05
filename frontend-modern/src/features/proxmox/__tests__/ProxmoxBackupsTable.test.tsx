@@ -498,13 +498,14 @@ describe('ProxmoxBackupsTable', () => {
   it('keeps coverage evidence expanded across repeated workload snapshots', async () => {
     mockBackupAPIs();
     const [workloads, setWorkloads] = createSignal<readonly Resource[]>([workloadResource]);
-    renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
-    ));
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />);
 
     await screen.findAllByText('pbs-docker');
     await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+
+    const toggle = screen.getByRole('button', { name: /collapse details for pbs-docker/i });
+    toggle.focus();
 
     for (let snapshot = 1; snapshot <= 3; snapshot += 1) {
       const name = `pbs-docker-snapshot-${snapshot}`;
@@ -513,6 +514,8 @@ describe('ProxmoxBackupsTable', () => {
       // Assert the new snapshot reached the rendered table, rather than merely
       // checking that a stale expanded row survived.
       await screen.findAllByText(name);
+      expect(screen.getByRole('button', { name: /collapse details for pbs-docker/i })).toBe(toggle);
+      expect(toggle).toHaveFocus();
       expect(screen.getByRole('columnheader', { name: /posture/i })).toBeInTheDocument();
       expect(screen.getByText('Restore evidence')).toBeInTheDocument();
       expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);

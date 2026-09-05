@@ -1,41 +1,35 @@
 {
   "version": 1,
-  "base_sha": "485e19600f8bb8b9126fd4f2ab7e9fa2f525d808",
-  "verified_at": "2026-09-04T14:39:20Z",
+  "base_sha": "3c5d4265439d92495f35f2460c3f666330a239e5",
+  "verified_at": "2026-09-05T00:33:47Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "24ea681203713d0ddeeb75f49509876c38bfec73fddaaabe730f9b0ad69e0cf4"
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "0abd4bcd970e5836e8903d4140b638e7637a74b14dd1f2f6b53b338ae1e31fb3"
   },
   "routes": [
-    "/settings/infrastructure (managed local backend with a routed two-node Proxmox cluster fixture)"
+    "/proxmox/backups/coverage (isolated production component/router/CSS fixture; not full application)"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
-    },
-    {
-      "width": 393,
-      "height": 727
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
-      "height": 664
+      "height": 900
     }
   ],
   "states": [
-    "Manage dialog with unsaved node name, Host Telemetry Agent strategy and SSL verification retained after a 15-second connection-ledger poll",
-    "Expanded two-node Proxmox cluster editor open at desktop, Pixel and iPhone widths",
-    "Manage dialog dismissed with the infrastructure workspace scroll position and deliberate onward focus retained",
-    "Manage dialog reopened with immutable cluster-member display-name save targeting"
+    "40 synthetic workloads with mid-table restore evidence expanded",
+    "Three replacement HTTP polling snapshots render updated workload names with focused toggle and expanded evidence retained",
+    "Native scroll remains 532px desktop and 503px narrow; route unchanged and no page errors"
   ],
   "interactions": [
-    "Edited the node name, changed setup strategy, enabled certificate verification and advanced the production polling clock while checking retained state and refreshed dialog context",
-    "Inspected desktop, Pixel and iPhone captures for placement, clipping, wrapping, scrolling, backdrop containment and close-control reachability",
-    "Closed Manage, moved focus to Add infrastructure without scrolling and waited beyond the delayed row-focus fallback",
-    "Reopened Manage, changed the second member display label and verified the PUT remained scoped to its immutable identity"
+    "Focus expansion toggle and press Enter, then retain focus across three replacement snapshots",
+    "Run pulse-heavy-run -- node scripts/check-backup-browser-polling.mjs",
+    "Run pulse-heavy-run -- env PULSE_BROWSER_WIDTH=390 node scripts/check-backup-browser-polling.mjs; keyboard interaction only, not touch qualification"
   ]
 }

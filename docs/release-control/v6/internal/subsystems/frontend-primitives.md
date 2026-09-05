@@ -2549,6 +2549,12 @@ default` instead of fusing provider and badge text such as
 
 ## Completion Obligations
 
+Coverage-table polling must preserve the DOM identity of an unchanged logical
+row, including its focused expansion control, rather than keying rendering by
+replacement snapshot object identity. The isolated Chromium polling check in
+`scripts/check-backup-browser-polling.mjs` exercises this boundary with the
+production table, router and styles; it does not qualify full-app scrolling.
+
 1. Update guardrail tests when new shared primitives are added, including
    new Settings controls that drive backend verification surfaces (for
    example the Verify Patrol button in
