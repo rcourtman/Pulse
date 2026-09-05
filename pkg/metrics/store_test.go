@@ -610,7 +610,7 @@ func TestQueryAllBatch(t *testing.T) {
 		}
 	})
 
-	t.Run("per-resource fallback stops at first non-empty tier like QueryAll", func(t *testing.T) {
+	t.Run("batch and single queries exclude fallback points outside the window", func(t *testing.T) {
 		tsMinute := ts.Add(-24 * time.Hour)
 		store.writeBatch([]bufferedMetric{
 			{resourceType: "disk", resourceID: "disk-raw", metricType: "smart_temp", value: 41, timestamp: ts, tier: TierRaw},

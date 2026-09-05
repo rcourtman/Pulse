@@ -15,17 +15,34 @@
 
 ## Purpose
 
-The open `patrol-assistant-customer-outcome-qualification` gap includes retained
-query coverage in `pkg/metrics/store.go`. A 24-hour `Query` returns the first
-non-empty resolution tier, and `QueryAll` fills missing metric names rather than
-missing times. A fixture with a minute-tier CPU point at 21:37 and a raw point
-at 22:16 returns only 21:37 for both 24-hour APIs, while a two-hour query returns
-22:16. The new model-facing evidence contract discloses the returned timestamps
-but does not repair this shared-store defect. Canonical follow-up must reconcile
-temporal coverage across tiers for single-series, all-series and batch queries,
-with explicit bucket precedence, extrema and downsampling semantics. Do not
-claim complete or current requested-window coverage from the present fallback
-behavior. This belongs to metrics-store qualification, not model prompting.
+Retained reads use one shared query contract in `pkg/metrics/store.go` for
+`Query`, `QueryAll`, `QueryAllBatch` and `QueryMetricTypesBatch`. A non-empty
+preferred resolution no longer hides a newer raw tail, an older uncovered
+bucket, a gap, or another metric on the same resource. Resource identity,
+metric filters and timestamp bounds apply to every tier and overlap probe.
+
+Tier priority still follows the requested range. An aggregate owns its UTC
+minute/hour/day bucket when that tier has priority. Lower-priority observations
+inside it are excluded. A coarser fallback that overlaps a preferred observation
+is omitted as an indivisible aggregate, never split or interpolated. Only
+buckets whose stored timestamp lies in the requested window participate. This
+avoids double-counting and prevents observations outside the requested range
+from suppressing evidence inside it. Reconciliation precedes display
+aggregation, which retains the existing unweighted mean and centred display
+bucket timestamp. Single and fleet queries use the same streaming aggregator.
+
+The overlap probes use indexed series/time searches in one SQLite statement per
+bounded resource chunk. Query-plan tests exercise the runtime SQL builder,
+including all tier priorities and metric filters. Multi-stage rollups preserve
+recorded minima and maxima instead of taking extrema from bucket averages.
+Already discarded historical extrema cannot be reconstructed by this change.
+
+The `retained-metric-query-coverage` follow-up addresses the specific first-tier
+query defect reproduced during Patrol outcome qualification. Returned points
+still do not prove continuous collection or a complete requested window.
+Uncollected observations and unavailable pressure evidence remain unavailable.
+`pkg/metrics/store_tier_coverage_test.go` owns the overlap, tail, gap, per-series
+scope, downsampling parity and retained-extrema regression cases.
 
 
 Resource-scoped Assistant performance reads query retained CPU, memory and

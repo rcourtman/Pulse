@@ -25,6 +25,11 @@ export const PVE_API_NODE_HISTORY_GROUPS: GuestDrawerHistoryGroupConfig[] =
   HOST_METRICS_HISTORY_GROUPS.filter((group) => group.id !== 'disk-io');
 
 export const getNodeDrawerHistoryTarget = (node: Node): NodeDrawerHistoryTarget | null => {
+  const target = node.metricsTarget;
+  if (target && (target.resourceType === 'node' || target.resourceType === 'agent')) {
+    const resourceId = target.resourceId.trim();
+    if (resourceId) return { resourceType: target.resourceType, resourceId };
+  }
   const linkedAgentId = (node.linkedAgentId || '').trim();
   if (linkedAgentId) {
     const resourceId = stripAgentPrefix(linkedAgentId);

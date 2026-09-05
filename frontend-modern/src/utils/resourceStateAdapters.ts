@@ -25,7 +25,7 @@ import { $RAW } from 'solid-js/store';
 
 import type { Resource } from '@/types/resource';
 import {
-  getActionableAgentIdFromResource,
+  getExplicitAgentIdFromResource,
   getExplicitResourceClusterName,
   hasDockerFacetEvidence,
 } from '@/utils/agentResources';
@@ -1424,7 +1424,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     preferredHostLabel;
   const name = asString(proxmox?.nodeName) || asString(proxmox?.node) || preferredHostLabel;
   const linkedAgentId =
-    asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);
+    asString(platform?.linkedAgentId) || getExplicitAgentIdFromResource(resource);
   const agentFacet = resource.agent;
   const agentNetworkInterfaces = agentFacet?.networkInterfaces;
   const proxmoxNetworkInterfaces = Array.isArray(proxmox?.networkInterfaces)
@@ -1439,6 +1439,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
 
   return {
     id: resource.id,
+    metricsTarget: resource.metricsTarget,
     name,
     displayName: getPreferredInfrastructureDisplayName(resource),
     instance,

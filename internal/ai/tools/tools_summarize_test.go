@@ -411,7 +411,7 @@ func newSummarizeStubProvider() *stubSummarizeResourceProvider {
 			},
 		},
 		targets: map[string]*unifiedresources.MetricsTarget{
-			"host-abc123": {ResourceType: "agent", ResourceID: "delly-node-id"},
+			"host-abc123": {ResourceType: "node", ResourceID: "delly-node-id"},
 			"vm-def456":   {ResourceType: "vm", ResourceID: "pve1:node:101"},
 		},
 	}
@@ -448,8 +448,7 @@ func TestSummarizeTool_FleetEnumeratesWhenIDsOmitted(t *testing.T) {
 	if len(parsed.Resources) != 2 || parsed.Resources[0].Name != "delly" || parsed.Resources[1].Type != "vm" {
 		t.Errorf("Resources = %+v", parsed.Resources)
 	}
-	// Pure Proxmox node classification keeps the "node" reporting type even
-	// though the metrics target labels the agent family.
+	// Pure Proxmox history follows its canonical node store coordinates.
 	if parsed.Resources[0].Type != "node" {
 		t.Errorf("host entry type = %q, want node", parsed.Resources[0].Type)
 	}

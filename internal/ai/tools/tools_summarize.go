@@ -315,9 +315,7 @@ func summarizeReportTypeForResource(res unifiedresources.Resource) string {
 // on it) while the metrics target rides MetricsResourceID. When the resolved
 // target's type is one reporting understands, it wins over the static
 // classification — merged host resources advertise the store family their
-// metrics are actually written under. Pure Proxmox nodes are the documented
-// exception: their metrics live under the "node" store type while the target
-// labels the agent family, so the node classification is kept there.
+// metrics are actually written under.
 func (e *PulseToolExecutor) summarizeFleetCandidateFor(res unifiedresources.Resource) (summarizeFleetCandidate, bool) {
 	id := strings.TrimSpace(res.ID)
 	reportType := summarizeReportTypeForResource(res)
@@ -332,10 +330,8 @@ func (e *PulseToolExecutor) summarizeFleetCandidateFor(res unifiedresources.Reso
 	}
 	if target := e.resourceMetricsTarget(res); target != nil {
 		cand.metricsID = strings.TrimSpace(target.ResourceID)
-		if reportType != "node" {
-			if canonical := reporting.CanonicalResourceType(target.ResourceType); canonical != "" {
-				cand.reportType = canonical
-			}
+		if canonical := reporting.CanonicalResourceType(target.ResourceType); canonical != "" {
+			cand.reportType = canonical
 		}
 	}
 	return cand, true

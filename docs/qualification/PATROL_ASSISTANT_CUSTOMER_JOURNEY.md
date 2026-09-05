@@ -311,3 +311,86 @@ provider readiness probe. The final saved-session pixel pass followed a correcti
 to the tool's descriptive governance metadata. Runtime source hashes, transcript
 and screenshots are retained in the local homelab evidence-trust artifact set.
 These receipts do not qualify autonomous Patrol or infrastructure mutations.
+
+
+## Retained history reconciliation, 2026-09-05
+
+The shared metrics query now reconciles each resource/metric across retained
+tiers before downsampling. Preferred buckets exclude overlapping lower-priority
+observations, and uncovered times and new metrics remain visible to single,
+all-series and batch consumers. Rollups preserve stored extrema through later
+aggregation stages. This does not recover historical peaks already discarded
+or observations that were never collected. Query-plan checks exercise the actual
+shared SQL builder and require indexed overlap probes.
+
+The original local fixture now returns both the minute and newer raw point for
+24-hour single/all-series reads. Regression cases cover older fallback buckets,
+internal gaps, newer raw tails, overlap precedence at minute/hour/day boundaries,
+resource-family isolation, per-metric filters, downsampling after reconciliation,
+and single/batch parity. Customer issue #1717 independently documents the value
+of API-only Proxmox history, although its earlier canonical-ID defect is distinct
+from this query-tier defect. The full issue and comments were read. It has no
+supplied screenshots and this work makes no new claim about that reporter's fix.
+
+The live read-only Assistant repeat completed in 161 seconds. Its 24-hour
+summary now contained 444 CPU/memory points and 436 temperature points, ending
+at 22:43:54 BST, seven seconds before the summary query. The previous run returned
+83 points ending at 21:39, about 45 minutes stale. The returned observation span
+is now roughly 2 hours 27 minutes, with a largest timestamp gap of 61 seconds.
+This validates the recovered recent tail, not a full day of collection.
+
+The model again correctly distinguished high utilisation from demonstrated
+pressure and disclosed the unavailable host agent evidence. Diagnosis remains
+unqualified. It asserted continuous collection from point spacing, inferred a
+monitoring/store restart from coincident timestamps, and called two temperature
+readings contradictory without ruling out change between their different
+observation times. It suggested treating a rising memory floor as evidence of
+a leak without workload attribution. These are model-reasoning failures, not
+additional proof of a storage defect or homelab fault. No infrastructure mutation
+or new refused provider-readiness probe was performed.
+
+Playwright exercised `/patrol` Assistant submission/completion, all eleven tool
+controls with keyboard and pointer expansion/collapse, inner output scrolling,
+answer pixels, Escape, session selection and reload at 1440x1000 and 390x1000.
+The actual cached provider-refusal state at
+`/settings/pulse-intelligence/patrol` and the manual HTTP 409 gate still hold.
+The local retained-coverage artifact set contains transcript, current source
+hashes and final browser screenshots.
+
+
+The adjacent `/proxmox` node History check found a second evidence-path defect.
+The view inferred a linked Agent from discovery routing, requested `agent/delly2`,
+and showed Collecting history while the real source was `node/homelab-delly2`.
+The canonical unified metrics target now advertises the collector's `node`
+storage family and source ID for API-only Proxmox hosts, while preserving real
+Agent-source precedence. The node projection carries that target to the drawer
+and takes Agent linkage only from explicit metadata. Summary tools consume the
+corrected target without their former Proxmox-specific exception.
+
+Current-build browser verification exercised the node History tab at 1h, 24h
+and 7d on 1440x1000 and 390x1000 viewports. Utilisation, network and thermal
+charts all contained retained points. Chart hover, range changes, Overview/History
+switching and reload were checked. API-only nodes no longer show Agent-only disk
+throughput or a fabricated linked-Agent label. A real linked-Agent case remains
+covered by drawer regression tests. No historical data was fabricated to fill
+the unavailable portion of the selected range.
+
+Worker verification passed the metrics package with the race detector
+(excluding timing-sensitive SLO tests), all query SLO tests without the race
+detector, and the full unified-resources package. Focused summary/reporting
+regressions, the two changed frontend suites (58 tests) and frontend type checking
+also passed. The node History receipt binds its final source hashes and returned
+range/point metadata separately from the model transcript.
+
+The final repeat after the canonical node-target correction completed in 215
+seconds with thirteen visible tool controls. It read 194 retained points through
+22:58:55 BST at 22:59:06, approximately eleven seconds old. Point count changed
+as the normal rollup replaced raw points with preferred minute buckets, while
+the recent tail remained available. The answer preserved the pressure-versus-
+utilisation distinction and recognised a resolved thermal alert, but still
+inferred a restart, continuous collection and a previously working Agent without
+sufficient evidence. It also repeated the known disk-health/wear explanation
+gap. These residuals remain in the outcome qualification gap. The final
+retained-canonical-coverage receipts bind the current code to Assistant
+expansion, output scrolling, answer pixels and reload at both viewports, plus
+the actual saved provider refusal and HTTP 409 gate.

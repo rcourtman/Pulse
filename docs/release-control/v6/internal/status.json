@@ -5648,15 +5648,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Performance is at the current release floor with bounded residuals. Retained queries still require temporal tier reconciliation so an existing aggregate does not hide newer raw evidence. Scalability headroom and performance follow-up remain tracked separately.",
+        "summary": "Performance is at the current release floor with bounded residuals. Retained query tier reconciliation and extrema preservation are verified. Additional scalability headroom and performance follow-up remain tracked separately.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "performance-post-rc-headroom"
-          },
-          {
-            "kind": "lane-followup",
-            "id": "retained-metric-query-coverage"
           }
         ]
       },
@@ -9730,19 +9726,6 @@
         "pulse-pro"
       ],
       "subsystem_ids": []
-    },
-    {
-      "id": "retained-metric-query-coverage",
-      "summary": "Repair temporal coverage across retained metric tiers. A 24-hour Query or QueryAll currently returns an older non-empty aggregate tier even when a newer raw point exists. Reconcile bucket precedence, extrema and downsampling consistently across single-series, all-series and batch reads. The model-facing evidence tool reports the returned timestamps but does not make this shared-store query complete. Required for trustworthy Patrol and Assistant history, tracked with patrol-assistant-customer-outcome-qualification.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-09-05",
-      "lane_ids": [
-        "L10"
-      ],
-      "subsystem_ids": [
-        "performance-and-scalability"
-      ]
     }
   ],
   "coverage_gaps": [
@@ -10218,19 +10201,23 @@
     },
     {
       "id": "patrol-assistant-customer-outcome-qualification",
-      "summary": "The 2026-09-05 product review found that Explain with Assistant opened a blank generic conversation and the attention workbench discarded richer canonical finding context. The explicit explanation dispatcher and canonical handoff repair address that frontend break, with scripted browser proof and regression tests. They do not qualify model reasoning, real infrastructure actions, or repeated customer value. Latest-report, monitoring-active, multi-ping telemetry excluding dev and deployment proof contained 127 paid installs, 71 with Patrol enabled and 23 with Assistant calls. Fourteen reported verified resolutions were concentrated in one install. Paid includes all non-free tiers, and activity cooccurrence is not a linked successful journey. Schema 17 outcome/provider/cost fields had no adoption in that review. Three real jobs remain to qualify across named provider/model/version configurations: unhealthy service diagnosis, backup or capacity risk, and supported VM/LXC plan, approval and verified result. Repeatability must be established across independent paid customer environments without pooling free-tier or ineligible installs. The same-day real maintainer homelab evaluation with Claude Opus 5 exposed missing Proxmox temperature-tool evidence, contradictory summary health, incomplete visible prose, alert-count confusion and an inaccurately classified provider refusal during Patrol readiness. The shared temperature projection and premature within-window evidence compaction are repaired, while the documented reasoning, completion, readiness and end-to-end outcome failures remain unqualified. The continuation repaired canonical resource lookup, operation-versus-disk filtering, Proxmox CPU topology and retained resource-scoped history across backend restarts. Unscoped summary/baseline modernization, wear semantics, disk risk explanation and complete retained-window coverage remain open. A named-resource repeat exposed overly restrictive current_resource recovery guidance, now corrected without weakening the attachment boundary. Live testing also exposed warning-based API execution after an incomplete provider check. Runtime and API now enforce the selected-mode verdict, including saved incomplete results, and the repaired live endpoint returns HTTP 409. One read-only test run started before the gate correction and was stopped, so it is not qualification evidence. The evidence interpretation continuation replaces model-facing heuristic summaries with retained statistics, explicit source scope, real observation coverage and preserved bucket extrema/timestamps. A typed provider_refusal diagnosis now survives CLI exit and legacy cache decoding without granting readiness or repeating the refused request. The final real summary distinguished utilisation from demonstrated pressure and explained extrema versus bucket averages, but still speculated about sensor artefacts and monitoring restarts, inferred continuous coverage from minute spacing, and conflated returned history with retained history. Reasoning remains unqualified. A local fixture confirmed that 24-hour Query and QueryAll can hide newer raw points when a preferred aggregate tier is non-empty. Shared temporal tier reconciliation, including batch queries, is required in L10 before claiming current requested-window history.",
+      "summary": "The 2026-09-05 product review found that Explain with Assistant opened a blank generic conversation and the attention workbench discarded richer canonical finding context. The explicit explanation dispatcher and canonical handoff repair address that frontend break, with scripted browser proof and regression tests. They do not qualify model reasoning, real infrastructure actions, or repeated customer value. Latest-report, monitoring-active, multi-ping telemetry excluding dev and deployment proof contained 127 paid installs, 71 with Patrol enabled and 23 with Assistant calls. Fourteen reported verified resolutions were concentrated in one install. Paid includes all non-free tiers, and activity cooccurrence is not a linked successful journey. Schema 17 outcome/provider/cost fields had no adoption in that review. Three real jobs remain to qualify across named provider/model/version configurations: unhealthy service diagnosis, backup or capacity risk, and supported VM/LXC plan, approval and verified result. Repeatability must be established across independent paid customer environments without pooling free-tier or ineligible installs. The same-day real maintainer homelab evaluation with Claude Opus 5 exposed missing Proxmox temperature-tool evidence, contradictory summary health, incomplete visible prose, alert-count confusion and an inaccurately classified provider refusal during Patrol readiness. The shared temperature projection and premature within-window evidence compaction are repaired, while the documented reasoning, completion, readiness and end-to-end outcome failures remain unqualified. The continuation repaired canonical resource lookup, operation-versus-disk filtering, Proxmox CPU topology and retained resource-scoped history across backend restarts. Unscoped summary/baseline modernization, wear semantics, disk risk explanation and complete retained-window coverage remain open. A named-resource repeat exposed overly restrictive current_resource recovery guidance, now corrected without weakening the attachment boundary. Live testing also exposed warning-based API execution after an incomplete provider check. Runtime and API now enforce the selected-mode verdict, including saved incomplete results, and the repaired live endpoint returns HTTP 409. One read-only test run started before the gate correction and was stopped, so it is not qualification evidence. The evidence interpretation continuation replaces model-facing heuristic summaries with retained statistics, explicit source scope, real observation coverage and preserved bucket extrema/timestamps. A typed provider_refusal diagnosis now survives CLI exit and legacy cache decoding without granting readiness or repeating the refused request. The final real summary distinguished utilisation from demonstrated pressure and explained extrema versus bucket averages, but still speculated about sensor artefacts and monitoring restarts, inferred continuous coverage from minute spacing, and conflated returned history with retained history. Reasoning remains unqualified. A local fixture confirmed that 24-hour Query and QueryAll can hide newer raw points when a preferred aggregate tier is non-empty. Shared temporal tier reconciliation now covers single and batch queries, with extrema preserved through rollups and indexed overlap probes. Metrics race and query SLO checks pass on the worker. The live retained summary reaches seven seconds before its query instead of returning a roughly 45-minute-stale tail. The adjacent node History tab exposed a separate canonical-target defect and an inferred Agent link from discovery routing. The unified PVE metrics target now matches the node store writer, the drawer consumes that target and explicit Agent linkage, and summary tools no longer carry a PVE-specific exception. Full diagnosis and autonomous Patrol outcomes remain unqualified.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-09-05",
       "lane_ids": [
         "L6",
-        "L10"
+        "L8",
+        "L10",
+        "L13"
       ],
       "subsystem_ids": [
         "ai-runtime",
         "api-contracts",
+        "frontend-primitives",
         "patrol-intelligence",
-        "performance-and-scalability"
+        "performance-and-scalability",
+        "unified-resources"
       ],
       "proposed_resolution": "lane-expansion",
       "coverage_impact": 4,
@@ -10243,6 +10230,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
           "kind": "file"
         },
         {
@@ -10383,7 +10375,9 @@
       "target_id": "v6-product-lane-expansion",
       "current_lane_ids": [
         "L6",
-        "L10"
+        "L8",
+        "L10",
+        "L13"
       ],
       "coverage_gap_ids": [
         "patrol-assistant-customer-outcome-qualification"
@@ -10391,8 +10385,10 @@
       "subsystem_ids": [
         "ai-runtime",
         "api-contracts",
+        "frontend-primitives",
         "patrol-intelligence",
-        "performance-and-scalability"
+        "performance-and-scalability",
+        "unified-resources"
       ],
       "demand_evidence": [
         "user-direction: 2026-09-05 prioritise dependable Patrol and Assistant outcomes as core Pulse Pro value",

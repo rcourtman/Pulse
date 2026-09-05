@@ -319,6 +319,31 @@ describe('NodeDrawer', () => {
     );
   });
 
+  it('uses canonical history coordinates instead of the display resource identity', async () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          id: 'agent-canonical-id',
+          linkedAgentId: '',
+          metricsTarget: { resourceType: 'node', resourceId: 'cluster-pve-native' },
+        })}
+      />
+    ));
+    await fireEvent.click(screen.getByText('History'));
+    await waitFor(() =>
+      expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceType: 'node',
+          resourceId: 'cluster-pve-native',
+          range: '24h',
+        }),
+      ),
+    );
+    expect(
+      screen.getAllByTestId('guest-history-group-chart').map((chart) => chart.dataset.historyGroup),
+    ).toEqual(['utilization', 'network', 'thermals']);
+  });
+
   it('renders API-only node history without unavailable disk throughput', async () => {
     render(() => (
       <NodeDrawer

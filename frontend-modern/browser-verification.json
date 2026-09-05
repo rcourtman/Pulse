@@ -1,37 +1,26 @@
 {
   "version": 1,
-  "base_sha": "75976c60be5e156be46fca344a02b7df5f573416",
-  "verified_at": "2026-09-05T17:45:39.915245Z",
+  "base_sha": "5288b64d40642b29cd27fa0ca67080cb261d37f1",
+  "verified_at": "2026-09-05T22:04:00.286Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts",
-    "frontend-modern/src/components/AI/Chat/index.tsx",
-    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
-    "frontend-modern/src/stores/aiChat.ts",
-    "frontend-modern/src/utils/aiChatPresentation.ts"
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts": "8606c79c11b0197ed5a55ed1d2ec83e0cd7dd0adda182937e5aad9144571cb17",
-    "frontend-modern/src/components/AI/Chat/index.tsx": "6b1d6243d9a99d688229dea9e954ae6aa770a8b6e07e7f0ce75316b486090f09",
-    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "f373ff21a1c54304d63b92498c39fa45f5ffb036a2b02e93de64fafbbf8ee52e",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "f098cddd58823d2df7687f0db7774363fc9c81a7a8845a917e73415a7f5aae10",
-    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "4152a3bec5412b4d744436128e8e038be349d9b6419fc58d3b7527908ffc982f",
-    "frontend-modern/src/stores/aiChat.ts": "d0b1ef69bcb454e6f0ce17a157c98bdd34d68d90f607b76081e9cd1bd6778e4c",
-    "frontend-modern/src/utils/aiChatPresentation.ts": "4b05f663110ec6c789f8ff050993a945e3e9d41c6e3fee4047500e979a48531d"
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts": "2a46640db19fe358e9f0ab32c4819a1c30a7c91b71015104b53253296176bdd6",
+    "frontend-modern/src/types/api.ts": "16e3c1c60450eb5bb8e4f0db57f595d29cc9dbfd2e01bffee1f0529262f9f60a",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "98ee10447e5fa0fe122122727ce1b59a29c92afbcdcf7f046f4cea9f2edc9e80"
   },
   "routes": [
+    "/proxmox",
     "/patrol",
-    "/alerts"
+    "/settings/pulse-intelligence/patrol"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 1000
-    },
-    {
-      "width": 900,
       "height": 1000
     },
     {
@@ -40,14 +29,13 @@
     }
   ],
   "states": [
-    "Current hot-dev frontend with mock monitoring backend. Scripted attention evidence and inference responses. Other non-GET requests blocked. No real model or infrastructure outcome qualification.",
-    "Patrol selected item, expanded evidence, scoped explanation, streamed response, failed provider request and successful retry. Draft preserved across Escape and context-only reopen.",
-    "Active alert secondary menu at desktop and narrow widths. Open, Escape dismissal, outside click dismissal, reopen, select explanation, menu closes and alert context sent. Screenshots inspected for menu placement, readable response, reachable composer and error controls."
+    "Current managed frontend and backend, mock monitoring disabled, real homelab and read-only model investigation. No infrastructure mutation or repeated refused readiness probe.",
+    "Proxmox node overview and History, 1h/24h/7d ranges, populated utilization/network/thermal charts. API-only node does not claim an installed Agent or expose unavailable disk throughput.",
+    "Assistant pending/completed turn, thirteen tool controls and full output/answer scrolling. Saved provider refusal remains visible and actual manual execution returns HTTP 409."
   ],
   "interactions": [
-    "node scripts/check-patrol-assistant-journey.mjs",
-    "Patrol at 1440/900/390: keyboard focus and Enter on Explain, exactly one selected-issue request, correct evidence/resource, autonomous false, no generic workflow starters, close/reopen preserves draft without inference.",
-    "Alerts at 1440/390: More alert actions, Escape, reopen, outside click, reopen, Explain. Selected alert evidence and resource attached with autonomous false. No Patrol trigger or configuration mutation.",
-    "Provider failure, Try again retains original handoff, reload does not resubmit. No page errors or unexpected non-GET requests."
+    "Node expansion, History tab, native range selection, hover on each chart, Overview/History switching, reload and reopen. Normal and narrow chart pixels inspected.",
+    "Assistant send and completion, keyboard Enter/pointer expansion and collapse, inner output scroll to end, answer pixels, Escape, history selection and reload.",
+    "Local Playwright receipts: retained-canonical-coverage/history-receipt.json and receipt.json. Source hashes match the final implementation. The model outcome is a bounded evidence-path pass, not diagnosis or autonomous Patrol qualification."
   ]
 }

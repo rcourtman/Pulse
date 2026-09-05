@@ -1211,215 +1211,27 @@ func (s *Store) coalesceQueuedRequests(initial writeRequest) []writeRequest {
 	}
 }
 
-// Query retrieves metrics for a resource within a time range, with optional downsampling
+// Query retrieves one metric using the same tier reconciliation as fleet reads.
 func (s *Store) Query(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64) ([]MetricPoint, error) {
-	resourceType = normalizeMetricResourceType(resourceType)
-	resourceID = normalizeMetricIdentifier(resourceID)
-	metricType = normalizeMetricType(metricType)
-	tiers := s.tierFallbacks(end.Sub(start))
-	if len(tiers) == 0 {
-		return []MetricPoint{}, nil
+	result, err := s.queryBatch(resourceType, []string{resourceID}, []string{metricType}, start, end, stepSecs)
+	if err != nil {
+		return nil, err
 	}
-
-	for i, tier := range tiers {
-		points, err := s.queryWithTier(resourceType, resourceID, metricType, start, end, stepSecs, tier)
-		if err != nil {
-			return nil, err
-		}
-		if len(points) > 0 || i == len(tiers)-1 {
-			return points, nil
-		}
-
-		log.Debug().
-			Str("resourceType", resourceType).
-			Str("resourceId", resourceID).
-			Str("metric", metricType).
-			Str("fromTier", string(tier)).
-			Str("toTier", string(tiers[i+1])).
-			Msg("Metrics query empty; falling back to more detailed tier")
-	}
-
-	return []MetricPoint{}, nil
+	return result[normalizeMetricIdentifier(resourceID)][normalizeMetricType(metricType)], nil
 }
 
-func (s *Store) queryWithTier(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64, tier Tier) ([]MetricPoint, error) {
-	var rows *sql.Rows
-	var err error
-
-	sqlQuery := `
-		SELECT timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
-		FROM metrics
-		WHERE resource_type = ? AND resource_id = ? AND metric_type = ? AND tier = ?
-		AND timestamp >= ? AND timestamp <= ?
-		ORDER BY timestamp ASC
-	`
-	queryParams := []interface{}{resourceType, resourceID, metricType, string(tier), start.Unix(), end.Unix()}
-
-	if stepSecs > 1 {
-		sqlQuery = `
-			SELECT 
-				(timestamp / ?) * ? + (? / 2) as bucket_ts, 
-				AVG(value), 
-				MIN(COALESCE(min_value, value)), 
-				MAX(COALESCE(max_value, value))
-			FROM metrics
-			WHERE resource_type = ? AND resource_id = ? AND metric_type = ? AND tier = ?
-			AND timestamp >= ? AND timestamp <= ?
-			GROUP BY bucket_ts
-			ORDER BY bucket_ts ASC
-		`
-		queryParams = []interface{}{
-			stepSecs, stepSecs, stepSecs,
-			resourceType, resourceID, metricType, string(tier), start.Unix(), end.Unix(),
-		}
-	}
-
-	// Retry on SQLITE_BUSY
-	for i := 0; i < 5; i++ {
-		rows, err = s.db.Query(sqlQuery, queryParams...)
-
-		if err == nil {
-			break
-		}
-		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
-			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
-			continue
-		}
-		return nil, fmt.Errorf("failed to query metrics: %w", err)
-	}
-	defer rows.Close()
-
-	var points []MetricPoint
-	for rows.Next() {
-		var ts int64
-		var p MetricPoint
-		if err := rows.Scan(&ts, &p.Value, &p.Min, &p.Max); err != nil {
-			log.Warn().Err(err).Msg("Failed to scan metric row")
-			continue
-		}
-		p.Timestamp = time.Unix(ts, 0)
-		points = append(points, p)
-	}
-
-	return points, rows.Err()
-}
-
-// QueryAll retrieves all metric types for a resource within a time range, with optional downsampling
+// QueryAll retrieves all metric types, filling observation times missing from
+// the preferred tier before applying optional downsampling.
 func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]MetricPoint, error) {
-	resourceType = normalizeMetricResourceType(resourceType)
-	resourceID = normalizeMetricIdentifier(resourceID)
-	tiers := s.tierFallbacks(end.Sub(start))
-	if len(tiers) == 0 {
-		return map[string][]MetricPoint{}, nil
+	result, err := s.queryBatch(resourceType, []string{resourceID}, nil, start, end, stepSecs)
+	if err != nil {
+		return nil, err
 	}
-
-	result := make(map[string][]MetricPoint)
-	for i, tier := range tiers {
-		tierResult, err := s.queryAllWithTier(resourceType, resourceID, start, end, stepSecs, tier)
-		if err != nil {
-			return nil, err
-		}
-		if len(tierResult) == 0 {
-			if i < len(tiers)-1 && len(result) == 0 {
-				log.Debug().
-					Str("resourceType", resourceType).
-					Str("resourceId", resourceID).
-					Str("fromTier", string(tier)).
-					Str("toTier", string(tiers[i+1])).
-					Msg("Metrics query empty; falling back to more detailed tier")
-			}
-			continue
-		}
-
-		// Merge in any metrics missing from higher tier results.
-		added := 0
-		for metric, points := range tierResult {
-			if len(points) == 0 {
-				continue
-			}
-			if existing, ok := result[metric]; !ok || len(existing) == 0 {
-				result[metric] = points
-				added++
-			}
-		}
-
-		// If we already have some metrics and this tier didn't add anything new,
-		// keep going in case lower tiers have newly introduced metrics.
-		if added == 0 && i < len(tiers)-1 && len(result) == 0 {
-			log.Debug().
-				Str("resourceType", resourceType).
-				Str("resourceId", resourceID).
-				Str("fromTier", string(tier)).
-				Str("toTier", string(tiers[i+1])).
-				Msg("Metrics query empty; falling back to more detailed tier")
-		}
+	metrics := result[normalizeMetricIdentifier(resourceID)]
+	if metrics == nil {
+		metrics = make(map[string][]MetricPoint)
 	}
-
-	return result, nil
-}
-
-func (s *Store) queryAllWithTier(resourceType, resourceID string, start, end time.Time, stepSecs int64, tier Tier) (map[string][]MetricPoint, error) {
-	var rows *sql.Rows
-	var err error
-
-	sqlQuery := `
-		SELECT metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
-		FROM metrics
-		WHERE resource_type = ? AND resource_id = ? AND tier = ?
-		AND timestamp >= ? AND timestamp <= ?
-		ORDER BY metric_type, timestamp ASC
-	`
-	queryParams := []interface{}{resourceType, resourceID, string(tier), start.Unix(), end.Unix()}
-
-	if stepSecs > 1 {
-		sqlQuery = `
-			SELECT 
-				metric_type,
-				(timestamp / ?) * ? + (? / 2) as bucket_ts, 
-				AVG(value), 
-				MIN(COALESCE(min_value, value)), 
-				MAX(COALESCE(max_value, value))
-			FROM metrics
-			WHERE resource_type = ? AND resource_id = ? AND tier = ?
-			AND timestamp >= ? AND timestamp <= ?
-			GROUP BY metric_type, bucket_ts
-			ORDER BY metric_type, bucket_ts ASC
-		`
-		queryParams = []interface{}{
-			stepSecs, stepSecs, stepSecs,
-			resourceType, resourceID, string(tier), start.Unix(), end.Unix(),
-		}
-	}
-
-	// Retry on SQLITE_BUSY
-	for i := 0; i < 5; i++ {
-		rows, err = s.db.Query(sqlQuery, queryParams...)
-
-		if err == nil {
-			break
-		}
-		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
-			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
-			continue
-		}
-		return nil, fmt.Errorf("failed to query all metrics: %w", err)
-	}
-	defer rows.Close()
-
-	result := make(map[string][]MetricPoint)
-	for rows.Next() {
-		var metricType string
-		var ts int64
-		var p MetricPoint
-		if err := rows.Scan(&metricType, &ts, &p.Value, &p.Min, &p.Max); err != nil {
-			log.Warn().Err(err).Msg("Failed to scan metric row")
-			continue
-		}
-		p.Timestamp = time.Unix(ts, 0)
-		result[metricType] = append(result[metricType], p)
-	}
-
-	return result, rows.Err()
+	return metrics, nil
 }
 
 // queryAllBatchChunkSize limits the number of resource IDs per SQL IN clause
@@ -1480,40 +1292,17 @@ func (s *Store) queryBatch(
 	}
 
 	result := make(map[string]map[string][]MetricPoint, len(unique))
-	unresolved := unique
-
-	for _, tier := range tiers {
-		if len(unresolved) == 0 {
-			break
+	// Reconcile every series in one snapshot per chunk. A resource with one
+	// aggregate must not hide another metric or a newer tail in a different tier.
+	for lo := 0; lo < len(unique); lo += queryAllBatchChunkSize {
+		hi := min(lo+queryAllBatchChunkSize, len(unique))
+		chunkResult, err := s.queryRetainedChunk(resourceType, unique[lo:hi], normalizedMetricTypes, start, end, stepSecs, tiers)
+		if err != nil {
+			return nil, err
 		}
-
-		nextUnresolved := make([]string, 0, len(unresolved))
-
-		// Process in chunks to stay within SQLite parameter limits.
-		for lo := 0; lo < len(unresolved); lo += queryAllBatchChunkSize {
-			hi := lo + queryAllBatchChunkSize
-			if hi > len(unresolved) {
-				hi = len(unresolved)
-			}
-			chunk := unresolved[lo:hi]
-			tierResult, err := s.queryAllBatchWithTier(resourceType, chunk, normalizedMetricTypes, start, end, stepSecs, tier)
-			if err != nil {
-				return nil, err
-			}
-
-			// Match QueryAll semantics per resource: once any tier returns data
-			// for a resource, stop falling back for that resource.
-			for _, resID := range chunk {
-				metricMap, found := tierResult[resID]
-				if !found || len(metricMap) == 0 {
-					nextUnresolved = append(nextUnresolved, resID)
-					continue
-				}
-				result[resID] = metricMap
-			}
+		for id, metrics := range chunkResult {
+			result[id] = metrics
 		}
-
-		unresolved = nextUnresolved
 	}
 
 	return result, nil
@@ -1543,65 +1332,66 @@ func normalizeMetricTypes(metricTypes []string) []string {
 	return normalized
 }
 
-func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tier Tier) (map[string]map[string][]MetricPoint, error) {
-	placeholders := make([]string, len(resourceIDs))
-	for i := range resourceIDs {
-		placeholders[i] = "?"
-	}
-	inClause := strings.Join(placeholders, ",")
+// retainedQuerySQL reconciles overlapping storage buckets before any display
+// aggregation. The preferred tier owns its bucket, lower tiers fill uncovered
+// buckets, and a coarser fallback is omitted if a preferred point overlaps it.
+// A bucket's presence does not establish continuous underlying collection.
+// All probes are scoped to the same series and requested timestamp window.
+func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, tiers []Tier) (string, []interface{}) {
+	idSlots := strings.TrimSuffix(strings.Repeat("?,", len(resourceIDs)), ",")
 	metricClause := ""
-	metricArgs := make([]interface{}, 0, len(metricTypes))
 	if len(metricTypes) > 0 {
-		metricPlaceholders := make([]string, len(metricTypes))
-		for i, metricType := range metricTypes {
-			metricPlaceholders[i] = "?"
-			metricArgs = append(metricArgs, metricType)
-		}
-		metricClause = fmt.Sprintf(" AND metric_type IN (%s)", strings.Join(metricPlaceholders, ","))
+		metricClause = " AND m.metric_type IN (" + strings.TrimSuffix(strings.Repeat("?,", len(metricTypes)), ",") + ")"
 	}
-
+	branches := make([]string, 0, len(tiers))
 	var params []interface{}
-	var sqlQuery string
-
-	if stepSecs > 1 {
-		params = make([]interface{}, 0, len(resourceIDs)+len(metricArgs)+4)
+	for i, tier := range tiers {
+		branch := `SELECT m.resource_id, m.metric_type, m.timestamp, m.value,
+   COALESCE(m.min_value, m.value) AS min_value, COALESCE(m.max_value, m.value) AS max_value
+   FROM metrics AS m
+   WHERE m.resource_type = ? AND m.resource_id IN (` + idSlots + `)` + metricClause + `
+   AND m.tier = ? AND m.timestamp >= ? AND m.timestamp <= ?`
 		params = append(params, resourceType)
 		for _, id := range resourceIDs {
 			params = append(params, id)
 		}
-		params = append(params, metricArgs...)
-		params = append(params, string(tier), start.Unix(), end.Unix())
-
-		sqlQuery = fmt.Sprintf(`
-			SELECT
-				resource_id,
-				metric_type,
-				timestamp,
-				value,
-				COALESCE(min_value, value),
-				COALESCE(max_value, value)
-			FROM metrics
-			WHERE resource_type = ? AND resource_id IN (%s)%s AND tier = ?
-			AND timestamp >= ? AND timestamp <= ?
-			ORDER BY resource_id, metric_type, timestamp ASC
-		`, inClause, metricClause)
-	} else {
-		params = make([]interface{}, 0, len(resourceIDs)+len(metricArgs)+4)
-		params = append(params, resourceType)
-		for _, id := range resourceIDs {
-			params = append(params, id)
+		for _, metric := range metricTypes {
+			params = append(params, metric)
 		}
-		params = append(params, metricArgs...)
 		params = append(params, string(tier), start.Unix(), end.Unix())
-
-		sqlQuery = fmt.Sprintf(`
-			SELECT resource_id, metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
-			FROM metrics
-			WHERE resource_type = ? AND resource_id IN (%s)%s AND tier = ?
-			AND timestamp >= ? AND timestamp <= ?
-			ORDER BY resource_id, metric_type, timestamp ASC
-		`, inClause, metricClause)
+		for _, preferred := range tiers[:i] {
+			// Retention intervals nest on UTC minute/hour/day boundaries. Using the
+			// larger interval makes both finer and coarser overlap probes indexable.
+			bucket := max(tierBucketSeconds(tier), tierBucketSeconds(preferred))
+			branch += fmt.Sprintf(` AND NOT EXISTS (
+    SELECT 1 FROM metrics AS h
+    WHERE h.resource_type = m.resource_type AND h.resource_id = m.resource_id
+    AND h.metric_type = m.metric_type AND h.tier = ?
+    AND h.timestamp >= MAX(?, (m.timestamp / %d) * %d)
+    AND h.timestamp <= ? AND h.timestamp < (m.timestamp / %d) * %d + %d
+   )`, bucket, bucket, bucket, bucket, bucket)
+			params = append(params, string(preferred), start.Unix(), end.Unix())
+		}
+		branches = append(branches, branch)
 	}
+	return strings.Join(branches, " UNION ALL ") + " ORDER BY resource_id, metric_type, timestamp ASC", params
+}
+
+func tierBucketSeconds(tier Tier) int64 {
+	switch tier {
+	case TierMinute:
+		return 60
+	case TierHourly:
+		return 3600
+	case TierDaily:
+		return 86400
+	default:
+		return 1
+	}
+}
+
+func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier) (map[string]map[string][]MetricPoint, error) {
+	sqlQuery, params := retainedQuerySQL(resourceType, resourceIDs, metricTypes, start, end, tiers)
 
 	// Retry on SQLITE_BUSY
 	var rows *sql.Rows
@@ -1756,10 +1546,10 @@ func estimateQueryAllBatchSeriesCapacity(start, end time.Time, stepSecs int64) i
 }
 
 // selectTier chooses the appropriate data tier based on time range
-// Note: Tier selection uses fixed thresholds to ensure queries use tiers with complete data:
+// Tier selection defines preferred resolution, not a guarantee of coverage:
 // - Raw: up to 2 hours (high-resolution real-time data)
 // - Minute: up to 24 hours (recent detailed data)
-// - Hourly: up to 7 days (medium-term with mock/seeded data coverage)
+// - Hourly: up to 7 days (medium-term history)
 // - Daily: beyond 7 days (long-term historical data)
 func (s *Store) selectTier(duration time.Duration) Tier {
 	const (
@@ -1783,10 +1573,10 @@ func (s *Store) selectTier(duration time.Duration) Tier {
 func (s *Store) tierFallbacks(duration time.Duration) []Tier {
 	switch s.selectTier(duration) {
 	case TierRaw:
-		// Fall back to coarser tiers when raw is empty (e.g., mock mode with seeded data)
+		// Coarser buckets fill times with no preferred raw observations.
 		return []Tier{TierRaw, TierMinute, TierHourly}
 	case TierMinute:
-		// Fall back to coarser tiers when minute is empty (e.g., mock mode with seeded data)
+		// Raw observations fill missing minute buckets before hourly fallback.
 		return []Tier{TierMinute, TierRaw, TierHourly}
 	case TierHourly:
 		return []Tier{TierHourly, TierMinute, TierRaw}
@@ -2024,8 +1814,8 @@ func (s *Store) rollupTierWindow(fromTier, toTier Tier, bucketSecs, startTs, end
 			resource_id,
 			metric_type,
 			AVG(value) as value,
-			MIN(value) as min_value,
-			MAX(value) as max_value,
+			MIN(COALESCE(min_value, value)) as min_value,
+			MAX(COALESCE(max_value, value)) as max_value,
 			(timestamp / ?) * ? as bucket_ts,
 			?
 		FROM metrics
@@ -2069,8 +1859,8 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 			resource_id, 
 			metric_type,
 			AVG(value) as value,
-			MIN(value) as min_value,
-			MAX(value) as max_value,
+			MIN(COALESCE(min_value, value)) as min_value,
+			MAX(COALESCE(max_value, value)) as max_value,
 			(timestamp / ?) * ? as bucket_ts,
 			?
 		FROM metrics

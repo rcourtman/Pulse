@@ -7121,11 +7121,11 @@ the reporting request shape the way the API report path's
 the resolved metrics target rides `MetricsResourceID`, so the
 engine's store queries actually find data instead of silently
 returning zero points. Reporting types are classified from the
-unified resource (agent-backed hosts as `agent`, pure Proxmox
-nodes as `node` — the documented exception where the metrics
-target labels the agent family but node metrics live under the
-`node` store type — pure Docker hosts as `docker-host`), and the
-resolved target's type wins elsewhere. `resource_type` is now an
+unified resource, with the canonical metrics target taking precedence.
+Agent-backed hosts use `agent`, pure Proxmox nodes use `node`, and
+pure Docker hosts use `docker-host`. The Proxmox storage-family
+correction belongs to the unified target, so summary tools no longer
+carry their own exception. `resource_type` is now an
 optional filter/default for fleet mode and only required for
 `action=resource` when the identifier is not a known resource.
 Every remaining error path in the tool tells the model to
