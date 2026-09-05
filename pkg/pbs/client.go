@@ -771,14 +771,20 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	log.Debug().Str("response", string(body)).Msg("PBS node status response")
 
 	var statusResult struct {
-		Data NodeStatus `json:"data"`
+		Data *NodeStatus `json:"data"`
 	}
 
 	if err := json.Unmarshal(body, &statusResult); err != nil {
 		return nil, fmt.Errorf("failed to decode status response: %w", err)
 	}
 
-	return &statusResult.Data, nil
+	// A successful HTTP response is not evidence of available metrics.
+	// Missing/null data must not become zero usage and resolve active alerts.
+	if statusResult.Data == nil {
+		return nil, fmt.Errorf("node status response contains no data")
+	}
+
+	return statusResult.Data, nil
 }
 
 // GetDatastores returns all datastores with their status.

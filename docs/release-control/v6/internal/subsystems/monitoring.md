@@ -17,6 +17,23 @@
 
 ## Purpose
 
+PBS node-status collection must reject HTTP-success responses whose `data`
+is omitted or null (including a null response envelope). Absent status is
+unavailable telemetry, not measured zero usage: the poller retains independently
+established connectivity, marks node metrics unavailable, and must not resolve
+an active metric incident from that response. This does not add per-field
+validation of populated status objects.
+
+Verification: `TestClient_GetNodeStatus_MissingData` in
+`pkg/pbs/client_http_test.go` covers the absent envelopes.
+`TestPBSPartialMetricsWebhookLifecycle` in
+`internal/monitoring/monitor_pbs_webhook_test.go` exercises repeated null status
+through the real poller, alert manager, notification queue and local webhook.
+It requires online-but-unavailable projection, unchanged incident identity,
+no false recovery history or delivery, then one identity-preserving recovery
+after valid low-memory samples. These are local synthetic checks, not
+installed-artifact or off-host destination qualification.
+
 Direct PBS backup polling classifies typed API and authentication failures by
 the response status exposed by `pbs.HTTPStatus`, including wrapped errors.
 A 5xx gateway or server response remains transient even when its body quotes

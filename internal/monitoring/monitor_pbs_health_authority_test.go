@@ -26,6 +26,7 @@ const (
 	pbsHealthTestNodeGatewayFailure
 	pbsHealthTestUnavailable
 	pbsHealthTestLowMemory
+	pbsHealthTestNullNodeStatus
 )
 
 type pbsHealthTestServer struct {
@@ -66,6 +67,10 @@ func newPBSHealthTestServer(t *testing.T) *pbsHealthTestServer {
 				"data": map[string]any{"version": "3.4.2"},
 			})
 		case "/api2/json/nodes/localhost/status":
+			if mode == pbsHealthTestNullNodeStatus {
+				_, _ = w.Write([]byte(`{"data":null}`))
+				return
+			}
 			if mode == pbsHealthTestNodeDenied {
 				http.Error(w, "permission denied", http.StatusForbidden)
 				return
