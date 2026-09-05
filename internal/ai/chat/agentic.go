@@ -978,11 +978,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	controlToolExecutedThisRun := false
 	advertisedActionGateBlocks := 0
 
-	// Track where each turn's messages begin in providerMessages for compaction.
-	// We keep the last N turns' tool results in full; older ones get compacted.
-	const compactionKeepTurns = 2                  // Keep last 2 turns' tool results in full (KA preserves key facts)
-	const compactionMinChars = 300                 // Only compact results longer than this
-	currentTurnStartIndex := len(providerMessages) // Initial messages are never compacted
+	// Preserve collected evidence across provider turns. Age alone is not a
+	// reason to replace observations with summaries. The pre-request context
+	// limit check below owns compaction when the request actually needs it.
+	currentTurnStartIndex := len(providerMessages)
 
 	// Generic Assistant/Watch wrap-up nudge. Patrol investigation has a
 	// separate evidence budget and completion checkpoint below.
@@ -1004,11 +1003,6 @@ agenticLoop:
 		(patrolOutputLimitRecoveryPending && !patrolOutputLimitRecoveryAttempted) ||
 		(investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted) ||
 		(investigationEvidenceStartRepairPending && !investigationEvidenceStartRepairAttempted) {
-		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
-		if turn > 0 {
-			compactOldToolResults(providerMessages, currentTurnStartIndex, compactionKeepTurns, compactionMinChars, a.knowledgeAccumulator)
-		}
-
 		// Check if aborted
 		a.mu.Lock()
 		if a.aborted[sessionID] {

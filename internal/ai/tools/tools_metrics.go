@@ -43,7 +43,7 @@ Examples:
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Filter by specific resource ID (for performance, baselines)",
+						Description: "Filter by specific resource ID (for performance, temperatures, baselines)",
 					},
 					"resource_type": {
 						Type:        "string",
@@ -370,6 +370,9 @@ func (e *PulseToolExecutor) executeGetPatterns(_ context.Context, _ map[string]i
 
 func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	hostFilter, _ := args["host"].(string)
+	resourceFilter, _ := args["resource_id"].(string)
+	hostFilter = strings.TrimSpace(hostFilter)
+	resourceFilter = strings.TrimSpace(resourceFilter)
 
 	rs, err := e.readStateForControl()
 	if err != nil {
@@ -377,6 +380,8 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 	}
 
 	type HostTemps struct {
+		ResourceID  string             `json:"resource_id"`
+		Source      string             `json:"source"`
 		Hostname    string             `json:"hostname"`
 		Platform    string             `json:"platform,omitempty"`
 		CPU         map[string]float64 `json:"cpu_temps,omitempty"`
@@ -397,7 +402,8 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 		if hostname == "" {
 			hostname = strings.TrimSpace(host.Name())
 		}
-		if hostFilter != "" && hostname != hostFilter {
+		if (hostFilter != "" && hostname != hostFilter && host.Name() != hostFilter && host.ID() != hostFilter) ||
+			(resourceFilter != "" && host.ID() != resourceFilter) {
 			continue
 		}
 
@@ -405,17 +411,19 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 		if sensors == nil {
 			continue
 		}
-		if len(sensors.TemperatureCelsius) == 0 && len(sensors.FanRPM) == 0 {
+		if len(sensors.TemperatureCelsius) == 0 && len(sensors.FanRPM) == 0 && len(sensors.Additional) == 0 {
 			continue
 		}
 
 		temps := HostTemps{
-			Hostname: hostname,
-			Platform: host.Platform(),
-			CPU:      make(map[string]float64),
-			Disks:    make(map[string]float64),
-			Fans:     make(map[string]float64),
-			Other:    make(map[string]float64),
+			ResourceID: host.ID(),
+			Source:     "agent",
+			Hostname:   hostname,
+			Platform:   host.Platform(),
+			CPU:        make(map[string]float64),
+			Disks:      make(map[string]float64),
+			Fans:       make(map[string]float64),
+			Other:      make(map[string]float64),
 		}
 
 		// Categorize temperatures
@@ -447,11 +455,67 @@ func (e *PulseToolExecutor) executeGetTemperatures(_ context.Context, args map[s
 		results = append(results, temps)
 	}
 
-	if len(results) == 0 {
-		if hostFilter != "" {
-			return NewTextResult(fmt.Sprintf("No temperature data available for host '%s'. The host may not have a Pulse agent installed or sensors may not be available.", hostFilter)), nil
+	// Both views come from the canonical resource registry. Keep observations
+	// from linked providers distinct instead of silently choosing a reading or
+	// merging sensors collected at different times.
+	for _, node := range rs.Nodes() {
+		if node == nil || (hostFilter != "" && node.Name() != hostFilter && node.NodeName() != hostFilter && node.ID() != hostFilter) ||
+			(resourceFilter != "" && node.ID() != resourceFilter) {
+			continue
 		}
-		return NewTextResult("No temperature data available. Ensure Pulse unified agents are installed on hosts and lm-sensors is available."), nil
+		details := node.TemperatureDetails()
+		if !node.HasTemperature() && (details == nil || !details.Available) {
+			continue
+		}
+		temps := HostTemps{
+			ResourceID: node.ID(), Source: "proxmox", Hostname: node.NodeName(), Platform: "proxmox",
+			CPU: make(map[string]float64), Disks: make(map[string]float64), Other: make(map[string]float64),
+		}
+		if temps.Hostname == "" {
+			temps.Hostname = node.Name()
+		}
+		if node.HasTemperature() {
+			temps.CPU["cpu_max"] = node.Temperature()
+		}
+		if details != nil && details.Available {
+			if !details.LastUpdate.IsZero() {
+				temps.LastUpdated = details.LastUpdate.Format(time.RFC3339)
+			}
+			if details.HasCPU {
+				temps.CPU["cpu_package"] = details.CPUPackage
+			}
+			for _, core := range details.Cores {
+				temps.CPU[fmt.Sprintf("cpu_core_%d", core.Core)] = core.Temp
+			}
+			for _, disk := range details.NVMe {
+				temps.Disks[disk.Device] = disk.Temp
+			}
+			for _, disk := range details.SMART {
+				if !disk.StandbySkipped {
+					temps.Disks[disk.Device] = float64(disk.Temperature)
+				}
+			}
+			for _, gpu := range details.GPU {
+				for label, value := range map[string]float64{"edge": gpu.Edge, "junction": gpu.Junction, "memory": gpu.Mem} {
+					if value != 0 {
+						temps.Other[gpu.Device+"_"+label] = value
+					}
+				}
+			}
+		}
+		if len(temps.CPU)+len(temps.Disks)+len(temps.Other) > 0 {
+			results = append(results, temps)
+		}
+	}
+
+	if len(results) == 0 {
+		if resourceFilter != "" {
+			return NewTextResult(fmt.Sprintf("No temperature data available for resource %q in the current canonical resource observations.", resourceFilter)), nil
+		}
+		if hostFilter != "" {
+			return NewTextResult(fmt.Sprintf("No temperature data available for host '%s' in the current canonical resource observations.", hostFilter)), nil
+		}
+		return NewTextResult("No temperature data available in the current canonical resource observations."), nil
 	}
 
 	output, _ := json.MarshalIndent(results, "", "  ")

@@ -95,3 +95,79 @@ blocked access, rejected action, executed action and verified resolution.
 
 The owning governance gap is `patrol-assistant-customer-outcome-qualification`.
 This interaction repair does not close that gap or authorize release publication.
+
+## Maintainer homelab evaluation, 2026-09-05
+
+The local development runtime used real existing connections with mock mode
+disabled, `claude-subscription:claude-opus-5` through Claude CLI 2.1.211 and the
+maintainer's Max login. Assistant was read-only, automatic fixes were disabled,
+and the development background-work guard stayed enabled. No injected faults
+or infrastructure writes were needed. This is one maintainer environment,
+not independent paid-customer qualification.
+
+The initial fleet question completed five provider turns and fourteen read-only
+tool calls in 172 seconds. The transport recorded 12 input tokens and 8,406 output
+tokens. Those CLI counters exclude cached input and are not complete context
+usage or billable cost evidence. The visible answer was not a qualification pass:
+
+- The temperature tool omitted a hot Proxmox node despite canonical telemetry
+  reporting roughly 94 degrees Celsius. A direct read-only sensor check confirmed
+  elevated temperature. The shared tool now projects Proxmox and agent readings
+  with canonical identity and source, retaining sensor timestamps when available.
+- The answer treated a warning-filtered count as the total alert count.
+- The resource summary reported healthy while its own observations included a
+  critical memory-pressure observation and omitted the thermal evidence.
+- The visible final answer stopped mid-sentence. The shared artifact guard drops
+  the remainder of a turn when it recognises provider-call text. The original
+  pre-sanitized final response was not retained, so the precise trigger for this
+  run is unproven. Completion handling and ordinary tool-reference prose need
+  a focused reproduction rather than an inferred parser fix.
+- Storage-risk wording exceeded the observed evidence about recoverability, and
+  shared storage was asserted as the cause without a captured topology check.
+
+The simple native subscription transport probe passed. The separate real Patrol
+readiness probe passed initial connectivity and tool/context checks but its
+continuation returned a provider policy refusal. The UI misleadingly framed the
+incomplete probe as a latency problem. This did not qualify Patrol or justify
+bypassing the provider failure. Preserve the unresolved classification issue,
+provider suitability, response completeness, evidence reconciliation and actual
+Patrol outcomes under the existing customer-outcome qualification gap.
+
+The temperature-only retest received canonical per-core, package and disk
+readings from the repaired tool. Its final answer still claimed that no thermal
+alert existed, although that same conversation contained an active thermal
+alert. Runtime tracing identified unconditional compaction after two tool turns:
+by the final answer, message context had fallen to roughly 968 estimated tokens,
+far below its 128,000-token fallback window. This replaced earlier observations
+with abbreviated summaries before they were needed for the conclusion.
+
+The runtime now preserves tool observations while the full request fits the
+model context window. Existing overflow handling remains authoritative. A
+five-turn executable regression verifies that the final request retains the
+original alert, temperature and collection timestamp from all four tool rounds.
+This repairs the evidence-loss mechanism without claiming that a particular
+model will always reconcile evidence correctly. Canonical lookup type mismatches,
+summary health, provider readiness and complete customer outcomes remain separate
+qualification gaps.
+
+With both repairs applied, the final live temperature question completed in
+181 seconds. The answer retained the per-core/package and NVMe readings, the
+source timestamp, and the independently returned active thermal alert with its
+threshold. It delivered a complete response and distinguished missing history
+and disk-health coverage from observed sensor data. This is a bounded diagnosis
+improvement, not a complete pass: hardware-cause inference from a 24-hour CPU
+average remained stronger than the evidence warranted, canonical lookup type
+mismatches still consumed tool calls, and the roughly three-minute answer latency
+remained below the interactive product bar. No remediation was requested or run.
+
+Browser verification exercised `/patrol` at 1440x1000 and 390x1000 with the real
+provider, inspected temperature tool details expanded with Enter and collapsed
+with a click, scrolled the evidence and complete answer, closed and reopened the
+drawer with Escape, and reloaded the persisted session. Provider selection was
+also checked at `/settings/pulse-intelligence/provider`. The local receipt binds
+the two changed runtime files by SHA-256. No provider responses were mocked.
+
+A final identical readiness retry again received the provider policy refusal.
+The normal manual Patrol trigger returned HTTP 409 `patrol_readiness_not_ready`.
+No Patrol run or infrastructure action was accepted. Actual Patrol evaluation
+with this model remains blocked on a working supported provider path.
