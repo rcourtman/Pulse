@@ -15,6 +15,14 @@
 
 ## Purpose
 
+TrueNAS provider incidents mapped to informational alert level remain on the
+canonical resource but do not enter the actionable active-alert lifecycle.
+Warning and critical incidents retain normal routing; downgrade to information
+clears an existing actionable incident through normal synchronisation.
+`TestSyncUnifiedResourceIncidentsTrueNASInformation` in
+`internal/alerts/unified_incidents_test.go` pins information, warning, recovery,
+and preservation of provider resource evidence.
+
 Own alert identity, alert specs, evaluation, persistence semantics, and
 operator-facing alert routing behavior for live runtime alerts.
 Alert-history investigations on narrow layouts render in a shared drawer

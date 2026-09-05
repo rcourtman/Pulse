@@ -1138,3 +1138,31 @@ func TestDeriveCanonicalIdentityDoesNotMutateLegacyAlert(t *testing.T) {
 		t.Fatalf("deriveCanonicalIdentity mutated legacy alert: %+v", alert)
 	}
 }
+
+// Provider information remains available on the resource without becoming an
+// acknowledgement-required incident. Warnings still activate and clear.
+func TestSyncUnifiedResourceIncidentsTrueNASInformation(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+	resource := unifiedresources.Resource{
+		ID: "storage:replication", Type: unifiedresources.ResourceTypeStorage,
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas", NativeID: "replication-1", Code: "replication",
+			Severity: storagehealth.RiskMonitor, Summary: "Replication succeeded.",
+		}},
+	}
+	for _, severity := range []storagehealth.RiskLevel{storagehealth.RiskMonitor, storagehealth.RiskWarning, storagehealth.RiskMonitor} {
+		resource.Incidents[0].Severity = severity
+		m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+		want := 0
+		if severity == storagehealth.RiskWarning {
+			want = 1
+		}
+		if got := len(m.GetActiveAlerts()); got != want {
+			t.Fatalf("severity %s: active alerts = %d, want %d", severity, got, want)
+		}
+	}
+	if len(resource.Incidents) != 1 {
+		t.Fatal("provider information removed")
+	}
+}
