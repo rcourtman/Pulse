@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { Route, Router, useNavigate } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
+import { createSignal, type Accessor } from 'solid-js';
+import type { AppConnectionStatus } from '@/useAppRuntimeState';
 import type { Resource } from '@/types/resource';
 import {
   AppLayout,
@@ -72,6 +74,12 @@ const renderLayout = (
   initialPath = '/settings/infrastructure',
   platformVisibility?: PlatformNavigationVisibility,
   tokenScopes: string[] = ['settings:read'],
+  connectionStatus: Accessor<AppConnectionStatus> = () => ({
+    kind: 'connected',
+    label: 'Connected',
+    detail: 'Backend and live data stream are connected.',
+    tone: 'healthy',
+  }),
 ) => {
   window.history.replaceState({}, '', initialPath);
   const RouteStateProbe = () => {
@@ -87,12 +95,7 @@ const renderLayout = (
   };
   const LayoutRoute = () => (
     <AppLayout
-      connectionStatus={() => ({
-        kind: 'connected',
-        label: 'Connected',
-        detail: 'Backend and live data stream are connected.',
-        tone: 'healthy',
-      })}
+      connectionStatus={connectionStatus}
       lastUpdateText={() => ''}
       versionInfo={() =>
         ({
@@ -221,6 +224,47 @@ describe('AppLayout navigation icons', () => {
     expect(mobileSettingsTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Infrastructure body');
+  });
+
+  it('retains navigation labels, icons and focus as backend health changes to sync reconnecting', async () => {
+    // #1899: isolate the shell status transition from inventory changes. This
+    // is not a reproduction of the reporter's socket/proxy or CSS environment.
+    const [connectionStatus, setConnectionStatus] = createSignal<AppConnectionStatus>({
+      kind: 'backend-healthy',
+      label: 'Backend healthy',
+      detail: 'Backend is healthy, but the live data stream is not connected.',
+      tone: 'warning',
+    });
+    renderLayout(
+      platformResources(),
+      '/settings/infrastructure',
+      undefined,
+      ['settings:read'],
+      connectionStatus,
+    );
+    const navigation = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const links = within(navigation).getAllByRole('link');
+    const labels = links.map((link) => link.textContent);
+    const proxmox = getInfrastructureLink('Proxmox');
+    proxmox.focus();
+    expect(proxmox).toHaveFocus();
+
+    for (const status of [
+      { kind: 'sync-reconnecting', label: 'Sync reconnecting', tone: 'warning' },
+      { kind: 'connected', label: 'Connected', tone: 'healthy' },
+      { kind: 'sync-reconnecting', label: 'Sync reconnecting', tone: 'warning' },
+    ] as const) {
+      setConnectionStatus({ ...status, detail: status.label });
+      await waitFor(() => expect(screen.getByText(status.label)).toBeInTheDocument());
+      expect(navigation).toBeInTheDocument();
+      const currentLinks = within(navigation).getAllByRole('link');
+      expect(currentLinks.map((link) => link.textContent)).toEqual(labels);
+      currentLinks.forEach((link, index) => {
+        expect(link).toBe(links[index]);
+        expect(link.querySelector('svg')).toBeTruthy();
+      });
+      expect(proxmox).toHaveFocus();
+    }
   });
 
   it('surfaces canonical Patrol attention as a count without renaming Patrol', () => {
