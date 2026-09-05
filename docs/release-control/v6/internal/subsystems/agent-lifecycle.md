@@ -617,6 +617,20 @@ installer download and the agent's subsequent Pulse TLS connection.
 64. `pkg/securityutil/httpurl.go`
 
 ## Shared Boundaries
+### Container update receipt and independent observation
+
+The server's independent Docker-update verification must compare the daemon
+state/running observation with the replacement state recorded by the agent,
+not only its container ID. A matching running replacement needs healthy or
+no-healthcheck evidence; intentionally stopped replacements remain stopped.
+Missing agent readback cannot become independent confirmation. This server-side
+classification does not amend the agent's mutation receipt, trigger another
+update, change runner permissions, or reinterpret compensation as execution.
+`TestDockerContainerUpdateIndependentObservationMustMatchState` in
+`internal/api/docker_container_action_result_test.go` verifies these boundaries;
+existing callback-loss reconciliation must continue without redispatch.
+
+
 
 The shared `PBSInstance.NodeMetricsUnavailable` field belongs exclusively to
 provider polling and alert evaluation. It is retained by in-process state copies
