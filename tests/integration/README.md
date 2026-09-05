@@ -305,8 +305,20 @@ a non-empty `PULSE_E2E_TIER`: unset that variable explicitly for diagnostics.
 The normal stable/probation configuration and quarantine are unchanged.
 A diagnostic pass is not a stable-gate, installed-customer or release receipt.
 
-Reports remain under the invocation-specific report/result directories for
-inspection; treat browser artifacts as potentially sensitive. Direct npm,
+The shell-owned runner requires Linux and Python 3: its supervisor uses Linux
+child-subreaper support and `/proc` to wait for orphaned browser writers. It
+fails closed on unsupported platforms rather than claiming safe cleanup.
+Cookie state is private to the invocation (directory mode 0700) and removed
+on completion. On TERM, INT or HUP, the supervisor stops and reaps writers
+before removing that invocation's cookies, reports, videos and result root.
+A writer ignoring TERM is killed after five seconds. If writers cannot be
+reaped within fifteen seconds, cleanup fails and retains artifacts rather
+than racing them. SIGKILL of the supervisor or host failure still requires
+manual, invocation-scoped cleanup.
+
+Reports remain after ordinary success/failure for inspection; treat browser
+artifacts as potentially sensitive and remove them after retaining a sanitised
+receipt. Direct npm,
 setup and helper invocations do not inherit the shell runner's isolation
 guarantees. The existing seven scenarios do not establish the delayed admission
 and reconnect recovery matrix.
