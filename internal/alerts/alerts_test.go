@@ -20991,3 +20991,53 @@ func TestCheckStorageForecastUsesCanonicalUsageAlertIdentity(t *testing.T) {
 		t.Fatalf("capacity origin = %v, want forecast", got)
 	}
 }
+
+// Empty capacity requires consistent byte evidence, not a default zero usage.
+func TestStorageEmptyCapacityRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		total, used, free int64
+		status            string
+		recover           bool
+	}{
+		{"confirmed empty", 1000, 0, 1000, "online", true},
+		{"missing capacity", 0, 0, 0, "online", false},
+		{"missing free", 1000, 0, 0, "online", false},
+		{"inconsistent used", 1000, 100, 1000, "online", false},
+		{"offline", 1000, 0, 1000, "offline", false},
+		{"unavailable", 1000, 0, 1000, "unavailable", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewManagerWithDataDir(t.TempDir())
+			defer m.Stop()
+			m.UpdateConfig(AlertConfig{Enabled: true, ActivationState: ActivationActive,
+				TimeThresholds: map[string]int{"storage": 0}, StorageDefault: HysteresisThreshold{Trigger: 80, Clear: 70}})
+			s := models.Storage{ID: "pbs-test-backups", Name: "backups", Type: "pbs", Status: "online", Total: 1000, Used: 850, Free: 150, Usage: 85}
+			for range 5 {
+				m.CheckStorage(s)
+			}
+			id := canonicalMetricStateID(s.ID, "usage")
+			original := testRequireActiveAlert(t, m, id)
+			s.Usage, s.Total, s.Used, s.Free, s.Status = 0, tc.total, tc.used, tc.free, tc.status
+			for range 5 {
+				m.CheckStorage(s)
+			}
+			if !tc.recover {
+				if !testHasActiveAlert(t, m, id) {
+					t.Fatal("unknown or offline capacity cleared usage incident")
+				}
+				if m.GetResolvedAlert(id) != nil {
+					t.Fatal("fabricated recovery history")
+				}
+				return
+			}
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("confirmed empty storage retained usage incident")
+			}
+			resolved := m.GetResolvedAlert(id)
+			if resolved == nil || resolved.Value != 0 || !resolved.StartTime.Equal(original.StartTime) {
+				t.Fatalf("wrong clearing observation or incident: %+v", resolved)
+			}
+		})
+	}
+}

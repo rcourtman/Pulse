@@ -15,6 +15,34 @@
 
 ## Purpose
 
+Confirmed canonical metric recovery publishes the clearing evaluation's value,
+observation time, and resolved metric wording in the snapshot consumed by
+recent-resolution reads and notification callbacks. Clone that snapshot before
+refreshing it; preserve incident identity and start time, including after guest
+identity migration. Missing or malformed telemetry is not recovery evidence.
+Explicit configuration-disable and resource-removal resolution are unchanged.
+`TestAlertCharacterizationGuestMetricResolutionUsesCurrentNodeIdentityAfterMove`
+in `internal/alerts/migration_characterization_test.go` pins identity and clearing
+content together. `TestPBSPartialMetricsWebhookLifecycle` in
+`internal/monitoring/monitor_pbs_webhook_test.go` checks nonzero recovery content,
+invalid-telemetry suppression and matching history through a local HTTP receiver.
+
+Storage capacity evaluation admits zero usage only when `Total > 0`,
+`Used == 0`, and `Free == Total` confirm an empty store. Offline or unavailable
+storage remains ineligible; missing or inconsistent byte counters do not clear
+an incident. This observation passes through the existing capacity lifecycle,
+including recovery confirmation and predictive evidence, without bypassing
+notification eligibility.
+`TestStorageEmptyCapacityRecovery` in `internal/alerts/alerts_test.go` pins these
+cases. `TestStorageEmptyRecoveryWebhook` in
+`internal/monitoring/monitor_storage_webhook_test.go` checks zero-value recovery,
+current observation time, matching history and duplicate avoidance through the
+production callback/queue path. `TestStorageRecoveryAcrossRestart` in
+`internal/alerts/storage_restart_test.go` pins missing-counter non-recovery and
+confirmed-empty recovery through orderly JSON and SQLite restarts. These are
+local synthetic checks, not installed PBS, off-host delivery, crash recovery,
+or release-soak qualification.
+
 TrueNAS INFO provider incidents remain on the canonical resource but do not
 enter the actionable active-alert lifecycle. Native NOTICE remains actionable
 at informational canonical severity; it must not be discarded merely because

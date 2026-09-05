@@ -381,6 +381,14 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			return
 		}
 
+		// Publish the observation that cleared the incident, not the last
+		// firing sample. Both history and resolved callbacks consume this snapshot.
+		existingAlert = existingAlert.Clone()
+		existingAlert.Value = value
+		existingAlert.LastSeen = observedAt
+		message, _ := metricAlertMessage(resourceType, metricType, value, opts)
+		existingAlert.Message = "Resolved: " + message
+
 		recoveryEvidence, hasRecoveryEvidence := canonicalAlertEvidenceEnvelope(
 			spec,
 			evidence,
