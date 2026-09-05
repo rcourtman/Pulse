@@ -18,14 +18,18 @@ Widths 1440 and 1100 (height 900), and 390 and 320 (height 844), each passed
 with and without injected admission HTTP failure. The checks exercise socket
 closure with 1013, retained navigation/inventory, recovery without document
 reload, and incident-control access at desktop/mobile widths. Narrow cases
-also exercise platform switching, More navigation, and Docker table keyboard
-access. Admission-failure cases require an observed failed request.
+also exercise platform switching and More navigation. Docker table keyboard
+access and clipped-text assertions require the separate `PULSE_E2E_TABLE_ACCESS=1`
+opt-in. The retained JUnit records eight successful cases but does not record
+that flag, so it cannot independently establish those conditional assertions
+ran. Admission-failure cases require an observed failed request.
 
 `junit.xml` is the unmodified runner result. Two inspected screenshots retain
 representative desktop incident access during reconnect and 320px inventory.
 The narrow screenshot alone is not proof of connection state; the test asserts
 that state separately. Small update cells still wrap heavily at 320px, despite
-passing the existing no-clipped-text checks. No readability redesign is implied.
+the earlier reported no-clipped-text result. That conditional result is not
+independently established by this retained JUnit. No readability redesign is implied.
 
 Additional focused checks: 53 tests passed across websocket-resilience and
 websocket-unified; `TestAlertCharacterizationGetActiveAlertsExportsCanonicalIdentity`
@@ -39,6 +43,7 @@ From repository root after installing locked dependencies:
 pulse-heavy-run -- env \
   PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 \
   PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 \
+  PULSE_E2E_TABLE_ACCESS=1 \
   PULSE_E2E_LOCAL_BACKEND_PORT=18765 \
   npm --prefix tests/integration test -- \
   tests/96-navigation-socket-recovery.spec.ts --project=chromium
@@ -65,3 +70,19 @@ same-content performance/contracts qualification if pursued.
 Next useful evidence is exact-candidate recovery and installed alert receipt,
 not another equivalent source-only navigation run without changed inputs.
 No release readiness or backport eligibility judgment is made here.
+
+## Receipt audit — 5 September 2026
+
+The repeat command above now explicitly enables table-access assertions. This
+is a documentation correction, not a fresh browser run or a claim that the
+original run omitted the flag. Retain the invocation flags and the
+`narrow-table-access` attachment on the next qualification run.
+
+The recovery assertions in this spec establish reconnection, retained navigation
+and unchanged document identity. They do not compare a changed incident or
+resource value before and after the interruption. The managed-runtime recovery
+spec likewise checks connection status and HTTP health, not changed incident
+content. A future data-recovery qualification should change an identified
+incident during disconnection and verify its rendered state after reconnect,
+including a genuine empty active-alert response. Existing store-level snapshot
+tests are narrower evidence; no missing-data browser regression is claimed here.
