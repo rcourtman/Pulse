@@ -1,5 +1,5 @@
 // Full application, real organisation selector; synthetic HTTP and cold socket.
-// Run with PULSE_PROOF_WIDTH=390|1440 and PULSE_PROOF_MODE=failure|success|reverse.
+// Run with PULSE_PROOF_WIDTH=390|1440 and PULSE_PROOF_MODE=failure|success|reverse|superseded.
 // pulse-heavy-run -- node scripts/check-navigation-admission-race.mjs
 import { createServer } from "../frontend-modern/node_modules/vite/dist/node/index.js";
 import {
@@ -18,9 +18,9 @@ const height = width === 390 ? 844 : 900;
 const mode = process.env.PULSE_PROOF_MODE || "failure";
 if (
   ![390, 1440].includes(width) ||
-  !["failure", "success", "reverse"].includes(mode)
+  !["failure", "success", "reverse", "superseded"].includes(mode)
 ) {
-  throw new Error("Use width 390 or 1440 and mode failure, success or reverse");
+  throw new Error("Use width 390 or 1440 and mode failure, success, reverse or superseded");
 }
 const phase =
   process.env.PULSE_PROOF_PHASE === "baseline" ? "baseline" : "repaired";
@@ -95,6 +95,10 @@ try {
             outgoing = route;
             return;
           }
+          if (mode === "superseded") {
+            if (!incoming) { incoming = route; return; }
+            return json(emptyAdmission);
+          }
           incoming = route;
           if (mode === "reverse") return;
           if (mode === "success") return json(emptyAdmission);
@@ -110,6 +114,7 @@ try {
         return json([
           { id: "default", displayName: "Default Organization" },
           { id: "acme", displayName: "Acme" },
+          { id: "third", displayName: "Third" },
         ]);
       if (path === "/api/license/runtime-capabilities")
         return json({
@@ -147,7 +152,17 @@ try {
   await org.selectOption("acme");
   await expect(org).toHaveValue("acme");
   await expect.poll(() => Boolean(incoming)).toBe(true);
-  if (mode !== "reverse") {
+  const expectedRequests = ["default", "default", "acme"];
+  if (mode === "superseded") {
+    const thirdResponse = page.waitForResponse(r =>
+      r.url().includes("/api/resources?page=1&limit=1") &&
+      r.request().headers()["x-pulse-org-id"] === "third");
+    await org.selectOption("third");
+    await (await thirdResponse).finished();
+    await expect(org).toHaveValue("third");
+    expectedRequests.push("third");
+  }
+  if (mode !== "reverse" && mode !== "superseded") {
     await expect
       .poll(() =>
         incoming
@@ -197,18 +212,23 @@ try {
   );
   // Remove the transient switch toast so the narrow navigation is inspectable.
   const dismiss = page.getByRole("button", { name: "Dismiss notification" });
-  for (const button of await dismiss.all()) await button.click();
-  await expect(dismiss).toHaveCount(0);
+  // Multiple switches animate/remove toasts; wait for their normal expiry rather
+  // than retaining locators that can detach while Playwright waits for stability.
+  await expect(dismiss).toHaveCount(0, { timeout: 15_000 });
   await page.screenshot({ path: `${output}/after-outgoing-response.png` });
   await expect(platform).toHaveCount(0);
-  expect(requests).toEqual(["default", "default", "acme"]);
+  expect(requests).toEqual(expectedRequests);
   expect(failed).toBe(mode === "failure" ? 1 : 0);
-  if (mode === "reverse") {
+  if (mode === "reverse" || mode === "superseded") {
     const newestResponse = page.waitForResponse(
       (r) => r.request() === incoming.request(),
     );
-    await incoming.fulfill({ json: emptyAdmission });
+    await incoming.fulfill({ json: mode === "superseded"
+      ? { aggregations: { platformAdmission: { proxmox: true, docker: true } } }
+      : emptyAdmission });
     await (await newestResponse).finished();
+    await page.evaluate(() => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await expect(platform).toHaveCount(0);
   }
   if (width < 1280) {
@@ -235,7 +255,7 @@ try {
   hold = false;
   await org.selectOption("default");
   await expect(platform).toBeVisible();
-  expect(requests).toEqual(["default", "default", "acme", "default"]);
+  expect(requests).toEqual([...expectedRequests, "default"]);
   if (width < 1280) {
     await platform.click();
     const menu = page.getByRole("menu", {
@@ -254,9 +274,9 @@ try {
       "websocket_reconnected",
     ),
   );
-  await expect.poll(() => requests.length).toBe(5);
+  await expect.poll(() => requests.length).toBe(expectedRequests.length + 2);
   await expect(platform).toBeVisible();
-  expect(requests).toEqual(["default", "default", "acme", "default", "default"]);
+  expect(requests).toEqual([...expectedRequests, "default", "default"]);
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(
     documentIdentity,
   );

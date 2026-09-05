@@ -1,0 +1,164 @@
+[
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mode": "failure",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 1,
+    "verified_at": "2026-09-05T16:54:49.496Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mode": "success",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:55:12.726Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mode": "reverse",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:55:35.941Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mode": "superseded",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "third",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:55:59.091Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "mode": "failure",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 1,
+    "verified_at": "2026-09-05T16:56:19.211Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "mode": "success",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:56:42.832Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "mode": "reverse",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:57:00.634Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "mode": "superseded",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "third",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:57:19.715Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  }
+]

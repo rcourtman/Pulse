@@ -122,6 +122,46 @@ for (const admissionFailure of [false, true]) {
       if (width === 390) await mobileDestinations(page);
       expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
       await capture('recovered');
+      if (width === 390 && !admissionFailure && process.env.PULSE_E2E_TABLE_ACCESS === '1') {
+        const row = page.locator('tr[data-docker-container-row]').filter({ hasText: 'notification' }).first();
+        const table = row.locator('xpath=ancestor::table');
+        const wrapper = table.locator('..');
+        const measure = () => wrapper.evaluate(el => ({
+          width: el.clientWidth, scrollWidth: el.scrollWidth, left: el.scrollLeft,
+          overflowX: getComputedStyle(el).overflowX, tabIndex: (el as HTMLElement).tabIndex,
+          cells: Array.from(el.querySelector('tr[data-docker-container-row]')!.children).map(cell => ({
+            text: cell.textContent, x: cell.getBoundingClientRect().x,
+            width: cell.getBoundingClientRect().width,
+            titles: Array.from(cell.querySelectorAll('[title]')).map(n => n.getAttribute('title')),
+          })),
+        }));
+        await row.scrollIntoViewIfNeeded();
+        const initial = await measure();
+        await row.hover();
+        await page.mouse.wheel(2000, 0);
+        await page.waitForTimeout(350);
+        const pointer = await measure();
+        await capture('table-after-horizontal-wheel');
+        await wrapper.evaluate(el => { el.scrollLeft = 0; });
+        // Start on a real focusable descendant, without adding tabindex to the UI.
+        const toggle = row.getByRole('button').first();
+        await toggle.focus();
+        await page.keyboard.press('ArrowRight');
+        await page.waitForTimeout(350);
+        const keyboard = await measure();
+        const accessibleRow = await row.ariaSnapshot();
+        await page.keyboard.press('Enter');
+        await capture('table-keyboard-detail');
+        const expanded = await toggle.getAttribute('aria-expanded');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        const detailId = await toggle.getAttribute('aria-controls');
+        const detailText = detailId ? await page.locator(`[id="${detailId}"]`).innerText() : null;
+        await testInfo.attach('narrow-table-access', {
+          body: JSON.stringify({ initial, pointer, keyboard, accessibleRow, expanded, detailText }, null, 2),
+          contentType: 'application/json',
+        });
+      }
+
       await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: width === 390 ? 844 : 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
     });
   }
