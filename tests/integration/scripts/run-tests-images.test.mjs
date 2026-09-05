@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+
+const runner = fileURLToPath(new URL('./run-tests.sh', import.meta.url));
+const repo = path.resolve(path.dirname(runner), '../../..');
+
+function run(failImage = '') {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pulse-image-test-'));
+  const log = path.join(dir, 'calls');
+  try {
+    writeFileSync(path.join(dir, 'docker'), `#!/bin/bash
+printf '%s\\n' "$*" >> "$CALL_LOG"
+if [ "$1 $2" = 'compose version' ]; then exit 0; fi
+if [ "$1 $2" = 'image inspect' ]; then exit 0; fi
+if [ "$1" = build ]; then
+  [ "$3" != "$FAIL_IMAGE" ]
+  exit $?
+fi
+exit 91
+`, { mode: 0o755 });
+    const result = spawnSync('bash', [runner, failImage ? 'multi-tenant' : 'invalid-test-suite'], {
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, CALL_LOG: log, FAIL_IMAGE: failImage },
+      encoding: 'utf8',
+    });
+    return { ...result, calls: readFileSync(log, 'utf8').trim().split('\n') };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('rebuilds both test images from this checkout even when local tags exist', () => {
+  const result = run();
+  assert.equal(result.status, 1); // Deliberately unknown suite: never starts services.
+  assert.ok(result.stdout.includes('Unknown suite: invalid-test-suite'));
+  assert.deepEqual(result.calls.filter(call => call.startsWith('build ')), [
+    `build -t pulse-mock-github:test ${repo}/tests/integration/mock-github-server`,
+    `build -t pulse:test --build-arg GO_BUILD_TAGS= -f ${repo}/Dockerfile ${repo}`,
+  ]);
+});
+
+for (const image of ['pulse-mock-github:test', 'pulse:test']) {
+  test(`failed ${image} build cannot fall through to a cached image`, () => {
+    const result = run(image);
+    assert.equal(result.status, 1);
+    assert.ok(result.calls.some(call => call.startsWith(`build -t ${image} `)));
+    assert.ok(!result.calls.some(call => call.includes(' up ')));
+    assert.ok(!result.stdout.includes('Starting test environment'));
+  });
+}

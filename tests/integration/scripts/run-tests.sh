@@ -37,17 +37,16 @@ compose() {
 }
 
 ensure_test_images() {
-    if ! docker image inspect pulse-mock-github:test >/dev/null 2>&1; then
-        echo "Building missing image: pulse-mock-github:test"
-        docker build -t pulse-mock-github:test "$TEST_ROOT/mock-github-server"
-    fi
+    # A local tag may belong to another checkout. Always build from these
+    # sources; Docker can reuse unchanged layers, but tag existence is not
+    # evidence that the image includes the code we are qualifying.
+    echo "Building test images from: $REPO_ROOT"
+    docker build -t pulse-mock-github:test "$TEST_ROOT/mock-github-server"
 
-    if ! docker image inspect pulse:test >/dev/null 2>&1; then
-        echo "Building missing image: pulse:test"
-        # Test image drops the release build tag so the suite can enable mock
-        # fixtures without a demo entitlement.
-        docker build -t pulse:test --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
-    fi
+    # Test image drops the release build tag so the suite can enable mock
+    # fixtures without a demo entitlement. A build failure must stop the run,
+    # never fall back to a previously tagged image.
+    docker build -t pulse:test --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
 }
 
 # Function to run suite with specific mock config
