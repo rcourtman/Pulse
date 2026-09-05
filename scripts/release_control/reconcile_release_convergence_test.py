@@ -461,6 +461,35 @@ class CredentialContainmentTests(unittest.TestCase):
 
 
 class ReconciliationTests(unittest.TestCase):
+    def test_recovery_receipts_require_successful_submission(self):
+        cases = [
+            ({}, "Dispatched fresh convergence controls"),
+            ({"current_controls": True}, "Re-ran current-control convergence"),
+            ({"committed": False}, "Renewed pre-commit convergence owner"),
+        ]
+        for options, receipt in cases:
+            for code in (0, 1):
+                with self.subTest(options=options, code=code):
+                    github = FakeGitHub(**options)
+                    transport = subject.GitHub(github.repository, "gh")
+                    github.post = transport.post
+                    result = subprocess.CompletedProcess(
+                        [], code, stdout="", stderr="rejected" if code else ""
+                    )
+                    output = io.StringIO()
+                    with patch.object(subject.subprocess, "run", return_value=result) as command, contextlib.redirect_stdout(output):
+                        if code:
+                            with self.assertRaises(subject.ReconciliationError):
+                                subject.reconcile(github, github.run_id, 5)
+                        else:
+                            subject.reconcile(github, github.run_id, 5)
+                    command.assert_called_once()
+                    if code:
+                        self.assertNotIn(receipt, output.getvalue())
+                    else:
+                        self.assertIn(receipt, output.getvalue())
+                    self.assertNotIn("DRY RUN", output.getvalue())
+
     def test_post_reports_submission_only_after_success(self):
         for payload in (None, {"ref": "main"}):
             for code in (0, 1):
