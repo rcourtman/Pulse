@@ -36,6 +36,7 @@ const (
 	PatrolFailureCauseProviderRateLimited        PatrolFailureCause = "provider_rate_limited"
 	PatrolFailureCauseProviderAuth               PatrolFailureCause = "provider_auth"
 	PatrolFailureCauseProviderConnection         PatrolFailureCause = "provider_connection"
+	PatrolFailureCauseProviderRefusal            PatrolFailureCause = "provider_refusal"
 	// PatrolFailureCauseInterrupted marks a run that was cancelled mid-flight
 	// (operator cancel or a dropped client connection). It is deliberately not
 	// a provider fault: an interrupted run carries no evidence about the

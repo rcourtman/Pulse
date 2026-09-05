@@ -331,6 +331,39 @@ func (s *Service) loadPatrolModelReadiness() {
 		persisted.Result.PatrolCapable = false
 		persisted.Result.MaxVerifiedMode = ""
 	}
+	// Older subscription transports persisted the CLI's terminal envelope in
+	// the error detail. Recover only its explicit refusal signal, not prose or
+	// incidental rate-limit events, without spending another provider request.
+	if persisted.Result.Provider == config.AIProviderClaudeSubscription && persisted.Result.Cause == PatrolFailureCauseProviderConnection {
+		for i, detail := range persisted.Result.Details {
+			if !strings.HasPrefix(detail, "Multi-turn continuation probe failed: claude subscription agent failed:") {
+				continue
+			}
+			start := strings.Index(detail, `{"type":"result"`)
+			if start < 0 {
+				continue
+			}
+			var terminal struct {
+				StopReason string `json:"stop_reason"`
+			}
+			if json.NewDecoder(strings.NewReader(detail[start:])).Decode(&terminal) != nil || terminal.StopReason != "refusal" {
+				continue
+			}
+			failure := patrolRuntimeFailureFromError(providers.ErrProviderRequestRefused)
+			persisted.Result.Cause = failure.Cause
+			persisted.Result.Summary = failure.Summary
+			persisted.Result.Recommendation = failure.Recommendation
+			persisted.Result.Details[i] = "Multi-turn continuation probe failed: " + failure.Detail
+			persisted.Result.Dimensions.ToolProtocol.Summary = failure.Summary
+			if tool := &persisted.Result.Dimensions.ToolProtocol; tool.Attempts > 0 && tool.Passed == tool.Attempts {
+				tool.Summary = "Initial tool use passed. The provider refused the continuation request."
+			}
+			persisted.Result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: failure.Description}
+			persisted.Result.Success = false
+			persisted.Result.PatrolCapable = false
+			persisted.Result.MaxVerifiedMode = ""
+		}
+	}
 	persisted.Result.CacheKey = persisted.CacheKey
 	s.patrolModelReadinessCache.result = clonePatrolModelReadinessResult(&persisted.Result)
 	s.patrolModelReadinessCache.recordedAt = persisted.RecordedAt
@@ -786,6 +819,9 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		failure := patrolRuntimeFailureFromErrorCtx(ctx, probeErr)
 		probeFailure = &failure
 		toolSummary = failure.Summary
+		if toolPassed == len(scenarios) && failure.Cause == PatrolFailureCauseProviderRefusal {
+			toolSummary = "Initial tool use passed. The provider refused the continuation request."
+		}
 	}
 	// A mid-run cancellation invalidates nothing the model already proved and
 	// proves nothing about what it never attempted: keep completed per-scenario
@@ -893,6 +929,9 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		result.Cause = probeFailure.Cause
 		result.Summary = probeFailure.Summary
 		result.Recommendation = probeFailure.Recommendation
+		if probeFailure.Cause == PatrolFailureCauseProviderRefusal {
+			result.Modes.Monitor.Summary = probeFailure.Description
+		}
 	}
 	if interrupted {
 		result.Status = PatrolModelReadinessNotAssessed

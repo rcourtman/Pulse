@@ -22,6 +22,10 @@ import (
 // continues to own and execute every infrastructure tool call.
 type SubscriptionAgent string
 
+// ErrProviderRequestRefused preserves an explicit provider refusal independently
+// of transport failures. It must not be recovered as a completed tool turn.
+var ErrProviderRequestRefused = errors.New("provider refused this request under its usage policy")
+
 type SubscriptionAgentSetupIssue string
 
 const (
@@ -108,6 +112,7 @@ type claudePrintResponse struct {
 	Result            string            `json:"result"`
 	PermissionDenials []json.RawMessage `json:"permission_denials"`
 	TerminalReason    string            `json:"terminal_reason,omitempty"`
+	StopReason        string            `json:"stop_reason,omitempty"`
 	NumTurns          int               `json:"num_turns,omitempty"`
 	Usage             struct {
 		InputTokens  int `json:"input_tokens"`
@@ -456,6 +461,11 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("%s subscription agent timed out: %w", name, ctx.Err())
+		}
+		if name == "claude" {
+			if terminal, ok := decodeClaudeTerminalResponse(stdout.buffer.Bytes()); ok && terminal.StopReason == "refusal" {
+				return nil, ErrProviderRequestRefused
+			}
 		}
 		message := strings.TrimSpace(stderr.buffer.String())
 		if message == "" {
@@ -809,6 +819,9 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 		if err := json.Unmarshal(raw, &wrapper); err != nil {
 			return turn, fmt.Errorf("decode Claude subscription response: %w", err)
 		}
+		if wrapper.StopReason == "refusal" {
+			return turn, ErrProviderRequestRefused
+		}
 		if len(wrapper.PermissionDenials) > 0 {
 			return turn, errors.New("Claude subscription agent attempted a denied built-in tool")
 		}
@@ -898,6 +911,9 @@ func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscri
 	if !terminalFound {
 		return subscriptionAgentTurn{}, errors.New("Claude subscription stream did not contain a terminal result")
 	}
+	if terminal.StopReason == "refusal" {
+		return subscriptionAgentTurn{}, ErrProviderRequestRefused
+	}
 	if len(terminal.PermissionDenials) > 0 {
 		return subscriptionAgentTurn{}, errors.New("Claude subscription agent attempted a denied built-in tool")
 	}
@@ -914,6 +930,9 @@ func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscri
 
 func decodeClaudePrintResponse(wrapper claudePrintResponse) (subscriptionAgentTurn, error) {
 	var turn subscriptionAgentTurn
+	if wrapper.StopReason == "refusal" {
+		return turn, ErrProviderRequestRefused
+	}
 	if len(wrapper.PermissionDenials) > 0 {
 		return turn, errors.New("Claude subscription agent attempted a denied built-in tool")
 	}

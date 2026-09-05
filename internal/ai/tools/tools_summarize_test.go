@@ -124,11 +124,7 @@ func TestSummarizeTool_ResourceReturnsHeuristicNarrative(t *testing.T) {
 	}
 	_ = engine
 
-	// Write metrics via the same store. The engine was constructed with
-	// MetricsStore so we need to reach back into the store; instead, rely
-	// on writing via package-level access through engine internals.
-	// Simpler: skip data and accept that the heuristic narrator returns
-	// "insufficient data" — which is itself a valid narrative we can assert.
+	// No retained samples must remain an explicit empty evidence result.
 	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
 		"action":        "resource",
 		"resource_type": "node",
@@ -153,15 +149,15 @@ func TestSummarizeTool_ResourceReturnsHeuristicNarrative(t *testing.T) {
 	if parsed.Action != "resource" {
 		t.Errorf("Action = %q, want resource", parsed.Action)
 	}
-	if parsed.NarrativeSource != reporting.NarrativeSourceHeuristic {
-		t.Errorf("NarrativeSource = %q, want heuristic (v1 always heuristic)", parsed.NarrativeSource)
+	if parsed.Scope.Source != "retained_metrics" || parsed.Evidence == nil || len(parsed.Evidence.Metrics) != 0 {
+		t.Fatalf("expected empty retained evidence, got %+v", parsed)
 	}
-	if parsed.HealthStatus == "" {
-		t.Error("expected HealthStatus populated")
+	for _, field := range []string{"health_status", "health_message", "observations", "recommendations"} {
+		if strings.Contains(res.Content[0].Text, `"`+field+`"`) {
+			t.Fatalf("empty evidence invented %s: %s", field, res.Content[0].Text)
+		}
 	}
-	if len(parsed.Observations) == 0 {
-		t.Error("expected at least one observation from the heuristic narrator")
-	}
+
 }
 
 func TestSummarizeTool_FleetParsesCommaSeparatedIDs(t *testing.T) {
@@ -192,8 +188,8 @@ func TestSummarizeTool_FleetParsesCommaSeparatedIDs(t *testing.T) {
 			t.Errorf("ResourceIDs[%d] = %q, want %q", i, parsed.ResourceIDs[i], w)
 		}
 	}
-	if parsed.NarrativeSource != reporting.NarrativeSourceHeuristic {
-		t.Errorf("NarrativeSource = %q, want heuristic", parsed.NarrativeSource)
+	if parsed.Scope.Source != "retained_metrics" || len(parsed.Evidence) != 3 {
+		t.Fatalf("expected retained evidence for all resources: %+v", parsed)
 	}
 }
 
@@ -294,25 +290,23 @@ func TestSummarizeTool_UsesReportNarratorWhenConfigured(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("unexpected error: %+v", res.Content)
 	}
-	if !narrator.called {
-		t.Fatal("expected narrator to be invoked")
+	if narrator.called {
+		t.Fatal("metric evidence must not invoke a second model")
 	}
 	var parsed summarizeResourceResponse
 	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if parsed.NarrativeSource != reporting.NarrativeSourceAI {
-		t.Errorf("NarrativeSource = %q, want ai", parsed.NarrativeSource)
+	if parsed.Scope.Source != "retained_metrics" || parsed.Evidence == nil {
+		t.Fatalf("expected measured evidence, got %+v", parsed)
 	}
-	if parsed.HealthMessage != "AI says fine" {
-		t.Errorf("HealthMessage = %q, want AI says fine", parsed.HealthMessage)
+	if strings.Contains(res.Content[0].Text, "AI says fine") || strings.Contains(res.Content[0].Text, "health_status") {
+		t.Fatal("narrator judgment leaked into metric evidence")
 	}
-	if len(parsed.Observations) != 1 || parsed.Observations[0].Text != "AI bullet" {
-		t.Errorf("Observations = %#v", parsed.Observations)
-	}
+
 }
 
-func TestSummarizeTool_FleetUsesFleetNarratorWhenConfigured(t *testing.T) {
+func TestSummarizeTool_FleetDoesNotInvokeNestedNarrator(t *testing.T) {
 	dir := t.TempDir()
 	store, err := metrics.NewStore(metrics.StoreConfig{
 		DBPath:          filepath.Join(dir, "metrics.db"),
@@ -359,19 +353,20 @@ func TestSummarizeTool_FleetUsesFleetNarratorWhenConfigured(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("unexpected error: %+v", res.Content)
 	}
-	if !fleet.called {
-		t.Fatal("expected fleet narrator to be invoked")
+	if fleet.called {
+		t.Fatal("fleet evidence must not invoke a second model")
 	}
 	var parsed summarizeFleetResponse
 	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if parsed.NarrativeSource != reporting.NarrativeSourceAI {
-		t.Errorf("NarrativeSource = %q, want ai", parsed.NarrativeSource)
+	if parsed.Scope.Source != "retained_metrics" || len(parsed.Evidence) != 2 {
+		t.Fatalf("expected both resources as evidence, got %+v", parsed)
 	}
-	if len(parsed.Outliers) != 1 || parsed.Outliers[0].ResourceName != "alpha" {
-		t.Errorf("Outliers = %#v", parsed.Outliers)
+	if strings.Contains(res.Content[0].Text, "Memory creeping up") || strings.Contains(res.Content[0].Text, "outliers") {
+		t.Fatal("fleet judgment leaked into metric evidence")
 	}
+
 }
 
 // The production unified provider (the monitor adapter) must satisfy the
@@ -630,6 +625,40 @@ func TestSummarizeRangeWindow(t *testing.T) {
 	for input, want := range cases {
 		if got := summarizeRangeWindow(input); got != want {
 			t.Errorf("summarizeRangeWindow(%q) = %v, want %v", input, got, want)
+		}
+	}
+}
+
+func TestSummarizeToolReturnsHighUtilizationAsEvidenceWithoutDiagnosis(t *testing.T) {
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	at := time.Now().Add(-time.Hour).Truncate(time.Minute)
+	store.Write("node", "delly-node-id", "memory", 92, at)
+	store.Flush()
+	previous := reporting.GetEngine()
+	reporting.SetEngine(reporting.NewReportEngine(reporting.EngineConfig{MetricsStore: store}))
+	defer reporting.SetEngine(previous)
+	exec := NewPulseToolExecutor(ExecutorConfig{})
+	exec.SetUnifiedResourceProvider(newSummarizeStubProvider())
+	for _, args := range []map[string]interface{}{
+		{"action": "resource", "resource_id": "delly", "range": "24h"},
+		{"action": "fleet", "resource_ids": "delly", "range": "24h"},
+	} {
+		result, err := exec.executeSummarize(context.Background(), args)
+		if err != nil || result.IsError {
+			t.Fatalf("evidence = %+v, %v", result, err)
+		}
+		text := result.Content[0].Text
+		for _, absent := range []string{"health_status", "HEALTHY", "CRITICAL", "pressure", "recommendations"} {
+			if strings.Contains(text, absent) {
+				t.Fatalf("unexpected diagnosis %q in %s", absent, text)
+			}
+		}
+		if !strings.Contains(text, `"mean":92`) || !strings.Contains(text, `"retained_points":1`) || !strings.Contains(text, `"disk_health"`) || !strings.Contains(text, `"alerts"`) {
+			t.Fatalf("reading or unqueried source scope missing: %s", text)
 		}
 	}
 }
