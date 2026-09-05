@@ -3046,7 +3046,7 @@ func TestAgenticLoop_CancelsUnavailableCurrentResourcePendingToolCall(t *testing
 			if !strings.Contains(toolResult.Content, "CURRENT_RESOURCE_UNAVAILABLE") {
 				t.Fatalf("expected current resource block marker, got %q", toolResult.Content)
 			}
-			if !strings.Contains(toolResult.Content, "Ask which host, VM, container, app, or storage resource") {
+			if !strings.Contains(toolResult.Content, "use pulse_query search to resolve its canonical ID") {
 				t.Fatalf("expected model-facing recovery instruction, got %q", toolResult.Content)
 			}
 			callback(providers.StreamEvent{

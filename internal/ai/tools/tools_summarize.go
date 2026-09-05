@@ -249,14 +249,6 @@ type summarizeFleetEntry struct {
 	Name string `json:"name,omitempty"`
 }
 
-// summarizeMetricsTargetResolver is the optional capability the unified
-// resource provider exposes for translating canonical resource IDs into
-// metrics-store query targets. The production provider (the monitor's
-// unified adapter) implements it; lightweight fixtures may not.
-type summarizeMetricsTargetResolver interface {
-	MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget
-}
-
 // summarizeFleetCandidate is a unified resource resolved into the reporting
 // engine's request shape: a reporting resource type, the canonical resource
 // ID (which keys Patrol findings and recovery points), and the metrics-store
@@ -325,18 +317,6 @@ func summarizeReportTypeForResource(res unifiedresources.Resource) string {
 	}
 }
 
-// summarizeMetricsTarget resolves the metrics-store target for a unified
-// resource, asking the provider's on-demand resolver first (registry targets
-// are computed lazily; the struct field is only populated by fixtures).
-func (e *PulseToolExecutor) summarizeMetricsTarget(res unifiedresources.Resource) *unifiedresources.MetricsTarget {
-	if resolver, ok := e.unifiedResourceProvider.(summarizeMetricsTargetResolver); ok && resolver != nil {
-		if target := resolver.MetricsTargetForResource(res.ID); target != nil {
-			return target
-		}
-	}
-	return res.MetricsTarget
-}
-
 // summarizeFleetCandidateFor projects a unified resource into a fleet
 // candidate, mirroring the API report path's resolveReportSubject: the
 // canonical ID stays the request ResourceID (findings and recovery points key
@@ -358,7 +338,7 @@ func (e *PulseToolExecutor) summarizeFleetCandidateFor(res unifiedresources.Reso
 		name:       strings.TrimSpace(res.Name),
 		status:     string(res.Status),
 	}
-	if target := e.summarizeMetricsTarget(res); target != nil {
+	if target := e.resourceMetricsTarget(res); target != nil {
 		cand.metricsID = strings.TrimSpace(target.ResourceID)
 		if reportType != "node" {
 			if canonical := reporting.CanonicalResourceType(target.ResourceType); canonical != "" {

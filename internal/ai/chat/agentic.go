@@ -162,7 +162,7 @@ func currentResourceUnavailableToolResult(err error) string {
 		reason = strings.TrimSpace(err.Error())
 	}
 	return fmt.Sprintf(
-		"CURRENT_RESOURCE_UNAVAILABLE: %s. Ask which host, VM, container, app, or storage resource the user means before calling resource-targeted tools. Do not retry this tool with %s until the user provides or opens a specific resource context.",
+		"CURRENT_RESOURCE_UNAVAILABLE: %s. The %s shortcut requires an attached resource. For a resource named in the user request, use pulse_query search to resolve its canonical ID and use that ID in subsequent tools. Ask the user only if the intended resource remains unspecified or ambiguous.",
 		reason,
 		agentcapabilities.CurrentResourceHandle,
 	)

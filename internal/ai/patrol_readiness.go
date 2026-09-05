@@ -230,15 +230,21 @@ func (s *Service) PatrolRuntimeReadiness() PatrolConfigReadiness {
 	switch suitability.Status {
 	case PatrolModeVerified:
 		return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessReady, PatrolFailureCauseNone, suitability.Summary)
-	case PatrolModeWarning, PatrolModeNotAssessed:
+	case PatrolModeWarning:
 		return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessWarning, advisor.Cause, suitability.Summary)
-	default:
-		cause := advisor.Cause
-		if cause == PatrolFailureCauseNone || cause == "" {
-			cause = PatrolFailureCauseModelToolSupportUnverified
+	case PatrolModeNotAssessed:
+		// Preserve operator-cancellation semantics and higher-mode canary
+		// guidance after verified Watch. A failed provider evaluation with
+		// unassessed Watch cannot authorize a run through a warning status.
+		if advisor.Modes.Monitor.Status == PatrolModeVerified || advisor.Cause == PatrolFailureCauseInterrupted {
+			return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessWarning, advisor.Cause, suitability.Summary)
 		}
-		return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessNotReady, cause, suitability.Summary)
 	}
+	cause := advisor.Cause
+	if cause == PatrolFailureCauseNone || cause == "" {
+		cause = PatrolFailureCauseModelToolSupportUnverified
+	}
+	return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessNotReady, cause, suitability.Summary)
 }
 
 func patrolPreflightReadinessSummary(result *PatrolPreflightResult) string {

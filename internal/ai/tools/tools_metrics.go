@@ -47,7 +47,7 @@ Examples:
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Filter by canonical v6 resource type: vm, system-container, node (for performance, baselines)",
+						Description: "Filter by resource type: agent, vm, system-container (performance). The node alias is also accepted. Baselines accept vm, system-container, node.",
 					},
 					"host": {
 						Type:        "string",
@@ -136,12 +136,12 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	if resourceType != "" {
 		if isLegacyMetricsResourceTypeInput(resourceType) {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, or node", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, or system-container (node is an alias)", resourceType)), nil
 		}
 		resourceType = canonicalMetricsResourceType(resourceType)
-		validTypes := map[string]bool{"vm": true, "system-container": true, "node": true}
+		validTypes := map[string]bool{"agent": true, "vm": true, "system-container": true, "node": true}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, or node", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use agent, vm, or system-container (node is an alias)", resourceType)), nil
 		}
 	}
 
@@ -165,7 +165,30 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 
 	if resourceID != "" {
 		response.ResourceID = resourceID
-		metrics, err := e.metricsHistory.GetResourceMetrics(resourceID, duration)
+		metricsID := resourceID
+		var metricsTarget *unifiedresources.MetricsTarget
+		if e.unifiedResourceProvider != nil {
+			resource, err := e.resolvePerformanceResource(resourceID, resourceType)
+			if err != nil {
+				return NewErrorResult(err), nil
+			}
+			response.ResourceID = resource.ID
+			target := e.resourceMetricsTarget(resource)
+			if target == nil || strings.TrimSpace(target.ResourceID) == "" {
+				return NewTextResult(fmt.Sprintf("No metrics target is available for resource %s.", resource.ID)), nil
+			}
+			metricsID = target.ResourceID
+			metricsTarget = target
+		}
+		var metrics []MetricPoint
+		var err error
+		if retained, ok := e.metricsHistory.(interface {
+			GetResourceMetricsForTarget(unifiedresources.MetricsTarget, time.Duration) ([]MetricPoint, error)
+		}); ok && metricsTarget != nil {
+			metrics, err = retained.GetResourceMetricsForTarget(*metricsTarget, duration)
+		} else {
+			metrics, err = e.metricsHistory.GetResourceMetrics(metricsID, duration)
+		}
 		if err != nil {
 			return NewErrorResult(err), nil
 		}
@@ -189,7 +212,7 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 	keys := make([]string, 0, len(summary))
 	for id, metric := range summary {
 		metricType := canonicalMetricsResourceType(metric.ResourceType)
-		if resourceType != "" && metricType != resourceType {
+		if resourceType != "" && canonicalQueryResourceType(metricType) != canonicalQueryResourceType(resourceType) {
 			continue
 		}
 		keys = append(keys, id)
@@ -688,7 +711,7 @@ func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map
 	instanceFilter, _ := args["instance"].(string)
 	nodeFilter, _ := args["node"].(string)
 	healthFilter, _ := args["health"].(string)
-	typeFilter, _ := args["type"].(string)
+	typeFilter, _ := args["disk_type"].(string)
 	limit := intArg(args, "limit", 100)
 
 	// Prefer unified resources when available
@@ -707,10 +730,7 @@ func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map
 				continue
 			}
 
-			node := r.ParentName
-			if node == "" && len(r.Identity.Hostnames) > 0 {
-				node = r.Identity.Hostnames[0]
-			}
+			node := canonicalPhysicalDiskHost(r)
 
 			// Apply filters
 			if instanceFilter != "" {

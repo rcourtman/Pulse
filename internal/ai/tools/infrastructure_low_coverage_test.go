@@ -652,7 +652,7 @@ func TestExecuteListPhysicalDisks(t *testing.T) {
 		UnifiedResourceProvider: diskProvider,
 	})
 	result, err := exec.executeListPhysicalDisks(ctx, map[string]interface{}{
-		"type": "sata",
+		"disk_type": "sata",
 	})
 	require.NoError(t, err)
 

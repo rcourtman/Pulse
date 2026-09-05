@@ -171,3 +171,76 @@ A final identical readiness retry again received the provider policy refusal.
 The normal manual Patrol trigger returned HTTP 409 `patrol_readiness_not_ready`.
 No Patrol run or infrastructure action was accepted. Actual Patrol evaluation
 with this model remains blocked on a working supported provider path.
+
+
+## Resource evidence continuation, 2026-09-05
+
+The next real read-only run exposed independent model-facing contract defects.
+A canonical resource or hostname was passed directly to the in-memory metrics
+store, while `pulse_summarize` already resolved the registry's metrics target.
+Physical disk queries used the operation selector `type=disks` as a hardware
+format filter. The advertised `node` get type was rejected. Canonical agent
+projection also dropped Proxmox CPU topology. These defects are repaired in the
+shared tools, with ambiguous identity rejected and canonical response IDs kept.
+
+The first repaired performance query returned only post-restart observations.
+The production tool adapter now receives the current monitor's retained SQLite
+store. Resource-scoped reads use that store and return errors rather than
+silently substituting shorter in-memory history. A close/reopen regression
+covers Proxmox nodes, agents, VMs and system containers. Merged points are
+chronological before the existing output-size limit is applied. Unscoped
+summaries and baselines retain their existing providers and remain a
+modernization residual.
+
+A subsequent live Opus 5 response retrieved pre-restart observations and the
+correct delly2 NVMe disk, whose SMART assessment passed at 33 degrees Celsius.
+It correctly identified that the retained series covered about 31 minutes,
+not the requested full day. More retained data cannot be invented. The model
+still inferred a probable wear-related reason for a warning without the risk
+record, and the tool omitted explicit wear units. Disk risk explanation and
+coverage reconciliation remain unqualified.
+
+The corrected incomplete-readiness projection is browser-tested using the
+backend regression result, explicitly as presentation proof rather than a new
+provider qualification. No provider refusal was bypassed or repeatedly retried.
+The real manual Patrol endpoint remains blocked with HTTP 409. The existing
+provider policy refusal still prevents a qualified autonomous Patrol run.
+
+
+The named-resource repeat also misused `current_resource` from the Patrol
+page, then asked which machine was intended despite `delly2` being named.
+The shared boundary error had instructed the model to ask the user before any
+further targeted read. It now distinguishes the unattached shortcut from an
+explicit name and directs name resolution through canonical query search.
+The shortcut remains blocked until attached context exists.
+
+Live gate testing exposed an execution defect while correcting the saved
+readiness verdict: both runtime and API paths treated an unassessed mode as an
+executable warning. One manual read-only test run started unexpectedly and
+reassessed an existing finding before the development backend was restarted to
+stop it. No infrastructure mutation was performed. It is not a qualified
+Patrol outcome. The runtime now blocks a provider-failed unassessed Watch result
+for every selected mode, and the API consumes that execution verdict instead
+of authorizing from display warnings. Operator cancellation retains its
+existing non-failure behavior. The repaired live endpoint returned HTTP 409,
+and the actual saved result displays latency and Watch-only as not assessed.
+No new provider probe was needed to correct that persisted result.
+
+
+The final named-resource retest completed without clarification in 110 seconds.
+It resolved delly2 to the correct canonical agent, reported 12 CPU cores,
+retrieved chronological pre-restart metrics, and attributed the KIOXIA NVMe
+SMART PASSED result to the correct host. It identified the 31-minute retained
+window and roughly 44-minute age of its newest point, and did not claim that
+unchecked alerts were absent. Reasoning remains imperfect: child resources
+were later described as guests without workload enumeration, and coincident
+metric changes were treated as a probable workload start without attribution.
+This is a bounded evidence-path pass, not full diagnosis qualification.
+
+Final browser verification used `/patrol` and
+`/settings/pulse-intelligence/patrol` at 1440x1000 and 390x1000. It exercised
+Assistant submission and completion, keyboard/pointer tool-result expansion
+and collapse, output scrolling, final-answer pixels, Escape, session history
+and reload. The actual cached readiness result and actual HTTP 409 gate were
+verified after the final source changes. Local receipts bind source hashes,
+transcripts and screenshots under the homelab resource-browser artifact set.

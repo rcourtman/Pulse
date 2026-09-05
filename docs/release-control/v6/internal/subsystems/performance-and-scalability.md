@@ -15,6 +15,12 @@
 
 ## Purpose
 
+Resource-scoped Assistant performance reads query retained CPU, memory and
+disk series using the registry target, then retain the existing 120-point
+output limit. A backend restart does not define the requested history window.
+Store errors cannot silently substitute a shorter in-memory series. Unscoped
+summary modernization remains tracked by the AI runtime contract.
+
 Own measurable performance budgets, query-plan guarantees, and hot-path
 regression protection.
 

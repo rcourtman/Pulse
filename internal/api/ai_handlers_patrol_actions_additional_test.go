@@ -2,9 +2,12 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1098,6 +1101,82 @@ func TestHandleForcePatrol_BlocksNotReadyPatrolModel(t *testing.T) {
 	}
 	if payload.Details["model"] != model {
 		t.Fatalf("model detail = %q, want %q", payload.Details["model"], model)
+	}
+}
+
+func TestHandleForcePatrol_BlocksIncompleteContinuationDespitePassingDimensions(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "provider unavailable", http.StatusServiceUnavailable)
+	}))
+	defer provider.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:test-model"
+	aiCfg.PatrolModel = aiCfg.Model
+	aiCfg.OllamaBaseURL = provider.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatal(err)
+	}
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	// Obtain the production cache identity against a local provider, then
+	// reproduce a saved evaluation whose continuation failed after its probes.
+	result := handler.defaultAIService.RunPatrolModelReadiness(context.Background(), config.AIProviderOllama, "test-model")
+	if result.CacheKey == "" {
+		t.Fatal("expected a persisted evaluation identity")
+	}
+	result.Success = false
+	result.PatrolCapable = false
+	result.TransportHealthy = true
+	result.Status = ai.PatrolModelReadinessWarning
+	result.Cause = ai.PatrolFailureCauseProviderConnection
+	result.MaxVerifiedMode = ""
+	result.Summary = "Provider stopped before continuation completed."
+	result.Dimensions.Connectivity = ai.PatrolModelReadinessDimension{Status: ai.PatrolModelReadinessPass}
+	result.Dimensions.ToolProtocol = ai.PatrolModelReadinessDimension{Status: ai.PatrolModelReadinessPass, Attempts: 3, Passed: 3}
+	result.Dimensions.ContextQuality = ai.PatrolModelReadinessDimension{Status: ai.PatrolModelReadinessPass, Attempts: 2, Passed: 2}
+	result.Dimensions.Latency = ai.PatrolModelReadinessDimension{Status: ai.PatrolModelReadinessNotAssessed}
+	result.Modes.Monitor = ai.PatrolModeSuitability{Status: ai.PatrolModeNotAssessed, Summary: result.Summary}
+	result.Modes.Approval = ai.PatrolModeSuitability{Status: ai.PatrolModeNotSuitable}
+	payload, err := json.Marshal(struct {
+		Result     ai.PatrolModelReadinessResult `json:"result"`
+		CacheKey   string                        `json:"cache_key"`
+		RecordedAt time.Time                     `json:"recorded_at"`
+	}{result, result.CacheKey, time.Now().UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "ai_patrol_model_readiness.json"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler = newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
+	if cached, _ := handler.defaultAIService.CachedPatrolModelReadiness(); cached == nil {
+		t.Fatal("expected the saved evaluation to survive restart")
+	}
+	readiness := handler.buildPatrolReadiness(context.Background(), handler.defaultAIService, true)
+	for _, id := range []string{"tools", "context_quality", "latency"} {
+		if check := requirePatrolReadinessCheck(t, readiness, id); check.Status == patrolReadinessNotReady {
+			t.Fatalf("display dimension %s unexpectedly blocks the fixture: %+v", id, check)
+		}
+	}
+	if check := requirePatrolReadinessCheck(t, readiness, "runtime"); check.Status != patrolReadinessNotReady {
+		t.Fatalf("execution check = %+v, want not ready", check)
+	}
+	rec := httptest.NewRecorder()
+	handler.HandleForcePatrol(rec, newLoopbackRequest(http.MethodPost, "/api/ai/patrol/run", nil))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	var response APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != "patrol_readiness_not_ready" {
+		t.Fatalf("code = %q, want patrol_readiness_not_ready", response.Code)
 	}
 }
 
