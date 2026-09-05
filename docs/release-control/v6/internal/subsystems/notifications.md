@@ -571,11 +571,43 @@ every destination the decision webhook delivery already made for HTTP 4xx in
 `isRetryableWebhookError`.
 
 Dead-lettering early must not lose the notification: `RetryTerminalFailures`
-remains the operator's recovery path, returning retained terminal failures to
-the queue with a fresh budget once the credentials or configuration are fixed.
+remains the operator's recovery path, returning eligible retained terminal
+failures to the queue with a fresh budget once the credentials or configuration
+are fixed. Resolution removes obsolete firing entries from that eligibility;
+retry must not resurrect an incident which has already recovered.
 A dead-letter row records `failureClass` and a `deadLetterReason` of
 `failure_class_not_retryable` or `max_retries_exhausted` so the two are
 distinguishable in local logs.
 
 `internal/notifications/failure_class_test.go` pins the retryable split and
 that a deterministic failure dead-letters on its first attempt.
+
+
+### Resolution remains final across terminal retries and restart
+
+Resolution cancellation covers pending, sending, failed, and dead-lettered
+firing rows. A wholly obsolete row becomes cancelled; a grouped row retains
+only unrelated firing alerts and their operational links. Recovery jobs are
+not cancelled by this operation. Only removed pending entries contribute to
+the pending-suppression return count; terminal or interrupted sends must not
+be counted as proof that firing was never delivered.
+
+The cancellation verdict persists across queue reopen and bulk operator
+retry. Per-item retry also rejects cancelled and already-sent rows atomically,
+so a stale retry request cannot bypass resolution or duplicate a completed
+delivery. Pending, sending, failed, and dead-lettered rows remain eligible for
+the existing retry scheduler.
+
+Cancelling a row retains its failed-attempt audit history and announces the
+changed queue-health verdict only after releasing both the database mutex and
+per-alert delivery gates. Clearing obsolete retained failures does not prove
+that a destination has been repaired. Nor does this operation retrospectively
+identify obsolete rows whose resolution happened before this behaviour was
+installed; historical backlogs still require incident reconciliation.
+
+`internal/notifications/queue_resolution_retry_test.go` proves failed and
+dead-lettered cancellation across durable reopen and actual queue processing,
+preservation of unrelated grouped firing and recovery jobs, retained failed
+attempts, callback lock release and committed-state visibility, and the
+per-item retry eligibility matrix. These are component proofs, not installed
+receiver receipts or exactly-once delivery guarantees.
