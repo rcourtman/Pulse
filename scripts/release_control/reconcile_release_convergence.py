@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 from datetime import datetime
 import json
 import os
@@ -478,6 +479,20 @@ def flatten_pages(pages: Iterable[object], key: str | None = None) -> list[objec
     return values
 
 
+def report_decision(message: str) -> None:
+    """Expose safe decision text, not private API responses, in the run summary."""
+    print(message)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as output:
+            output.write(
+                "### Release convergence reconciliation\n\n"
+                "A successful reconciliation job is not evidence of successful "
+                "release convergence or installed customer health.\n\n"
+                f"<pre>{html.escape(message)}</pre>\n\n"
+            )
+
+
 def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
     repository = github.repository
     repository_state = github.api(f"repos/{repository}")
@@ -499,7 +514,7 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         path=CONVERGENCE_PATH,
     )
     if run.get("status") != "completed" or run.get("conclusion") not in TERMINAL_FAILURES:
-        print(f"Convergence run {run_id} no longer has terminal convergence debt; no action.")
+        report_decision(f"Convergence run {run_id} no longer has terminal convergence debt; no action.")
         return
     title = run.get("display_title")
     match = DISPLAY_TITLE.fullmatch(title) if isinstance(title, str) else None
@@ -528,7 +543,7 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         raise ReconciliationError("convergence history omitted the requested run")
     newest = max(matching_runs, key=lambda item: timestamp(item.get("created_at"), "run"))
     if newest.get("id") != run_id:
-        print(f"A newer convergence run already owns {title}; no action.")
+        report_decision(f"A newer convergence run already owns {title}; no action.")
         return
     try:
         release = github.api(f"repos/{repository}/releases/tags/{tag}")
@@ -554,21 +569,21 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         ) < 50:
             submitted = github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
             if submitted:
-                print(
+                report_decision(
                     f"Renewed pre-commit convergence owner {run_id} "
                     f"for active source {source_run_id}."
                 )
             else:
-                print(
+                report_decision(
                     f"DRY RUN: Would renew pre-commit convergence owner {run_id} "
                     f"for active source {source_run_id}."
                 )
             return
-        print(f"{tag} has no immutable activation commit; no convergence retry was dispatched.")
+        report_decision(f"{tag} has no immutable activation commit; no convergence retry was dispatched.")
         return
 
     if github.unchanged_credential_containment_block(run_id):
-        print(
+        report_decision(
             f"Convergence run {run_id} is held by unchanged private credential containment; "
             "no unattended retry was dispatched."
         )
@@ -604,16 +619,16 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
             if item.get("head_sha") == run.get("head_sha")
         )
         if attempts >= max_attempts:
-            print(
+            report_decision(
                 f"{title} remains failed after the {attempts}-attempt retry budget; "
                 "no unchanged-control retry was dispatched."
             )
             return
         submitted = github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
         if submitted:
-            print(f"Re-ran current-control convergence {run_id} for committed {tag}.")
+            report_decision(f"Re-ran current-control convergence {run_id} for committed {tag}.")
         else:
-            print(
+            report_decision(
                 f"DRY RUN: Would re-run current-control convergence {run_id} "
                 f"for committed {tag}."
             )
@@ -641,12 +656,12 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         payload,
     )
     if submitted:
-        print(
+        report_decision(
             f"Dispatched fresh convergence controls after observing {default_commit} "
             f"for committed {tag}; the failed run used {run.get('head_sha')}."
         )
     else:
-        print(
+        report_decision(
             f"DRY RUN: Would dispatch fresh convergence controls after observing "
             f"{default_commit} for committed {tag}; the failed run used "
             f"{run.get('head_sha')}."
@@ -708,7 +723,10 @@ def main() -> int:
     try:
         run_ids = discover(github) if args.latest else [args.run_id]
         if not run_ids:
-            print("No current immutable release has unattended convergence debt.")
+            report_decision(
+                "No failed run selected for retry among current immutable channel heads. "
+                "Mutable releases and missing convergence runs are not qualified by this check."
+            )
             return 0
         for run_id in run_ids:
             assert run_id is not None
