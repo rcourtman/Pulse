@@ -55,3 +55,21 @@ Narrow-width interaction is keyboard-driven, not touch or Brave qualification.
 The test does not cover Settings Manage editing, Authentication strategy selection,
 expansion padding, arbitrary inventory churn/reordering, or a deployed release.
 Passing is not grounds to close the mixed report #1869.
+
+## CI and release evidence
+
+These standalone runners are manual qualification commands: the current GitHub
+workflows do not invoke them. A green Frontend or Core E2E check therefore does
+not establish that either runner passed on the checked commit. Record the exact
+source revision, command, viewport and output when using their results for
+release review; retained JSON samples describe their recorded run, not later
+commits or distributed images.
+
+The separate integration spec
+`tests/integration/tests/64-workloads-proxmox-refresh-stability.spec.ts` covers
+workload History, LXC refresh/deletion and off-screen PBS drawer scrolling. It is
+currently listed in `PROBATION_SPECS` in `tests/integration/e2e-tiering.mjs`:
+its failures are reported but do not fail the Core E2E gate. Inspect the probation
+report as well as the aggregate check. It is not a substitute for these runners'
+Coverage/By date assertions. Promotion remains subject to the existing ten-clean-
+executed-main-runs rule; a local pass is not grounds to bypass it.
