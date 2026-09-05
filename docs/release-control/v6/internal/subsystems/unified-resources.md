@@ -5030,3 +5030,17 @@ organisation URL state reset. The global no-op store reports false.
 A failed admission HTTP refresh is not an empty estate either: retain the last
 valid facet on request failure. A successful response still replaces it,
 including all-false admission; first-load failure remains unresolved.
+
+### Existing Docker update and expanded identity text remain readable
+
+DockerContainersTable marks its update cell as the phone reflow boundary for both
+read-only status and governed UpdateButton content. The boundary must preserve
+full action names, review semantics and native agent/container identity; it must
+not hide update labels to satisfy width constraints. DockerNativeTables.test.ts
+checks that the governed update action remains inside that boundary.
+
+ResourceDetailDrawer headings wrap long display names rather than ellipsising
+them. Overview rows may still truncate identity; keyboard expansion exposes the
+full heading. This shared drawer rule applies across resource types. The 390px
+browser qualification checks heading fit and keyboard expansion; no data model,
+authorisation, action dispatch or resource admission contract changes.

@@ -26,6 +26,26 @@ installed-customer or release qualification. The executable discovery and
 tier-refusal checks in `tests/integration/scripts/managed-local-backend.test.mjs`
 protect this boundary without launching a browser.
 
+The shell entrypoint requires Linux child-subreaper support, Python 3 and
+`/proc`; unsupported platforms fail closed. Its supervisor owns a unique
+0700 cookie directory and overrides inherited cookie paths. Normal completion
+reaps writers and removes cookies while retaining reports for inspection.
+TERM/INT/HUP stop and reap descendants, including adopted detached writers,
+before removing only that invocation's cookies, reports and results. Writers
+ignoring TERM receive KILL after five seconds; inability to reap within fifteen
+seconds fails cleanup and retains artifacts rather than racing writers.
+Supervisor SIGKILL and host failure still require manual scoped cleanup.
+`tests/integration/scripts/managed-local-backend.test.mjs` verifies helper path
+selection and executes the supervisor and shell interruption fixtures. These
+are process/fixture proofs, not real-browser or container-cleanup receipts.
+
+The cross-organisation sharing diagnostic must use cookie-session authentication,
+not the primary API-token shortcut: the restricted token is correctly refused
+when the browser selects another organisation. It asserts the absence of a
+browser token and presence of a session cookie before creating shares. Getting
+past that authentication mismatch does not establish sharing success: rendered
+Accept/Decline controls and the accepted API state remain required assertions.
+
 
 ### Portable installer lifecycle ownership
 
@@ -429,6 +449,13 @@ may delete invalid assets and rewrite validation annotations only while a
 release is still a draft. A post-publication edit is observation, not authority
 to mutate or destroy an immutable release; failed revalidation records a
 failing status and requires an explicit corrective release path.
+Asset-validation banners report asset checks only, never publication readiness.
+Both draft and post-publication banners must explicitly distinguish asset checks
+from installed-service health, release convergence, clean soak and stable
+publication approval, while retaining the individual check summary.
+`scripts/release_control/render_release_body_test.py` executes the workflow
+wording branch for both states and verifies these reporting limits; this local
+proof does not qualify an installed service or authorise release mutation.
 The activation marker is part of that complete draft packet: its stored digest
 must be checked before publication, and customer convergence is forbidden until
 GitHub reports the release immutable and its signed release attestation verifies.
@@ -1113,6 +1140,15 @@ artifact-selection behaviour.
    and qualified by the exact create-release run. It must bind that artifact
    to the activated source run, tag, commit, and activation marker, and must
    not repeat chart packaging or the pre-activation kind install/upgrade smoke.
+   An existing chart release must explicitly report a non-draft state before
+   convergence uploads assets, edits metadata, or advertises it through Pages.
+   Matching assets visible to the authenticated workflow do not make a draft
+   publicly downloadable. Draft or unknown publication state fails closed
+   without implicitly publishing an operator-owned draft. Published matching
+   assets remain reusable without replacement. The executable retry fixtures
+   in `scripts/release_control/helm_pages_retry_test.py` and the release-policy
+   test `test_helm_pages_retry_requires_explicitly_published_chart` protect this
+   boundary; they are not live publication or installed Helm qualification.
    Release-to-convergence and cross-repository child-run observation should
    use short bounded polls so GitHub indexing cannot add tens of seconds after
    a required exact run or activation marker has already completed.
@@ -5012,7 +5048,14 @@ back to a marker-free draft.
 
 `scripts/verify-github-release-integrity.sh` is the shared post-publication
 check. It binds the release database ID, tag, exact source SHA, immutable state,
-and single digest-bearing activation marker, then requires `gh release verify`
+and single digest-bearing activation marker. Uniqueness counts every asset named
+`release-activation.json`, including pending, empty, or malformed entries,
+before validating the marker's metadata. Duplicate names must fail before
+attestation or download; filtering out invalid entries must not make an
+ambiguous inventory acceptable. The regression cases in
+`scripts/release_control/verify_github_release_integrity_test.py` cover both
+valid duplicates and a valid marker accompanied by a malformed duplicate.
+The check then requires `gh release verify`
 to validate GitHub's signed release attestation. It must then download the
 activation marker from that release and require `gh release verify-asset` to
 bind the exact consumed bytes to the signed release attestation. Filename,

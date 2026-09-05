@@ -97,6 +97,7 @@ if ! jq -e \
      .immutable == true and
      ($expected_release_id == "" or (.id | tostring) == $expected_release_id) and
      ($expected_source_sha == "" or .target_commitish == $expected_source_sha) and
+     ([.assets[]? | select(.name == "release-activation.json")] | length == 1) and
      ([.assets[]? | select(
         .name == "release-activation.json" and
         .state == "uploaded" and

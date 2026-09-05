@@ -1432,3 +1432,33 @@ body,
     transition: none;
   }
 }
+
+/* Phone update states must remain readable inside the existing, non-scrolling
+ * Docker table. Wrap the badge rather than clipping it or hiding its label. */
+@container (max-width: 33.999rem) {
+  .docker-container-update-cell {
+    padding-inline: 0.125rem;
+  }
+
+  .docker-container-update-cell > :is(span, div),
+  .docker-container-update-cell button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .docker-container-update-cell > span,
+  .docker-container-update-cell button {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.125rem;
+    padding-inline: 0.125rem;
+    font-size: 10px;
+  }
+
+  .docker-container-update-cell svg {
+    flex-shrink: 0;
+  }
+}

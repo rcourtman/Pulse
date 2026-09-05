@@ -51,11 +51,11 @@ async function mobileDestinations(page: Page) {
 }
 
 for (const admissionFailure of [false, true]) {
-  for (const width of [1440, 1100, 390]) {
+  for (const width of [1440, 1100, 390, 320]) {
     test(`populated navigation survives socket loss at ${width}px (admission failure: ${admissionFailure})`, async ({ page, browser }, testInfo) => {
       test.skip(!enabled, 'Requires isolated mock backend and explicit qualification opt-in');
       test.setTimeout(120_000);
-      await page.setViewportSize({ width, height: 900 });
+      await page.setViewportSize({ width, height: width <= 390 ? 844 : 900 });
       let blocked = false;
       let failAdmission = false;
       let failedAdmissions = 0;
@@ -94,7 +94,7 @@ for (const admissionFailure of [false, true]) {
       const capture = async (stage: string) => {
         await testInfo.attach(stage, { body: await page.screenshot({ path: testInfo.outputPath(`${stage}.png`) }), contentType: 'image/png' });
       };
-      if (width === 390) await mobileDestinations(page);
+      if (width <= 390) await mobileDestinations(page);
       await capture('healthy');
       const documentIdentity = await page.evaluate(() => performance.timeOrigin);
       blocked = true;
@@ -110,7 +110,7 @@ for (const admissionFailure of [false, true]) {
         await expect(page.getByRole('button', { name: 'Acknowledge', exact: true }).first()).toBeEnabled();
         await capture('active-incidents-during-reconnect');
       }
-      if (width === 390) await mobileDestinations(page);
+      if (width <= 390) await mobileDestinations(page);
       const admissionResponse = admissionFailure
         ? page.waitForResponse(response => response.url().includes('/api/resources?page=1&limit=1') && response.status() === 503)
         : null;
@@ -119,10 +119,92 @@ for (const admissionFailure of [false, true]) {
       await expect(page.getByRole('status', { name: healthy })).toBeVisible({ timeout: 45_000 });
       if (admissionFailure) await expect.poll(() => failedAdmissions).toBeGreaterThan(0);
       expect.soft(await navigation(page)).toEqual(before);
-      if (width === 390) await mobileDestinations(page);
+      if (width <= 390) await mobileDestinations(page);
       expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
       await capture('recovered');
-      await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
+      if (width <= 390 && !admissionFailure && process.env.PULSE_E2E_TABLE_ACCESS === '1') {
+        const row = page.locator('tr[data-docker-container-row]').filter({ hasText: 'notification' }).first();
+        const table = row.locator('xpath=ancestor::table');
+        const wrapper = table.locator('..');
+        const measure = () => wrapper.evaluate(el => ({
+          width: el.clientWidth, scrollWidth: el.scrollWidth, left: el.scrollLeft,
+          overflowX: getComputedStyle(el).overflowX, tabIndex: (el as HTMLElement).tabIndex,
+          cells: Array.from(el.querySelector('tr[data-docker-container-row]')!.children).map(cell => ({
+            text: cell.textContent, x: cell.getBoundingClientRect().x,
+            width: cell.getBoundingClientRect().width,
+            titles: Array.from(cell.querySelectorAll('[title]')).map(n => n.getAttribute('title')),
+          })),
+        }));
+        await row.scrollIntoViewIfNeeded();
+        const initial = await measure();
+        // Text ranges catch clipped glyphs even when the wrapper itself has no
+        // scrollable overflow. Check every rendered update state, not one row.
+        await expect(table.locator('.docker-container-update-cell').filter({ hasText: 'Current' }).first()).toBeVisible();
+        const clippedUpdateText = await table.locator('.docker-container-update-cell').evaluateAll(cells =>
+          cells.flatMap(cell => {
+            const bounds = cell.getBoundingClientRect();
+            const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+            const clipped: string[] = [];
+            while (walker.nextNode()) {
+              if (!walker.currentNode.textContent?.trim()) continue;
+              const range = document.createRange();
+              range.selectNodeContents(walker.currentNode);
+              if (Array.from(range.getClientRects()).some(rect =>
+                rect.left < bounds.left - 1 || rect.right > bounds.right + 1)) {
+                clipped.push(walker.currentNode.textContent!);
+              }
+            }
+            return clipped;
+          }),
+        );
+        expect(clippedUpdateText).toEqual([]);
+        // At 320px labels may wrap; reflow requires no lost text, not a
+        // single line. Preserve the stronger 390px presentation regression.
+        if (width === 390) {
+          const currentLabel = table.locator('.docker-container-update-cell span').filter({ hasText: /^Current$/ }).last();
+          expect(await currentLabel.evaluate(el => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            return range.getClientRects().length;
+          })).toBe(1);
+        }
+
+        expect(initial.overflowX).toBe('clip');
+        expect(initial.scrollWidth).toBe(initial.width);
+
+        await row.hover();
+        await page.mouse.wheel(2000, 0);
+        await page.waitForTimeout(350);
+        const pointer = await measure();
+        await capture('table-after-horizontal-wheel');
+        await wrapper.evaluate(el => { el.scrollLeft = 0; });
+        // Start on a real focusable descendant, without adding tabindex to the UI.
+        const toggle = row.getByRole('button').first();
+        await toggle.focus();
+        await page.keyboard.press('ArrowRight');
+        await page.waitForTimeout(350);
+        const keyboard = await measure();
+        const accessibleRow = await row.ariaSnapshot();
+        await page.keyboard.press('Enter');
+        await capture('table-keyboard-detail');
+        const expanded = await toggle.getAttribute('aria-expanded');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        const detailId = await toggle.getAttribute('aria-controls');
+        const detailText = detailId ? await page.locator(`[id="${detailId}"]`).innerText() : null;
+        const heading = page.locator(`[id="${detailId}"] h2`).first();
+        await expect(heading).toContainText('notification');
+        expect(await heading.evaluate(el => el.scrollWidth <= el.clientWidth &&
+          getComputedStyle(el).textOverflow !== 'ellipsis')).toBe(true);
+        await heading.scrollIntoViewIfNeeded();
+        await capture('table-full-detail-heading');
+
+        await testInfo.attach('narrow-table-access', {
+          body: JSON.stringify({ initial, pointer, keyboard, accessibleRow, expanded, detailText }, null, 2),
+          contentType: 'application/json',
+        });
+      }
+
+      await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: width <= 390 ? 844 : 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
     });
   }
 }

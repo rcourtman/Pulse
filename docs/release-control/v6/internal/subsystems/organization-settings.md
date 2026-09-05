@@ -64,6 +64,8 @@ create, review, and approve cross-organization shares.
 
 ## Shared Boundaries
 
+Organisation overview, access and sharing use the authenticated currentUsername for owner/member comparisons, including local sessions scoped to a non-default organisation. They must not infer the current principal from the privileged configured-administrator field when currentUsername is present. Existing owner/admin membership checks and server-side enforcement remain authoritative.
+
 1. `frontend-modern/src/api/orgs.ts` shared with `api-contracts`: the organization frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/rbac.ts` shared with `api-contracts`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 3. `internal/api/access_control_handlers.go` shared with `api-contracts`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.

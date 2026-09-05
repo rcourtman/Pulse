@@ -3,6 +3,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { runInNewContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -178,6 +181,17 @@ test('multi-tenant release auth reuses storage state and classifies login rate l
   assert.match(helpers, /loginResponse\?\.status\(\) === 429/);
   assert.match(helpers, /return "error:Too many requests"/);
   assert.match(helpers, /\/too many\/i\.test\(lastOutcome\) \? 15_000/);
+});
+
+test('sharing diagnostic uses cookie-session auth without granting cross-org token access', async () => {
+  const spec = await fs.readFile(path.join(integrationRoot, 'tests', '03-multi-tenant.spec.ts'), 'utf8');
+  const sharing = spec.split("test('Scenario 6:")[1].split("test('Scenario 7:")[0];
+  assert.match(sharing, /await ensureSessionAuthenticated\(page\)/);
+  assert.doesNotMatch(sharing, /await ensureAuthenticated\(page\)/);
+  assert.match(sharing, /sessionStorage\.getItem\('pulse_auth'\)\)\)\.toBeNull\(\)/);
+  assert.match(sharing, /cookie\.name === 'pulse_session'/);
+  assert.match(sharing, /cookie\.name === '__Host-pulse_session'/);
+  assert.match(sharing, /getByRole\('button', \{ name: 'Accept' \}\)\)\.toBeVisible\(\)/);
 });
 
 test('shared browser readiness waits for the bounded mock history contract', async () => {
@@ -414,4 +428,28 @@ test('normal stable configuration retains multi-tenant quarantine', () => {
   const result = list('playwright.config.ts', 'stable');
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /Total: 0 tests/);
+});
+
+
+test('owned cookie state selects the supervisor path without changing direct-run fallback', async () => {
+  const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');
+  const declaration = helpers.match(/const sharedCookieStatePath = [\s\S]*?;\n/);
+  assert.ok(declaration, 'cookie path resolver must remain inspectable');
+  const source = declaration[0].replace('(): string', '()') + '\nsharedCookieStatePath();';
+  const resolve = value => runInNewContext(source, {
+    path, helpersDir: path.join(integrationRoot, 'tests'),
+    process: { env: { PULSE_E2E_COOKIE_STATE_PATH: value } },
+  });
+  assert.equal(resolve(' /invocation-owned/cookies.json '), '/invocation-owned/cookies.json');
+  for (const value of [undefined, '', '   ']) {
+    assert.equal(resolve(value), path.join(integrationRoot, 'tmp/playwright-auth/shared-cookie-session.json'));
+  }
+});
+
+test('owned runner orchestration proves reaping, signal cleanup and concurrent isolation', { timeout: 30000 }, async () => {
+  const run = promisify(execFile);
+  // Registry-recognised orchestration proof executes the behavioural fixtures;
+  // neither a source-string match nor a fixture result is browser acceptance.
+  await run('python3', [path.join(scriptsDir, 'owned-run.test.py')], { timeout: 20000 });
+  await run(process.execPath, ['--test', path.join(scriptsDir, 'run-tests-interruption.test.mjs')], { timeout: 15000 });
 });

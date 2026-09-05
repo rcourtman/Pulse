@@ -311,6 +311,38 @@ class ReleaseContinuityTest(unittest.TestCase):
         self.assertEqual(diagnostic["identity"]["newer_stable_tags"], "")
         self.assertEqual(output, "")
 
+    def test_replacement_supersedes_orphan_without_granting_release_trust(self) -> None:
+        # Keep the same historical inventories across recovery. Deleting the
+        # orphan is neither necessary nor a substitute for release admission.
+        old = {**valid_release(), "tag_name": "v6.4.1", "immutable": False}
+        replacement = {**valid_release(), "tag_name": "v6.4.3"}
+        refs = [{"ref": "refs/tags/v6.4.2"}]
+        registries = [{"name": "ghcr.io/rcourtman/pulse", "tags": ["6.4.2"]}]
+        result, diagnostic, _ = self.run_command(
+            "frontier", old, stable_refs=refs, releases=[old],
+            registries=registries,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(
+            {item["code"] for item in diagnostic["violations"]},
+            {"stable_tag_without_release", "registry_stable_tag_beyond_latest"},
+        )
+        for immutable in (False, True):
+            with self.subTest(immutable=immutable):
+                candidate = {**replacement, "immutable": immutable}
+                result, diagnostic, _ = self.run_command(
+                    "frontier", candidate, stable_refs=refs,
+                    releases=[old, candidate], registries=registries,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(diagnostic["identity"]["orphaned_stable_tags"], "")
+                result, diagnostic, _ = self.run_command("release", candidate)
+                self.assertEqual(result.returncode, 0 if immutable else 1)
+                self.assertEqual(
+                    [item["code"] for item in diagnostic["violations"]],
+                    [] if immutable else ["release_mutable"],
+                )
+
     def test_frontier_rejects_newer_stable_tag_without_release_packet(self) -> None:
         release = valid_release()
         result, diagnostic, _ = self.run_command(

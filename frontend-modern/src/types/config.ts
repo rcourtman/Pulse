@@ -162,6 +162,8 @@ export interface SecurityStatus {
   proxyAuthUsername?: string;
   proxyAuthIsAdmin?: boolean;
   proxyAuthLogoutURL?: string;
+  // Effective authenticated principal, including organisation-scoped local sessions.
+  currentUsername?: string;
   authUsername?: string;
   authLastModified?: string;
   message?: string;

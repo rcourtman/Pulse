@@ -15,6 +15,20 @@
 
 ## Purpose
 
+Confirmed canonical metric recovery publishes the clearing evaluation's value,
+observation time, and resolved metric wording in the snapshot consumed by
+recent-resolution reads and notification callbacks. It must not reuse the last
+firing sample, including when the clearing value is zero or guest identity
+migrates between nodes. Clone the snapshot before refreshing recovery content;
+preserve incident identity and start time. Missing or malformed telemetry is
+not a clearing observation. This does not change explicit configuration-disable
+or resource-removal resolution semantics.
+`TestAlertCharacterizationGuestMetricResolutionUsesCurrentNodeIdentityAfterMove`
+in `internal/alerts/migration_characterization_test.go` pins canonical identity
+and clearing content together; `TestPBSPartialMetricsWebhookLifecycle` in
+`internal/monitoring/monitor_pbs_webhook_test.go` verifies low/zero measurements
+and invalid-telemetry suppression through a local HTTP receiver.
+
 TrueNAS INFO provider incidents remain on the canonical resource but do not
 enter the actionable active-alert lifecycle. Native NOTICE remains actionable
 at informational canonical severity; it must not be discarded merely because
@@ -371,6 +385,15 @@ default construction path still restores.
 
 ## Shared Boundaries
 
+PBS node-status availability is distinct from connectivity. While a connected
+PBS carries monitoring-owned `NodeMetricsUnavailable` evidence, CPU and memory
+evaluation must not treat zero-valued placeholders as recovery. Existing
+policy suppression and full-outage handling retain precedence. Valid low
+measurements resume normal recovery, including callbacks and recent history.
+Regression proof lives in `internal/alerts/telemetry_quality_test.go` and the
+HTTP-to-manager lifecycle in `internal/monitoring/monitor_pbs_coverage_test.go`.
+
+
 1. `frontend-modern/src/stores/websocket.ts` shared with `performance-and-scalability`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
    That shared store normalizes slimmed broadcast resources at ingestion —
    expanding `capabilitiesRef` through the state `capabilityCatalog` and
@@ -597,6 +620,25 @@ must not reinterpret acknowledgement as resolution, omit suppressed state from
 inspectability, or convert missing/stale evidence into health.
 
 ## Current State
+
+### Confirmed empty storage is recovery evidence
+
+Static storage capacity evaluation must admit a zero usage observation when
+`Total > 0`, `Used == 0`, and `Free == Total` together confirm an empty store.
+Offline or unavailable storage remains ineligible. Zero usage without those
+consistent byte counters is unknown capacity, not evidence of recovery.
+The observation passes through the existing canonical capacity lifecycle,
+including recovery confirmation and any predictive-capacity evidence; this
+rule does not directly clear an incident or bypass notification eligibility.
+
+`TestStorageEmptyCapacityRecovery` in `internal/alerts/alerts_test.go` pins
+confirmed empty recovery and retention under absent/inconsistent counters and
+offline/unavailable status. `internal/monitoring/monitor_storage_webhook_test.go`
+pins production callback/queue delivery of the correlated zero-value recovery,
+current observation time, matching history and duplicate avoidance, with no
+recovery on missing capacity. This is synthetic local receiver proof, not
+installed PBS API, off-host delivery or release qualification.
+
 
 ### Alert-quality telemetry folds only canonical durable lifecycle truth
 

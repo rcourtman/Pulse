@@ -1,0 +1,10 @@
+{
+  "run": "pulse-e2e-c95ed0849f86ed9f8e32a964b082d150",
+  "interrupted": true,
+  "exit": 143,
+  "containers_before": "pulse-e2e-c95ed0849f86ed9f8e32a964b082d150-server running\npulse-e2e-c95ed0849f86ed9f8e32a964b082d150-seed exited\npulse-e2e-c95ed0849f86ed9f8e32a964b082d150-mock running\n",
+  "containers_after": "",
+  "volumes_after": "",
+  "remaining_pids": [],
+  "owned_paths_remaining": []
+}

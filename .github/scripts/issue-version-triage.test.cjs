@@ -431,3 +431,35 @@ test("extractPulseVersion reads a capitalised version under its heading", () => 
     "6.0.4"
   );
 });
+
+test("structured Pulse version never falls back to an upgrade source or agent version", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const version of ["6.4", "6", "_No response_", ""]) {
+    assert.equal(extractPulseVersion(
+      "[Bug]: upgrade from rcourtman/pulse:v5.1.35 to rcourtman/pulse:6 failed",
+      `### Pulse version\n\n${version}\n\n### Agent version\n5.1.30\n`,
+    ), null);
+  }
+  assert.equal(extractPulseVersion("upgrade from v5.1.35", "### Pulse version\r\n\r\nV6.4.1\r\n\r\n### Agent version\r\n5.1.30"), "6.4.1");
+  assert.equal(extractPulseVersion("bug on v6.4.1", "legacy free-form report"), "6.4.1");
+  assert.equal(extractPulseVersion("bug on v5.1.35", "### Pulse version"), null);
+});
+
+test("ambiguous upgrade version requests information without a retest comment", async () => {
+  const { github, calls } = createGithub({ latestVersion: "6.4.1" });
+  const issue = {
+    number: 1913,
+    title: "[Bug]: upgrade from rcourtman/pulse:v5.1.35 to rcourtman/pulse:6 failed",
+    body: "### Pulse version\n\n6.4\n\n### Agent version\nnone\n",
+    labels: [{ name: "bug" }],
+    author_association: "NONE",
+  };
+  const args = { github, context: createContext({ issue }), core: createCore() };
+  await triage.syncLabels(args);
+  await triage.postRetestComment(args);
+  const labels = calls.setLabels.at(-1).labels;
+  assert.ok(labels.includes("needs-version-info"));
+  assert.ok(!labels.includes("affects-5.1.35"));
+  assert.ok(!labels.includes("needs-retest-on-latest"));
+  assert.equal(calls.createComment.length, 0);
+});

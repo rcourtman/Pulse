@@ -110,7 +110,7 @@ jobs:
             # updates in earlier commits as insubstantial.
             if ! git diff-tree --no-commit-id --name-only -r "${commit}" \
               | PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="${reason}" python3 scripts/release_control/canonical_completion_guard.py \
-                  --files-from-stdin --diff-base "${commit}^"; then
+                  --files-from-stdin --diff-base "${commit}^" --commit "${commit}"; then
               echo "Canonical completion guard failed for commit ${commit}."
               status=1
             fi
@@ -187,6 +187,9 @@ jobs:
 
       - name: Run stable release continuity diagnostic unit tests
         run: python3 scripts/release_control/release_continuity_test.py
+
+      - name: Run Helm Pages publication retry tests
+        run: python3 scripts/release_control/helm_pages_retry_test.py
 
       - name: Run status audit unit tests
         run: python3 scripts/release_control/status_audit_test.py

@@ -872,6 +872,9 @@ describe('Docker native tables', () => {
     // One click plans the governed action; the review dialog is the
     // confirmation surface, so no second in-row confirm click exists.
     const updateButton = screen.getByRole('button', { name: /click to review and update/i });
+    // The phone reflow boundary must include the governed action, not just read-only badges.
+    expect(updateButton.closest('td')).toHaveClass('docker-container-update-cell');
+    expect(updateButton).toHaveTextContent('Update');
     fireEvent.click(updateButton);
 
     await waitFor(() =>

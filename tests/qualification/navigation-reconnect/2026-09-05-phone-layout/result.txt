@@ -1,0 +1,20 @@
+Running 6 tests using 1 worker
+
+(node:2415548) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2415548) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/96-navigation-socket-recovery.spec.ts:79:5 › populated navigation survives socket loss at 1440px (admission failure: false) (8.3s)
+  ✓  2 [chromium] › tests/96-navigation-socket-recovery.spec.ts:79:5 › populated navigation survives socket loss at 1100px (admission failure: false) (9.8s)
+  ✓  3 [chromium] › tests/96-navigation-socket-recovery.spec.ts:79:5 › populated navigation survives socket loss at 390px (admission failure: false) (16.2s)
+  ✓  4 [chromium] › tests/96-navigation-socket-recovery.spec.ts:79:5 › populated navigation survives socket loss at 1440px (admission failure: true) (6.5s)
+  ✓  5 [chromium] › tests/96-navigation-socket-recovery.spec.ts:79:5 › populated navigation survives socket loss at 1100px (admission failure: true) (7.1s)
+  ✓  6 [chromium] › tests/96-navigation-socket-recovery.spec.ts:79:5 › populated navigation survives socket loss at 390px (admission failure: true) (13.9s)
+
+  6 passed (1.0m)
+
+To open last HTML report run:
+
+  npx playwright show-report
+
+[integration] Stopped managed local backend

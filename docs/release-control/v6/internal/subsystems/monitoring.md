@@ -17,6 +17,51 @@
 
 ## Purpose
 
+PBS node-status collection must reject HTTP-success responses whose `data`
+is omitted or null (including a null response envelope). Absent status is
+unavailable telemetry, not measured zero usage: the poller retains independently
+established connectivity, marks node metrics unavailable, and must not resolve
+an active metric incident from that response. Populated objects must include
+non-null CPU, memory used and memory total measurements, with non-negative
+usage and a positive memory denominator. Missing fields must not become zero
+usage. Since the poller has a single node-metrics availability flag, incomplete
+CPU or memory makes the node metrics unavailable together; unrelated status
+fields are not required. Explicit zero CPU and memory usage remain valid.
+
+The upstream PBS API schema at
+https://pbs.proxmox.com/docs/api-viewer/apidoc.js (read 2026-09-05) declares CPU
+and memory used/total as numeric measurements. This validation is limited to
+measurements consumed by node alerting, not exhaustive schema enforcement.
+
+Verification: `TestClient_GetNodeStatus_MissingData` in
+`pkg/pbs/client_http_test.go` covers the absent envelopes.
+`TestPBSPartialMetricsWebhookLifecycle` in
+`internal/monitoring/monitor_pbs_webhook_test.go` exercises repeated null status
+and missing memory-used measurements through the real poller, alert manager,
+notification queue and local webhook. `TestClient_GetNodeStatus_MetricCompleteness`
+pins omitted/null fields, invalid denominators, negative usage, genuine zero,
+and tolerance for unrelated extra fields.
+It requires online-but-unavailable projection, unchanged incident identity,
+no false recovery history or delivery, then one identity-preserving recovery
+after valid low-memory samples. These are local synthetic checks, not
+installed-artifact or off-host destination qualification.
+
+Direct PBS backup polling classifies typed API and authentication failures by
+the response status exposed by `pbs.HTTPStatus`, including wrapped errors.
+A 5xx gateway or server response remains transient even when its body quotes
+an upstream “API error 403” or “API error 404”; that text must not erase the
+last known backup inventory. Genuine 4xx responses remain terminal under the
+existing cache policy. The legacy untyped-error fallback is unchanged.
+Retaining cached inventory does not establish a successful poll or fresh
+backup evidence.
+
+Verification: `TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
+`TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError` in
+`internal/monitoring/monitor_backups_readstate_test.go` exercise actual HTTP
+fixtures for 500, 502 quoting 403, 503 quoting 404, and genuine 401/403/404.
+These tests prove cache retention/removal, not installed PBS wake, service
+restart, or notification receipt.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.
@@ -652,6 +697,17 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 63b. `internal/config/guest_metadata.go`
 
 ## Shared Boundaries
+
+PBS polling owns the internal `PBSInstance.NodeMetricsUnavailable` discriminator:
+each poll starts unavailable and only a successful non-nil node-status result
+clears it. A denied or failed node-status endpoint does not invalidate successful
+connectivity or independently accessible datastore inventory. In-process state
+copies preserve this evidence; JSON deliberately does not carry it. The
+zero-value compatibility default is not persisted availability evidence.
+Proof: `internal/models/metrics_types_test.go` and
+`internal/monitoring/monitor_pbs_coverage_test.go`. The latter exercises real
+HTTP polling through normal alert-manager publication, not destination delivery.
+
 
 1. `internal/config/host_continuity.go` shared with `agent-lifecycle`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
 2. `internal/kubernetesagent/agent.go` shared with `agent-lifecycle`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.

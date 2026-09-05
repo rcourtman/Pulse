@@ -1109,7 +1109,7 @@ export async function ensureSessionAuthenticated(page: Page) {
 // that loads it lands on the login screen. Storage states must therefore
 // always come from the cookie-backed password login.
 const sharedCookieStatePath = (): string =>
-  path.resolve(
+  process.env.PULSE_E2E_COOKIE_STATE_PATH?.trim() || path.resolve(
     helpersDir,
     "..",
     "tmp",

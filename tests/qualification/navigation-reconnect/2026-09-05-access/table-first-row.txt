@@ -1,0 +1,168 @@
+{
+  "initial": {
+    "width": 362,
+    "scrollWidth": 362,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 108.59375,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 117.59375,
+        "width": 48.4375,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "6%",
+        "x": 166.03125,
+        "width": 55.890625,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 221.921875,
+        "width": 63.34375,
+        "titles": []
+      },
+      {
+        "text": "2",
+        "x": 285.265625,
+        "width": 37.25,
+        "titles": []
+      },
+      {
+        "text": "Update",
+        "x": 322.515625,
+        "width": 48.4375,
+        "titles": []
+      }
+    ]
+  },
+  "pointer": {
+    "width": 362,
+    "scrollWidth": 362,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 108.59375,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 117.59375,
+        "width": 48.4375,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "6%",
+        "x": 166.03125,
+        "width": 55.890625,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 221.921875,
+        "width": 63.34375,
+        "titles": []
+      },
+      {
+        "text": "2",
+        "x": 285.265625,
+        "width": 37.25,
+        "titles": []
+      },
+      {
+        "text": "Update",
+        "x": 322.515625,
+        "width": 48.4375,
+        "titles": []
+      }
+    ]
+  },
+  "keyboard": {
+    "width": 362,
+    "scrollWidth": 362,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 108.59375,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 117.59375,
+        "width": 48.4375,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "6%",
+        "x": 166.03125,
+        "width": 55.890625,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 221.921875,
+        "width": 63.34375,
+        "titles": []
+      },
+      {
+        "text": "2",
+        "x": 285.265625,
+        "width": 37.25,
+        "titles": []
+      },
+      {
+        "text": "Update",
+        "x": 322.515625,
+        "width": 48.4375,
+        "titles": []
+      }
+    ]
+  },
+  "accessibleRow": "- 'row "Expand details for loki loki running 6% 74% 2 Click to review and update Current: sha256:afe3f... Latest: sha256:2a043..."':
+  - cell "Expand details for loki loki":
+    - button "Expand details for loki"
+    - text: loki
+  - cell "running"
+  - cell "6%"
+  - cell "74%"
+  - cell "2"
+  - 'cell "Click to review and update Current: sha256:afe3f... Latest: sha256:2a043..."':
+    - 'button "Click to review and update Current: sha256:afe3f... Latest: sha256:2a043..."':
+      - img
+      - text: Update",
+  "expanded": "true"
+}

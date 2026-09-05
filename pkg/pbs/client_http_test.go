@@ -580,7 +580,7 @@ func TestClient_GetNodeName_SuperuserPermissionFailureRetries(t *testing.T) {
 			if firstErr == nil {
 				t.Fatal("first GetNodeName: expected error")
 			}
-			if got, ok := pbsHTTPStatus(firstErr); !ok || got != status {
+			if got, ok := HTTPStatus(firstErr); !ok || got != status {
 				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, status, firstErr)
 			}
 			name, err := client.GetNodeName(context.Background())
@@ -632,7 +632,7 @@ func TestClient_GetNodeName_TransientHTTPFailuresRetryAndRecover(t *testing.T) {
 			if firstErr == nil {
 				t.Fatal("first GetNodeName: expected error")
 			}
-			if got, ok := pbsHTTPStatus(firstErr); !ok || got != tc.status {
+			if got, ok := HTTPStatus(firstErr); !ok || got != tc.status {
 				t.Fatalf("first GetNodeName status = (%d, %v), want (%d, true): %v", got, ok, tc.status, firstErr)
 			}
 			name, err := client.GetNodeName(context.Background())
@@ -795,7 +795,7 @@ func TestClient_GetNodeName_ConcurrentTransientFailureIsSingleFlight(t *testing.
 		if err == nil {
 			t.Fatal("concurrent GetNodeName: expected transient error")
 		}
-		if got, ok := pbsHTTPStatus(err); !ok || got != http.StatusServiceUnavailable {
+		if got, ok := HTTPStatus(err); !ok || got != http.StatusServiceUnavailable {
 			t.Fatalf("concurrent GetNodeName status = (%d, %v), want (503, true): %v", got, ok, err)
 		}
 	}
@@ -836,7 +836,7 @@ func TestClient_GetNodeStatus_PermissionOutageRecovery(t *testing.T) {
 			_, _ = w.Write([]byte("permission denied: upstream authentication error"))
 			return
 		}
-		_, _ = w.Write([]byte(`{"data":{"cpu":0.25}}`))
+		_, _ = w.Write([]byte(`{"data":{"cpu":0.25,"memory":{"used":500,"total":1000}}}`))
 	}))
 	defer server.Close()
 	client, err := NewClient(ClientConfig{
@@ -856,7 +856,7 @@ func TestClient_GetNodeStatus_PermissionOutageRecovery(t *testing.T) {
 		if status != nil || err == nil {
 			t.Fatalf("outage %d = (%+v, %v), want nil status and error", code, status, err)
 		}
-		if got, ok := pbsHTTPStatus(err); !ok || got != code {
+		if got, ok := HTTPStatus(err); !ok || got != code {
 			t.Fatalf("outage status = (%d, %v), want %d", got, ok, code)
 		}
 	}
@@ -867,5 +867,61 @@ func TestClient_GetNodeStatus_PermissionOutageRecovery(t *testing.T) {
 	}
 	if status.CPU != 0.25 {
 		t.Fatalf("recovered CPU = %v, want 0.25", status.CPU)
+	}
+}
+
+func TestClient_GetNodeStatus_MissingData(t *testing.T) {
+	for _, body := range []string{`{"data":null}`, `{}`, `null`} {
+		t.Run(body, func(t *testing.T) {
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			})
+			defer server.Close()
+			status, err := client.GetNodeStatus(context.Background())
+			if status != nil || err == nil {
+				t.Fatalf("absent metrics = (%+v, %v), want nil status and error", status, err)
+			}
+		})
+	}
+}
+
+// Missing measurements must not be indistinguishable from measured zero usage.
+func TestClient_GetNodeStatus_MetricCompleteness(t *testing.T) {
+	for _, tc := range []struct {
+		name, data string
+		valid      bool
+	}{
+		{"empty", `{}`, false},
+		{"cpu only", `{"cpu":0}`, false},
+		{"missing cpu", `{"memory":{"used":0,"total":1000}}`, false},
+		{"null cpu", `{"cpu":null,"memory":{"used":0,"total":1000}}`, false},
+		{"null memory", `{"cpu":0,"memory":null}`, false},
+		{"missing used", `{"cpu":0,"memory":{"total":1000}}`, false},
+		{"null used", `{"cpu":0,"memory":{"used":null,"total":1000}}`, false},
+		{"missing total", `{"cpu":0,"memory":{"used":0}}`, false},
+		{"null total", `{"cpu":0,"memory":{"used":0,"total":null}}`, false},
+		{"zero total", `{"cpu":0,"memory":{"used":0,"total":0}}`, false},
+		{"negative total", `{"cpu":0,"memory":{"used":0,"total":-1}}`, false},
+		{"negative used", `{"cpu":0,"memory":{"used":-1,"total":1000}}`, false},
+		{"negative cpu", `{"cpu":-1,"memory":{"used":0,"total":1000}}`, false},
+		{"wrong type", `{"cpu":0,"memory":{"used":"0","total":1000}}`, false},
+		{"measured zero", `{"cpu":0,"memory":{"used":0,"total":1000}}`, true},
+		{"extra fields", `{"cpu":0.2,"memory":{"used":500,"total":1000,"free":500},"future":true}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(`{"data":` + tc.data + `}`))
+			})
+			defer server.Close()
+			status, err := client.GetNodeStatus(context.Background())
+			if tc.valid {
+				if err != nil || status == nil {
+					t.Fatalf("valid measurements = (%+v, %v)", status, err)
+				}
+			} else if err == nil || status != nil {
+				t.Fatalf("incomplete/invalid measurements = (%+v, %v), want nil status and error", status, err)
+			}
+		})
 	}
 }

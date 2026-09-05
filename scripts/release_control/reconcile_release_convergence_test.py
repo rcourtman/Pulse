@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
+import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 import subprocess
@@ -256,6 +260,49 @@ class FakeGitHub:
         return False
 
 
+class DecisionSummaryTests(unittest.TestCase):
+    def test_local_execution_needs_no_summary_file(self):
+        with patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(io.StringIO()) as output:
+            subject.report_decision("No action.")
+        self.assertEqual("No action.\n", output.getvalue())
+
+    def test_summary_appends_escaped_decisions_without_claiming_delivery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "summary.md"
+            path.write_text("Existing summary\n", encoding="utf-8")
+            with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(path)}):
+                subject.report_decision("held <not delivered>")
+                subject.report_decision("second decision")
+            summary = path.read_text(encoding="utf-8")
+        self.assertTrue(summary.startswith("Existing summary\n"))
+        self.assertIn("held &lt;not delivered&gt;", summary)
+        self.assertIn("second decision", summary)
+        self.assertIn("not evidence of successful release convergence", summary)
+
+    def test_empty_discovery_does_not_claim_absent_debt(self):
+        args = argparse.Namespace(repository="rcourtman/Pulse", run_id=None,
+                                  latest=True, max_attempts=5, dry_run=True)
+        with patch.object(subject, "parse_args", return_value=args), \
+                patch.object(subject, "discover", return_value=[]), \
+                patch.object(subject, "report_decision") as report:
+            self.assertEqual(0, subject.main())
+        message = report.call_args.args[0]
+        self.assertIn("No failed run selected for retry", message)
+        self.assertIn("missing convergence runs are not qualified", message)
+
+    def test_credential_hold_is_visible_without_retry(self):
+        github = FakeGitHub(current_controls=True)
+        github.unchanged_credential_containment_block = lambda run_id: True
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "summary.md"
+            with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(path)}):
+                subject.reconcile(github, github.run_id, 5)
+            summary = path.read_text(encoding="utf-8")
+        self.assertEqual([], github.posts)
+        self.assertIn("held by unchanged private credential containment", summary)
+        self.assertIn("no unattended retry was dispatched", summary)
+
+
 class JobLogTests(unittest.TestCase):
     def test_uses_captured_sanitised_job_reader_with_private_auth(self):
         github = subject.GitHub("rcourtman/Pulse", "gh", mutate=False)
@@ -461,6 +508,35 @@ class CredentialContainmentTests(unittest.TestCase):
 
 
 class ReconciliationTests(unittest.TestCase):
+    def test_recovery_receipts_require_successful_submission(self):
+        cases = [
+            ({}, "Dispatched fresh convergence controls"),
+            ({"current_controls": True}, "Re-ran current-control convergence"),
+            ({"committed": False}, "Renewed pre-commit convergence owner"),
+        ]
+        for options, receipt in cases:
+            for code in (0, 1):
+                with self.subTest(options=options, code=code):
+                    github = FakeGitHub(**options)
+                    transport = subject.GitHub(github.repository, "gh")
+                    github.post = transport.post
+                    result = subprocess.CompletedProcess(
+                        [], code, stdout="", stderr="rejected" if code else ""
+                    )
+                    output = io.StringIO()
+                    with patch.object(subject.subprocess, "run", return_value=result) as command, contextlib.redirect_stdout(output):
+                        if code:
+                            with self.assertRaises(subject.ReconciliationError):
+                                subject.reconcile(github, github.run_id, 5)
+                        else:
+                            subject.reconcile(github, github.run_id, 5)
+                    command.assert_called_once()
+                    if code:
+                        self.assertNotIn(receipt, output.getvalue())
+                    else:
+                        self.assertIn(receipt, output.getvalue())
+                    self.assertNotIn("DRY RUN", output.getvalue())
+
     def test_post_reports_submission_only_after_success(self):
         for payload in (None, {"ref": "main"}):
             for code in (0, 1):

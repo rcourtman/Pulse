@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -498,5 +499,72 @@ func TestPBSAndPMGPollSkipDisabledInstances(t *testing.T) {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("monitor_pbs_pmg.go must emit debug-log %q when skipping a disabled instance so operators can correlate paused ledger rows with runtime behavior", snippet)
 		}
+	}
+}
+
+// Exercise real HTTP polling and one manager through missing metrics and recovery.
+func TestPBSMetricAvailabilityAlertLifecycle(t *testing.T) {
+	fixture := newPBSHealthTestServer(t)
+	instance := config.PBSInstance{Name: "pbs-lifecycle", Host: fixture.server.URL, MonitorDatastores: true}
+	monitor := newPBSHealthAuthorityMonitor([]config.PBSInstance{instance})
+	client := newPBSHealthTestClient(t, instance.Host)
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer manager.Stop()
+	monitor.alertManager = manager
+	manager.UpdateConfig(alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive,
+		TimeThresholds: map[string]int{"pbs": 0}, PBSDefaults: alerts.ThresholdConfig{
+			Memory: &alerts.HysteresisThreshold{Trigger: 40, Clear: 30},
+		}})
+	fired, resolved := make(chan string, 8), make(chan string, 8)
+	manager.SetAlertCallback(func(a *alerts.Alert) { fired <- a.ID })
+	manager.SetResolvedCallback(func(id string) { resolved <- id })
+	poll := func() models.PBSInstance {
+		monitor.pollPBSInstance(context.Background(), instance.Name, client)
+		return pbsInstanceByName(t, monitor.state.GetSnapshot(), instance.Name)
+	}
+	poll()
+	if len(manager.GetActiveAlerts()) != 1 {
+		t.Fatal("high memory failed to activate")
+	}
+	select {
+	case <-fired:
+	case <-time.After(time.Second):
+		t.Fatal("missing alert dispatch")
+	}
+	for _, mode := range []pbsHealthTestMode{pbsHealthTestNodeDenied, pbsHealthTestNodeGatewayFailure} {
+		fixture.setMode(mode)
+		missing := poll()
+		if missing.Status != "online" || !missing.NodeMetricsUnavailable {
+			t.Fatalf("bad missing projection: %+v", missing)
+		}
+		for range 5 {
+			poll()
+		}
+		if len(manager.GetActiveAlerts()) != 1 {
+			t.Fatal("endpoint failure resolved memory alert")
+		}
+		if len(manager.GetRecentlyResolved()) != 0 {
+			t.Fatal("false resolved history")
+		}
+		select {
+		case id := <-resolved:
+			t.Fatalf("false recovery dispatch %s", id)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	fixture.setMode(pbsHealthTestLowMemory)
+	for range 5 {
+		poll()
+	}
+	if len(manager.GetActiveAlerts()) != 0 {
+		t.Fatal("valid low memory failed to recover")
+	}
+	select {
+	case <-resolved:
+	case <-time.After(time.Second):
+		t.Fatal("missing recovery dispatch")
+	}
+	if len(manager.GetRecentlyResolved()) != 1 {
+		t.Fatal("missing resolved history")
 	}
 }

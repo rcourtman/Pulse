@@ -24750,3 +24750,44 @@ func TestContract_NotificationDestinationWritesPublishOnlyAfterPersistence(t *te
 		})
 	}
 }
+
+// Local organisation owners must be identifiable without exposing the
+// configured administrator identity or granting instance settings access.
+func TestSecurityStatusCurrentUserForScopedLocalSession(t *testing.T) {
+	cfg := newCapabilityConfig(t, "instance-admin")
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	for _, username := range []string{"", "org-owner", "instance-admin"} {
+		authenticated := username != ""
+		req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+		if authenticated {
+			req.AddCookie(capabilitySessionCookie(t, username))
+			req = req.WithContext(context.WithValue(req.Context(), OrgContextKey, &models.Organization{ID: "customer-org"}))
+		}
+		rec := httptest.NewRecorder()
+		router.mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d", rec.Code)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if authenticated {
+			if payload["currentUsername"] != username {
+				t.Errorf("currentUsername = %v", payload["currentUsername"])
+			}
+			if payload["detailLevel"] != "authenticated" {
+				t.Errorf("detailLevel = %v", payload["detailLevel"])
+			}
+			if _, ok := payload["authUsername"]; ok {
+				t.Error("configured admin identity exposed")
+			}
+			caps := payload["settingsCapabilities"].(map[string]any)
+			if caps["authenticationWrite"] != false {
+				t.Error("instance settings capability granted")
+			}
+		} else if _, ok := payload["currentUsername"]; ok {
+			t.Error("public response exposes currentUsername")
+		}
+	}
+}

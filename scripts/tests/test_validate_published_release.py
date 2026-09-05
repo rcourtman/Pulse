@@ -72,7 +72,9 @@ class ValidatePublishedReleaseTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def sign(self, path: Path) -> None:
+    def sign(
+        self, path: Path, *, key: Path | None = None, namespace: str = "pulse-install"
+    ) -> None:
         subprocess.run(
             [
                 "ssh-keygen",
@@ -80,9 +82,9 @@ class ValidatePublishedReleaseTest(unittest.TestCase):
                 "-Y",
                 "sign",
                 "-f",
-                str(self.private_key),
+                str(key or self.private_key),
                 "-n",
-                "pulse-install",
+                namespace,
                 str(path),
             ],
             check=True,
@@ -158,6 +160,39 @@ printf '%s\n' "${FAKE_SSH_PUBLIC_KEY}"
         result = self.run_validator()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SSH signature verification failed for install.sh", result.stderr)
+
+    def test_rejects_valid_signatures_from_an_untrusted_key(self) -> None:
+        other_key = self.root / "untrusted-key"
+        subprocess.run(
+            ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(other_key)],
+            check=True,
+        )
+        for name in ("checksums.txt", "install.sh"):
+            with self.subTest(asset=name):
+                path = self.assets / name
+                self.sign(path, key=other_key)
+                result = self.run_validator()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    f"SSH signature verification failed for {name}", result.stderr
+                )
+                if name == "checksums.txt":
+                    self.assertNotIn("Verifying install.sh", result.stdout)
+                self.sign(path)
+
+    def test_rejects_trusted_key_signatures_for_another_namespace(self) -> None:
+        for name in ("checksums.txt", "install.sh"):
+            with self.subTest(asset=name):
+                path = self.assets / name
+                self.sign(path, namespace="not-pulse-install")
+                result = self.run_validator()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    f"SSH signature verification failed for {name}", result.stderr
+                )
+                if name == "checksums.txt":
+                    self.assertNotIn("Verifying install.sh", result.stdout)
+                self.sign(path)
 
     def test_rejects_unsigned_published_mcp_installer(self) -> None:
         checksums = (self.assets / "checksums.txt").read_text(encoding="utf-8")

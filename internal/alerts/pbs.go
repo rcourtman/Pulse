@@ -125,6 +125,12 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		return
 	}
 
+	// Endpoint failure is not evidence of metric recovery. Connectivity above
+	// remains independent, as do explicit policy suppression and full outages.
+	if pbs.NodeMetricsUnavailable {
+		return
+	}
+
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:       pbs.ID,
 		Type:     "pbs",

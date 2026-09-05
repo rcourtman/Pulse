@@ -230,6 +230,22 @@ class VerifyGitHubReleaseIntegrityTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("activation marker", result.stderr)
 
+    def test_rejects_duplicate_activation_names_before_attestation(self) -> None:
+        for duplicate in (
+            {"state": "uploaded", "size": 300, "digest": "sha256:" + "b" * 64},
+            {"state": "new", "size": 0, "digest": None},
+        ):
+            with self.subTest(duplicate=duplicate):
+                release = self.release()
+                release["assets"].append(
+                    {"name": "release-activation.json", **duplicate}
+                )
+                result, calls = self.run_verifier(release)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("activation marker", result.stderr)
+                self.assertNotIn("release verify", calls)
+                self.assertNotIn("release download", calls)
+
     def test_rejects_failed_release_attestation(self) -> None:
         result, _ = self.run_verifier(self.release(), verification_succeeds=False)
         self.assertNotEqual(result.returncode, 0)
