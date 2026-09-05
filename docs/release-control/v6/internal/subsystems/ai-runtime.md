@@ -19,6 +19,25 @@
 
 ## Purpose
 
+Within an active investigation, tool observations are preserved across provider
+turns while the full request fits the model context window. Turn age is not a
+compaction trigger and does not prove evidence has been understood or retained.
+The existing pre-request context-limit boundary owns overflow compaction,
+re-estimation and fail-closed rejection. `TestAgenticLoopPreservesEarlierEvidenceWithinContextLimit`
+exercises four tool rounds and checks that the final answer request still carries
+the original alert state, sensor reading and observation timestamp.
+
+The shared `pulse_metrics` temperature read projects both canonical agent and
+Proxmox node observations through typed read state. Proxmox sensors must remain
+available without an installed host agent. Results preserve canonical resource
+identity and source, with the sensor collection timestamp when supplied, and
+keep linked providers distinct rather than choosing between conflicting
+readings. Hostname, display name, or canonical identity can select a host, and
+`resource_id` filters exactly. Missing observations do not imply that an agent
+must be installed. Standby-skipped disks are not current temperature evidence.
+`TestExecuteGetTemperaturesCanonicalSources` verifies provider provenance,
+selection, sensor coverage, and absence handling.
+
 Incident timeline summaries must distinguish provider conditions from metric
 threshold evidence. For `resource-incident` alert events, numeric value and
 threshold placeholders must not render as a measured comparison; retain the
