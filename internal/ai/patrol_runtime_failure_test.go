@@ -42,6 +42,25 @@ func TestPatrolRuntimeFailureFromError_PopulatesImpactForAllCauses(t *testing.T)
 	}
 }
 
+func TestPatrolRuntimeFailurePreservesProviderRefusal(t *testing.T) {
+	failure := patrolRuntimeFailureFromError(providers.ErrProviderRequestRefused)
+	if failure.Cause != PatrolFailureCauseProviderRefusal || failure.Summary != "Provider refused this request" {
+		t.Fatalf("refusal misclassified: %+v", failure)
+	}
+	connection := ClassifyProviderConnectionFailure(providers.ErrProviderRequestRefused)
+	if connection.Cause != failure.Cause || connection.Recommendation != failure.Recommendation {
+		t.Fatalf("connection diagnostic lost refusal: %+v", connection)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if interrupted := patrolRuntimeFailureFromErrorCtx(ctx, providers.ErrProviderRequestRefused); interrupted.Cause != PatrolFailureCauseInterrupted {
+		t.Fatalf("operator cancellation lost precedence: %+v", interrupted)
+	}
+	if generic := patrolRuntimeFailureFromError(errors.New("connection refused")); generic.Cause != PatrolFailureCauseProviderConnection {
+		t.Fatalf("socket failure was misclassified as refusal: %+v", generic)
+	}
+}
+
 func TestPatrolRuntimeFailureFromError_ClassifiesNoToolCapableEndpoint(t *testing.T) {
 	// OpenRouter surfaces this when account-level provider/data filters
 	// exclude every tool-capable route for the selected model.

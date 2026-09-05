@@ -244,3 +244,70 @@ and collapse, output scrolling, final-answer pixels, Escape, session history
 and reload. The actual cached readiness result and actual HTTP 409 gate were
 verified after the final source changes. Local receipts bind source hashes,
 transcripts and screenshots under the homelab resource-browser artifact set.
+
+
+## Evidence interpretation continuation, 2026-09-05
+
+The provider refusal is now a first-class `provider_refusal` diagnostic. The
+subscription transport preserves the terminal refusal before either structured
+completion or a preceding tool call can be recovered. Both process exit paths
+are covered. Saved legacy evidence is corrected only from a complete terminal
+JSON envelope with `stop_reason=refusal`, preserving the original time and probe
+counts. This produces clear policy/support guidance without a new provider
+request, weakened CLI restrictions or a verified Patrol mode. The real saved
+result was inspected in desktop/mobile settings and the manual endpoint still
+returned HTTP 409.
+
+The model-facing summary no longer invokes the report narrator. Its canonical
+`MetricEvidenceProvider` contract reads the report engine's retained data and
+returns units, extrema, means, latest values, point counts and observation
+timestamps. Extrema include recorded bucket ranges and identify their buckets.
+Means and latest values can be bucket averages. The response names alerts,
+findings, disk health, backups and topology as not queried, requiring their own
+tools before health or causal conclusions. A 92% memory reading is returned as
+evidence without a heuristic critical or healthy label. Existing export/report
+narratives and health cards remain separate behavior and have not been qualified
+or repaired by this change.
+
+The first live summary investigation correctly separated high utilisation from
+proven memory pressure and disclosed the short, stale retained window. It still
+dismissed a recorded historical temperature maximum because the current sensor
+reading was lower. That is an incorrect inference, not proof that the recorded
+peak is an artefact. The summary now explicitly distinguishes preserved bucket
+extrema from bucket averages and includes the extrema's bucket timestamps.
+Unsupported workload-change inference and assumptions about a previously
+working agent channel remain model-reasoning concerns.
+
+A separate local fixture reproduced the shared history query coverage defect.
+It wrote CPU=10 in the minute tier at 21:37 and CPU=20 in raw data at 22:16.
+Both 24-hour `Store.Query` and `Store.QueryAll` returned only the older point.
+A two-hour query returned the newer raw point. The preferred non-empty tier
+therefore hides newer evidence. Temporal tier reconciliation, including batch
+queries and aggregation semantics, is recorded in the performance-and-scalability
+contract under the existing outcome gap. The evidence tool exposes its returned
+coverage and cannot make the underlying query complete. This is separate from
+missing observations that were never collected.
+
+The final live read-only investigation completed in 195 seconds with ten visible
+tool controls. It resolved the named resource, preserved the extrema bucket
+timestamps, explained the difference between extrema and plotted averages,
+disclosed the 83-point / 82-minute returned span and roughly 45-minute age,
+and distinguished high utilisation from demonstrated memory pressure. The
+failed host pressure read was correctly treated as unavailable evidence.
+However, the answer still speculated about a sensor/startup artefact, inferred
+monitoring restart from coincident timestamps, claimed continuous coverage from
+minute spacing, and called the returned span a retention limit. None of those
+claims was established by the tool results. Recommending simply waiting a day
+is insufficient given the independently reproduced tier query defect. This
+is a bounded evidence-contract pass, with diagnosis qualification still open.
+
+Final browser inspection covered `/patrol` and
+`/settings/pulse-intelligence/patrol` at 1440x1000 and 390x1000. The interaction
+matrix included Assistant submission/completion, keyboard and pointer expansion
+and collapse, scrollable tool outputs through their final entries, final answer
+pixels, Escape, session-history selection and reload. It also covered the actual
+cached provider-refusal settings and blocked manual execution, with no repeated
+provider readiness probe. The final saved-session pixel pass followed a correction
+to the tool's descriptive governance metadata. Runtime source hashes, transcript
+and screenshots are retained in the local homelab evidence-trust artifact set.
+These receipts do not qualify autonomous Patrol or infrastructure mutations.

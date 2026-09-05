@@ -15,6 +15,19 @@
 
 ## Purpose
 
+The open `patrol-assistant-customer-outcome-qualification` gap includes retained
+query coverage in `pkg/metrics/store.go`. A 24-hour `Query` returns the first
+non-empty resolution tier, and `QueryAll` fills missing metric names rather than
+missing times. A fixture with a minute-tier CPU point at 21:37 and a raw point
+at 22:16 returns only 21:37 for both 24-hour APIs, while a two-hour query returns
+22:16. The new model-facing evidence contract discloses the returned timestamps
+but does not repair this shared-store defect. Canonical follow-up must reconcile
+temporal coverage across tiers for single-series, all-series and batch queries,
+with explicit bucket precedence, extrema and downsampling semantics. Do not
+claim complete or current requested-window coverage from the present fallback
+behavior. This belongs to metrics-store qualification, not model prompting.
+
+
 Resource-scoped Assistant performance reads query retained CPU, memory and
 disk series using the registry target, then retain the existing 120-point
 output limit. A backend restart does not define the requested history window.

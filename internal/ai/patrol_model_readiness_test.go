@@ -474,3 +474,52 @@ func TestPatrolReadinessCacheCorrectsLegacyIncompleteLatency(t *testing.T) {
 		t.Fatalf("recorded evidence changed: %+v", cached)
 	}
 }
+
+func TestPatrolReadinessProviderRefusalRemainsBlocked(t *testing.T) {
+	cfg := readinessTestConfig()
+	result := runPatrolModelReadinessWithProvider(context.Background(), cfg, config.AIProviderOllama, "test-model", "ollama:test-model", &scriptedReadinessProvider{contextWindow: 32768, continuationErr: providers.ErrProviderRequestRefused})
+	if result.Cause != PatrolFailureCauseProviderRefusal || result.Success || result.PatrolCapable || result.MaxVerifiedMode != "" {
+		t.Fatalf("refusal verdict = %+v", result)
+	}
+	if result.Dimensions.ToolProtocol.Passed != 3 || result.Dimensions.ContextQuality.Passed != 2 || result.Dimensions.Latency.Status != PatrolModelReadinessNotAssessed {
+		t.Fatalf("refusal lost completed probe evidence: %+v", result.Dimensions)
+	}
+	if !strings.Contains(result.Modes.Monitor.Summary, "explicitly refused") || !strings.Contains(result.Recommendation, "permits this workflow") {
+		t.Fatalf("refusal lacks an actionable explanation: %+v", result)
+	}
+}
+
+func TestPatrolReadinessCacheRecoversExplicitLegacyRefusal(t *testing.T) {
+	for _, stopReason := range []string{"refusal", "end_turn"} {
+		t.Run(stopReason, func(t *testing.T) {
+			persistence := config.NewConfigPersistence(t.TempDir())
+			cfg := readinessTestConfig()
+			cfg.Model = "claude-subscription:test-model"
+			cfg.PatrolModel = cfg.Model
+			service := NewService(persistence, nil)
+			service.cfg = cfg
+			result := emptyPatrolModelReadinessResult()
+			result.Provider, result.Model = config.AIProviderClaudeSubscription, "test-model"
+			result.Cause = PatrolFailureCauseProviderConnection
+			result.Details = []string{`Multi-turn continuation probe failed: claude subscription agent failed: exit status 1: {"type":"result","stop_reason":"` + stopReason + `","result":"private diagnostic with refusal in prose"}`}
+			result.Dimensions.ToolProtocol = PatrolModelReadinessDimension{Status: PatrolModelReadinessPass, Passed: 3, Attempts: 3}
+			result.Dimensions.ContextQuality = PatrolModelReadinessDimension{Status: PatrolModelReadinessPass, Passed: 2, Attempts: 2}
+			result.CacheKey = service.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+			at := time.Now().Add(-time.Hour)
+			service.recordPatrolModelReadiness(result, at)
+			reloaded := NewService(persistence, nil)
+			reloaded.cfg = cfg
+			cached, recordedAt := reloaded.CachedPatrolModelReadiness()
+			if cached == nil || !recordedAt.Equal(at) || cached.Dimensions.ToolProtocol.Passed != 3 || cached.Dimensions.ContextQuality.Passed != 2 {
+				t.Fatalf("saved evidence changed: %+v at %s", cached, recordedAt)
+			}
+			if stopReason == "refusal" {
+				if cached.Cause != PatrolFailureCauseProviderRefusal || strings.Contains(cached.Details[0], "private diagnostic") || reloaded.PatrolRuntimeReadiness().Ready {
+					t.Fatalf("legacy refusal was lost or authorized: %+v", cached)
+				}
+			} else if cached.Cause != PatrolFailureCauseProviderConnection {
+				t.Fatalf("incidental refusal prose changed the cause: %+v", cached)
+			}
+		})
+	}
+}
