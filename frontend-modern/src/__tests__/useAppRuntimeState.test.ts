@@ -697,7 +697,9 @@ describe('useAppRuntimeState', () => {
   });
 
   it('does not mistake alert-only reconnect recovery for an empty resource snapshot', async () => {
-    websocketState = makeWebSocketState({ activeAlerts: [{ id: 'recovered-alert' } as State['activeAlerts'][number]] });
+    websocketState = makeWebSocketState({
+      activeAlerts: [{ id: 'recovered-alert' } as State['activeAlerts'][number]],
+    });
     websocketConnected = false;
     websocketReconnecting = true;
     websocketInitialDataReceived = false;
@@ -917,6 +919,57 @@ describe('useAppRuntimeState', () => {
       expect(hookState.platformAdmission()).toMatchObject({ docker: true, proxmox: false });
     });
 
+    dispose();
+  });
+
+  it('retains valid admission after a failed reconnect refresh and accepts later empty admission', async () => {
+    const eventsModule = await import('@/stores/events');
+    const { dispose, hookState } = mountHook();
+    await waitFor(() => expect(hookState.platformAdmission()).not.toBeNull());
+    const admitted = hookState.platformAdmission();
+    const reconnect = (eventsModule.eventBus.on as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([event]) => event === 'websocket_reconnected',
+    )![1] as () => void;
+    apiFetchJSONMock.mockRejectedValue(new Error('503 admission unavailable'));
+    reconnect();
+    await flushAsync();
+    expect(hookState.platformAdmission()).toEqual(admitted);
+
+    const empty = {
+      proxmox: false,
+      docker: false,
+      kubernetes: false,
+      truenas: false,
+      vmware: false,
+      standalone: false,
+    };
+    apiFetchJSONMock.mockResolvedValue({ aggregations: { platformAdmission: empty } });
+    reconnect();
+    await waitFor(() => expect(hookState.platformAdmission()).toEqual(empty));
+    dispose();
+  });
+
+  it('does not retain outgoing tenant admission if the new tenant request fails', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
+    const { dispose, hookState } = mountHook();
+    await waitFor(() => {
+      expect(hookState.platformAdmission()).not.toBeNull();
+      expect(hookState.organizations().some((org) => org.id === 'acme')).toBe(true);
+    });
+    apiFetchJSONMock.mockRejectedValue(new Error('503 admission unavailable'));
+    hookState.handleOrgSwitch(hookState.activeOrgID() === 'acme' ? 'default' : 'acme');
+    expect(hookState.platformAdmission()).toBeNull();
+    await flushAsync();
+    expect(hookState.platformAdmission()).toBeNull();
+    dispose();
+  });
+
+  it('leaves admission unresolved when the first request fails', async () => {
+    apiFetchJSONMock.mockRejectedValue(new Error('503 admission unavailable'));
+    const { dispose, hookState } = mountHook();
+    await waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalled());
+    await flushAsync();
+    expect(hookState.platformAdmission()).toBeNull();
     dispose();
   });
 

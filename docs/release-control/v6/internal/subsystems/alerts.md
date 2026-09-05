@@ -2524,3 +2524,8 @@ REST active-alert recovery may complete before a resource snapshot. Neither
 active incidents nor alert hydration completion establishes an empty resource
 estate or replaces platform navigation admission. Incident access must remain
 available during socket reconnect; this does not assert notification delivery.
+
+Qualification additionally injects admission HTTP 503 on reconnect with
+populated inventory and checks incident access on desktop and the 390px mobile
+rail. Enabled acknowledgement controls prove access only, not persisted
+acknowledgement or external notification receipt.

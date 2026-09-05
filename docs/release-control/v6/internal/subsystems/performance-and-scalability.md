@@ -3028,3 +3028,6 @@ Runtime resource resolution uses a store signal recording resource snapshot
 receipt, or an already populated resource array, rather than alert payload
 presence. Reconnect must not add an estate fetch or scan to recover navigation.
 The signal survives transport loss and resets on organisation URL changes.
+
+On admission-request failure retain the existing facet without extra retries,
+polling or full-estate reads. A later successful refresh replaces that facet.
