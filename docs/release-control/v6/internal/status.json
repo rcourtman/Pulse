@@ -10240,6 +10240,40 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "patrol-assistant-customer-outcome-qualification",
+      "summary": "The 2026-09-05 product review found that Explain with Assistant opened a blank generic conversation and the attention workbench discarded richer canonical finding context. The explicit explanation dispatcher and canonical handoff repair address that frontend break, with scripted browser proof and regression tests. They do not qualify model reasoning, real infrastructure actions, or repeated customer value. Latest-report, monitoring-active, multi-ping telemetry excluding dev and deployment proof contained 127 paid installs, 71 with Patrol enabled and 23 with Assistant calls. Fourteen reported verified resolutions were concentrated in one install. Paid includes all non-free tiers, and activity cooccurrence is not a linked successful journey. Schema 17 outcome/provider/cost fields had no adoption in that review. Three real jobs remain to qualify across named provider/model/version configurations: unhealthy service diagnosis, backup or capacity risk, and supported VM/LXC plan, approval and verified result. Repeatability must be established across independent paid customer environments without pooling free-tier or ineligible installs.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-09-05",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 4,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/qualification",
+          "kind": "dir"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/check-patrol-assistant-journey.mjs",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
@@ -10357,36 +10391,32 @@
         "product-demand: pulse-pro/FEATURE_REQUESTS.md#patrol-weekly-digest-what-patrol-did-for-you",
         "design-note: docs/PATROL_WEEKLY_DIGEST.md"
       ]
-    }
-  ],
-  "work_claims": [
-    {
-      "id": "claude-ai-provider-guided-setup-candidate-lane-ai-provider-guided-setup",
-      "agent_id": "claude-ai-provider-guided-setup",
-      "summary": "Guided AI provider setup with cost preview",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-09-02T05:31:42Z",
-      "heartbeat_at": "2026-09-02T05:31:42Z",
-      "expires_at": "2026-09-02T09:31:42Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "ai-provider-guided-setup"
-      }
     },
     {
-      "id": "claude-patrol-digest-candidate-lane-patrol-weekly-digest",
-      "agent_id": "claude-patrol-digest",
-      "summary": "Patrol weekly digest: aggregation endpoint and in-app This week card",
+      "id": "patrol-assistant-customer-outcomes",
+      "name": "Patrol and Assistant Customer Outcomes",
+      "summary": "Qualify unhealthy service diagnosis, backup or capacity risk, and supported VM/LXC planning through approval and independent verification on disposable infrastructure. Compare named model configurations for useful outcomes, missed faults, false positives, latency and cost, then establish repeated value across independent volunteered Pro environments. The explicit explanation handoff is the completed frontend foundation, not completion of this outcome qualification.",
+      "status": "proposed",
+      "recorded_at": "2026-09-05",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-09-02T05:37:43Z",
-      "heartbeat_at": "2026-09-02T05:37:43Z",
-      "expires_at": "2026-09-02T11:37:43Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "patrol-weekly-digest"
-      }
+      "current_lane_ids": [
+        "L6"
+      ],
+      "coverage_gap_ids": [
+        "patrol-assistant-customer-outcome-qualification"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence"
+      ],
+      "demand_evidence": [
+        "user-direction: 2026-09-05 prioritise dependable Patrol and Assistant outcomes as core Pulse Pro value",
+        "qualification-contract: docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md"
+      ]
     }
   ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

@@ -6642,8 +6642,12 @@ decisions from the structured handoff metadata and bounded chat context.
 Frontend handoff builders may send these fields for owned alert, incident,
 Patrol assessment, Patrol finding, or Patrol run-history context, but the
 backend must not persist them as user-authored message text, and the frontend
-must not prefill or auto-submit a product-authored user prompt from them. They
-are context only and must be treated as explanation/review context only. When a
+must not turn their evidence or proposed remedies into user-authored message
+text. Ordinary attachment is context only. A labelled Explain action may
+submit the shared user-selected explanation request over the existing chat
+transport, with the evidence kept in model-only handoff fields and
+`autonomous_mode:false`. This starts explanation/review and grants no new
+approval or execution authority. When a
 Patrol `finding_id` resolves,
 backend-refreshed durable finding context remains canonical; the handler may
 merge only recognized same-finding Patrol product handoff text and same-finding
@@ -10590,3 +10594,9 @@ service, Patrol, or an email destination is missing; nothing is written to
 disk. The advanced-reporting entitlement gates both kinds. Proofs:
 `internal/api/report_schedules_test.go`, `internal/api/patrol_digest_email_test.go`,
 `internal/api/ai_handlers_more_test.go`.
+
+The explicit issue explanation journey is qualified separately from provider
+reasoning and real remediation in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
+proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
+response does not establish a useful customer outcome or model qualification.

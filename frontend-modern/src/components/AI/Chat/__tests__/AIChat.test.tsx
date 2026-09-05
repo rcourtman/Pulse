@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Show, createSignal } from 'solid-js';
+import type { AIChatExplanationRequest } from '@/stores/aiChat';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
 import type { QueuedFollowUp } from '../hooks/useChat';
 import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
@@ -179,6 +180,8 @@ const {
 
   const mockAiChatStore = {
     isOpenSignal: vi.fn(() => true),
+    explanationRequestSignal: vi.fn((): AIChatExplanationRequest | null => null),
+    ackExplanationRequest: vi.fn(),
     commandRequestSignal: vi.fn(
       (): {
         id: number;
@@ -549,6 +552,8 @@ beforeEach(() => {
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
   mockAiChatStore.commandRequestSignal.mockReturnValue(null);
+  mockAiChatStore.explanationRequestSignal.mockReturnValue(null);
+  mockAiChatStore.ackExplanationRequest.mockReset();
   mockAiChatStore.context = {
     findingId: undefined,
     autonomousMode: undefined,
@@ -1760,6 +1765,7 @@ describe('AIChat', () => {
       renderChat();
 
       expect(screen.getByLabelText('Assistant context')).toBeInTheDocument();
+      expect(screen.queryByTestId('assistant-workflow-starters')).not.toBeInTheDocument();
       expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
       expect(screen.getByText('High CPU usage on web-server')).toBeInTheDocument();
       expect(screen.queryByText('Backup job saturated CPU.')).not.toBeInTheDocument();
@@ -2689,6 +2695,34 @@ describe('AIChat', () => {
       expect(status).toHaveTextContent('Route:');
       expect(screen.getByRole('button', { name: 'Hide route status' })).toBeInTheDocument();
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('dispatches an explicit issue request without replacing a draft or interrupting the current session', async () => {
+      const [request, setRequest] = createSignal<AIChatExplanationRequest | null>(null);
+      mockAiChatStore.explanationRequestSignal.mockImplementation(request);
+      mockAiChatStore.ackExplanationRequest.mockImplementation(() => setRequest(null));
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: 'My unfinished question' } });
+      setRequest({
+        id: 1,
+        signal: new AbortController().signal,
+        context: {
+          findingId: 'finding-1',
+          handoffContext: 'Current evidence',
+          autonomousMode: false,
+        },
+      });
+      await waitFor(() => expect(mockChat.sendMessage).toHaveBeenCalledOnce());
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        expect.stringContaining('Explain this issue'),
+        undefined,
+        'finding-1',
+        expect.objectContaining({ autonomousMode: false, handoffContext: 'Current evidence' }),
+      );
+      expect(textarea).toHaveValue('My unfinished question');
+      expect(mockChat.newSession).not.toHaveBeenCalled();
+      expect(mockChat.stop).not.toHaveBeenCalled();
     });
 
     it('consumes pending command palette model requests without sending a provider prompt', async () => {
@@ -5946,7 +5980,7 @@ describe('AIChat', () => {
       });
       expect(
         screen.getByText(
-          /Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance\./,
+          /Inventory, metrics, and alerts are available. Enable discovery in Settings for additional service details\./,
         ),
       ).toBeInTheDocument();
     });

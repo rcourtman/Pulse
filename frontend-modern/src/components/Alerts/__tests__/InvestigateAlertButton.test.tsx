@@ -9,7 +9,7 @@ import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 // ---------------------------------------------------------------------------
 
 const {
-  openMock,
+  explainMock,
   openUpgradeDestinationMock,
   formatAlertValueMock,
   mockAiChatStore,
@@ -19,7 +19,7 @@ const {
   triggerPatrolRunMock,
   notificationStoreMock,
 } = vi.hoisted(() => {
-  const openMock = vi.fn();
+  const explainMock = vi.fn();
   const openUpgradeDestinationMock = vi.fn();
   const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
     value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
@@ -29,7 +29,7 @@ const {
   const presentationPolicyHidesUpgradePromptsMock = vi.fn();
   const mockAiChatStore = {
     enabled: true as boolean | null,
-    open: (...args: unknown[]) => openMock(...args),
+    explain: (...args: unknown[]) => explainMock(...args),
   };
   const triggerPatrolRunMock = vi.fn();
   const notificationStoreMock = {
@@ -39,7 +39,7 @@ const {
     info: vi.fn(),
   };
   return {
-    openMock,
+    explainMock,
     openUpgradeDestinationMock,
     formatAlertValueMock,
     mockAiChatStore,
@@ -107,7 +107,7 @@ function makeAlert(overrides: Partial<Alert> = {}): Alert {
 }
 
 function openedContext(): Record<string, unknown> {
-  return openMock.mock.calls[0]?.[0] as Record<string, unknown>;
+  return explainMock.mock.calls[0]?.[0] as Record<string, unknown>;
 }
 
 function openedBriefing(): { statusLabel?: string; detailLines?: string[]; subject?: string } {
@@ -130,7 +130,7 @@ afterEach(() => {
 
 beforeEach(() => {
   setActiveLocale(DEFAULT_LOCALE);
-  openMock.mockReset();
+  explainMock.mockReset();
   formatAlertValueMock.mockClear();
   openUpgradeDestinationMock.mockReset();
   getUpgradeActionDestinationMock.mockReset();
@@ -271,7 +271,7 @@ describe('InvestigateAlertButton', () => {
         href: getPublicPricingUrl('ai_alerts'),
         external: true,
       });
-      expect(openMock).not.toHaveBeenCalled();
+      expect(explainMock).not.toHaveBeenCalled();
     });
 
     it('keeps the locked state non-promotional when upgrade prompts are hidden', async () => {
@@ -288,7 +288,7 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(button);
 
       expect(openUpgradeDestinationMock).not.toHaveBeenCalled();
-      expect(openMock).not.toHaveBeenCalled();
+      expect(explainMock).not.toHaveBeenCalled();
     });
 
     it('still stops propagation when locked and clicked', () => {
@@ -316,7 +316,7 @@ describe('InvestigateAlertButton', () => {
       const button = screen.getByRole('button');
       await fireEvent.click(button);
 
-      expect(openMock).toHaveBeenCalledTimes(1);
+      expect(explainMock).toHaveBeenCalledTimes(1);
       const context = openedContext();
 
       // Verify context
@@ -780,7 +780,7 @@ describe('InvestigateAlertButton patrolOption', () => {
     await fireEvent.click(screen.getByRole('button', { name: /Have Patrol investigate/i }));
 
     await waitFor(() => expect(triggerPatrolRunMock).toHaveBeenCalled());
-    expect(openMock).not.toHaveBeenCalled();
+    expect(explainMock).not.toHaveBeenCalled();
   });
 
   it('opens the Assistant only from the secondary explanation item', async () => {
@@ -790,7 +790,7 @@ describe('InvestigateAlertButton patrolOption', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'More alert actions' }));
     await fireEvent.click(await screen.findByRole('menuitem', { name: /Explain with Assistant/i }));
 
-    expect(openMock).toHaveBeenCalledTimes(1);
+    expect(explainMock).toHaveBeenCalledTimes(1);
     expect(triggerPatrolRunMock).not.toHaveBeenCalled();
   });
 });
