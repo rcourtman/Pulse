@@ -183,9 +183,11 @@ describe('AlertHistoryMobileList changing history', () => {
     const resourceButton = screen.getByRole('button', { name: 'Resource' });
     resourceButton.focus();
     await fireEvent.click(resourceButton);
-    expect(screen.getByRole('dialog', {
-      name: 'Resource incidents for pve-production-01',
-    })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', {
+        name: 'Resource incidents for pve-production-01',
+      }),
+    ).toBeInTheDocument();
 
     // A refresh or filter change can remove the originating history card.
     setGroupedAlerts([]);

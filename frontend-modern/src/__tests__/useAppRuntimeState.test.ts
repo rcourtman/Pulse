@@ -697,7 +697,9 @@ describe('useAppRuntimeState', () => {
   });
 
   it('does not mistake alert-only reconnect recovery for an empty resource snapshot', async () => {
-    websocketState = makeWebSocketState({ activeAlerts: [{ id: 'recovered-alert' } as State['activeAlerts'][number]] });
+    websocketState = makeWebSocketState({
+      activeAlerts: [{ id: 'recovered-alert' } as State['activeAlerts'][number]],
+    });
     websocketConnected = false;
     websocketReconnecting = true;
     websocketInitialDataReceived = false;

@@ -80,7 +80,7 @@ describe('TrueNASAlertsTable', () => {
     expect(detail.getByText('disk-sdc')).toBeInTheDocument();
     expect(detail.getByText('SMART')).toBeInTheDocument();
 
-    setResources([makeDisk({ status: 'healthy', incidents: [] })]);
+    setResources([makeDisk({ status: 'online', incidents: [] })]);
     expect(await screen.findByText('No active provider incidents')).toBeInTheDocument();
     expect(screen.queryByTestId('truenas-alert-detail')).not.toBeInTheDocument();
     expect(screen.queryByText('Device /dev/sdc has failed.')).not.toBeInTheDocument();
@@ -116,7 +116,7 @@ describe('TrueNASAlertsTable', () => {
       within(screen.getByTestId('truenas-alert-detail')).getByText('disk-sdc'),
     ).toBeInTheDocument();
 
-    setResources([makeDisk({ status: 'healthy', incidents: [] }), otherDisk]);
+    setResources([makeDisk({ status: 'online', incidents: [] }), otherDisk]);
     expect(await screen.findByText('Device /dev/sdd has SMART test failures.')).toBeInTheDocument();
     expect(screen.queryByTestId('truenas-alert-detail')).not.toBeInTheDocument();
     expect(screen.queryByText('Device /dev/sdc has SMART test failures.')).not.toBeInTheDocument();
