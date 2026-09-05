@@ -817,3 +817,55 @@ func TestClient_GetNodeName_ConcurrentTransientFailureIsSingleFlight(t *testing.
 		t.Fatalf("/nodes hit %d times after recovery and cache read, want 2", got)
 	}
 }
+
+// Restricted node metrics must not turn a later outage into a permission
+// fallback, nor prevent recovery on the same long-lived polling client.
+func TestClient_GetNodeStatus_PermissionOutageRecovery(t *testing.T) {
+	var responseCode atomic.Int32
+	responseCode.Store(http.StatusForbidden)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes/localhost/status" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		code := int(responseCode.Load())
+		w.WriteHeader(code)
+		if code != http.StatusOK {
+			// Deliberately misleading body: classification must use HTTP status.
+			_, _ = w.Write([]byte("permission denied: upstream authentication error"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"cpu":0.25}}`))
+	}))
+	defer server.Close()
+	client, err := NewClient(ClientConfig{
+		Host: server.URL, TokenName: "monitor@pbs!pulse",
+		TokenValue: "test-only", Timeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := client.GetNodeStatus(context.Background())
+	if err != nil || status != nil {
+		t.Fatalf("restricted metrics = (%+v, %v), want (nil, nil)", status, err)
+	}
+	for _, code := range []int{http.StatusServiceUnavailable, http.StatusBadGateway} {
+		responseCode.Store(int32(code))
+		status, err = client.GetNodeStatus(context.Background())
+		if status != nil || err == nil {
+			t.Fatalf("outage %d = (%+v, %v), want nil status and error", code, status, err)
+		}
+		if got, ok := pbsHTTPStatus(err); !ok || got != code {
+			t.Fatalf("outage status = (%d, %v), want %d", got, ok, code)
+		}
+	}
+	responseCode.Store(http.StatusOK)
+	status, err = client.GetNodeStatus(context.Background())
+	if err != nil || status == nil {
+		t.Fatalf("recovery = (%+v, %v), want metrics", status, err)
+	}
+	if status.CPU != 0.25 {
+		t.Fatalf("recovered CPU = %v, want 0.25", status.CPU)
+	}
+}
