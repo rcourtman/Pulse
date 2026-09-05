@@ -34,6 +34,11 @@ export PULSE_E2E_MOCK_IMAGE="pulse-mock-github:$PULSE_E2E_RUN_ID"
 export PULSE_E2E_SERVER_CONTAINER="$PULSE_E2E_RUN_ID-server"
 export PULSE_E2E_MOCK_CONTAINER="$PULSE_E2E_RUN_ID-mock"
 export PULSE_E2E_SEED_CONTAINER="$PULSE_E2E_RUN_ID-seed"
+# Entitlement bootstrap and browser helpers use this older variable name.
+# Do not let inherited live-runtime overrides redirect writes outside this run.
+export PULSE_E2E_PULSE_CONTAINER="$PULSE_E2E_SERVER_CONTAINER"
+unset PULSE_E2E_ENTITLEMENT_WRITE_COMMAND PULSE_E2E_BILLING_STATE_PATH
+unset PULSE_E2E_CONTAINER_BILLING_PATH PULSE_E2E_SKIP_DOCKER
 export PULSE_E2E_PORT=0 PULSE_E2E_AGENT_PORT=0 PULSE_E2E_MOCK_GITHUB_PORT=0
 echo "Isolated integration project: $PULSE_E2E_RUN_ID"
 
@@ -54,10 +59,12 @@ ensure_test_images() {
     echo "Building test images from: $REPO_ROOT"
     docker build -t "$PULSE_E2E_MOCK_IMAGE" "$TEST_ROOT/mock-github-server"
 
+    # Select the source-built server stage explicitly: the final Dockerfile
+    # stage is a prebuilt agent requiring a release_payload context.
     # Test image drops the release build tag so the suite can enable mock
     # fixtures without a demo entitlement. A build failure must stop the run,
     # never fall back to a previously tagged image.
-    docker build -t "$PULSE_E2E_SERVER_IMAGE" --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+    docker build --target e2e_runtime -t "$PULSE_E2E_SERVER_IMAGE" --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
 }
 
 # EXIT also handles build/start/test failures; signals preserve failure status.
