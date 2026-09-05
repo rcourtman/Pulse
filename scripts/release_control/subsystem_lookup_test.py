@@ -3042,22 +3042,28 @@ class SubsystemLookupTest(unittest.TestCase):
             organization_match["matched_contract_references"],
             [
                 {
+                    **_contract_reference(
+                        "docs/release-control/v6/internal/subsystems/organization-settings.md",
+                        "1. `frontend-modern/src/api/orgs.ts`",
+                        "frontend-modern/src/api/orgs.ts",
+                    ),
                     "heading": "## Canonical Files",
-                    "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 26,
-                    "heading_line": 22,
                 },
                 {
+                    **_contract_reference(
+                        "docs/release-control/v6/internal/subsystems/organization-settings.md",
+                        "1. `frontend-modern/src/api/orgs.ts` shared with",
+                        "frontend-modern/src/api/orgs.ts",
+                    ),
                     "heading": "## Shared Boundaries",
-                    "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 67,
-                    "heading_line": 65,
                 },
                 {
+                    **_contract_reference(
+                        "docs/release-control/v6/internal/subsystems/organization-settings.md",
+                        "3. Route organization and RBAC frontend transport changes through",
+                        "frontend-modern/src/api/orgs.ts",
+                    ),
                     "heading": "## Extension Points",
-                    "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 94,
-                    "heading_line": 74,
                 },
             ],
         )
@@ -3117,22 +3123,28 @@ class SubsystemLookupTest(unittest.TestCase):
             organization_match["matched_contract_references"],
             [
                 {
+                    **_contract_reference(
+                        "docs/release-control/v6/internal/subsystems/organization-settings.md",
+                        "34. `internal/api/access_control_handlers.go`",
+                        "internal/api/access_control_handlers.go",
+                    ),
                     "heading": "## Canonical Files",
-                    "path": "internal/api/access_control_handlers.go",
-                    "line": 59,
-                    "heading_line": 22,
                 },
                 {
+                    **_contract_reference(
+                        "docs/release-control/v6/internal/subsystems/organization-settings.md",
+                        "3. `internal/api/access_control_handlers.go` shared with",
+                        "internal/api/access_control_handlers.go",
+                    ),
                     "heading": "## Shared Boundaries",
-                    "path": "internal/api/access_control_handlers.go",
-                    "line": 69,
-                    "heading_line": 65,
                 },
                 {
+                    **_contract_reference(
+                        "docs/release-control/v6/internal/subsystems/organization-settings.md",
+                        "5. Keep RBAC role, assignment, and admin recovery transport aligned through",
+                        "internal/api/access_control_handlers.go",
+                    ),
                     "heading": "## Extension Points",
-                    "path": "internal/api/access_control_handlers.go",
-                    "line": 108,
-                    "heading_line": 74,
                 },
             ],
         )
