@@ -3595,6 +3595,22 @@ counters exist to measure.
 
 ## Completion Obligations
 
+### Docker update agent-attested running verification
+
+In `internal/api/docker_container_action_result.go`, a matching replacement
+container ID is insufficient to confirm a running agent readback. A running
+replacement must report state `running` and health `healthy` or explicit
+`none`. Known unsuitable health or lifecycle states contradict verification;
+missing or unrecognised running health yields `inconclusive` with
+`container_health_unknown`. This does not change execution or compensation
+history, introduce a wire field, or require stopped replacements to run.
+
+Verification: `TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim`
+in `internal/api/docker_container_action_result_test.go` covers healthy,
+no-healthcheck, stopped, unhealthy, starting, restarting and unknown-health
+readbacks. The typed-dispatch fixture supplies explicit no-healthcheck evidence.
+
+
 The public connection ledger and action APIs must project telemetry liveness
 and command admission independently. An agent may be adapter-healthy while
 remote control is `disconnected`; in that state command policy is blocked and

@@ -2882,6 +2882,22 @@ traverse an agent.
 
 ## Completion Obligations
 
+### Docker update readback is not mutation history
+
+The agent's post-update inspect can observe a running replacement whose health
+has not settled or has deteriorated after module success. The API must retain
+the completed mutation as execution history without treating replacement
+identity alone as confirmed running health. Agent-attested verification requires
+running state and healthy or explicit no-healthcheck evidence for running
+replacements; unknown health remains inconclusive. This does not trigger an
+automatic resend or rollback and preserves deliberately stopped updates.
+
+Verification: `TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim`
+asserts both verification outcomes and unchanged successful execution.
+`TestDockerContainerActionExecutorDispatchesTypedUpdate` retains typed-only
+dispatch with explicit no-healthcheck readback evidence.
+
+
 Command-capable agent completion must prove more than fresh telemetry. The
 dedicated agent listener must admit the full bootstrap/report/WebSocket
 lifecycle, command sessions must be keyed by organization plus canonical bound

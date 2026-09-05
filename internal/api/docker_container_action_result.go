@@ -115,7 +115,15 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 			}
 			status := unified.ActionVerificationContradicted
 			reason := "postcondition_contradicted"
-			if dockerUpdateFactsMatch(facts, facts.After.ContainerID) {
+			// A running replacement must also have a usable running/health
+			// readback; identity alone must not confirm an unhealthy update.
+			// Preserve updates of containers intentionally left stopped.
+			if facts.After.Running && !agentexec.IsDockerContainerHealth(facts.After.Health) {
+				status = unified.ActionVerificationInconclusive
+				reason = "container_health_unknown"
+			} else if dockerUpdateFactsMatch(facts, facts.After.ContainerID) &&
+				(!facts.After.Running || (facts.After.State == "running" &&
+					agentexec.DockerContainerHealthAllowsVerifiedRunningState(facts.After.Health))) {
 				status = unified.ActionVerificationConfirmed
 				reason = ""
 			}

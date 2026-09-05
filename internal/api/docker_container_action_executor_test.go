@@ -120,7 +120,7 @@ func (f *fakeDockerActionAgentCommander) ExecuteDockerContainerUpdate(_ context.
 		OldImageDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 		NewImageDigest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
 		BackupCreated:  true, BackupContainer: "api_pulse_backup_20260714_000000",
-		After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: newID, State: "running", Running: true, StartedAt: now, ObservedAt: now},
+		After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: newID, State: "running", Running: true, Health: agentexec.DockerContainerHealthNone, StartedAt: now, ObservedAt: now},
 	}, nil
 }
 

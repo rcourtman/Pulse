@@ -2120,6 +2120,22 @@ take a correctness dependency on its contents.
 
 ## Completion Obligations
 
+### Recovered Docker update evidence preserves health uncertainty
+
+The shared API action-result boundary must not turn a matching replacement ID
+into confirmed running health when the agent readback reports unhealthy,
+health-check starting or restarting. Unknown running health remains
+inconclusive, while the recorded completed execution and compensation facts
+remain unchanged. This rule does not settle missing receipts, prove intended
+stopped state, or authorise redispatch of a recovered update.
+
+Verification: `TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim`
+in `internal/api/docker_container_action_result_test.go` pins these result
+distinctions. Existing `TestIssue1649StrandedDockerUpdateReconcilesWithoutRedispatch`
+and `TestRouterRecoverExecutingDockerUpdateAfterCapabilityDisappears` exercise
+reconciliation without treating the verification correction as a new mutation.
+
+
 Coverage rows reconcile replacement recovery-model snapshots by their logical
 `key` before windowing. Refreshed names must render without discarding expanded
 restore evidence or keyboard focus on a surviving row. Verify with
