@@ -29,48 +29,50 @@ type issue1124DBStat struct {
 }
 
 type issue1124ProfileReport struct {
-	SchemaMode           string            `json:"schema_mode"`
-	AutoCheckpoint       bool              `json:"auto_checkpoint"`
-	AutoCheckpointPages  int               `json:"auto_checkpoint_pages"`
-	Ticks                int               `json:"ticks"`
-	Resources            int               `json:"resources"`
-	Samples              int               `json:"samples"`
-	WriteCalls           int               `json:"write_calls"`
-	LogicalPayloadBytes  int64             `json:"logical_payload_bytes"`
-	Elapsed              time.Duration     `json:"elapsed"`
-	WriteP50             time.Duration     `json:"write_p50"`
-	WriteP95             time.Duration     `json:"write_p95"`
-	WriteP99             time.Duration     `json:"write_p99"`
-	WriteMax             time.Duration     `json:"write_max"`
-	WALBytes             int64             `json:"wal_bytes"`
-	WALFrames            int64             `json:"wal_frames"`
-	CacheWritesBefore    int64             `json:"cache_writes_before_checkpoint"`
-	CacheWritesAfter     int64             `json:"cache_writes_after_checkpoint"`
-	CacheSpills          int64             `json:"cache_spills"`
-	PhysicalWriteBytes   int64             `json:"physical_write_bytes"`
-	CheckpointWriteBytes int64             `json:"checkpoint_write_bytes"`
-	CheckpointLogFrames  int64             `json:"checkpoint_log_frames"`
-	CheckpointedFrames   int64             `json:"checkpointed_frames"`
-	MainBytesBefore      int64             `json:"main_bytes_before_checkpoint"`
-	MainBytesAfter       int64             `json:"main_bytes_after_checkpoint"`
-	PageSize             int64             `json:"page_size"`
-	PageCount            int64             `json:"page_count"`
-	FreelistCount        int64             `json:"freelist_count"`
-	ReadCount            int64             `json:"concurrent_read_count"`
-	ReadP50              time.Duration     `json:"read_p50"`
-	ReadP95              time.Duration     `json:"read_p95"`
-	ReadP99              time.Duration     `json:"read_p99"`
-	MaxReadLatency       time.Duration     `json:"max_read_latency"`
-	RestartElapsed       time.Duration     `json:"restart_elapsed"`
-	RestartMainBytes     int64             `json:"restart_main_bytes"`
-	RestartPageCount     int64             `json:"restart_page_count"`
-	RestartFreelist      int64             `json:"restart_freelist_count"`
-	RetentionElapsed     time.Duration     `json:"retention_elapsed"`
-	RetentionRows        int               `json:"retention_rows"`
-	RetentionMainBytes   int64             `json:"retention_main_bytes"`
-	RetentionPageCount   int64             `json:"retention_page_count"`
-	RetentionFreelist    int64             `json:"retention_freelist_count"`
-	DBStats              []issue1124DBStat `json:"db_stats"`
+	SchemaMode                    string            `json:"schema_mode"`
+	AutoCheckpoint                bool              `json:"auto_checkpoint"`
+	AutoCheckpointPages           int               `json:"auto_checkpoint_pages"`
+	Ticks                         int               `json:"ticks"`
+	Resources                     int               `json:"resources"`
+	Samples                       int               `json:"samples"`
+	WriteCalls                    int               `json:"write_calls"`
+	LogicalPayloadBytes           int64             `json:"logical_payload_bytes"`
+	Elapsed                       time.Duration     `json:"elapsed"`
+	WriteP50                      time.Duration     `json:"write_p50"`
+	WriteP95                      time.Duration     `json:"write_p95"`
+	WriteP99                      time.Duration     `json:"write_p99"`
+	WriteMax                      time.Duration     `json:"write_max"`
+	WALBytes                      int64             `json:"wal_bytes"`
+	WALFrames                     int64             `json:"wal_frames"`
+	CacheWritesBefore             int64             `json:"cache_writes_before_checkpoint"`
+	CacheWritesAfter              int64             `json:"cache_writes_after_checkpoint"`
+	CacheSpills                   int64             `json:"cache_spills"`
+	ProcessWriteBytes             int64             `json:"process_write_bytes"`
+	ProcessCancelledWriteBytes    int64             `json:"process_cancelled_write_bytes"`
+	CheckpointCancelledWriteBytes int64             `json:"checkpoint_cancelled_write_bytes"`
+	CheckpointWriteBytes          int64             `json:"checkpoint_write_bytes"`
+	CheckpointLogFrames           int64             `json:"checkpoint_log_frames"`
+	CheckpointedFrames            int64             `json:"checkpointed_frames"`
+	MainBytesBefore               int64             `json:"main_bytes_before_checkpoint"`
+	MainBytesAfter                int64             `json:"main_bytes_after_checkpoint"`
+	PageSize                      int64             `json:"page_size"`
+	PageCount                     int64             `json:"page_count"`
+	FreelistCount                 int64             `json:"freelist_count"`
+	ReadCount                     int64             `json:"concurrent_read_count"`
+	ReadP50                       time.Duration     `json:"read_p50"`
+	ReadP95                       time.Duration     `json:"read_p95"`
+	ReadP99                       time.Duration     `json:"read_p99"`
+	MaxReadLatency                time.Duration     `json:"max_read_latency"`
+	RestartElapsed                time.Duration     `json:"restart_elapsed"`
+	RestartMainBytes              int64             `json:"restart_main_bytes"`
+	RestartPageCount              int64             `json:"restart_page_count"`
+	RestartFreelist               int64             `json:"restart_freelist_count"`
+	RetentionElapsed              time.Duration     `json:"retention_elapsed"`
+	RetentionRows                 int               `json:"retention_rows"`
+	RetentionMainBytes            int64             `json:"retention_main_bytes"`
+	RetentionPageCount            int64             `json:"retention_page_count"`
+	RetentionFreelist             int64             `json:"retention_freelist_count"`
+	DBStats                       []issue1124DBStat `json:"db_stats"`
 }
 
 type issue1124Series struct {
@@ -601,7 +603,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		_ = issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, true)
 		_ = issue1124DBStatus(t, store, sqlite3.DBStatusCacheSpill, true)
 	}
-	processWritesBefore := issue1124ProcessWriteBytes()
+	processWritesBefore := issue1124ProcessIO()
 
 	series := issue1124Estate()
 	batches := issue1124ProviderBatches(series)
@@ -706,7 +708,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		cacheWritesBefore = issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, false)
 		cacheSpills = issue1124DBStatus(t, store, sqlite3.DBStatusCacheSpill, false)
 	}
-	processWritesAfterWAL := issue1124ProcessWriteBytes()
+	processWritesAfterWAL := issue1124ProcessIO()
 	walFrames := int64(0)
 	if walBytes >= 32 {
 		walFrames = (walBytes - 32) / (pageSize + 24)
@@ -726,7 +728,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 	if !withReaders {
 		cacheWritesAfter = issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, false)
 	}
-	processWritesAfterCheckpoint := issue1124ProcessWriteBytes()
+	processWritesAfterCheckpoint := issue1124ProcessIO()
 	dbStats := issue1124ReadDBStats(t, store)
 
 	expectedSamples := ticks * samplesPerTick
@@ -803,48 +805,50 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 	}
 
 	report := issue1124ProfileReport{
-		SchemaMode:           mode,
-		AutoCheckpoint:       autoCheckpoint,
-		AutoCheckpointPages:  checkpointPages,
-		Ticks:                ticks,
-		Resources:            len(series),
-		Samples:              expectedSamples,
-		WriteCalls:           ticks * len(batches),
-		LogicalPayloadBytes:  logicalBytes,
-		Elapsed:              writeElapsed,
-		WriteP50:             issue1124Percentile(writeLatencies, 0.50),
-		WriteP95:             issue1124Percentile(writeLatencies, 0.95),
-		WriteP99:             issue1124Percentile(writeLatencies, 0.99),
-		WriteMax:             issue1124Percentile(writeLatencies, 1),
-		WALBytes:             walBytes,
-		WALFrames:            walFrames,
-		CacheWritesBefore:    cacheWritesBefore,
-		CacheWritesAfter:     cacheWritesAfter,
-		CacheSpills:          cacheSpills,
-		PhysicalWriteBytes:   issue1124CounterDelta(processWritesBefore, processWritesAfterWAL),
-		CheckpointWriteBytes: issue1124CounterDelta(processWritesAfterWAL, processWritesAfterCheckpoint),
-		CheckpointLogFrames:  logFrames,
-		CheckpointedFrames:   checkpointed,
-		MainBytesBefore:      mainBefore,
-		MainBytesAfter:       mainAfter,
-		PageSize:             pageSize,
-		PageCount:            pageCount,
-		FreelistCount:        freelistCount,
-		ReadCount:            readCount.Load(),
-		ReadP50:              issue1124Percentile(readLatencies, 0.50),
-		ReadP95:              issue1124Percentile(readLatencies, 0.95),
-		ReadP99:              issue1124Percentile(readLatencies, 0.99),
-		MaxReadLatency:       time.Duration(maxReadNanos.Load()),
-		RestartElapsed:       restartElapsed,
-		RestartMainBytes:     restartMainBytes,
-		RestartPageCount:     restartPageCount,
-		RestartFreelist:      restartFreelist,
-		RetentionElapsed:     retentionElapsed,
-		RetentionRows:        retentionRows,
-		RetentionMainBytes:   retentionMainBytes,
-		RetentionPageCount:   retentionPageCount,
-		RetentionFreelist:    retentionFreelist,
-		DBStats:              dbStats,
+		SchemaMode:                    mode,
+		AutoCheckpoint:                autoCheckpoint,
+		AutoCheckpointPages:           checkpointPages,
+		Ticks:                         ticks,
+		Resources:                     len(series),
+		Samples:                       expectedSamples,
+		WriteCalls:                    ticks * len(batches),
+		LogicalPayloadBytes:           logicalBytes,
+		Elapsed:                       writeElapsed,
+		WriteP50:                      issue1124Percentile(writeLatencies, 0.50),
+		WriteP95:                      issue1124Percentile(writeLatencies, 0.95),
+		WriteP99:                      issue1124Percentile(writeLatencies, 0.99),
+		WriteMax:                      issue1124Percentile(writeLatencies, 1),
+		WALBytes:                      walBytes,
+		WALFrames:                     walFrames,
+		CacheWritesBefore:             cacheWritesBefore,
+		CacheWritesAfter:              cacheWritesAfter,
+		CacheSpills:                   cacheSpills,
+		ProcessCancelledWriteBytes:    issue1124CounterDelta(processWritesBefore.cancelled, processWritesAfterWAL.cancelled),
+		CheckpointCancelledWriteBytes: issue1124CounterDelta(processWritesAfterWAL.cancelled, processWritesAfterCheckpoint.cancelled),
+		ProcessWriteBytes:             issue1124CounterDelta(processWritesBefore.writes, processWritesAfterWAL.writes),
+		CheckpointWriteBytes:          issue1124CounterDelta(processWritesAfterWAL.writes, processWritesAfterCheckpoint.writes),
+		CheckpointLogFrames:           logFrames,
+		CheckpointedFrames:            checkpointed,
+		MainBytesBefore:               mainBefore,
+		MainBytesAfter:                mainAfter,
+		PageSize:                      pageSize,
+		PageCount:                     pageCount,
+		FreelistCount:                 freelistCount,
+		ReadCount:                     readCount.Load(),
+		ReadP50:                       issue1124Percentile(readLatencies, 0.50),
+		ReadP95:                       issue1124Percentile(readLatencies, 0.95),
+		ReadP99:                       issue1124Percentile(readLatencies, 0.99),
+		MaxReadLatency:                time.Duration(maxReadNanos.Load()),
+		RestartElapsed:                restartElapsed,
+		RestartMainBytes:              restartMainBytes,
+		RestartPageCount:              restartPageCount,
+		RestartFreelist:               restartFreelist,
+		RetentionElapsed:              retentionElapsed,
+		RetentionRows:                 retentionRows,
+		RetentionMainBytes:            retentionMainBytes,
+		RetentionPageCount:            retentionPageCount,
+		RetentionFreelist:             retentionFreelist,
+		DBStats:                       dbStats,
 	}
 	if mode == "full-batched" || mode == "consolidated-batched" {
 		report.WriteCalls = ticks
@@ -980,22 +984,66 @@ func issue1124FileSize(t *testing.T, path string) int64 {
 	return info.Size()
 }
 
-func issue1124ProcessWriteBytes() int64 {
+// Process accounting is not device wear. Keep cancelled writes separate:
+// truncation can cancel dirty pages attributed to another process.
+// See https://man7.org/linux/man-pages/man5/proc_pid_io.5.html.
+type issue1124IOCounters struct {
+	writes, cancelled int64
+}
+
+func issue1124ProcessIO() issue1124IOCounters {
 	data, err := os.ReadFile("/proc/self/io")
 	if err != nil {
-		return -1
+		return issue1124IOCounters{-1, -1}
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	return issue1124ParseProcessIO(string(data))
+}
+
+func issue1124ParseProcessIO(data string) issue1124IOCounters {
+	counters := issue1124IOCounters{-1, -1}
+	for _, line := range strings.Split(data, "\n") {
 		key, value, ok := strings.Cut(line, ":")
-		if !ok || strings.TrimSpace(key) != "write_bytes" {
+		if !ok {
 			continue
 		}
 		parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
-		if err == nil {
-			return parsed
+		if err != nil || parsed < 0 {
+			continue
+		}
+		switch strings.TrimSpace(key) {
+		case "write_bytes":
+			counters.writes = parsed
+		case "cancelled_write_bytes":
+			counters.cancelled = parsed
 		}
 	}
-	return -1
+	return counters
+}
+
+func TestIssue1124ProcessIOAccounting(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		want        issue1124IOCounters
+	}{
+		{"normal", "wchar: 999\nwrite_bytes: 120\ncancelled_write_bytes: 30\n", issue1124IOCounters{120, 30}},
+		{"zero", "write_bytes: 0\ncancelled_write_bytes: 0", issue1124IOCounters{0, 0}},
+		{"missing", "", issue1124IOCounters{-1, -1}},
+		{"partial", "write_bytes: 10", issue1124IOCounters{10, -1}},
+		{"invalid", "write_bytes: nope\ncancelled_write_bytes: -1", issue1124IOCounters{-1, -1}},
+		{"overflow", "write_bytes: 9223372036854775808", issue1124IOCounters{-1, -1}},
+		{"independent cancellation", "write_bytes: 10\ncancelled_write_bytes: 20", issue1124IOCounters{10, 20}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := issue1124ParseProcessIO(tc.input); got != tc.want {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct{ before, after, want int64 }{{0, 0, 0}, {10, 30, 20}, {-1, 30, -1}, {30, -1, -1}, {30, 10, -1}} {
+		if got := issue1124CounterDelta(tc.before, tc.after); got != tc.want {
+			t.Fatalf("delta(%d,%d)=%d, want %d", tc.before, tc.after, got, tc.want)
+		}
+	}
 }
 
 func issue1124CounterDelta(before, after int64) int64 {
