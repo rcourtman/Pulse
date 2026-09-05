@@ -3,8 +3,10 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,9 +148,28 @@ func testPBSPartialMetricsWebhookLifecycle(t *testing.T, recoveryMode pbsHealthT
 		recovery.Alerts[0].ID != incident.ID || !recovery.Alerts[0].StartTime.Equal(incident.StartTime) {
 		t.Fatalf("recovery does not identify delivered incident: %+v", recovery)
 	}
+	// Inspect what the receiver actually sees, not only the event envelope.
+	wantValue := 100.0 / 1024 * 100
+	if recoveryMode == pbsHealthTestZeroUsage {
+		wantValue = 0
+	}
+	resolved := recovery.Alerts[0]
+	if resolved.Value != wantValue {
+		t.Fatalf("recovery value = %v, want measured %v (firing %v)", resolved.Value, wantValue, incident.Value)
+	}
+	if !strings.HasPrefix(resolved.Message, "Resolved: ") || !strings.Contains(resolved.Message, fmt.Sprintf("%.1f%%", wantValue)) || strings.Contains(strings.ToLower(resolved.Message), "above") {
+		t.Fatalf("recovery retained breach wording: %q", resolved.Message)
+	}
 	waitSent(2)
 	if len(manager.GetActiveAlerts()) != 0 || len(manager.GetRecentlyResolved()) != 1 {
 		t.Fatal("genuine recovery did not update active/history state")
+	}
+	history := manager.GetResolvedAlert(incident.ID)
+	if history == nil || history.Value != wantValue || history.Message != resolved.Message || !history.LastSeen.Equal(resolved.LastSeen) {
+		t.Fatalf("recovery history differs from receiver: %+v", history)
+	}
+	if !resolved.LastSeen.After(incident.LastSeen) {
+		t.Fatal("recovery retained firing observation time")
 	}
 	for range 5 {
 		poll()

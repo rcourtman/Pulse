@@ -15,6 +15,20 @@
 
 ## Purpose
 
+Confirmed canonical metric recovery publishes the clearing evaluation's value,
+observation time, and resolved metric wording in the snapshot consumed by
+recent-resolution reads and notification callbacks. It must not reuse the last
+firing sample, including when the clearing value is zero or guest identity
+migrates between nodes. Clone the snapshot before refreshing recovery content;
+preserve incident identity and start time. Missing or malformed telemetry is
+not a clearing observation. This does not change explicit configuration-disable
+or resource-removal resolution semantics.
+`TestAlertCharacterizationGuestMetricResolutionUsesCurrentNodeIdentityAfterMove`
+in `internal/alerts/migration_characterization_test.go` pins canonical identity
+and clearing content together; `TestPBSPartialMetricsWebhookLifecycle` in
+`internal/monitoring/monitor_pbs_webhook_test.go` verifies low/zero measurements
+and invalid-telemetry suppression through a local HTTP receiver.
+
 TrueNAS INFO provider incidents remain on the canonical resource but do not
 enter the actionable active-alert lifecycle. Native NOTICE remains actionable
 at informational canonical severity; it must not be discarded merely because
