@@ -1,4 +1,6 @@
-import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
+import { For, Show, createEffect, createMemo, type Accessor, type JSX } from 'solid-js';
+
+import { createStore, reconcile } from 'solid-js/store';
 
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -155,7 +157,11 @@ export function ProxmoxCoverageTable(props: {
   const pbsSource = getProxmoxBackupSourcePresentation('pbs');
   const archiveSource = getProxmoxBackupSourcePresentation('archive');
   const snapshotSource = getProxmoxBackupSourcePresentation('snapshot');
-  const tableWindow = useProxmoxBackupTableWindowing(() => props.rows);
+  // Polling rebuilds recovery-model objects. Preserve logical row identity so
+  // Solid does not replace the focused toggle (or the browser's scroll anchor).
+  const [stableRows, setStableRows] = createStore<WorkloadCoverageRow[]>([]);
+  createEffect(() => setStableRows(reconcile([...props.rows], { key: 'key' })));
+  const tableWindow = useProxmoxBackupTableWindowing(() => [...stableRows]);
 
   return (
     <Show

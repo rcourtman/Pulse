@@ -1571,6 +1571,12 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
 
 ## Completion Obligations
 
+Replacement workload snapshots must update backup coverage content without
+remounting surviving logical coverage rows. Preserve the focused expansion
+control and expanded evidence across those updates. The isolated browser
+polling regression verifies replacement HTTP fixture snapshots, not the full
+application resource-provider or WebSocket lifecycle.
+
 1. Update this contract when canonical resource identity or type rules change
 2. Update contract and guardrail tests when a new resource type is added
 3. Route runtime changes through the explicit unified-resource proof policies in `registry.json`; default fallback proof routing is not allowed

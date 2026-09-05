@@ -2094,6 +2094,12 @@ take a correctness dependency on its contents.
 
 ## Completion Obligations
 
+Coverage rows reconcile replacement recovery-model snapshots by their logical
+`key` before windowing. Refreshed names must render without discarding expanded
+restore evidence or keyboard focus on a surviving row. Verify with
+`scripts/check-backup-browser-polling.mjs`; full provider/WebSocket polling and
+the reported backup-page scroll jump remain outside that isolated fixture.
+
 Agent-backed lifecycle recovery must namespace every in-memory pending request,
 typed result, operation query, and deployment progress subscription by the
 admitted organization session. That transport namespace must not alter the
