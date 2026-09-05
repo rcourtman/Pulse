@@ -100,6 +100,10 @@ type diskUsageCall struct {
 // guardedDiskUsage bounds the wait for a mount probe and leaves at most one
 // syscall in flight per mountpoint, even when reporting loops overlap.
 func guardedDiskUsage(ctx context.Context, mountpoint string) (*godisk.UsageStat, error) {
+	// Do not admit potentially uninterruptible work for an expired collection.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	stuckDiskMounts.Lock()
 	call, loaded := stuckDiskMounts.calls[mountpoint]
 	if !loaded {

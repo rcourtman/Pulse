@@ -284,3 +284,37 @@ func TestGuardedDiskUsage_ConcurrentHealthyMounts(t *testing.T) {
 		}
 	}
 }
+
+// A cancelled collection must not start a syscall which may ignore its context
+// and remain stuck in the kernel after the caller has already gone away.
+func TestGuardedDiskUsage_AlreadyCancelledDoesNotStartProbe(t *testing.T) {
+	const mount = "/test/already-cancelled"
+	origUsage := diskUsage
+	var calls atomic.Int32
+	diskUsage = func(context.Context, string) (*godisk.UsageStat, error) {
+		calls.Add(1)
+		return nil, nil
+	}
+	defer func() { diskUsage = origUsage }()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := guardedDiskUsage(ctx, mount)
+	// Wait for any incorrectly admitted probe to finish before restoring the
+	// shared stub; registry removal follows the syscall.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, ok := loadDiskUsageCall(mount); !ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("probe did not drain")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if err != context.Canceled {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("cancelled collection started %d probes, want none", got)
+	}
+}
