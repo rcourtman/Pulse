@@ -1,22 +1,19 @@
 {
   "version": 1,
-  "base_sha": "193ead50fd9559b92ee242f34b8e9718fd7a3e3e",
-  "verified_at": "2026-09-05T03:43:42Z",
+  "base_sha": "deac5e7750a79052170ba4396b700a3d6b855e3f",
+  "verified_at": "2026-09-05T04:03:13Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket-global.ts",
-    "frontend-modern/src/stores/websocket.ts",
     "frontend-modern/src/useAppRuntimeState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket-global.ts": "abacee8810729f0dbded90f0b8be99ad09936134160b631b74967e0751f2919f",
-    "frontend-modern/src/stores/websocket.ts": "253b45b6c9694ad39c881cf8b592398962ae5fa6849a1590812fbb634649fb9b",
-    "frontend-modern/src/useAppRuntimeState.ts": "e879a23baf48caf99359c63cf4c0c637156d27a28ab823f62c19e14052fd1643"
+    "frontend-modern/src/useAppRuntimeState.ts": "01c0eebf2d99994d730c8add6604d1851f89f8a6532cabbc159b44f030b8124b"
   },
   "routes": [
     "/proxmox",
     "/docker",
-    "/alerts"
+    "/alerts",
+    "/settings"
   ],
   "viewports": [
     {
@@ -33,14 +30,15 @@
     }
   ],
   "states": [
-    "Synthetic populated Proxmox and Docker inventory in isolated real Go backend with production embedded frontend",
-    "Connected socket closed with 1013; reconnect attempts blocked while HTTP health remains available",
-    "Platform destinations retained during interruption and automatic recovery without reload; desktop navigation intentionally hidden below xl",
-    "Desktop active incidents retain enabled acknowledgement control; no acknowledgement persistence or notification receipt claim"
+    "Isolated real Go backend and production embedded frontend; synthetic Proxmox and Docker inventory; Chromium 141.0.7390.37, fresh contexts, 100% zoom",
+    "Real connected socket closed with 1013; reconnect attempts blocked while HTTP health stays available",
+    "Six checks passed at 1440, 1100 and 390 by 900, with and without admission HTTP 503 on recovery; each injected case observed exactly one failed admission request",
+    "Platform destinations retained through interruption and recovery without document reload; no acknowledgement persistence or notification delivery claim"
   ],
   "interactions": [
     "pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 PULSE_E2E_LOCAL_BACKEND_PORT=18765 npm --prefix tests/integration test -- tests/96-navigation-socket-recovery.spec.ts --project=chromium",
-    "Three Chromium checks passed; fresh contexts at 100% zoom; desktop and 390px reconnect screenshots inspected. Mobile menu interaction not exercised.",
-    "Open Alerts during interruption at 1440px; unblock socket and verify recovery without reload"
+    "390px before, during and after interruption: open More, Escape, reopen and follow Settings; switch Proxmox and Docker; open Alerts with enabled Acknowledge control and return to Docker",
+    "1440px: open active incidents during interruption with enabled Acknowledge control; recovered desktop and 390px screenshots inspected",
+    "Baseline failed at 1440 and 1100 when admission HTTP refresh failed; baseline 390px passed. Focused retention test failed before repair. Repaired run: six browser checks and 107 focused tests pass"
   ]
 }

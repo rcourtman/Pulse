@@ -152,6 +152,31 @@ describe('App platform navigation admission', () => {
     expect(admission.visibility).toMatchObject({ docker: true, truenas: true, standalone: true });
   });
 
+  it('does not let retained reconnect admission override an explicit empty resource snapshot', () => {
+    const retainedFacet = {
+      proxmox: true,
+      docker: true,
+      kubernetes: false,
+      truenas: false,
+      vmware: false,
+      standalone: false,
+    };
+    expect(resolvePlatformNavigationAdmission([], false, retainedFacet).visibility.docker).toBe(
+      true,
+    );
+    const authoritativeEmpty = resolvePlatformNavigationAdmission([], true, retainedFacet);
+    expect(authoritativeEmpty.resolved).toBe(true);
+    expect(Object.values(authoritativeEmpty.visibility)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(getDefaultWorkspaceRoute(authoritativeEmpty.visibility, false)).toBe('/alerts');
+  });
+
   it('stays unresolved when neither the facet nor runtime state is available', () => {
     const admission = resolvePlatformNavigationAdmission([], false, null);
 

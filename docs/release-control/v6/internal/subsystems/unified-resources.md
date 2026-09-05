@@ -5026,3 +5026,7 @@ initialDataReceived. Only a state frame with a resources field sets this signal;
 an explicit empty resources array is authoritative, while an alert-only frame
 is not. Preserve the signal across transport reconnect and clear it with
 organisation URL state reset. The global no-op store reports false.
+
+A failed admission HTTP refresh is not an empty estate either: retain the last
+valid facet on request failure. A successful response still replaces it,
+including all-false admission; first-load failure remains unresolved.

@@ -3457,3 +3457,8 @@ snapshot evidence arrives; alert-only recovery is not resource evidence.
 Resource snapshot receipt survives a transport reconnect but resets when the
 WebSocket organisation URL changes. The no-op pre-auth store reports no resource
 snapshot. Outgoing tenant admission must not authorise incoming tenant tabs.
+
+A failed reconnect admission request retains the current tenant's last valid
+facet. The synchronous organisation-switch reset still clears outgoing
+admission before requesting the new tenant, including when that request fails.
+This is navigation continuity, not an authorization or entitlement decision.

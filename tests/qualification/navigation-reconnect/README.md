@@ -68,3 +68,45 @@ checks pass at 1440, 1100 and 390×900. Desktop and narrow reconnect screenshots
 were inspected. At 390px the Docker inventory and bottom navigation remain
 visible; this does not exercise the More menu or mobile platform switching.
 The matching browser receipt records the exact runtime source hashes.
+
+## Admission HTTP failure and mobile interaction — 5 September 2026
+
+The expanded experiment on integrated main
+`deac5e7750a79052170ba4396b700a3d6b855e3f` found a second failure:
+after a real socket reconnect, returning HTTP 503 specifically for
+`/api/resources?page=1&limit=1` removed the platform destinations at 1440
+and 1100px. The populated inventory was not sufficient to establish canonical
+resource-snapshot receipt. System destinations and incident controls remained.
+This is a reproduced source-build path consistent with #1899, not confirmation
+of the reporter's installation or a newly qualified v6.4.1 artifact.
+
+Baseline: four checks passed, two failed. All three no-HTTP-failure checks
+passed; the 390px failure-injection check also passed. Do not describe this as
+an unconditional defect at every width: resource snapshot arrival affects it.
+The new focused retention test independently failed before the repair.
+
+The repair retains the last valid admission facet on request failure. No new
+fetches, retries or navigation surface. Successful responses still replace it,
+including an all-false facet. First-load failures remain unresolved, and an
+organisation switch still clears outgoing admission before the new request;
+focused tests cover that request failing as well.
+
+The same opt-in command above now runs six checks: all three widths with and
+without admission HTTP failure. At 390px it opens and dismisses More, follows
+Settings from More, switches to Proxmox and Docker, and opens active incidents
+with an enabled acknowledgement control before, during and after interruption.
+Failure injection must observe a completed 503 response, not merely install a
+route handler. The test checks document identity through recovery without reload.
+
+This supersedes the earlier admission-failure/mobile-interaction exclusions,
+not the published-artifact, candidate-branch, reporter-browser, reverse-proxy or
+long-outage exclusions. Release qualification and soak remain separate.
+
+Repair validation: all six browser checks pass (Chromium 141.0.7390.37,
+100% zoom, 1440/1100/390×900), each injected case recording one failed admission
+request. Desktop and narrow repaired screenshots were inspected. 107 focused
+runtime, architecture and websocket tests pass. The browser receipt binds
+the repaired runtime source bytes; baseline artifacts are retained locally in
+`tmp/navigation-admission-baseline/`, repaired artifacts in
+`tests/integration/test-results/` and `tests/integration/playwright-report/`.
+These local artifacts are not release qualification or automatic CI admission.

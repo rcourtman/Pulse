@@ -306,10 +306,11 @@ export const useAppRuntimeState = () => {
       );
       setPlatformAdmission(normalizePlatformAdmission(payload?.aggregations?.platformAdmission));
     } catch (error) {
-      // Older servers do not report the facet; navigation keeps its previous
-      // behaviour rather than hiding platforms the estate really has.
+      // A failed refresh says nothing about which platforms still exist.
+      // Keep the last valid facet until a successful response replaces it.
+      // First-load failures remain unresolved; org switches clear it before
+      // requesting the new tenant, so this cannot retain outgoing admission.
       logger.debug('[useAppRuntimeState] platform admission unavailable', error);
-      setPlatformAdmission(null);
     }
   };
 
