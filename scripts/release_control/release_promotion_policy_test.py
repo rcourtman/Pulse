@@ -16,6 +16,7 @@ import yaml
 from yaml.constructor import ConstructorError
 
 import record_rc_to_ga_blocked as blocked_record
+import helm_pages_retry_test
 from live_runtime_proof import evaluate_live_runtime
 from release_promotion_policy_support import (
     REQUIRED_STAGED_GOVERNANCE_INPUTS,
@@ -580,6 +581,20 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Require activated GitHub release", floating_tags)
         self.assertIn("--json isDraft,publishedAt,tagName", floating_tags)
         self.assertIn("Floating-tag promotion refuses inactive release", floating_tags)
+
+    def test_helm_pages_retry_requires_explicitly_published_chart(self) -> None:
+        runner = helm_pages_retry_test.HelmPagesRetryTests()
+        for draft, digest in ((True, helm_pages_retry_test.DIGEST), (True, ""),
+                              (None, helm_pages_retry_test.DIGEST)):
+            with self.subTest(draft=draft, digest=digest):
+                result, calls = runner.run_publication(draft=draft, digest=digest)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("PAGES_BOUNDARY", result.stdout)
+                self.assertEqual(len(calls), 1, "draft refusal must precede any mutation")
+        result, calls = runner.run_publication(draft=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PAGES_BOUNDARY", result.stdout)
+        self.assertEqual(len(calls), 2, "matching published chart retry is read-only")
 
     def test_each_post_commit_surface_failure_is_retriable_convergence_debt(self) -> None:
         release_workflow = read(".github/workflows/create-release.yml")

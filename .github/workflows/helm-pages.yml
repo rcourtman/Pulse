@@ -200,8 +200,17 @@ jobs:
           fi
           local_digest="sha256:$(sha256sum "${chart_path}" | cut -d ' ' -f 1)"
 
-          if existing_prerelease="$(gh release view "${chart_release}" --repo "${GITHUB_REPOSITORY}" \
-              --json isPrerelease --jq '.isPrerelease' 2>/dev/null)"; then
+          if existing_state="$(gh release view "${chart_release}" --repo "${GITHUB_REPOSITORY}" \
+              --json isPrerelease,isDraft --jq '[.isPrerelease, .isDraft] | @tsv' 2>/dev/null)"; then
+            existing_prerelease="$(awk -F '\t' '{print $1}' <<<"${existing_state}")"
+            existing_draft="$(awk -F '\t' '{print $2}' <<<"${existing_state}")"
+            # A draft asset is visible to this authenticated workflow but not
+            # to Helm consumers. Do not turn an interrupted publication into
+            # a public index entry, or implicitly publish an operator's draft.
+            if [[ "${existing_draft}" != "false" ]]; then
+              echo "::error::Chart release ${chart_release} is not confirmed published; refusing to modify it or advertise it through Pages."
+              exit 1
+            fi
             # Immutable releases refuse asset replacement, so a convergence
             # retry must recognise the exact chart it already published
             # rather than clobber it (v6.4.3-rc.1 retry, 2026-09-02). The
