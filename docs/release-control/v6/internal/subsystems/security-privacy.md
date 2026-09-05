@@ -2476,6 +2476,18 @@ as investigated, one bucket per finding, and add no finding, resource,
 session, or action identity. The receiver canonicalizes every one of the four
 strings to its released vocabulary or `unknown` and clamps the counts like
 every other counter.
+Patrol run and new-finding volumes use bounded local UTC-day tallies in
+`internal/config/persistence.go`, preserving aggregate activity after the
+operator-facing run history is trimmed. Finding volume has its own persistence
+cursor so installations with an existing run tally backfill retained runs on
+upgrade without recounting run volume. No run, finding, resource, provider, or
+session identity is added to the tally or outbound ping. The rolling totals
+include the whole UTC day containing the cutoff. Activity trimmed before the
+finding tally existed cannot be recovered. This changes retention of existing
+aggregate fields and does not expand the telemetry schema. Investigation
+counts remain one per surviving finding investigated in-window, with one
+current outcome bucket per finding. They do not count repeated attempts or
+form a conversion denominator for newly detected findings.
 The earlier draft schema-v8 `business_estate` field was reverted and must not
 remain in the license server's accepted ping struct merely because a private receiver build
 and database migration briefly carried it. Existing deployed databases need no
