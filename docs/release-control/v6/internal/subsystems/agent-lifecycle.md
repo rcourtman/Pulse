@@ -618,6 +618,8 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+The shared security-status route may expose the validated caller currentUsername to authenticated clients, including organisation-scoped local sessions. This presentation identity is not an agent credential, enrollment grant or command authority; agent download, enrollment and token-scope checks remain independent of this field.
+
 `internal/models/models.go` and `internal/monitoring/monitor.go` also carry
 monitoring-owned Proxmox cluster node identity and membership-confirmation
 state. Provider instances with equal cluster/member display names must not

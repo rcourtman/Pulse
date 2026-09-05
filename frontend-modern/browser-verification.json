@@ -1,38 +1,37 @@
 {
   "version": 1,
-  "base_sha": "58413ebdf6af81018bce15ff4023ca9824c0cdae",
-  "verified_at": "2026-09-05T09:32:59.247Z",
+  "base_sha": "2356e4300022a9e0502b97030b84fc902ca15281",
+  "verified_at": "2026-09-05T15:02:51Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/useAppRuntimeState.ts"
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/types/config.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/useAppRuntimeState.ts": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "a4c53fd983db3390e43771e484ef7337c72a0ada6e6c28bcc311b02e88cbde19",
+    "frontend-modern/src/types/config.ts": "07c9961a8ca87998b6d6e4f398770efd11bfd4b089ce25f18e93e5bafffd9c8d"
   },
   "routes": [
-    "/alerts",
-    "/settings",
-    "/docker"
+    "/settings/organization/sharing"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1280,
+      "height": 720
     },
     {
       "width": 390,
-      "height": 900
+      "height": 844
     }
   ],
   "states": [
-    "Full application served by isolated local Vite; synthetic HTTP, two synthetic organisations and cold socket; Chromium 141.0.7390.37, fresh contexts, default zoom.",
-    "Six cases: incoming admission fails, succeeds all-false, or completes after outgoing response. Superseded outgoing response cannot restore platform navigation.",
-    "Backend tenancy, populated resource rendering, production build, external notification delivery and candidate soak not qualified."
+    "Source-built isolated e2e_runtime with mock inventory, Chromium desktop context at default zoom; narrow run changes scenario 6 viewport only, not device emulation.",
+    "Cookie-session organisation switch preserves currentUsername while security detail drops from privileged to authenticated; both owner memberships match. Pending incoming/outgoing shares render; incoming Accept succeeds with persisted accepted status and viewer role.",
+    "Pending and accepted screenshots inspected at both widths. Wide table rows and narrow scrolled layout are clipped; this is functional identity/acceptance proof, not a clean visual-layout claim. No installed customer, release, reconnect/admission or automatic interruption-cleanup qualification."
   ],
   "interactions": [
-    "pulse-heavy-run -- bash -c 'for w in 390 1440; do for mode in failure success reverse; do PULSE_PROOF_WIDTH=$w PULSE_PROOF_MODE=$mode node scripts/check-navigation-admission-race.mjs || exit; done; done'",
-    "Production reconnect subscriber invoked; switch organisation via real selector; release held outgoing response; assert no platform navigation and exact organisation request sequence.",
-    "390px: More open, Escape, reopen, Settings; subsequent successful organisation switch restores platform selector; choose Docker and verify route without reload.",
-    "1440px: Settings remains visible; subsequent successful switch restores Proxmox destination without reload. Desktop and narrow screenshots inspected."
+    "pulse-heavy-run -- bash tests/integration/scripts/run-tests.sh multi-tenant: 6 passed, 1 expected disabled-feature skip.",
+    "PULSE_E2E_SHARING_NARROW=1 pulse-heavy-run -- bash tests/integration/scripts/run-tests.sh multi-tenant: 6 passed, 1 expected disabled-feature skip.",
+    "Scenario 6 creates two organisations and pending shares, reloads scoped cookie session, asserts owner identity, clicks Accept, verifies Active/Remove and accepted API role, switches to default and deletes fixtures. Scenario 7 cookie-session RBAC scope checks pass."
   ]
 }

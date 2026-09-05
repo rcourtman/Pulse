@@ -435,6 +435,8 @@ enums locally.
 
 ## Shared Boundaries
 
+GET /api/security/status includes currentUsername in authenticated and privileged responses, derived from the validated authentication snapshot rather than configured administrator identity. Public login discovery omits it. The field is identity only: it does not grant instance-settings authority or change token scopes. Scoped local sessions retain this identity when privileged authUsername is withheld.
+
 Commercial migration payloads are a shared API/cloud-paid contract. The
 license-server client must preserve canonical v6 nested error-envelope codes
 such as `RENEWED_KEY_AVAILABLE`, and commercial posture payloads may carry

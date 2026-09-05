@@ -466,6 +466,8 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 
 ## Shared Boundaries
 
+The settings panel registry supplies organisation overview, access and sharing with security-status currentUsername. An explicitly empty principal must not fall back to configured administrator identity; only older responses lacking the field use proxy/SSO/configured-username compatibility fallback. This identity plumbing must not change settings shell framing or bypass panel capability gates.
+
 Settings navigation discoverability is part of the shared settings-shell
 boundary. A settings route that is available in normal commercial presentation
 must be reachable through the sidebar unless it is explicitly a hidden

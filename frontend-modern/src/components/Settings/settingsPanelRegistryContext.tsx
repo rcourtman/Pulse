@@ -40,9 +40,10 @@ export function buildSettingsPanelRegistryContext(
 ): SettingsPanelRegistryContext {
   const settingsCapabilities = () => params.securityStatus()?.settingsCapabilities ?? null;
   const currentUser = () =>
-    params.securityStatus()?.proxyAuthUsername ||
-    params.securityStatus()?.ssoSessionUsername ||
-    params.securityStatus()?.authUsername;
+    params.securityStatus()?.currentUsername ??
+    (params.securityStatus()?.proxyAuthUsername ||
+      params.securityStatus()?.ssoSessionUsername ||
+      params.securityStatus()?.authUsername);
 
   const systemAiPanel: Component = () => (
     <div class="space-y-6">
