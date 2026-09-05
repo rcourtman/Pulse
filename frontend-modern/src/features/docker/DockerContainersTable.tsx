@@ -632,7 +632,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'updates':
           return (
-            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content docker-container-update-cell`}>
+            <TableCell
+              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content docker-container-update-cell`}
+            >
               <Show
                 when={action}
                 fallback={
