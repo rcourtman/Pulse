@@ -619,6 +619,25 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Confirmed empty storage is recovery evidence
+
+Static storage capacity evaluation must admit a zero usage observation when
+`Total > 0`, `Used == 0`, and `Free == Total` together confirm an empty store.
+Offline or unavailable storage remains ineligible. Zero usage without those
+consistent byte counters is unknown capacity, not evidence of recovery.
+The observation passes through the existing canonical capacity lifecycle,
+including recovery confirmation and any predictive-capacity evidence; this
+rule does not directly clear an incident or bypass notification eligibility.
+
+`TestStorageEmptyCapacityRecovery` in `internal/alerts/alerts_test.go` pins
+confirmed empty recovery and retention under absent/inconsistent counters and
+offline/unavailable status. `internal/monitoring/monitor_storage_webhook_test.go`
+pins production callback/queue delivery of the correlated zero-value recovery,
+current observation time, matching history and duplicate avoidance, with no
+recovery on missing capacity. This is synthetic local receiver proof, not
+installed PBS API, off-host delivery or release qualification.
+
+
 ### Alert-quality telemetry folds only canonical durable lifecycle truth
 
 `internal/alerts/telemetry_quality.go` folds active alerts and the canonical
