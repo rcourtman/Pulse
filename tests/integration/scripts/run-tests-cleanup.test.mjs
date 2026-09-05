@@ -51,3 +51,39 @@ exit 0`,
     });
   }
 }
+
+for (const failure of ['startup', 'health', 'entitlement', 'port-command', 'port-binding']) {
+  test(`${failure} failure with failed teardown stops before the next suite`, () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pulse-cleanup-early-test-'));
+    try {
+      const stubs = {
+        docker: `if [ "$1" = compose ]; then
+  case " $* " in
+    *" up -d "*) echo start >> '${dir}/starts'; exit ${failure === 'startup' ? 19 : 0} ;;
+    *" down -v "*) exit 17 ;;
+    *" port "*) echo ${failure === 'port-binding' ? 'invalid' : '127.0.0.1:17655'}; exit ${failure === 'port-command' ? 24 : 0} ;;
+  esac
+fi
+if [ "$1 $2" = 'inspect -f' ]; then echo ${failure === 'health' ? 'false' : 'true'}; fi
+exit 0`,
+        curl: 'exit 0',
+        node: `if [ "$1" = -e ]; then printf '%s' 0123456789abcdef0123456789abcdef; exit 0; fi
+exit ${failure === 'entitlement' ? 23 : 0}`,
+        npx: 'exit 0',
+        go: 'exit 0',
+      };
+      for (const [name, body] of Object.entries(stubs)) {
+        writeFileSync(path.join(dir, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+      }
+      const result = spawnSync('bash', [runner, 'all'], {
+        env: { ...process.env, PATH: `${dir}:${process.env.PATH}` },
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 1, result.stdout + result.stderr);
+      assert.equal(readFileSync(path.join(dir, 'starts'), 'utf8'), 'start\n',
+        'failed setup teardown must not let another suite inherit dirty state');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
