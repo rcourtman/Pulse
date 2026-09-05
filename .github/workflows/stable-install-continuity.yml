@@ -64,7 +64,7 @@ jobs:
     needs: resolve
     permissions:
       contents: read
-    uses: ./.github/workflows/install-sh-smoke.yml
+    uses: ./.github/workflows/install-sh-smoke-body.yml
     with:
       tag: ${{ needs.resolve.outputs.tag }}
       version: ${{ needs.resolve.outputs.version }}

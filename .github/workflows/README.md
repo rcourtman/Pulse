@@ -140,6 +140,13 @@ and verifies the live service health and exact version. The privileged systemd
 smoke environment is digest-pinned because a floating container image would
 otherwise be an unreviewed code path inside the release gate.
 
+The shared `install-sh-smoke-body.yml` inherits its caller's token permissions;
+keep it free of workflow- or job-level permission overrides. Continuity calls
+that body directly with `contents: read`. The existing `install-sh-smoke.yml`
+manual/release entry point retains `contents: write` for unpublished draft asset
+GETs and forwards the same inputs to the body. Calling that draft-capable entry
+point from read-only continuity prevents workflow admission before any job runs.
+
 Future release candidates also carry
 `release-build-provenance.sigstore.json`, produced by the hosted
 `build-release-candidate.yml` job after complete candidate validation. The
