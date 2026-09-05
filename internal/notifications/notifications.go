@@ -3868,7 +3868,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 				Str("type", baseType).
 				Str("event", string(event)).
 				Msg("skipping queued email notification because email delivery is disabled")
-			return nil
+			return ErrNotificationDeliverySkipped
 		}
 		deliveredJob = notificationDeliveryJob{
 			Type:        "email",
@@ -3891,7 +3891,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 				Str("event", string(event)).
 				Str("webhookID", webhookConfig.ID).
 				Msg("skipping queued webhook notification because delivery is disabled")
-			return nil
+			return ErrNotificationDeliverySkipped
 		}
 		deliveredJob = notificationDeliveryJob{
 			Type:          "webhook",
@@ -3914,7 +3914,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 				Str("type", baseType).
 				Str("event", string(event)).
 				Msg("skipping queued Apprise notification because delivery is disabled")
-			return nil
+			return ErrNotificationDeliverySkipped
 		}
 		deliveredJob = notificationDeliveryJob{
 			Type:          "apprise",
