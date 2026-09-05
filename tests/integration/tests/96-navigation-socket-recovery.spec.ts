@@ -51,11 +51,11 @@ async function mobileDestinations(page: Page) {
 }
 
 for (const admissionFailure of [false, true]) {
-  for (const width of [1440, 1100, 390]) {
+  for (const width of [1440, 1100, 390, 320]) {
     test(`populated navigation survives socket loss at ${width}px (admission failure: ${admissionFailure})`, async ({ page, browser }, testInfo) => {
       test.skip(!enabled, 'Requires isolated mock backend and explicit qualification opt-in');
       test.setTimeout(120_000);
-      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.setViewportSize({ width, height: width <= 390 ? 844 : 900 });
       let blocked = false;
       let failAdmission = false;
       let failedAdmissions = 0;
@@ -94,7 +94,7 @@ for (const admissionFailure of [false, true]) {
       const capture = async (stage: string) => {
         await testInfo.attach(stage, { body: await page.screenshot({ path: testInfo.outputPath(`${stage}.png`) }), contentType: 'image/png' });
       };
-      if (width === 390) await mobileDestinations(page);
+      if (width <= 390) await mobileDestinations(page);
       await capture('healthy');
       const documentIdentity = await page.evaluate(() => performance.timeOrigin);
       blocked = true;
@@ -110,7 +110,7 @@ for (const admissionFailure of [false, true]) {
         await expect(page.getByRole('button', { name: 'Acknowledge', exact: true }).first()).toBeEnabled();
         await capture('active-incidents-during-reconnect');
       }
-      if (width === 390) await mobileDestinations(page);
+      if (width <= 390) await mobileDestinations(page);
       const admissionResponse = admissionFailure
         ? page.waitForResponse(response => response.url().includes('/api/resources?page=1&limit=1') && response.status() === 503)
         : null;
@@ -119,10 +119,10 @@ for (const admissionFailure of [false, true]) {
       await expect(page.getByRole('status', { name: healthy })).toBeVisible({ timeout: 45_000 });
       if (admissionFailure) await expect.poll(() => failedAdmissions).toBeGreaterThan(0);
       expect.soft(await navigation(page)).toEqual(before);
-      if (width === 390) await mobileDestinations(page);
+      if (width <= 390) await mobileDestinations(page);
       expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
       await capture('recovered');
-      if (width === 390 && !admissionFailure && process.env.PULSE_E2E_TABLE_ACCESS === '1') {
+      if (width <= 390 && !admissionFailure && process.env.PULSE_E2E_TABLE_ACCESS === '1') {
         const row = page.locator('tr[data-docker-container-row]').filter({ hasText: 'notification' }).first();
         const table = row.locator('xpath=ancestor::table');
         const wrapper = table.locator('..');
@@ -158,12 +158,16 @@ for (const admissionFailure of [false, true]) {
           }),
         );
         expect(clippedUpdateText).toEqual([]);
-        const currentLabel = table.locator('.docker-container-update-cell span').filter({ hasText: /^Current$/ }).last();
-        expect(await currentLabel.evaluate(el => {
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          return range.getClientRects().length;
-        })).toBe(1);
+        // At 320px labels may wrap; reflow requires no lost text, not a
+        // single line. Preserve the stronger 390px presentation regression.
+        if (width === 390) {
+          const currentLabel = table.locator('.docker-container-update-cell span').filter({ hasText: /^Current$/ }).last();
+          expect(await currentLabel.evaluate(el => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            return range.getClientRects().length;
+          })).toBe(1);
+        }
 
         expect(initial.overflowX).toBe('clip');
         expect(initial.scrollWidth).toBe(initial.width);
@@ -200,7 +204,7 @@ for (const admissionFailure of [false, true]) {
         });
       }
 
-      await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: width === 390 ? 844 : 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
+      await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: width <= 390 ? 844 : 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
     });
   }
 }
