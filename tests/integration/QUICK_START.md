@@ -220,3 +220,16 @@ test('my new test', async ({ page }) => {
 - Review existing test files for examples
 - Check Docker logs for service issues
 - Review Playwright documentation: <https://playwright.dev>
+
+### Worktree-safe shell runner
+
+`scripts/run-tests.sh` builds unique per-invocation image tags and uses a unique
+Compose project and container names. Host ports are allocated by Docker on
+loopback and discovered after startup; this runner does not honour fixed port
+or base-URL overrides. Its EXIT/INT/TERM/HUP cleanup removes only that invocation's
+stack, volumes and image tags. SIGKILL or host failure can leave resources behind;
+the printed `pulse-e2e-…` project identifies those resources for manual cleanup.
+
+This isolation applies to the shell runner, not direct `npm test`,
+`setup.sh` or hand-written Compose commands, which retain legacy defaults.
+Do not use those defaults concurrently for checkout-specific qualification.

@@ -272,10 +272,11 @@ class GitHub:
             raise ReconciliationError(f"GitHub returned no pages for {endpoint}")
         return value
 
-    def post(self, endpoint: str, payload: dict[str, Any] | None = None) -> None:
+    def post(self, endpoint: str, payload: dict[str, Any] | None = None) -> bool:
+        """Return whether a mutation was submitted; dry runs never submit."""
         if not self.mutate:
             print(f"DRY RUN: POST {endpoint}")
-            return
+            return False
         arguments = [
             "api",
             "--method",
@@ -299,8 +300,9 @@ class GitHub:
                 detail = result.stderr.strip().splitlines()
                 suffix = f": {detail[-1]}" if detail else ""
                 raise ReconciliationError(f"GitHub mutation failed for {endpoint}{suffix}")
-            return
+            return True
         self._run(arguments)
+        return True
 
     def download_marker(self, tag: str, directory: Path) -> dict[str, Any]:
         self._run(
@@ -550,8 +552,17 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         if source.get("status") != "completed" and positive_int(
             run.get("run_attempt"), "run attempt"
         ) < 50:
-            github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
-            print(f"Renewed pre-commit convergence owner {run_id} for active source {source_run_id}.")
+            submitted = github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
+            if submitted:
+                print(
+                    f"Renewed pre-commit convergence owner {run_id} "
+                    f"for active source {source_run_id}."
+                )
+            else:
+                print(
+                    f"DRY RUN: Would renew pre-commit convergence owner {run_id} "
+                    f"for active source {source_run_id}."
+                )
             return
         print(f"{tag} has no immutable activation commit; no convergence retry was dispatched.")
         return
@@ -598,8 +609,14 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
                 "no unchanged-control retry was dispatched."
             )
             return
-        github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
-        print(f"Re-ran current-control convergence {run_id} for committed {tag}.")
+        submitted = github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
+        if submitted:
+            print(f"Re-ran current-control convergence {run_id} for committed {tag}.")
+        else:
+            print(
+                f"DRY RUN: Would re-run current-control convergence {run_id} "
+                f"for committed {tag}."
+            )
         return
 
     prerelease = release.get("prerelease")
@@ -619,14 +636,21 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
             "source_release_run_id": marker["source_release_run_id"],
         },
     }
-    github.post(
+    submitted = github.post(
         f"repos/{repository}/actions/workflows/release-convergence.yml/dispatches",
         payload,
     )
-    print(
-        f"Dispatched fresh convergence controls after observing {default_commit} for committed {tag}; "
-        f"the failed run used {run.get('head_sha')}."
-    )
+    if submitted:
+        print(
+            f"Dispatched fresh convergence controls after observing {default_commit} "
+            f"for committed {tag}; the failed run used {run.get('head_sha')}."
+        )
+    else:
+        print(
+            f"DRY RUN: Would dispatch fresh convergence controls after observing "
+            f"{default_commit} for committed {tag}; the failed run used "
+            f"{run.get('head_sha')}."
+        )
 
 
 def discover(github: GitHub) -> list[int]:

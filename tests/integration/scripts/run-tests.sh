@@ -26,6 +26,27 @@ echo ""
 cd "$TEST_ROOT"
 REPO_ROOT="$(cd "$TEST_ROOT/../.." && pwd)"
 
+# Unique per invocation, including simultaneous runs of the same checkout.
+# Never inherit another runner's project, image tags or fixed host ports.
+export PULSE_E2E_RUN_ID="pulse-e2e-$(node -e "process.stdout.write(require('crypto').randomBytes(16).toString('hex'))")"
+export PULSE_E2E_SERVER_IMAGE="pulse:$PULSE_E2E_RUN_ID"
+export PULSE_E2E_MOCK_IMAGE="pulse-mock-github:$PULSE_E2E_RUN_ID"
+export PULSE_E2E_SERVER_CONTAINER="$PULSE_E2E_RUN_ID-server"
+export PULSE_E2E_MOCK_CONTAINER="$PULSE_E2E_RUN_ID-mock"
+export PULSE_E2E_SEED_CONTAINER="$PULSE_E2E_RUN_ID-seed"
+# Entitlement bootstrap and browser helpers use this older variable name.
+# Do not let inherited live-runtime overrides redirect writes outside this run.
+export PULSE_E2E_PULSE_CONTAINER="$PULSE_E2E_SERVER_CONTAINER"
+unset PULSE_E2E_ENTITLEMENT_WRITE_COMMAND PULSE_E2E_BILLING_STATE_PATH
+unset PULSE_E2E_CONTAINER_BILLING_PATH PULSE_E2E_SKIP_DOCKER
+unset PLAYWRIGHT_BASE_URL
+export PULSE_E2E_PORT=0 PULSE_E2E_AGENT_PORT=0 PULSE_E2E_MOCK_GITHUB_PORT=0
+# Reports and browser artifacts must be as isolated as the containers.
+# Override inherited paths: sharing these can erase another invocation's receipts.
+export PULSE_E2E_REPORT_DIR="$TEST_ROOT/playwright-report/$PULSE_E2E_RUN_ID"
+export PULSE_E2E_RESULTS_DIR="$TEST_ROOT/test-results/$PULSE_E2E_RUN_ID"
+echo "Isolated integration project: $PULSE_E2E_RUN_ID"
+
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
 else
@@ -33,20 +54,41 @@ else
 fi
 
 compose() {
-    "${COMPOSE_CMD[@]}" -f docker-compose.test.yml "$@"
+    "${COMPOSE_CMD[@]}" -p "$PULSE_E2E_RUN_ID" -f docker-compose.test.yml "$@"
 }
 
 ensure_test_images() {
-    if ! docker image inspect pulse-mock-github:test >/dev/null 2>&1; then
-        echo "Building missing image: pulse-mock-github:test"
-        docker build -t pulse-mock-github:test "$TEST_ROOT/mock-github-server"
-    fi
+    # A local tag may belong to another checkout. Always build from these
+    # sources; Docker can reuse unchanged layers, but tag existence is not
+    # evidence that the image includes the code we are qualifying.
+    echo "Building test images from: $REPO_ROOT"
+    docker build -t "$PULSE_E2E_MOCK_IMAGE" "$TEST_ROOT/mock-github-server"
 
-    if ! docker image inspect pulse:test >/dev/null 2>&1; then
-        echo "Building missing image: pulse:test"
-        # Test image drops the release build tag so the suite can enable mock
-        # fixtures without a demo entitlement.
-        docker build -t pulse:test --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+    # Select the source-built server stage explicitly: the final Dockerfile
+    # stage is a prebuilt agent requiring a release_payload context.
+    # Test image drops the release build tag so the suite can enable mock
+    # fixtures without a demo entitlement. A build failure must stop the run,
+    # never fall back to a previously tagged image.
+    docker build --target e2e_runtime -t "$PULSE_E2E_SERVER_IMAGE" --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+}
+
+# EXIT also handles build/start/test failures; signals preserve failure status.
+cleanup() {
+    compose down -v || true
+    docker image rm "$PULSE_E2E_SERVER_IMAGE" "$PULSE_E2E_MOCK_IMAGE" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+teardown_suite() {
+    # run_suite is called in an || list, where Bash disables errexit.
+    # Stop the entire run if teardown fails: later suites must not inherit
+    # containers or volumes from a previous scenario.
+    if ! compose down -v; then
+        echo -e "${RED}❌ Failed to clean up test environment; stopping run${NC}"
+        exit 1
     fi
 }
 
@@ -75,18 +117,32 @@ run_suite() {
     else
         unset PULSE_E2E_ENTITLEMENT_PROFILE
     fi
-    local pulse_base_url="${PULSE_BASE_URL:-http://localhost:${PULSE_E2E_PORT:-7655}}"
-    pulse_base_url="${pulse_base_url%/}"
-    local health_url="${pulse_base_url}/api/health"
+    export PULSE_E2E_PORT=0 PULSE_E2E_AGENT_PORT=0 PULSE_E2E_MOCK_GITHUB_PORT=0
 
     # Start services
     echo "Starting test environment..."
     if ! compose up -d; then
         echo -e "${RED}❌ Failed to start docker services${NC}"
         compose logs
-        compose down -v
+        teardown_suite
         return 1
     fi
+
+    # Resolve Docker-allocated ports only after successful startup. A failed
+    # bind must never fall back to probing a different worktree's listener.
+    local binding
+    binding="$(compose port pulse-test 7655)" || { teardown_suite; return 1; }
+    [[ "$binding" =~ :([0-9]+)$ ]] || { teardown_suite; return 1; }
+    export PULSE_BASE_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
+    local pulse_base_url="$PULSE_BASE_URL"
+    local health_url="$pulse_base_url/api/health"
+    binding="$(compose port pulse-test 7656)" || { teardown_suite; return 1; }
+    [[ "$binding" =~ :([0-9]+)$ ]] || { teardown_suite; return 1; }
+    export PULSE_E2E_AGENT_PORT="${BASH_REMATCH[1]}"
+    export PULSE_AGENT_BASE_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
+    binding="$(compose port mock-github 8080)" || { teardown_suite; return 1; }
+    [[ "$binding" =~ :([0-9]+)$ ]] || { teardown_suite; return 1; }
+    export MOCK_GITHUB_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
 
     # Wait for services
     echo "Waiting for services to be ready..."
@@ -101,19 +157,19 @@ run_suite() {
 
     # Check if the Pulse test container is actually running and reachable.
     local pulse_running
-    pulse_running="$(docker inspect -f '{{.State.Running}}' pulse-test-server 2>/dev/null || true)"
+    pulse_running="$(docker inspect -f '{{.State.Running}}' "$PULSE_E2E_SERVER_CONTAINER" 2>/dev/null || true)"
     if [ "$health_ok" -ne 1 ] || [ "$pulse_running" != "true" ]; then
         echo -e "${RED}❌ Services failed to start${NC}"
         compose ps
         compose logs
-        compose down -v
+        teardown_suite
         return 1
     fi
 
     if ! node ./scripts/apply-entitlement-profile.mjs; then
         echo -e "${RED}❌ Failed to apply entitlement bootstrap${NC}"
         compose logs
-        compose down -v
+        teardown_suite
         return 1
     fi
 
@@ -134,7 +190,7 @@ run_suite() {
             npx playwright test "tests/06-theme-visual.spec.ts" --project=chromium --reporter=list
             ;;
         multi-tenant)
-            npx playwright test "tests/03-multi-tenant.spec.ts" --project=chromium --reporter=list
+            npx playwright test --config=playwright.multi-tenant-diagnostic.config.ts --project=chromium
             ;;
         retired-trial-acquisition)
             npx playwright test "tests/07-retired-trial-acquisition.spec.ts" --project=chromium --reporter=list
@@ -175,7 +231,7 @@ run_suite() {
 
     # Cleanup
     echo "Cleaning up..."
-    compose down -v
+    teardown_suite
 
     return $TEST_RESULT
 }

@@ -3,7 +3,7 @@ services:
   # This is only used by the test stack and is safe to keep deterministic.
   seed-bootstrap-token:
     image: alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
-    container_name: pulse-test-seed-bootstrap-token
+    container_name: ${PULSE_E2E_SEED_CONTAINER:-pulse-test-seed-bootstrap-token}
     environment:
       - PULSE_E2E_BOOTSTRAP_TOKEN=${PULSE_E2E_BOOTSTRAP_TOKEN:-0123456789abcdef0123456789abcdef0123456789abcdef}
       - PUID=${PUID:-1000}
@@ -37,10 +37,10 @@ services:
 
   # Mock GitHub API server for controlled testing
   mock-github:
-    image: pulse-mock-github:test
-    container_name: pulse-mock-github
+    image: ${PULSE_E2E_MOCK_IMAGE:-pulse-mock-github:test}
+    container_name: ${PULSE_E2E_MOCK_CONTAINER:-pulse-mock-github}
     ports:
-      - "${PULSE_E2E_MOCK_GITHUB_PORT:-8080}:8080"
+      - "127.0.0.1:${PULSE_E2E_MOCK_GITHUB_PORT:-8080}:8080"
     environment:
       - PORT=8080
       - MOCK_BASE_URL=http://mock-github:8080
@@ -60,11 +60,11 @@ services:
 
   # Pulse server under test
   pulse-test:
-    image: pulse:test
-    container_name: pulse-test-server
+    image: ${PULSE_E2E_SERVER_IMAGE:-pulse:test}
+    container_name: ${PULSE_E2E_SERVER_CONTAINER:-pulse-test-server}
     ports:
-      - "${PULSE_E2E_PORT:-7655}:7655"
-      - "${PULSE_E2E_AGENT_PORT:-7656}:7656"
+      - "127.0.0.1:${PULSE_E2E_PORT:-7655}:7655"
+      - "127.0.0.1:${PULSE_E2E_AGENT_PORT:-7656}:7656"
     environment:
       - TZ=UTC
       # Dedicated agent-ingest listener so E2E can prove the split-port

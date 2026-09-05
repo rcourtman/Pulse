@@ -1,27 +1,22 @@
 {
   "version": 1,
-  "base_sha": "deac5e7750a79052170ba4396b700a3d6b855e3f",
-  "verified_at": "2026-09-05T04:03:13Z",
+  "base_sha": "58413ebdf6af81018bce15ff4023ca9824c0cdae",
+  "verified_at": "2026-09-05T09:32:59.247Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/useAppRuntimeState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/useAppRuntimeState.ts": "01c0eebf2d99994d730c8add6604d1851f89f8a6532cabbc159b44f030b8124b"
+    "frontend-modern/src/useAppRuntimeState.ts": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
   },
   "routes": [
-    "/proxmox",
-    "/docker",
     "/alerts",
-    "/settings"
+    "/settings",
+    "/docker"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 1100,
       "height": 900
     },
     {
@@ -30,15 +25,14 @@
     }
   ],
   "states": [
-    "Isolated real Go backend and production embedded frontend; synthetic Proxmox and Docker inventory; Chromium 141.0.7390.37, fresh contexts, 100% zoom",
-    "Real connected socket closed with 1013; reconnect attempts blocked while HTTP health stays available",
-    "Six checks passed at 1440, 1100 and 390 by 900, with and without admission HTTP 503 on recovery; each injected case observed exactly one failed admission request",
-    "Platform destinations retained through interruption and recovery without document reload; no acknowledgement persistence or notification delivery claim"
+    "Full application served by isolated local Vite; synthetic HTTP, two synthetic organisations and cold socket; Chromium 141.0.7390.37, fresh contexts, default zoom.",
+    "Six cases: incoming admission fails, succeeds all-false, or completes after outgoing response. Superseded outgoing response cannot restore platform navigation.",
+    "Backend tenancy, populated resource rendering, production build, external notification delivery and candidate soak not qualified."
   ],
   "interactions": [
-    "pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 PULSE_E2E_LOCAL_BACKEND_PORT=18765 npm --prefix tests/integration test -- tests/96-navigation-socket-recovery.spec.ts --project=chromium",
-    "390px before, during and after interruption: open More, Escape, reopen and follow Settings; switch Proxmox and Docker; open Alerts with enabled Acknowledge control and return to Docker",
-    "1440px: open active incidents during interruption with enabled Acknowledge control; recovered desktop and 390px screenshots inspected",
-    "Baseline failed at 1440 and 1100 when admission HTTP refresh failed; baseline 390px passed. Focused retention test failed before repair. Repaired run: six browser checks and 107 focused tests pass"
+    "pulse-heavy-run -- bash -c 'for w in 390 1440; do for mode in failure success reverse; do PULSE_PROOF_WIDTH=$w PULSE_PROOF_MODE=$mode node scripts/check-navigation-admission-race.mjs || exit; done; done'",
+    "Production reconnect subscriber invoked; switch organisation via real selector; release held outgoing response; assert no platform navigation and exact organisation request sequence.",
+    "390px: More open, Escape, reopen, Settings; subsequent successful organisation switch restores platform selector; choose Docker and verify route without reload.",
+    "1440px: Settings remains visible; subsequent successful switch restores Proxmox destination without reload. Desktop and narrow screenshots inspected."
   ]
 }

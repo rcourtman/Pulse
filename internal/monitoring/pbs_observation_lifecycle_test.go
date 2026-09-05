@@ -1,6 +1,11 @@
 package monitoring
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -92,6 +97,128 @@ func TestPBSObservationHistorySurvivesRebuildsAndStoreReopen(t *testing.T) {
 			timestamp := start.Add(time.Duration(i) * 10 * time.Second)
 			if point.Value != expected[i] || !point.Timestamp.Equal(timestamp) {
 				t.Fatalf("reopened %s[%d] = %+v, want %v at %s", metric, i, point, expected[i], timestamp)
+			}
+		}
+	}
+}
+
+// A fresh process has no in-memory deduplication state. Replaying the cached
+// observation while PBS is offline must not manufacture a new durable sample;
+// an equal-valued observation after recovery must still be retained.
+func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
+	dir := os.Getenv("PULSE_PBS_HISTORY_TEST_DIR")
+	child := dir != ""
+	if !child {
+		dir = t.TempDir()
+	}
+	cfg := metrics.DefaultConfig(dir)
+	start := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	if child {
+		var err error
+		start, err = time.Parse(time.RFC3339, os.Getenv("PULSE_PBS_HISTORY_TEST_START"))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var targetID string
+	for generation := 0; generation < 2; generation++ {
+		if !child {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestPBSObservationHistoryAcrossMonitorReplacement$", "-test.count=1")
+			cmd.Env = append(os.Environ(),
+				"PULSE_PBS_HISTORY_TEST_DIR="+dir,
+				"PULSE_PBS_HISTORY_TEST_START="+start.Format(time.RFC3339),
+				"PULSE_PBS_HISTORY_TEST_GENERATION="+strconv.Itoa(generation))
+			output, err := cmd.CombinedOutput()
+			cancel()
+			if err != nil {
+				t.Fatalf("generation %d: %v\n%s", generation, err, output)
+			}
+			id, err := os.ReadFile(filepath.Join(dir, "target-id"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if targetID != "" && targetID != string(id) {
+				t.Fatal("target changed across process restart")
+			}
+			targetID = string(id)
+			continue
+		}
+		if strconv.Itoa(generation) != os.Getenv("PULSE_PBS_HISTORY_TEST_GENERATION") {
+			continue
+		}
+		persistent, err := metrics.NewStore(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		func() {
+			defer func() {
+				if err := persistent.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			monitor := &Monitor{metricsHistory: NewMetricsHistory(1024, 24*time.Hour), metricsStore: persistent}
+			adapter := unifiedresources.NewMonitorAdapter(nil)
+			snapshot := models.StateSnapshot{PBSInstances: []models.PBSInstance{{
+				ID: "pbs-restart", Name: "pbs-restart", Status: "online", LastSeen: start,
+				Datastores: []models.PBSDatastore{{Name: "backups", Status: "available", Total: 1000, Used: 400, Free: 600, Usage: 40}},
+			}}}
+			if generation == 1 {
+				snapshot.PBSInstances[0].Status = "offline"
+			}
+			for poll := 0; poll < 6; poll++ {
+				adapter.PopulateFromSnapshot(snapshot)
+				for _, resource := range adapter.GetAll() {
+					if resource.Storage == nil || resource.Storage.Platform != "pbs" {
+						continue
+					}
+					target := adapter.MetricsTargetForResource(resource.ID)
+					if target == nil {
+						t.Fatal("missing metrics target")
+					}
+					if targetID != "" && targetID != target.ResourceID {
+						t.Fatal("target changed across replacement")
+					}
+					targetID = target.ResourceID
+				}
+				if targetID == "" {
+					t.Fatal("missing PBS datastore")
+				}
+				monitor.syncUnifiedStorageMetrics(adapter)
+			}
+			if generation == 1 {
+				snapshot.PBSInstances[0].Status = "online"
+				snapshot.PBSInstances[0].LastSeen = start.Add(30 * time.Second)
+				adapter.PopulateFromSnapshot(snapshot)
+				monitor.syncUnifiedStorageMetrics(adapter)
+			}
+		}()
+	}
+	if child {
+		if err := os.WriteFile(filepath.Join(dir, "target-id"), []byte(targetID), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	// Both writer processes exited before these queries: no shared Go memory or
+	// buffered writes can satisfy the assertions.
+	persistent, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer persistent.Close()
+	for metric, value := range map[string]float64{"usage": 40, "used": 400, "total": 1000, "avail": 600} {
+		points, err := persistent.Query("storage", targetID, metric, start.Add(-time.Second), start.Add(time.Minute), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(points) != 2 {
+			t.Fatalf("%s: got %d durable points, want 2", metric, len(points))
+		}
+		for i, point := range points {
+			expectedTime := start.Add(time.Duration(i) * 30 * time.Second)
+			if point.Value != value || !point.Timestamp.Equal(expectedTime) {
+				t.Fatalf("%s[%d] = %+v, want %v at %s", metric, i, point, value, expectedTime)
 			}
 		}
 	}

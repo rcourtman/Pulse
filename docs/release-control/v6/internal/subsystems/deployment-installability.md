@@ -15,6 +15,18 @@
 
 ## Purpose
 
+The shell-owned multi-tenant integration suite uses a dedicated desktop-only
+Playwright configuration selecting the seven multi-tenant scenarios. It must
+reject any non-empty E2E tier identity rather than impersonating stable or
+probation CI. Normal tier selection retains the multi-tenant quarantine.
+Diagnostic reports use invocation-specific roots under the shell runner;
+direct npm, setup and helper paths do not inherit its isolation guarantees.
+These scenarios do not establish delayed-admission, reconnect, interruption,
+installed-customer or release qualification. The executable discovery and
+tier-refusal checks in `tests/integration/scripts/managed-local-backend.test.mjs`
+protect this boundary without launching a browser.
+
+
 ### Portable installer lifecycle ownership
 
 The shared shell installer lifecycle directory (outside the least-privilege
