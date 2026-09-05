@@ -7108,3 +7108,15 @@ reasoning and real remediation in
 `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
 proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
 response does not establish a useful customer outcome or model qualification.
+
+### Alert health attention preserves asynchronous ownership
+
+The existing delivery-health card and shared buttons consume only the latest
+started health read's state. Configuration Retry can overlap a disabled card
+refresh; disabling that button is not a concurrency guard. Older completions
+must neither clear the latest request's busy flag nor replace its attention or
+unavailable presentation. Existing danger tone, accessible alert role, labels,
+confirmation and wrapping controls remain unchanged; no new primitive is added.
+The focused hook/caller tests and `scripts/check-delivery-health-ordering.mjs`
+cover this dependency at desktop and narrow widths using scripted health and
+queue-action responses, without claiming backend notification delivery.
