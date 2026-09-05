@@ -1,37 +1,47 @@
 {
   "version": 1,
-  "base_sha": "2356e4300022a9e0502b97030b84fc902ca15281",
-  "verified_at": "2026-09-05T15:02:51Z",
+  "base_sha": "5beeaf4cbe32603bf4d8dcb07069957a659aa1a4",
+  "verified_at": "2026-09-05T17:22:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
-    "frontend-modern/src/types/config.ts"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "a4c53fd983db3390e43771e484ef7337c72a0ada6e6c28bcc311b02e88cbde19",
-    "frontend-modern/src/types/config.ts": "07c9961a8ca87998b6d6e4f398770efd11bfd4b089ce25f18e93e5bafffd9c8d"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "0c81c819d7a4fc604df3e202181815b1fcab3b7e3c28198c8a4f7a4d5e441dd3",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "555c0653223509adafbde423558ef9e89672d68c096e50f6f4772c42088b8286",
+    "frontend-modern/src/index.css": "db660b38b158594f6e09f179db69e76f85afed11f0dc863fb35619720445312d"
   },
   "routes": [
-    "/settings/organization/sharing"
+    "/docker",
+    "/proxmox",
+    "/settings",
+    "/alerts"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
-    },
-    {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
     }
   ],
   "states": [
-    "Source-built isolated e2e_runtime with mock inventory, Chromium desktop context at default zoom; narrow run changes scenario 6 viewport only, not device emulation.",
-    "Cookie-session organisation switch preserves currentUsername while security detail drops from privileged to authenticated; both owner memberships match. Pending incoming/outgoing shares render; incoming Accept succeeds with persisted accepted status and viewer role.",
-    "Pending and accepted screenshots inspected at both widths. Wide table rows and narrow scrolled layout are clipped; this is functional identity/acceptance proof, not a clean visual-layout claim. No installed customer, release, reconnect/admission or automatic interruption-cleanup qualification."
+    "Isolated source-built local backend with synthetic inventory; desktop Chromium at default zoom, not physical Android or touch emulation.",
+    "Six populated-navigation recovery cases passed: normal and failed admission at each width. Phone update text-range, single-line Current, non-scrolling wrapper and expanded heading checks passed at 390px normal admission.",
+    "Viewed retained final phone screenshots: Current and Update fully visible; notifications-worker wraps in expanded drawer. No blanket accessibility, 320px, every asynchronous action-state or installed-release claim."
   ],
   "interactions": [
-    "pulse-heavy-run -- bash tests/integration/scripts/run-tests.sh multi-tenant: 6 passed, 1 expected disabled-feature skip.",
-    "PULSE_E2E_SHARING_NARROW=1 pulse-heavy-run -- bash tests/integration/scripts/run-tests.sh multi-tenant: 6 passed, 1 expected disabled-feature skip.",
-    "Scenario 6 creates two organisations and pending shares, reloads scoped cookie session, asserts owner identity, clicks Accept, verifies Active/Remove and accepted API role, switches to default and deletes fixtures. Scenario 7 cookie-session RBAC scope checks pass."
+    "pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 PULSE_E2E_TABLE_ACCESS=1 PULSE_E2E_LOCAL_BACKEND_PORT=18765 npm --prefix tests/integration test -- tests/96-navigation-socket-recovery.spec.ts --project=chromium: six passed; managed backend stopped.",
+    "Interrupted and restored WebSocket connections; preserved populated navigation through successful and failed admission; exercised mobile More, Settings, platform switching and Alerts.",
+    "At 390px, horizontal wheel and ArrowRight leave wrapper unscrolled; Enter expands container detail, whose heading is scrolled into view and photographed. Receipts: tests/qualification/navigation-reconnect/2026-09-05-phone-layout/.",
+    "Receipt reconstructed during governance repair from the retained final run and exact unchanged runtime bytes. Only contracts and tests changed after that run."
   ]
 }

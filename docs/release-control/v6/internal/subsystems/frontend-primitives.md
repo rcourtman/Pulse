@@ -7085,3 +7085,16 @@ Patrol-origin fixes are waiting for approval. Loading, failed-load, no-runs,
 and truncated-history states carry distinct copy, and a failed load never
 renders zero counts as if the week were quiet. Browser proof covers the desktop
 and narrow Activity tab in `frontend-modern/browser-verification.json`.
+
+### Phone Docker update labels preserve page-owned scrolling
+
+Below the 33.999rem table-container boundary, Docker update cells reduce inline
+padding and wrap existing badge/button content within the allocated cell. The
+rule is scoped to `docker-container-update-cell`; it must not restore a nested
+horizontal scrollport or change app-shell touch handling. Phone platform wrappers
+retain `overflow: clip`. Labels remain text, not icon-only substitutes.
+
+App.architecture.test.ts protects the CSS scope and scroll ownership;
+96-navigation-socket-recovery.spec.ts checks real 390px text ranges and the
+non-scrolling wrapper. Browser receipts do not establish physical Android touch
+behaviour or every asynchronous update state.

@@ -986,3 +986,18 @@ describe('mobile bottom navigation clearance', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+
+describe('Docker phone update reflow boundary', () => {
+  it('scopes label wrapping to narrow Docker cells without restoring a nested scrollport', () => {
+    const phoneStyles = appStylesSource.slice(appStylesSource.indexOf('/* Phone update states'));
+    expect(phoneStyles).toContain('@container (max-width: 33.999rem)');
+    expect(phoneStyles).toMatch(/\.docker-container-update-cell\s*\{\s*padding-inline: 0.125rem;/);
+    expect(phoneStyles).toContain('max-width: 100%');
+    expect(phoneStyles).toContain('white-space: normal');
+    expect(phoneStyles).toContain('overflow-wrap: anywhere');
+    expect(phoneStyles).toContain('flex-wrap: wrap');
+    expect(phoneStyles).not.toMatch(/overflow(?:-x|-y)?:\s*(auto|scroll)/);
+    expect(appStylesSource).toMatch(/\.table-scroll-shell\.table-scroll-shell-phone-page\s*\{\s*overflow: clip;/);
+  });
+});
