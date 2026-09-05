@@ -645,6 +645,51 @@ steps:
         dynamic = self.audit("permissions: ${{ inputs.permissions }}\njobs: {}\n")
         self.assertTrue(any("scope mapping" in finding for finding in dynamic))
 
+    def test_workflow_call_only_may_inherit_caller_permissions(self) -> None:
+        inherited = self.audit(
+            """on:
+  workflow_call:
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo inherited
+"""
+        )
+        self.assertEqual(inherited, [])
+
+        independently_runnable = self.audit(
+            """on:
+  workflow_call:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo independent
+"""
+        )
+        self.assertTrue(
+            any("top-level permissions" in finding for finding in independently_runnable)
+        )
+
+        job_override = self.audit(
+            """on:
+  workflow_call:
+jobs:
+  unsafe:
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo unsafe
+"""
+        )
+        self.assertTrue(any("top-level permissions" in finding for finding in job_override))
+
     def test_rejects_broad_or_dynamic_job_permission_overrides(self) -> None:
         broad = self.audit(
             """permissions:
