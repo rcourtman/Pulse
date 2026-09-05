@@ -254,6 +254,8 @@ command-capable profile.
 
 ## Shared Boundaries
 
+Recovery consumers of security status must distinguish currentUsername (the validated caller identity) from privileged authUsername (administrator configuration). Presence of currentUsername in a scoped response does not authorise export, import, recovery or unprotected backup transfer; existing settings capabilities and backend enforcement still gate those operations.
+
 The Patrol action broker and shared policy-writer wiring under `internal/api/`
 remain API/action-lifecycle authority even when the target is storage-related.
 Automatic admission requires a fresh, resource-bound policy lease and an

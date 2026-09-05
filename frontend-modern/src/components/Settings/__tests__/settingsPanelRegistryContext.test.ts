@@ -41,6 +41,24 @@ function buildParams(securityStatus: SecurityStatus | null): UseSettingsPanelReg
 }
 
 describe('buildSettingsPanelRegistryContext', () => {
+  it('uses the authenticated principal rather than the configured administrator', () => {
+    const context = buildSettingsPanelRegistryContext(buildParams({
+      currentUsername: 'org-owner',
+      authUsername: 'instance-admin',
+    } as SecurityStatus));
+    expect(context.getOrganizationSharingPanelProps().currentUser).toBe('org-owner');
+    expect(context.getOrganizationAccessPanelProps().currentUser).toBe('org-owner');
+    expect(context.getOrganizationOverviewPanelProps().currentUser).toBe('org-owner');
+  });
+
+  it('does not replace an explicitly empty principal with the configured admin', () => {
+    const context = buildSettingsPanelRegistryContext(buildParams({
+      currentUsername: '',
+      authUsername: 'instance-admin',
+    } as SecurityStatus));
+    expect(context.getOrganizationSharingPanelProps().currentUser).toBe('');
+  });
+
   it('passes the effective current user into organization panels', () => {
     const context = buildSettingsPanelRegistryContext(
       buildParams({

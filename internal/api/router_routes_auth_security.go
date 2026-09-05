@@ -49,6 +49,7 @@ type publicSecurityStatusResponse struct {
 }
 
 type authenticatedSecurityStatusResponse struct {
+	CurrentUsername string `json:"currentUsername"`
 	publicSecurityStatusResponse
 	HasProxyAuth          bool                               `json:"hasProxyAuth"`
 	ProxyAuthLogoutURL    string                             `json:"proxyAuthLogoutURL"`
@@ -381,6 +382,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		publicStatus.DetailLevel = securityStatusDetailAuthenticated
 		authenticatedStatus := authenticatedSecurityStatusResponse{
 			publicSecurityStatusResponse: publicStatus,
+			CurrentUsername:              authSnapshot.username,
 			HasProxyAuth:                 authSnapshot.authMethod == "proxy",
 			ProxyAuthLogoutURL:           r.config.ProxyAuthLogoutURL,
 			ProxyAuthUsername:            proxyAuthUsername,

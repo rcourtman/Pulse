@@ -330,7 +330,7 @@ describe('settings architecture guardrails', () => {
     expect(settingsPanelRegistryContextSource).toContain(
       'params.securityStatus()?.ssoSessionUsername',
     );
-    expect(settingsPanelRegistryContextSource).toContain('params.securityStatus()?.authUsername;');
+    expect(settingsPanelRegistryContextSource).toContain('params.securityStatus()?.authUsername);');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationOverviewPanelProps');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationAccessPanelProps');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationSharingPanelProps');
@@ -2076,5 +2076,19 @@ describe('settings architecture guardrails', () => {
     } as unknown as DiagnosticsData);
 
     expect(JSON.stringify(sanitized)).not.toContain('192.168.1.20');
+  });
+});
+
+// Principal selection belongs to the shared shell registry, not an individual
+// organisation panel or a browser storage hint.
+describe('organisation principal shell boundary', () => {
+  it('prefers authenticated identity with a nullish legacy fallback', () => {
+    expect(settingsPanelRegistryContextSource).toContain('params.securityStatus()?.currentUsername ??');
+    expect(settingsPanelRegistryContextSource).not.toContain('sessionStorage');
+    for (const panel of ['Overview', 'Access', 'Sharing']) {
+      expect(settingsPanelRegistryContextSource).toContain(
+        `getOrganization${panel}PanelProps: () => ({\n      currentUser: currentUser(),`,
+      );
+    }
   });
 });

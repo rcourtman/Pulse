@@ -286,6 +286,8 @@ test.describe('Multi-tenant E2E flows', () => {
   });
 
   test('Scenario 6: cross-org share preserves intended access role and requires target acceptance', async ({ page, isMobile }) => {
+    const narrowProof = process.env.PULSE_E2E_SHARING_NARROW === '1';
+    if (narrowProof) await page.setViewportSize({ width: 390, height: 844 });
     // This is a user-session flow, not a token-isolation test. The primary
     // API token is deliberately restricted and must not gain cross-org access.
     await ensureSessionAuthenticated(page);
@@ -299,10 +301,39 @@ test.describe('Multi-tenant E2E flows', () => {
 
     const orgA = await createOrg(page, `E2E Share Source ${Date.now()}`);
     const orgB = await createOrg(page, `E2E Share Target ${Date.now()}`);
+    // Report relationships only: never retain cookies, tokens or raw identities.
+    const inspectIdentity = async (phase: string) => {
+      const statusResponse = await apiRequest(page, '/api/security/status');
+      expect(statusResponse.ok()).toBeTruthy();
+      const status = await statusResponse.json();
+      expect(status.currentUsername).toBe(E2E_CREDENTIALS.username);
+      const sessionUser = await page.evaluate(() => sessionStorage.getItem('pulse_auth_user'));
+      const organizations = await Promise.all([orgA, orgB].map(async ({ id }) => {
+        const response = await apiRequest(page, `/api/orgs/${encodeURIComponent(id)}`);
+        expect(response.ok()).toBeTruthy();
+        const organization = await response.json();
+        const membersResponse = await apiRequest(page, `/api/orgs/${encodeURIComponent(id)}/members`);
+        expect(membersResponse.ok()).toBeTruthy();
+        const members = await membersResponse.json();
+        const presentedUser = status.currentUsername ?? (status.proxyAuthUsername || status.ssoSessionUsername || status.authUsername);
+        return {
+          ownerMatchesLogin: organization.ownerUserId === E2E_CREDENTIALS.username,
+          ownerMatchesPresentedUser: organization.ownerUserId === presentedUser,
+          loginMembership: members.find((member: OrganizationMember) => member.userId === E2E_CREDENTIALS.username)?.role ?? null,
+        };
+      }));
+      console.log('sharing identity relationships', JSON.stringify({
+        phase, detailLevel: status.detailLevel,
+        hasPresentedUser: Boolean(status.currentUsername ?? (status.proxyAuthUsername || status.ssoSessionUsername || status.authUsername)),
+        sessionHintMatchesLogin: sessionUser === E2E_CREDENTIALS.username,
+        organizations,
+      }));
+    };
     const outboundResourceName = `Shared View Outbound ${Date.now()}`;
     const inboundResourceName = `Shared View Inbound ${Date.now()}`;
 
     try {
+      await inspectIdentity('before-switch');
       const createShareRes = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgA.id)}/shares`, {
         method: 'POST',
         data: {
@@ -361,10 +392,11 @@ test.describe('Multi-tenant E2E flows', () => {
       expect(incomingMatch?.status).toBe('pending');
 
       await switchOrg(page, orgA.id);
+      await inspectIdentity('after-switch');
       await page.goto('/settings/organization/sharing', { waitUntil: 'domcontentloaded' });
       await page.waitForURL(/\/settings\/organization\/sharing/, { timeout: 15_000 });
 
-      if (isMobile) {
+      if (isMobile || narrowProof) {
         await expect(page.getByRole('heading', { level: 1, name: 'Sharing', exact: true })).toBeVisible();
         await expect(page.getByRole('heading', { level: 2, name: 'Organization Sharing' })).toBeVisible();
       } else {
@@ -378,6 +410,7 @@ test.describe('Multi-tenant E2E flows', () => {
       await expect(incomingRow.getByRole('button', { name: 'Accept' })).toBeVisible();
       await expect(incomingRow.getByRole('button', { name: 'Decline' })).toBeVisible();
 
+      await page.screenshot({ path: test.info().outputPath('sharing-pending.png'), fullPage: true });
       await incomingRow.getByRole('button', { name: 'Accept' }).click();
       await expect(incomingRow.getByText('Active')).toBeVisible();
       await expect(incomingRow.getByRole('button', { name: 'Accept' })).toHaveCount(0);
@@ -394,16 +427,25 @@ test.describe('Multi-tenant E2E flows', () => {
       );
       expect(acceptedIncomingMatch?.status).toBe('accepted');
       expect(acceptedIncomingMatch?.accessRole).toBe('viewer');
+      await page.screenshot({ path: test.info().outputPath('sharing-accepted.png'), fullPage: true });
     } finally {
+      // Leave the active tenant before deleting its fixture data.
+      await switchOrg(page, 'default');
       await deleteOrg(page, orgB.id);
       await deleteOrg(page, orgA.id);
     }
   });
 
   test('Scenario 7: role changes update effective permissions only in the scoped org', async ({ page }) => {
-    await ensureAuthenticated(page);
+    // RBAC mutations are also a user-session flow; do not combine a browser
+    // API token with a potentially stale cookie in page.request.
+    await ensureSessionAuthenticated(page);
 
-    const mtEnabled = await isMultiTenantEnabled(page);
+    const availability = await apiRequest(page, '/api/orgs');
+    if (process.env.PULSE_MULTI_TENANT_ENABLED === 'true') {
+      expect(availability.status(), 'enabled fixture must not silently skip RBAC coverage').toBe(200);
+    }
+    const mtEnabled = availability.ok();
     test.skip(!mtEnabled, 'Multi-tenant feature not enabled in this environment');
 
     const orgA = await createOrg(page, `E2E RBAC Scope A ${Date.now()}`);
