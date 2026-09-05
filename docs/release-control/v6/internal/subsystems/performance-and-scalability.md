@@ -3021,3 +3021,10 @@ A `patrol_digest` run performs the same bounded reads as
 capped action-audit page, and cost events for the window) once per weekly
 occurrence, under the existing schedule run mutex. It adds no polling, no
 per-resource fan-out, and no new persistence.
+
+### Reconnect admission uses constant-time snapshot evidence
+
+Runtime resource resolution uses a store signal recording resource snapshot
+receipt, or an already populated resource array, rather than alert payload
+presence. Reconnect must not add an estate fetch or scan to recover navigation.
+The signal survives transport loss and resets on organisation URL changes.

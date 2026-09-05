@@ -1,20 +1,30 @@
 {
   "version": 1,
-  "base_sha": "3c5d4265439d92495f35f2460c3f666330a239e5",
-  "verified_at": "2026-09-05T00:33:47Z",
+  "base_sha": "193ead50fd9559b92ee242f34b8e9718fd7a3e3e",
+  "verified_at": "2026-09-05T03:43:42Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/useAppRuntimeState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "0abd4bcd970e5836e8903d4140b638e7637a74b14dd1f2f6b53b338ae1e31fb3"
+    "frontend-modern/src/stores/websocket-global.ts": "abacee8810729f0dbded90f0b8be99ad09936134160b631b74967e0751f2919f",
+    "frontend-modern/src/stores/websocket.ts": "253b45b6c9694ad39c881cf8b592398962ae5fa6849a1590812fbb634649fb9b",
+    "frontend-modern/src/useAppRuntimeState.ts": "e879a23baf48caf99359c63cf4c0c637156d27a28ab823f62c19e14052fd1643"
   },
   "routes": [
-    "/proxmox/backups/coverage (isolated production component/router/CSS fixture; not full application)"
+    "/proxmox",
+    "/docker",
+    "/alerts"
   ],
   "viewports": [
     {
       "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1100,
       "height": 900
     },
     {
@@ -23,13 +33,14 @@
     }
   ],
   "states": [
-    "40 synthetic workloads with mid-table restore evidence expanded",
-    "Three replacement HTTP polling snapshots render updated workload names with focused toggle and expanded evidence retained",
-    "Native scroll remains 532px desktop and 503px narrow; route unchanged and no page errors"
+    "Synthetic populated Proxmox and Docker inventory in isolated real Go backend with production embedded frontend",
+    "Connected socket closed with 1013; reconnect attempts blocked while HTTP health remains available",
+    "Platform destinations retained during interruption and automatic recovery without reload; desktop navigation intentionally hidden below xl",
+    "Desktop active incidents retain enabled acknowledgement control; no acknowledgement persistence or notification receipt claim"
   ],
   "interactions": [
-    "Focus expansion toggle and press Enter, then retain focus across three replacement snapshots",
-    "Run pulse-heavy-run -- node scripts/check-backup-browser-polling.mjs",
-    "Run pulse-heavy-run -- env PULSE_BROWSER_WIDTH=390 node scripts/check-backup-browser-polling.mjs; keyboard interaction only, not touch qualification"
+    "pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 PULSE_E2E_LOCAL_BACKEND_PORT=18765 npm --prefix tests/integration test -- tests/96-navigation-socket-recovery.spec.ts --project=chromium",
+    "Three Chromium checks passed; fresh contexts at 100% zoom; desktop and 390px reconnect screenshots inspected. Mobile menu interaction not exercised.",
+    "Open Alerts during interruption at 1440px; unblock socket and verify recovery without reload"
   ]
 }

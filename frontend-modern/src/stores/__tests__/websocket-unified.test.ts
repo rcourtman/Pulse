@@ -126,6 +126,25 @@ describe('websocket store unified resource contract', () => {
     vi.unstubAllGlobals();
   });
 
+  it('tracks resource admission separately from status frames and retains it through reconnect only', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({ type: 'rawData', data: { lastUpdate: 1, activeAlerts: {} } });
+      expect(store.initialDataReceived()).toBe(true);
+      expect(store.resourceSnapshotReceived()).toBe(false);
+      emitMessage({ type: 'rawData', data: { resources: [] } });
+      expect(store.resourceSnapshotReceived()).toBe(true);
+      mockWsInstance?.onclose?.({ code: 1013, reason: 'interruption' } as CloseEvent);
+      expect(store.initialDataReceived()).toBe(false);
+      expect(store.resourceSnapshotReceived()).toBe(true);
+      store.switchUrl('ws://localhost/ws?org=another');
+      expect(store.resourceSnapshotReceived()).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+
   it('initializes with empty resources array only', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
