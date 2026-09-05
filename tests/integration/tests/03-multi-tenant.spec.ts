@@ -7,6 +7,7 @@ import {
   createOrg,
   deleteOrg,
   ensureAuthenticated,
+  ensureSessionAuthenticated,
   E2E_CREDENTIALS,
   isMultiTenantEnabled,
   switchOrg,
@@ -285,7 +286,13 @@ test.describe('Multi-tenant E2E flows', () => {
   });
 
   test('Scenario 6: cross-org share preserves intended access role and requires target acceptance', async ({ page, isMobile }) => {
-    await ensureAuthenticated(page);
+    // This is a user-session flow, not a token-isolation test. The primary
+    // API token is deliberately restricted and must not gain cross-org access.
+    await ensureSessionAuthenticated(page);
+    expect(await page.evaluate(() => window.sessionStorage.getItem('pulse_auth'))).toBeNull();
+    expect((await page.context().cookies()).some(cookie =>
+      cookie.name === 'pulse_session' || cookie.name === '__Host-pulse_session',
+    )).toBeTruthy();
 
     const mtEnabled = await isMultiTenantEnabled(page);
     test.skip(!mtEnabled, 'Multi-tenant feature not enabled in this environment');

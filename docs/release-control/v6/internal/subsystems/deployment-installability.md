@@ -26,6 +26,13 @@ installed-customer or release qualification. The executable discovery and
 tier-refusal checks in `tests/integration/scripts/managed-local-backend.test.mjs`
 protect this boundary without launching a browser.
 
+The cross-organisation sharing diagnostic must use cookie-session authentication,
+not the primary API-token shortcut: the restricted token is correctly refused
+when the browser selects another organisation. It asserts the absence of a
+browser token and presence of a session cookie before creating shares. Getting
+past that authentication mismatch does not establish sharing success: rendered
+Accept/Decline controls and the accepted API state remain required assertions.
+
 
 ### Portable installer lifecycle ownership
 

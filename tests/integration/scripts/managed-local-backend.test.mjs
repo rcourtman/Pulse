@@ -180,6 +180,17 @@ test('multi-tenant release auth reuses storage state and classifies login rate l
   assert.match(helpers, /\/too many\/i\.test\(lastOutcome\) \? 15_000/);
 });
 
+test('sharing diagnostic uses cookie-session auth without granting cross-org token access', async () => {
+  const spec = await fs.readFile(path.join(integrationRoot, 'tests', '03-multi-tenant.spec.ts'), 'utf8');
+  const sharing = spec.split("test('Scenario 6:")[1].split("test('Scenario 7:")[0];
+  assert.match(sharing, /await ensureSessionAuthenticated\(page\)/);
+  assert.doesNotMatch(sharing, /await ensureAuthenticated\(page\)/);
+  assert.match(sharing, /sessionStorage\.getItem\('pulse_auth'\)\)\)\.toBeNull\(\)/);
+  assert.match(sharing, /cookie\.name === 'pulse_session'/);
+  assert.match(sharing, /cookie\.name === '__Host-pulse_session'/);
+  assert.match(sharing, /getByRole\('button', \{ name: 'Accept' \}\)\)\.toBeVisible\(\)/);
+});
+
 test('shared browser readiness waits for the bounded mock history contract', async () => {
   const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');
   const compose = await fs.readFile(path.join(integrationRoot, 'docker-compose.test.yml'), 'utf8');
