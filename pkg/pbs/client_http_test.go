@@ -869,3 +869,19 @@ func TestClient_GetNodeStatus_PermissionOutageRecovery(t *testing.T) {
 		t.Fatalf("recovered CPU = %v, want 0.25", status.CPU)
 	}
 }
+
+func TestClient_GetNodeStatus_MissingData(t *testing.T) {
+	for _, body := range []string{`{"data":null}`, `{}`, `null`} {
+		t.Run(body, func(t *testing.T) {
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			})
+			defer server.Close()
+			status, err := client.GetNodeStatus(context.Background())
+			if status != nil || err == nil {
+				t.Fatalf("absent metrics = (%+v, %v), want nil status and error", status, err)
+			}
+		})
+	}
+}

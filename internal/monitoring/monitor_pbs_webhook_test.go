@@ -98,10 +98,14 @@ func TestPBSPartialMetricsWebhookLifecycle(t *testing.T) {
 	}
 	incident := firing.Alerts[0]
 	waitSent(1)
-	for _, mode := range []pbsHealthTestMode{pbsHealthTestNodeDenied, pbsHealthTestNodeGatewayFailure} {
+	for _, mode := range []pbsHealthTestMode{pbsHealthTestNodeDenied, pbsHealthTestNodeGatewayFailure, pbsHealthTestNullNodeStatus} {
 		fixture.setMode(mode)
 		for range 5 {
 			poll()
+		}
+		projection := pbsInstanceByName(t, monitor.state.GetSnapshot(), instance.Name)
+		if projection.Status != "online" || !projection.NodeMetricsUnavailable {
+			t.Fatalf("partial failure must retain connectivity without claiming metrics: %+v", projection)
 		}
 		active := manager.GetActiveAlerts()
 		if len(active) != 1 || active[0].ID != incident.ID || !active[0].StartTime.Equal(incident.StartTime) {
