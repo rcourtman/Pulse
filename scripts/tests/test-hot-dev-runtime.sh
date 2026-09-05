@@ -355,7 +355,7 @@ test_go_module_security_dependency_floors() {
   output="$(cd "${ROOT_DIR}" && go list -m golang.org/x/net golang.org/x/crypto golang.org/x/sys)"
 
   assert_module_at_least "Go module floor keeps x/net past restricted-outbound advisories" "${output}" "golang.org/x/net" "v0.56.0"
-  assert_module_at_least "Go module floor keeps x/crypto aligned with x/net security floor" "${output}" "golang.org/x/crypto" "v0.54.0"
+  assert_module_at_least "Go module floor excludes SSH connection deadlock advisories" "${output}" "golang.org/x/crypto" "v0.56.0"
   assert_module_at_least "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys" "v0.47.0"
 }
 
@@ -364,9 +364,9 @@ test_go_release_toolchain_floor() {
   module_toolchain="$(sed -n 's/^toolchain //p' "${ROOT_DIR}/go.mod")"
   installed_toolchain="$(cd "${ROOT_DIR}" && go env GOVERSION)"
 
-  assert_contains "Go module uses the patched release toolchain" "${module_toolchain}" "go1.26.7"
-  assert_contains "dev toolchain installer uses the patched release toolchain" "$(<"${ROOT_DIR}/scripts/.go-version")" "go1.26.7"
-  assert_contains "active dev runtime resolves the patched release toolchain" "${installed_toolchain}" "go1.26.7"
+  assert_contains "Go module uses the patched release toolchain" "${module_toolchain}" "go1.26.8"
+  assert_contains "dev toolchain installer uses the patched release toolchain" "$(<"${ROOT_DIR}/scripts/.go-version")" "go1.26.8"
+  assert_contains "active dev runtime resolves the patched release toolchain" "${installed_toolchain}" "go1.26.8"
 }
 
 test_backend_race_suite_keeps_hosted_runner_timeout_headroom() {

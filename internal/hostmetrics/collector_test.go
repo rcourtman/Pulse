@@ -3,11 +3,58 @@ package hostmetrics
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"testing"
 
+	gopsutilcommon "github.com/shirou/gopsutil/v4/common"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 	gomem "github.com/shirou/gopsutil/v4/mem"
 )
+
+func TestMountEnumerationContextUsesAgentNamespaceOnNativeLinux(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux mount namespaces only")
+	}
+	t.Setenv("HOST_PROC", "")
+	t.Setenv("HOST_PROC_MOUNTINFO", "")
+
+	original := gopsutilcommon.EnvMap{gopsutilcommon.HostSysEnvKey: "/host/sys"}
+	ctx := context.WithValue(context.Background(), gopsutilcommon.EnvKey, original)
+	got, ok := mountEnumerationContext(ctx).Value(gopsutilcommon.EnvKey).(gopsutilcommon.EnvMap)
+	if !ok {
+		t.Fatal("mount enumeration context has no gopsutil environment")
+	}
+	if got[gopsutilcommon.HostProcMountinfo] != "/proc/self/mountinfo" {
+		t.Fatalf("mountinfo = %q, want collector namespace", got[gopsutilcommon.HostProcMountinfo])
+	}
+	if got[gopsutilcommon.HostSysEnvKey] != "/host/sys" {
+		t.Fatalf("existing gopsutil context was discarded: %+v", got)
+	}
+	if _, mutated := original[gopsutilcommon.HostProcMountinfo]; mutated {
+		t.Fatal("caller's gopsutil environment was mutated")
+	}
+}
+
+func TestMountEnumerationContextPreservesHostProcOverride(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux mount namespaces only")
+	}
+	t.Setenv("HOST_PROC", "")
+	t.Setenv("HOST_PROC_MOUNTINFO", "")
+
+	original := gopsutilcommon.EnvMap{gopsutilcommon.HostProcEnvKey: "/host/proc"}
+	ctx := context.WithValue(context.Background(), gopsutilcommon.EnvKey, original)
+	got := mountEnumerationContext(ctx)
+	if got != ctx {
+		t.Fatal("explicit host proc context was replaced")
+	}
+
+	t.Setenv("HOST_PROC_MOUNTINFO", "/host/proc/1/mountinfo")
+	plain := context.Background()
+	if got := mountEnumerationContext(plain); got != plain {
+		t.Fatal("explicit host mountinfo environment was replaced")
+	}
+}
 
 func TestCollectDiskIO(t *testing.T) {
 	ctx := context.Background()
@@ -175,6 +222,42 @@ func TestCollectDisksIncludesExplicitTmpfsMount(t *testing.T) {
 	disks := collectDisksWithIncludes(context.Background(), nil, []string{"/var/log"})
 	if len(disks) != 1 || disks[0].Mountpoint != "/var/log" || disks[0].Filesystem != "tmpfs" {
 		t.Fatalf("explicit tmpfs include was not reported correctly: %+v", disks)
+	}
+}
+
+func TestCollectDisksKeepsDistinctExplicitTmpfsMountsWithEqualCapacity(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	t.Cleanup(func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+	})
+
+	diskPartitions = func(context.Context, bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "tmpfs", Mountpoint: "/var/log", Fstype: "tmpfs"},
+			{Device: "tmpfs", Mountpoint: "/mnt/ramdisk/plex-transcode", Fstype: "tmpfs"},
+		}, nil
+	}
+	diskUsage = func(_ context.Context, path string) (*godisk.UsageStat, error) {
+		return &godisk.UsageStat{
+			Path:        path,
+			Total:       1024,
+			Used:        768,
+			Free:        256,
+			UsedPercent: 75,
+		}, nil
+	}
+
+	disks := collectDisksWithIncludes(context.Background(), nil, []string{
+		"/var/log",
+		"/mnt/ramdisk/plex-transcode",
+	})
+	if len(disks) != 2 {
+		t.Fatalf("distinct explicitly included tmpfs mounts were deduplicated: %+v", disks)
+	}
+	if disks[0].Mountpoint != "/mnt/ramdisk/plex-transcode" || disks[1].Mountpoint != "/var/log" {
+		t.Fatalf("explicit tmpfs mounts = %+v", disks)
 	}
 }
 

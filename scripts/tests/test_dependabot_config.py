@@ -155,12 +155,18 @@ class DependabotConfigTest(unittest.TestCase):
             },
         )
         scan_steps = jobs["npm-audit"]["steps"]
-        audit_commands = [step["run"] for step in scan_steps if "run" in step]
+        audit_commands = [
+            step["run"]
+            for step in scan_steps
+            if step.get("id") in {"audit-complete", "audit-production"}
+        ]
         self.assertEqual(
             audit_commands,
             [
-                "npm audit --package-lock-only",
-                "npm audit --package-lock-only --omit=dev",
+                'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" '
+                "all --package-lock-only",
+                'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" '
+                "production --package-lock-only",
             ],
         )
 

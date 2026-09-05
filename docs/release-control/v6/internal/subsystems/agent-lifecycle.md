@@ -15,6 +15,23 @@
 
 ## Purpose
 
+Unraid collection preserves optional nonnegative `mdNumDisks` as `numDisks` through the host report. Explicit zero survives JSON encoding; absent, negative, or malformed source counts remain unknown. This telemetry does not change enrollment or command authority; older agents retain unknown-count behaviour.
+
+### Portable installer lifecycle ownership
+
+The shared shell installer lifecycle directory (outside the least-privilege
+profile) and atomic lifecycle-file staging use numeric UID/GID `0:0` when
+running as root. They must not depend on a group named `root`, which is absent
+on macOS. The least-privilege directory retains its dedicated collector group
+and 0750 mode; ordinary root lifecycle directories retain 0700 mode.
+Ownership failure aborts directory preparation or file installation before
+replacement of the saved installer. The runtime shell fixture
+`TestInstallSHLifecyclePortableRootOwnership` in
+`scripts/installtests/install_sh_test.go` rejects named ownership and proves
+that a failed chown leaves the previously saved installer intact. This fixture
+is not native macOS upgrade qualification.
+
+
 `models.PBSBackup` may carry monitoring-owned write-activity evidence for an
 incomplete PBS snapshot. `inProgress` means the snapshot has no completed
 manifest; `writeActivityObserved` and `writeActive` distinguish a successfully
@@ -2995,6 +3012,12 @@ explicitly mapped administrator reaches the lifecycle handlers.
    scrolling just to reach primary controls. Dedicated collection and
    last-activity columns may return only once the workspace has enough width
    to show the full ledger without clipping headers or row actions.
+   Closing a connection's governed Manage dialog must return keyboard focus to
+   the originating ledger action without moving the infrastructure viewport.
+   If ledger refresh replaces the original row while the dialog is open,
+   `InfrastructureWorkspace.tsx` may resolve the stable replacement action,
+   but that delayed fallback must also focus with `preventScroll` rather than
+   revealing the row through an implicit or explicit page scroll.
 10. Keep post-install lifecycle completion explicit inside
     `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
     and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
@@ -4969,6 +4992,12 @@ surface:
 `NodeModalBasicInfoSection.tsx`, `NodeModalClusterMembersSection.tsx`,
 `NodeModalAuthenticationSection.tsx`, `NodeModalMonitoringSection.tsx`,
 `NodeModalStatusFooter.tsx`, `nodeModalModel.ts`, and `useNodeModalState.ts`.
+Because the infrastructure ledger continues polling while that editor remains
+mounted, `NodeCredentialSlot.tsx` must pass the current configured node and
+security/temperature settings into `useNodeModalState.ts` as reactive
+accessors rather than mount-time snapshots. An untouched form adopts a newer
+server snapshot; the modal state's dirty guard remains the authority that
+prevents a refresh from replacing operator edits in progress.
 The cluster members section is the canonical manual override surface for
 per-member connection addresses on an existing PVE cluster: it writes only
 `ClusterEndpoints[n].IPOverride` through the write-only
@@ -7572,6 +7601,16 @@ monitor select loop is progressing; agent report success or failure cannot
 independently assert that Pulse is healthy. Agent-lifecycle behavior and proof
 routes remain unchanged.
 
+### Unified storage history does not alter agent lifecycle state
+
+`internal/monitoring/monitor.go` may preserve a unified storage metric's source
+observation time while projecting it into history, but that shared monitoring
+path has no host enrollment authority. A storage-history sync must not clear or
+rewrite durable host-removal entries, admit a report from a denied credential,
+or create agent continuity evidence. The removal lifecycle proof keeps a
+removed host blocked across a PBS storage sync so metric timestamp maintenance
+cannot become an accidental re-enrollment transition.
+
 ### Deploy enrollment swaps credentials as one durable transition
 
 A deploy bootstrap token remains the live credential until Pulse can durably
@@ -7706,3 +7745,21 @@ counts projected from existing action audit records.
 The `patrol_digest` report schedule kind in `internal/api/report_schedules.go`
 only reads the digest and sends an email. It issues no agent commands, plans
 no actions, and changes no capability, token, or binding state.
+
+### Independent module CPU sampling baselines
+
+The host default system collector retains its own `hostmetrics.Collector` for
+its lifetime. `Metrics` and `MetricsWithDiskFilters` use that same retained
+baseline; independent host collectors and the Docker module do not consume
+one another's CPU counters. Docker retains a separate module-scoped collector,
+not one per arbitrary Docker Agent instance. The first observation keeps the
+existing spot-sample fallback; subsequent observations measure the owning
+collector's reporting interval. Package-level hostmetrics convenience calls
+remain shared and must not be used for independent module reporting loops.
+
+`TestDefaultCollectorIndependentCPUBaselines` in
+`internal/hostagent/agent_metrics_test.go` exercises both host entry points
+against interleaved Linux procfs counters.
+`internal/hostmetrics/issue1894_interleaved_collectors_test.go` independently
+pins isolated collector deltas and startup fallback. This changes telemetry
+sampling only, not report schemas, identity, enrollment or command authority.

@@ -98,6 +98,9 @@ func TestForcePatrolAcceptanceOwnsStatusAndProducesOneHistoryRecord(t *testing.T
 	if history[0].ID != acceptance.RunID {
 		t.Fatalf("history run id = %q, want %q", history[0].ID, acceptance.RunID)
 	}
+	if history[0].TriggerReason != string(TriggerReasonManual) {
+		t.Fatalf("history trigger = %q, want direct manual run", history[0].TriggerReason)
+	}
 	if calls := providerCalls.Load(); calls != 1 {
 		t.Fatalf("provider calls after completion = %d, want 1", calls)
 	}

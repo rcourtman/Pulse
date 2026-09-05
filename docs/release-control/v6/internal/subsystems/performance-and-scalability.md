@@ -229,6 +229,10 @@ its members (a flagged id absent from the incoming snapshot conservatively
 refreshes every group), and a tick that flags no member preserves the cached
 merged host row by object identity. Unchanged non-host display resources retain
 object identity.
+Same-hostname provider disambiguation must retain that locality: candidate
+rows are indexed by normalized host key, and machine, DMI, cluster, endpoint,
+and linked-agent comparisons may inspect only the matching key's bucket rather
+than rescan unrelated estate rows.
 `frontend-modern/src/stores/websocket.ts` publishes the changed-ID set and a
 monotonic resource revision with each reconciliation. The shared
 `useUnifiedResources` owner applies that revision to the process-wide canonical

@@ -1725,6 +1725,15 @@ describe('settings architecture guardrails', () => {
     );
 
     expect(nodeCredentialSlotSource).toContain('useNodeModalState(modalProps)');
+    // The workspace deliberately remains mounted while its connection ledger
+    // polls. Preserve reactive inputs here so untouched forms adopt a newer
+    // server projection; useNodeModalState owns the dirty-edit guard.
+    expect(nodeCredentialSlotSource).toContain('get editingNode()');
+    expect(nodeCredentialSlotSource).toContain('get securityStatus()');
+    expect(nodeCredentialSlotSource).toContain('get temperatureMonitoringEnabled()');
+    expect(nodeCredentialSlotSource).toContain('get temperatureMonitoringLocked()');
+    expect(nodeCredentialSlotSource).toContain('get savingTemperatureSetting()');
+    expect(nodeCredentialSlotSource).not.toContain('editingNode: props.editingNode');
     expect(nodeCredentialSlotSource).toContain('<NodeModalBasicInfoSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalAuthenticationSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');

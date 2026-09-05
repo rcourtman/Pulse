@@ -2,7 +2,7 @@
 # npm-audit-retry.sh — Run npm audit, separating a real advisory from an
 # unreachable advisory endpoint.
 #
-# Usage: scripts/npm-audit-retry.sh <all|production>
+# Usage: scripts/npm-audit-retry.sh <all|production> [npm-audit-args...]
 #
 # `npm audit` exits 1 both when it finds vulnerabilities and when it cannot
 # reach registry.npmjs.org. Treating those the same made a required check
@@ -56,10 +56,12 @@ case "${SCOPE}" in
   all)        SCOPE_ARGS=() ;;
   production) SCOPE_ARGS=(--omit=dev) ;;
   *)
-    echo "Usage: $0 <all|production>" >&2
+    echo "Usage: $0 <all|production> [npm-audit-args...]" >&2
     exit 2
     ;;
 esac
+shift
+AUDIT_ARGS=("$@")
 
 ATTEMPTS="${NPM_AUDIT_ATTEMPTS:-3}"
 DELAY="${NPM_AUDIT_RETRY_DELAY:-15}"
@@ -84,7 +86,7 @@ run_audit() {
   local limit="$1" out="$2"
 
   : >"${out}"
-  "${NPM_BIN}" audit --json "${SCOPE_ARGS[@]}" >"${out}" 2>/dev/null &
+  "${NPM_BIN}" audit --json "${AUDIT_ARGS[@]}" "${SCOPE_ARGS[@]}" >"${out}" 2>/dev/null &
   local npm_pid=$!
 
   (
@@ -127,27 +129,32 @@ except ValueError:
     print("unreachable")
     sys.exit(0)
 
-# npm reports an unusable audit endpoint as an error object, ENOAUDIT being
-# the code it uses for 5xx, timeouts and offline runs alike.
+meta = report.get("metadata") if isinstance(report, dict) else None
+vulns = meta.get("vulnerabilities") if isinstance(meta, dict) else None
+if isinstance(vulns, dict) and "total" in vulns:
+    # A usable advisory verdict takes precedence even if npm also includes a
+    # transport error. Never turn a real finding into a retryable outage.
+    total = vulns.get("total", 0)
+    detail = " ".join(
+        f"{name}={vulns.get(name, 0)}"
+        for name in ("critical", "high", "moderate", "low", "info")
+    )
+    print("vulnerable" if total else "clean")
+    print(f"total={total} {detail}")
+    sys.exit(0)
+
 if isinstance(report, dict) and report.get("error"):
+    # npm reports an unusable endpoint as an error object, ENOAUDIT being the
+    # code it uses for 5xx, timeouts and offline runs alike.
     print("unreachable")
     sys.exit(0)
 
-meta = report.get("metadata") if isinstance(report, dict) else None
-vulns = meta.get("vulnerabilities") if isinstance(meta, dict) else None
 if not isinstance(vulns, dict) or "total" not in vulns:
     # No usable verdict in the payload: treat as unreachable rather than
     # silently passing on a shape we do not understand.
     print("unreachable")
     sys.exit(0)
 
-total = vulns.get("total", 0)
-detail = " ".join(
-    f"{name}={vulns.get(name, 0)}"
-    for name in ("critical", "high", "moderate", "low", "info")
-)
-print("vulnerable" if total else "clean")
-print(f"total={total} {detail}")
 '
 }
 
@@ -189,7 +196,7 @@ while [ "${attempt}" -le "${ATTEMPTS}" ]; do
       echo "::error::npm audit (${SCOPE}) found vulnerabilities: ${summary}"
       # Re-run without --json so the log carries the human-readable advisory
       # detail a maintainer needs to act on.
-      "${NPM_BIN}" audit "${SCOPE_ARGS[@]}" || true
+      "${NPM_BIN}" audit "${AUDIT_ARGS[@]}" "${SCOPE_ARGS[@]}" || true
       exit 1
       ;;
     *)

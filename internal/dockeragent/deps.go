@@ -14,15 +14,18 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 )
 
+// Docker reporting must not consume the host module or package-level CPU baseline.
+var dockerHostMetrics hostmetrics.Collector
+
 var (
 	connectRuntimeFn                  = connectRuntime
 	connectCollectorRuntimeFn         = connectCollectorOwnedRootlessRuntime
-	hostmetricsCollect                = hostmetrics.Collect
+	hostmetricsCollect                = dockerHostMetrics.Collect
 	hostmetricsCollectWithDiskFilters = func(ctx context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
 		if len(include) == 0 {
 			return hostmetricsCollect(ctx, exclude)
 		}
-		return hostmetrics.CollectWithDiskFilters(ctx, exclude, include)
+		return dockerHostMetrics.CollectWithDiskFilters(ctx, exclude, include)
 	}
 	newTickerFn              = time.NewTicker
 	randomDurationFn         = randomDuration

@@ -1,16 +1,108 @@
 package api
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+func TestOIDCServiceVerifiesTokenWhenProviderHasUnsupportedKey(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key: %v", err)
+	}
+
+	modulus := base64.RawURLEncoding.EncodeToString(privateKey.PublicKey.N.Bytes())
+	jwks := fmt.Sprintf(`{
+		"keys": [
+			{
+				"kty": "OKP",
+				"crv": "Ed448",
+				"kid": "unsupported",
+				"use": "sig",
+				"x": "gH1eRK-6hW6ZoAy2k11U4L5uaIaMaZTMCf1cAbsxsYLvTqV2-TQG1PNyLOrhZkMyzUJulMc1wAfH"
+			},
+			{
+				"kty": "RSA",
+				"kid": "supported",
+				"use": "sig",
+				"alg": "RS256",
+				"n": %q,
+				"e": "AQAB"
+			}
+		]
+	}`, modulus)
+
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		baseURL := "http://" + r.Host
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_, _ = fmt.Fprintf(w, `{
+				"issuer": %q,
+				"authorization_endpoint": %q,
+				"token_endpoint": %q,
+				"jwks_uri": %q
+			}`, baseURL, baseURL+"/authorize", baseURL+"/token", baseURL+"/jwks")
+		case "/jwks":
+			_, _ = w.Write([]byte(jwks))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	service, err := NewOIDCService(t.Context(), &config.OIDCConfig{
+		Enabled:     true,
+		IssuerURL:   server.URL,
+		ClientID:    "pulse-client",
+		RedirectURL: "http://pulse.example/api/oidc/callback",
+		Scopes:      []string{"openid"},
+	})
+	if err != nil {
+		t.Fatalf("initialize Pulse OIDC service: %v", err)
+	}
+	defer service.stateStore.Stop()
+
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","kid":"supported"}`))
+	payload := []byte(fmt.Sprintf(`{
+		"iss": %q,
+		"sub": "pulse-user",
+		"aud": "pulse-client",
+		"iat": %d,
+		"exp": %d
+	}`, server.URL, time.Now().Add(-time.Minute).Unix(), time.Now().Add(time.Hour).Unix()))
+	encodedPayload := base64.RawURLEncoding.EncodeToString(payload)
+	signingInput := header + "." + encodedPayload
+	digest := sha256.Sum256([]byte(signingInput))
+	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, digest[:])
+	if err != nil {
+		t.Fatalf("sign JWT: %v", err)
+	}
+	token := signingInput + "." + base64.RawURLEncoding.EncodeToString(signature)
+
+	idToken, err := service.verifier.Verify(t.Context(), token)
+	if err != nil {
+		t.Fatalf("verify ID token against mixed provider key set: %v", err)
+	}
+	if idToken.Subject != "pulse-user" {
+		t.Fatalf("verified subject = %q, want pulse-user", idToken.Subject)
+	}
+}
 
 func TestNewOIDCHTTPClient_WithCustomCABundle(t *testing.T) {
 	// Self-signed TLS server should be rejected by default client

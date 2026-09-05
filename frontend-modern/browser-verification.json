@@ -1,59 +1,35 @@
 {
   "version": 1,
-  "base_sha": "ef460aa6542a41728e2fe3e4a8266488c919b0be",
-  "verified_at": "2026-09-02T18:04:36Z",
+  "base_sha": "3c5d4265439d92495f35f2460c3f666330a239e5",
+  "verified_at": "2026-09-05T00:33:47Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
-    "frontend-modern/src/components/Settings/Settings.tsx",
-    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx",
-    "frontend-modern/src/components/WhatsNewCard.tsx",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/utils/localStorage.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx": "9512529c0e6b86ba4e1055c5009158d442bd8d4a84c2dd9f73822a053989886a",
-    "frontend-modern/src/components/Settings/Settings.tsx": "72682c86dd055761cbd68d4f57b684afe4d978a0b53748859d0721e711ce321a",
-    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx": "7f8ddc0c826b5abe90f40ac08ef3856d046510a7f72afe2f40f32ae72e547eba",
-    "frontend-modern/src/components/WhatsNewCard.tsx": "90543f19d61e9ba6d93251a7bcc9c179fa8d7ccb6ab3364e364d0ea13b2c31f0",
-    "frontend-modern/src/i18n/messages.de.ts": "f43d3c32d59f32178531e11a56e6014d384831871bb8cc3b472fca8e20a96840",
-    "frontend-modern/src/i18n/messages.es.ts": "928c7c7b34dd75ffd00639cb8b27ad81c0e6c8210db8ff41c234a26c5b9c9031",
-    "frontend-modern/src/i18n/messages.ts": "fef88e4096b8d49dc8e4a5b721804bb3b602dddef442827f0b315bec0d45a435",
-    "frontend-modern/src/utils/localStorage.ts": "19a532f55271b2fc696e3ba4ae6ba098e759f0f9df207015c803f7fcc0050bd6"
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "0abd4bcd970e5836e8903d4140b638e7637a74b14dd1f2f6b53b338ae1e31fb3"
   },
   "routes": [
-    "/ (first-run setup wizard, fresh data dir)",
-    "/settings/system-general#usage-telemetry (mock data, existing-install localStorage baseline)",
-    "/docs/PRIVACY (shipped privacy document)"
+    "/proxmox/backups/coverage (isolated production component/router/CSS fixture; not full application)"
   ],
   "viewports": [
     {
-      "width": 1280,
+      "width": 1440,
       "height": 900
     },
     {
       "width": 390,
-      "height": 844
+      "height": 900
     }
   ],
   "states": [
-    "Setup welcome step: Usage statistics card, purpose-first copy, never-sold statement, \"you choose on the next step\", no PULSE_TELEMETRY instruction",
-    "Setup security step (bootstrap validation and quick-setup responses intercepted by Playwright, no real token): Usage statistics toggle default on, description leads with the benefit and carries the never-sold statement",
-    "Setup security step: toggle off, aria-pressed false; completion reached after Create Account",
-    "Settings system-general with prior release baseline: no telemetry-payload-update-notice banner rendered",
-    "Settings Usage data and privacy panel: description leads with purpose, carries the never-sold statement, Preview payload rendered as primary Button, Reset ID secondary",
-    "Settings panel with payload preview open at 390px: no horizontal page overflow",
-    "Shipped /docs/PRIVACY renders the \"What it is not used for\" section and the Payload changes table",
-    "Locales: en verified live; de/es catalog copy covered by i18n and SetupWizard localization unit tests"
+    "40 synthetic workloads with mid-table restore evidence expanded",
+    "Three replacement HTTP polling snapshots render updated workload names with focused toggle and expanded evidence retained",
+    "Native scroll remains 532px desktop and 503px narrow; route unchanged and no page errors"
   ],
   "interactions": [
-    "Fill bootstrap token field with a placeholder and click Verify bootstrap token (validation endpoint intercepted)",
-    "Click Usage statistics toggle on the security step",
-    "Click Create Account & Continue: observed POST /api/security/quick-setup then POST /api/system/settings/update {\"telemetryEnabled\":false}",
-    "Click Preview payload in Settings and read the rendered heartbeat JSON",
-    "Click Full details from the Settings panel and read the popup document",
-    "Resize to 390x844 and repeat the wizard, security step, and Settings panel checks"
+    "Focus expansion toggle and press Enter, then retain focus across three replacement snapshots",
+    "Run pulse-heavy-run -- node scripts/check-backup-browser-polling.mjs",
+    "Run pulse-heavy-run -- env PULSE_BROWSER_WIDTH=390 node scripts/check-backup-browser-polling.mjs; keyboard interaction only, not touch qualification"
   ]
 }

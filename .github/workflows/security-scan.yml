@@ -78,6 +78,62 @@ jobs:
             --diagnostic release-continuity-evidence/release-diagnostic.json \
             --github-output "${GITHUB_OUTPUT}"
 
+      - name: Reject orphaned stable publication tags
+        id: frontier
+        if: ${{ !cancelled() && steps.release.outputs.referenceable == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          evidence=release-continuity-evidence
+          gh api --paginate --slurp \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${REPOSITORY}/git/matching-refs/tags/v?per_page=100" \
+            > "${evidence}/stable-refs.json"
+          gh api --paginate --slurp \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${REPOSITORY}/releases?per_page=100" \
+            > "${evidence}/releases.json"
+
+          fetch_registry_tags() {
+            local registry_name="$1" auth_url="$2" registry_url="$3" image="$4" output="$5"
+            local token
+            token="$(curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors "${auth_url}")"
+            token="$(jq -er '.token | select(type == "string" and length > 0)' <<<"${token}")"
+            curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
+              -H "Authorization: Bearer ${token}" \
+              "${registry_url}/v2/${image}/tags/list?n=10000" \
+              | jq --arg name "${registry_name}/${image}" '.name = $name' > "${output}"
+          }
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          for image in pulse pulse-control-plane; do
+            file_image="${image//-/_}"
+            fetch_registry_tags \
+              ghcr.io \
+              "https://ghcr.io/token?service=ghcr.io&scope=repository:${owner}/${image}:pull" \
+              https://ghcr.io "${owner}/${image}" \
+              "${evidence}/ghcr-${file_image}-tags.json"
+          done
+          # The server image is public on both registries. The control-plane
+          # image is publicly enumerable only on GHCR, so an unauthenticated
+          # continuity audit must not depend on Docker Hub credentials.
+          fetch_registry_tags \
+            docker.io \
+            "https://auth.docker.io/token?service=registry.docker.io&scope=repository:rcourtman/pulse:pull" \
+            https://registry-1.docker.io rcourtman/pulse \
+            "${evidence}/docker-pulse-tags.json"
+          python3 scripts/release_control/release_continuity.py frontier \
+            --release-json "${evidence}/release.json" \
+            --stable-refs-json "${evidence}/stable-refs.json" \
+            --releases-json "${evidence}/releases.json" \
+            --registry-tags-json "${evidence}/ghcr-pulse-tags.json" \
+            --registry-tags-json "${evidence}/docker-pulse-tags.json" \
+            --registry-tags-json "${evidence}/ghcr-pulse_control_plane-tags.json" \
+            --diagnostic "${evidence}/frontier-diagnostic.json"
+
       - name: Bind the release activation marker
         id: activation
         # A structurally valid tag/id/SHA remains safe lookup data even when
@@ -114,7 +170,7 @@ jobs:
 
       - name: Verify immutable release and build provenance
         id: packet
-        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.frontier.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -127,7 +183,7 @@ jobs:
 
       - name: Authenticate every published release asset
         id: assets
-        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.frontier.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           REPOSITORY: ${{ github.repository }}
@@ -136,7 +192,7 @@ jobs:
 
       - name: Verify exact-version container identities
         id: containers
-        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.frontier.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -158,7 +214,7 @@ jobs:
 
       - name: Verify stable container discovery aliases
         id: aliases
-        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.frontier.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           TAG: ${{ steps.release.outputs.tag }}
           EXPECTED_SERVER_DIGEST: ${{ steps.activation.outputs.server_image_digest }}
@@ -171,7 +227,7 @@ jobs:
 
       - name: Verify exact-version Helm identity
         id: helm
-        if: ${{ always() && steps.release.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        if: ${{ always() && steps.release.outcome == 'success' && steps.frontier.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -202,6 +258,7 @@ jobs:
           CONTROL_PLANE_IMAGE_DIGEST: ${{ steps.activation.outputs.control_plane_image_digest }}
           HELM_CHART_DIGEST: ${{ steps.activation.outputs.helm_chart_digest }}
           RELEASE_RESULT: ${{ steps.release.outcome }}
+          FRONTIER_RESULT: ${{ steps.frontier.outcome }}
           ACTIVATION_RESULT: ${{ steps.activation.outcome }}
           PACKET_RESULT: ${{ steps.packet.outcome }}
           ASSET_RESULT: ${{ steps.assets.outcome }}
@@ -216,7 +273,7 @@ jobs:
           if [ "${TRIGGER_SCHEDULE}" = '17 */6 * * *' ]; then
             mode=release_lock
           fi
-          for diagnostic in release activation; do
+          for diagnostic in release frontier activation; do
             path="release-continuity-evidence/${diagnostic}-diagnostic.json"
             if [ ! -s "${path}" ]; then
               jq -n \
@@ -227,6 +284,7 @@ jobs:
           done
           jq -n \
             --slurpfile release_diagnostic release-continuity-evidence/release-diagnostic.json \
+            --slurpfile frontier_diagnostic release-continuity-evidence/frontier-diagnostic.json \
             --slurpfile activation_diagnostic release-continuity-evidence/activation-diagnostic.json \
             --arg schema_version "1" \
             --arg checked_at "${checked_at}" \
@@ -248,6 +306,7 @@ jobs:
             --arg control_plane_image_digest "${CONTROL_PLANE_IMAGE_DIGEST}" \
             --arg helm_chart_digest "${HELM_CHART_DIGEST}" \
             --arg release_result "${RELEASE_RESULT}" \
+            --arg frontier_result "${FRONTIER_RESULT}" \
             --arg activation_result "${ACTIVATION_RESULT}" \
             --arg packet_result "${PACKET_RESULT}" \
             --arg asset_result "${ASSET_RESULT}" \
@@ -281,10 +340,12 @@ jobs:
               },
               diagnostics: {
                 release_identity: $release_diagnostic[0],
+                stable_publication_frontier: $frontier_diagnostic[0],
                 activation_binding: $activation_diagnostic[0]
               },
               checks: {
                 release_resolution: $release_result,
+                stable_publication_frontier: $frontier_result,
                 activation_binding: $activation_result,
                 immutable_packet_and_provenance: $packet_result,
                 authenticated_assets: $asset_result,
@@ -383,9 +444,25 @@ jobs:
           node-version: '24'
 
       - name: Audit complete dependency graph
+        id: audit-complete
+        continue-on-error: true
         working-directory: ${{ matrix.directory }}
-        run: npm audit --package-lock-only
+        run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all --package-lock-only
 
       - name: Audit production dependencies
+        id: audit-production
+        continue-on-error: true
         working-directory: ${{ matrix.directory }}
-        run: npm audit --package-lock-only --omit=dev
+        run: bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" production --package-lock-only
+
+      - name: Require dependency audits
+        if: ${{ !cancelled() }}
+        env:
+          COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}
+          PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}
+        run: |
+          if [ "${COMPLETE_AUDIT_RESULT}" != success ] || \
+             [ "${PRODUCTION_AUDIT_RESULT}" != success ]; then
+            echo "::error::One or more dependency audits failed."
+            exit 1
+          fi

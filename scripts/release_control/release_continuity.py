@@ -29,6 +29,10 @@ IMMUTABLE_REPLACEMENT_ACTION = (
     "Do not edit or repair the advertised release in place; restore the last known-good "
     "stable target if needed, then publish a corrected replacement through convergence."
 )
+ORPHAN_REPLACEMENT_ACTION = (
+    "Do not advertise or repair the orphaned version in place; inspect the failed "
+    "release run and publish a corrected replacement through convergence."
+)
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,27 @@ RELEASE_RULES = {
     "publication_time_invalid": (
         "The advertised release has no publication timestamp.",
         "Do not treat the release as activated until GitHub reports publication.",
+    ),
+}
+
+
+FRONTIER_RULES = {
+    "frontier_payload_invalid": (
+        "GitHub did not return complete stable-tag and release inventories.",
+        "Inspect the matching-refs and releases API responses before retrying.",
+    ),
+    "stable_tag_without_release": (
+        "A stable source tag newer than the advertised release has no GitHub Release packet.",
+        ORPHAN_REPLACEMENT_ACTION,
+    ),
+    "newer_stable_release_not_advertised": (
+        "A published stable release is newer than the advertised latest release.",
+        "Inspect the latest-release selection and customer aliases; do not move them without "
+        "an immutable activation packet and successful convergence.",
+    ),
+    "registry_stable_tag_beyond_latest": (
+        "A public container registry exposes a stable version newer than the advertised release.",
+        ORPHAN_REPLACEMENT_ACTION,
     ),
 }
 
@@ -268,6 +293,192 @@ def release_is_referenceable(payload: Any, failures: list[Violation]) -> bool:
     return isinstance(payload, dict) and not any(
         item.code in RELEASE_REFERENCE_VIOLATIONS for item in failures
     )
+
+
+def stable_version(tag: str) -> tuple[int, int, int]:
+    if STABLE_TAG.fullmatch(tag) is None:
+        raise ValueError(f"invalid stable tag {tag!r}")
+    parts = tuple(int(part) for part in tag.removeprefix("v").split("."))
+    return (parts[0], parts[1], parts[2])
+
+
+def inventory_list(payload: Any) -> list[Any] | None:
+    """Flatten gh api's ordinary or --slurp pagination representation."""
+
+    if not isinstance(payload, list):
+        return None
+    if payload and all(isinstance(page, list) for page in payload):
+        return [item for page in payload for item in page]
+    return payload
+
+
+def frontier_violations(
+    latest_release: Any,
+    stable_refs_payload: Any,
+    releases_payload: Any,
+    registry_payloads: list[Any],
+) -> tuple[list[Violation], dict[str, Any]]:
+    refs = inventory_list(stable_refs_payload)
+    releases = inventory_list(releases_payload)
+    latest_tag = latest_release.get("tag_name") if isinstance(latest_release, dict) else None
+    identity: dict[str, Any] = {
+        "advertised_tag": latest_tag,
+        "newer_stable_tags": "",
+        "orphaned_stable_tags": "",
+        "unadvertised_published_stable_tags": "",
+        "registry_stable_tags_beyond_latest": "",
+    }
+    if (
+        not isinstance(latest_tag, str)
+        or STABLE_TAG.fullmatch(latest_tag) is None
+        or refs is None
+        or releases is None
+    ):
+        return (
+            [
+                violation(
+                    "frontier_payload_invalid",
+                    "$",
+                    "stable latest release plus tag and release arrays",
+                    {
+                        "latest_release": type(latest_release).__name__,
+                        "stable_refs": type(stable_refs_payload).__name__,
+                        "releases": type(releases_payload).__name__,
+                    },
+                    FRONTIER_RULES,
+                )
+            ],
+            identity,
+        )
+
+    stable_tags: set[str] = set()
+    for ref in refs:
+        if not isinstance(ref, dict):
+            return (
+                [
+                    violation(
+                        "frontier_payload_invalid",
+                        "stable_refs",
+                        "array of Git ref objects",
+                        ref,
+                        FRONTIER_RULES,
+                    )
+                ],
+                identity,
+            )
+        ref_name = ref.get("ref")
+        if isinstance(ref_name, str):
+            tag = ref_name.removeprefix("refs/tags/")
+            if STABLE_TAG.fullmatch(tag):
+                stable_tags.add(tag)
+
+    releases_by_tag: dict[str, dict[str, Any]] = {}
+    for release in releases:
+        if not isinstance(release, dict):
+            return (
+                [
+                    violation(
+                        "frontier_payload_invalid",
+                        "releases",
+                        "array of GitHub Release objects",
+                        release,
+                        FRONTIER_RULES,
+                    )
+                ],
+                identity,
+            )
+        release_tag = release.get("tag_name")
+        if isinstance(release_tag, str) and STABLE_TAG.fullmatch(release_tag):
+            releases_by_tag[release_tag] = release
+
+    latest_version = stable_version(latest_tag)
+    newer_tags = sorted(
+        (tag for tag in stable_tags if stable_version(tag) > latest_version),
+        key=stable_version,
+    )
+    orphaned = [tag for tag in newer_tags if tag not in releases_by_tag]
+    # Release inventory is an independent public surface. Do not make this
+    # check conditional on the corresponding Git ref still appearing in the
+    # matching-refs response: a published packet remains customer-visible
+    # even if its source tag has subsequently been removed.
+    unadvertised = sorted(
+        (
+            tag
+            for tag, release in releases_by_tag.items()
+            if stable_version(tag) > latest_version
+            and release.get("draft") is False
+            and isinstance(release.get("published_at"), str)
+            and bool(release["published_at"])
+        ),
+        key=stable_version,
+    )
+    registry_tags: dict[str, set[str]] = {}
+    for registry in registry_payloads:
+        if (
+            not isinstance(registry, dict)
+            or not isinstance(registry.get("name"), str)
+            or not isinstance(registry.get("tags"), list)
+            or not all(isinstance(tag, str) for tag in registry["tags"])
+        ):
+            return (
+                [
+                    violation(
+                        "frontier_payload_invalid",
+                        "registries",
+                        "array of registry tag-list objects",
+                        registry,
+                        FRONTIER_RULES,
+                    )
+                ],
+                identity,
+            )
+        registry_name = registry["name"]
+        for raw_tag in registry["tags"]:
+            tag = raw_tag if raw_tag.startswith("v") else f"v{raw_tag}"
+            if STABLE_TAG.fullmatch(tag) and stable_version(tag) > latest_version:
+                registry_tags.setdefault(tag, set()).add(registry_name)
+    identity.update(
+        {
+            "newer_stable_tags": ",".join(newer_tags),
+            "orphaned_stable_tags": ",".join(orphaned),
+            "unadvertised_published_stable_tags": ",".join(unadvertised),
+            "registry_stable_tags_beyond_latest": ",".join(
+                sorted(registry_tags, key=stable_version)
+            ),
+        }
+    )
+
+    failures = [
+        violation(
+            "stable_tag_without_release",
+            f"refs/tags/{tag}",
+            "one GitHub Release object",
+            None,
+            FRONTIER_RULES,
+        )
+        for tag in orphaned
+    ]
+    failures.extend(
+        violation(
+            "newer_stable_release_not_advertised",
+            f"releases/{tag}",
+            f"not newer than {latest_tag}",
+            tag,
+            FRONTIER_RULES,
+        )
+        for tag in unadvertised
+    )
+    failures.extend(
+        violation(
+            "registry_stable_tag_beyond_latest",
+            f"registries/{tag}",
+            f"no public stable container tag newer than {latest_tag}",
+            ",".join(sorted(registry_tags[tag])),
+            FRONTIER_RULES,
+        )
+        for tag in sorted(registry_tags, key=stable_version)
+    )
+    return failures, identity
 
 
 def activation_violations(
@@ -541,6 +752,29 @@ def validate_activation(args: argparse.Namespace) -> int:
     return 0
 
 
+def validate_frontier(args: argparse.Namespace) -> int:
+    try:
+        latest_release = read_json(args.release_json)
+        stable_refs = read_json(args.stable_refs_json)
+        releases = read_json(args.releases_json)
+        registries = [read_json(path) for path in args.registry_tags_json]
+    except ValueError as exc:
+        failures = [
+            violation(
+                "frontier_payload_invalid", "$", "valid JSON inventories", str(exc), FRONTIER_RULES
+            )
+        ]
+        identity: dict[str, Any] = {}
+    else:
+        failures, identity = frontier_violations(latest_release, stable_refs, releases, registries)
+
+    write_diagnostic(args.diagnostic, "stable_publication_frontier", identity, failures)
+    if failures:
+        report_failures(failures, FRONTIER_RULES)
+        return 1
+    return 0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -555,6 +789,13 @@ def parse_args() -> argparse.Namespace:
     activation.add_argument("--activation-json", type=Path, required=True)
     activation.add_argument("--diagnostic", type=Path, required=True)
     activation.add_argument("--github-output", type=Path, required=True)
+
+    frontier = commands.add_parser("frontier")
+    frontier.add_argument("--release-json", type=Path, required=True)
+    frontier.add_argument("--stable-refs-json", type=Path, required=True)
+    frontier.add_argument("--releases-json", type=Path, required=True)
+    frontier.add_argument("--registry-tags-json", type=Path, action="append", required=True)
+    frontier.add_argument("--diagnostic", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -562,7 +803,9 @@ def main() -> int:
     args = parse_args()
     if args.command == "release":
         return validate_release(args)
-    return validate_activation(args)
+    if args.command == "activation":
+        return validate_activation(args)
+    return validate_frontier(args)
 
 
 if __name__ == "__main__":

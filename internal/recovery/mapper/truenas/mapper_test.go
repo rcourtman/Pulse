@@ -198,6 +198,9 @@ func TestOutcomeFromTrueNASReplication(t *testing.T) {
 		{"ok", "ok", "", recovery.OutcomeSuccess},
 		{"complete", "complete", "", recovery.OutcomeSuccess},
 		{"completed", "completed", "", recovery.OutcomeSuccess},
+		{"finished uppercase", "FINISHED", "", recovery.OutcomeSuccess},
+		{"finished normalized", "  Finished  ", "  ", recovery.OutcomeSuccess},
+		{"finished error takes precedence", "FINISHED", "replication failed", recovery.OutcomeFailed},
 		{"warning", "warning", "", recovery.OutcomeWarning},
 		{"partial", "partial", "", recovery.OutcomeWarning},
 		{"partiallyfailed", "partiallyfailed", "", recovery.OutcomeWarning},
@@ -258,4 +261,36 @@ func TestSplitSnapshotName(t *testing.T) {
 
 func ptrInt64(v int64) *int64 {
 	return &v
+}
+
+// FINISHED is emitted by TrueNAS zettarepl for ReplicationTaskSuccess (#1892).
+func TestFromTrueNASSnapshot_FinishedReplication(t *testing.T) {
+	lastRun := time.Date(2026, 9, 4, 5, 45, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name    string
+		lastRun *time.Time
+		errText string
+		want    recovery.Outcome
+	}{
+		{"completed", &lastRun, "", recovery.OutcomeSuccess},
+		{"error retained", &lastRun, "transfer failed", recovery.OutcomeFailed},
+		{"missing run remains unknown", nil, "", recovery.OutcomeUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			points := FromTrueNASSnapshot("conn", &truenas.FixtureSnapshot{
+				ReplicationTasks: []truenas.ReplicationTask{{
+					ID: "1", LastState: "FINISHED", LastRun: tc.lastRun, LastError: tc.errText,
+				}},
+			})
+			if len(points) != 1 {
+				t.Fatalf("got %d points", len(points))
+			}
+			if points[0].Outcome != tc.want {
+				t.Errorf("outcome = %v, want %v", points[0].Outcome, tc.want)
+			}
+			if points[0].Details["lastState"] != "FINISHED" {
+				t.Error("provider state lost")
+			}
+		})
+	}
 }

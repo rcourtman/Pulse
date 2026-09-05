@@ -3,6 +3,8 @@ package hostmetrics
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -11,6 +13,7 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rs/zerolog/log"
+	gopsutilcommon "github.com/shirou/gopsutil/v4/common"
 	gocpu "github.com/shirou/gopsutil/v4/cpu"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 	goload "github.com/shirou/gopsutil/v4/load"
@@ -25,12 +28,51 @@ var (
 	cpuTimes       = gocpu.TimesWithContext
 	loadAvg        = goload.AvgWithContext
 	virtualMemory  = gomem.VirtualMemoryWithContext
-	diskPartitions = godisk.PartitionsWithContext
+	diskPartitions = partitionsVisibleToAgent
 	diskUsage      = godisk.UsageWithContext
 	diskIOCounters = godisk.IOCountersWithContext
 	netInterfaces  = gonet.InterfacesWithContext
 	netIOCounters  = gonet.IOCountersWithContext
 )
+
+// partitionsVisibleToAgent asks gopsutil to enumerate the mount namespace the
+// collector actually runs in. gopsutil otherwise prefers /proc/1/mountinfo on
+// Linux. A systemd service with PrivateTmp (as installed by Pulse) has its own
+// mount namespace, so PID 1 can omit mounts that the collector can access and
+// that an operator explicitly selected with --disk-include.
+//
+// Containerised collectors can deliberately point gopsutil at host procfs.
+// Preserve either form of that override rather than replacing it with the
+// container process's namespace.
+func partitionsVisibleToAgent(ctx context.Context, all bool) ([]godisk.PartitionStat, error) {
+	return godisk.PartitionsWithContext(mountEnumerationContext(ctx), all)
+}
+
+func mountEnumerationContext(ctx context.Context) context.Context {
+	if runtime.GOOS != "linux" || hasConfiguredHostProc(ctx) {
+		return ctx
+	}
+	env := cloneGopsutilEnv(ctx)
+	env[gopsutilcommon.HostProcMountinfo] = "/proc/self/mountinfo"
+	return context.WithValue(ctx, gopsutilcommon.EnvKey, env)
+}
+
+func hasConfiguredHostProc(ctx context.Context) bool {
+	if strings.TrimSpace(os.Getenv("HOST_PROC")) != "" || strings.TrimSpace(os.Getenv("HOST_PROC_MOUNTINFO")) != "" {
+		return true
+	}
+	env, _ := ctx.Value(gopsutilcommon.EnvKey).(gopsutilcommon.EnvMap)
+	return strings.TrimSpace(env[gopsutilcommon.HostProcEnvKey]) != "" || strings.TrimSpace(env[gopsutilcommon.HostProcMountinfo]) != ""
+}
+
+func cloneGopsutilEnv(ctx context.Context) gopsutilcommon.EnvMap {
+	cloned := make(gopsutilcommon.EnvMap)
+	env, _ := ctx.Value(gopsutilcommon.EnvKey).(gopsutilcommon.EnvMap)
+	for key, value := range env {
+		cloned[key] = value
+	}
+	return cloned
+}
 
 // diskUsageTimeout bounds a single mountpoint usage syscall. statfs on a
 // healthy filesystem answers in microseconds; a hard-mounted network
@@ -38,42 +80,50 @@ var (
 // kernel wait, which would otherwise freeze the whole reporting cycle.
 var diskUsageTimeout = 5 * time.Second
 
-// stuckDiskMounts tracks mountpoints whose usage syscall has not returned
-// yet. The blocked goroutine cannot be cancelled, so the mount is skipped
-// on later cycles until its original call finally comes back.
+// stuckDiskMounts tracks all in-flight usage calls, including calls that have
+// not timed out yet. Host and Docker collectors share the same mount probes.
 var stuckDiskMounts sync.Map
 
-// guardedDiskUsage runs the usage syscall off the collection goroutine and
-// gives up after diskUsageTimeout, leaving at most one in-flight call per
-// mountpoint.
+type diskUsageCall struct {
+	done     chan struct{}
+	deadline time.Time
+	usage    *godisk.UsageStat
+	err      error
+}
+
+// guardedDiskUsage bounds the wait for a mount probe and leaves at most one
+// syscall in flight per mountpoint, even when reporting loops overlap.
 func guardedDiskUsage(ctx context.Context, mountpoint string) (*godisk.UsageStat, error) {
-	if _, stuck := stuckDiskMounts.Load(mountpoint); stuck {
-		return nil, fmt.Errorf("mountpoint %s skipped: previous usage call has not returned", mountpoint)
+	call := &diskUsageCall{
+		done:     make(chan struct{}),
+		deadline: time.Now().Add(diskUsageTimeout),
+	}
+	actual, loaded := stuckDiskMounts.LoadOrStore(mountpoint, call)
+	if loaded {
+		call = actual.(*diskUsageCall)
+	} else {
+		go func() {
+			call.usage, call.err = diskUsage(ctx, mountpoint)
+			// Publish the result before admitting a new probe.
+			close(call.done)
+			stuckDiskMounts.Delete(mountpoint)
+			if time.Now().After(call.deadline) {
+				log.Info().Str("mount", mountpoint).Msg("disk: stalled usage call returned, mount re-included")
+			}
+		}()
 	}
 
-	type usageResult struct {
-		usage *godisk.UsageStat
-		err   error
-	}
-	resultCh := make(chan usageResult, 1)
-	go func() {
-		usage, err := diskUsage(ctx, mountpoint)
-		resultCh <- usageResult{usage: usage, err: err}
-	}()
-
-	timer := time.NewTimer(diskUsageTimeout)
+	timer := time.NewTimer(time.Until(call.deadline))
 	defer timer.Stop()
 	select {
-	case result := <-resultCh:
-		return result.usage, result.err
+	case <-call.done:
+		return call.usage, call.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-timer.C:
-		stuckDiskMounts.Store(mountpoint, struct{}{})
-		log.Warn().Str("mount", mountpoint).Dur("timeout", diskUsageTimeout).Msg("disk: usage call did not answer, excluding mount until it does (unresponsive network mount?)")
-		go func() {
-			<-resultCh
-			stuckDiskMounts.Delete(mountpoint)
-			log.Info().Str("mount", mountpoint).Msg("disk: stalled usage call returned, mount re-included")
-		}()
+		if !loaded {
+			log.Warn().Str("mount", mountpoint).Dur("timeout", diskUsageTimeout).Msg("disk: usage call did not answer, excluding mount until it does (unresponsive network mount?)")
+		}
 		return nil, fmt.Errorf("usage call for %s did not answer within %s", mountpoint, diskUsageTimeout)
 	}
 }
@@ -89,9 +139,24 @@ type Snapshot struct {
 	Network         []agentshost.NetworkInterface
 }
 
+// Collector owns the CPU baseline for one reporting loop. Its zero value is
+// ready to use. Retain it across reports; do not copy it after first use.
+type Collector struct {
+	cpu cpuUsageTracker
+}
+
+// Collect gathers metrics using this reporting loop's CPU baseline.
+func (c *Collector) Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
+	return c.CollectWithDiskFilters(ctx, diskExclude, nil)
+}
+
+var defaultCollector Collector
+
 // Collect gathers a point-in-time snapshot of host resource utilisation.
 // diskExclude contains user-defined patterns for devices or mount points to
 // exclude. It preserves the original API for callers that do not need includes.
+// Package-level calls share a baseline; independent reporting loops must use
+// their own retained Collector.
 func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	return CollectWithDiskFilters(ctx, diskExclude, nil)
 }
@@ -100,6 +165,12 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 // and includes. Includes opt matching filesystems back in after Pulse's
 // automatic pseudo-filesystem filtering. Explicit exclusions always win.
 func CollectWithDiskFilters(ctx context.Context, diskExclude, diskInclude []string) (Snapshot, error) {
+	return defaultCollector.CollectWithDiskFilters(ctx, diskExclude, diskInclude)
+}
+
+// CollectWithDiskFilters gathers metrics with this loop's CPU baseline and
+// applies the same disk filtering as the package-level convenience function.
+func (c *Collector) CollectWithDiskFilters(ctx context.Context, diskExclude, diskInclude []string) (Snapshot, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -111,7 +182,7 @@ func CollectWithDiskFilters(ctx context.Context, diskExclude, diskInclude []stri
 		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu count")
 	}
 
-	if cpuUsage, err := collectCPUUsage(collectCtx); err == nil {
+	if cpuUsage, err := c.cpu.collect(collectCtx); err == nil {
 		snapshot.CPUUsagePercent = cpuUsage
 	} else {
 		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu usage")
@@ -213,13 +284,10 @@ type cpuUsageTracker struct {
 	hasPrev bool
 }
 
-// defaultCPUUsage backs Collect. The state is process-wide by design: every
-// consumer of Collect reports a busy average over the window since the
-// previous collection, which stays correct even if collections interleave.
-var defaultCPUUsage = &cpuUsageTracker{}
-
+// collectCPUUsage preserves the package-level convenience path. Independent
+// reporting loops must retain their own Collector instead.
 func collectCPUUsage(ctx context.Context) (float64, error) {
-	return defaultCPUUsage.collect(ctx)
+	return defaultCollector.cpu.collect(ctx)
 }
 
 func (t *cpuUsageTracker) collect(ctx context.Context) (float64, error) {
@@ -360,29 +428,34 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 		// - Virtual/pseudo filesystems (tmpfs, devtmpfs, cgroup, etc.)
 		// - Container overlay paths (Docker/Podman layers on ZFS, including TrueNAS .ix-apps)
 		// See issues #505, #690, #718, #790.
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used); shouldSkip && !explicitlyIncluded {
+		automaticallyFiltered, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used)
+		if automaticallyFiltered && !explicitlyIncluded {
 			continue
 		}
 
-		// Deduplicate by device + total bytes (issue #953).
-		// Synology NAS and similar systems create multiple "shared folders" as bind mounts
-		// or BTRFS subvolumes that all report the same device and total capacity.
-		// Only count each unique device+total combination once.
-		deviceKey := fmt.Sprintf("%s:%d", part.Device, usage.Total)
-		if existingMount, exists := deviceTotals[deviceKey]; exists {
-			// Prefer shorter/shallower mountpoints (e.g., /volume1 over /volume1/docker)
-			if len(part.Mountpoint) >= len(existingMount) {
-				continue
-			}
-			// This mountpoint is shallower - remove the old entry and use this one
-			for i := len(disks) - 1; i >= 0; i-- {
-				if disks[i].Mountpoint == existingMount {
-					disks = append(disks[:i], disks[i+1:]...)
-					break
+		// Deduplicate normally visible storage by device + total bytes (issue
+		// #953). Synology NAS and similar systems create multiple shared folders
+		// that report the same underlying capacity. Automatically filtered
+		// filesystems are different: generic sources such as "tmpfs" can name
+		// multiple independent mounts with equal capacity, and these entries are
+		// present only because the operator explicitly selected each one.
+		if !automaticallyFiltered {
+			deviceKey := fmt.Sprintf("%s:%d", part.Device, usage.Total)
+			if existingMount, exists := deviceTotals[deviceKey]; exists {
+				// Prefer shorter/shallower mountpoints (e.g., /volume1 over /volume1/docker)
+				if len(part.Mountpoint) >= len(existingMount) {
+					continue
+				}
+				// This mountpoint is shallower - remove the old entry and use this one
+				for i := len(disks) - 1; i >= 0; i-- {
+					if disks[i].Mountpoint == existingMount {
+						disks = append(disks[:i], disks[i+1:]...)
+						break
+					}
 				}
 			}
+			deviceTotals[deviceKey] = part.Mountpoint
 		}
-		deviceTotals[deviceKey] = part.Mountpoint
 
 		disks = append(disks, agentshost.Disk{
 			Device:     part.Device,

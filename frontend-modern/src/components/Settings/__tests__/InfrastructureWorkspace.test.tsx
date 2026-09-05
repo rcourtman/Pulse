@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
 import type {
@@ -11,10 +12,27 @@ const routeState = vi.hoisted(() => ({
   pathname: '/settings/infrastructure',
   search: '',
 }));
-const connectionState = vi.hoisted(() => ({
-  connections: [] as Connection[],
-  rows: null as InfrastructureSystemRow[] | null,
-}));
+const connectionState = vi.hoisted(() => {
+  let connections: Connection[] = [];
+  let observe = () => {};
+  let notifyChanged = () => {};
+  return {
+    get connections() {
+      observe();
+      return connections;
+    },
+    set connections(value: Connection[]) {
+      connections = value;
+    },
+    rows: null as InfrastructureSystemRow[] | null,
+    setObserver(nextObserve: () => void, nextNotifyChanged: () => void) {
+      observe = nextObserve;
+      notifyChanged = nextNotifyChanged;
+    },
+    notifyChanged: () => notifyChanged(),
+  };
+});
+const nodeCredentialSlotState = vi.hoisted(() => ({ mountCount: 0 }));
 const emptyFleetRow = vi.hoisted(
   () =>
     ({
@@ -169,11 +187,14 @@ vi.mock('../InfrastructureInstallerSection', () => ({
 }));
 
 vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
-  NodeCredentialSlot: (props: { nodeType: string }) => (
-    <div data-testid="proxmox-section" data-node-type={props.nodeType}>
-      proxmox
-    </div>
-  ),
+  NodeCredentialSlot: (props: { nodeType: string }) => {
+    nodeCredentialSlotState.mountCount += 1;
+    return (
+      <div data-testid="proxmox-section" data-node-type={props.nodeType}>
+        <input aria-label="Authentication method" value="api" />
+      </div>
+    );
+  },
 }));
 
 vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', () => ({
@@ -287,6 +308,11 @@ describe('InfrastructureWorkspace', () => {
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
     connectionState.rows = null;
+    connectionState.setObserver(
+      () => {},
+      () => {},
+    );
+    nodeCredentialSlotState.mountCount = 0;
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       writable: true,
@@ -998,8 +1024,84 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Manage zeus')).toBeInTheDocument();
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
 
+    const focusSpy = vi.spyOn(manageButton, 'focus');
     fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
-    await waitFor(() => expect(manageButton).toHaveFocus());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(focusSpy).toHaveBeenCalledTimes(1);
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(manageButton).toHaveFocus();
+  });
+
+  it('does not steal focus back to Manage after the operator moves on', async () => {
+    renderWorkspace({
+      pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
+    });
+
+    const manageButton = await screen.findByRole('button', { name: /^Manage$/i });
+    fireEvent.click(manageButton);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
+    const nextAction = screen.getByRole('button', { name: /^Add infrastructure$/i });
+    nextAction.focus();
+
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(nextAction).toHaveFocus();
+  });
+
+  it('returns focus to a Manage control recreated by a connection poll', async () => {
+    const [revision, setRevision] = createSignal(0);
+    connectionState.setObserver(revision, () => setRevision((value) => value + 1));
+    renderWorkspace({
+      pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
+    });
+
+    const originalManageButton = await screen.findByRole('button', { name: /^Manage$/i });
+    fireEvent.click(originalManageButton);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    connectionState.connections = [
+      connectionFixture({ lastSeen: new Date(Date.now() + 15_000).toISOString() }),
+    ];
+    connectionState.notifyChanged();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Manage$/i })).not.toBe(originalManageButton),
+    );
+    const replacementManageButton = screen.getByRole('button', { name: /^Manage$/i });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(replacementManageButton).toHaveFocus();
+  });
+
+  it('keeps the mounted node editor across connection-ledger refreshes', async () => {
+    const [revision, setRevision] = createSignal(0);
+    connectionState.setObserver(revision, () => setRevision((value) => value + 1));
+    renderWorkspace({
+      pveNodes: () => [{ id: 'pve-0', type: 'pve', name: 'zeus' } as any],
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Manage$/i }));
+    const method = await screen.findByRole('textbox', { name: 'Authentication method' });
+    fireEvent.input(method, { target: { value: 'agent' } });
+    expect(method).toHaveValue('agent');
+
+    connectionState.connections = [
+      connectionFixture({
+        address: 'https://10.0.0.2:8006',
+        lastSeen: new Date(Date.now() + 15_000).toISOString(),
+      }),
+    ];
+    connectionState.notifyChanged();
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Authentication method' })).toHaveValue('agent'),
+    );
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
+      'Proxmox VE · https://10.0.0.2:8006',
+    );
+    expect(nodeCredentialSlotState.mountCount).toBe(1);
   });
 
   it('shows standalone agent identity in the landing row and the agent detail drawer', async () => {

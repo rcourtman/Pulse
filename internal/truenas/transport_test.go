@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -331,39 +332,47 @@ func TestTransportNegotiationAllowsOnlyRecognizedLegacyREST(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy core https redirect", func(t *testing.T) {
-		var poolRESTCalls atomic.Int32
-		server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			switch request.URL.Path {
-			case "/api/current":
-				http.Redirect(writer, request, "/ui/", http.StatusFound)
-			case "/api/v2.0/system/info":
-				_, _ = writer.Write([]byte(`{"hostname":"core","version":"TrueNAS-13.0-U6.4","uptime_seconds":1}`))
-			case "/api/v2.0/pool":
-				poolRESTCalls.Add(1)
-				_, _ = writer.Write([]byte(`[{"id":1,"name":"core-tank","status":"ONLINE"}]`))
-			default:
-				http.NotFound(writer, request)
-			}
-		}))
-		t.Cleanup(server.Close)
+	for _, test := range []struct {
+		name    string
+		version string
+	}{
+		{name: "legacy core 12 https redirect", version: "TrueNAS-12.0-U5"},
+		{name: "legacy core 13 https redirect", version: "TrueNAS-13.0-U6.4"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var poolRESTCalls atomic.Int32
+			server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				switch request.URL.Path {
+				case "/api/current":
+					http.Redirect(writer, request, "/ui/", http.StatusFound)
+				case "/api/v2.0/system/info":
+					_, _ = fmt.Fprintf(writer, `{"hostname":"core","version":%q,"uptime_seconds":1}`, test.version)
+				case "/api/v2.0/pool":
+					poolRESTCalls.Add(1)
+					_, _ = writer.Write([]byte(`[{"id":1,"name":"core-tank","status":"ONLINE"}]`))
+				default:
+					http.NotFound(writer, request)
+				}
+			}))
+			t.Cleanup(server.Close)
 
-		client := protocolFixtureClient(t, server.URL, ClientConfig{APIKey: "legacy-core-key"})
-		pools, err := client.GetPools(context.Background())
-		if err != nil {
-			t.Fatalf("GetPools() redirected CORE error = %v", err)
-		}
-		if len(pools) != 1 || pools[0].Name != "core-tank" {
-			t.Fatalf("unexpected redirected CORE pools: %+v", pools)
-		}
-		if poolRESTCalls.Load() != 1 {
-			t.Fatalf("redirected CORE pool REST calls = %d, want 1", poolRESTCalls.Load())
-		}
-		if status := client.TransportStatus(); status.Mode != TransportLegacyREST ||
-			status.ApplianceVersion != "TrueNAS-13.0-U6.4" {
-			t.Fatalf("unexpected redirected CORE status: %+v", status)
-		}
-	})
+			client := protocolFixtureClient(t, server.URL, ClientConfig{APIKey: "legacy-core-key"})
+			pools, err := client.GetPools(context.Background())
+			if err != nil {
+				t.Fatalf("GetPools() redirected CORE error = %v", err)
+			}
+			if len(pools) != 1 || pools[0].Name != "core-tank" {
+				t.Fatalf("unexpected redirected CORE pools: %+v", pools)
+			}
+			if poolRESTCalls.Load() != 1 {
+				t.Fatalf("redirected CORE pool REST calls = %d, want 1", poolRESTCalls.Load())
+			}
+			if status := client.TransportStatus(); status.Mode != TransportLegacyREST ||
+				status.ApplianceVersion != test.version {
+				t.Fatalf("unexpected redirected CORE status: %+v", status)
+			}
+		})
+	}
 
 	t.Run("current scale fail closed", func(t *testing.T) {
 		var poolRESTCalls atomic.Int32

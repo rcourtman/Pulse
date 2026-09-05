@@ -199,6 +199,19 @@ test("additional topic classification is explicit and fail-quiet for legacy form
     ),
     true
   );
+  assert.equal(
+    classifyAdditionalActionableTopics(
+      [
+        "### Additional actionable topics",
+        "### 2. Proxmox VE Agent Install Command",
+        "The generated command should expose its security controls.",
+        "",
+        "### Pulse version",
+        "v6.4.1",
+      ].join("\n")
+    ),
+    true
+  );
 });
 
 test("every actionable issue form exposes the decomposition signal", () => {

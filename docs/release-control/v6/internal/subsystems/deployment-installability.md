@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Portable installer lifecycle ownership
+
+The shared shell installer lifecycle directory (outside the least-privilege
+profile) and atomic lifecycle-file staging use numeric UID/GID `0:0` when
+running as root. They must not depend on a group named `root`, which is absent
+on macOS. The least-privilege directory retains its dedicated collector group
+and 0750 mode; ordinary root lifecycle directories retain 0700 mode.
+Ownership failure aborts directory preparation or file installation before
+replacement of the saved installer. The runtime shell fixture
+`TestInstallSHLifecyclePortableRootOwnership` in
+`scripts/installtests/install_sh_test.go` rejects named ownership and proves
+that a failed chown leaves the previously saved installer intact. This fixture
+is not native macOS upgrade qualification.
+
+
 Own server installation, deployment bootstrap behavior, provider-hosted MSP
 deployment artifacts, update planning, and server-side update execution
 surfaces.
@@ -4026,8 +4041,9 @@ informs rather than blocks delivery. That runner exists because
 advisory endpoint: on 2026-09-03 registry.npmjs.org returned 503s and timeouts
 for over an hour and no pull request could land, including changes that touch
 no JavaScript. It separates the two and nothing else. A conclusive result is
-acted on immediately and any vulnerability at any severity still fails, so a
-severity threshold must never be introduced; only an unreachable endpoint is
+acted on immediately and any vulnerability at any severity still fails, even
+if the same response also carries a transport error, so a severity threshold
+must never be introduced; only an unreachable endpoint is
 retried. Retrying is bounded by wall clock and not by attempt count alone,
 because npm's own `fetch-timeout` defaults to five minutes and it retries
 internally: on 2026-09-04 three attempts against a hanging endpoint ran for

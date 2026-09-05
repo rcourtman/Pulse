@@ -7,6 +7,7 @@ import {
   createMemo,
   createSignal,
   onCleanup,
+  untrack,
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import X from 'lucide-solid/icons/x';
@@ -320,7 +321,20 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           (element) =>
             element.getAttribute('data-infrastructure-manage-id') === focusReturnConnectionId,
         );
-        focusTarget?.focus();
+        const activeElement = document.activeElement;
+        const focusReturnIsStillPending =
+          !activeElement ||
+          activeElement === document.body ||
+          activeElement === document.documentElement ||
+          !document.contains(activeElement);
+        // The shared dialog restores its captured trigger without scrolling,
+        // but this delayed lookup covers rows recreated while the dialog was
+        // open. Only use that fallback while focus remains unclaimed: the
+        // operator may already have moved to another control during the delay.
+        // Keep the fallback from pulling a lower infrastructure row into view.
+        if (focusReturnIsStillPending) {
+          focusTarget?.focus({ preventScroll: true });
+        }
       }, 250);
     }
   };
@@ -711,7 +725,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     onSaved: () => void;
   }) => {
     if (context.mode === 'edit') {
-      const connection = editingConnection();
+      // Connection-ledger polls replace otherwise identical connection
+      // snapshots (for example when lastSeen advances). Do not make the
+      // credential-slot owner depend on those snapshots: recreating the slot
+      // discards its local form state before the operator can save. The
+      // selected source identity remains owned by editingRowSource until this
+      // flow closes, while the live row and attached-agent details continue
+      // to update elsewhere in the dialog.
+      const connection = untrack(editingConnection);
       if (!connection) {
         return (
           <div

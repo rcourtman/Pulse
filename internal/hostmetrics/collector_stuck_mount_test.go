@@ -2,6 +2,7 @@ package hostmetrics
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -140,5 +141,90 @@ func TestCollectDisks_NetworkMountsNeverReachUsageSyscall(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("explicitly included network mount missing from collection: %+v", disks)
+	}
+}
+
+// Host and Docker report loops can probe the same mount before either timeout
+// expires. They must share the in-flight syscall, including its healthy result.
+func TestGuardedDiskUsage_ConcurrentCollectorsShareCall(t *testing.T) {
+	origUsage, origTimeout := diskUsage, diskUsageTimeout
+	release := make(chan struct{})
+	var calls atomic.Int32
+	diskUsageTimeout = 100 * time.Millisecond
+	diskUsage = func(context.Context, string) (*godisk.UsageStat, error) {
+		calls.Add(1)
+		<-release
+		return &godisk.UsageStat{Total: 123}, nil
+	}
+	defer func() {
+		diskUsage, diskUsageTimeout = origUsage, origTimeout
+	}()
+	const mount = "/test/concurrent-collectors"
+	done := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			_, err := guardedDiskUsage(context.Background(), mount)
+			done <- err
+		}()
+	}
+	for i := 0; i < 2; i++ {
+		if err := <-done; err == nil {
+			t.Error("blocked syscall should time out")
+		}
+	}
+	gotCalls := calls.Load()
+	close(release)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := stuckDiskMounts.Load(mount); !ok {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if gotCalls != 1 {
+		t.Fatalf("concurrent collectors started %d syscalls, want 1", gotCalls)
+	}
+	usage, err := guardedDiskUsage(context.Background(), mount)
+	if err != nil || usage == nil || usage.Total != 123 {
+		t.Fatalf("recovered mount: usage=%v err=%v", usage, err)
+	}
+}
+
+// Waiting callers receive the owner's result rather than dropping a healthy
+// mount solely because another module happened to probe it first.
+func TestGuardedDiskUsage_SharedResult(t *testing.T) {
+	const mount = "/test/shared-result"
+	want := &godisk.UsageStat{Total: 456}
+	call := &diskUsageCall{
+		done:     make(chan struct{}),
+		deadline: time.Now().Add(time.Second),
+	}
+	stuckDiskMounts.Store(mount, call)
+	defer stuckDiskMounts.Delete(mount)
+	go func() {
+		call.usage = want
+		close(call.done)
+	}()
+	got, err := guardedDiskUsage(context.Background(), mount)
+	if err != nil || got != want {
+		t.Fatalf("shared result = %v, %v; want %v", got, err, want)
+	}
+}
+
+func TestGuardedDiskUsage_CancelledWaitKeepsProbe(t *testing.T) {
+	const mount = "/test/cancelled-wait"
+	call := &diskUsageCall{
+		done:     make(chan struct{}),
+		deadline: time.Now().Add(time.Hour),
+	}
+	stuckDiskMounts.Store(mount, call)
+	defer stuckDiskMounts.Delete(mount)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := guardedDiskUsage(ctx, mount); err != context.Canceled {
+		t.Fatalf("cancelled wait = %v", err)
+	}
+	if actual, ok := stuckDiskMounts.Load(mount); !ok || actual != call {
+		t.Fatal("cancelling a waiter must not admit a duplicate probe")
 	}
 }

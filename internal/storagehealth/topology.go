@@ -299,7 +299,9 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 		}
 	}
 
-	if storage.ArrayStarted && !parityConfigured {
+	// Unraid can start pool services with no array. Only an explicit zero
+	// suppresses this warning, preserving behaviour for older agents.
+	if storage.ArrayStarted && !parityConfigured && (storage.NumDisks == nil || *storage.NumDisks != 0) {
 		addReason("unraid_no_parity", RiskWarning, "Unraid array is running without parity protection")
 	}
 	if storage.ArrayStarted && parityConfigured && !parityHealthy {

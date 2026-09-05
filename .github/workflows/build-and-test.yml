@@ -144,7 +144,9 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend-modern
-        run: npm ci
+        # The explicit bounded audit below owns the advisory verdict. Avoid
+        # npm ci's duplicate best-effort audit POST and its hidden timeout.
+        run: npm ci --no-audit
 
       # npm audit exits 1 both for a real advisory and for an unreachable
       # advisory endpoint. The runner keeps the advisory verdict exactly as
@@ -158,6 +160,8 @@ jobs:
       # for every workspace by the scheduled npm-audit job in
       # security-scan.yml, where it informs rather than blocks delivery.
       - name: Audit complete frontend dependency graph
+        id: audit-complete
+        continue-on-error: true
         working-directory: frontend-modern
         env:
           NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}
@@ -196,6 +200,18 @@ jobs:
       - name: Check frontend bundle size budget
         working-directory: frontend-modern
         run: npm run check:bundlesize
+
+      # An audit service failure or real advisory stays gating, but it must not
+      # suppress formatting, tests, type-checking, or production-build proof.
+      - name: Require frontend dependency audit
+        if: ${{ !cancelled() }}
+        env:
+          COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}
+        run: |
+          if [ "${COMPLETE_AUDIT_RESULT}" != success ]; then
+            echo "::error::The frontend dependency audit failed."
+            exit 1
+          fi
 
   backend:
     name: Backend tests (${{ matrix.shard }})
@@ -293,12 +309,20 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Checkout pull request base for paired comparison
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: benchmark-base
 
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -311,64 +335,48 @@ jobs:
           mkdir -p internal/api/frontend-modern/dist
           [ -f internal/api/frontend-modern/dist/index.html ] || \
             printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
+          if [ -d benchmark-base ]; then
+            mkdir -p benchmark-base/internal/api/frontend-modern/dist
+            [ -f benchmark-base/internal/api/frontend-modern/dist/index.html ] || \
+              printf '<!doctype html><title>ci embed stub</title>\n' \
+                > benchmark-base/internal/api/frontend-modern/dist/index.html
+          fi
 
-      - name: Go benchmarks
-        timeout-minutes: 20
+      - name: Go benchmarks (non-PR)
+        if: github.event_name != 'pull_request'
+        timeout-minutes: 15
         env:
-          PULSE_DATA_DIR: /tmp/pulse-bench-data
-        run: |
-          set -o pipefail
-          go test -bench=. -benchmem -count=5 -run=^$ -benchtime=100ms -timeout=5m \
-            ./pkg/metrics/ \
-            ./pkg/auth/ \
-            ./internal/api/ \
-            ./internal/monitoring/ \
-            ./internal/unifiedresources/ \
-            ./internal/dockeragent/ \
-            ./cmd/pulse-agent/ \
-            ./internal/hostagent/ \
-            ./internal/hostmetrics/ \
-            | tee bench-results.txt
+          PULSE_BENCH_SAMPLE_COUNT: "10"
+        run: bash scripts/run-ci-benchmarks.sh
 
-      - name: Upload benchmark results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bench-results
-          path: bench-results.txt
-          retention-days: 7
+      - name: Paired base and candidate benchmarks (pull requests)
+        if: github.event_name == 'pull_request'
+        timeout-minutes: 25
+        env:
+          PULSE_BENCH_BASELINE_DIR: ${{ github.workspace }}/benchmark-base
+          PULSE_BENCH_SAMPLE_COUNT: "10"
+        run: bash scripts/run-ci-benchmarks.sh
 
       - name: Install benchstat
         run: go install golang.org/x/perf/cmd/benchstat@v0.0.0-20260211190930-8161c38c6cdc
-
-      - name: Save benchmark baseline (main branch)
-        if: github.ref == 'refs/heads/main'
-        run: cp bench-results.txt bench-baseline.txt
-
-      - name: Cache benchmark baseline (main branch)
-        if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: bench-baseline.txt
-          key: go-bench-baseline-${{ github.sha }}
-
-      - name: Restore benchmark baseline (PRs)
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: bench-baseline.txt
-          key: go-bench-baseline-
-          restore-keys: go-bench-baseline-
 
       - name: Compare benchmarks against baseline
         if: github.event_name == 'pull_request'
         run: |
           set -eo pipefail
-          if [ ! -f bench-baseline.txt ]; then
-            echo "No benchmark baseline found (first PR against main?). Skipping comparison."
-            exit 0
-          fi
           echo "=== Benchmark comparison (baseline vs current) ==="
           benchstat bench-baseline.txt bench-results.txt | tee bench-comparison.txt
           echo ""
           bash scripts/check-bench-regression.sh bench-comparison.txt
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bench-results
+          path: |
+            bench-results.txt
+            bench-baseline.txt
+            bench-comparison.txt
+          if-no-files-found: warn
+          retention-days: 7

@@ -17,6 +17,10 @@
 
 ## Purpose
 
+TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence.
+
+Unraid host ingestion and canonical read-state reconstruction preserve the optional array disk count, distinguishing explicit zero from unknown. Storage assessment suppresses only the no-parity warning for an explicit zero-disk array; unknown counts retain the prior warning and disabled, invalid, or missing member evidence remains effective.
+
 Direct PBS backup polling correlates manifestless snapshots with current
 writer tasks before publishing guest backup-running state. The client queries
 running `backup` and `syncjob` task families separately with bounded pagination;
@@ -934,9 +938,15 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
     deprecated REST bridge. Only an unsupported-endpoint WebSocket handshake
     may trigger a REST `/system/info` version probe, and REST may then be
     selected only for recognized SCALE releases before 25.04 or TrueNAS
-    CORE/FreeNAS. Unknown or current versions fail closed. The decision and
-    persistent socket belong to one configured client, so reconnects or
-    legacy negotiation for one appliance cannot alter another appliance.
+    CORE/FreeNAS. The legacy probe recognizes the `TrueNAS-12.` and
+    `TrueNAS-13` prefixes, versions carrying an explicit `CORE` marker, and
+    the `FreeNAS-` prefix; this includes CORE 12 maintenance releases such as
+    `TrueNAS-12.0-U5` without admitting an unknown numeric family. Unknown or
+    current versions fail closed. The decision and persistent socket belong
+    to one configured client, so reconnects or legacy negotiation for one
+    appliance cannot alter another appliance. Regression coverage for the
+    exact CORE 12 and CORE 13 HTTPS redirect/version paths lives in
+    `internal/truenas/transport_test.go`.
     On a connection already configured as HTTPS, an `/api/current` handshake
     that redirects to the same appliance's HTTPS web UI is unsupported-endpoint
     evidence, not successful JSON-RPC negotiation. It may open only the bounded
@@ -1846,6 +1856,20 @@ metrics into persisted history, it must append in-memory history first and
 flush the backing store through one `metrics.WriteBatchSync` batch per sync
 sweep instead of per-metric async writes, so canonical chart history cannot
 race itself into partial persisted windows.
+
+### Unified storage rebuilds preserve source observation time
+
+Canonical resource-store rebuilds are projections, not fresh storage polls.
+When `internal/monitoring/monitor.go` syncs a non-native storage metric into
+in-memory and persisted history, every metric in that projected observation
+must use the selected metric source's `SourceStatus.LastSeen`. If that source
+timestamp is unavailable, the resource `LastSeen` is the continuity fallback;
+wall-clock sync time is used only when neither observation timestamp exists.
+Repeated registry rebuilds of one unchanged PBS datastore observation must
+therefore replace the same timestamped history point rather than create a new
+raw point for each unrelated provider completion. This does not change the
+native Proxmox storage writer exclusion or canonical storage target selection.
+
 That same chart boundary now also owns long-range in-memory coverage
 selection. `internal/monitoring/metrics_history.go` must expose guest and node
 coverage spans for the requested metric families, and

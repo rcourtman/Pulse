@@ -17,10 +17,13 @@ function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function extractSectionValue(body, heading) {
+function extractSectionValue(body, heading, followingHeadings = []) {
   if (!body) return null;
+  const boundary = followingHeadings.length
+    ? followingHeadings.map(escapeRegExp).join("|")
+    : "[^\\n]+";
   const pattern = new RegExp(
-    `^#+\\s*${escapeRegExp(heading)}\\s*$\\n+([\\s\\S]*?)(?=^#+\\s+|$)`,
+    `^#+\\s*${escapeRegExp(heading)}\\s*$\\n+([\\s\\S]*?)(?=^#+\\s*(?:${boundary})\\s*$|$)`,
     "im"
   );
   const match = body.match(pattern);
@@ -40,7 +43,12 @@ function stripHTMLComments(value) {
 }
 
 function classifyAdditionalActionableTopics(body) {
-  const value = extractSectionValue(body, "Additional actionable topics");
+  const value = extractSectionValue(body, "Additional actionable topics", [
+    "Pulse version",
+    "Additional context",
+    "Logs, screenshots, or diagnostics",
+    "Confirmations",
+  ]);
   if (value === null) return null;
 
   const normalized = stripHTMLComments(value)

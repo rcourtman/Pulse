@@ -252,3 +252,23 @@ func TestPoolTopologyStaysDiscriminatorAcrossVDevLayouts(t *testing.T) {
 		})
 	}
 }
+
+func TestIncidentProjectionPreservesNativeSeverity(t *testing.T) {
+	for _, level := range []string{"INFO", "NOTICE"} {
+		t.Run(level, func(t *testing.T) {
+			incident, ok := incidentFromAlert(Alert{ID: "condition-1", Level: " " + strings.ToLower(level) + " ", Message: "Provider condition"})
+			if !ok {
+				t.Fatal("native condition omitted")
+			}
+			if incident.NativeSeverity != level {
+				t.Fatalf("native severity = %q, want %q", incident.NativeSeverity, level)
+			}
+			if incident.Severity != storagehealth.RiskMonitor {
+				t.Fatalf("canonical severity inflated: %v", incident.Severity)
+			}
+			if incident.NativeID != "condition-1" {
+				t.Fatalf("native identity changed: %q", incident.NativeID)
+			}
+		})
+	}
+}

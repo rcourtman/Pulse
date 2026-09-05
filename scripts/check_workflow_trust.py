@@ -142,9 +142,6 @@ WRITE_PERMISSION_RE = re.compile(
     r'''^\s+(?:[A-Za-z-]+|"[A-Za-z-]+"|'[A-Za-z-]+')\s*:\s*'''
     r'''(?:write|"write"|'write')\s*$'''
 )
-# This value is intentionally public and only uses secret storage as a legacy
-# configuration mechanism. Confidential credentials have no PR exception.
-NON_CONFIDENTIAL_PULL_REQUEST_SECRETS = frozenset({"PULSE_LICENSE_PUBLIC_KEY"})
 CHECKOUT_PREFIX = "actions/checkout@"
 # These action inputs are programs, not ordinary data. GitHub's Actions
 # CodeQL models treat the same actions as code-injection sinks: expression
@@ -158,7 +155,7 @@ GENERATED_CODE_ACTION_INPUTS = {
 SAFE_PULL_REQUEST_TARGET_WORKFLOW = "reclaim-closed-pr-capacity.yml"
 SAFE_PULL_REQUEST_TARGET_ACTIONS = (
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b",
+    "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd",
 )
 # v7.0.1 includes checkout's fail-closed fork-PR protection for privileged
 # pull_request_target and workflow_run events. Keep this exact-pin allowlist
@@ -166,6 +163,18 @@ SAFE_PULL_REQUEST_TARGET_ACTIONS = (
 PROTECTED_CHECKOUT_PINS = frozenset(
     {"3d3c42e5aac5ba805825da76410c181273ba90b1"}
 )
+# GitHub removes Node 20 from hosted runners on 2026-09-23. These JavaScript
+# actions had Node 20 pins in this repository, so keep their reviewed Node 24
+# replacements explicit rather than allowing a dependency refresh to restore
+# an action runtime that the release path can no longer execute.
+REVIEWED_NODE24_ACTION_PINS = {
+    "actions/download-artifact@": frozenset(
+        {"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"}
+    ),
+    "actions/github-script@": frozenset(
+        {"ed597411d8f924073f98dfc5c65a23a2325f34cd"}
+    ),
+}
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
 PERMISSIONS_RE = re.compile(
     rf"^(\s*){_yaml_key('permissions')}\s*:\s*(.*?)\s*$"
@@ -201,11 +210,11 @@ NONEMPTY_FLOW_MAPPING_RE = re.compile(
     r'''^\s*(?:-\s*)?(?:[A-Za-z0-9_.-]+|"[^"]+"|'[^']+')'''
     r"\s*:\s*\{(?!\s*\}\s*$)"
 )
-# OIDC-backed delivery identity is only trusted when GitHub owns the runner
+# Secrets and delivery identity are only trusted when GitHub owns the runner
 # lifecycle. Keep the accepted image labels explicit and reviewable so a job
 # cannot move to persistent or dynamically selected compute without changing
-# this contract. These are the hosted images used by Pulse's attestation jobs.
-TRUSTED_OIDC_RUNNER_LABELS = frozenset(
+# this contract.
+TRUSTED_PRIVILEGED_RUNNER_LABELS = frozenset(
     {"ubuntu-24.04", "windows-2025", "macos-15"}
 )
 
@@ -714,15 +723,12 @@ def _is_untrusted_expression(value: str) -> bool:
     )
 
 
-def _has_confidential_secret_reference(lines: list[str]) -> bool:
-    """Return whether workflow lines can resolve a confidential secret."""
+def _has_secret_reference(lines: list[str]) -> bool:
+    """Return whether workflow lines can resolve any repository secret."""
     for line in lines:
         for expression in EXPRESSION_RE.findall(line.split("#", 1)[0]):
             static_references = list(SECRET_CONTEXT_RE.finditer(expression))
-            secret_names = {
-                match.group(1) or match.group(3) for match in static_references
-            }
-            if secret_names - NON_CONFIDENTIAL_PULL_REQUEST_SECRETS:
+            if static_references:
                 return True
             if len(SECRET_CONTEXT_TOKEN_RE.findall(expression)) != len(
                 static_references
@@ -874,7 +880,7 @@ def _is_hardened_closed_pr_cancellation(path: Path, lines: list[str]) -> bool:
     ]
     if dependencies != list(SAFE_PULL_REQUEST_TARGET_ACTIONS):
         return False
-    if _has_confidential_secret_reference(lines):
+    if _has_secret_reference(lines):
         return False
     if any(
         re.match(r"^\s*(?:container|services|defaults|env)\s*:", line)
@@ -1113,7 +1119,7 @@ def _audit_oidc_runner_trust(path: Path, lines: list[str]) -> list[Finding]:
             continue
         if (
             len(runner_declarations) != 1
-            or runner_declarations[0][1] not in TRUSTED_OIDC_RUNNER_LABELS
+            or runner_declarations[0][1] not in TRUSTED_PRIVILEGED_RUNNER_LABELS
         ):
             finding_index = (
                 runner_declarations[0][0] if runner_declarations else job_index
@@ -1125,6 +1131,89 @@ def _audit_oidc_runner_trust(path: Path, lines: list[str]) -> list[Finding]:
                     "id-token write jobs must use exactly one reviewed literal "
                     "GitHub-hosted runner label; dynamic or self-hosted runners "
                     "cannot mint trusted delivery identity",
+                )
+            )
+
+    return findings
+
+
+def _audit_privileged_runner_trust(path: Path, lines: list[str]) -> list[Finding]:
+    """Keep secrets and repository write authority off mutable runner boundaries."""
+    findings: list[Finding] = []
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if JOBS_RE.match(line.split("#", 1)[0])
+        ),
+        len(lines),
+    )
+    jobs_end = (
+        _mapping_end_index(lines, jobs_index)
+        if jobs_index < len(lines)
+        else len(lines)
+    )
+    top_level_write = any(
+        not match.group(1)
+        and _permission_mapping_has_write(lines, index)
+        for index, line in enumerate(lines)
+        if (match := PERMISSIONS_RE.match(line.split("#", 1)[0]))
+    )
+    top_level_secret = _has_secret_reference(
+        lines[:jobs_index] + lines[jobs_end:]
+    )
+
+    for job_index, end_index, _ in _runner_job_ranges(lines):
+        job_lines = lines[job_index:end_index]
+        direct_indent = _direct_mapping_indent(lines, job_index, end_index)
+        if direct_indent is None:
+            continue
+        permission_indexes = [
+            index
+            for index in range(job_index + 1, end_index)
+            if (
+                (match := PERMISSIONS_RE.match(lines[index].split("#", 1)[0]))
+                and len(match.group(1)) == direct_indent
+            )
+        ]
+        job_write = (
+            any(
+                _permission_mapping_has_write(lines, index, end_index)
+                for index in permission_indexes
+            )
+            if permission_indexes
+            else top_level_write
+        )
+        if not (top_level_secret or _has_secret_reference(job_lines) or job_write):
+            continue
+
+        runner_declarations: list[tuple[int, str]] = []
+        for index in range(job_index + 1, end_index):
+            code = lines[index].split("#", 1)[0]
+            match = re.match(
+                rf"^(\s*){_yaml_key('runs-on')}\s*:\s*(.*?)\s*$", code
+            )
+            if match and len(match.group(1)) == direct_indent:
+                runner_declarations.append(
+                    (index, match.group(2).strip().strip("'\""))
+                )
+
+        # A reusable-workflow caller cannot choose compute. Its called local
+        # jobs are audited independently, including inherited secrets and
+        # permissions at their actual runner boundary.
+        if not runner_declarations:
+            continue
+        if (
+            len(runner_declarations) != 1
+            or runner_declarations[0][1] not in TRUSTED_PRIVILEGED_RUNNER_LABELS
+        ):
+            findings.append(
+                Finding(
+                    path,
+                    runner_declarations[0][0] + 1,
+                    "secret- or write-capable jobs must use exactly one reviewed "
+                    "literal GitHub-hosted runner label; persistent, dynamic, or "
+                    "self-hosted runners can retain credentials or code between jobs",
                 )
             )
 
@@ -1153,7 +1242,7 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
         for index, line in enumerate(lines)
         if (match := PERMISSIONS_RE.match(line.split("#", 1)[0]))
     )
-    top_level_confidential_secret = _has_confidential_secret_reference(
+    top_level_secret = _has_secret_reference(
         lines[:jobs_index] + lines[jobs_end:]
     )
 
@@ -1176,8 +1265,8 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
         )
         privileged = (
             top_level_write
-            or top_level_confidential_secret
-            or _has_confidential_secret_reference(job_lines)
+            or top_level_secret
+            or _has_secret_reference(job_lines)
             or job_write
         )
         if not privileged:
@@ -1275,6 +1364,7 @@ def audit_workflow(path: Path) -> list[Finding]:
     findings = _audit_yaml_trust_shape(path, lines)
     findings.extend(_audit_runner_job_timeouts(path, lines))
     findings.extend(_audit_oidc_runner_trust(path, lines))
+    findings.extend(_audit_privileged_runner_trust(path, lines))
     findings.extend(_audit_privileged_job_caches(path, lines))
     findings.extend(_audit_workflow_run_trigger(path, lines))
     has_workflow_run_trigger = _has_trigger(lines, "workflow_run")
@@ -1294,13 +1384,13 @@ def audit_workflow(path: Path) -> list[Finding]:
 
     if _has_trigger(lines, "pull_request"):
         for index, line in enumerate(lines):
-            if _has_confidential_secret_reference([line]):
+            if _has_secret_reference([line]):
                 findings.append(
                     Finding(
                         path,
                         index + 1,
-                        "pull_request workflows must not reference confidential "
-                        "repository secrets; isolate privileged work in a non-PR workflow",
+                        "pull_request workflows must not reference repository "
+                        "secrets; isolate privileged work in a non-PR workflow",
                     )
                 )
 
@@ -1442,6 +1532,23 @@ def audit_workflow(path: Path) -> list[Finding]:
                 )
             )
             continue
+
+        reviewed_runtime_pins = next(
+            (
+                pins
+                for prefix, pins in REVIEWED_NODE24_ACTION_PINS.items()
+                if dependency_lower.startswith(prefix)
+            ),
+            None,
+        )
+        if reviewed_runtime_pins is not None and ref not in reviewed_runtime_pins:
+            findings.append(
+                Finding(
+                    path,
+                    line_number,
+                    "action pin is outside the reviewed Node 24 runtime baseline",
+                )
+            )
 
         # GitHub repository names are case-insensitive, so normalize before
         # applying checkout-specific credential controls.

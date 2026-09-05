@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -925,5 +928,47 @@ func TestCollectCommandOutputLimitedKeepsLegacyCollectorsCompatible(t *testing.T
 	}
 	if output != "1234" {
 		t.Fatalf("bounded output = %q, want %q", output, "1234")
+	}
+}
+
+// Pin the production SystemCollector routing, not just hostmetrics.Collector:
+// both entry points must retain one baseline per default collector (#1894).
+func TestDefaultCollectorIndependentCPUBaselines(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("uses Linux procfs counter fixtures")
+	}
+	proc := t.TempDir()
+	write := func(name, data string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(proc, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("meminfo", "MemTotal: 8192 kB\nMemFree: 4096 kB\nMemAvailable: 4096 kB\n")
+	write("mountinfo", "")
+	t.Setenv("HOST_PROC", proc)
+	t.Setenv("HOST_PROC_MOUNTINFO", filepath.Join(proc, "mountinfo"))
+	a, b := NewDefaultCollector(), NewDefaultCollector()
+	samples := [][2]int{{10000, 100000}, {10080, 100020}, {10300, 105700}, {10380, 105720}, {10600, 111400}, {10680, 111420}}
+	for i, sample := range samples {
+		write("stat", fmt.Sprintf("cpu  %d 0 0 %d 0 0 0 0 0 0\ncpu0 %d 0 0 %d 0 0 0 0 0 0\n", sample[0], sample[1], sample[0], sample[1]))
+		collector := a
+		if i%2 == 1 {
+			collector = b
+		}
+		var snapshot hostmetrics.Snapshot
+		var err error
+		// Alternate APIs on each instance to verify they share its retained state.
+		if (i/2)%2 == 0 {
+			snapshot, err = collector.Metrics(context.Background(), nil)
+		} else {
+			snapshot, err = collectMetricsWithDiskFilters(context.Background(), collector, nil, nil)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i >= 2 && math.Abs(snapshot.CPUUsagePercent-5) > 1e-8 {
+			t.Fatalf("sample %d: CPU = %v, want full-interval 5%%", i, snapshot.CPUUsagePercent)
+		}
 	}
 }

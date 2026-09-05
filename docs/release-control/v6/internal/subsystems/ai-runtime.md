@@ -19,6 +19,15 @@
 
 ## Purpose
 
+Incident timeline summaries must distinguish provider conditions from metric
+threshold evidence. For `resource-incident` alert events, numeric value and
+threshold placeholders must not render as a measured comparison; retain the
+alert type and severity instead. Numeric metric alerts retain their comparison
+format. This applies to reconstructed event summaries, not a migration of
+already persisted summary strings.
+`TestProviderIncidentSummaryDoesNotInventThreshold` in
+`internal/ai/memory/provider_incident_summary_test.go` verifies both boundaries.
+
 Own the Pulse Intelligence Core: canonical context, governed actions, safety
 gates, approval state, action audit, and verification. That core backs Pulse
 Patrol as the primary built-in operator that checks infrastructure, investigates
@@ -6669,6 +6678,14 @@ baseline before fault injection. The Watch correlation and Pro investigation
 fixtures use Alpine's `nc` applet for the disposable HTTP dependency; a missing
 optional daemon must fail baseline convergence and never be scored as a model
 miss.
+Repository Actions may validate the Patrol catalogue and replay recorded
+qualification evidence only on a fresh GitHub-hosted runner. Live and release
+qualification require private-lab credentials, fault authority, and reports
+that can contain private resource identity, so they must run directly from a
+disposable canary-lab host at a pinned Pulse revision, never from a persistent
+self-hosted Actions runner. Keep raw artifacts outside the working tree in an
+access-controlled root with checksums, and execute the reviewed Watch scenarios
+sequentially so model overrides and run association cannot race.
 Governed Docker remediation qualification must not define a deliberate
 container stop as a required Watch finding. Patrol intentionally suppresses an
 ordinary stopped workload unless independent evidence establishes that it was

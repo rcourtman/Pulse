@@ -21,6 +21,17 @@
 
 ## Purpose
 
+Provider incident nativeSeverity is evidence, not a storage recovery result or identity component. TrueNAS NOTICE remains actionable while INFO remains resource evidence; both retain canonical monitor risk. This distinction must not alter pool health assessment, recovery confirmation counts, or storage action authority.
+
+TrueNAS replication state `FINISHED` is successful completion evidence when a
+last-run timestamp exists, matching the provider success event. Explicit error
+text still takes precedence; a missing last-run timestamp remains unknown.
+Persisted recovery rollups must retain this outcome and success time rather
+than classify a completed replication as unknown. This does not imply restore
+verification or resolve provider INFO alert lifecycle behaviour.
+
+Unraid `StorageMeta.numDisks` is optional source evidence: zero denotes an explicitly empty parity array, not proof that pools are protected or that a recovery point exists. Suppressing the no-parity warning for zero must not erase disk-failure evidence or grant storage/recovery authority.
+
 A manifestless PBS snapshot never becomes a successful recovery point and
 never advances backup age. Recovery mapping reports it as running while a live
 writer accounts for it or current-task visibility is unavailable; after a
@@ -2084,6 +2095,12 @@ take a correctness dependency on its contents.
 21. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
 
 ## Completion Obligations
+
+Coverage rows reconcile replacement recovery-model snapshots by their logical
+`key` before windowing. Refreshed names must render without discarding expanded
+restore evidence or keyboard focus on a surviving row. Verify with
+`scripts/check-backup-browser-polling.mjs`; full provider/WebSocket polling and
+the reported backup-page scroll jump remain outside that isolated fixture.
 
 Agent-backed lifecycle recovery must namespace every in-memory pending request,
 typed result, operation query, and deployment progress subscription by the

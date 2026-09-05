@@ -16,9 +16,18 @@ steps from lexical policy checks.
 
 Checkout pins additionally belong to a reviewed allowlist whose current floor
 includes GitHub's fail-closed fork-PR protection for privileged events. The
-audit prohibits `pull_request_target` entirely and rejects checkout's
-`allow-unsafe-pr-checkout` opt-out; privileged work must remain isolated from
-pull-request code rather than bypassing the upstream guard.
+audit rejects `pull_request_target` except for the exact, metadata-only closed-PR
+capacity reclaimer, and rejects checkout's `allow-unsafe-pr-checkout` opt-out.
+That exception can only run the protected default-branch helper, has no shell,
+cache, artifact, container, secret, or pull-request checkout ingress, and is
+machine-checked down to its permissions, dependencies, and generated program.
+
+JavaScript action pins that previously selected Node 20 also belong to a
+reviewed Node 24 allowlist. Release-candidate artifact downloads use
+`actions/download-artifact` v8.0.1 and issue automation uses
+`actions/github-script` v8.0.0; the audit rejects a return to their Node 20
+pins before GitHub removes that runtime from hosted runners on 23 September
+2026.
 
 `workflow_run` is also a privileged trigger. Every handler must filter its
 upstream workflow to the literal canonical branch `main`, and checkout steps
@@ -55,13 +64,17 @@ source. The audit recognizes the script inputs of `actions/github-script`,
 in those programs. Pass the value through step `env` and read it from the
 script's process environment instead.
 
-Jobs that receive confidential repository secrets or a write-capable
+Jobs that receive repository secrets or a write-capable
 `GITHUB_TOKEN` do not restore or save caches. This includes setup-action
 dependency caches, direct Actions caches, and external BuildKit cache imports:
 cache contents are unsigned mutable build input, while provenance only records
-what the workflow produced. Read-only jobs may still cache locked dependencies;
-the intentionally public legacy license key is not treated as a confidential
-credential.
+what the workflow produced. Read-only jobs may still cache locked dependencies.
+
+Those privileged jobs also run only on a reviewed, literal GitHub-hosted image.
+Persistent self-hosted runners can retain executable state from an earlier job,
+and dynamic runner expressions can silently move a credential boundary. Local
+self-hosted acceleration therefore remains free of repository secrets and
+read-only.
 
 Passing data through `env` does not make it safe to append to the runner's
 `GITHUB_OUTPUT`, `GITHUB_ENV`, `GITHUB_PATH`, or `GITHUB_STATE` command files.
@@ -73,7 +86,7 @@ and chooses a random multiline delimiter that cannot collide with the value.
 This prevents embedded newlines from creating additional outputs or
 environment entries.
 
-Workflows triggered by `pull_request` cannot reference confidential repository
+Workflows triggered by `pull_request` cannot reference repository
 secrets. Canonical governance therefore keeps its pull-request checks local to
 the public checkout. `canonical-private-governance.yml` performs cross-repo
 status, control-plane, subsystem-registry, subsystem-contract, mobile
@@ -81,8 +94,8 @@ compatibility, and repo-governance checks only after a push to `main`, so
 unmerged pull-request code cannot replace the instructions that receive
 `WORKFLOW_PAT`. The public job still audits contract structure and every public
 path; only private path existence is deferred to that credential-isolated job.
-`PULSE_LICENSE_PUBLIC_KEY` is the sole explicit PR exception because that
-legacy secret value is intentionally non-confidential.
+Public configuration is not exempt: pull-request workflows must use repository
+variables or checked-in values rather than the secret context.
 
 ## Release Continuity
 
@@ -105,6 +118,15 @@ failed release-trust check still permits activation-marker inspection when the
 tag, numeric release ID, and exact source SHA are structurally valid. This
 exposes independent marker damage in the same evidence packet; it never admits
 the release or enables later delivery checks unless both trust checks pass.
+Scheduled and push-time npm audits classify JSON results, use one-minute
+registry attempts, and retry an unavailable audit endpoint. Advisory findings
+still fail immediately, even if the same response contains a transport error. The
+scheduled security scan and dependency-changing builds fail if three attempts
+produce no result; a build with an unchanged dependency graph warns and uses
+the base commit's passing answer. Audit steps defer their aggregate verdict so
+an unavailable endpoint cannot suppress independent frontend checks or the
+production bundle build; the preceding clean install disables npm's duplicate
+best-effort audit request.
 Activation inspection also requires exactly one uploaded marker and compares
 the downloaded byte count and SHA-256 value with GitHub's release-asset
 metadata, so a valid-looking JSON response cannot silently replace or truncate

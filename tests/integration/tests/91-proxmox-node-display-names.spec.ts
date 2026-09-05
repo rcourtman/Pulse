@@ -117,6 +117,7 @@ const nodesFixture = [
 async function routeClusterNodeDisplayNames(
   page: Page,
   onUpdate: (payload: Record<string, unknown>) => void,
+  getConnectionsFixture: () => typeof connectionsFixture = () => connectionsFixture,
 ) {
   await page.routeWebSocket('**/ws*', () => {});
   await page.route('**/api/connections*', async (route) => {
@@ -127,7 +128,7 @@ async function routeClusterNodeDisplayNames(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(connectionsFixture),
+      body: JSON.stringify(getConnectionsFixture()),
     });
   });
   await page.route('**/api/config/nodes**', async (route) => {
@@ -183,7 +184,56 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('Proxmox cluster node display names', () => {
   test.setTimeout(180_000);
 
-  test('keeps native diagnostics while saving by immutable identity', async ({ page }) => {
+  test('keeps unsaved infrastructure edits across a connection-ledger poll', async ({ page }) => {
+    let publishRefreshedConnection = false;
+    let refreshedConnectionResponses = 0;
+    const refreshedConnectionsFixture: typeof connectionsFixture = {
+      ...connectionsFixture,
+      connections: connectionsFixture.connections.map((connection) => ({
+        ...connection,
+        address: 'https://pve-refresh.example.test:8006',
+        lastSeen: '2026-09-04T00:15:00Z',
+      })),
+    };
+
+    await page.clock.install();
+    await routeClusterNodeDisplayNames(
+      page,
+      () => {},
+      () => {
+        if (!publishRefreshedConnection) return connectionsFixture;
+        refreshedConnectionResponses += 1;
+        return refreshedConnectionsFixture;
+      },
+    );
+
+    await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Manage', exact: true }).click();
+
+    const dialog = page.getByRole('dialog');
+    const nodeName = dialog.getByLabel('Node Name');
+    const verifyCertificate = dialog.getByRole('checkbox', {
+      name: 'Verify SSL certificate',
+    });
+    await nodeName.fill('Unsaved cluster label');
+    await dialog.getByRole('button', { name: 'Host Telemetry Agent', exact: true }).click();
+    await verifyCertificate.check();
+    await expect(dialog.getByText('Host telemetry agent', { exact: true })).toBeVisible();
+
+    publishRefreshedConnection = true;
+    await page.clock.fastForward(15_000);
+    await expect.poll(() => refreshedConnectionResponses).toBeGreaterThan(0);
+
+    await expect(dialog).toHaveAccessibleDescription(
+      'Proxmox VE cluster · Production Cluster (https://pve-refresh.example.test:8006)',
+    );
+    await expect(nodeName).toHaveValue('Unsaved cluster label');
+    await expect(dialog.getByText('Host telemetry agent', { exact: true })).toBeVisible();
+    await expect(verifyCertificate).toBeChecked();
+    await page.screenshot({ path: test.info().outputPath('manage-dialog-poll-retained.png') });
+  });
+
+  test('keeps native diagnostics while saving by immutable identity', async ({ page }, testInfo) => {
     let updatePayload: Record<string, unknown> | undefined;
     await routeClusterNodeDisplayNames(page, (payload) => {
       updatePayload = payload;
@@ -197,7 +247,8 @@ test.describe('Proxmox cluster node display names', () => {
     await expect(page.getByText('Render East', { exact: true })).toBeVisible();
     await expect(page.getByText('Production Cluster (pve1)', { exact: true })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Manage', exact: true }).click();
+    const manageButton = page.getByRole('button', { name: 'Manage', exact: true });
+    await manageButton.click();
     await expect(
       page.getByText(
         'Give each node an optional display name for Pulse. This never changes its Proxmox name, identity, credentials, or connection address.',
@@ -206,6 +257,58 @@ test.describe('Proxmox cluster node display names', () => {
     ).toBeVisible();
     await expect(page.getByText('Proxmox node: pve1', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Display name for pve1')).toHaveValue('Render East');
+
+    await page.screenshot({ path: testInfo.outputPath('manage-dialog.png') });
+    const scrollTopBeforeClose = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>('.app-scroll-shell');
+      return shell?.scrollTop ?? window.scrollY;
+    });
+    await manageButton.evaluate((element) => {
+      const state = window as Window & { __infrastructureManageFocusCalls?: FocusOptions[] };
+      state.__infrastructureManageFocusCalls = [];
+      const target = element as HTMLButtonElement;
+      const originalFocus = target.focus.bind(target);
+      target.focus = (options?: FocusOptions) => {
+        state.__infrastructureManageFocusCalls?.push(options ?? {});
+        originalFocus(options);
+      };
+    });
+    await page.getByRole('button', { name: 'Close edit infrastructure dialog' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (window as Window & { __infrastructureManageFocusCalls?: FocusOptions[] })
+                .__infrastructureManageFocusCalls?.length ?? 0,
+          ),
+        { timeout: 2_000 },
+      )
+      .toBe(1);
+    // The row-stability fallback runs later than the shared dialog cleanup.
+    // Moving on during that window must not pull focus back to Manage.
+    const nextAction = page.getByRole('button', { name: 'Add infrastructure', exact: true });
+    await nextAction.evaluate((element) => element.focus({ preventScroll: true }));
+    await page.waitForTimeout(350);
+    expect(
+      await page.evaluate(
+        () =>
+          (window as Window & { __infrastructureManageFocusCalls?: FocusOptions[] })
+            .__infrastructureManageFocusCalls,
+      ),
+    ).toEqual([{ preventScroll: true }]);
+    expect(
+      await page.evaluate(() => {
+        const shell = document.querySelector<HTMLElement>('.app-scroll-shell');
+        return shell?.scrollTop ?? window.scrollY;
+      }),
+    ).toBe(scrollTopBeforeClose);
+    await expect(nextAction).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath('manage-dialog-closed.png') });
+
+    await manageButton.click();
+    await expect(page.getByRole('dialog')).toBeVisible();
 
     // Equal display labels are intentionally valid presentation. The write
     // target remains the second member's immutable identity.

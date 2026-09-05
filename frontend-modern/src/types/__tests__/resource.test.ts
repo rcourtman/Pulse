@@ -70,6 +70,23 @@ describe('Resource Type Guards', () => {
     expect(resource.id).toBe('test-1');
   });
 
+  it('retains canonical host identity evidence on frontend resource consumers', () => {
+    const resource = createResource({
+      type: 'agent',
+      identity: {
+        hostnames: ['pve', 'pve.example.test'],
+        machineId: 'machine-provider-a',
+        dmiUuid: 'dmi-provider-a',
+      },
+    });
+
+    expect(resource.identity).toEqual({
+      hostnames: ['pve', 'pve.example.test'],
+      machineId: 'machine-provider-a',
+      dmiUuid: 'dmi-provider-a',
+    });
+  });
+
   it('retains three-state UDP availability evidence on canonical resources', () => {
     const resource = createResource({
       type: 'network-endpoint',

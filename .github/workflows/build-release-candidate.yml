@@ -527,14 +527,14 @@ jobs:
 
       - name: Download legacy signed binaries
         if: ${{ inputs.windows_signing_backend == 'legacy-pfx' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: legacy-signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: unsigned-native-agent-binaries
 
       - name: Download SignPath signing request record
         if: ${{ inputs.windows_signing_backend == 'signpath' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: windows-signing-request-${{ github.sha }}-${{ inputs.version }}
           path: windows-signing-request
@@ -854,21 +854,21 @@ jobs:
 
       - name: Download signed macOS binaries
         if: ${{ inputs.require_macos_signing }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: signed-macos-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries
 
       - name: Download signed Windows binaries
         if: ${{ inputs.require_windows_signing }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries
 
       - name: Download Windows signing evidence
         if: ${{ inputs.require_windows_signing }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: windows-signing-evidence-${{ github.sha }}-${{ inputs.version }}
           path: release-candidate-manifest

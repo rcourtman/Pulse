@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	truenasmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -1113,4 +1115,61 @@ func assertRecoveryColumnExists(t *testing.T, dbPath string, column string) {
 		t.Fatalf("table_info rows err: %v", err)
 	}
 	t.Fatalf("expected recovery_points column %q to exist after migration", column)
+}
+
+func TestStore_TrueNASFinishedReplicationRollup(t *testing.T) {
+	at := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name    string
+		lastRun *time.Time
+		errText string
+		want    recovery.Outcome
+	}{
+		{"finished", &at, "", recovery.OutcomeSuccess},
+		{"explicit error", &at, "transfer failed", recovery.OutcomeFailed},
+		{"missing run", nil, "", recovery.OutcomeUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dbPath := filepath.Join(t.TempDir(), "recovery.db")
+			db, err := Open(dbPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			points := truenasmapper.FromTrueNASSnapshot("nas", &truenas.FixtureSnapshot{
+				CollectedAt: at,
+				ReplicationTasks: []truenas.ReplicationTask{{
+					ID: "1", Name: "backup", LastState: "FINISHED", LastRun: tc.lastRun, LastError: tc.errText,
+				}},
+			})
+			if err := db.UpsertPoints(context.Background(), points); err != nil {
+				_ = db.Close()
+				t.Fatal(err)
+			}
+			if err := db.Close(); err != nil {
+				t.Fatal(err)
+			}
+			db, err = Open(dbPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = db.Close() })
+			rows, total, err := db.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if total != 1 || len(rows) != 1 {
+				t.Fatalf("rollups total=%d len=%d, want 1/1", total, len(rows))
+			}
+			if rows[0].LastOutcome != tc.want {
+				t.Fatalf("outcome=%v, want %v", rows[0].LastOutcome, tc.want)
+			}
+			if tc.want == recovery.OutcomeSuccess {
+				if rows[0].LastSuccessAt == nil || !rows[0].LastSuccessAt.Equal(at) {
+					t.Fatalf("success time=%v, want %v", rows[0].LastSuccessAt, at)
+				}
+			} else if rows[0].LastSuccessAt != nil {
+				t.Fatalf("unexpected success time: %v", rows[0].LastSuccessAt)
+			}
+		})
+	}
 }

@@ -763,3 +763,52 @@ func TestHostAgentRemovalLifecycleOrdersConcurrentReportsBeforeDeletion(t *testi
 		t.Fatal("old token reported after concurrent deletion completed")
 	}
 }
+
+func TestUnifiedStorageMetricSyncPreservesHostRemovalBlock(t *testing.T) {
+	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
+	now := time.Now().UTC().Truncate(time.Second)
+	report := hostRemovalLifecycleReport(
+		"storage-sync-machine",
+		"storage-sync-machine",
+		"storage-sync-agent",
+		"storage-sync.local",
+		"linux",
+		now,
+	)
+	token := &config.APITokenRecord{ID: "storage-sync-token", CreatedAt: now.Add(-time.Hour)}
+	host, err := monitor.ApplyHostReport(report, token)
+	if err != nil {
+		t.Fatalf("initial ApplyHostReport: %v", err)
+	}
+	if _, err := monitor.RemoveHostAgent(host.ID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateFromSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-lifecycle-boundary",
+			Name:     "pbs-lifecycle-boundary",
+			Status:   "online",
+			LastSeen: now,
+			Datastores: []models.PBSDatastore{{
+				Name:   "backups",
+				Status: "available",
+				Total:  1000,
+				Used:   400,
+				Free:   600,
+				Usage:  40,
+			}},
+		}},
+	})
+	monitor.metricsHistory = NewMetricsHistory(16, time.Hour)
+	monitor.syncUnifiedStorageMetrics(resourceStore)
+
+	if got := monitor.hostContinuityStore.RemovedEntries(); len(got) != 1 {
+		t.Fatalf("storage metric sync changed durable removal entries: %+v", got)
+	}
+	report.Timestamp = now.Add(time.Minute)
+	if _, err := monitor.ApplyHostReport(report, token); err == nil {
+		t.Fatal("storage metric sync allowed a removed host to report with its denied token")
+	}
+}

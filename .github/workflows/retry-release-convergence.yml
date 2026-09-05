@@ -42,6 +42,7 @@ jobs:
       - name: Reconcile the failed convergence
         env:
           GH_TOKEN: ${{ github.token }}
+          PRO_REPOSITORY_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: >-
           python3 scripts/release_control/reconcile_release_convergence.py
@@ -61,6 +62,7 @@ jobs:
       - name: Reconcile current channel heads
         env:
           GH_TOKEN: ${{ github.token }}
+          PRO_REPOSITORY_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: >-
           python3 scripts/release_control/reconcile_release_convergence.py
           --repository "${GITHUB_REPOSITORY}"

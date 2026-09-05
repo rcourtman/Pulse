@@ -306,7 +306,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		"FROM --platform=linux/amd64 node:24-alpine@sha256:",
 		"npm ci",
 		"npm run build",
-		"FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine@sha256:",
+		"FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine@sha256:",
 		"FROM alpine:3.24@sha256:",
 		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
 		"ARG TARGETOS",
@@ -333,7 +333,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		"CGO_ENABLED=0 go build -o /pulse-control-plane ./cmd/pulse-control-plane",
 	)
 	assertDigestPinnedDockerStage(t, text, `FROM --platform=linux/amd64 node:24-alpine@sha256:`, ` AS frontend-builder`)
-	assertDigestPinnedDockerStage(t, text, `FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine@sha256:`, ` AS builder`)
+	assertDigestPinnedDockerStage(t, text, `FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine@sha256:`, ` AS builder`)
 	assertDigestPinnedDockerStage(t, text, `FROM alpine:3.24@sha256:`, ` AS control-plane-runtime-foundation`)
 }
 

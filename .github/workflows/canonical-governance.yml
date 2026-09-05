@@ -170,6 +170,9 @@ jobs:
       - name: Run release promotion policy unit tests
         run: python3 scripts/release_control/release_promotion_policy_test.py
 
+      - name: Run release convergence reconciler unit tests
+        run: python3 scripts/release_control/reconcile_release_convergence_test.py
+
       - name: Run release container identity verifier unit tests
         run: python3 scripts/release_control/verify_release_container_images_test.py
 

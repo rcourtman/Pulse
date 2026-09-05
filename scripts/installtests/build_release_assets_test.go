@@ -161,12 +161,23 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`"repos/${REPOSITORY}/releases/latest"`,
 		`scripts/release_control/release_continuity.py release`,
 		"release-diagnostic.json",
+		"Reject orphaned stable publication tags",
+		`"repos/${REPOSITORY}/git/matching-refs/tags/v?per_page=100"`,
+		`"repos/${REPOSITORY}/releases?per_page=100"`,
+		"https://ghcr.io/token?service=ghcr.io&scope=repository:",
+		"https://auth.docker.io/token?service=registry.docker.io&scope=repository:",
+		`"${registry_url}/v2/${image}/tags/list?n=10000"`,
+		`--registry-tags-json "${evidence}/ghcr-pulse-tags.json"`,
+		`--registry-tags-json "${evidence}/docker-pulse-tags.json"`,
+		`scripts/release_control/release_continuity.py frontier`,
+		"frontier-diagnostic.json",
 		"Bind the release activation marker",
 		`!cancelled()`,
 		`steps.release.outputs.referenceable == 'true'`,
 		`scripts/release_control/release_continuity.py activation`,
 		"activation-diagnostic.json",
 		`steps.activation.outcome == 'success'`,
+		`steps.frontier.outcome == 'success'`,
 		`./scripts/verify-github-release-integrity.sh`,
 		`./scripts/validate-published-release.sh`,
 		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
@@ -177,6 +188,7 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`stable_container_aliases: $alias_result`,
 		`activation_binding: $activation_result`,
 		`release_identity: $release_diagnostic[0]`,
+		`stable_publication_frontier: $frontier_diagnostic[0]`,
 		`CONVERGENCE_RUN_ID: ${{ github.event.workflow_run.id }}`,
 		`TRIGGER_SCHEDULE: ${{ github.event.schedule }}`,
 		`mode=release_lock`,
@@ -229,6 +241,7 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		step := workflowStepBlock(t, workflowJobBlock(t, workflow, "release-continuity"), stepName)
 		for _, admission := range []string{
 			`steps.release.outcome == 'success'`,
+			`steps.frontier.outcome == 'success'`,
 			`steps.activation.outcome == 'success'`,
 		} {
 			if !strings.Contains(step, admission) {
@@ -1606,7 +1619,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`FROM --platform=linux/amd64 node:24-alpine@sha256:`,
-		`FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`,
+		`FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`,
 		`FROM backend-builder AS release-assets-builder`,
 		`AS agent_runtime`,
 		`AS pulse-runtime-foundation`,
@@ -1641,7 +1654,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		}
 	}
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 node:24-alpine@sha256:`, ` AS frontend-builder`)
-	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine@sha256:`, ` AS backend-builder`)
+	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`, ` AS backend-builder`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS agent_runtime`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS pulse-runtime-foundation`)
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
@@ -1654,7 +1667,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
 	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:24-alpine AS frontend-builder`) ||
-		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.7-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.8-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS agent_runtime`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.24 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
@@ -2098,8 +2111,7 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`Require activated GitHub release and source run`,
 		`release-activation.json`,
 		`.github/workflows/create-release.yml`,
-		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
-		`--name "pulse-chart-${VERSION}"`,
+		`"${GITHUB_REPOSITORY}" "${CHART_DIGEST}" "${CHART_PATH}"`,
 		`qualified chart metadata does not match the activated release`,
 		`name: Publish chart release and merge Pages index`,
 		`gh release create "${chart_release}" "${chart_path}"`,
@@ -2116,6 +2128,7 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"workflow_run:",
+		`gh run download "${SOURCE_RELEASE_RUN_ID}"`,
 		`Smoke test with kind`,
 		`Install helm-docs`,
 		`helm package deploy/helm/pulse`,
@@ -2829,7 +2842,10 @@ func TestReleaseAssetCommonRunsUpdateKeyThroughModulePath(t *testing.T) {
 		t.Skip("go not installed")
 	}
 
-	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_go_run_update_key")
+	// Keep the toolchain selected by the test runner. A login shell may source a
+	// developer's stale mise/asdf profile and replace setup-go's release
+	// toolchain while leaving its GOROOT behind.
+	cmd := exec.Command("bash", "-c", "source ./scripts/release_asset_common.sh; pulse_release_go_run_update_key")
 	cmd.Dir = repoFile()
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -2861,7 +2877,7 @@ func TestReleaseAssetCommonRejectsUnexpectedUpdateSigningPublicKey(t *testing.T)
 		t.Fatalf("generate unexpected public key: %v", err)
 	}
 
-	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_prepare_signing_state pulse-installer pulse-install")
+	cmd := exec.Command("bash", "-c", "source ./scripts/release_asset_common.sh; pulse_release_prepare_signing_state pulse-installer pulse-install")
 	cmd.Dir = repoFile()
 	cmd.Env = append(os.Environ(),
 		"PULSE_UPDATE_SIGNING_KEY="+base64.StdEncoding.EncodeToString(privateKey),
@@ -3642,6 +3658,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,
+		`run: npm ci --no-audit`,
 		`- name: Audit complete frontend dependency graph`,
 		`npm-audit-retry.sh" all`,
 		// The runner may retry an unreachable advisory endpoint, but only a
@@ -3649,6 +3666,10 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 		// without a fresh result.
 		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
 		`frontend_deps: ${{ steps.filter.outputs.frontend_deps }}`,
+		`continue-on-error: true`,
+		`- name: Require frontend dependency audit`,
+		`if: ${{ !cancelled() }}`,
+		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
 	)
 	// The production-only audit reports a subset of the complete audit's
 	// advisories and cannot gate anything the complete audit did not already
@@ -3656,7 +3677,10 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	// somewhere: the scheduled scan owns the dev-versus-production split.
 	assertFileContainsAll(t, repoFile(".github", "workflows", "security-scan.yml"),
 		`- name: Audit production dependencies`,
-		`npm audit --package-lock-only --omit=dev`,
+		`npm-audit-retry.sh" production --package-lock-only`,
+		`- name: Require dependency audits`,
+		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
+		`PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}`,
 	)
 	// The gate itself must stay strict. An unreachable endpoint may be
 	// retried, but no severity threshold may be introduced that lets a real
@@ -3670,6 +3694,9 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 		t.Fatalf("%s must not weaken the audit with a severity threshold", runnerPath)
 	}
 	assertFileContainsAll(t, runnerPath,
+		`NPM_AUDIT_REQUIRE_RESULT:-true`,
+		`AUDIT_ARGS=("$@")`,
+		`if isinstance(vulns, dict) and "total" in vulns:`,
 		`print("vulnerable" if total else "clean")`,
 	)
 	// Retrying must be bounded by wall clock, not by attempt count alone.

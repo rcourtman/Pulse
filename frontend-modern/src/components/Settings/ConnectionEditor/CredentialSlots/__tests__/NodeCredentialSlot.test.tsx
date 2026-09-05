@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
 import type { NodeConfigWithStatus } from '@/types/nodes';
@@ -20,6 +21,144 @@ const createSettings = (): InfrastructurePlatformSettingsProps =>
 
 describe('NodeCredentialSlot', () => {
   afterEach(() => cleanup());
+
+  it('syncs an untouched mounted editor to a refreshed node snapshot', async () => {
+    const settings = createSettings();
+    const initialNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: false,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+    const [editingNode, setEditingNode] = createSignal(initialNode);
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode()}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://pve1.local:8006');
+    expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).not.toBeChecked();
+
+    setEditingNode({
+      ...initialNode,
+      host: 'https://pve1-refreshed.local:8006',
+      verifySSL: true,
+    } as NodeConfigWithStatus);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue(
+        'https://pve1-refreshed.local:8006',
+      );
+      expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+    });
+  });
+
+  it('preserves unsaved connection edits across polls and saves to the refreshed edit target', async () => {
+    const settings = createSettings();
+    const onSaved = vi.fn();
+    const initialNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: true,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+    const [editingNode, setEditingNode] = createSignal(initialNode);
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode()}
+        onCancel={vi.fn()}
+        onSaved={onSaved}
+      />
+    ));
+
+    const endpoint = screen.getByLabelText(/^Endpoint URL/);
+    const verifySSL = screen.getByRole('checkbox', { name: 'Verify SSL certificate' });
+    fireEvent.input(endpoint, { target: { value: 'https://operator-edit.local:8006' } });
+    fireEvent.click(verifySSL);
+
+    for (let poll = 1; poll <= 2; poll += 1) {
+      setEditingNode({
+        ...initialNode,
+        host: `https://server-poll-${poll}.local:8006`,
+      });
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^Endpoint URL/)).toBe(endpoint);
+        expect(endpoint).toHaveValue('https://operator-edit.local:8006');
+        expect(verifySSL).not.toBeChecked();
+      });
+    }
+
+    expect(settings.saveNode).not.toHaveBeenCalled();
+    fireEvent.submit(endpoint.closest('form')!);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(settings.saveNode).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ host: 'https://operator-edit.local:8006', verifySSL: false }),
+      editingNode(),
+    );
+  });
+
+  it('keeps the selected authentication strategy across polls but resets for another node', async () => {
+    const settings = createSettings();
+    const initialNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: true,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+    const [editingNode, setEditingNode] = createSignal(initialNode);
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode()}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Host Telemetry Agent$/i }));
+    const agentPanel = screen.getByText('Host telemetry agent');
+    for (let poll = 1; poll <= 2; poll += 1) {
+      setEditingNode({ ...initialNode, host: `https://poll-${poll}.local:8006` });
+      await waitFor(() => {
+        expect(screen.getByText('Host telemetry agent')).toBe(agentPanel);
+        expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue(initialNode.host);
+      });
+    }
+
+    // A genuinely different edit target must not inherit the previous strategy.
+    setEditingNode({ ...initialNode, id: 'pve-1', host: 'https://pve2.local:8006' });
+    await waitFor(() => {
+      expect(screen.queryByText('Host telemetry agent')).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://pve2.local:8006');
+    });
+    expect(settings.saveNode).not.toHaveBeenCalled();
+  });
 
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {
     render(() => (

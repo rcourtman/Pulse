@@ -2,12 +2,13 @@
 
 # Resolve the exact-version OCI Helm chart to its registry digest and verify
 # that GitHub's signed build provenance binds it to the release source and the
-# canonical hosted chart publisher.
+# canonical hosted chart publisher. When an output path is supplied, preserve
+# the exact OCI package whose digest and provenance passed those checks.
 
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 4 ]; then
-    echo "Usage: $0 <tag> <source-sha> [owner/repo] [expected-digest]" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 5 ]; then
+    echo "Usage: $0 <tag> <source-sha> [owner/repo] [expected-digest] [output-chart]" >&2
     exit 2
 fi
 
@@ -15,6 +16,7 @@ TAG="$1"
 SOURCE_SHA="$2"
 REPOSITORY="${3:-${GITHUB_REPOSITORY:-rcourtman/Pulse}}"
 EXPECTED_DIGEST="${4:-}"
+OUTPUT_CHART="${5:-}"
 OWNER="${REPOSITORY%%/*}"
 VERSION="${TAG#v}"
 SUBJECT="ghcr.io/${OWNER}/pulse-chart/pulse"
@@ -85,6 +87,19 @@ gh attestation verify "oci://${SUBJECT}@${chart_digest}" \
     --deny-self-hosted-runners \
     --predicate-type https://slsa.dev/provenance/v1 \
     >/dev/null
+
+if [ -n "$OUTPUT_CHART" ]; then
+    resolved_chart="${pull_dir}/pulse-${VERSION}.tgz"
+    if [ ! -f "$resolved_chart" ] || [ -L "$resolved_chart" ]; then
+        echo "Verified OCI pull did not produce one regular chart package: ${resolved_chart}" >&2
+        exit 1
+    fi
+    if [ -L "$OUTPUT_CHART" ]; then
+        echo "Refusing to replace symlink output path: ${OUTPUT_CHART}" >&2
+        exit 1
+    fi
+    install -m 0644 -- "$resolved_chart" "$OUTPUT_CHART"
+fi
 
 printf 'chart_digest=%s\n' "$chart_digest"
 echo "[OK] Helm chart ${VERSION} and hosted build provenance resolve to ${chart_digest}." >&2

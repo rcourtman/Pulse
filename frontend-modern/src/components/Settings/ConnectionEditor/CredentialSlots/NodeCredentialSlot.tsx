@@ -64,16 +64,28 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
   const modalProps: NodeModalProps = {
     isOpen: true,
     nodeType: props.nodeType,
-    editingNode: props.editingNode ?? undefined,
+    // Infrastructure polling replaces the configured-node object while this
+    // slot deliberately remains mounted. Keep that prop reactive so an
+    // untouched form can adopt the latest server snapshot; useNodeModalState
+    // owns the complementary dirty guard that protects user edits.
+    get editingNode() {
+      return props.editingNode ?? undefined;
+    },
     prefillNode: prefill,
     onClose: props.onCancel,
     onSave: handleSave,
-    securityStatus: props.settings.securityStatus() ?? undefined,
-    temperatureMonitoringEnabled: props.settings.resolveTemperatureMonitoringEnabled(
-      props.editingNode ?? null,
-    ),
-    temperatureMonitoringLocked: props.settings.temperatureMonitoringLocked(),
-    savingTemperatureSetting: props.settings.savingTemperatureSetting(),
+    get securityStatus() {
+      return props.settings.securityStatus() ?? undefined;
+    },
+    get temperatureMonitoringEnabled() {
+      return props.settings.resolveTemperatureMonitoringEnabled(props.editingNode ?? null);
+    },
+    get temperatureMonitoringLocked() {
+      return props.settings.temperatureMonitoringLocked();
+    },
+    get savingTemperatureSetting() {
+      return props.settings.savingTemperatureSetting();
+    },
     setupHandoffDisabled: () => Boolean(props.importCandidate && !importApproved()),
     setupHandoffDisabledReason: importApprovalRequiredMessage,
     onToggleTemperatureMonitoring: async (enabled) => {

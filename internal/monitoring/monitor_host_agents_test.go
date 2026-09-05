@@ -5654,3 +5654,34 @@ func TestMonitorConstructionWiresNotificationDeliveryReconciliation(t *testing.T
 		}
 	}
 }
+
+func TestApplyHostReportPreservesPoolOnlyUnraidCount(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(), alertManager: alerts.NewManager(),
+		hostTokenBindings: make(map[string]string), config: &config.Config{},
+		rateTracker: NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+	var report agentshost.Report
+	// Exercise the agent wire format: explicit zero must survive omitempty.
+	err := json.Unmarshal([]byte(`{"agent":{"id":"pool-only","version":"test"},"host":{"id":"pool-only","hostname":"pool-only"},"unraid":{"arrayStarted":true,"numDisks":0}}`), &report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report.Timestamp = time.Now().UTC()
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Unraid == nil || host.Unraid.NumDisks == nil || *host.Unraid.NumDisks != 0 {
+		t.Fatalf("lost explicit zero: %+v", host.Unraid)
+	}
+	record := unifiedresources.HostIngestRecord(host)
+	restored := hostUnraidFromReadStateView(record.Resource.Agent.Unraid)
+	if restored == nil || restored.NumDisks == nil || *restored.NumDisks != 0 {
+		t.Fatalf("canonical round trip lost explicit zero: %+v", restored)
+	}
+	if assessment := storagehealth.AssessUnraidStorage(*restored); assessment.Level != storagehealth.RiskHealthy {
+		t.Fatalf("pool-only host raised storage risk: %+v", assessment)
+	}
+}
