@@ -2083,7 +2083,9 @@ describe('settings architecture guardrails', () => {
 // organisation panel or a browser storage hint.
 describe('organisation principal shell boundary', () => {
   it('prefers authenticated identity with a nullish legacy fallback', () => {
-    expect(settingsPanelRegistryContextSource).toContain('params.securityStatus()?.currentUsername ??');
+    expect(settingsPanelRegistryContextSource).toContain(
+      'params.securityStatus()?.currentUsername ??',
+    );
     expect(settingsPanelRegistryContextSource).not.toContain('sessionStorage');
     for (const panel of ['Overview', 'Access', 'Sharing']) {
       expect(settingsPanelRegistryContextSource).toContain(
