@@ -147,6 +147,31 @@ manual/release entry point retains `contents: write` for unpublished draft asset
 GETs and forwards the same inputs to the body. Calling that draft-capable entry
 point from read-only continuity prevents workflow admission before any job runs.
 
+### When advertised stable is mutable
+
+Treat a failed `immutable == true` check as release-integrity debt, not proof
+that a downloaded binary is compromised or that the customer runtime is down.
+Record the advertised tag, release ID, source identity and failed check separately
+from installed health. A successful unrelated workflow does not clear it.
+
+The repository setting checked by `scripts/check-github-release-immutability.sh`
+applies to **future** publications only; it does not repair an already published
+mutable release. GitHub documents this boundary in
+[Preventing changes to your releases](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/establish-provenance-and-integrity/prevent-release-changes).
+Do not disable the continuity assertion, reset incident state, replace historical
+assets, or delete/recreate a published release to obtain a passing result.
+
+Recovery belongs to the governed release path: qualify a replacement candidate,
+retain its exact source and artifact identities, complete the required clean
+soak, and obtain approval of the exact stable packet under the
+[Release Train policy](../../docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md#release-train).
+An immutable prerelease alone does not satisfy those gates. After authorised
+stable activation, require the continuity read-back for the newly advertised
+identity; enabling the setting or changing a pointer is not verification.
+Installed customer journeys, scheduled health outcomes and notification
+receipt/recovery evidence remain separate checks. This procedure grants no
+publication or deployment authority.
+
 Future release candidates also carry
 `release-build-provenance.sigstore.json`, produced by the hosted
 `build-release-candidate.yml` job after complete candidate validation. The
