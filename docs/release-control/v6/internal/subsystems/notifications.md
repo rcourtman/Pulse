@@ -525,3 +525,32 @@ content and destination identity never leave Pulse.
 
 `internal/notifications/queue_test.go` pins the local classification order and
 the terminal-only retry/dead-letter accounting boundary.
+
+### Resolution remains final across terminal retries and restart
+
+Resolution cancellation covers pending, sending, failed, and dead-lettered
+firing rows. A wholly obsolete row becomes cancelled; a grouped row retains
+only unrelated firing alerts and their operational links. Recovery jobs are
+not cancelled by this operation. Only removed pending entries contribute to
+the pending-suppression return count; terminal or interrupted sends must not
+be counted as proof that firing was never delivered.
+
+The cancellation verdict persists across queue reopen and bulk operator
+retry. Per-item retry also rejects cancelled and already-sent rows atomically,
+so a stale retry request cannot bypass resolution or duplicate a completed
+delivery. Pending, sending, failed, and dead-lettered rows remain eligible for
+the existing retry scheduler.
+
+Cancelling a row retains its failed-attempt audit history and announces the
+changed queue-health verdict only after releasing both the database mutex and
+per-alert delivery gates. Clearing obsolete retained failures does not prove
+that a destination has been repaired. Nor does this operation retrospectively
+identify obsolete rows whose resolution happened before this behaviour was
+installed; historical backlogs still require incident reconciliation.
+
+`internal/notifications/queue_resolution_retry_test.go` proves failed and
+dead-lettered cancellation across durable reopen and actual queue processing,
+preservation of unrelated grouped firing and recovery jobs, retained failed
+attempts, callback lock release and committed-state visibility, and the
+per-item retry eligibility matrix. These are component proofs, not installed
+receiver receipts or exactly-once delivery guarantees.

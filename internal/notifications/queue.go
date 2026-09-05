@@ -1205,7 +1205,8 @@ func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotificati
 	return &notif, nil
 }
 
-// ScheduleRetry schedules a notification for retry with exponential backoff
+// ScheduleRetry schedules a notification for retry with exponential backoff.
+// Cancelled and delivered rows are final, even for stale operator requests.
 func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 	backoff := calculateBackoff(attempt)
 	nextRetry := time.Now().Add(backoff)
@@ -1231,10 +1232,10 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 		UPDATE notification_queue
 		SET status = 'pending', next_retry_at = ?, last_attempt = ?,
 		    operational_links = ?, completed_at = NULL, last_error = NULL
-		WHERE id = ?
+		WHERE id = ? AND status IN ('pending', 'sending', 'failed', 'dlq')
 	`
 
-	_, err = nq.db.Exec(
+	result, err := nq.db.Exec(
 		query,
 		nextRetry.Unix(),
 		time.Now().Unix(),
@@ -1245,7 +1246,14 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 		nq.mu.Unlock()
 		return fmt.Errorf("failed to schedule retry: %w", err)
 	}
+	affected, err := result.RowsAffected()
 	nq.mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("read scheduled retry result: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("notification %s is no longer eligible for retry", id)
+	}
 
 	log.Debug().
 		Str("id", id).
@@ -2040,22 +2048,29 @@ func calculateBackoff(attempt int) time.Duration {
 // returns the number of matched firing-alert entries removed from rows that
 // were still waiting for delivery ('pending'). Entries in rows already
 // mid-send ('sending') are cancelled best-effort but not counted, because
-// their delivery may still complete.
+// their delivery may still complete. Failed/dead-lettered firing entries are
+// also suppressed so operator retry cannot resurrect a resolved incident;
+// these do not contribute to the pending-only return count.
 func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string) (int, error) {
 	alertIdentifiers = normalizeAlertIdentifiers(alertIdentifiers)
 	if len(alertIdentifiers) == 0 {
 		return 0, nil
 	}
 	releaseDeliveryGates := nq.acquireAlertDeliveryGates(alertIdentifiers, true)
-	defer releaseDeliveryGates()
-
+	healthChanged := false
 	nq.mu.Lock()
-	defer nq.mu.Unlock()
+	defer func() {
+		nq.mu.Unlock()
+		releaseDeliveryGates()
+		if healthChanged {
+			nq.notifyDeliveryHealthChanged()
+		}
+	}()
 
 	query := `
 		SELECT id, type, status, alerts, operational_links
 		FROM notification_queue
-		WHERE status IN ('pending', 'sending')
+		WHERE status IN ('pending', 'sending', 'failed', 'dlq')
 	`
 
 	rows, err := nq.db.Query(query)
@@ -2214,7 +2229,9 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 					Str("action", "cancel_mark_notification").
 					Str("notifID", notifID).
 					Msg("Failed to mark notification as cancelled")
+				return 0, fmt.Errorf("cancel resolved notification %s: %w", notifID, err)
 			}
+			healthChanged = true
 		}
 	}
 
