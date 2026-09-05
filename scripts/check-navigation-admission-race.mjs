@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const root = `${repo}frontend-modern`;
 const width = Number(process.env.PULSE_PROOF_WIDTH || 1440);
+const height = width === 390 ? 844 : 900;
 const mode = process.env.PULSE_PROOF_MODE || "failure";
 if (
   ![390, 1440].includes(width) ||
@@ -48,7 +49,7 @@ let browser;
 try {
   await server.listen();
   browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width, height: 900 } });
+  const page = await browser.newPage({ viewport: { width, height } });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/*", (route) =>
@@ -246,6 +247,16 @@ try {
     await expect(menu).toBeHidden();
     await page.screenshot({ path: `${output}/recovered-navigation.png` });
   }
+  // A later reconnect must refresh the current organisation, not resurrect
+  // the delayed outgoing request or require a document reload.
+  await page.evaluate(async () =>
+    (await import("/src/stores/events.ts")).eventBus.emit(
+      "websocket_reconnected",
+    ),
+  );
+  await expect.poll(() => requests.length).toBe(5);
+  await expect(platform).toBeVisible();
+  expect(requests).toEqual(["default", "default", "acme", "default", "default"]);
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(
     documentIdentity,
   );
@@ -253,7 +264,7 @@ try {
   const result = {
     result: "passed",
     browser: browser.version(),
-    viewport: { width, height: 900 },
+    viewport: { width, height },
     mode,
     phase,
     requests,
