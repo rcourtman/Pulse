@@ -254,6 +254,22 @@ command-capable profile.
 
 ## Shared Boundaries
 
+### Shared Docker-update verification boundary
+
+The shared API result converter classifies independent Docker update readback
+using replacement identity, state/running agreement and running health, rather
+than identity alone. Both immediate execution and durable receipt reconciliation
+use this converter. Contradictory observations affect verification only;
+missing agent readback is inconclusive. Execution and compensation records
+remain unchanged: container backup-rename compensation is not a storage backup,
+recovery point, or independently verified restore. No storage selection,
+retention or recovery authority is added. The focused
+`TestDockerContainerUpdateIndependentObservationMustMatchState` in
+`internal/api/docker_container_action_result_test.go` asserts that independent
+verification changes never rewrite successful execution history, including
+stopped replacements and missing readback.
+
+
 Recovery consumers of security status must distinguish currentUsername (the validated caller identity) from privileged authUsername (administrator configuration). Presence of currentUsername in a scoped response does not authorise export, import, recovery or unprotected backup transfer; existing settings capabilities and backend enforcement still gate those operations.
 
 The Patrol action broker and shared policy-writer wiring under `internal/api/`

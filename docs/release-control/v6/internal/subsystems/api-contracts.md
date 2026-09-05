@@ -435,6 +435,21 @@ enums locally.
 
 ## Shared Boundaries
 
+### Independent Docker update readback
+
+`dockerContainerUpdateExecutionResult` must not promote replacement-ID equality
+alone to independent confirmation. The daemon observation must match the
+agent readback's state and running flag; running replacements additionally
+require state `running` and health `healthy` or `none`. A deliberately stopped
+replacement remains confirmable without being started. Missing agent readback
+or its state leaves independent verification inconclusive. Contradictory
+readback changes verification, not the recorded execution or compensation.
+No wire schema or mutation authority changes. Verification:
+`TestDockerContainerUpdateIndependentObservationMustMatchState` in
+`internal/api/docker_container_action_result_test.go` covers running, stopped,
+restarting, unhealthy, unknown health and absent readback cases.
+
+
 GET /api/security/status includes currentUsername in authenticated and privileged responses, derived from the validated authentication snapshot rather than configured administrator identity. Public login discovery omits it. The field is identity only: it does not grant instance-settings authority or change token scopes. Scoped local sessions retain this identity when privileged authUsername is withheld.
 
 Commercial migration payloads are a shared API/cloud-paid contract. The
