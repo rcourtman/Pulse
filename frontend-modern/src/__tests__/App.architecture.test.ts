@@ -866,6 +866,20 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("label: 'Actions'");
   });
 
+  it('keeps alert hydration separate from tenant resource admission', () => {
+    const start = appRuntimeStateSource.indexOf('const runtimeStateResolved');
+    const predicate = appRuntimeStateSource.slice(
+      start, appRuntimeStateSource.indexOf('const state =', start),
+    );
+    expect(start).toBeGreaterThan(-1);
+    expect(predicate).toContain('resourceSnapshotReceived()');
+    expect(predicate).not.toContain('initialDataReceived()');
+    expect(predicate).not.toContain('hasRuntimeStatePayload');
+    const storeSource = readFileSync(join(process.cwd(), 'src/stores/websocket.ts'), 'utf8');
+    const reset = storeSource.slice(storeSource.indexOf('setResourceSnapshotReceived(false)'));
+    expect(reset).toContain("setActiveAlertsHydrationStatus('pending')");
+  });
+
   it('drops platform admission when the tenant changes', () => {
     const switchStart = appRuntimeStateSource.indexOf('const handleOrgSwitch');
     expect(switchStart).toBeGreaterThan(-1);

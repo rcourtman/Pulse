@@ -155,6 +155,7 @@ describe('useAppRuntimeState', () => {
         connected: () => websocketConnected,
         reconnecting: () => websocketReconnecting,
         initialDataReceived: () => websocketInitialDataReceived,
+        resourceSnapshotReceived: () => websocketInitialDataReceived,
         reconnect: vi.fn(),
         switchUrl: vi.fn(),
       }),
@@ -692,6 +693,18 @@ describe('useAppRuntimeState', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state/summary')).toHaveLength(1);
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
+    dispose();
+  });
+
+  it('does not mistake alert-only reconnect recovery for an empty resource snapshot', async () => {
+    websocketState = makeWebSocketState({ activeAlerts: [{ id: 'recovered-alert' } as State['activeAlerts'][number]] });
+    websocketConnected = false;
+    websocketReconnecting = true;
+    websocketInitialDataReceived = false;
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.enhancedStore()).not.toBeNull());
+    expect(hookState.state().activeAlerts).toHaveLength(1);
+    expect(hookState.runtimeStateResolved()).toBe(false);
     dispose();
   });
 

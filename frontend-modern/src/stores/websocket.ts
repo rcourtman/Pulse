@@ -275,6 +275,9 @@ export function createWebSocketStore(url: string) {
   const [connected, setConnected] = createSignal(false);
   const [reconnecting, setReconnecting] = createSignal(false);
   const [initialDataReceived, setInitialDataReceived] = createSignal(false);
+  // Display admission survives transport reconnects, but not an organisation
+  // change. Alerts/status alone cannot establish an empty resource estate.
+  const [resourceSnapshotReceived, setResourceSnapshotReceived] = createSignal(false);
   const createInitialState = (): State => ({
     // Canonical v6 state comes from unified resources.
     connectedInfrastructure: [],
@@ -1210,6 +1213,7 @@ export function createWebSocketStore(url: string) {
             let changedResourceIds: ReadonlySet<string> | undefined;
             let changedResourceKeys: ResourceChangedKeys | undefined;
             if (message.data.resources !== undefined) {
+              setResourceSnapshotReceived(true);
               // A full snapshot supersedes every pending deferral, and queued
               // deltas reference the baseline this snapshot replaces.
               deferredResourceIds.clear();
@@ -1850,6 +1854,7 @@ export function createWebSocketStore(url: string) {
     connected,
     reconnecting,
     initialDataReceived,
+    resourceSnapshotReceived,
     activeAlertsHydrationStatus,
     updateProgress,
     resourceChange,
@@ -1890,6 +1895,7 @@ export function createWebSocketStore(url: string) {
         setConnected(false);
         setReconnecting(false);
         setInitialDataReceived(false);
+        setResourceSnapshotReceived(false);
         setActiveAlertsHydrationStatus('pending');
         setUpdateProgress(null);
         setResourceChange({
