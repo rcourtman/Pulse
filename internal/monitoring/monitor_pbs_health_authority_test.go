@@ -22,6 +22,9 @@ const (
 	pbsHealthTestAuthFailure
 	pbsHealthTestTimeout
 	pbsHealthTestPartialData
+	pbsHealthTestNodeDenied
+	pbsHealthTestNodeGatewayFailure
+	pbsHealthTestUnavailable
 )
 
 type pbsHealthTestServer struct {
@@ -47,6 +50,9 @@ func newPBSHealthTestServer(t *testing.T) *pbsHealthTestServer {
 		case pbsHealthTestAuthFailure:
 			http.Error(w, "authentication failed: 401 Unauthorized", http.StatusUnauthorized)
 			return
+		case pbsHealthTestUnavailable:
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
 		case pbsHealthTestTimeout:
 			<-r.Context().Done()
 			return
@@ -59,6 +65,14 @@ func newPBSHealthTestServer(t *testing.T) *pbsHealthTestServer {
 				"data": map[string]any{"version": "3.4.2"},
 			})
 		case "/api2/json/nodes/localhost/status":
+			if mode == pbsHealthTestNodeDenied {
+				http.Error(w, "permission denied", http.StatusForbidden)
+				return
+			}
+			if mode == pbsHealthTestNodeGatewayFailure {
+				http.Error(w, "gateway unavailable", http.StatusBadGateway)
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
 					"cpu":    0.15,
@@ -296,4 +310,64 @@ func TestInitPBSClientsDoesNotTreatClientConstructionAsConnectivity(t *testing.T
 		t.Fatalf("invalid URL initialization ledger = %+v, want one current failure", status)
 	}
 	assertPBSConnectionProjection(t, monitor, "pbs-invalid-url", false, "offline")
+}
+
+// TestPollPBSNodeMetricsFailureAndRecovery characterises connectivity separately
+// from metric availability. Zero-valued metrics are the current projection of
+// unavailable data, not evidence of measured zero utilisation or alert recovery.
+func TestPollPBSNodeMetricsFailureAndRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode pbsHealthTestMode
+	}{
+		{"permission-denied", pbsHealthTestNodeDenied},
+		{"endpoint-gateway-failure", pbsHealthTestNodeGatewayFailure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newPBSHealthTestServer(t)
+			instance := config.PBSInstance{Name: "pbs-metrics", Host: fixture.server.URL, MonitorDatastores: true}
+			monitor := newPBSHealthAuthorityMonitor([]config.PBSInstance{instance})
+			client := newPBSHealthTestClient(t, instance.Host)
+			poll := func() models.PBSInstance {
+				monitor.pollPBSInstance(context.Background(), instance.Name, client)
+				return pbsInstanceByName(t, monitor.state.GetSnapshot(), instance.Name)
+			}
+			assertMetrics := func(got models.PBSInstance) {
+				t.Helper()
+				if got.CPU != 0.15 || got.Memory != 50 || got.MemoryUsed != 512 || got.MemoryTotal != 1024 || got.Uptime != 120 {
+					t.Fatalf("successful node metrics not published: %+v", got)
+				}
+			}
+			assertMetrics(poll())
+			previous := monitor.pollStatusMap["pbs::"+instance.Name].LastSuccess
+			fixture.setMode(tc.mode)
+			partial := poll()
+			assertPBSConnectionProjection(t, monitor, instance.Name, true, "online")
+			status := monitor.pollStatusMap["pbs::"+instance.Name]
+			if !status.LastSuccess.After(previous) || status.ConsecutiveFailures != 0 || status.LastErrorMessage != "" {
+				t.Fatalf("endpoint failure incorrectly affected connectivity ledger: %+v", status)
+			}
+			if partial.CPU != 0 || partial.Memory != 0 || partial.MemoryUsed != 0 || partial.MemoryTotal != 0 || partial.Uptime != 0 {
+				t.Fatalf("unavailable node metrics retained previous measurements: %+v", partial)
+			}
+			if len(partial.Datastores) != 1 || partial.Datastores[0].Name != "backups" {
+				t.Fatalf("node endpoint failure discarded accessible datastore: %+v", partial.Datastores)
+			}
+			fixture.setMode(pbsHealthTestUnavailable)
+			lastConnected := status.LastSuccess
+			poll()
+			assertPBSConnectionProjection(t, monitor, instance.Name, false, "offline")
+			status = monitor.pollStatusMap["pbs::"+instance.Name]
+			if !status.LastSuccess.Equal(lastConnected) || status.ConsecutiveFailures != 1 || status.LastErrorMessage == "" {
+				t.Fatalf("full outage not recorded independently: %+v", status)
+			}
+			fixture.setMode(pbsHealthTestSuccess)
+			assertMetrics(poll())
+			assertPBSConnectionProjection(t, monitor, instance.Name, true, "online")
+			status = monitor.pollStatusMap["pbs::"+instance.Name]
+			if !status.LastSuccess.After(lastConnected) || status.ConsecutiveFailures != 0 || status.LastErrorMessage != "" || !status.LastErrorAt.IsZero() {
+				t.Fatalf("recovery did not clear current connectivity failure: %+v", status)
+			}
+		})
+	}
 }
