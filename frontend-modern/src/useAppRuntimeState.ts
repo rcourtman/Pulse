@@ -297,13 +297,18 @@ export const useAppRuntimeState = () => {
     return Object.fromEntries(flags) as PlatformNavigationVisibility;
   };
 
+  let platformAdmissionRequest = 0;
   const loadPlatformAdmission = async () => {
+    const request = ++platformAdmissionRequest;
     try {
       // One resource is enough: the aggregations describe the whole set, so
       // this resolves navigation without reading an estate-sized payload.
       const payload = await apiFetchJSON<{ aggregations?: { platformAdmission?: unknown } }>(
         '/api/resources?page=1&limit=1',
       );
+      // A tenant switch or newer refresh supersedes this response, even if
+      // that newer request failed. Never restore an outgoing tenant facet.
+      if (request !== platformAdmissionRequest) return;
       setPlatformAdmission(normalizePlatformAdmission(payload?.aggregations?.platformAdmission));
     } catch (error) {
       // A failed refresh says nothing about which platforms still exist.

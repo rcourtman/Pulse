@@ -964,6 +964,61 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
+  it.each(['failed', 'successful', 'pending'] as const)(
+    'ignores an outgoing tenant refresh after a %s tenant switch request',
+    async (completion) => {
+      isMultiTenantEnabledMock.mockReturnValue(true);
+      const eventsModule = await import('@/stores/events');
+      const { dispose, hookState } = mountHook();
+      await waitFor(() => {
+        expect(hookState.platformAdmission()).not.toBeNull();
+        expect(hookState.organizations().some((org) => org.id === 'acme')).toBe(true);
+      });
+      const outgoing = hookState.platformAdmission();
+      let finishOutgoing!: (value: unknown) => void;
+      apiFetchJSONMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOutgoing = resolve;
+          }),
+      );
+      const reconnect = (eventsModule.eventBus.on as ReturnType<typeof vi.fn>).mock.calls.find(
+        ([event]) => event === 'websocket_reconnected',
+      )![1] as () => void;
+      reconnect();
+      const emptyAdmission = Object.fromEntries(Object.keys(outgoing!).map((key) => [key, false]));
+      let finishIncoming!: (value: unknown) => void;
+      if (completion === 'failed') {
+        apiFetchJSONMock.mockRejectedValue(new Error('503 admission unavailable'));
+      } else if (completion === 'successful') {
+        apiFetchJSONMock.mockResolvedValue({ aggregations: { platformAdmission: emptyAdmission } });
+      } else {
+        apiFetchJSONMock.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              finishIncoming = resolve;
+            }),
+        );
+      }
+      hookState.handleOrgSwitch(hookState.activeOrgID() === 'acme' ? 'default' : 'acme');
+      await flushAsync();
+      expect(hookState.platformAdmission()).toEqual(
+        completion === 'successful' ? emptyAdmission : null,
+      );
+      finishOutgoing({ aggregations: { platformAdmission: outgoing } });
+      await flushAsync();
+      expect(hookState.platformAdmission()).toEqual(
+        completion === 'successful' ? emptyAdmission : null,
+      );
+      if (completion === 'pending') {
+        finishIncoming({ aggregations: { platformAdmission: emptyAdmission } });
+        await flushAsync();
+        expect(hookState.platformAdmission()).toEqual(emptyAdmission);
+      }
+      dispose();
+    },
+  );
+
   it('leaves admission unresolved when the first request fails', async () => {
     apiFetchJSONMock.mockRejectedValue(new Error('503 admission unavailable'));
     const { dispose, hookState } = mountHook();
