@@ -1,7 +1,9 @@
 package notifications
 
 import (
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
@@ -35,18 +37,26 @@ func TestQueueDisabledDeliveryIsCancelledNotSent(t *testing.T) {
 					if err := q.Enqueue(n); err != nil {
 						t.Fatal(err)
 					}
-					// Do not start background workers; process one persisted row synchronously.
-					q.processor = nm.ProcessQueuedNotification
-					callbacks := 0
+					// Queue construction starts workers. Configure via the locked setter
+					// and wait for reconciliation even if a worker wins the claim.
+					var callbacks atomic.Int32
+					reconciled := make(chan struct{}, 2)
 					q.SetDeliveryHealthChangedCallback(func() {
-						callbacks++
+						callbacks.Add(1)
 						release := q.acquireAlertDeliveryGates([]string{"incident"}, true)
 						defer release()
 						if _, err := q.GetQueueStats(); err != nil {
 							t.Error(err)
 						}
+						reconciled <- struct{}{}
 					})
+					q.SetProcessor(nm.ProcessQueuedNotification)
 					q.processNotification(n)
+					select {
+					case <-reconciled:
+					case <-time.After(3 * time.Second):
+						t.Fatal("disabled delivery did not reconcile")
+					}
 					var status string
 					var completed *int64
 					if err := q.db.QueryRow(`SELECT status, completed_at FROM notification_queue WHERE id = ?`, n.ID).Scan(&status, &completed); err != nil {
@@ -71,8 +81,8 @@ func TestQueueDisabledDeliveryIsCancelledNotSent(t *testing.T) {
 							t.Errorf("%s has %d rows for a policy skip", table, count)
 						}
 					}
-					if callbacks != 1 {
-						t.Errorf("health callbacks = %d, want 1", callbacks)
+					if count := callbacks.Load(); count != 1 {
+						t.Errorf("health callbacks = %d, want 1", count)
 					}
 					if count, err := q.RetryTerminalFailures(); err != nil || count != 0 {
 						t.Errorf("retry = %d, %v; want no replay", count, err)
