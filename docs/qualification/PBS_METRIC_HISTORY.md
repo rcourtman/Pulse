@@ -68,3 +68,39 @@ synthetic registry rebuilds, unchanged later values and store reopen, not a
 whole-process restart, real upstream outage or installed artifact. Attach the
 phase table, per-metric query results and exact artifact identity to the
 candidate receipt. Do not close #1882 on this checklist or on local tests alone.
+
+## Write-cost companion measurement
+
+Sample correctness, PBS API request load and persistence write cost are three
+separate measurements. Upstream's historical
+[RRD journal proposal](https://lists.proxmox.com/pipermail/pbs-devel/2021-October/004207.html)
+illustrates why stored point counts alone cannot establish bytes written; it
+is not evidence of a current Pulse defect or the installed PBS implementation.
+
+For the same authorised environment, compare baseline and repaired artifacts
+under matched inventory, polling, retention, logging and filesystem settings.
+Record warm-up separately, then equal-duration steady-state windows covering
+multiple flushes. Record UTC boundaries, elapsed seconds, process identity and
+restarts, successful source observations and request counts alongside:
+
+- Pulse process `write_bytes` and `cancelled_write_bytes` counter deltas from
+  `/proc/<pid>/io`, where existing permissions allow; keep both counters rather
+  than treating `wchar` as disk traffic. Never subtract across a process restart.
+- Independently observed host/device write bytes over that window, naming the
+  device and filesystem and recording other workload, including PBS jobs.
+- Database and WAL sizes at each boundary as context only: file growth is not
+  cumulative write traffic. Record checkpoint/retention activity where known.
+
+[Linux documents these process counters and their limitations](https://man7.org/linux/man-pages/man5/proc_pid_io.5.html).
+They include waited-for children and are not a measurement of SSD wear or
+physical device write amplification. Device totals include other writers and
+cannot alone attribute traffic to Pulse. Missing permission or unavailable
+counters means “not measured”, not zero; do not elevate access for this check.
+
+Report bytes/elapsed-second separately from per-metric observation counts.
+Repeat anomalous windows under matched conditions before assigning causality;
+there is no established universal byte-rate pass threshold. Take the SQLite
+backup after the measured window, and record it separately so qualification's
+own I/O is not mistaken for steady-state persistence. Attach raw numeric
+counter boundaries with synthetic resource identifiers, not credentials,
+process environments or customer database contents.
