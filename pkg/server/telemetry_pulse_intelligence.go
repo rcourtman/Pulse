@@ -244,23 +244,12 @@ func applyPulseIntelligencePatrolRunSnapshot(snap *telemetry.Snapshot, persisten
 	if err != nil || history == nil {
 		return
 	}
-	// Run volume comes from the uncapped daily tally. Counting history.Runs
+	// Run and finding volumes come from daily tallies. Counting history.Runs
 	// directly saturates at the operator-facing history cap, which on an install
 	// patrolling on a normal schedule is reached within hours of a thirty-day
 	// window rather than at its end.
 	snap.PulseIntelligencePatrolRuns30d += history.PatrolRunsSince(since)
-	for _, run := range history.Runs {
-		observedAt := run.CompletedAt
-		if observedAt.IsZero() {
-			observedAt = run.StartedAt
-		}
-		if observedAt.IsZero() || observedAt.Before(since) {
-			continue
-		}
-		if run.NewFindings > 0 {
-			snap.PulseIntelligencePatrolNewFindings30d += run.NewFindings
-		}
-	}
+	snap.PulseIntelligencePatrolNewFindings30d += history.PatrolNewFindingsSince(since)
 }
 
 func applyPulseIntelligenceFindingSnapshot(snap *telemetry.Snapshot, persistence *config.ConfigPersistence, since time.Time) {
