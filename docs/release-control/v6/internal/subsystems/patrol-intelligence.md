@@ -868,8 +868,13 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    probe, context assembler, and execution-governance owner; the configured LLM
    is the diagnostic and remediation-reasoning owner. Patrol handoffs may
    provide system context, resource posture, action posture, and governed tools,
-   but must not synthesize, pre-fill, or auto-submit chat prompts, force active
-   tool use, name a required tool path, show suggested prompt chips, or present
+   but ordinary context attachment must not synthesize, pre-fill, or submit
+   chat prompts. The explicitly labelled Explain action starts the shared
+   evidence-first Assistant request with the selected attention record, bounded
+   evidence, resource references, and the canonical finding handoff when exactly
+   one finding is linked. Ambiguous links must not select an arbitrary finding.
+   Neither path may force active tool use, name a required tool path, show
+   suggested prompt chips, or present
    a Patrol-authored remediation answer for the LLM to execute. Patrol
    runs must still call the configured model when deterministic triage is quiet,
    and unmatched deterministic signals may be returned as context for another
@@ -2578,3 +2583,9 @@ is unavailable rather than showing zeros. Proofs:
 `frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceSurface.test.tsx`,
 `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx` (card ordering),
 and the browser receipt in `frontend-modern/browser-verification.json`.
+
+The explicit issue explanation journey is qualified separately from provider
+reasoning and real remediation in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
+proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
+response does not establish a useful customer outcome or model qualification.

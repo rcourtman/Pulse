@@ -63,7 +63,7 @@ export const AI_CHAT_SESSION_SEARCH_ERROR_STATE = 'Failed to search assistant se
 export const AI_CHAT_MODEL_SELECTOR_EMPTY_STATE = 'No matching models.';
 export const AI_CHAT_DISCOVERY_HINT_TITLE = 'Discovery is off.';
 export const AI_CHAT_DISCOVERY_HINT_BODY =
-  'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.';
+  'Inventory, metrics, and alerts are available. Enable discovery in Settings for additional service details.';
 export const AI_CHAT_INPUT_PLACEHOLDER = 'Ask about your infrastructure...';
 export const AI_CHAT_QUESTION_CARD_TITLE = 'Pulse Assistant needs your input';
 export const AI_CHAT_QUESTION_CARD_PLACEHOLDER = 'Type your answer...';

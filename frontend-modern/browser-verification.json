@@ -1,47 +1,53 @@
 {
   "version": 1,
-  "base_sha": "5beeaf4cbe32603bf4d8dcb07069957a659aa1a4",
-  "verified_at": "2026-09-05T17:22:19Z",
+  "base_sha": "75976c60be5e156be46fca344a02b7df5f573416",
+  "verified_at": "2026-09-05T17:45:39.915245Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts",
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+    "frontend-modern/src/stores/aiChat.ts",
+    "frontend-modern/src/utils/aiChatPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "0c81c819d7a4fc604df3e202181815b1fcab3b7e3c28198c8a4f7a4d5e441dd3",
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "555c0653223509adafbde423558ef9e89672d68c096e50f6f4772c42088b8286",
-    "frontend-modern/src/index.css": "db660b38b158594f6e09f179db69e76f85afed11f0dc863fb35619720445312d"
+    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts": "8606c79c11b0197ed5a55ed1d2ec83e0cd7dd0adda182937e5aad9144571cb17",
+    "frontend-modern/src/components/AI/Chat/index.tsx": "6b1d6243d9a99d688229dea9e954ae6aa770a8b6e07e7f0ce75316b486090f09",
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "f373ff21a1c54304d63b92498c39fa45f5ffb036a2b02e93de64fafbbf8ee52e",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "f098cddd58823d2df7687f0db7774363fc9c81a7a8845a917e73415a7f5aae10",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "4152a3bec5412b4d744436128e8e038be349d9b6419fc58d3b7527908ffc982f",
+    "frontend-modern/src/stores/aiChat.ts": "d0b1ef69bcb454e6f0ce17a157c98bdd34d68d90f607b76081e9cd1bd6778e4c",
+    "frontend-modern/src/utils/aiChatPresentation.ts": "4b05f663110ec6c789f8ff050993a945e3e9d41c6e3fee4047500e979a48531d"
   },
   "routes": [
-    "/docker",
-    "/proxmox",
-    "/settings",
+    "/patrol",
     "/alerts"
   ],
   "viewports": [
     {
-      "width": 390,
-      "height": 844
-    },
-    {
-      "width": 1100,
-      "height": 900
-    },
-    {
       "width": 1440,
-      "height": 900
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
     }
   ],
   "states": [
-    "Isolated source-built local backend with synthetic inventory; desktop Chromium at default zoom, not physical Android or touch emulation.",
-    "Six populated-navigation recovery cases passed: normal and failed admission at each width. Phone update text-range, single-line Current, non-scrolling wrapper and expanded heading checks passed at 390px normal admission.",
-    "Viewed retained final phone screenshots: Current and Update fully visible; notifications-worker wraps in expanded drawer. No blanket accessibility, 320px, every asynchronous action-state or installed-release claim."
+    "Current hot-dev frontend with mock monitoring backend. Scripted attention evidence and inference responses. Other non-GET requests blocked. No real model or infrastructure outcome qualification.",
+    "Patrol selected item, expanded evidence, scoped explanation, streamed response, failed provider request and successful retry. Draft preserved across Escape and context-only reopen.",
+    "Active alert secondary menu at desktop and narrow widths. Open, Escape dismissal, outside click dismissal, reopen, select explanation, menu closes and alert context sent. Screenshots inspected for menu placement, readable response, reachable composer and error controls."
   ],
   "interactions": [
-    "pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 PULSE_E2E_TABLE_ACCESS=1 PULSE_E2E_LOCAL_BACKEND_PORT=18765 npm --prefix tests/integration test -- tests/96-navigation-socket-recovery.spec.ts --project=chromium: six passed; managed backend stopped.",
-    "Interrupted and restored WebSocket connections; preserved populated navigation through successful and failed admission; exercised mobile More, Settings, platform switching and Alerts.",
-    "At 390px, horizontal wheel and ArrowRight leave wrapper unscrolled; Enter expands container detail, whose heading is scrolled into view and photographed. Receipts: tests/qualification/navigation-reconnect/2026-09-05-phone-layout/.",
-    "Receipt reconstructed during governance repair from the retained final run and exact unchanged runtime bytes. Only contracts and tests changed after that run."
+    "node scripts/check-patrol-assistant-journey.mjs",
+    "Patrol at 1440/900/390: keyboard focus and Enter on Explain, exactly one selected-issue request, correct evidence/resource, autonomous false, no generic workflow starters, close/reopen preserves draft without inference.",
+    "Alerts at 1440/390: More alert actions, Escape, reopen, outside click, reopen, Explain. Selected alert evidence and resource attached with autonomous false. No Patrol trigger or configuration mutation.",
+    "Provider failure, Try again retains original handoff, reload does not resubmit. No page errors or unexpected non-GET requests."
   ]
 }

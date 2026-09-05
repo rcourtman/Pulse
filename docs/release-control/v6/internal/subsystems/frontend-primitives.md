@@ -2696,9 +2696,13 @@ production table, router and styles; it does not qualify full-app scrolling.
     Scoped Assistant handoffs must keep request-local execution overrides in
     drawer context. Dashboard and other route-owned entry points may open the
     Assistant drawer with source context and `autonomousMode:false`, but they
-    must not pre-fill or auto-submit a prompt, mutate persistent AI control-level
-    settings or trigger background Assistant settings/model bootstrap before
-    the drawer is open. Patrol finding handoffs that add structured
+    must not infer a user task from an ordinary context-only open. Explicit
+    labelled explanation actions use `aiChatStore.explain` and the shared
+    explanation dispatcher, which captures the request context, waits for open
+    initialization, preserves drafts, and acknowledges each request once.
+    Older request completion must not clear newer handoff context. Neither
+    path may mutate persistent AI control-level settings or trigger background
+    Assistant settings/model bootstrap before the drawer is open. Patrol finding handoffs that add structured
     investigation-record framing must derive that context through
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
     so shared drawer primitives stay shell-owned rather than becoming a
@@ -7098,3 +7102,9 @@ App.architecture.test.ts protects the CSS scope and scroll ownership;
 96-navigation-socket-recovery.spec.ts checks real 390px text ranges and the
 non-scrolling wrapper. Browser receipts do not establish physical Android touch
 behaviour or every asynchronous update state.
+
+The explicit issue explanation journey is qualified separately from provider
+reasoning and real remediation in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
+proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
+response does not establish a useful customer outcome or model qualification.

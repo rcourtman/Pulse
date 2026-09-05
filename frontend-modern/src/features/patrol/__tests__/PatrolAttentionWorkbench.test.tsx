@@ -96,6 +96,7 @@ import {
   sortPatrolAttentionDecisions,
 } from '../PatrolAttentionWorkbench';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
+import { buildPatrolAttentionAssistantHandoff } from '../patrolInvestigationContextModel';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 
 const evaluatedAt = '2026-07-19T08:00:00Z';
@@ -1029,5 +1030,70 @@ describe('PatrolAttentionWorkbench', () => {
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close action review' }));
     await waitFor(() => expect(currentTrigger).toHaveFocus());
+  });
+});
+
+describe('attention explanation context', () => {
+  it('preserves canonical finding and investigation identity when the issue has one linked finding', () => {
+    const selected = detail(item());
+    const handoff = buildPatrolAttentionAssistantHandoff(selected, [mirroredFinding()]);
+    expect(handoff.context.findingId).toBe('finding-1');
+    expect(handoff.context.handoffMetadata?.kind).toBe('patrol_finding');
+    expect(handoff.context.briefing?.title).toBe('Disk pressure on Database VM');
+    expect(handoff.context.handoffContext).toContain(
+      'The root volume has been filling for a week.',
+    );
+    expect(handoff.context.handoffContext).toContain('Operational Record: record-1');
+    expect(handoff.context.handoffContext).toContain('Evidence evidence-1:');
+    expect(handoff.context.autonomousMode).toBe(false);
+  });
+
+  it('keeps unlinked attention evidence and existing governed action references without inventing a finding', () => {
+    const selected = detail(
+      item({
+        availableActions: [
+          {
+            actionId: 'action-1',
+            targetResourceId: 'pve:vm:101',
+            capability: 'reboot',
+            kind: 'resource',
+            label: 'Reboot',
+            mode: 'plan',
+            risk: 'medium',
+            approval: 'required',
+            eligibility: 'eligible',
+            reasons: [],
+            evidenceIds: ['evidence-1'],
+            expectedPostcondition: 'running',
+            verificationPolicy: 'independent',
+            requiresApproval: true,
+          },
+        ],
+      }),
+    );
+    const handoff = buildPatrolAttentionAssistantHandoff(selected);
+    expect(handoff.context.findingId).toBeUndefined();
+    expect(handoff.context.handoffResources).toEqual([
+      { id: 'pve:vm:101', name: 'Database VM', type: 'vm' },
+    ]);
+    expect(handoff.context.handoffActions).toEqual([
+      {
+        actionId: 'action-1',
+        targetResourceId: 'pve:vm:101',
+        actionCapability: 'reboot',
+        actionRequiresApproval: true,
+      },
+    ]);
+    expect(handoff.context.handoffContext).toContain('Evidence: fresh/complete');
+    expect(handoff.context.handoffContext).toContain('observed');
+  });
+
+  it('does not bind the request to an arbitrary finding when several findings explain an issue', () => {
+    const handoff = buildPatrolAttentionAssistantHandoff(detail(item()), [
+      mirroredFinding(),
+      mirroredFinding({ id: 'finding-2' }),
+    ]);
+    expect(handoff.context.findingId).toBeUndefined();
+    expect(handoff.context.context?.operationalRecordId).toBe('record-1');
   });
 });
