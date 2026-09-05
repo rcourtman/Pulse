@@ -77,6 +77,20 @@ function normalizeVersion(value) {
 function extractPulseVersion(title, body) {
   if (body) {
     const lines = body.split(/\r?\n/);
+    const versionHeading = lines.findIndex((line) =>
+      /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line)
+    );
+    if (versionHeading !== -1) {
+      // The explicit running-version field is authoritative, even when it is
+      // incomplete. A title may name the old image in an upgrade report, and
+      // neighbouring fields may contain an unrelated agent version.
+      const value = [];
+      for (let i = versionHeading + 1; i < lines.length; i += 1) {
+        if (/^#{1,6}[ \t]+/.test(lines[i])) break;
+        value.push(lines[i]);
+      }
+      return normalizeVersion(stripHTMLComments(value.join("\n")));
+    }
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i] || "";
       if (/pulse\s*(\||-)?\s*version/i.test(line)) {
