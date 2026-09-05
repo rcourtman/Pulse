@@ -15,13 +15,19 @@
 
 ## Purpose
 
-TrueNAS provider incidents mapped to informational alert level remain on the
-canonical resource but do not enter the actionable active-alert lifecycle.
+TrueNAS INFO provider incidents remain on the canonical resource but do not
+enter the actionable active-alert lifecycle. Native NOTICE remains actionable
+at informational canonical severity; it must not be discarded merely because
+INFO and NOTICE share the monitor risk level. Native severity is preserved by
+the provider projection.
 Warning and critical incidents retain normal routing; downgrade to information
 clears an existing actionable incident through normal synchronisation.
 `TestSyncUnifiedResourceIncidentsTrueNASInformation` in
 `internal/alerts/unified_incidents_test.go` pins information, warning, recovery,
 and preservation of provider resource evidence.
+`TestSyncUnifiedResourceIncidentsTrueNASNativeNotice` additionally exercises
+native projection, NOTICE activation without severity inflation, and confirmed
+recovery to INFO.
 
 Own alert identity, alert specs, evaluation, persistence semantics, and
 operator-facing alert routing behavior for live runtime alerts.
