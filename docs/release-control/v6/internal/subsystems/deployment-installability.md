@@ -4089,6 +4089,13 @@ are part of the same governed bootstrap input even when the package manifest
 range already permits the newer version; the lockfile must identify the
 resolved package version and integrity that the release build will actually
 consume.
+Build and Test and Core E2E must admit both pushes and pull requests for
+`release/v*` trains as well as main. A release proposal must not appear
+qualified merely because documentation and boundary checks passed while the
+branch filters excluded build, dependency-security and applicable E2E checks.
+Existing path filters and per-job requirements remain in force; branch admission
+is not evidence that those jobs executed or passed.
+
 Frontend dependency-security changes use their own proof route rather than
 borrowing the local dev-runtime orchestration tests. The canonical
 `.github/workflows/build-and-test.yml` frontend job must run the complete
