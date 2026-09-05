@@ -188,6 +188,9 @@ jobs:
       - name: Run stable release continuity diagnostic unit tests
         run: python3 scripts/release_control/release_continuity_test.py
 
+      - name: Run Helm Pages publication retry tests
+        run: python3 scripts/release_control/helm_pages_retry_test.py
+
       - name: Run status audit unit tests
         run: python3 scripts/release_control/status_audit_test.py
 

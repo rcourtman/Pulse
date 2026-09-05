@@ -1140,6 +1140,15 @@ artifact-selection behaviour.
    and qualified by the exact create-release run. It must bind that artifact
    to the activated source run, tag, commit, and activation marker, and must
    not repeat chart packaging or the pre-activation kind install/upgrade smoke.
+   An existing chart release must explicitly report a non-draft state before
+   convergence uploads assets, edits metadata, or advertises it through Pages.
+   Matching assets visible to the authenticated workflow do not make a draft
+   publicly downloadable. Draft or unknown publication state fails closed
+   without implicitly publishing an operator-owned draft. Published matching
+   assets remain reusable without replacement. The executable retry fixtures
+   in `scripts/release_control/helm_pages_retry_test.py` and the release-policy
+   test `test_helm_pages_retry_requires_explicitly_published_chart` protect this
+   boundary; they are not live publication or installed Helm qualification.
    Release-to-convergence and cross-repository child-run observation should
    use short bounded polls so GitHub indexing cannot add tens of seconds after
    a required exact run or activation marker has already completed.
