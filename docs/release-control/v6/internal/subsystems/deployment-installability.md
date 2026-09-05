@@ -5019,7 +5019,14 @@ back to a marker-free draft.
 
 `scripts/verify-github-release-integrity.sh` is the shared post-publication
 check. It binds the release database ID, tag, exact source SHA, immutable state,
-and single digest-bearing activation marker, then requires `gh release verify`
+and single digest-bearing activation marker. Uniqueness counts every asset named
+`release-activation.json`, including pending, empty, or malformed entries,
+before validating the marker's metadata. Duplicate names must fail before
+attestation or download; filtering out invalid entries must not make an
+ambiguous inventory acceptable. The regression cases in
+`scripts/release_control/verify_github_release_integrity_test.py` cover both
+valid duplicates and a valid marker accompanied by a malformed duplicate.
+The check then requires `gh release verify`
 to validate GitHub's signed release attestation. It must then download the
 activation marker from that release and require `gh release verify-asset` to
 bind the exact consumed bytes to the signed release attestation. Filename,
