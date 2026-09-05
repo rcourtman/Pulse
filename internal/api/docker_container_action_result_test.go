@@ -106,7 +106,7 @@ func TestDockerContainerUpdateExecutionResultClampsBoundedPositiveAgentClockSkew
 	facts := agentexec.DockerContainerUpdateResultPayload{
 		Operation: agentexec.DockerContainerOperationUpdate, ActionID: "action-update", ExecutionPhase: agentexec.DockerContainerPhaseComplete,
 		MutationStarted: true, MutationCompleted: true, ReadbackRan: true, NewContainerID: dockerLifecycleTestID,
-		After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: "running", Running: true, ObservedAt: observedAt},
+		After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: "running", Running: true, Health: agentexec.DockerContainerHealthHealthy, ObservedAt: observedAt},
 	}
 	result, err := dockerContainerUpdateExecutionResult("app-container:fixture", "agent-1", facts, nil, receivedAt)
 	if err != nil {
@@ -237,6 +237,41 @@ func TestDockerContainerUpdateIndependentObservationMustMatchState(t *testing.T)
 			}
 			if got := result.ActionResultV2.Verification; got.Status != tc.want || got.EvidenceClass != unified.ActionEvidenceIndependent {
 				t.Fatalf("verification = %+v, want %s / independent", got, tc.want)
+			}
+			if result.ActionResultV2.Execution.Status != unified.ActionExecutionSucceeded {
+				t.Fatal("readback changed execution history")
+			}
+		})
+	}
+}
+
+func TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name, state, health string
+		running             bool
+		want                unified.ActionVerificationStatus
+	}{
+		{"healthy", "running", "healthy", true, unified.ActionVerificationConfirmed},
+		{"no healthcheck", "running", "none", true, unified.ActionVerificationConfirmed},
+		{"stopped preserved", "created", "none", false, unified.ActionVerificationConfirmed},
+		{"unhealthy", "running", "unhealthy", true, unified.ActionVerificationContradicted},
+		{"starting", "running", "starting", true, unified.ActionVerificationContradicted},
+		{"restarting", "restarting", "healthy", true, unified.ActionVerificationContradicted},
+		{"unknown health", "running", "", true, unified.ActionVerificationInconclusive},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := agentexec.DockerContainerUpdateResultPayload{
+				Operation: agentexec.DockerContainerOperationUpdate, ActionID: "action-update", ExecutionPhase: agentexec.DockerContainerPhaseComplete,
+				MutationStarted: true, MutationCompleted: true, ReadbackRan: true, NewContainerID: dockerLifecycleTestID,
+				After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: tc.state, Running: tc.running, Health: tc.health, ObservedAt: now},
+			}
+			result, err := dockerContainerUpdateExecutionResult("app-container:fixture", "agent-1", facts, nil, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := result.ActionResultV2.Verification; got.Status != tc.want || got.EvidenceClass != unified.ActionEvidenceAgentAttested {
+				t.Fatalf("verification = %+v, want %s / agent_attested", got, tc.want)
 			}
 			if result.ActionResultV2.Execution.Status != unified.ActionExecutionSucceeded {
 				t.Fatal("readback changed execution history")
