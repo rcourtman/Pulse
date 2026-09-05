@@ -254,6 +254,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 
 	for storageKey, alert := range desired {
 		if existing, exists := m.getActiveAlertNoLock(storageKey); exists && existing != nil {
+			oldLevel := existing.Level
 			existing.LastSeen = alert.LastSeen
 			existing.Level = alert.Level
 			existing.ResourceID = alert.ResourceID
@@ -281,6 +282,14 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			}
 			applyCanonicalIdentity(existing, alert.CanonicalSpecID, alert.CanonicalKind)
 			m.setActiveAlertNoLock(storageKey, existing)
+			// Like metric alerts, an existing provider incident becoming critical
+			// must notify again. Keep its lifecycle and all delivery policy gates;
+			// unchanged severity and downgrades must not create notification noise.
+			if oldLevel != existing.Level && existing.Level == AlertLevelCritical &&
+				!existing.Acknowledged &&
+				m.allowNotificationByRateLimit(storageKey, existing, "critical-escalation") {
+				m.dispatchAlert(existing, false)
+			}
 			continue
 		}
 

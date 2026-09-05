@@ -20,6 +20,15 @@ enter the actionable active-alert lifecycle. Native NOTICE remains actionable
 at informational canonical severity; it must not be discarded merely because
 INFO and NOTICE share the monitor risk level. Native severity is preserved by
 the provider projection.
+An existing provider incident transitioning from a non-critical level to
+critical re-enters canonical notification dispatch, subject to acknowledgement,
+rate limits, and delivery policy. The transition preserves incident identity
+and start time. Repeated critical observations and severity downgrades do not
+re-notify; confirmed recovery retains the same lifecycle identity.
+`TestTrueNASNativeCriticalTransition` in
+`internal/alerts/unified_incidents_test.go` verifies these boundaries through
+native TrueNAS WARNING, EMERGENCY, and INFO observations.
+
 Warning and critical incidents retain normal routing; downgrade to information
 clears an existing actionable incident through normal synchronisation.
 `TestSyncUnifiedResourceIncidentsTrueNASInformation` in
