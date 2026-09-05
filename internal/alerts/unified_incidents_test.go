@@ -1253,3 +1253,82 @@ func TestSyncUnifiedResourceIncidentsTrueNASNativeRecoveryStreak(t *testing.T) {
 		}
 	}
 }
+
+// A severity change must retain the incident identity without silently losing
+// the critical notification or dispatching on every subsequent observation.
+func TestTrueNASNativeCriticalTransition(t *testing.T) {
+	for _, gate := range []string{"active", "acknowledged", "rate-limited"} {
+		t.Run(gate, func(t *testing.T) {
+			m := newTestManager(t)
+			configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+			var dispatched []Alert
+			m.SetAlertCallback(func(a *Alert) { dispatched = append(dispatched, *a) })
+			resolved := make(chan string, 4)
+			m.SetResolvedCallback(func(id string) { resolved <- id })
+			syncLevel := func(level string) {
+				records := truenas.FixtureRecords(truenas.FixtureSnapshot{
+					CollectedAt: time.Now(),
+					System:      truenas.SystemInfo{Hostname: "native-transition", Healthy: true},
+					Alerts:      []truenas.Alert{{ID: "native-1", Level: level, Message: "Provider condition"}},
+				})
+				var resources []unifiedresources.Resource
+				for _, record := range records {
+					record.Resource.ID = "host:" + record.SourceID
+					resources = append(resources, record.Resource)
+				}
+				m.SyncUnifiedResourceIncidents(resources)
+			}
+			syncLevel("WARNING")
+			if len(dispatched) != 1 {
+				t.Fatalf("initial dispatches = %d", len(dispatched))
+			}
+			initial := dispatched[0]
+			if gate != "active" {
+				m.mu.Lock()
+				for key, a := range m.activeAlerts {
+					if gate == "acknowledged" {
+						a.Acknowledged = true
+					} else {
+						// Exhaust the canonical incident budget before escalation.
+						m.config.Schedule.MaxAlertsHour = 1
+						m.alertRateLimit[key] = []time.Time{time.Now()}
+					}
+				}
+				m.mu.Unlock()
+			}
+			syncLevel("EMERGENCY")
+			syncLevel("EMERGENCY")
+			active := m.GetActiveAlerts()
+			if len(active) != 1 || active[0].ID != initial.ID || active[0].Level != AlertLevelCritical || !active[0].StartTime.Equal(initial.StartTime) {
+				t.Fatalf("critical transition lost lifecycle identity: %+v", active)
+			}
+			want := 2
+			if gate != "active" {
+				want = 1
+			}
+			if len(dispatched) != want {
+				t.Fatalf("dispatches = %d, want %d", len(dispatched), want)
+			}
+			if gate == "active" && (dispatched[1].ID != initial.ID || dispatched[1].Level != AlertLevelCritical) {
+				t.Fatal("critical notification lost severity or identity")
+			}
+			syncLevel("WARNING")
+			if len(dispatched) != want {
+				t.Fatal("downgrade dispatched")
+			}
+			syncLevel("INFO")
+			syncLevel("INFO")
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("confirmed recovery retained incident")
+			}
+			select {
+			case id := <-resolved:
+				if id != initial.ID {
+					t.Fatalf("recovery ID = %s, want %s", id, initial.ID)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("missing recovery callback")
+			}
+		})
+	}
+}
