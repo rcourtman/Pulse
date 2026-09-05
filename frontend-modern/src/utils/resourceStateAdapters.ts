@@ -521,25 +521,162 @@ const getCanonicalSourceList = (
 const sourceListContainsRuntimePlatform = (sources: string[] | undefined): boolean =>
   sourceListHas(sources, 'proxmox-pve', 'docker', 'kubernetes', 'vmware-vsphere', 'truenas');
 
-const getHostResourceMergeKey = (resource: Resource): string | undefined => {
-  if (resource.type !== 'agent') return undefined;
+const getRealtimeAgentFacet = (resource: Resource): JsonRecord | undefined =>
+  asRecord(resource.agent) ?? asRecord(asRecord(resource.platformData)?.agent);
+
+const getRealtimeProxmoxFacet = (resource: Resource): JsonRecord | undefined =>
+  asRecord(resource.proxmox) ?? asRecord(asRecord(resource.platformData)?.proxmox);
+
+const getRealtimeHostIdentity = (resource: Resource): JsonRecord | undefined =>
+  asRecord(resource.identity);
+
+const getRealtimeHostnameCandidates = (resource: Resource): Array<string | undefined> => {
   const platform = asRecord(resource.platformData);
-  const canonical = resource.canonicalIdentity;
-  const candidates = [
-    canonical?.platformId,
-    canonical?.hostname,
+  const identity = getRealtimeHostIdentity(resource);
+  const identityHostnames = readStringArray(identity?.hostnames) ?? [];
+  return [
+    resource.canonicalIdentity?.platformId,
+    resource.canonicalIdentity?.hostname,
     resource.platformId,
-    asString(asRecord(resource.agent)?.hostname),
+    ...identityHostnames,
+    asString(identity?.hostname),
+    asString(getRealtimeAgentFacet(resource)?.hostname),
+    asString(getRealtimeProxmoxFacet(resource)?.nodeName),
     asString(asRecord(platform?.agent)?.hostname),
-    asString(asRecord(resource.proxmox)?.nodeName),
     asString(asRecord(platform?.proxmox)?.nodeName),
     getPreferredResourceHostname(resource),
     getPreferredInfrastructureDisplayName(resource),
     resource.displayName,
     resource.name,
   ];
-  const hostKey = candidates.map(normalizeResourceIdentityToken).find(Boolean);
+};
+
+const getHostResourceMergeKey = (resource: Resource): string | undefined => {
+  if (resource.type !== 'agent') return undefined;
+  const hostKey = getRealtimeHostnameCandidates(resource)
+    .map(normalizeResourceIdentityToken)
+    .find(Boolean);
   return hostKey ? `agent:${hostKey}` : undefined;
+};
+
+const realtimeIdentityValuesEqual = (left: unknown, right: unknown): boolean => {
+  const leftValue = asString(left)?.toLowerCase();
+  const rightValue = asString(right)?.toLowerCase();
+  return Boolean(leftValue && rightValue && leftValue === rightValue);
+};
+
+const realtimeIdentityValuesConflict = (left: unknown, right: unknown): boolean => {
+  const leftValue = asString(left)?.toLowerCase();
+  const rightValue = asString(right)?.toLowerCase();
+  return Boolean(leftValue && rightValue && leftValue !== rightValue);
+};
+
+const extractRealtimeEndpointHostname = (value: unknown): string | undefined => {
+  const raw = asString(value);
+  if (!raw) return undefined;
+  try {
+    const parsed = asString(new URL(raw).hostname)?.toLowerCase();
+    if (parsed) return parsed;
+  } catch {
+    // Fall through to the host[:port][/path] compatibility form below.
+  }
+  return asString(raw.split('/', 1)[0]?.split(':', 1)[0])?.toLowerCase();
+};
+
+// Two hand-added standalone Proxmox sites can legitimately expose the same
+// native short node name. Instance, immutable node identity, and endpoint are
+// provider-scope evidence; the browser must preserve the server's split when
+// those scopes differ (#1753).
+const realtimeProxmoxNodeScopesDistinct = (
+  left: JsonRecord | undefined,
+  right: JsonRecord | undefined,
+): boolean => {
+  if (!left || !right || !asString(left.nodeName) || !asString(right.nodeName)) return false;
+  if (!realtimeIdentityValuesConflict(left.instance, right.instance)) return false;
+  if (realtimeIdentityValuesEqual(left.nodeIdentity, right.nodeIdentity)) return false;
+  if (
+    realtimeIdentityValuesEqual(
+      extractRealtimeEndpointHostname(left.host),
+      extractRealtimeEndpointHostname(right.host),
+    )
+  ) {
+    return false;
+  }
+  return true;
+};
+
+const getRealtimeMachineIds = (resource: Resource): string[] => {
+  const identity = getRealtimeHostIdentity(resource);
+  const agent = getRealtimeAgentFacet(resource);
+  return [asString(identity?.machineId), asString(agent?.machineId)].filter(
+    (value): value is string => Boolean(value),
+  );
+};
+
+const realtimeMachineIdsOverlap = (left: string[], right: string[]): boolean =>
+  left.some((leftId) => right.some((rightId) => leftId.toLowerCase() === rightId.toLowerCase()));
+
+const realtimeHostIdentitiesDistinct = (left: Resource, right: Resource): boolean => {
+  const leftMachineIds = getRealtimeMachineIds(left);
+  const rightMachineIds = getRealtimeMachineIds(right);
+  if (
+    leftMachineIds.length > 0 &&
+    rightMachineIds.length > 0 &&
+    !realtimeMachineIdsOverlap(leftMachineIds, rightMachineIds)
+  ) {
+    return true;
+  }
+
+  if (
+    realtimeIdentityValuesConflict(
+      getRealtimeHostIdentity(left)?.dmiUuid,
+      getRealtimeHostIdentity(right)?.dmiUuid,
+    )
+  ) {
+    return true;
+  }
+
+  const leftProxmox = getRealtimeProxmoxFacet(left);
+  const rightProxmox = getRealtimeProxmoxFacet(right);
+  if (realtimeIdentityValuesConflict(leftProxmox?.clusterName, rightProxmox?.clusterName)) {
+    return true;
+  }
+  return realtimeProxmoxNodeScopesDistinct(leftProxmox, rightProxmox);
+};
+
+const getAmbiguousRealtimeProxmoxHostKeys = (resources: Resource[]): Set<string> => {
+  const facetsByHostKey = new Map<string, JsonRecord[]>();
+  const ambiguous = new Set<string>();
+  for (const resource of resources) {
+    const facet = getRealtimeProxmoxFacet(resource);
+    const hostKey = getHostResourceMergeKey(resource);
+    if (!facet || !asString(facet.nodeName) || !hostKey || ambiguous.has(hostKey)) continue;
+    const existingFacets = facetsByHostKey.get(hostKey) ?? [];
+    if (existingFacets.some((existing) => realtimeProxmoxNodeScopesDistinct(existing, facet))) {
+      ambiguous.add(hostKey);
+    }
+    existingFacets.push(facet);
+    facetsByHostKey.set(hostKey, existingFacets);
+  }
+  return ambiguous;
+};
+
+const realtimeGuardedMergeAllowed = (left: Resource, right: Resource): boolean => {
+  const leftProxmox = getRealtimeProxmoxFacet(left);
+  const rightProxmox = getRealtimeProxmoxFacet(right);
+  const leftIsNode = Boolean(asString(leftProxmox?.nodeName));
+  const rightIsNode = Boolean(asString(rightProxmox?.nodeName));
+  if (leftIsNode === rightIsNode) return true;
+
+  const node = leftIsNode ? left : right;
+  const agent = leftIsNode ? right : left;
+  const nodeProxmox = getRealtimeProxmoxFacet(node);
+  const nodePlatform = asRecord(node.platformData);
+  const linkedAgentId =
+    asString(nodeProxmox?.linkedAgentId) ??
+    asString(nodePlatform?.linkedAgentId) ??
+    asString(getRealtimeAgentFacet(node)?.agentId);
+  return realtimeIdentityValuesEqual(linkedAgentId, getRealtimeAgentFacet(agent)?.agentId);
 };
 
 const shouldMergeRealtimeHostResources = (incoming: Resource, existing: Resource): boolean => {
@@ -592,7 +729,8 @@ const mergeRealtimeHostResources = (incoming: Resource, existing: Resource): Res
 
 const coalesceCanonicalRealtimeResourceSnapshot = (resources: Resource[]): Resource[] => {
   const coalesced: Resource[] = [];
-  const indexByHostKey = new Map<string, number>();
+  const indexesByHostKey = new Map<string, number[]>();
+  const ambiguousProxmoxHostKeys = getAmbiguousRealtimeProxmoxHostKeys(resources);
 
   for (const resource of resources) {
     const hostKey = getHostResourceMergeKey(resource);
@@ -601,20 +739,28 @@ const coalesceCanonicalRealtimeResourceSnapshot = (resources: Resource[]): Resou
       continue;
     }
 
-    const existingIndex = indexByHostKey.get(hostKey);
-    if (existingIndex === undefined) {
-      indexByHostKey.set(hostKey, coalesced.length);
-      coalesced.push(resource);
-      continue;
+    let merged = false;
+    for (const existingIndex of indexesByHostKey.get(hostKey) ?? []) {
+      const existing = coalesced[existingIndex];
+      if (realtimeHostIdentitiesDistinct(resource, existing)) continue;
+      if (
+        ambiguousProxmoxHostKeys.has(hostKey) &&
+        !realtimeGuardedMergeAllowed(resource, existing)
+      ) {
+        continue;
+      }
+      if (!shouldMergeRealtimeHostResources(resource, existing)) continue;
+      coalesced[existingIndex] = mergeRealtimeHostResources(resource, existing);
+      merged = true;
+      break;
     }
 
-    const existing = coalesced[existingIndex];
-    if (!shouldMergeRealtimeHostResources(resource, existing)) {
+    if (!merged) {
+      const indexes = indexesByHostKey.get(hostKey) ?? [];
+      indexes.push(coalesced.length);
+      indexesByHostKey.set(hostKey, indexes);
       coalesced.push(resource);
-      continue;
     }
-
-    coalesced[existingIndex] = mergeRealtimeHostResources(resource, existing);
   }
 
   return coalesced;

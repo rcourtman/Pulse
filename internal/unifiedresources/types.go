@@ -454,6 +454,7 @@ type StorageMeta struct {
 	ArrayState   string  `json:"arrayState,omitempty"`
 	SyncAction   string  `json:"syncAction,omitempty"`
 	SyncProgress float64 `json:"syncProgress,omitempty"`
+	NumDisks     *int    `json:"numDisks,omitempty"` // nil means the agent did not report an array disk count.
 	NumProtected int     `json:"numProtected,omitempty"`
 	NumDisabled  int     `json:"numDisabled,omitempty"`
 	NumInvalid   int     `json:"numInvalid,omitempty"`
@@ -468,6 +469,8 @@ type StorageConsumerMeta struct {
 }
 
 type ResourceIncident struct {
+	// NativeSeverity preserves provider levels that share a canonical risk (e.g. INFO and NOTICE).
+	NativeSeverity                string                  `json:"nativeSeverity,omitempty"`
 	Provider                      string                  `json:"provider,omitempty"`
 	NativeID                      string                  `json:"nativeId,omitempty"`
 	Code                          string                  `json:"code"`
@@ -748,6 +751,7 @@ type HostUnraidMeta struct {
 	SyncAction        string               `json:"syncAction,omitempty"`
 	SyncProgress      float64              `json:"syncProgress,omitempty"`
 	SyncErrors        int64                `json:"syncErrors,omitempty"`
+	NumDisks          *int                 `json:"numDisks,omitempty"` // nil means the agent did not report an array disk count.
 	NumProtected      int                  `json:"numProtected,omitempty"`
 	NumDisabled       int                  `json:"numDisabled,omitempty"`
 	NumInvalid        int                  `json:"numInvalid,omitempty"`

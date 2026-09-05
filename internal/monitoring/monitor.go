@@ -3896,6 +3896,7 @@ func hostUnraidFromReadStateView(unraid *unifiedresources.HostUnraidMeta) *model
 		SyncAction:   unraid.SyncAction,
 		SyncProgress: unraid.SyncProgress,
 		SyncErrors:   unraid.SyncErrors,
+		NumDisks:     unraid.NumDisks,
 		NumProtected: unraid.NumProtected,
 		NumDisabled:  unraid.NumDisabled,
 		NumInvalid:   unraid.NumInvalid,
@@ -5385,7 +5386,7 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 
 	now := time.Now()
 	storeWrites := make([]metrics.WriteMetric, 0)
-	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64, timestamp time.Time) {
 		if m.metricsStore == nil {
 			return
 		}
@@ -5394,7 +5395,7 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 			ResourceID:   resourceID,
 			MetricType:   metricType,
 			Value:        value,
-			Timestamp:    now,
+			Timestamp:    timestamp,
 			Tier:         metrics.TierRaw,
 		})
 	}
@@ -5434,6 +5435,13 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 		seenTargets[targetID] = struct{}{}
 
 		disk := resource.Metrics.Disk
+		observedAt := resource.LastSeen
+		if status, ok := resource.SourceStatus[disk.Source]; ok && !status.LastSeen.IsZero() {
+			observedAt = status.LastSeen
+		}
+		if observedAt.IsZero() {
+			observedAt = now
+		}
 		usage := disk.Percent
 		used := int64(0)
 		total := int64(0)
@@ -5452,18 +5460,18 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 		}
 
 		if m.metricsHistory != nil {
-			m.metricsHistory.AddStorageMetric(targetID, "usage", usage, now)
+			m.metricsHistory.AddStorageMetric(targetID, "usage", usage, observedAt)
 			if total > 0 {
-				m.metricsHistory.AddStorageMetric(targetID, "used", float64(used), now)
-				m.metricsHistory.AddStorageMetric(targetID, "total", float64(total), now)
-				m.metricsHistory.AddStorageMetric(targetID, "avail", float64(free), now)
+				m.metricsHistory.AddStorageMetric(targetID, "used", float64(used), observedAt)
+				m.metricsHistory.AddStorageMetric(targetID, "total", float64(total), observedAt)
+				m.metricsHistory.AddStorageMetric(targetID, "avail", float64(free), observedAt)
 			}
 		}
-		appendStoreWrite("storage", targetID, "usage", usage)
+		appendStoreWrite("storage", targetID, "usage", usage, observedAt)
 		if total > 0 {
-			appendStoreWrite("storage", targetID, "used", float64(used))
-			appendStoreWrite("storage", targetID, "total", float64(total))
-			appendStoreWrite("storage", targetID, "avail", float64(free))
+			appendStoreWrite("storage", targetID, "used", float64(used), observedAt)
+			appendStoreWrite("storage", targetID, "total", float64(total), observedAt)
+			appendStoreWrite("storage", targetID, "avail", float64(free), observedAt)
 		}
 	}
 	if len(storeWrites) > 0 {

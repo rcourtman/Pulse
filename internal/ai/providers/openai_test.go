@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1377,6 +1378,153 @@ func TestOpenAIClient_HelperFlags(t *testing.T) {
 	client := NewOpenAIClient("sk", "gpt-4", "https://api.openai.com", 0)
 	assert.True(t, client.requiresMaxCompletionTokens("o1-mini"))
 	assert.False(t, client.requiresMaxCompletionTokens("gpt-4"))
+}
+
+// Issue #1837: GPT-5 family models reject max_tokens on api.openai.com and on
+// Azure deployments of the same models.
+func TestOpenAIClient_RequiresMaxCompletionTokens_GPT5FamilyAndAzure(t *testing.T) {
+	official := NewOpenAIClient("sk", "gpt-5.6-luna-2026-07-09", "https://api.openai.com/v1", 0)
+	assert.True(t, official.requiresMaxCompletionTokens("gpt-5.6-luna-2026-07-09"))
+	assert.True(t, official.requiresMaxCompletionTokens("GPT-5-mini"))
+	assert.False(t, official.requiresMaxCompletionTokens("gpt-4o"))
+
+	azure := NewOpenAIClient("key", "gpt-5.6-luna", "https://example.services.ai.azure.com/openai/v1/chat/completions", 0)
+	assert.True(t, azure.usesAzureOpenAIEndpoint())
+	assert.True(t, azure.requiresMaxCompletionTokens("gpt-5.6-luna"))
+	assert.False(t, azure.requiresMaxCompletionTokens("gpt-4o"))
+
+	compatible := NewOpenAIClient("key", "gpt-5.6-luna", "https://gateway.example.com/v1", 0)
+	assert.False(t, compatible.requiresMaxCompletionTokens("gpt-5.6-luna"))
+	compatible.completionBudgetLearned.Store(true)
+	assert.True(t, compatible.requiresMaxCompletionTokens("anything"))
+}
+
+func maxTokensRejection() []byte {
+	body, _ := json.Marshal(openaiError{Error: openaiErrorDetail{
+		Message: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+		Type:    "invalid_request_error",
+		Code:    "unsupported_parameter",
+	}})
+	return body
+}
+
+func TestOpenAIClient_Chat_ResendsWithMaxCompletionTokensWhenRejected(t *testing.T) {
+	var requests []openaiRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req openaiRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		requests = append(requests, req)
+		if req.MaxTokens > 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write(maxTokensRejection())
+			return
+		}
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-1",
+			Model: req.Model,
+			Choices: []openaiChoice{{
+				Message:      openaiRespMsg{Role: "assistant", Content: "Hello"},
+				FinishReason: "stop",
+			}},
+			Usage: openaiUsage{PromptTokens: 2, CompletionTokens: 3},
+		})
+	}))
+	defer server.Close()
+
+	// A deployment name that does not reveal the model family, as on Azure.
+	client := NewOpenAIClient("key", "luna-prod", server.URL, 0)
+	request := ChatRequest{
+		MaxTokens:   123,
+		Temperature: 0.7,
+		Messages:    []Message{{Role: "user", Content: "Hi"}},
+	}
+	resp, err := client.Chat(context.Background(), request)
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", resp.Content)
+	require.Len(t, requests, 2)
+	assert.Equal(t, 123, requests[0].MaxTokens)
+	assert.Equal(t, 123, requests[1].MaxCompletionTokens)
+	assert.Zero(t, requests[1].MaxTokens)
+	assert.Zero(t, requests[1].Temperature)
+
+	// The endpoint's answer is remembered: the next request goes straight out
+	// in the accepted form.
+	_, err = client.Chat(context.Background(), request)
+	require.NoError(t, err)
+	require.Len(t, requests, 3)
+	assert.Equal(t, 123, requests[2].MaxCompletionTokens)
+	assert.Zero(t, requests[2].MaxTokens)
+}
+
+func TestOpenAIClient_Chat_OtherBadRequestsAreNotRetried(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(openaiError{Error: openaiErrorDetail{Message: "Invalid value for 'messages'"}})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("key", "gpt-4o", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		MaxTokens: 5,
+		Messages:  []Message{{Role: "user", Content: "Hi"}},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Invalid value for 'messages'")
+	assert.Equal(t, 1, calls)
+	assert.False(t, client.completionBudgetLearned.Load())
+}
+
+func TestOpenAIClient_ChatStream_ResendsWithMaxCompletionTokensWhenRejected(t *testing.T) {
+	var requests []openaiStreamRequest
+	client := NewOpenAIClient("key", "luna-prod", "https://gateway.example.com/v1", 0)
+	client.streamClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			var req openaiStreamRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				return nil, err
+			}
+			requests = append(requests, req)
+			if req.MaxTokens > 0 {
+				return &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewReader(maxTokensRejection())),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(
+					"data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n" +
+						"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n" +
+						"data: [DONE]\n",
+				)),
+			}, nil
+		}),
+	}
+
+	var content strings.Builder
+	err := client.ChatStream(context.Background(), ChatRequest{
+		MaxTokens:   99,
+		Temperature: 0.4,
+		Messages:    []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		if event.Type == "content" {
+			content.WriteString(event.Data.(ContentEvent).Text)
+		}
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ok", content.String())
+	require.Len(t, requests, 2)
+	assert.Equal(t, 99, requests[0].MaxTokens)
+	assert.Equal(t, 99, requests[1].MaxCompletionTokens)
+	assert.Zero(t, requests[1].MaxTokens)
+	assert.Zero(t, requests[1].Temperature)
+	assert.True(t, client.completionBudgetLearned.Load())
 }
 
 func TestOpenAIClient_SupportsThinking(t *testing.T) {

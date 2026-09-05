@@ -113,10 +113,12 @@ describe('InlineDetailTableRow', () => {
 
     render(() => <Fixture />);
     const disclosure = screen.getByRole('button', { name: 'Resource details' });
+    const disclosureFocus = vi.spyOn(disclosure, 'focus');
     const close = screen.getByRole('button', { name: 'Close details' });
     close.focus();
     await fireEvent.click(close);
 
     await waitFor(() => expect(disclosure).toHaveFocus());
+    expect(disclosureFocus).toHaveBeenCalledWith({ preventScroll: true });
   });
 });

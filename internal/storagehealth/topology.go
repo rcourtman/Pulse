@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unraidstatus "github.com/rcourtman/pulse-go-rewrite/internal/unraid"
 )
 
 func AssessHostRAIDArray(array models.HostRAIDArray) Assessment {
@@ -298,7 +299,9 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 		}
 	}
 
-	if storage.ArrayStarted && !parityConfigured {
+	// Unraid can start pool services with no array. Only an explicit zero
+	// suppresses this warning, preserving behaviour for older agents.
+	if storage.ArrayStarted && !parityConfigured && (storage.NumDisks == nil || *storage.NumDisks != 0) {
 		addReason("unraid_no_parity", RiskWarning, "Unraid array is running without parity protection")
 	}
 	if storage.ArrayStarted && parityConfigured && !parityHealthy {
@@ -346,13 +349,16 @@ func unraidDiskStateCounts(storage models.HostUnraidStorage) (disabled, invalid,
 func isUnraidEmptySlot(disk models.HostUnraidDisk) bool {
 	rawStatus := strings.ToUpper(strings.TrimSpace(disk.RawStatus))
 	status := strings.ToLower(strings.TrimSpace(disk.Status))
+	if unraidstatus.IsExplicitMissingMember(rawStatus) {
+		return false
+	}
 	if !strings.Contains(rawStatus, "DISK_NP") && status != "missing" {
 		return false
 	}
 	return strings.TrimSpace(disk.Device) == "" &&
 		strings.TrimSpace(disk.Model) == "" &&
 		strings.TrimSpace(disk.Serial) == "" &&
-		strings.TrimSpace(disk.Filesystem) == "" &&
+		!unraidstatus.HasMeaningfulFilesystem(disk.Filesystem) &&
 		disk.SizeBytes == 0
 }
 

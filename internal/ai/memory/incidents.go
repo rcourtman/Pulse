@@ -1124,7 +1124,8 @@ func incidentEventSummaryFromChange(change unifiedresources.ResourceChange, even
 			level, _ := stringMetadata(change.Metadata, unifiedresources.MetadataAlertLevel)
 			value, hasValue := floatMetadata(change.Metadata, unifiedresources.MetadataAlertValue)
 			threshold, hasThreshold := floatMetadata(change.Metadata, unifiedresources.MetadataAlertThreshold)
-			if hasValue || hasThreshold {
+			// Resource incidents carry numeric zero placeholders, not threshold evidence.
+			if alertType != "resource-incident" && (hasValue || hasThreshold) {
 				return fmt.Sprintf("Alert triggered: %s (%s %.1f >= %.1f)", alertType, level, value, threshold)
 			}
 			if level != "" {

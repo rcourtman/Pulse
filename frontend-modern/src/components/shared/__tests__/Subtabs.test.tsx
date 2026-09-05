@@ -32,7 +32,7 @@ describe('Subtabs', () => {
     expect(historyTab).toHaveClass('min-h-9', 'text-xs', 'sm:min-h-10', 'sm:text-sm');
   });
 
-  it('scrolls a newly selected tab into view', async () => {
+  it('reveals a newly selected tab horizontally without scrolling vertical ancestors', async () => {
     const previousScrollIntoView = Element.prototype.scrollIntoView;
     const scrollIntoView = vi.fn();
     Object.defineProperty(Element.prototype, 'scrollIntoView', {
@@ -55,16 +55,25 @@ describe('Subtabs', () => {
         />
       ));
 
+      const tablist = screen.getByRole('tablist', { name: 'Threshold platform' });
+      const machines = screen.getByRole('tab', { name: 'Machines' });
+      Object.defineProperties(tablist, {
+        clientWidth: { configurable: true, value: 100 },
+        scrollWidth: { configurable: true, value: 300 },
+        scrollLeft: { configurable: true, writable: true, value: 0 },
+      });
+      Object.defineProperties(machines, {
+        offsetLeft: { configurable: true, value: 220 },
+        offsetWidth: { configurable: true, value: 70 },
+      });
       scrollIntoView.mockClear();
-      fireEvent.click(screen.getByRole('tab', { name: 'Machines' }));
+      fireEvent.click(machines);
 
       await waitFor(() => {
-        expect(screen.getByRole('tab', { name: 'Machines' })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+        expect(machines).toHaveAttribute('aria-selected', 'true');
+        expect(tablist.scrollLeft).toBe(198);
       });
+      expect(scrollIntoView).not.toHaveBeenCalled();
     } finally {
       if (previousScrollIntoView) {
         Object.defineProperty(Element.prototype, 'scrollIntoView', {

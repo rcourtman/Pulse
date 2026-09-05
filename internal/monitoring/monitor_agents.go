@@ -3415,6 +3415,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			SyncAction:   syncAction,
 			SyncProgress: syncProgress,
 			SyncErrors:   report.Unraid.SyncErrors,
+			NumDisks:     report.Unraid.NumDisks,
 			NumProtected: numProtected,
 			NumDisabled:  numDisabled,
 			NumInvalid:   numInvalid,
@@ -4147,7 +4148,7 @@ func isLegacyUnraidEmptySlot(disk agentshost.UnraidDisk, normalizedStatus string
 	}
 	return strings.TrimSpace(disk.Device) == "" &&
 		!unraidstatus.HasMeaningfulIdentity(disk.Model, disk.Serial) &&
-		strings.TrimSpace(disk.Filesystem) == "" &&
+		!unraidstatus.HasMeaningfulFilesystem(disk.Filesystem) &&
 		disk.SizeBytes == 0
 }
 

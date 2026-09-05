@@ -19,6 +19,15 @@
 
 ## Purpose
 
+Incident timeline summaries must distinguish provider conditions from metric
+threshold evidence. For `resource-incident` alert events, numeric value and
+threshold placeholders must not render as a measured comparison; retain the
+alert type and severity instead. Numeric metric alerts retain their comparison
+format. This applies to reconstructed event summaries, not a migration of
+already persisted summary strings.
+`TestProviderIncidentSummaryDoesNotInventThreshold` in
+`internal/ai/memory/provider_incident_summary_test.go` verifies both boundaries.
+
 Own the Pulse Intelligence Core: canonical context, governed actions, safety
 gates, approval state, action audit, and verification. That core backs Pulse
 Patrol as the primary built-in operator that checks infrastructure, investigates

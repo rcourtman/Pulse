@@ -15,6 +15,10 @@
 
 ## Purpose
 
+ResourceIncident carries optional nativeSeverity JSON evidence independently of canonical Severity and identity. Missing nativeSeverity remains compatible with older payloads. TrueNAS INFO and NOTICE may share canonical monitor risk without becoming indistinguishable to alert consumers; native severity does not change resource or incident identity.
+
+Unraid adapters preserve optional `numDisks` in both host and storage metadata, including explicit zero in JSON and absence for unknown counts. Disk count is topology evidence only: changing it must not change canonical host/storage identity. The storage projection uses the monitoring-owned assessment so an explicit pool-only array does not acquire a no-parity warning.
+
 Own canonical resource identity, type normalization, typed views, and
 cross-source deduplication.
 Storage metadata may expose source-authored alias IDs as compatibility evidence
@@ -86,6 +90,17 @@ then leaves the top-level monitored-system projection exactly once so usage and
 licensing do not count a decommissioned member. Proxmox platform consumers must
 scope equal cluster labels and node names by provider instance when grouping,
 searching, and assigning guests or storage.
+That provider scope also governs node-to-agent link inference and host
+presentation coalescing. A repeated cluster label is operator-authored
+grouping metadata, not same-machine evidence; cross-instance equality requires
+the same node identity, the exact configured endpoint, or independently
+corroborated host evidence.
+Frontend REST and realtime resource mirrors must retain the canonical
+`hostnames`, `machineId`, and `dmiUuid` evidence used for that decision. When
+independent Proxmox connections expose the same native node hostname, browser
+compatibility coalescing must preserve the server-authored provider split; in
+an ambiguous hostname bucket, a separate agent row may join a provider node
+only through its explicit linked-agent identity rather than hostname alone.
 The same boundary carries cluster-node presentation without weakening
 canonical identity. `ProxmoxData` preserves the immutable connection-scoped
 node identity, current native node name, prior native-name aliases, and

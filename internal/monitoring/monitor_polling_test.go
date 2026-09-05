@@ -368,6 +368,78 @@ func TestUpdateResourceStoreSyncsUnifiedIncidentAlerts(t *testing.T) {
 }
 
 func TestUpdateResourceStoreSyncsCanonicalStorageMetrics(t *testing.T) {
+	t.Run("repeated PBS registry rebuild keeps one observed sample", func(t *testing.T) {
+		cfg := metrics.DefaultConfig(t.TempDir())
+		store, err := metrics.NewStore(cfg)
+		if err != nil {
+			t.Fatalf("metrics.NewStore() error = %v", err)
+		}
+		defer func() { _ = store.Close() }()
+
+		observedAt := time.Now().UTC().Add(-10 * time.Second).Truncate(time.Second)
+		snapshot := models.StateSnapshot{
+			PBSInstances: []models.PBSInstance{{
+				ID:       "pbs-backup",
+				Name:     "backup",
+				Status:   "online",
+				LastSeen: observedAt,
+				Datastores: []models.PBSDatastore{{
+					Name:   "main",
+					Status: "available",
+					Total:  1000,
+					Used:   400,
+					Free:   600,
+					Usage:  40,
+				}},
+			}},
+		}
+		resourceStore := unifiedresources.NewMonitorAdapter(nil)
+		monitor := &Monitor{
+			resourceStore:  resourceStore,
+			metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+			metricsStore:   store,
+		}
+
+		monitor.updateResourceStore(snapshot)
+		monitor.updateResourceStore(snapshot)
+
+		var targetID string
+		for _, resource := range resourceStore.GetAll() {
+			if resource.Type != unifiedresources.ResourceTypeStorage || resource.Storage == nil || resource.Storage.Platform != "pbs" {
+				continue
+			}
+			target := resourceStore.MetricsTargetForResource(resource.ID)
+			if target != nil {
+				targetID = target.ResourceID
+			}
+		}
+		if targetID == "" {
+			t.Fatal("expected a PBS datastore metrics target")
+		}
+
+		memory := monitor.GetStorageMetrics(targetID, time.Hour)
+		for _, metricType := range []string{"usage", "used", "total", "avail"} {
+			points := memory[metricType]
+			if len(points) != 1 {
+				t.Fatalf("in-memory %s points = %d, want one sample for one PBS observation", metricType, len(points))
+			}
+			if !points[0].Timestamp.Equal(observedAt) {
+				t.Fatalf("in-memory %s timestamp = %s, want observation time %s", metricType, points[0].Timestamp, observedAt)
+			}
+
+			persisted, err := store.Query("storage", targetID, metricType, observedAt.Add(-time.Minute), time.Now().Add(time.Minute), 0)
+			if err != nil {
+				t.Fatalf("query persisted %s metrics: %v", metricType, err)
+			}
+			if len(persisted) != 1 {
+				t.Fatalf("persisted %s points = %d, want one sample for one PBS observation", metricType, len(persisted))
+			}
+			if !persisted[0].Timestamp.Equal(observedAt) {
+				t.Fatalf("persisted %s timestamp = %s, want observation time %s", metricType, persisted[0].Timestamp, observedAt)
+			}
+		}
+	})
+
 	t.Run("supplemental truenas storage", func(t *testing.T) {
 		cfg := metrics.DefaultConfig(t.TempDir())
 		store, err := metrics.NewStore(cfg)

@@ -82,6 +82,13 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			if !ok {
 				continue
 			}
+			// TrueNAS informational conditions remain visible on the resource,
+			// but do not require acknowledgement as actionable incidents. NOTICE
+			// shares the monitor risk level but remains notification-worthy.
+			if strings.EqualFold(strings.TrimSpace(incident.Provider), "truenas") && level == AlertLevelInfo &&
+				!strings.EqualFold(strings.TrimSpace(incident.NativeSeverity), "NOTICE") {
+				continue
+			}
 			alert := unifiedIncidentAlert(resource, incident, level, now)
 			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
 			storageKey := canonicalTrackingKeyForSpec(spec, alert.ID)

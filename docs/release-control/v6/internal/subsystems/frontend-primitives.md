@@ -1054,6 +1054,11 @@ shell listeners before it closes. Feature-owned
 dialogs may provide a stable fallback target when their original virtual row
 has unmounted, but they must use the same scroll-neutral focus contract rather
 than compensating with page-level scroll writes.
+`InfrastructureWorkspace.tsx` exercises that extension point after its shared
+Manage dialog closes: both the shared captured-trigger restoration and its
+delayed stable-row fallback must use `preventScroll`, preserve the app scroll
+offset, and leave focus on the originating Manage action at desktop and narrow
+viewports.
 
 Assistant shell entry changes must keep Assistant contextual rather than
 generic: `AppLayout.tsx` and the command palette may expose a compact launcher,
@@ -4624,6 +4629,10 @@ container, reset the parent table's `whitespace-nowrap` inheritance, and allow
 its descendants to shrink, then restore visible overflow for the static
 desktop layout. Long operator-state copy must wrap inside the shared row border
 instead of painting beneath adjacent controls or disappearing at the clip edge.
+When focused detail content is removed, `InlineDetailTableRow` restores focus
+to its current `aria-controls` disclosure with `preventScroll`; live refresh,
+collapse, and row replacement must not move the surrounding application
+viewport merely to reveal that control.
 Inline detail section content is registry-backed separately from the row shell.
 `DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
 detail row compaction, section-table rendering, value-tone classes, and the
@@ -4938,7 +4947,10 @@ already proven on owning surfaces like operations rather than introducing new
 variant APIs on the primitive. When that rail overflows on phone widths,
 `Subtabs` owns visible, accessible edge-scroll controls and keeps them in sync
 with native scrolling and rail resize; callers must not add drawer-local arrow
-overlays or leave clipped tab labels as the only overflow cue.
+overlays or leave clipped tab labels as the only overflow cue. Selection
+changes reveal the active tab by moving only that horizontal rail through the
+shared rail-visibility controller; `Subtabs` must not use `scrollIntoView`,
+which can also move page and drawer ancestors vertically.
 The search-input enhancement surfaces now follow that same owner split.
 `frontend-modern/src/components/shared/SearchInputEnhancements.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useSearchInputEnhancements.ts`

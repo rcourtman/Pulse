@@ -105,7 +105,7 @@ async function positionElementNearViewportBottom(
   return locator.evaluate((element) => element.getBoundingClientRect().top);
 }
 
-// The drawer tab strip (Overview | History | Discovery) marks the active tab
+// The drawer tab strip marks the active tab
 // with aria-selected, so read that instead of panel order.
 async function readGuestDrawerActiveTab(detailRow: Locator): Promise<string> {
   const buttons = detailRow.locator("[aria-selected]");
@@ -179,7 +179,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     }
   });
 
-  test("keeps an expanded Proxmox VM on the Discovery tab across workload polling", async ({
+  test("keeps an expanded Proxmox VM on the History tab across a canonical refresh", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -189,8 +189,13 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
 
     await ensureMockModeEnabled(page);
 
+    // Make the canonical REST refresh below the only live-data input. A
+    // timer-only wait is not a refresh proof now that this surface reconciles
+    // snapshots in response to realtime metadata events.
+    await page.routeWebSocket("**/ws*", () => {});
+
     // Workloads are owned by the Proxmox workloads sub-route; preserve the
-    // canonical type/platform scope while exercising its polling behavior.
+    // canonical type/platform scope while exercising its refresh behavior.
     await page.goto("/proxmox/workloads?type=vm&platform=proxmox-pve", {
       waitUntil: "domcontentloaded",
     });
@@ -213,33 +218,59 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
 
     // The drawer tab strip exposes proper tab roles.
-    const discoveryButton = detailRow.getByRole("tab", {
-      name: "Discovery",
+    // History is always present and is the tab users reported being reset by
+    // live refreshes. Discovery is optional and must not be a hidden fixture
+    // prerequisite for this polling regression proof.
+    const historyButton = detailRow.getByRole("tab", {
+      name: "History",
       exact: true,
     });
-    await expect(discoveryButton).toBeVisible();
-    await discoveryButton.click();
+    await expect(historyButton).toBeVisible();
+    await historyButton.click();
 
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow))
-      .toBe("discovery");
+      .toBe("history");
 
-    const beforePollScrollTop = await readPrimaryViewportScrollTop(page);
+    const beforeRefreshScrollTop = await readPrimaryViewportScrollTop(page);
 
-    await page.waitForTimeout(7_500);
+    const refreshResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === "/api/resources" &&
+        url.searchParams.get("type") ===
+          "agent,vm,system-container,oci-container" &&
+        url.searchParams.get("source") === "proxmox"
+      );
+    });
+    await page.evaluate((metadataId) => {
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "guest", metadataId },
+        }),
+      );
+    }, guestId);
+
+    const completedRefreshResponse = await refreshResponse;
+    expect(completedRefreshResponse.ok()).toBe(true);
+    await completedRefreshResponse.finished();
+
+    // Let the fetch continuation reconcile the completed response before
+    // observing the drawer. The old sleep did not establish this ordering.
+    await page.waitForTimeout(100);
 
     await expect(detailRow).toBeVisible();
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow), { timeout: 15_000 })
-      .toBe("discovery");
+      .toBe("history");
 
-    const afterPollScrollTop = await readPrimaryViewportScrollTop(page);
-    expect(afterPollScrollTop).toBeGreaterThanOrEqual(
-      Math.max(10, beforePollScrollTop - 80),
+    const afterRefreshScrollTop = await readPrimaryViewportScrollTop(page);
+    expect(afterRefreshScrollTop).toBeGreaterThanOrEqual(
+      Math.max(10, beforeRefreshScrollTop - 80),
     );
   });
 
-  test("retains LXC rows through warning health projections and removes a confirmed deletion", async ({
+  test("retains LXC rows through warning health refreshes and removes a confirmed deletion", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -254,15 +285,18 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     let deletionResponses = 0;
     let publishDeletion = false;
 
-    // The REST sequence is the contract under test. Prevent live inventory
-    // frames from replacing it while polling is exercised.
+    // The Proxmox surface owns a source-scoped canonical resource snapshot.
+    // Intercept that REST sequence and prevent live inventory frames from
+    // replacing it while snapshot refresh is exercised.
     await page.routeWebSocket("**/ws*", () => {});
 
     await page.route("**/api/resources?**", async (route) => {
       const url = new URL(route.request().url());
       if (
         url.pathname !== "/api/resources" ||
-        url.searchParams.get("type") !== "vm,system-container,app-container,pod"
+        url.searchParams.get("type") !==
+          "agent,vm,system-container,oci-container" ||
+        url.searchParams.get("source") !== "proxmox"
       ) {
         await route.continue();
         return;
@@ -318,6 +352,17 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     );
     await expect(detailRow).toBeVisible();
 
+    // The Proxmox surface now reconciles its canonical snapshot from realtime
+    // frames rather than a timer-driven REST poll. Use the same forced
+    // canonical refresh event as an in-app metadata update so this remains a
+    // deterministic snapshot-reconciliation proof with WebSockets blocked.
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "guest", metadataId: "lab:node-a:102" },
+        }),
+      ),
+    );
     await expect
       .poll(() => staleProjectionResponses, { timeout: 15_000 })
       .toBeGreaterThan(0);
@@ -327,11 +372,146 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
 
     publishDeletion = true;
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new CustomEvent("pulse:resource-metadata-changed", {
+          detail: { metadataKind: "guest", metadataId: "lab:node-a:102" },
+        }),
+      ),
+    );
     await expect
       .poll(() => deletionResponses, { timeout: 15_000 })
       .toBeGreaterThan(0);
     await expect(rows).toHaveCount(2);
     await expect(rows.filter({ hasText: "lxc-gamma" })).toHaveCount(0);
     await expect(detailRow).toBeVisible();
+  });
+
+  test("does not request vertical scrolling when an off-screen Backups drawer changes or closes", async ({
+    page,
+  }, testInfo) => {
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
+    const serversTable = page.locator('[data-proxmox-backups-table="servers"]');
+    await expect(serversTable).toBeVisible({ timeout: 60_000 });
+
+    const disclosure = serversTable.locator("button[aria-controls]").first();
+    const summaryRow = disclosure.locator("xpath=ancestor::tr");
+    await summaryRow.click();
+
+    const detailRow = serversTable.locator(
+      "tr[data-inline-platform-resource-detail-for]",
+    );
+    await expect(detailRow).toBeVisible();
+    const manageTab = detailRow.getByRole("tab", {
+      name: "Manage",
+      exact: true,
+    });
+    const overviewTab = detailRow.getByRole("tab", {
+      name: "Overview",
+      exact: true,
+    });
+    const closeButton = detailRow.getByRole("button", {
+      name: /^Collapse .* details$/,
+    });
+    const viewportAnchor = page.getByText("Backup health", { exact: true });
+    await expect(viewportAnchor).toBeVisible();
+
+    await page.screenshot({
+      path: testInfo.outputPath("pbs-detail-overview.png"),
+    });
+    await manageTab.click();
+    await expect(manageTab).toHaveAttribute("aria-selected", "true");
+    await page.screenshot({
+      path: testInfo.outputPath("pbs-detail-manage.png"),
+    });
+    await overviewTab.click();
+    await expect(overviewTab).toHaveAttribute("aria-selected", "true");
+
+    // Put the section beneath the expanded drawer in view so the drawer tabs
+    // are above the viewport, matching an operator reading backup evidence
+    // below a server row. Tab selection must only move its horizontal rail.
+    const nextScrollTop = await viewportAnchor.evaluate((element) => {
+      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+      if (shell && shell.contains(element)) {
+        const shellRect = shell.getBoundingClientRect();
+        return Math.max(
+          0,
+          shell.scrollTop +
+            element.getBoundingClientRect().top -
+            shellRect.top -
+            180,
+        );
+      }
+      return Math.max(
+        0,
+        window.scrollY + element.getBoundingClientRect().top - 180,
+      );
+    });
+    await page.evaluate((top) => {
+      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+      if (shell) shell.scrollTop = top;
+      else window.scrollTo(0, top);
+    }, nextScrollTop);
+    await page.waitForTimeout(150);
+
+    await page.evaluate(() => {
+      const state = window as Window & {
+        __pulseScrollIntoViewCalls?: number;
+      };
+      state.__pulseScrollIntoViewCalls = 0;
+      Element.prototype.scrollIntoView = () => {
+        state.__pulseScrollIntoViewCalls =
+          (state.__pulseScrollIntoViewCalls ?? 0) + 1;
+      };
+    });
+    await manageTab.evaluate((element) => (element as HTMLElement).click());
+    await expect(manageTab).toHaveAttribute("aria-selected", "true");
+    await page.waitForTimeout(150);
+    expect(
+      await page.evaluate(
+        () =>
+          (window as Window & { __pulseScrollIntoViewCalls?: number })
+            .__pulseScrollIntoViewCalls ?? 0,
+      ),
+    ).toBe(0);
+
+    await page.screenshot({
+      path: testInfo.outputPath("pbs-detail-anchor.png"),
+    });
+
+    // Closing from focused drawer content returns focus to the disclosure,
+    // but that restoration must not scroll the summary row back into view.
+    await manageTab.evaluate((element) =>
+      (element as HTMLElement).focus({ preventScroll: true }),
+    );
+    await disclosure.evaluate((element) => {
+      const state = window as Window & {
+        __pulseDisclosureFocusOptions?: FocusOptions;
+      };
+      const disclosureElement = element as HTMLElement;
+      const originalFocus = disclosureElement.focus.bind(disclosureElement);
+      disclosureElement.focus = (options?: FocusOptions) => {
+        state.__pulseDisclosureFocusOptions = options;
+        originalFocus(options);
+      };
+    });
+    await closeButton.evaluate((element) => (element as HTMLElement).click());
+    await expect(detailRow).toHaveCount(0);
+    await page.waitForTimeout(150);
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __pulseDisclosureFocusOptions?: FocusOptions;
+            }
+          ).__pulseDisclosureFocusOptions,
+      ),
+    ).toEqual({ preventScroll: true });
+    if (!testInfo.project.name.startsWith("mobile-")) {
+      await expect(disclosure).toBeFocused();
+    }
   });
 });

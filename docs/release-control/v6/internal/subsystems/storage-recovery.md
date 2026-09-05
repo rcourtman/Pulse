@@ -21,6 +21,17 @@
 
 ## Purpose
 
+Provider incident nativeSeverity is evidence, not a storage recovery result or identity component. TrueNAS NOTICE remains actionable while INFO remains resource evidence; both retain canonical monitor risk. This distinction must not alter pool health assessment, recovery confirmation counts, or storage action authority.
+
+TrueNAS replication state `FINISHED` is successful completion evidence when a
+last-run timestamp exists, matching the provider success event. Explicit error
+text still takes precedence; a missing last-run timestamp remains unknown.
+Persisted recovery rollups must retain this outcome and success time rather
+than classify a completed replication as unknown. This does not imply restore
+verification or resolve provider INFO alert lifecycle behaviour.
+
+Unraid `StorageMeta.numDisks` is optional source evidence: zero denotes an explicitly empty parity array, not proof that pools are protected or that a recovery point exists. Suppressing the no-parity warning for zero must not erase disk-failure evidence or grant storage/recovery authority.
+
 A manifestless PBS snapshot never becomes a successful recovery point and
 never advances backup age. Recovery mapping reports it as running while a live
 writer accounts for it or current-task visibility is unavailable; after a

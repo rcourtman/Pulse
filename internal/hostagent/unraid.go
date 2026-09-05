@@ -185,6 +185,11 @@ func parseUnraidStatusOutput(output string) (*agentshost.UnraidStorage, error) {
 		NumMissing:   parseUnraidIntField(fields, "mdNumMissing"),
 	}
 
+	// Zero is meaningful for pool-only systems; missing or invalid is unknown.
+	if count, err := strconv.Atoi(strings.TrimSpace(fields["mdNumDisks"])); err == nil && count >= 0 {
+		storage.NumDisks = &count
+	}
+
 	indexes := collectUnraidIndexes(fields)
 	disks := make([]agentshost.UnraidDisk, 0, len(indexes))
 	for _, idx := range indexes {
@@ -522,10 +527,10 @@ func isUnraidEmptySlot(disk agentshost.UnraidDisk) bool {
 	// Unraid names every configured slot (for example disk6 or parity2), even
 	// when it has never been assigned. A slot label is therefore topology, not
 	// membership evidence. Preserve DISK_NP members only when native identity,
-	// device, filesystem, or size evidence shows that a disk was assigned.
+	// device, a concrete filesystem, or size evidence shows that a disk was assigned.
 	return strings.TrimSpace(disk.Device) == "" &&
 		!unraidstatus.HasMeaningfulIdentity(disk.Model, disk.Serial) &&
-		strings.TrimSpace(disk.Filesystem) == "" &&
+		!unraidstatus.HasMeaningfulFilesystem(disk.Filesystem) &&
 		disk.SizeBytes == 0
 }
 
