@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TrueNASAlertsTable } from '@/features/truenas/TrueNASAlertsTable';
@@ -41,6 +42,50 @@ afterEach(() => {
 });
 
 describe('TrueNASAlertsTable', () => {
+  it('refreshes an expanded incident through critical escalation and recovery', async () => {
+    const disk = makeDisk();
+    const [resources, setResources] = createSignal([disk]);
+    render(() => (
+      <TrueNASAlertsTable
+        incidents={buildTrueNASIncidentRows(resources())}
+        scope={resources()}
+        emptyIcon={<span />}
+        emptyTitle="No alerts"
+        emptyDescription="No active provider incidents"
+        showToolbar={false}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Device /dev/sdc has SMART test failures.'));
+    expect(
+      within(screen.getByTestId('truenas-alert-detail')).getAllByText('Warning').length,
+    ).toBeGreaterThan(0);
+
+    setResources([
+      makeDisk({
+        incidents: [
+          {
+            ...disk.incidents![0],
+            severity: 'critical',
+            summary: 'Device /dev/sdc has failed.',
+          },
+        ],
+      }),
+    ]);
+
+    const detail = within(await screen.findByTestId('truenas-alert-detail'));
+    expect(detail.getAllByText('Critical').length).toBeGreaterThan(0);
+    expect(detail.queryByText('Warning')).not.toBeInTheDocument();
+    expect(detail.getByText('Device /dev/sdc has failed.')).toBeInTheDocument();
+    expect(detail.getByText('disk-sdc')).toBeInTheDocument();
+    expect(detail.getByText('SMART')).toBeInTheDocument();
+
+    setResources([makeDisk({ status: 'healthy', incidents: [] })]);
+    expect(await screen.findByText('No active provider incidents')).toBeInTheDocument();
+    expect(screen.queryByTestId('truenas-alert-detail')).not.toBeInTheDocument();
+    expect(screen.queryByText('Device /dev/sdc has failed.')).not.toBeInTheDocument();
+  });
+
   it('opens inline native alert details for TrueNAS incident rows', async () => {
     const disk = makeDisk();
     const incidents = buildTrueNASIncidentRows([disk]);
