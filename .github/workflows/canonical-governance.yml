@@ -110,7 +110,7 @@ jobs:
             # updates in earlier commits as insubstantial.
             if ! git diff-tree --no-commit-id --name-only -r "${commit}" \
               | PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="${reason}" python3 scripts/release_control/canonical_completion_guard.py \
-                  --files-from-stdin --diff-base "${commit}^"; then
+                  --files-from-stdin --diff-base "${commit}^" --commit "${commit}"; then
               echo "Canonical completion guard failed for commit ${commit}."
               status=1
             fi

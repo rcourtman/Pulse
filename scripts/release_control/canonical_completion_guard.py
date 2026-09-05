@@ -18,6 +18,7 @@ import subprocess
 import sys
 from typing import Dict, List, Sequence, Set
 
+import browser_verification_guard
 from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import load_repo_json
 from subsystem_contracts import load_contract_index, referenced_contracts_for_path
@@ -36,6 +37,49 @@ def contract_neutral_override_reason() -> str | None:
     """
     reason = os.environ.get(CONTRACT_NEUTRAL_OVERRIDE_ENV, "").strip()
     return reason or None
+
+
+def prettier_only_contract_neutral_reason(
+    staged_files: Sequence[str],
+    *,
+    commit: str | None,
+) -> str | None:
+    """Recognise a committed frontend reformat without trusting its message.
+
+    Historical commits cannot be amended after review. CI may therefore need
+    to establish that a formatting repair without a Contract-Neutral trailer
+    is contract-neutral from the commit's bytes rather than retroactively
+    changing its metadata. This path
+    fails closed: every canonical runtime path in the commit must be a
+    user-visible frontend path whose new blob is exactly locked Prettier output
+    for its parent blob. Staged/pre-commit checks still require the explicit
+    operator reason because they have no immutable commit to inspect.
+    """
+    if not commit:
+        return None
+
+    impacted = infer_impacted_subsystems(staged_files)
+    runtime_paths = {
+        path
+        for data in impacted.values()
+        for path in data.get("touched_runtime_files", [])
+        if path not in set(data.get("cycle_artifact_files", []))
+    }
+    if not runtime_paths:
+        return None
+
+    frontend_paths = set(browser_verification_guard.frontend_runtime_paths(runtime_paths))
+    if frontend_paths != runtime_paths:
+        return None
+
+    reformatted = browser_verification_guard.formatting_only_paths(
+        sorted(frontend_paths),
+        commit=commit,
+    )
+    if reformatted != frontend_paths:
+        return None
+
+    return f"mechanically verified Prettier-only frontend reformat in {commit}"
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -607,7 +651,12 @@ def format_missing_requirements(
     return "\n".join(lines)
 
 
-def check_staged_contracts(staged_files: Sequence[str], *, diff_base: str | None = None) -> int:
+def check_staged_contracts(
+    staged_files: Sequence[str],
+    *,
+    diff_base: str | None = None,
+    inferred_override_reason: str | None = None,
+) -> int:
     staged_set: Set[str] = set(staged_files)
     impacted = infer_impacted_subsystems(staged_files, use_staged_registry=True)
     required_contracts = required_contract_updates(
@@ -647,13 +696,21 @@ def check_staged_contracts(staged_files: Sequence[str], *, diff_base: str | None
         missing_verification,
     )
 
-    override_reason = contract_neutral_override_reason()
+    explicit_override_reason = contract_neutral_override_reason()
+    override_reason = explicit_override_reason or inferred_override_reason
     if override_reason:
-        print(
-            "Canonical completion guard: canonical-shape block bypassed by "
-            f"{CONTRACT_NEUTRAL_OVERRIDE_ENV}={override_reason!r}",
-            file=sys.stderr,
-        )
+        if explicit_override_reason:
+            print(
+                "Canonical completion guard: canonical-shape block bypassed by "
+                f"{CONTRACT_NEUTRAL_OVERRIDE_ENV}={override_reason!r}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "Canonical completion guard: canonical-shape block bypassed by "
+                f"fail-closed commit inspection ({override_reason}).",
+                file=sys.stderr,
+            )
         print("Suppressed requirements (logged for audit):", file=sys.stderr)
         print(formatted, file=sys.stderr)
         return 0
@@ -695,9 +752,20 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
             "from a commit range; requires --files-from-stdin."
         ),
     )
+    parser.add_argument(
+        "--commit",
+        default=None,
+        help=(
+            "Committed revision represented by the changed-file list. In CI this "
+            "permits a fail-closed byte comparison for mechanically verified "
+            "Prettier-only frontend reformats."
+        ),
+    )
     args = parser.parse_args(list(argv))
     if args.diff_base and not args.files_from_stdin:
         parser.error("--diff-base requires --files-from-stdin")
+    if args.commit and not args.files_from_stdin:
+        parser.error("--commit requires --files-from-stdin")
     return args
 
 
@@ -705,7 +773,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(list(argv or ()))
     diff_base = resolve_diff_base(args.diff_base) if args.diff_base else None
     if args.files_from_stdin:
-        return check_staged_contracts(stdin_files(sys.stdin), diff_base=diff_base)
+        files = stdin_files(sys.stdin)
+        inferred_reason = prettier_only_contract_neutral_reason(files, commit=args.commit)
+        return check_staged_contracts(
+            files,
+            diff_base=diff_base,
+            inferred_override_reason=inferred_reason,
+        )
     return check_staged_contracts(git_staged_files())
 
 

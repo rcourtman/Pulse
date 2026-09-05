@@ -20,6 +20,7 @@ from canonical_completion_guard import (
     load_subsystem_rules,
     path_policy_matches,
     parse_args,
+    prettier_only_contract_neutral_reason,
     required_contract_updates,
     resolve_diff_base,
     staged_contract_has_substantive_change,
@@ -3546,6 +3547,56 @@ None yet.
 
 
 class ContractNeutralOverrideTest(unittest.TestCase):
+    def test_committed_prettier_only_runtime_change_gets_inferred_reason(self):
+        runtime_path = "frontend-modern/src/features/docker/DockerContainersTable.tsx"
+        with (
+            patch(
+                "canonical_completion_guard.infer_impacted_subsystems",
+                return_value={
+                    "unified-resources": {
+                        "touched_runtime_files": [runtime_path],
+                        "cycle_artifact_files": [],
+                    }
+                },
+            ),
+            patch(
+                "canonical_completion_guard.browser_verification_guard.formatting_only_paths",
+                return_value={runtime_path},
+            ),
+        ):
+            reason = prettier_only_contract_neutral_reason(
+                [runtime_path],
+                commit="a" * 40,
+            )
+
+        self.assertEqual(
+            reason,
+            f"mechanically verified Prettier-only frontend reformat in {'a' * 40}",
+        )
+
+    def test_inferred_reason_fails_closed_for_mixed_runtime_change(self):
+        frontend_path = "frontend-modern/src/features/docker/DockerContainersTable.tsx"
+        backend_path = "internal/alerts/storage.go"
+        with patch(
+            "canonical_completion_guard.infer_impacted_subsystems",
+            return_value={
+                "unified-resources": {
+                    "touched_runtime_files": [frontend_path],
+                    "cycle_artifact_files": [],
+                },
+                "alerts": {
+                    "touched_runtime_files": [backend_path],
+                    "cycle_artifact_files": [],
+                },
+            },
+        ):
+            reason = prettier_only_contract_neutral_reason(
+                [frontend_path, backend_path],
+                commit="b" * 40,
+            )
+
+        self.assertIsNone(reason)
+
     def test_check_staged_contracts_returns_zero_when_override_set(self):
         stderr = io.StringIO()
         with (
