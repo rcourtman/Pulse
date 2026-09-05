@@ -2519,3 +2519,10 @@ alert ID in the event log. The primary remains the one delivery owner.
 not established causality. `incident_synthesis_test.go` pins classification,
 contradiction downgrade, bounded evidence, duplicate-delivery suppression, and
 partial-recovery behavior.
+
+### Alert hydration is not resource admission
+
+REST active-alert recovery may complete before a resource snapshot. Neither
+active incidents nor alert hydration completion establishes an empty resource
+estate or replaces platform navigation admission. Incident access must remain
+available during socket reconnect; this does not assert notification delivery.
