@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
@@ -192,3 +193,46 @@ func TestAlertQualityResolutionDurationBoundaries(t *testing.T) {
 }
 
 func alertQualityTimePtr(value time.Time) *time.Time { return &value }
+
+func TestPBSMissingMetricsDoNotResolve(t *testing.T) {
+	m := newUnifiedEvalParityManager(t)
+	m.UpdateConfig(AlertConfig{Enabled: true, PBSDefaults: ThresholdConfig{
+		CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+		Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+	}})
+	disableTestTimeThresholds(m)
+	resolved := make(chan string, 8)
+	m.SetResolvedCallback(func(id string) { resolved <- id })
+	p := models.PBSInstance{ID: "pbs-missing", Name: "backup", Status: "online", CPU: 95, Memory: 95}
+	m.CheckPBS(p)
+	if len(m.GetActiveAlerts()) != 2 {
+		t.Fatal("expected two high utilisation alerts")
+	}
+	p.CPU, p.Memory = 0, 0
+	p.NodeMetricsUnavailable = true
+	for range 5 {
+		m.CheckPBS(p)
+	}
+	if len(m.GetActiveAlerts()) != 2 {
+		t.Fatal("missing metrics falsely resolved high utilisation")
+	}
+	select {
+	case id := <-resolved:
+		t.Fatalf("false recovery callback %s", id)
+	case <-time.After(50 * time.Millisecond):
+	}
+	p.NodeMetricsUnavailable = false
+	for range 5 {
+		m.CheckPBS(p)
+	}
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("measured zero did not recover")
+	}
+	for range 2 {
+		select {
+		case <-resolved:
+		case <-time.After(time.Second):
+			t.Fatal("missing genuine recovery callback")
+		}
+	}
+}

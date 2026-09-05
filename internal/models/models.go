@@ -2699,6 +2699,10 @@ type PhysicalDisk struct {
 
 // PBSInstance represents a Proxmox Backup Server instance
 type PBSInstance struct {
+	// NodeMetricsUnavailable distinguishes a failed node-status poll from measured zero.
+	// Internal poll evidence; the zero value preserves legacy in-process callers.
+	NodeMetricsUnavailable bool `json:"-"`
+
 	ID                string                 `json:"id"`
 	Name              string                 `json:"name"`
 	Host              string                 `json:"host"`

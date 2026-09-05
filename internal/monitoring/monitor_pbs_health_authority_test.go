@@ -25,6 +25,7 @@ const (
 	pbsHealthTestNodeDenied
 	pbsHealthTestNodeGatewayFailure
 	pbsHealthTestUnavailable
+	pbsHealthTestLowMemory
 )
 
 type pbsHealthTestServer struct {
@@ -75,8 +76,13 @@ func newPBSHealthTestServer(t *testing.T) *pbsHealthTestServer {
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
-					"cpu":    0.15,
-					"memory": map[string]any{"used": 512, "total": 1024},
+					"cpu": 0.15,
+					"memory": map[string]any{"used": func() int {
+						if mode == pbsHealthTestLowMemory {
+							return 100
+						}
+						return 512
+					}(), "total": 1024},
 					"uptime": 120,
 				},
 			})
@@ -334,6 +340,9 @@ func TestPollPBSNodeMetricsFailureAndRecovery(t *testing.T) {
 			}
 			assertMetrics := func(got models.PBSInstance) {
 				t.Helper()
+				if got.NodeMetricsUnavailable {
+					t.Fatal("successful metrics marked unavailable")
+				}
 				if got.CPU != 0.15 || got.Memory != 50 || got.MemoryUsed != 512 || got.MemoryTotal != 1024 || got.Uptime != 120 {
 					t.Fatalf("successful node metrics not published: %+v", got)
 				}
@@ -346,6 +355,9 @@ func TestPollPBSNodeMetricsFailureAndRecovery(t *testing.T) {
 			status := monitor.pollStatusMap["pbs::"+instance.Name]
 			if !status.LastSuccess.After(previous) || status.ConsecutiveFailures != 0 || status.LastErrorMessage != "" {
 				t.Fatalf("endpoint failure incorrectly affected connectivity ledger: %+v", status)
+			}
+			if !partial.NodeMetricsUnavailable {
+				t.Fatal("failed node endpoint not marked unavailable")
 			}
 			if partial.CPU != 0 || partial.Memory != 0 || partial.MemoryUsed != 0 || partial.MemoryTotal != 0 || partial.Uptime != 0 {
 				t.Fatalf("unavailable node metrics retained previous measurements: %+v", partial)
