@@ -200,10 +200,9 @@ export const useAppRuntimeState = () => {
   const [backendHealthy, setBackendHealthy] = createSignal(false);
   const runtimeStateResolved = (): boolean => {
     const store = wsStore();
-    // Deliberately not "some payload arrived": a bootstrap that carried no
-    // resources would still read as resolved and navigation would classify an
-    // empty estate, hiding every platform tab.
-    return Boolean(store?.initialDataReceived()) || hasRuntimeStatePayload(store?.state);
+    // Alert REST recovery can populate state before the first resource frame.
+    // It must not replace valid admission with an invented empty estate.
+    return Boolean(store?.resourceSnapshotReceived()) || (store?.state.resources.length ?? 0) > 0;
   };
   const state = (): State => {
     const store = wsStore();

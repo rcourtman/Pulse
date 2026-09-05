@@ -1,39 +1,46 @@
 {
   "version": 1,
-  "base_sha": "c1b671631dda188909411258466822a914640b80",
-  "verified_at": "2026-09-04T04:04:52Z",
+  "base_sha": "2c4b27fc4b229bece4585c33eb3b11e74f1bdeef",
+  "verified_at": "2026-09-05T04:09:32Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/types/resource.ts",
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/useAppRuntimeState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/types/resource.ts": "c43048a9796babd38f338cff14c21ed2b6dbbf8b16f2bb1fddf89529ef5a65f5",
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "328efccc8b88b8e590bef9e56568b2f969a06df314d464b5f44b757a2acb189f"
+    "frontend-modern/src/stores/websocket-global.ts": "abacee8810729f0dbded90f0b8be99ad09936134160b631b74967e0751f2919f",
+    "frontend-modern/src/stores/websocket.ts": "253b45b6c9694ad39c881cf8b592398962ae5fa6849a1590812fbb634649fb9b",
+    "frontend-modern/src/useAppRuntimeState.ts": "e879a23baf48caf99359c63cf4c0c637156d27a28ab823f62c19e14052fd1643"
   },
   "routes": [
-    "/proxmox (managed hot-dev mock with two provider-scoped standalone sites sharing the native node name pve)"
+    "/proxmox",
+    "/docker",
+    "/alerts"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
     },
     {
       "width": 390,
-      "height": 844
+      "height": 900
     }
   ],
   "states": [
-    "Initial Proxmox overview showing Nodes 2 and two standalone rows with configured names and distinct provider endpoint links",
-    "Proxmox overview after six mock websocket update intervals with both provider-scoped rows still present",
-    "Reloaded Proxmox overview with both same-native-name rows restored from the REST bootstrap snapshot",
-    "Narrow Proxmox overview showing Nodes 2 and both configured site names without clipping or navigation overlap"
+    "Synthetic populated Proxmox and Docker inventory in isolated real Go backend with production embedded frontend",
+    "Connected socket closed with 1013; reconnect attempts blocked while HTTP health remains available",
+    "Platform destinations retained during interruption and automatic recovery without reload; desktop navigation intentionally hidden below xl",
+    "Desktop active incidents retain enabled acknowledgement control; no acknowledgement persistence or notification receipt claim"
   ],
   "interactions": [
-    "Authenticated to the managed development runtime and navigated to the Proxmox overview",
-    "Verified both distinct provider endpoints and waited 12 seconds across repeated realtime updates",
-    "Reloaded the route and rechecked both resource rows",
-    "Resized from 1280 by 800 to 390 by 844 and inspected full-page screenshots for row count, clipping, overflow, and fixed-navigation overlap"
+    "pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 PULSE_E2E_LOCAL_BACKEND_PORT=18765 npm --prefix tests/integration test -- tests/96-navigation-socket-recovery.spec.ts --project=chromium",
+    "Three Chromium checks passed; fresh contexts at 100% zoom; desktop and 390px reconnect screenshots inspected. Mobile menu interaction not exercised.",
+    "Open Alerts during interruption at 1440px; unblock socket and verify recovery without reload"
   ]
 }

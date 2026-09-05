@@ -3013,3 +3013,10 @@ poll, query, websocket subscription, history series, cache, per-row scan, or
 responsive signal. The Docker drawer evaluates the one bounded string only for
 the selected host, and summary-only helper collection omits the existing
 stats-dependent and secondary-inventory work at the agent.
+
+### Reconnect admission uses constant-time snapshot evidence
+
+Runtime resource resolution uses a store signal recording resource snapshot
+receipt, or an already populated resource array, rather than alert payload
+presence. Reconnect must not add an estate fetch or scan to recover navigation.
+The signal survives transport loss and resets on organisation URL changes.
