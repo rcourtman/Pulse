@@ -86,6 +86,48 @@ describe('TrueNASAlertsTable', () => {
     expect(screen.queryByText('Device /dev/sdc has failed.')).not.toBeInTheDocument();
   });
 
+  it('removes recovered details without hiding another active incident', async () => {
+    const disk = makeDisk();
+    const otherDisk = makeDisk({
+      id: 'disk-sdd',
+      name: 'sdd',
+      displayName: 'sdd',
+      incidents: [
+        {
+          ...disk.incidents![0],
+          summary: 'Device /dev/sdd has SMART test failures.',
+        },
+      ],
+    });
+    const [resources, setResources] = createSignal([disk, otherDisk]);
+    render(() => (
+      <TrueNASAlertsTable
+        incidents={buildTrueNASIncidentRows(resources())}
+        scope={resources()}
+        emptyIcon={<span />}
+        emptyTitle="No alerts"
+        emptyDescription="No active provider incidents"
+        showToolbar={false}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Device /dev/sdc has SMART test failures.'));
+    expect(
+      within(screen.getByTestId('truenas-alert-detail')).getByText('disk-sdc'),
+    ).toBeInTheDocument();
+
+    setResources([makeDisk({ status: 'healthy', incidents: [] }), otherDisk]);
+    expect(await screen.findByText('Device /dev/sdd has SMART test failures.')).toBeInTheDocument();
+    expect(screen.queryByTestId('truenas-alert-detail')).not.toBeInTheDocument();
+    expect(screen.queryByText('Device /dev/sdc has SMART test failures.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No active provider incidents')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByText('Device /dev/sdd has SMART test failures.'));
+    const detail = within(screen.getByTestId('truenas-alert-detail'));
+    expect(detail.getByText('disk-sdd')).toBeInTheDocument();
+    expect(detail.queryByText('disk-sdc')).not.toBeInTheDocument();
+  });
+
   it('opens inline native alert details for TrueNAS incident rows', async () => {
     const disk = makeDisk();
     const incidents = buildTrueNASIncidentRows([disk]);
