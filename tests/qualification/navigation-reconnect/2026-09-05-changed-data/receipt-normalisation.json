@@ -1,0 +1,26 @@
+[
+  {
+    "path": "cold-fixture/junit.xml",
+    "original_gzip": "cold-fixture/junit.xml.gz",
+    "original_sha256": "1f2e930cd0e768b8ebc50e3d8cf0b359f0dad8859961a952f0739201efc663bc",
+    "normalised_sha256": "d8add4a54e01a3c3989a222cc4b6d48e58f2c55be49ada4108849a576f27fdf8"
+  },
+  {
+    "path": "initial/junit.xml",
+    "original_gzip": "initial/junit.xml.gz",
+    "original_sha256": "00a92c8c2100abe19663ea2a90809d78b468d920148a315db2b2b4b440b10220",
+    "normalised_sha256": "07e4a08eee694e38068ee6fd025e4c4f3752438c7629ac6c329c4df3fb5b73c4"
+  },
+  {
+    "path": "named-service/junit.xml",
+    "original_gzip": "named-service/junit.xml.gz",
+    "original_sha256": "f325c144f617d6031b835d2d34b1e25d86c8181fb1fe73ffa8e043089e65a876",
+    "normalised_sha256": "99377de17b633459b3c5d1f30723d6ba73a43cc58dd5ec9cbec9ff53ef7bf5e1"
+  },
+  {
+    "path": "standalone/junit.xml",
+    "original_gzip": "standalone/junit.xml.gz",
+    "original_sha256": "27e74939a4451199306ba701f8a73c823aa68cae29af23f620c00838f462ca85",
+    "normalised_sha256": "ad130acf7faecd348093162a0bec613d43c81ddb01a7e238db40c30638b3ddd5"
+  }
+]
