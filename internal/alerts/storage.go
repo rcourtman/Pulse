@@ -101,8 +101,11 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 		Float64("clear", thresholds.Usage.Clear).
 		Msg("Checking storage thresholds")
 
-	// Check usage if storage is online - checkMetric will skip if threshold is nil or <= 0
-	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
+	// Zero usage is a clearing observation only when the byte counters also
+	// confirm an empty store. A default zero from missing capacity telemetry
+	// must not resolve an existing incident.
+	confirmedEmpty := storage.Usage == 0 && storage.Total > 0 && storage.Used == 0 && storage.Free == storage.Total
+	if storage.Status != "offline" && storage.Status != "unavailable" && (storage.Usage > 0 || confirmedEmpty) {
 		m.evaluateStorageCapacity(storage, thresholds, trend)
 	}
 

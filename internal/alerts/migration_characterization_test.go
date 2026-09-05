@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -681,6 +682,14 @@ func TestAlertCharacterizationGuestMetricResolutionUsesCurrentNodeIdentityAfterM
 	}
 	if resolved.Alert.ResourceID != newResourceID {
 		t.Fatalf("resolved alert resource ID = %q, want %q", resolved.Alert.ResourceID, newResourceID)
+	}
+	// Identity migration must not preserve the old firing observation in
+	// the snapshot used by recovery callbacks and recent-resolution reads.
+	if resolved.Value != 70 || !strings.HasPrefix(resolved.Message, "Resolved: VM cpu ") || !strings.Contains(resolved.Message, "70.0%") || strings.Contains(resolved.Message, "95.0%") {
+		t.Fatalf("resolved snapshot retained firing content: value=%v message=%q", resolved.Value, resolved.Message)
+	}
+	if !resolved.LastSeen.After(resolved.StartTime) {
+		t.Fatalf("resolved observation time %v did not advance past incident start %v", resolved.LastSeen, resolved.StartTime)
 	}
 
 	history := m.GetAlertHistory(5)
