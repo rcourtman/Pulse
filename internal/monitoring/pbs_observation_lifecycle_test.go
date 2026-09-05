@@ -1,6 +1,11 @@
 package monitoring
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -97,14 +102,51 @@ func TestPBSObservationHistorySurvivesRebuildsAndStoreReopen(t *testing.T) {
 	}
 }
 
-// A fresh monitor has no in-memory deduplication state. Replaying the cached
+// A fresh process has no in-memory deduplication state. Replaying the cached
 // observation while PBS is offline must not manufacture a new durable sample;
 // an equal-valued observation after recovery must still be retained.
 func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
-	cfg := metrics.DefaultConfig(t.TempDir())
+	dir := os.Getenv("PULSE_PBS_HISTORY_TEST_DIR")
+	child := dir != ""
+	if !child {
+		dir = t.TempDir()
+	}
+	cfg := metrics.DefaultConfig(dir)
 	start := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	if child {
+		var err error
+		start, err = time.Parse(time.RFC3339, os.Getenv("PULSE_PBS_HISTORY_TEST_START"))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	var targetID string
 	for generation := 0; generation < 2; generation++ {
+		if !child {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestPBSObservationHistoryAcrossMonitorReplacement$", "-test.count=1")
+			cmd.Env = append(os.Environ(),
+				"PULSE_PBS_HISTORY_TEST_DIR="+dir,
+				"PULSE_PBS_HISTORY_TEST_START="+start.Format(time.RFC3339),
+				"PULSE_PBS_HISTORY_TEST_GENERATION="+strconv.Itoa(generation))
+			output, err := cmd.CombinedOutput()
+			cancel()
+			if err != nil {
+				t.Fatalf("generation %d: %v\n%s", generation, err, output)
+			}
+			id, err := os.ReadFile(filepath.Join(dir, "target-id"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if targetID != "" && targetID != string(id) {
+				t.Fatal("target changed across process restart")
+			}
+			targetID = string(id)
+			continue
+		}
+		if strconv.Itoa(generation) != os.Getenv("PULSE_PBS_HISTORY_TEST_GENERATION") {
+			continue
+		}
 		persistent, err := metrics.NewStore(cfg)
 		if err != nil {
 			t.Fatal(err)
@@ -152,7 +194,14 @@ func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
 			}
 		}()
 	}
-	// Reopen again so these assertions cannot be satisfied by buffered writes.
+	if child {
+		if err := os.WriteFile(filepath.Join(dir, "target-id"), []byte(targetID), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	// Both writer processes exited before these queries: no shared Go memory or
+	// buffered writes can satisfy the assertions.
 	persistent, err := metrics.NewStore(cfg)
 	if err != nil {
 		t.Fatal(err)
