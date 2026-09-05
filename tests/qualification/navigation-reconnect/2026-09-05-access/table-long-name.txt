@@ -1,0 +1,241 @@
+{
+  "initial": {
+    "width": 362,
+    "scrollWidth": 362,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 108.59375,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 117.59375,
+        "width": 48.4375,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "3%",
+        "x": 166.03125,
+        "width": 55.890625,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 221.921875,
+        "width": 63.34375,
+        "titles": []
+      },
+      {
+        "text": "3",
+        "x": 285.265625,
+        "width": 37.25,
+        "titles": []
+      },
+      {
+        "text": "Current",
+        "x": 322.515625,
+        "width": 48.4375,
+        "titles": []
+      }
+    ]
+  },
+  "pointer": {
+    "width": 362,
+    "scrollWidth": 362,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 108.59375,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 117.59375,
+        "width": 48.4375,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "3%",
+        "x": 166.03125,
+        "width": 55.890625,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 221.921875,
+        "width": 63.34375,
+        "titles": []
+      },
+      {
+        "text": "3",
+        "x": 285.265625,
+        "width": 37.25,
+        "titles": []
+      },
+      {
+        "text": "Current",
+        "x": 322.515625,
+        "width": 48.4375,
+        "titles": []
+      }
+    ]
+  },
+  "keyboard": {
+    "width": 362,
+    "scrollWidth": 362,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 108.59375,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 117.59375,
+        "width": 48.4375,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "3%",
+        "x": 166.03125,
+        "width": 55.890625,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 221.921875,
+        "width": 63.34375,
+        "titles": []
+      },
+      {
+        "text": "3",
+        "x": 285.265625,
+        "width": 37.25,
+        "titles": []
+      },
+      {
+        "text": "Current",
+        "x": 322.515625,
+        "width": 48.4375,
+        "titles": []
+      }
+    ]
+  },
+  "accessibleRow": "- row "Expand details for notifications-worker notifications-worker running 4% 49% 1 —":
+  - cell "Expand details for notifications-worker notifications-worker":
+    - button "Expand details for notifications-worker"
+    - text: notifications-worker
+  - cell "running"
+  - cell "4%"
+  - cell "49%"
+  - cell "1"
+  - cell "—"",
+  "expanded": "true",
+  "detailText": "notifications-worker
+Container
+Docker / Podman
+Overview
+History
+Manage
+RUNTIME CONTEXT
+Observed state\t
+Running
+
+Uptime\t
+11d 18h
+
+Last seen\t
+11s ago
+
+CONTAINER
+Image\t
+ghcr.io/pulse-demo/notifications-worker:2026.04
+
+Restarts\t
+1
+
+Created\t
+17 days ago
+
+Started\t
+11 days ago
+
+Compose project\t
+orion-2
+
+Compose service\t
+postgres
+
+Labels\t
+com.docker.compose.project: orion-2
+com.docker.compose.service: postgres
+com.pulse.demo: true
+com.pulse.role.production: true
+com.pulse.role.queue: true
+com.pulse.role.worker: true
+environment: staging
+
+IDENTITY
+Hostname\t
+notifications-worker
+
+Primary ID\t
+app-container:orion-2-26f93461b215
+
+Parent\t
+agent-679e9ef0038bd2b7
+
+Discovery\t
+app-container:notifications-worker
+
+Metrics Target\t
+app-container:orion-2-26f93461b215
+
+Aliases\t
+app-container:orion-2-26f93461b215
+orion-2-26f93461b215
+orion-2-mock
+app-platform-01
++4
+Relationship map
+
+1 canonical relationship
+
+CANONICAL RELATIONSHIPS
+notifications-worker
+→
+docker-network-0ab79ab291cd98fa
+Attached To
+100% confidence · Docker Adapter · last seen just now"
+}
