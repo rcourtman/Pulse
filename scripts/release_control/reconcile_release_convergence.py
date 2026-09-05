@@ -553,8 +553,16 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
             run.get("run_attempt"), "run attempt"
         ) < 50:
             submitted = github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
-            action = "Renewed" if submitted else "DRY RUN: Would renew"
-            print(f"{action} pre-commit convergence owner {run_id} for active source {source_run_id}.")
+            if submitted:
+                print(
+                    f"Renewed pre-commit convergence owner {run_id} "
+                    f"for active source {source_run_id}."
+                )
+            else:
+                print(
+                    f"DRY RUN: Would renew pre-commit convergence owner {run_id} "
+                    f"for active source {source_run_id}."
+                )
             return
         print(f"{tag} has no immutable activation commit; no convergence retry was dispatched.")
         return
@@ -602,8 +610,13 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
             )
             return
         submitted = github.post(f"repos/{repository}/actions/runs/{run_id}/rerun")
-        action = "Re-ran" if submitted else "DRY RUN: Would re-run"
-        print(f"{action} current-control convergence {run_id} for committed {tag}.")
+        if submitted:
+            print(f"Re-ran current-control convergence {run_id} for committed {tag}.")
+        else:
+            print(
+                f"DRY RUN: Would re-run current-control convergence {run_id} "
+                f"for committed {tag}."
+            )
         return
 
     prerelease = release.get("prerelease")
@@ -627,11 +640,17 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         f"repos/{repository}/actions/workflows/release-convergence.yml/dispatches",
         payload,
     )
-    action = "Dispatched" if submitted else "DRY RUN: Would dispatch"
-    print(
-        f"{action} fresh convergence controls after observing {default_commit} for committed {tag}; "
-        f"the failed run used {run.get('head_sha')}."
-    )
+    if submitted:
+        print(
+            f"Dispatched fresh convergence controls after observing {default_commit} "
+            f"for committed {tag}; the failed run used {run.get('head_sha')}."
+        )
+    else:
+        print(
+            f"DRY RUN: Would dispatch fresh convergence controls after observing "
+            f"{default_commit} for committed {tag}; the failed run used "
+            f"{run.get('head_sha')}."
+        )
 
 
 def discover(github: GitHub) -> list[int]:
