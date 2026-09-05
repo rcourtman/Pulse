@@ -5168,3 +5168,20 @@ passed. A read-only probe of job 101235205647 retained the expected failure text
 without ESC bytes. Private containment classification and successful scheduled
 reconciliation still require post-integration evidence; this is not customer
 convergence or release qualification.
+
+### 2026-09-05 — Bind hosted chart application version to release version
+
+The hosted Helm publisher rejects a supplied application version that differs
+from the chart version before emitting version outputs or packaging. Both server
+and agent image defaults use Chart.AppVersion, so an exact source SHA and chart
+digest alone do not prevent an override from selecting another release's images.
+The normal release caller already supplies equal versions; default and release
+event paths remain unchanged. This does not remove users' image value overrides.
+
+Verification: helm_publish_version_test.py executes the actual version-resolution
+shell. Four mismatches failed assertions before the fix and are rejected after it;
+stable/alpha/beta/RC equal and default versions and release-event defaults pass.
+All 4 tests, 7 Helm Pages retry tests and 47 promotion-policy tests pass locally.
+No hosted publication or installed-image qualification is claimed.
+External reference retrieved 2026-09-05: https://helm.sh/docs/topics/charts/#the-appversion-field
+explains that application version is separate from chart version.
