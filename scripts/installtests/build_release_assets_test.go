@@ -2119,7 +2119,8 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`helm repo index "${index_work}"`,
 		`git -C gh-pages push origin HEAD:gh-pages`,
 		`grep -q "version: ${VERSION}"`,
-		`helm show chart pulse-public/pulse --version "${VERSION}"`,
+		`helm pull pulse-public/pulse --version "${VERSION}" --destination "${public_work}"`,
+		`cmp -s "${qualified_chart}" "${public_work}/pulse-${VERSION}.tgz"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(helmPages, needle) {
