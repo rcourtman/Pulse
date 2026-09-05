@@ -16,6 +16,21 @@ import (
 // This is local integration proof, not installed-artifact or off-host delivery
 // qualification. Both the synthetic PBS and receiver live in this test process.
 func TestPBSPartialMetricsWebhookLifecycle(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode pbsHealthTestMode
+	}{
+		{"low usage", pbsHealthTestLowMemory},
+		{"measured zero", pbsHealthTestZeroUsage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testPBSPartialMetricsWebhookLifecycle(t, tc.mode)
+		})
+	}
+}
+
+func testPBSPartialMetricsWebhookLifecycle(t *testing.T, recoveryMode pbsHealthTestMode) {
+	t.Helper()
 	type payload struct {
 		Event  string         `json:"event"`
 		Alerts []alerts.Alert `json:"alerts"`
@@ -98,7 +113,8 @@ func TestPBSPartialMetricsWebhookLifecycle(t *testing.T) {
 	}
 	incident := firing.Alerts[0]
 	waitSent(1)
-	for _, mode := range []pbsHealthTestMode{pbsHealthTestNodeDenied, pbsHealthTestNodeGatewayFailure, pbsHealthTestNullNodeStatus, pbsHealthTestIncompleteNodeStatus} {
+	for _, mode := range []pbsHealthTestMode{pbsHealthTestNodeDenied, pbsHealthTestNodeGatewayFailure, pbsHealthTestNullNodeStatus, pbsHealthTestIncompleteNodeStatus,
+		pbsHealthTestNegativeCPU, pbsHealthTestZeroMemoryTotal, pbsHealthTestWrongMemoryType} {
 		fixture.setMode(mode)
 		for range 5 {
 			poll()
@@ -120,7 +136,8 @@ func TestPBSPartialMetricsWebhookLifecycle(t *testing.T) {
 		case <-time.After(150 * time.Millisecond):
 		}
 	}
-	fixture.setMode(pbsHealthTestLowMemory)
+	// A measured zero is valid recovery, unlike missing or malformed numbers.
+	fixture.setMode(recoveryMode)
 	for range 5 {
 		poll()
 	}
