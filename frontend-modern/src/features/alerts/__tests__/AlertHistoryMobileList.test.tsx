@@ -43,14 +43,16 @@ function createState() {
   );
   const closeResourceIncidentPanel = vi.fn(() => setResourceIncidentPanel(null));
 
+  const [groupedAlerts, setGroupedAlerts] = createSignal([
+    {
+      label: 'Today (August 4th)',
+      fullLabel: 'Today, August 4th 2026',
+      alerts: [alert],
+    },
+  ]);
+
   const state = {
-    groupedAlerts: () => [
-      {
-        label: 'Today (August 4th)',
-        fullLabel: 'Today, August 4th 2026',
-        alerts: [alert],
-      },
-    ],
+    groupedAlerts,
     getIncidentRowKey: () => 'alert-1-row',
     expandedIncidents,
     incidentLoading: () => ({}),
@@ -81,6 +83,7 @@ function createState() {
     closeResourceIncidentPanel,
     openResourceIncidentPanel,
     state,
+    setGroupedAlerts,
     toggleIncidentTimeline,
   };
 }
@@ -169,5 +172,31 @@ describe('AlertHistoryMobileList', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(closeResourceIncidentPanel).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Resource' })).toHaveFocus();
+  });
+});
+
+describe('AlertHistoryMobileList changing history', () => {
+  it('returns focus to the list when the investigated row disappears', async () => {
+    const { closeResourceIncidentPanel, setGroupedAlerts, state } = createState();
+    render(() => <AlertHistoryMobileList state={state} />);
+
+    const resourceButton = screen.getByRole('button', { name: 'Resource' });
+    resourceButton.focus();
+    await fireEvent.click(resourceButton);
+    expect(screen.getByRole('dialog', {
+      name: 'Resource incidents for pve-production-01',
+    })).toBeInTheDocument();
+
+    // A refresh or filter change can remove the originating history card.
+    setGroupedAlerts([]);
+    expect(resourceButton).not.toBeInTheDocument();
+    await fireEvent.keyDown(document, { key: 'Escape' });
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(closeResourceIncidentPanel).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('alert-history-mobile-list')).toHaveFocus();
   });
 });
