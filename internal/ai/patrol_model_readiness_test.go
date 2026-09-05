@@ -19,6 +19,7 @@ import (
 
 type scriptedReadinessProvider struct {
 	connectionErr       error
+	continuationErr     error
 	wrongProtocol       bool
 	wrongContext        bool
 	skipContinuation    bool
@@ -73,6 +74,9 @@ func (p *scriptedReadinessProvider) ChatStream(ctx context.Context, req provider
 
 	last := req.Messages[len(req.Messages)-1]
 	if last.ToolResult != nil {
+		if p.continuationErr != nil {
+			return p.continuationErr
+		}
 		if p.skipContinuation {
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "end_turn", InputTokens: 100, OutputTokens: 10}})
 			return nil
@@ -409,5 +413,64 @@ func TestPatrolRuntimeReadinessUsesAdvisorForSelectedAutonomyMode(t *testing.T) 
 	readiness = service.PatrolRuntimeReadiness()
 	if !readiness.Ready || readiness.Status != PatrolReadinessWarning {
 		t.Fatalf("unassessed higher autonomy should remain advisory in the MVP: %+v", readiness)
+	}
+}
+
+func TestRunPatrolModelReadinessWithProvider_IncompleteContinuationIsNotLatencyFailure(t *testing.T) {
+	provider := &scriptedReadinessProvider{contextWindow: 32768, continuationErr: errors.New("provider rejected continuation request")}
+	result := runPatrolModelReadinessWithProvider(context.Background(), readinessTestConfig(), config.AIProviderOllama, "test-model", "ollama:test-model", provider)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("readiness evidence: %s", encoded)
+
+	if result.Success || result.PatrolCapable || result.MaxVerifiedMode != "" {
+		t.Fatalf("incomplete provider evaluation must not authorize Patrol: %+v", result)
+	}
+	if result.Dimensions.Latency.Status != PatrolModelReadinessNotAssessed {
+		t.Fatalf("unfinished evaluation is not measured latency failure: %+v", result.Dimensions.Latency)
+	}
+	if result.Dimensions.ToolProtocol.Passed != 3 || result.Dimensions.ContextQuality.Passed != 2 {
+		t.Fatalf("completed evidence must survive: %+v", result.Dimensions)
+	}
+	if result.Modes.Monitor.Status != PatrolModeNotAssessed || result.Cause != PatrolFailureCauseProviderConnection {
+		t.Fatalf("preserve provider failure without asserting model incapability: %+v", result)
+	}
+}
+
+func TestPatrolReadinessCacheCorrectsLegacyIncompleteLatency(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	cfg := readinessTestConfig()
+	service := NewService(persistence, nil)
+	service.cfg = cfg
+	result := runPatrolModelReadinessWithProvider(context.Background(), cfg, config.AIProviderOllama, "test-model", "ollama:test-model", &scriptedReadinessProvider{contextWindow: 32768, continuationErr: errors.New("provider rejected continuation request")})
+	result.Dimensions.Latency = PatrolModelReadinessDimension{Status: PatrolModelReadinessFail, Summary: "Latency could not be measured because the streaming probe did not complete."}
+	result.Modes.Monitor.Status = PatrolModeNotSuitable
+	result.CacheKey = service.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+	at := time.Now()
+	service.recordPatrolModelReadiness(result, at)
+	reloaded := NewService(persistence, nil)
+	reloaded.cfg = cfg
+	cached, recordedAt := reloaded.CachedPatrolModelReadiness()
+	if cached == nil {
+		t.Fatal("expected retained evidence")
+	}
+	if cached.Success || cached.PatrolCapable || cached.MaxVerifiedMode != "" {
+		t.Fatalf("cache correction must not authorize Patrol: %+v", cached)
+	}
+	if cached.Dimensions.Latency.Status != PatrolModelReadinessNotAssessed || cached.Modes.Monitor.Status != PatrolModeNotAssessed {
+		t.Fatalf("legacy incomplete probe still misclassified: %+v", cached)
+	}
+	for _, mode := range []string{config.PatrolAutonomyMonitor, config.PatrolAutonomyApproval, config.PatrolAutonomyAssisted, config.PatrolAutonomyFull} {
+		cfg.PatrolAutonomyLevel = mode
+		cached.CacheKey = reloaded.patrolModelReadinessCacheKey(cfg, cached.Provider, cached.Model)
+		reloaded.recordPatrolModelReadiness(*cached, at.Add(time.Second))
+		if readiness := reloaded.PatrolRuntimeReadiness(); readiness.Ready {
+			t.Fatalf("unassessed Watch must block %s, got %+v", mode, readiness)
+		}
+	}
+	if !recordedAt.Equal(at) || cached.Cause != result.Cause || cached.Dimensions.ToolProtocol.Passed != 3 || cached.Dimensions.ContextQuality.Passed != 2 {
+		t.Fatalf("recorded evidence changed: %+v", cached)
 	}
 }

@@ -5253,6 +5253,13 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	}
 	addCheck("model", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol model", "Patrol has a model selected from a configured provider.", "")
 
+	// Execution authority comes from the runtime's selected-mode verdict.
+	// Display-only dimension warnings must not turn an incomplete evaluation
+	// into permission to launch a manual run.
+	if runtime := aiService.PatrolRuntimeReadiness(); !runtime.Ready {
+		addCheck("runtime", patrolReadinessNotReady, runtime.Cause, "Patrol execution", runtime.Summary, "open_provider_settings")
+	}
+
 	toolStatus, toolCause, toolMessage, toolAction := resolvePatrolToolsCheck(aiService, provider, model)
 	addCheck("tools", toolStatus, toolCause, "Patrol tools", toolMessage, toolAction)
 	if advisor, recordedAt := aiService.CachedPatrolModelReadiness(); advisor != nil && !recordedAt.IsZero() {

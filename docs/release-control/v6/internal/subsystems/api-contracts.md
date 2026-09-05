@@ -20,6 +20,20 @@
 
 ## Purpose
 
+The manual Patrol API consumes the service's selected-mode runtime verdict as
+an execution check. Dimension-level presentation warnings cannot authorize a
+run after a provider failure leaves Watch-only readiness unassessed. Operator
+cancellation retains its existing non-failure advisory semantics. Higher-mode canary guidance
+retains its existing advisory behavior only after Watch has been verified.
+
+The Assistant tool-provider wiring passes the current monitor's retained
+metrics store to the historical metrics adapter. Resource-scoped performance
+queries use canonical registry coordinates and retain history across process
+restarts. Store failures are returned to the caller rather than hidden behind
+an in-memory fallback. This is an internal read-provider extension and adds no
+route or external write authority. The restart proof is
+`internal/ai/tools/retained_metrics_test.go`.
+
 The public `PBSBackup` projection keeps `inProgress` as the compatibility field
 for an incomplete, manifestless snapshot. Optional
 `writeActivityObserved: true` says the collector obtained a complete bounded

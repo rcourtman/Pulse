@@ -3294,6 +3294,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 			metricsAdapter := tools.NewMetricsHistoryToolAdapter(
 				&metricsSourceWrapper{history: metricsHistory},
 				monitor.GetUnifiedReadState(),
+				monitor.GetMetricsStore(),
 			)
 			if metricsAdapter != nil {
 				service.SetMetricsHistory(metricsAdapter)

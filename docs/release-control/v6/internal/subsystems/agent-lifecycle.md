@@ -15,6 +15,11 @@
 
 ## Purpose
 
+Assistant historical metric wiring uses the current monitor's retained store
+and registry metrics coordinates. Historical reads do not alter enrollment,
+agent ownership, or command capabilities. Proxmox-only canonical agent details
+retain CPU topology without requiring an installed collector.
+
 Unraid collection preserves optional nonnegative `mdNumDisks` as `numDisks` through the host report. Explicit zero survives JSON encoding; absent, negative, or malformed source counts remain unknown. This telemetry does not change enrollment or command authority; older agents retain unknown-count behaviour.
 
 ### Portable installer lifecycle ownership

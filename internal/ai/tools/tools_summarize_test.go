@@ -377,7 +377,7 @@ func TestSummarizeTool_FleetUsesFleetNarratorWhenConfigured(t *testing.T) {
 // The production unified provider (the monitor adapter) must satisfy the
 // on-demand metrics-target resolver, or fleet enumeration silently degrades
 // to fixture-populated targets only.
-var _ summarizeMetricsTargetResolver = (*unifiedresources.MonitorAdapter)(nil)
+var _ resourceMetricsTargetResolver = (*unifiedresources.MonitorAdapter)(nil)
 
 // stubSummarizeResourceProvider implements UnifiedResourceProvider plus the
 // on-demand metrics-target resolver the production monitor adapter exposes.
