@@ -290,6 +290,63 @@ class DecisionSummaryTests(unittest.TestCase):
         self.assertIn("No failed run selected for retry", message)
         self.assertIn("missing convergence runs are not qualified", message)
 
+    def discover_with_releases(self, releases):
+        github = FakeGitHub()
+        github.pages = lambda endpoint: (
+            [releases] if "/releases?" in endpoint
+            else [{"workflow_runs": github.runs}]
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "summary.md"
+            with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(path)}), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                selected = subject.discover(github)
+            summary = path.read_text() if path.exists() else ""
+        self.assertEqual([], github.posts)
+        return selected, output.getvalue(), summary
+
+    def test_mutable_stable_debt_visible_even_when_preview_retry_selected(self):
+        selected, output, summary = self.discover_with_releases([
+            release("v6.4.1", "2026-09-01T00:00:00Z",
+                    prerelease=False, immutable=False),
+            release("v6.5.0-rc.1", "2026-09-02T00:00:00Z", prerelease=True),
+        ])
+        self.assertEqual([100], selected)
+        for text in (output, summary):
+            self.assertIn("Current stable head v6.4.1", text)
+            self.assertIn("continuity debt remains", text)
+            self.assertIn("No retry or fallback", text)
+
+    def test_unknown_immutability_reports_debt_without_older_fallback(self):
+        for unknown in (None, "true", 1, False):
+            with self.subTest(immutable=unknown):
+                head = release("v6.5.0-rc.2", "2026-09-03T00:00:00Z",
+                               prerelease=True)
+                head["immutable"] = unknown
+                selected, output, summary = self.discover_with_releases([
+                    release("v6.5.0-rc.1", "2026-09-02T00:00:00Z", prerelease=True),
+                    head,
+                ])
+                self.assertEqual([], selected)
+                self.assertIn("Current preview head v6.5.0-rc.2", output)
+                self.assertIn("no confirmed immutable activation commit", summary)
+
+    def test_old_mutable_draft_and_companion_do_not_report_current_debt(self):
+        draft = release("v6.6.0", "2026-09-04T00:00:00Z",
+                        prerelease=False, immutable=False)
+        draft["draft"] = True
+        selected, output, summary = self.discover_with_releases([
+            release("v6.4.0-rc.1", "2026-09-01T00:00:00Z",
+                    prerelease=True, immutable=False),
+            release("v6.5.0-rc.1", "2026-09-02T00:00:00Z", prerelease=True),
+            release("helm-chart-6.5.0", "2026-09-03T00:00:00Z",
+                    prerelease=False, immutable=False),
+            draft,
+        ])
+        self.assertEqual([100], selected)
+        self.assertEqual("", output)
+        self.assertEqual("", summary)
+
     def test_credential_hold_is_visible_without_retry(self):
         github = FakeGitHub(current_controls=True)
         github.unchanged_credential_containment_block = lambda run_id: True
