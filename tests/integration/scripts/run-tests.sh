@@ -70,6 +70,16 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
+teardown_suite() {
+    # run_suite is called in an || list, where Bash disables errexit.
+    # Stop the entire run if teardown fails: later suites must not inherit
+    # containers or volumes from a previous scenario.
+    if ! compose down -v; then
+        echo -e "${RED}❌ Failed to clean up test environment; stopping run${NC}"
+        exit 1
+    fi
+}
+
 # Function to run suite with specific mock config
 run_suite() {
     local name="$1"
@@ -102,24 +112,24 @@ run_suite() {
     if ! compose up -d; then
         echo -e "${RED}❌ Failed to start docker services${NC}"
         compose logs
-        compose down -v
+        teardown_suite
         return 1
     fi
 
     # Resolve Docker-allocated ports only after successful startup. A failed
     # bind must never fall back to probing a different worktree's listener.
     local binding
-    binding="$(compose port pulse-test 7655)" || return 1
-    [[ "$binding" =~ :([0-9]+)$ ]] || return 1
+    binding="$(compose port pulse-test 7655)" || { teardown_suite; return 1; }
+    [[ "$binding" =~ :([0-9]+)$ ]] || { teardown_suite; return 1; }
     export PULSE_BASE_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
     local pulse_base_url="$PULSE_BASE_URL"
     local health_url="$pulse_base_url/api/health"
-    binding="$(compose port pulse-test 7656)" || return 1
-    [[ "$binding" =~ :([0-9]+)$ ]] || return 1
+    binding="$(compose port pulse-test 7656)" || { teardown_suite; return 1; }
+    [[ "$binding" =~ :([0-9]+)$ ]] || { teardown_suite; return 1; }
     export PULSE_E2E_AGENT_PORT="${BASH_REMATCH[1]}"
     export PULSE_AGENT_BASE_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
-    binding="$(compose port mock-github 8080)" || return 1
-    [[ "$binding" =~ :([0-9]+)$ ]] || return 1
+    binding="$(compose port mock-github 8080)" || { teardown_suite; return 1; }
+    [[ "$binding" =~ :([0-9]+)$ ]] || { teardown_suite; return 1; }
     export MOCK_GITHUB_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
 
     # Wait for services
@@ -140,14 +150,14 @@ run_suite() {
         echo -e "${RED}❌ Services failed to start${NC}"
         compose ps
         compose logs
-        compose down -v
+        teardown_suite
         return 1
     fi
 
     if ! node ./scripts/apply-entitlement-profile.mjs; then
         echo -e "${RED}❌ Failed to apply entitlement bootstrap${NC}"
         compose logs
-        compose down -v
+        teardown_suite
         return 1
     fi
 
@@ -209,13 +219,7 @@ run_suite() {
 
     # Cleanup
     echo "Cleaning up..."
-    # run_suite is called in an || list, where Bash disables errexit.
-    # Stop the entire run if teardown fails: later suites must not inherit
-    # containers or volumes from a previous scenario.
-    if ! compose down -v; then
-        echo -e "${RED}❌ Failed to clean up test environment; stopping run${NC}"
-        exit 1
-    fi
+    teardown_suite
 
     return $TEST_RESULT
 }
