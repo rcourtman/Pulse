@@ -78,6 +78,15 @@ func TestResolvedTerminalFiringIsNotReplayedAfterRestart(t *testing.T) {
 			if retried != 2 {
 				t.Errorf("retried %d rows, want only surviving group and recovery", retried)
 			}
+			// Alert IDs identify a resource/condition and can recur. Resolution
+			// must suppress the old queue row, not permanently mute that ID.
+			if err := q.Enqueue(&QueuedNotification{
+				ID: "new-incident", Type: "webhook", Status: QueueStatusPending,
+				Config: []byte("{}"), MaxAttempts: 3,
+				Alerts: []*alerts.Alert{{ID: "healthy"}},
+			}); err != nil {
+				t.Fatal(err)
+			}
 			delivered := map[string][]string{}
 			var mu sync.Mutex
 			q.SetProcessor(func(n *QueuedNotification) error {
@@ -104,10 +113,11 @@ func TestResolvedTerminalFiringIsNotReplayedAfterRestart(t *testing.T) {
 				time.Sleep(time.Millisecond)
 			}
 			mu.Lock()
-			if len(delivered) != 2 || len(delivered["group"]) != 1 ||
+			if len(delivered) != 3 || len(delivered["new-incident"]) != 1 ||
+				delivered["new-incident"][0] != "healthy" || len(delivered["group"]) != 1 ||
 				delivered["group"][0] != "still-firing" ||
 				len(delivered["recovery"]) != 1 || delivered["recovery"][0] != "healthy" {
-				t.Errorf("replayed payloads = %v, want only still-firing and genuine recovery", delivered)
+				t.Errorf("replayed payloads = %v, want still-firing, genuine recovery and the new incident", delivered)
 			}
 			mu.Unlock()
 			var failures int
