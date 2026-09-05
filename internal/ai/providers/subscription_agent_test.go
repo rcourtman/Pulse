@@ -88,6 +88,33 @@ func TestCappedBufferBoundsChildOutput(t *testing.T) {
 	}
 }
 
+func TestSubscriptionAgentPreservesExplicitRefusalAcrossProcessExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake subscription CLI uses a POSIX shell script")
+	}
+	for _, exitCode := range []string{"0", "1"} {
+		t.Run("exit_"+exitCode, func(t *testing.T) {
+			binDir := t.TempDir()
+			// Even a preceding declared call or apparently successful envelope
+			// must not be routed once the terminal provider verdict is refusal.
+			writeExecutable(t, filepath.Join(binDir, "claude"), `#!/bin/sh
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"read-1","name":"pulse_read","input":{}}]}}'
+printf '%s\n' '{"type":"result","subtype":"success","is_error":true,"stop_reason":"refusal","terminal_reason":"api_error","result":"private provider detail","structured_output":{"content":"done","stop_reason":"end_turn","tool_calls":[]}}'
+exit `+exitCode+"\n")
+			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			client := NewSubscriptionAgentClient(SubscriptionAgentClaude, "test-model", time.Second)
+			var events int
+			err := client.ChatStream(context.Background(), ChatRequest{Tools: []Tool{{Name: "pulse_read"}}}, func(StreamEvent) { events++ })
+			if !errors.Is(err, ErrProviderRequestRefused) || events != 0 {
+				t.Fatalf("refusal = %v, emitted events = %d", err, events)
+			}
+			if strings.Contains(err.Error(), "private provider detail") {
+				t.Fatal("raw CLI envelope escaped the transport")
+			}
+		})
+	}
+}
+
 func TestSubscriptionAgentRequestTimeout(t *testing.T) {
 	if got := subscriptionAgentRequestTimeout(30 * time.Second); got != SubscriptionAgentMinimumRequestTimeout {
 		t.Fatalf("short configured timeout = %s, want %s", got, SubscriptionAgentMinimumRequestTimeout)

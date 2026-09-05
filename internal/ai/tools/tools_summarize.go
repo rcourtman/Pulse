@@ -12,28 +12,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// registerSummarizeTools registers the pulse_summarize tool which
-// exposes the reporting synthesis engine to chat sessions as a
-// retrospective question-answering capability. The tool wraps the
-// engine's NarrativeFor and FleetNarrativeFor entry points so
-// operators can ask "what's hot on pve1 this week" or "where should
-// I look across my fleet" without round-tripping through report
-// generation. v1 returns heuristic narrative (the same deterministic
-// observations the report PDF carries when AI is unconfigured); a
-// follow-up commit will thread the per-tenant AI narrator through
-// the chat session so this tool can return AI-generated synthesis
-// in the same shape.
+// registerSummarizeTools exposes retained evidence for model-owned synthesis.
+// Report narratives remain available to report consumers through reporting.Engine.
 func (e *PulseToolExecutor) registerSummarizeTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseSummarizeToolName,
-			Description: `Generate a retrospective summary of one resource or a fleet across a time window. Use this when the operator asks questions like "what's been happening with pve1 this week" or "where should I look across my fleet" — answers grounded in metric stats, alerts, storage state, disk health, and Patrol findings within the window.
+			Description: `Read retained metric evidence for one resource or a fleet over 24h, 7d, or 30d. Returns measured statistics, units, actual first/latest observation times, retained point counts and largest gaps. The requested window does not imply complete or fresh coverage. Means are unweighted means of returned retained points, which may already be retention aggregates.
 
-Two modes via the 'action' parameter:
-  - "resource": summarises a single resource. Required: resource_id (ID or name); resource_type only when the ID is not a known resource.
-  - "fleet":    summarises a fleet across multiple resources. resource_ids is optional — omit it and the tool enumerates the known fleet itself (infrastructure first, bounded). Never ask the operator for resource IDs.
+This tool reads metrics only. Alerts, findings, disk health, backup coverage and topology are not queried. Use the relevant tools for those sources before drawing conclusions about health or causes.
 
-Time window defaults to the last 7 days; supported ranges: 24h, 7d, 30d.`,
+Actions:
+- resource: resource_id is required, resource_type is only needed for IDs unknown to the registry.
+- fleet: omit resource_ids to enumerate the known fleet, or provide comma-separated IDs or names. resource_type optionally filters enumeration.
+
+Default window: 7d. Interpret the evidence in the current conversation. No separate model or heuristic diagnosis runs inside this tool.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -69,8 +62,8 @@ Time window defaults to the last 7 days; supported ranges: 24h, 7d, 30d.`,
 		Governance: ToolGovernance{
 			ActionMode:      ToolActionRead,
 			ApprovalPolicy:  ToolApprovalScopeOnly,
-			ApprovalSummary: "no approval required; pure read of metrics history and findings store.",
-			Summary:         "Returns a retrospective synthesis (observations, recommendations, outliers, period comparison) for one resource or a fleet within a time window.",
+			ApprovalSummary: "no approval required; pure read of retained metrics.",
+			Summary:         "Returns retained metric statistics and observation coverage for one resource or a fleet within a time window.",
 		},
 	})
 }
@@ -97,9 +90,9 @@ func summarizeRangeWindow(raw string) time.Duration {
 }
 
 func (e *PulseToolExecutor) executeSummarize(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
-	engine := reporting.GetEngine()
-	if engine == nil {
-		return NewErrorResult(fmt.Errorf("reporting engine not initialized")), nil
+	engine, ok := reporting.GetEngine().(reporting.MetricEvidenceProvider)
+	if !ok || engine == nil {
+		return NewErrorResult(fmt.Errorf("retained metric evidence is unavailable from the reporting engine")), nil
 	}
 
 	action, _ := args["action"].(string)
@@ -122,24 +115,36 @@ func (e *PulseToolExecutor) executeSummarize(ctx context.Context, args map[strin
 	}
 }
 
+// EvidenceScope states what was collected, independently from an empty result.
+// In particular, an empty metrics map says nothing about alert or disk health.
+type summarizeEvidenceScope struct {
+	Source      string   `json:"source"`
+	NotQueried  []string `json:"not_queried"`
+	Aggregation string   `json:"aggregation"`
+}
+
+func retainedSummaryScope() summarizeEvidenceScope {
+	return summarizeEvidenceScope{
+		Source:      "retained_metrics",
+		NotQueried:  []string{"alerts", "findings", "disk_health", "backups", "topology"},
+		Aggregation: "Mean and latest describe retained point values, which may be bucket averages. Min and max preserve recorded bucket extrema, with their bucket timestamps, so peaks can exceed the plotted averages. The mean is unweighted. First and last timestamps do not prove continuous coverage.",
+	}
+}
+
 type summarizeResourceResponse struct {
-	OK              bool                        `json:"ok"`
-	Action          string                      `json:"action"`
-	ResourceType    string                      `json:"resource_type"`
-	ResourceID      string                      `json:"resource_id"`
-	WindowStart     time.Time                   `json:"window_start"`
-	WindowEnd       time.Time                   `json:"window_end"`
-	NarrativeSource string                      `json:"narrative_source"`
-	HealthStatus    string                      `json:"health_status,omitempty"`
-	HealthMessage   string                      `json:"health_message,omitempty"`
-	Observations    []reporting.NarrativeBullet `json:"observations,omitempty"`
-	Recommendations []string                    `json:"recommendations,omitempty"`
-	Disclaimer      string                      `json:"disclaimer,omitempty"`
+	OK           bool                      `json:"ok"`
+	Action       string                    `json:"action"`
+	ResourceType string                    `json:"resource_type"`
+	ResourceID   string                    `json:"resource_id"`
+	WindowStart  time.Time                 `json:"window_start"`
+	WindowEnd    time.Time                 `json:"window_end"`
+	Scope        summarizeEvidenceScope    `json:"scope"`
+	Evidence     *reporting.MetricEvidence `json:"evidence"`
 }
 
 func (e *PulseToolExecutor) summarizeResource(
-	_ context.Context,
-	engine reporting.Engine,
+	ctx context.Context,
+	engine reporting.MetricEvidenceProvider,
 	args map[string]interface{},
 	start, end time.Time,
 ) (CallToolResult, error) {
@@ -182,14 +187,12 @@ func (e *PulseToolExecutor) summarizeResource(
 	}
 	req.Start = start
 	req.End = end
-	req.Narrator = e.reportNarrator
-	req.FindingsProvider = e.reportFindingsProvider
-	narrative, err := engine.NarrativeFor(req)
+	evidence, err := engine.MetricEvidenceFor(ctx, req)
 	if err != nil {
-		return NewErrorResult(fmt.Errorf("narrative generation failed: %w", err)), nil
+		return NewErrorResult(fmt.Errorf("metric evidence query failed: %w", err)), nil
 	}
-	if narrative == nil {
-		return NewErrorResult(fmt.Errorf("narrative generation produced no result")), nil
+	if evidence == nil {
+		return NewErrorResult(fmt.Errorf("metric evidence query produced no result")), nil
 	}
 
 	// Telemetry: structured event line per summarize invocation so
@@ -200,45 +203,34 @@ func (e *PulseToolExecutor) summarizeResource(
 		Str("org_id", e.orgID).
 		Str("action", "resource").
 		Str("resource_type", canonicalType).
-		Str("narrative_source", narrative.Source).
-		Bool("ai_configured", e.reportNarrator != nil).
-		Bool("findings_configured", e.reportFindingsProvider != nil).
+		Str("evidence_source", "retained_metrics").
 		Time("window_start", start).
 		Time("window_end", end).
 		Msg("Reporting: pulse_summarize invoked")
 
 	return NewJSONResult(summarizeResourceResponse{
-		OK:              true,
-		Action:          "resource",
-		ResourceType:    canonicalType,
-		ResourceID:      resourceID,
-		WindowStart:     start,
-		WindowEnd:       end,
-		NarrativeSource: narrative.Source,
-		HealthStatus:    narrative.HealthStatus,
-		HealthMessage:   narrative.HealthMessage,
-		Observations:    narrative.Observations,
-		Recommendations: narrative.Recommendations,
-		Disclaimer:      narrative.Disclaimer,
+		OK:           true,
+		Action:       "resource",
+		ResourceType: canonicalType,
+		ResourceID:   resourceID,
+		WindowStart:  start,
+		WindowEnd:    end,
+		Scope:        retainedSummaryScope(),
+		Evidence:     evidence,
 	}), nil
 }
 
 type summarizeFleetResponse struct {
-	OK              bool                        `json:"ok"`
-	Action          string                      `json:"action"`
-	ResourceIDs     []string                    `json:"resource_ids"`
-	Resources       []summarizeFleetEntry       `json:"resources,omitempty"`
-	Enumerated      bool                        `json:"enumerated,omitempty"`
-	Note            string                      `json:"note,omitempty"`
-	WindowStart     time.Time                   `json:"window_start"`
-	WindowEnd       time.Time                   `json:"window_end"`
-	NarrativeSource string                      `json:"narrative_source"`
-	HealthStatus    string                      `json:"health_status,omitempty"`
-	HealthMessage   string                      `json:"health_message,omitempty"`
-	Outliers        []reporting.FleetOutlier    `json:"outliers,omitempty"`
-	Patterns        []reporting.NarrativeBullet `json:"patterns,omitempty"`
-	Recommendations []string                    `json:"recommendations,omitempty"`
-	Disclaimer      string                      `json:"disclaimer,omitempty"`
+	OK          bool                        `json:"ok"`
+	Action      string                      `json:"action"`
+	ResourceIDs []string                    `json:"resource_ids"`
+	Resources   []summarizeFleetEntry       `json:"resources"`
+	Enumerated  bool                        `json:"enumerated,omitempty"`
+	Note        string                      `json:"note,omitempty"`
+	WindowStart time.Time                   `json:"window_start"`
+	WindowEnd   time.Time                   `json:"window_end"`
+	Scope       summarizeEvidenceScope      `json:"scope"`
+	Evidence    []*reporting.MetricEvidence `json:"evidence"`
 }
 
 // summarizeFleetEntry names one fleet member in the response so the model can
@@ -431,8 +423,8 @@ func (e *PulseToolExecutor) buildSummarizeCandidateIndex() *summarizeCandidateIn
 const summarizeFleetMaxResources = 50
 
 func (e *PulseToolExecutor) summarizeFleet(
-	_ context.Context,
-	engine reporting.Engine,
+	ctx context.Context,
+	engine reporting.MetricEvidenceProvider,
 	args map[string]interface{},
 	start, end time.Time,
 ) (CallToolResult, error) {
@@ -523,21 +515,17 @@ func (e *PulseToolExecutor) summarizeFleet(
 		entries = append(entries, summarizeFleetEntry{ID: cand.id, Type: cand.reportType, Name: cand.name})
 	}
 
-	req := reporting.MultiReportRequest{
-		Title:            "Fleet summary",
-		Start:            start,
-		End:              end,
-		Resources:        resources,
-		FleetNarrator:    e.reportFleetNarrator,
-		Narrator:         e.reportNarrator,
-		FindingsProvider: e.reportFindingsProvider,
-	}
-	narrative, err := engine.FleetNarrativeFor(req)
-	if err != nil {
-		return NewErrorResult(fmt.Errorf("fleet narrative generation failed: %w", err)), nil
-	}
-	if narrative == nil {
-		return NewErrorResult(fmt.Errorf("fleet narrative generation produced no result")), nil
+	evidence := make([]*reporting.MetricEvidence, 0, len(resources))
+	for _, req := range resources {
+		req.Start, req.End = start, end
+		item, err := engine.MetricEvidenceFor(ctx, req)
+		if err != nil {
+			return NewErrorResult(fmt.Errorf("metric evidence query failed for %s: %w", req.ResourceID, err)), nil
+		}
+		if item == nil {
+			return NewErrorResult(fmt.Errorf("metric evidence query produced no result for %s", req.ResourceID)), nil
+		}
+		evidence = append(evidence, item)
 	}
 
 	log.Info().
@@ -547,28 +535,21 @@ func (e *PulseToolExecutor) summarizeFleet(
 		Str("resource_type", canonicalDefault).
 		Bool("enumerated", enumerated).
 		Int("resource_count", len(ids)).
-		Str("narrative_source", narrative.Source).
-		Bool("ai_configured", e.reportFleetNarrator != nil).
-		Bool("findings_configured", e.reportFindingsProvider != nil).
+		Str("evidence_source", "retained_metrics").
 		Time("window_start", start).
 		Time("window_end", end).
 		Msg("Reporting: pulse_summarize invoked")
 
 	return NewJSONResult(summarizeFleetResponse{
-		OK:              true,
-		Action:          "fleet",
-		ResourceIDs:     ids,
-		Resources:       entries,
-		Enumerated:      enumerated,
-		Note:            note,
-		WindowStart:     start,
-		WindowEnd:       end,
-		NarrativeSource: narrative.Source,
-		HealthStatus:    narrative.HealthStatus,
-		HealthMessage:   narrative.HealthMessage,
-		Outliers:        narrative.Outliers,
-		Patterns:        narrative.Patterns,
-		Recommendations: narrative.Recommendations,
-		Disclaimer:      narrative.Disclaimer,
+		OK:          true,
+		Action:      "fleet",
+		ResourceIDs: ids,
+		Resources:   entries,
+		Enumerated:  enumerated,
+		Note:        note,
+		WindowStart: start,
+		WindowEnd:   end,
+		Scope:       retainedSummaryScope(),
+		Evidence:    evidence,
 	}), nil
 }

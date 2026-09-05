@@ -36,8 +36,8 @@ metrics target. The retained SQLite metrics store supplies the requested window
 across backend restarts. An available store error remains an error, with no
 silent downgrade to a shorter in-memory history. The in-memory-only adapter
 remains a compatibility boundary for installations without a retained store.
-The unscoped summary and baseline paths still use their existing providers and
-are a modernization residual, not proof of retained-history coverage.
+Unscoped `pulse_metrics` performance and baseline paths still use their existing
+providers and are a modernization residual, not proof of retained-history coverage.
 `TestPerformanceMetricsRetainedAcrossRestart` verifies native store coordinates,
 canonical response identity, node/agent/guest families, restart retention and
 store failure. The `node` get alias resolves to canonical `agent`, whose CPU
@@ -50,8 +50,17 @@ suitability unassessed. Completed tool/context evidence remains available, and
 an explicit provider-error guard prevents authorizing Patrol. Provider errors
 remain distinct from measured latency failures. The exact legacy unfinished-probe latency verdict is corrected when persisted
 evidence is decoded, preserving its timestamp, provider cause and completed
-checks without a new provider request or granting a verified mode. Provider refusal taxonomy and
-supported subscription readiness remain unresolved qualification work.
+checks without a new provider request or granting a verified mode.
+
+An explicit Claude terminal `stop_reason=refusal` becomes the typed provider
+refusal error before any tool call or final answer can be recovered, on either
+successful or unsuccessful process exit. Runtime and connection diagnostics
+project `provider_refusal` with policy/support guidance rather than network,
+latency or billing guidance. A saved legacy CLI envelope is reclassified only
+when its complete terminal JSON contains that explicit signal. Initial probe
+counts and the original evaluation time survive, the CLI dump is removed from
+the displayed refusal detail, and no provider request or authorization is
+created. Supported subscription Patrol execution remains unqualified.
 
 Within an active investigation, tool observations are preserved across provider
 turns while the full request fits the model context window. Turn age is not a
@@ -688,6 +697,8 @@ mutation, approval, or policy authority. This is the retained-intent seam from
 cheap local detection into model-owned diagnosis and governed action.
 
 ## Canonical Files
+
+- `pkg/reporting/evidence.go`: measured retained-history evidence contract for model-facing summaries, with no report narrator or heuristic health judgement.
 
 1. `internal/ai/`
    1g. `internal/ai/patrol_objectives.go`
@@ -7084,14 +7095,12 @@ narrative honestly retrospective on Patrol's work and prevents
 silent shadow-classification competing with Patrol's detection
 rules.
 
-The same reporting synthesis layer is now exposed to Pulse
-Assistant as a first-class chat tool, `pulse_summarize`. The tool
-wraps the engine's `NarrativeFor` and `FleetNarrativeFor` entry
-points (single-resource and fleet modes selected by an `action`
-parameter) so an operator can ask "what's been happening with
-pve1 this week" or "where should I look across my fleet" and get
-a structured retrospective answer in chat rather than having to
-generate, download, and read a PDF.
+`pulse_summarize` is the model-facing retained-metric evidence tool. It uses
+`pkg/reporting.MetricEvidenceProvider`, implemented by `ReportEngine` in
+`pkg/reporting/evidence.go`, to read the same retained store as reports without
+invoking a narrator. The capable model in the active conversation owns synthesis.
+Report-only narratives and PDF health cards are separate reporting behavior,
+not evidence of machine health or a substitute for an investigation.
 
 The tool is self-targeting: `action=fleet` with `resource_ids`
 omitted enumerates the known fleet from the executor's unified
@@ -7123,40 +7132,27 @@ Every remaining error path in the tool tells the model to
 enumerate or retry and explicitly forbids asking the operator for
 resource IDs. `TestSummarizeTool_FleetEnumeratesWhenIDsOmitted`,
 `TestSummarizeTool_FleetResolvesNamesAndTranslatesMetricsIDs`, and
-the compile-time `summarizeMetricsTargetResolver` pin on the
-monitor adapter hold this behavior. The tool is read-only (no
-approval gate, no control-level requirement) and returns a JSON
-envelope carrying the narrative source, health status, observations
-or outliers, recommendations, and provenance disclaimer. v1 always
-returns heuristic narrative; the AI narrator wiring through the
-chat session is a focused follow-up that adds `Narrator`,
-`FleetNarrator`, and `FindingsProvider` plumbing to the executor
-configuration so the tool inherits the same per-tenant AI service
-the report PDF endpoint already uses. Reporting therefore expands
-from an export-shaped feature into a first-class capability
-Assistant can compose with — the underlying engine surface stays
-unchanged.
+the compile-time `resourceMetricsTargetResolver` pin on the monitor adapter
+hold this behavior.
 
-That follow-up has now landed. `chat.Config` carries three optional
-fields (`ReportNarrator`, `ReportFleetNarrator`,
-`ReportFindingsProvider`) which are threaded through to
-`tools.ExecutorConfig` and stored on `PulseToolExecutor`. The
-`pulse_summarize` tool reads them when building requests so the
-engine sees a populated narrator when the tenant's AI service is
-configured. The router installs a `SetReportNarratorResolver`
-closure on the chat handler that mirrors the reporting handler's
-pattern: it asks the AISettingsHandler for the per-tenant
-`ai.Service` and, when that service has `Enabled=true`, returns it
-as the implementation for all three roles (Service satisfies
-`reporting.Narrator`, `reporting.FleetNarrator`, and
-`reporting.FindingsProvider` already). An unconfigured tenant still
-sees the heuristic fallback — the tool never errors on missing AI,
-matching the report PDF's graceful-degradation posture. AI-narrated
-chat synthesis therefore uses the same provider, sanitizer, model
-selection, cost ledger (report_narrative / report_narrative_fleet
-use-cases), and budget gate the report PDF endpoint already
-enforces — there is exactly one canonical synthesis path for both
-surfaces.
+Both modes return statistics with units, retained point counts, first/latest
+observation timestamps and the largest gap between returned points. Means are
+unweighted means of retained values, which may themselves be retention
+aggregates. Extrema retain bucket minima/maxima. Neither the requested range
+nor the first-to-last span proves continuous coverage. Empty metrics remain an
+empty evidence map. Store errors and unavailable evidence capabilities return
+errors, never a healthy verdict or heuristic fallback. Fleet reads fail visibly
+if a selected resource query fails rather than silently dropping that resource.
+
+The response explicitly names alerts, findings, disk health, backups and topology
+as not queried. Models must use their corresponding tools to collect those
+sources. The evidence tool does not emit health labels, scored outliers,
+recommendations or a second model's conclusions. Report narrator dependencies
+remain available for report generation but are not invoked by `pulse_summarize`.
+`TestSummarizeToolReturnsHighUtilizationAsEvidenceWithoutDiagnosis` verifies that
+92% memory remains a measured reading and is not labelled critical or healthy.
+`TestMetricEvidenceRetainsObservedCoverageAcrossRestart` verifies retained
+coordinates, sparse timestamps, statistics, empty results and query failures.
 
 The same canonical AI runtime now also records user-chat token
 usage to the cost ledger. `chat.Service.ExecuteStream` was a

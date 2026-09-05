@@ -2063,6 +2063,7 @@
         "pkg/aicontracts/investigation.go",
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
+        "pkg/reporting/evidence.go",
         "scripts/generate-pulse-intelligence-docs.go"
       ],
       "verification": {
@@ -2071,6 +2072,19 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "retained-metric-evidence",
+            "label": "retained metric evidence and observation coverage proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/reporting/evidence.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/reporting/evidence_test.go"
+            ]
+          },
           {
             "id": "patrol-qualification",
             "label": "Patrol independent-ground-truth qualification, replay, and publication proof",

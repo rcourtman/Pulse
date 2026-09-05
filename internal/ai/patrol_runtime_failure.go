@@ -173,6 +173,11 @@ func ClassifyProviderConnectionFailure(err error) PatrolRuntimeFailureDiagnostic
 	}
 
 	switch failure.Cause {
+	case PatrolFailureCauseProviderRefusal:
+		diagnostic.Title = failure.Summary
+		diagnostic.Summary = failure.Summary
+		diagnostic.Description = failure.Description
+		diagnostic.Recommendation = failure.Recommendation
 	case PatrolFailureCauseInterrupted:
 		diagnostic.Title = "Connection test interrupted"
 		diagnostic.Summary = "Connection test interrupted"
@@ -311,6 +316,13 @@ func patrolRuntimeFailureFromErrorCtx(ctx context.Context, err error) patrolRunt
 		failure.Cause = PatrolFailureCauseProviderNotConfigured
 		failure.Description = "Pulse Patrol cannot use the local " + setup.displayName + " subscription because its CLI executable or login is unavailable to the operating-system account running Pulse."
 		failure.Recommendation = setup.recommendation
+	case errors.Is(err, providers.ErrProviderRequestRefused):
+		failure.Title = "Pulse Patrol: Provider refused this request"
+		failure.Summary = "Provider refused this request"
+		failure.Cause = PatrolFailureCauseProviderRefusal
+		failure.Description = "The provider explicitly refused this request under its usage policy. Patrol could not complete the evaluation."
+		failure.Recommendation = "Review the provider's usage policy or contact its support. Use a provider integration that permits this workflow, then verify Patrol again."
+		failure.Detail = failure.Description
 	case patrolMalformedToolHistory(lower):
 		failure.Title = "Pulse Patrol: Malformed tool-call conversation history"
 		failure.Summary = "Malformed tool-call conversation history"
