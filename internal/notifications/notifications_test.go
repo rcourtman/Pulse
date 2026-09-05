@@ -4155,6 +4155,12 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		if !strings.Contains(text, "Resolved") {
 			t.Errorf("expected 'Resolved' in text, got %q", text)
 		}
+		if !strings.Contains(text, "web-vm-01 on pve1 is now healthy") || strings.Contains(text, testAlert.Message) {
+			t.Errorf("recovery text must describe recovery, not the original breach: %q", text)
+		}
+		if testAlert.Message != "CPU high on web-vm-01" {
+			t.Fatal("rendering recovery mutated the original alert message")
+		}
 	})
 
 	t.Run("discord resolved uses green embed color", func(t *testing.T) {
@@ -4190,6 +4196,10 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 			t.Fatal("expected at least one embed")
 		}
 		embed := embeds[0].(map[string]any)
+		description, _ := embed["description"].(string)
+		if !strings.Contains(description, "web-vm-01 on pve1 is now healthy") || strings.Contains(description, testAlert.Message) {
+			t.Errorf("recovery description must describe recovery, not the original breach: %q", description)
+		}
 		// Green color = 3066993
 		if embed["color"] != float64(3066993) {
 			t.Errorf("expected green embed color 3066993, got %v", embed["color"])
