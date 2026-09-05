@@ -319,6 +319,18 @@ func (s *Service) loadPatrolModelReadiness() {
 	if persisted.Result.ProbeVersion != PatrolModelReadinessProbeVersion || persisted.RecordedAt.IsZero() {
 		return
 	}
+	// Older v1 writers marked this exact unfinished-probe outcome as a
+	// latency failure. Correct its presentation on decode without rerunning the
+	// provider, changing the recorded evidence, or granting a verified mode.
+	if persisted.Result.Dimensions.Latency.Status == PatrolModelReadinessFail &&
+		persisted.Result.Dimensions.Latency.Summary == "Latency could not be measured because the streaming probe did not complete." {
+		persisted.Result.Dimensions.Latency.Status = PatrolModelReadinessNotAssessed
+		persisted.Result.Dimensions.Latency.Summary = "Latency was not fully measured because the provider did not complete the evaluation."
+		persisted.Result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "Watch-only readiness was not established because the provider did not complete the evaluation."}
+		persisted.Result.Success = false
+		persisted.Result.PatrolCapable = false
+		persisted.Result.MaxVerifiedMode = ""
+	}
 	persisted.Result.CacheKey = persisted.CacheKey
 	s.patrolModelReadinessCache.result = clonePatrolModelReadinessResult(&persisted.Result)
 	s.patrolModelReadinessCache.recordedAt = persisted.RecordedAt
@@ -830,8 +842,8 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		latencyStatus = PatrolModelReadinessNotAssessed
 		latencySummary = "Latency was not fully measured because the evaluation was interrupted."
 	} else if len(durations) == 0 || probeErr != nil {
-		latencyStatus = PatrolModelReadinessFail
-		latencySummary = "Latency could not be measured because the streaming probe did not complete."
+		latencyStatus = PatrolModelReadinessNotAssessed
+		latencySummary = "Latency was not fully measured because the provider did not complete the evaluation."
 	} else if projectedWatch > patrolReadinessWatchEnvelope {
 		latencyStatus = PatrolModelReadinessWarning
 		latencySummary = fmt.Sprintf("Projected 8-turn Watch-only loop is %s, above the four-minute readiness envelope.", formatReadinessDuration(projectedWatch))
@@ -846,10 +858,12 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		ProjectedApprovalMs: projectedApproval.Milliseconds(),
 	}
 
-	watchVerified := toolStatus == PatrolModelReadinessPass && contextStatus == PatrolModelReadinessPass && latencyStatus == PatrolModelReadinessPass
+	watchVerified := probeErr == nil && toolStatus == PatrolModelReadinessPass && contextStatus == PatrolModelReadinessPass && latencyStatus == PatrolModelReadinessPass
 	approvalVerified := watchVerified && continuationObserved && projectedApproval <= cfg.GetPatrolInvestigationTimeout()
 	if watchVerified {
 		result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeVerified, Summary: "Verified for Watch only on this provider, model, and runtime."}
+	} else if probeErr != nil {
+		result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "Watch-only readiness was not established because the provider did not complete the evaluation."}
 	} else if latencyStatus == PatrolModelReadinessWarning {
 		result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeWarning, Summary: "Core protocol passed, but projected Watch-only latency exceeds the readiness envelope."}
 	} else {

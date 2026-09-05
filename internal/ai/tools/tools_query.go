@@ -2166,7 +2166,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type. For get/search, prefer canonical values: 'agent', 'vm', 'system-container', 'app-container', 'storage', 'physical-disk', 'node', and 'docker-host'. Compatibility aliases 'system' and 'storage-pool' are still accepted. For config: 'vm', 'system-container', or supported API-backed 'app-container'.",
+						Description: "Resource type. For get/search, prefer canonical values: 'agent', 'vm', 'system-container', 'app-container', 'storage', 'physical-disk', and 'docker-host'. For get, 'node' resolves to 'agent'. For search, 'node' filters Proxmox nodes. Compatibility aliases 'system' and 'storage-pool' are still accepted. For config: 'vm', 'system-container', or supported API-backed 'app-container'.",
 						Enum:        []string{"agent", "system", "vm", "system-container", "app-container", "node", "docker-host", "storage", "storage-pool", "physical-disk"},
 					},
 					"resource_id": {
@@ -2261,7 +2261,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 
 func canonicalQueryResourceType(resourceType string) string {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
-	case "system":
+	case "system", "node":
 		return "agent"
 	case "storage-pool":
 		return "storage"
@@ -3319,9 +3319,15 @@ func canonicalAgentResponse(resource unifiedresources.Resource, governance *gove
 		}
 	}
 	response.Tags = append([]string{}, resource.Tags...)
+	if resource.Proxmox != nil {
+		response.CPU.Cores = unifiedresources.NewNodeView(&resource).CPUs()
+	}
+
 	if resource.Agent != nil {
 		response.OS = strings.TrimSpace(resource.Agent.OSName)
-		response.CPU.Cores = resource.Agent.CPUCount
+		if resource.Agent.CPUCount > 0 {
+			response.CPU.Cores = resource.Agent.CPUCount
+		}
 	}
 	if response.Host == "" && resource.TrueNAS != nil {
 		response.Host = strings.TrimSpace(resource.TrueNAS.Hostname)

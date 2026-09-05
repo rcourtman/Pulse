@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 // AlertManagerToolAdapter adapts alerts.Manager to AlertProvider interface
@@ -246,19 +248,25 @@ type MetricsSource interface {
 
 // MetricsHistoryToolAdapter adapts the metrics history to MetricsHistoryProvider interface
 type MetricsHistoryToolAdapter struct {
-	readState     unifiedresources.ReadState
-	metricsSource MetricsSource
+	readState       unifiedresources.ReadState
+	metricsSource   MetricsSource
+	retainedMetrics *metrics.Store
 }
 
 // NewMetricsHistoryToolAdapter creates a new adapter for metrics history.
 // readState is required for iterating VMs/Containers/Nodes in GetAllMetricsSummary.
-func NewMetricsHistoryToolAdapter(metricsSource MetricsSource, readState unifiedresources.ReadState) *MetricsHistoryToolAdapter {
+func NewMetricsHistoryToolAdapter(metricsSource MetricsSource, readState unifiedresources.ReadState, retained ...*metrics.Store) *MetricsHistoryToolAdapter {
 	if metricsSource == nil || readState == nil {
 		return nil
 	}
+	var store *metrics.Store
+	if len(retained) > 0 {
+		store = retained[0]
+	}
 	return &MetricsHistoryToolAdapter{
-		readState:     readState,
-		metricsSource: metricsSource,
+		retainedMetrics: store,
+		readState:       readState,
+		metricsSource:   metricsSource,
 	}
 }
 
@@ -384,6 +392,8 @@ func mergeMetricsByTimestamp(allMetrics map[string][]RawMetricPoint) []MetricPoi
 	for _, p := range pointsByTime {
 		result = append(result, *p)
 	}
+
+	sort.Slice(result, func(i, j int) bool { return result[i].Timestamp.Before(result[j].Timestamp) })
 
 	return result
 }

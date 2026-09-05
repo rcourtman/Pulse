@@ -19,6 +19,40 @@
 
 ## Purpose
 
+The manual Patrol API consumes the service's selected-mode runtime verdict as
+an execution check. Dimension-level presentation warnings cannot authorize a
+run after a provider failure leaves Watch-only readiness unassessed. Operator
+cancellation retains its existing non-failure advisory semantics. Higher-mode canary guidance
+retains its existing advisory behavior only after Watch has been verified.
+
+The unavailable `current_resource` tool result describes an unattached shortcut,
+not an unresolved explicit name. Its recovery guidance directs named resources
+through canonical query search. The attachment guard remains enforced and
+never invents a selected resource or grants execution authority.
+
+Resource-scoped `pulse_metrics` performance reads resolve canonical identity
+and unambiguous lookup aliases through the unified registry, then query its
+metrics target. The retained SQLite metrics store supplies the requested window
+across backend restarts. An available store error remains an error, with no
+silent downgrade to a shorter in-memory history. The in-memory-only adapter
+remains a compatibility boundary for installations without a retained store.
+The unscoped summary and baseline paths still use their existing providers and
+are a modernization residual, not proof of retained-history coverage.
+`TestPerformanceMetricsRetainedAcrossRestart` verifies native store coordinates,
+canonical response identity, node/agent/guest families, restart retention and
+store failure. The `node` get alias resolves to canonical `agent`, whose CPU
+count retains Proxmox topology when no agent count is available. Physical disk
+metrics use the advertised `disk_type` filter independently of `type=disks`,
+and share canonical disk host projection with resource queries.
+
+An incomplete streaming readiness evaluation leaves latency and Watch-only
+suitability unassessed. Completed tool/context evidence remains available, and
+an explicit provider-error guard prevents authorizing Patrol. Provider errors
+remain distinct from measured latency failures. The exact legacy unfinished-probe latency verdict is corrected when persisted
+evidence is decoded, preserving its timestamp, provider cause and completed
+checks without a new provider request or granting a verified mode. Provider refusal taxonomy and
+supported subscription readiness remain unresolved qualification work.
+
 Within an active investigation, tool observations are preserved across provider
 turns while the full request fits the model context window. Turn age is not a
 compaction trigger and does not prove evidence has been understood or retained.

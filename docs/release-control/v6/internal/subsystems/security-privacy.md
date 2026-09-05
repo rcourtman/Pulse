@@ -18,6 +18,11 @@
 
 ## Purpose
 
+Assistant retained-history wiring uses the store belonging to its current
+monitor and read-only metric queries. Canonical identity resolution precedes
+store lookup, and ambiguous names fail with a request for canonical identity.
+This provider extension grants no infrastructure execution or write authority.
+
 API-token rename is an authenticated token-management mutation: blank labels
 fail closed, successful changes are persisted and audited as `token_renamed`,
 and neither the plaintext credential nor its stored hash is exposed or
