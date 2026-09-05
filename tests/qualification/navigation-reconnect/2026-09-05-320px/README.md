@@ -51,3 +51,15 @@ Expect eight selected cases (normal/failed admission at 320, 390, 1100, 1440).
 Do not replace browser-verification.json with a pass until actually completed.
 Awkward 320px word wrapping remains a presentation limitation, not newly fixed
 behaviour. Check current ledger scope before any product layout follow-up.
+
+## Canonical integration follow-up
+
+The coordinating maintainer ran the command above against merged canonical
+commit `5be32dbaa7` on 5 September 2026 at 18:16 UTC. All eight Chromium cases
+passed in 1.8 minutes, including normal and failed admission at 320px. The
+managed local backend stopped cleanly. Visual inspection of the generated
+320px `table-full-detail-heading.png` confirmed that the expanded heading was
+horizontally present; the awkward narrow-table wrapping and truncation noted
+above remain. This focused run is not a blanket accessibility, installed
+artifact, or release-readiness result, and `browser-verification.json` remains
+unchanged.
