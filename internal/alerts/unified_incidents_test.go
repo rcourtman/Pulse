@@ -1257,8 +1257,8 @@ func TestSyncUnifiedResourceIncidentsTrueNASNativeRecoveryStreak(t *testing.T) {
 // A severity change must retain the incident identity without silently losing
 // the critical notification or dispatching on every subsequent observation.
 func TestTrueNASNativeCriticalTransition(t *testing.T) {
-	for _, acknowledged := range []bool{false, true} {
-		t.Run(map[bool]string{false: "active", true: "acknowledged"}[acknowledged], func(t *testing.T) {
+	for _, gate := range []string{"active", "acknowledged", "rate-limited"} {
+		t.Run(gate, func(t *testing.T) {
 			m := newTestManager(t)
 			configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 			var dispatched []Alert
@@ -1283,10 +1283,16 @@ func TestTrueNASNativeCriticalTransition(t *testing.T) {
 				t.Fatalf("initial dispatches = %d", len(dispatched))
 			}
 			initial := dispatched[0]
-			if acknowledged {
+			if gate != "active" {
 				m.mu.Lock()
-				for _, a := range m.activeAlerts {
-					a.Acknowledged = true
+				for key, a := range m.activeAlerts {
+					if gate == "acknowledged" {
+						a.Acknowledged = true
+					} else {
+						// Exhaust the canonical incident budget before escalation.
+						m.config.Schedule.MaxAlertsHour = 1
+						m.alertRateLimit[key] = []time.Time{time.Now()}
+					}
 				}
 				m.mu.Unlock()
 			}
@@ -1297,13 +1303,13 @@ func TestTrueNASNativeCriticalTransition(t *testing.T) {
 				t.Fatalf("critical transition lost lifecycle identity: %+v", active)
 			}
 			want := 2
-			if acknowledged {
+			if gate != "active" {
 				want = 1
 			}
 			if len(dispatched) != want {
 				t.Fatalf("dispatches = %d, want %d", len(dispatched), want)
 			}
-			if !acknowledged && (dispatched[1].ID != initial.ID || dispatched[1].Level != AlertLevelCritical) {
+			if gate == "active" && (dispatched[1].ID != initial.ID || dispatched[1].Level != AlertLevelCritical) {
 				t.Fatal("critical notification lost severity or identity")
 			}
 			syncLevel("WARNING")
