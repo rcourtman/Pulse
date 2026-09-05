@@ -1,5 +1,5 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
-import { ensureAuthenticated } from './helpers';
+import { apiRequest, ensureAuthenticated } from './helpers';
 
 // Opt-in: uses synthetic inventory in an isolated real backend. Never interrupts
 // a shared runtime or substitutes the application's websocket store.
@@ -207,4 +207,109 @@ for (const admissionFailure of [false, true]) {
       await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: width <= 390 ? 844 : 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
     });
   }
+}
+
+// Mutations go to the owned backend, not a fulfilled REST fixture or a store hook.
+// Keep this after the inventory matrix: global detection is briefly paused while
+// clearing incidents, then its original configuration is restored.
+for (const width of [1440, 320]) {
+  test(`changed backend incidents recover without reload at ${width}px`, async ({ page, browser }, testInfo) => {
+    test.skip(!enabled, 'Requires isolated mock backend and explicit qualification opt-in');
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 900 });
+    let blocked = false;
+    const sockets: WebSocketRoute[] = [];
+    await page.routeWebSocket('**/ws*', async socket => {
+      if (blocked) return socket.close({ code: 1013, reason: 'qualification interruption' });
+      socket.connectToServer();
+      sockets.push(socket);
+    });
+    // Prevent periodic REST reads from hiding a missing reconnect refresh.
+    // APIRequestContext mutations/reads below do not pass through page routing.
+    await page.route('**/api/alerts/active', route => blocked ? route.abort() : route.continue());
+    await ensureAuthenticated(page);
+    await page.goto('/alerts');
+    await expect(page.getByRole('status', { name: healthy })).toBeVisible();
+    const readActive = async () => {
+      const response = await apiRequest(page, '/api/alerts/active');
+      expect(response.ok()).toBe(true);
+      return await response.json() as Array<{ id: string; resourceName: string; type: string; acknowledged: boolean }>;
+    };
+    // Service names vary with the generated estate. Select an identified service
+    // health incident, not a name from a previous run or a cold offline host.
+    await expect.poll(async () => (await readActive()).some(alert =>
+      alert.type === 'docker-service-health')).toBe(true);
+    const initial = await readActive();
+    const target = initial.find(alert => alert.type === 'docker-service-health');
+    expect(target).toBeTruthy();
+    if (target!.acknowledged) {
+      const reset = await apiRequest(page, '/api/alerts/unacknowledge', {
+        method: 'POST', data: { alertIdentifier: target!.id },
+      });
+      expect(reset.ok()).toBe(true);
+    }
+    const card = page.locator(`[id=${JSON.stringify('alert-' + target!.id)}]`);
+    await expect(card.getByRole('button', { name: 'Acknowledge', exact: true })).toBeVisible();
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    const disconnect = async () => {
+      blocked = true;
+      for (const socket of sockets.splice(0)) await socket.close({ code: 1013, reason: 'qualification interruption' });
+      await expect(page.getByRole('status', { name: 'Backend is healthy. Live updates are reconnecting.' })).toBeVisible();
+    };
+    const reconnect = async () => {
+      const response = page.waitForResponse(r => new URL(r.url()).pathname === '/api/alerts/active' && r.ok());
+      blocked = false;
+      const snapshot = await (await response).json();
+      await expect(page.getByRole('status', { name: healthy })).toBeVisible({ timeout: 45_000 });
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+      return snapshot;
+    };
+    await disconnect();
+    const ack = await apiRequest(page, '/api/alerts/acknowledge', {
+      method: 'POST', data: { alertIdentifier: target!.id, user: 'reconnect-qualification' },
+    });
+    expect(ack.ok()).toBe(true);
+    await expect.poll(async () => (await readActive()).find(a => a.id === target!.id)?.acknowledged).toBe(true);
+    // It must still be the old rendered value before restoring either transport.
+    await expect(card.getByRole('button', { name: 'Acknowledge', exact: true })).toBeVisible();
+    const acknowledgedSnapshot = await reconnect();
+    expect(acknowledgedSnapshot.find((a: { id: string }) => a.id === target!.id)?.acknowledged).toBe(true);
+    // Acknowledged incidents sort last. The production list windows large
+    // estates, so a correct update can remove this card from the current DOM.
+    await page.getByRole('contentinfo').scrollIntoViewIfNeeded();
+    await expect(card.getByRole('button', { name: 'Unacknowledge', exact: true })).toBeVisible();
+    await card.scrollIntoViewIfNeeded();
+    await testInfo.attach('changed-incident', { body: await page.screenshot(), contentType: 'image/png' });
+
+    const configResponse = await apiRequest(page, '/api/alerts/config');
+    expect(configResponse.ok()).toBe(true);
+    const config = await configResponse.json();
+    try {
+      await disconnect();
+      const paused = await apiRequest(page, '/api/alerts/config', { method: 'PUT', data: { ...config, enabled: false } });
+      expect(paused.ok()).toBe(true);
+      const active = await readActive();
+      if (active.length) {
+        const cleared = await apiRequest(page, '/api/alerts/bulk/clear', {
+          method: 'POST', data: { alertIdentifiers: active.map(a => a.id) },
+        });
+        expect(cleared.ok()).toBe(true);
+      }
+      await expect.poll(readActive).toEqual([]);
+      await expect(card.getByRole('button', { name: 'Unacknowledge', exact: true })).toBeVisible();
+      const emptySnapshot = await reconnect();
+      expect(emptySnapshot).toEqual([]);
+      await expect(page.locator('[id^="alert-"]').filter({ has: page.getByRole('button', { name: /^(Unacknowledge|Acknowledge)$/ }) })).toHaveCount(0);
+      await expect(card).toHaveCount(0);
+      await testInfo.attach('empty-active-response', {
+        body: JSON.stringify({ browser: browser.version(), width, target, acknowledgedSnapshot: acknowledgedSnapshot.filter((a: { id: string }) => a.id === target!.id), emptySnapshot, documentIdentity }),
+        contentType: 'application/json',
+      });
+      await testInfo.attach('cleared-incidents', { body: await page.screenshot(), contentType: 'image/png' });
+    } finally {
+      blocked = false;
+      const restored = await apiRequest(page, '/api/alerts/config', { method: 'PUT', data: config });
+      expect(restored.ok()).toBe(true);
+    }
+  });
 }
