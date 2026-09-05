@@ -3364,7 +3364,14 @@ query...`, and `Reading storage...` before streamed tool arguments are
    timelines must render as source-named investigation handoffs in the drawer
    instead of generic dashboard briefs. Source-owned handoff helpers may attach
    bounded model-only context, resources, action references, and metadata, but
-   they must not synthesize, prefill, or auto-submit a user prompt. The drawer
+   ordinary context attachment must not synthesize, prefill, or submit a user
+   prompt. An explicit labelled Explain action is a user-selected task and
+   dispatches the shared evidence-first explanation request through
+   `frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts`.
+   It preserves drafts and current work, captures the selected context before
+   asynchronous initialization, and uses normal send, queue, and retry handling
+   with request-local `autonomousMode:false`. It must not prescribe a diagnosis
+   or a tool sequence or grant action authority. The drawer
    presentation must stay compact: source, status, one primary subject, and an
    optional safe route link. It must not render Patrol-authored remediation
    steps, evidence chips, command summaries, recommendations, or suggested-prompt
@@ -7949,3 +7956,9 @@ returns the typed `PatrolDigest` payload unchanged. Presentation code must not
 recompute digest counts from run history, findings, or cost events, and must
 not call the endpoint through any other client. Proof:
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
+
+The explicit issue explanation journey is qualified separately from provider
+reasoning and real remediation in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
+proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
+response does not establish a useful customer outcome or model qualification.

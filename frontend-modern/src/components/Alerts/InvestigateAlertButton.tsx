@@ -24,7 +24,7 @@ interface InvestigateAlertButtonProps {
    * When true (and the alert has a resource), the text/full variants render as
    * a split investigation button: the primary action runs a manual targeted
    * Patrol check scoped to this alert's resource, while a small menu keeps
-   * Pulse Assistant available for context-only explanation. The icon variant is
+   * Pulse Assistant available for scoped explanation. The icon variant is
    * single-purpose regardless.
    */
   patrolOption?: boolean;
@@ -32,7 +32,7 @@ interface InvestigateAlertButtonProps {
 
 /**
  * Investigation button for one-click alert follow-up.
- * Plain Assistant opens remain context-only. On alert cards that opt into
+ * The explicit Assistant explanation action starts a scoped read-only request. On alert cards that opt into
  * Patrol routing, resource-backed alerts make Patrol the primary doer and keep
  * Assistant as the secondary explanation path.
  * Hidden entirely when AI is not configured.
@@ -92,7 +92,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       vmid: props.vmid,
     });
 
-    aiChatStore.open(handoff.context);
+    aiChatStore.explain(handoff.context);
   };
 
   const startPatrolInvestigation = async () => {

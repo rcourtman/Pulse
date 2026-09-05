@@ -55,6 +55,7 @@ import { ActionIconButton } from '@/components/shared/Button';
 import { SearchField } from '@/components/shared/SearchField';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore, type AIChatContext } from '@/stores/aiChat';
+import { useExplanationRequest } from './hooks/useExplanationRequest';
 import {
   aiRuntimeModels,
   aiRuntimeModelsError,
@@ -2814,12 +2815,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
     queueMicrotask(resizeTextarea);
   });
 
+  let openInitialization: Promise<void> = Promise.resolve();
   createEffect(() => {
     if (!isOpen()) {
       setShowCommandHelp(false);
       return;
     }
-    void initializeWhenOpen();
+    openInitialization = initializeWhenOpen();
+  });
+
+  useExplanationRequest({
+    isOpen,
+    prepare: () => openInitialization,
+    send: (prompt, findingId, sendOptions) =>
+      chat.sendMessage(prompt, undefined, findingId, sendOptions),
+    onError: (error) => {
+      logger.warn('[AIChat] Failed to start issue explanation:', error);
+      notificationStore.error('Could not start the explanation. Try Explain with Assistant again.');
+    },
   });
 
   createEffect(() => {
@@ -5267,7 +5280,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </Show>
               </div>
             </Show>
-            <Show when={assistantWorkflowStarters().length > 0}>
+            <Show when={!contextBriefing() && assistantWorkflowStarters().length > 0}>
               <div
                 class="mb-2 flex min-h-7 min-w-0 flex-wrap items-center gap-1.5"
                 aria-label="Assistant workflow starters"

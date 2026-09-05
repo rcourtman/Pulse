@@ -512,14 +512,16 @@ transition references recovery evidence separate from its trigger evidence.
    On resource-backed active alert cards, Patrol is the primary doer: the
    visible primary action must run a manual scoped Patrol trigger such as
    "Have Patrol investigate" through the `ai-runtime` manual Patrol route
-   contract. Pulse Assistant remains a secondary context-only explanation path:
+   contract. Pulse Assistant remains a secondary explicit explanation path:
    Assistant handoffs must preserve alert context, force request-scoped
    approval mode, send bounded model-only handoff context plus structured
    resource references through the shared Assistant chat transport, and render a
    compact Alerts-owned briefing in the Assistant drawer without transferring
-   raw command payloads or synthesizing, pre-filling, or auto-submitting a chat
-   prompt. The Patrol trigger and the context-only Assistant open path must stay
-   distinct.
+   raw command payloads. The labelled Explain action dispatches the shared
+   explanation request through `aiChatStore.explain`, retaining selected alert
+   evidence through normal send and retry without replacing the composer draft.
+   Ordinary context-only opens remain free of inference. The Patrol trigger
+   and the Assistant explanation request must stay distinct.
 8. Add or change Pulse Assistant incident timeline handoffs through
    `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
    and `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`;
@@ -2529,3 +2531,9 @@ Qualification additionally injects admission HTTP 503 on reconnect with
 populated inventory and checks incident access on desktop and the 390px mobile
 rail. Enabled acknowledgement controls prove access only, not persisted
 acknowledgement or external notification receipt.
+
+The explicit issue explanation journey is qualified separately from provider
+reasoning and real remediation in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
+proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
+response does not establish a useful customer outcome or model qualification.

@@ -1,38 +1,53 @@
 {
   "version": 1,
-  "base_sha": "58413ebdf6af81018bce15ff4023ca9824c0cdae",
-  "verified_at": "2026-09-05T09:32:59.247Z",
+  "base_sha": "75976c60be5e156be46fca344a02b7df5f573416",
+  "verified_at": "2026-09-05T17:45:39.915245Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/useAppRuntimeState.ts"
+    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts",
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+    "frontend-modern/src/stores/aiChat.ts",
+    "frontend-modern/src/utils/aiChatPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/useAppRuntimeState.ts": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts": "8606c79c11b0197ed5a55ed1d2ec83e0cd7dd0adda182937e5aad9144571cb17",
+    "frontend-modern/src/components/AI/Chat/index.tsx": "6b1d6243d9a99d688229dea9e954ae6aa770a8b6e07e7f0ce75316b486090f09",
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "f373ff21a1c54304d63b92498c39fa45f5ffb036a2b02e93de64fafbbf8ee52e",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "f098cddd58823d2df7687f0db7774363fc9c81a7a8845a917e73415a7f5aae10",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "4152a3bec5412b4d744436128e8e038be349d9b6419fc58d3b7527908ffc982f",
+    "frontend-modern/src/stores/aiChat.ts": "d0b1ef69bcb454e6f0ce17a157c98bdd34d68d90f607b76081e9cd1bd6778e4c",
+    "frontend-modern/src/utils/aiChatPresentation.ts": "4b05f663110ec6c789f8ff050993a945e3e9d41c6e3fee4047500e979a48531d"
   },
   "routes": [
-    "/alerts",
-    "/settings",
-    "/docker"
+    "/patrol",
+    "/alerts"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
     },
     {
       "width": 390,
-      "height": 900
+      "height": 1000
     }
   ],
   "states": [
-    "Full application served by isolated local Vite; synthetic HTTP, two synthetic organisations and cold socket; Chromium 141.0.7390.37, fresh contexts, default zoom.",
-    "Six cases: incoming admission fails, succeeds all-false, or completes after outgoing response. Superseded outgoing response cannot restore platform navigation.",
-    "Backend tenancy, populated resource rendering, production build, external notification delivery and candidate soak not qualified."
+    "Current hot-dev frontend with mock monitoring backend. Scripted attention evidence and inference responses. Other non-GET requests blocked. No real model or infrastructure outcome qualification.",
+    "Patrol selected item, expanded evidence, scoped explanation, streamed response, failed provider request and successful retry. Draft preserved across Escape and context-only reopen.",
+    "Active alert secondary menu at desktop and narrow widths. Open, Escape dismissal, outside click dismissal, reopen, select explanation, menu closes and alert context sent. Screenshots inspected for menu placement, readable response, reachable composer and error controls."
   ],
   "interactions": [
-    "pulse-heavy-run -- bash -c 'for w in 390 1440; do for mode in failure success reverse; do PULSE_PROOF_WIDTH=$w PULSE_PROOF_MODE=$mode node scripts/check-navigation-admission-race.mjs || exit; done; done'",
-    "Production reconnect subscriber invoked; switch organisation via real selector; release held outgoing response; assert no platform navigation and exact organisation request sequence.",
-    "390px: More open, Escape, reopen, Settings; subsequent successful organisation switch restores platform selector; choose Docker and verify route without reload.",
-    "1440px: Settings remains visible; subsequent successful switch restores Proxmox destination without reload. Desktop and narrow screenshots inspected."
+    "node scripts/check-patrol-assistant-journey.mjs",
+    "Patrol at 1440/900/390: keyboard focus and Enter on Explain, exactly one selected-issue request, correct evidence/resource, autonomous false, no generic workflow starters, close/reopen preserves draft without inference.",
+    "Alerts at 1440/390: More alert actions, Escape, reopen, outside click, reopen, Explain. Selected alert evidence and resource attached with autonomous false. No Patrol trigger or configuration mutation.",
+    "Provider failure, Try again retains original handoff, reload does not resubmit. No page errors or unexpected non-GET requests."
   ]
 }

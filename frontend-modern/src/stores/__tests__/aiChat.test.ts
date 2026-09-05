@@ -77,6 +77,22 @@ describe('aiChatStore', () => {
     expect(aiChatStore.commandRequest).toMatchObject({ action: 'providers' });
   });
 
+  it('starts only explicit explanations and ignores stale acknowledgements', () => {
+    aiChatStore.open({ targetId: 'vm-a' });
+    expect(aiChatStore.explanationRequestSignal()).toBeNull();
+    aiChatStore.explain({ targetId: 'vm-a', autonomousMode: true });
+    const first = aiChatStore.explanationRequestSignal()!;
+    expect(first.context.autonomousMode).toBe(false);
+    aiChatStore.explain({ targetId: 'vm-b', handoffContext: 'Evidence B' });
+    const second = aiChatStore.explanationRequestSignal()!;
+    aiChatStore.ackExplanationRequest(first.id);
+    aiChatStore.clearRequestHandoffPayload(first.context);
+    expect(aiChatStore.explanationRequestSignal()).toBe(second);
+    expect(aiChatStore.context.handoffContext).toBe('Evidence B');
+    aiChatStore.ackExplanationRequest(second.id);
+    expect(aiChatStore.explanationRequestSignal()).toBeNull();
+  });
+
   it('re-derives enabled from the session assistantEnabled capability', async () => {
     getSecurityStatusMock.mockResolvedValue({
       sessionCapabilities: { assistantEnabled: true },

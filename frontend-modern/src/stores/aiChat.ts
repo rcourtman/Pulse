@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 // NOTE: AIAPI import removed - session management is handled by Pulse Assistant's embedded UI
@@ -87,6 +87,12 @@ export interface AIChatCommandRequest {
   action: AIChatCommandRequestAction;
 }
 
+export interface AIChatExplanationRequest {
+  id: number;
+  context: AIChatContext;
+  signal: AbortSignal;
+}
+
 // A single context item that can be accumulated
 interface ContextItem {
   id: string; // unique identifier (e.g., "vm-pve-node-101")
@@ -168,6 +174,10 @@ const saveMessagesToStorage = (msgs: Message[]) => {
 // Global state for the AI chat drawer
 const [isAIChatOpen, setIsAIChatOpen] = createSignal(false);
 const [aiChatContext, setAIChatContext] = createSignal<AIChatContext>({});
+let explanationScope = new AbortController();
+const [explanationRequest, setExplanationRequest] = createSignal<AIChatExplanationRequest | null>(
+  null,
+);
 const [aiChatCommandRequest, setAIChatCommandRequest] = createSignal<AIChatCommandRequest | null>(
   null,
 );
@@ -186,6 +196,7 @@ const [_isSyncing, _setIsSyncing] = createSignal<boolean>(false);
 let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const SAVE_DEBOUNCE_MS = 2000; // Save 2 seconds after last change
 let nextAIChatCommandRequestId = 1;
+let nextExplanationRequestId = 1;
 
 // Store reference to AI input for focusing from keyboard shortcuts
 let aiInputRef: HTMLTextAreaElement | null = null;
@@ -222,6 +233,7 @@ export const aiChatStore = {
   isOpenSignal: isAIChatOpen,
 
   commandRequestSignal: aiChatCommandRequest,
+  explanationRequestSignal: explanationRequest,
 
   get commandRequest() {
     return aiChatCommandRequest();
@@ -403,6 +415,25 @@ export const aiChatStore = {
     setIsAIChatOpen(true);
   },
 
+  // A labelled Explain action is a user request. Merely opening the drawer
+  // or attaching context never starts inference.
+  explain(context: AIChatContext) {
+    const scopedContext = { ...context, autonomousMode: false };
+    batch(() => {
+      setAIChatContext(scopedContext);
+      setExplanationRequest({
+        id: nextExplanationRequestId++,
+        context: scopedContext,
+        signal: explanationScope.signal,
+      });
+      setIsAIChatOpen(true);
+    });
+  },
+
+  ackExplanationRequest(id: number) {
+    setExplanationRequest((request) => (request?.id === id ? null : request));
+  },
+
   requestCommand(action: AIChatCommandRequestAction) {
     setAIChatCommandRequest({
       id: nextAIChatCommandRequestId++,
@@ -515,8 +546,10 @@ export const aiChatStore = {
 
   // Clear one-shot request handoff payloads after the backend has persisted
   // them as model-only session context.
-  clearRequestHandoffPayload() {
+  clearRequestHandoffPayload(expectedContext?: AIChatContext) {
     setAIChatContext((prev) => {
+      // A completed request must not consume a newer issue's handoff.
+      if (expectedContext && prev !== expectedContext) return prev;
       if (
         !prev.handoffContext &&
         !prev.handoffResources?.length &&
@@ -564,6 +597,10 @@ export const aiChatStore = {
 
 // Clear AI chat state on org switch to prevent cross-org data leakage
 eventBus.on('org_switched', () => {
+  // Invalidate requests waiting for drawer initialization before the tenant changes.
+  explanationScope.abort();
+  explanationScope = new AbortController();
+  setExplanationRequest(null);
   // Clear all messages
   setMessages([]);
   saveMessagesToStorage([]);

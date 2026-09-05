@@ -5,6 +5,7 @@ import type {
 } from '@/types/aiIntelligence';
 import type { ApprovalRequest, InvestigationRecord, RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord } from '@/api/patrol';
+import type { AttentionItemDetail } from '@/api/patrolAttention';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type {
   AIChatContext,
@@ -506,6 +507,90 @@ export function buildPatrolAssistantFindingHandoffFromUnifiedFinding(
   return buildPatrolAssistantFindingHandoff(
     buildPatrolAssistantFindingHandoffInputFromUnifiedFinding(finding, options),
   );
+}
+
+/** Keep the main attention journey on the same finding/action handoff as records. */
+export function buildPatrolAttentionAssistantHandoff(
+  detail: AttentionItemDetail,
+  linkedFindings: readonly UnifiedFinding[] = [],
+): PatrolAssistantFindingHandoff {
+  const item = detail.item;
+  // Never choose an arbitrary finding when several findings explain one issue.
+  const finding = linkedFindings.length === 1 ? linkedFindings[0] : undefined;
+  const canonical = finding
+    ? buildPatrolAssistantFindingHandoffFromUnifiedFinding(finding).context
+    : {};
+  const evidence = [...detail.evidence]
+    .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))
+    .slice(0, 5)
+    .map((entry) =>
+      [
+        `Evidence ${entry.id}: ${entry.source.provider}/${entry.source.collector}`,
+        `${entry.completeness}, ${entry.confidence}, permissions ${entry.permissions}`,
+        `observed ${entry.observedAt}`,
+        entry.reason?.message || entry.reason?.code,
+      ]
+        .filter(Boolean)
+        .join(' | '),
+    );
+  const actionReferences: AIChatHandoffAction[] = item.availableActions
+    .filter((action) => Boolean(action.actionId))
+    .slice(0, 5)
+    .map((action) => ({
+      actionId: action.actionId,
+      targetResourceId: action.targetResourceId,
+      actionCapability: action.capability,
+      actionRequiresApproval: action.requiresApproval,
+    }));
+  return {
+    context: {
+      ...canonical,
+      targetType: item.subjectResourceType || 'resource',
+      targetId: item.subjectResourceId,
+      autonomousMode: false,
+      handoffResources: canonical.handoffResources ?? [
+        {
+          id: item.subjectResourceId,
+          name: item.subjectResourceName,
+          type: item.subjectResourceType,
+        },
+      ],
+      handoffActions: canonical.handoffActions?.length
+        ? canonical.handoffActions
+        : actionReferences,
+      handoffContext: [
+        canonical.handoffContext,
+        '[Patrol Attention Context]',
+        `Attention Item: ${item.id}`,
+        `Operational Record: ${item.operationalRecordId}`,
+        `Resource: ${item.subjectResourceName} (${item.subjectResourceId})`,
+        `State: ${item.state}`,
+        `Severity: ${item.severity}`,
+        `Summary: ${item.plainLanguageSummary}`,
+        `Evidence: ${item.evidenceFreshness}/${item.evidenceCompleteness}`,
+        item.impact ? `Impact: ${item.impact}` : '',
+        item.recommendedNextStep ? `Recorded next step: ${item.recommendedNextStep}` : '',
+        ...evidence,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      briefing: {
+        sourceLabel: 'Pulse Patrol',
+        title: item.title,
+        subject: item.subjectResourceName,
+        statusLabel: `${item.severity} · ${item.state}`,
+      },
+      context: {
+        ...canonical.context,
+        attentionItemId: item.id,
+        operationalRecordId: item.operationalRecordId,
+        lifecycleState: item.state,
+        evidenceFreshness: item.evidenceFreshness,
+        evidenceCompleteness: item.evidenceCompleteness,
+        protectionPosture: item.protectionPosture,
+      },
+    },
+  };
 }
 
 export function buildPatrolAssessmentAssistantHandoff(

@@ -79,7 +79,7 @@
       "profile_id": "v6",
       "kind": "feature",
       "status": "active",
-      "summary": "Post-GA active development runs on main and promotes proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, continuous discovery reconciliation, and agent-ready operations contract proof after the monitoring-first v6 floor; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts.",
+      "summary": "Post-GA active development runs on main and promotes proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, continuous discovery reconciliation, and agent-ready operations contract proof after the monitoring-first v6 floor; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts. The current product priority is a coherent Patrol-to-Assistant customer journey: explain the selected issue from current evidence, preserve governed approval and verification, and qualify useful outcomes for unhealthy services, backup or capacity risks, and supported VM or LXC actions before claiming broad Pulse Pro value.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }

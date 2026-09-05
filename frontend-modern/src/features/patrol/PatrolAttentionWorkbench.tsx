@@ -50,6 +50,7 @@ import {
   getPatrolProtectionProviderLabels,
 } from '@/features/patrol/patrolControlPresentation';
 import { aiChatStore } from '@/stores/aiChat';
+import { buildPatrolAttentionAssistantHandoff } from './patrolInvestigationContextModel';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
@@ -863,60 +864,8 @@ function AttentionDetail(props: {
   const openAssistant = () => {
     const value = detail();
     if (!value) return;
-    const current = value.item;
-    const evidence = value.evidence.map(
-      (entry) =>
-        `${entry.source.provider}/${entry.source.collector}: ${entry.completeness}, ${entry.confidence}, observed ${entry.observedAt}`,
-    );
-    aiChatStore.open({
-      targetType: current.subjectResourceType || 'resource',
-      targetId: current.subjectResourceId,
-      autonomousMode: false,
-      handoffResources: [
-        {
-          id: current.subjectResourceId,
-          name: current.subjectResourceName,
-          type: current.subjectResourceType,
-        },
-      ],
-      briefing: {
-        sourceLabel: 'Pulse Patrol',
-        title: 'Selected attention item',
-        subject: current.title,
-        statusLabel: `${formatLabel(current.severity)} · ${formatLabel(current.state)}`,
-        detailLines: [
-          current.plainLanguageSummary,
-          current.impact ? `Impact: ${current.impact}` : undefined,
-          current.recommendedNextStep ? `Next step: ${current.recommendedNextStep}` : undefined,
-        ].filter((line): line is string => Boolean(line)),
-        evidence: evidence.slice(0, 5),
-        actionLabel: `Explain ${current.title}`,
-        safetyNote:
-          'This context explains evidence only. It does not grant approval or action authority.',
-      },
-      handoffContext: [
-        `Attention Item: ${current.id}`,
-        `Operational Record: ${current.operationalRecordId}`,
-        `Resource: ${current.subjectResourceName} (${current.subjectResourceId})`,
-        `State: ${current.state}`,
-        `Severity: ${current.severity}`,
-        `Summary: ${current.plainLanguageSummary}`,
-        `Evidence: ${current.evidenceFreshness}/${current.evidenceCompleteness}`,
-        current.impact ? `Impact: ${current.impact}` : '',
-        current.recommendedNextStep ? `Recommended Next Step: ${current.recommendedNextStep}` : '',
-        'Authority Boundary: Explain selected evidence only. Do not infer capabilities or bypass approval.',
-      ]
-        .filter(Boolean)
-        .join('\n'),
-      context: {
-        attentionItemId: current.id,
-        operationalRecordId: current.operationalRecordId,
-        lifecycleState: current.state,
-        evidenceFreshness: current.evidenceFreshness,
-        evidenceCompleteness: current.evidenceCompleteness,
-        protectionPosture: current.protectionPosture,
-      },
-    });
+    const handoff = buildPatrolAttentionAssistantHandoff(value, linkedFindings());
+    aiChatStore.explain(handoff.context);
   };
   const copyResourceId = async (value: string) => {
     if (await copyToClipboard(value)) setCopiedResourceId(value);

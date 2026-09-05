@@ -67,7 +67,7 @@ describe('aiChatPresentation', () => {
     );
     expect(AI_CHAT_DISCOVERY_HINT_TITLE).toBe('Discovery is off.');
     expect(AI_CHAT_DISCOVERY_HINT_BODY).toBe(
-      'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.',
+      'Inventory, metrics, and alerts are available. Enable discovery in Settings for additional service details.',
     );
     expect(AI_CHAT_NEW_SESSION_SHORT_LABEL).toBe('New');
     expect(AI_CHAT_NEW_SESSION_BUTTON_TITLE).toBe('Start new Assistant session');
