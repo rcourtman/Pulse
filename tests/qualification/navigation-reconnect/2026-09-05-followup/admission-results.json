@@ -1,0 +1,122 @@
+[
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "mode": "failure",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 1,
+    "verified_at": "2026-09-05T16:30:28.984Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "mode": "reverse",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:31:01.303Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "mode": "success",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:30:45.301Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mode": "failure",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 1,
+    "verified_at": "2026-09-05T16:29:25.974Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mode": "reverse",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:30:12.835Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  },
+  {
+    "result": "passed",
+    "browser": "141.0.7390.37",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mode": "success",
+    "phase": "repaired",
+    "requests": [
+      "default",
+      "default",
+      "acme",
+      "default",
+      "default"
+    ],
+    "failed": 0,
+    "verified_at": "2026-09-05T16:29:49.675Z",
+    "source_sha256": "d1de019dad5bff7fcb78116a8cf53663f1ddcd4c631bdbf0260b68580ebe0eb7"
+  }
+]

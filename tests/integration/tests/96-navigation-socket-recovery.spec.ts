@@ -55,7 +55,7 @@ for (const admissionFailure of [false, true]) {
     test(`populated navigation survives socket loss at ${width}px (admission failure: ${admissionFailure})`, async ({ page, browser }, testInfo) => {
       test.skip(!enabled, 'Requires isolated mock backend and explicit qualification opt-in');
       test.setTimeout(120_000);
-      await page.setViewportSize({ width, height: 900 });
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       let blocked = false;
       let failAdmission = false;
       let failedAdmissions = 0;
@@ -122,7 +122,7 @@ for (const admissionFailure of [false, true]) {
       if (width === 390) await mobileDestinations(page);
       expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
       await capture('recovered');
-      await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
+      await testInfo.attach('environment', { body: JSON.stringify({ browser: browser.version(), width, height: width === 390 ? 844 : 900, zoom: 1, admissionFailure, failedAdmissions, before }), contentType: 'application/json' });
     });
   }
 }
