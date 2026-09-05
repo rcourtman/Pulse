@@ -137,6 +137,37 @@ for (const admissionFailure of [false, true]) {
         }));
         await row.scrollIntoViewIfNeeded();
         const initial = await measure();
+        // Text ranges catch clipped glyphs even when the wrapper itself has no
+        // scrollable overflow. Check every rendered update state, not one row.
+        await expect(table.locator('.docker-container-update-cell').filter({ hasText: 'Current' }).first()).toBeVisible();
+        const clippedUpdateText = await table.locator('.docker-container-update-cell').evaluateAll(cells =>
+          cells.flatMap(cell => {
+            const bounds = cell.getBoundingClientRect();
+            const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+            const clipped: string[] = [];
+            while (walker.nextNode()) {
+              if (!walker.currentNode.textContent?.trim()) continue;
+              const range = document.createRange();
+              range.selectNodeContents(walker.currentNode);
+              if (Array.from(range.getClientRects()).some(rect =>
+                rect.left < bounds.left - 1 || rect.right > bounds.right + 1)) {
+                clipped.push(walker.currentNode.textContent!);
+              }
+            }
+            return clipped;
+          }),
+        );
+        expect(clippedUpdateText).toEqual([]);
+        const currentLabel = table.locator('.docker-container-update-cell span').filter({ hasText: /^Current$/ }).last();
+        expect(await currentLabel.evaluate(el => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return range.getClientRects().length;
+        })).toBe(1);
+
+        expect(initial.overflowX).toBe('clip');
+        expect(initial.scrollWidth).toBe(initial.width);
+
         await row.hover();
         await page.mouse.wheel(2000, 0);
         await page.waitForTimeout(350);
@@ -156,6 +187,13 @@ for (const admissionFailure of [false, true]) {
         await expect(toggle).toHaveAttribute('aria-expanded', 'true');
         const detailId = await toggle.getAttribute('aria-controls');
         const detailText = detailId ? await page.locator(`[id="${detailId}"]`).innerText() : null;
+        const heading = page.locator(`[id="${detailId}"] h2`).first();
+        await expect(heading).toContainText('notification');
+        expect(await heading.evaluate(el => el.scrollWidth <= el.clientWidth &&
+          getComputedStyle(el).textOverflow !== 'ellipsis')).toBe(true);
+        await heading.scrollIntoViewIfNeeded();
+        await capture('table-full-detail-heading');
+
         await testInfo.attach('narrow-table-access', {
           body: JSON.stringify({ initial, pointer, keyboard, accessibleRow, expanded, detailText }, null, 2),
           contentType: 'application/json',

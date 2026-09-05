@@ -84,7 +84,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         />
         <h2
           id={headingId()}
-          class="text-sm font-semibold text-base-content truncate m-0"
+          class="text-sm font-semibold text-base-content min-w-0 [overflow-wrap:anywhere] m-0"
           title={drawer.displayName()}
         >
           {drawer.displayName()}
