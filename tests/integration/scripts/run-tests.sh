@@ -174,7 +174,13 @@ run_suite() {
 
     # Cleanup
     echo "Cleaning up..."
-    compose down -v
+    # run_suite is called in an || list, where Bash disables errexit.
+    # Stop the entire run if teardown fails: later suites must not inherit
+    # containers or volumes from a previous scenario.
+    if ! compose down -v; then
+        echo -e "${RED}❌ Failed to clean up test environment; stopping run${NC}"
+        exit 1
+    fi
 
     return $TEST_RESULT
 }
