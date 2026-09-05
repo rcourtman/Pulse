@@ -241,23 +241,18 @@ stable release is an exact soaked candidate rather than the tip of a branch
 that keeps moving, and so that the always-running maintainer can release
 without the other lanes changing the candidate underneath it.
 
-1. A minor train runs every two weeks. The first candidate is cut on a
-   fixed day and time, Tuesday 09:00 Europe/London, and general availability
-   is the Tuesday one week later; the next train's candidate is cut the
-   Tuesday after that. The first train is v6.5.0: `v6.5.0-rc.1` on
-   2026-09-08, general availability on 2026-09-15, then `v6.6.0-rc.1` on
-   2026-09-22. The cadence follows measured velocity, not preference: at the
-   70 to 150 commits a day `main` received in the week before adoption, a
-   four-week train would put two to four thousand commits into every user
-   upgrade, and a two-week train halves that while keeping a full seven day
-   soak. The release steward reviews the cadence against velocity after
-   every third train and records the decision here.
+1. Founder intent, clarified on 2026-09-05: fast progress, with willingness
+   to use many betas before GA. Release scope, version, maturity and timing
+   belong to the maintainer's judgment from current evidence. The former
+   fixed v6.5 September 8/15 and v6.6 September 22 calendar is withdrawn.
+   The existing exact-candidate, source, soak and publication-authority
+   requirements still apply.
 2. Each train has its own branch, `release/v6.N`, created from `main` at cut
    time and declared in `docs/release-control/control_plane.json` so the
    release workflow refuses a dispatch from any other branch. `main` is never
-   frozen. A fix for something found in the candidate is backported to the
-   release branch through a pull request; each backport produces the next
-   `rc.N` and restarts the soak. After general availability the branch is
+   frozen. A fix for something found in a checkpoint is backported to the
+   release branch through a pull request. Each changed RC starts its own full soak; beta time never counts toward
+   stable promotion. After general availability the branch is
    the patch line for that train.
 3. General availability promotes the candidate's content. The resolver
    refuses a stable promotion whose tree differs from the promoted candidate
