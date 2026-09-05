@@ -198,3 +198,49 @@ func dockerResultFacts(now time.Time, started, completed, readback, matches bool
 }
 
 const dockerLifecycleTestID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+// A replacement identity alone is not proof that its reported running state
+// survived until the independent daemon readback.
+func TestDockerContainerUpdateIndependentObservationMustMatchState(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name, baseline, state, health string
+		running                       bool
+		want                          unified.ActionVerificationStatus
+	}{
+		{"running", "running", "running", "healthy", true, unified.ActionVerificationConfirmed},
+		{"no healthcheck", "running", "running", "none", true, unified.ActionVerificationConfirmed},
+		{"stopped original", "created", "created", "none", false, unified.ActionVerificationConfirmed},
+		{"stopped after update", "running", "exited", "", false, unified.ActionVerificationContradicted},
+		{"restarting", "running", "restarting", "", true, unified.ActionVerificationContradicted},
+		{"unhealthy", "running", "running", "unhealthy", true, unified.ActionVerificationContradicted},
+		{"starting healthcheck", "running", "running", "starting", true, unified.ActionVerificationContradicted},
+		{"unknown health", "running", "running", "", true, unified.ActionVerificationContradicted},
+		{"missing agent readback", "", "running", "healthy", true, unified.ActionVerificationInconclusive},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := agentexec.DockerContainerUpdateResultPayload{
+				Operation: agentexec.DockerContainerOperationUpdate, ActionID: "action-update", ExecutionPhase: agentexec.DockerContainerPhaseComplete,
+				MutationStarted: true, MutationCompleted: true, ReadbackRan: true, NewContainerID: dockerLifecycleTestID,
+				After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: "running", Running: true, ObservedAt: now},
+			}
+			facts.After.State = tc.baseline
+			facts.After.Running = tc.baseline == "running"
+			facts.ReadbackRan = tc.baseline != ""
+			observation := &dockerContainerPostconditionObservation{
+				ObserverID: "daemon-1", TrustDomain: "daemon:1", Method: "daemon_inspect", ReceivedAt: now,
+				Snapshot: agentexec.DockerContainerObservationSnapshot{ContainerID: dockerLifecycleTestID, State: tc.state, Running: tc.running, Health: tc.health, ObservedAt: now},
+			}
+			result, err := dockerContainerUpdateExecutionResult("app-container:fixture", "agent-1", facts, observation, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := result.ActionResultV2.Verification; got.Status != tc.want || got.EvidenceClass != unified.ActionEvidenceIndependent {
+				t.Fatalf("verification = %+v, want %s / independent", got, tc.want)
+			}
+			if result.ActionResultV2.Execution.Status != unified.ActionExecutionSucceeded {
+				t.Fatal("readback changed execution history")
+			}
+		})
+	}
+}
