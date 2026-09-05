@@ -21,7 +21,7 @@ func outcomeFromTrueNASReplication(state string, errText string) recovery.Outcom
 	}
 	normalized := strings.ToLower(strings.TrimSpace(state))
 	switch normalized {
-	case "success", "succeeded", "ok", "complete", "completed":
+	case "success", "succeeded", "ok", "complete", "completed", "finished":
 		return recovery.OutcomeSuccess
 	case "warning", "partial", "partiallyfailed", "partially_failed":
 		return recovery.OutcomeWarning
