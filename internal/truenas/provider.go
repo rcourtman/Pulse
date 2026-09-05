@@ -1582,7 +1582,7 @@ func appIncidentKey(app App) string {
 
 func severityFromAlertLevel(level string) (storagehealth.RiskLevel, bool) {
 	switch strings.ToUpper(strings.TrimSpace(level)) {
-	case "CRITICAL", "ERROR", "ALERT":
+	case "CRITICAL", "ERROR", "ALERT", "EMERGENCY":
 		return storagehealth.RiskCritical, true
 	case "WARNING", "WARN":
 		return storagehealth.RiskWarning, true

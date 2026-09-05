@@ -1205,3 +1205,51 @@ func TestSyncUnifiedResourceIncidentsTrueNASNativeNotice(t *testing.T) {
 		}
 	}
 }
+
+// A single informational poll must not resolve a native incident, and a
+// renewed actionable observation must reset the recovery streak.
+func TestSyncUnifiedResourceIncidentsTrueNASNativeRecoveryStreak(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+	var identity string
+	for i, tc := range []struct {
+		native string
+		level  AlertLevel
+		count  int
+	}{
+		{"NOTICE", AlertLevelInfo, 1},
+		{"WARNING", AlertLevelWarning, 1},
+		{"CRITICAL", AlertLevelCritical, 1},
+		{"EMERGENCY", AlertLevelCritical, 1},
+		{"EMERGENCY", AlertLevelCritical, 1},
+		{"INFO", AlertLevelCritical, 1},
+		{"WARNING", AlertLevelWarning, 1},
+		{"INFO", AlertLevelWarning, 1},
+		{"INFO", "", 0},
+		{"NOTICE", AlertLevelInfo, 1},
+	} {
+		records := truenas.FixtureRecords(truenas.FixtureSnapshot{
+			CollectedAt: time.Now(),
+			System:      truenas.SystemInfo{Hostname: "native-recovery", Healthy: true},
+			Alerts:      []truenas.Alert{{ID: "native-1", Level: tc.native, Message: "Provider condition"}},
+		})
+		var resources []unifiedresources.Resource
+		for _, record := range records {
+			record.Resource.ID = "host:" + record.SourceID
+			resources = append(resources, record.Resource)
+		}
+		m.SyncUnifiedResourceIncidents(resources)
+		active := m.GetActiveAlerts()
+		if len(active) != tc.count {
+			t.Fatalf("poll %d (%s): active = %d, want %d", i, tc.native, len(active), tc.count)
+		}
+		for _, alert := range active {
+			if identity == "" {
+				identity = alert.ID
+			}
+			if alert.ID != identity || alert.Level != tc.level {
+				t.Fatalf("poll %d (%s): identity/level = %s/%s, want %s/%s", i, tc.native, alert.ID, alert.Level, identity, tc.level)
+			}
+		}
+	}
+}

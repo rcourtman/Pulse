@@ -15,6 +15,8 @@
 
 ## Purpose
 
+TrueNAS EMERGENCY evidence retains canonical critical severity and the existing resource and incident identity. Repeated EMERGENCY observations remain actionable through the alerts consumer and interrupt pending recovery; confirmed absence, not an unmapped severity, supplies recovery evidence. Projection, dispatch and recovery-streak regression tests exercise this boundary.
+
 ResourceIncident carries optional nativeSeverity JSON evidence independently of canonical Severity and identity. Missing nativeSeverity remains compatible with older payloads. TrueNAS INFO and NOTICE may share canonical monitor risk without becoming indistinguishable to alert consumers; native severity does not change resource or incident identity.
 
 Unraid adapters preserve optional `numDisks` in both host and storage metadata, including explicit zero in JSON and absence for unknown counts. Disk count is topology evidence only: changing it must not change canonical host/storage identity. The storage projection uses the monitoring-owned assessment so an explicit pool-only array does not acquire a no-parity warning.

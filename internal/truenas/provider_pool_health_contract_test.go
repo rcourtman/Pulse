@@ -254,17 +254,28 @@ func TestPoolTopologyStaysDiscriminatorAcrossVDevLayouts(t *testing.T) {
 }
 
 func TestIncidentProjectionPreservesNativeSeverity(t *testing.T) {
-	for _, level := range []string{"INFO", "NOTICE"} {
-		t.Run(level, func(t *testing.T) {
-			incident, ok := incidentFromAlert(Alert{ID: "condition-1", Level: " " + strings.ToLower(level) + " ", Message: "Provider condition"})
+	for _, tc := range []struct {
+		level    string
+		severity storagehealth.RiskLevel
+	}{
+		{"INFO", storagehealth.RiskMonitor},
+		{"NOTICE", storagehealth.RiskMonitor},
+		{"WARNING", storagehealth.RiskWarning},
+		{"ERROR", storagehealth.RiskCritical},
+		{"CRITICAL", storagehealth.RiskCritical},
+		{"ALERT", storagehealth.RiskCritical},
+		{"EMERGENCY", storagehealth.RiskCritical},
+	} {
+		t.Run(tc.level, func(t *testing.T) {
+			incident, ok := incidentFromAlert(Alert{ID: "condition-1", Level: " " + strings.ToLower(tc.level) + " ", Message: "Provider condition"})
 			if !ok {
 				t.Fatal("native condition omitted")
 			}
-			if incident.NativeSeverity != level {
-				t.Fatalf("native severity = %q, want %q", incident.NativeSeverity, level)
+			if incident.NativeSeverity != tc.level {
+				t.Fatalf("native severity = %q, want %q", incident.NativeSeverity, tc.level)
 			}
-			if incident.Severity != storagehealth.RiskMonitor {
-				t.Fatalf("canonical severity inflated: %v", incident.Severity)
+			if incident.Severity != tc.severity {
+				t.Fatalf("canonical severity = %v, want %v", incident.Severity, tc.severity)
 			}
 			if incident.NativeID != "condition-1" {
 				t.Fatalf("native identity changed: %q", incident.NativeID)
