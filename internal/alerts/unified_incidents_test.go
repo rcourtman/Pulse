@@ -1220,6 +1220,8 @@ func TestSyncUnifiedResourceIncidentsTrueNASNativeRecoveryStreak(t *testing.T) {
 		{"NOTICE", AlertLevelInfo, 1},
 		{"WARNING", AlertLevelWarning, 1},
 		{"CRITICAL", AlertLevelCritical, 1},
+		{"EMERGENCY", AlertLevelCritical, 1},
+		{"EMERGENCY", AlertLevelCritical, 1},
 		{"INFO", AlertLevelCritical, 1},
 		{"WARNING", AlertLevelWarning, 1},
 		{"INFO", AlertLevelWarning, 1},
