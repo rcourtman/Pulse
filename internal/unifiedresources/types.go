@@ -469,6 +469,8 @@ type StorageConsumerMeta struct {
 }
 
 type ResourceIncident struct {
+	// NativeSeverity preserves provider levels that share a canonical risk (e.g. INFO and NOTICE).
+	NativeSeverity                string                  `json:"nativeSeverity,omitempty"`
 	Provider                      string                  `json:"provider,omitempty"`
 	NativeID                      string                  `json:"nativeId,omitempty"`
 	Code                          string                  `json:"code"`

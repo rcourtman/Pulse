@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -1164,5 +1165,43 @@ func TestSyncUnifiedResourceIncidentsTrueNASInformation(t *testing.T) {
 	}
 	if len(resource.Incidents) != 1 {
 		t.Fatal("provider information removed")
+	}
+}
+
+// Exercise native projection as well as alert synchronisation: INFO and NOTICE
+// share a canonical risk level but have different notification semantics.
+func TestSyncUnifiedResourceIncidentsTrueNASNativeNotice(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+	for _, tc := range []struct {
+		level string
+		want  int
+	}{
+		{"NOTICE", 1}, {"INFO", 0}, {"WARNING", 1}, {"INFO", 0}, {" notice ", 1}, {" info ", 0},
+	} {
+		records := truenas.FixtureRecords(truenas.FixtureSnapshot{
+			CollectedAt: time.Now(),
+			System:      truenas.SystemInfo{Hostname: "native-notice", Healthy: true},
+			Alerts:      []truenas.Alert{{ID: "native-1", Level: tc.level, Message: "Provider condition"}},
+		})
+		resources := make([]unifiedresources.Resource, 0, len(records))
+		for _, record := range records {
+			// Ingestion assigns the canonical identity before evaluation.
+			record.Resource.ID = "host:" + record.SourceID
+			resources = append(resources, record.Resource)
+		}
+		// Native alerts require two recovery observations.
+		m.SyncUnifiedResourceIncidents(resources)
+		m.SyncUnifiedResourceIncidents(resources)
+		if got := len(m.GetActiveAlerts()); got != tc.want {
+			t.Fatalf("native %s: active alerts = %d, want %d", tc.level, got, tc.want)
+		}
+		if tc.level == "NOTICE" {
+			for _, alert := range m.GetActiveAlerts() {
+				if alert.Level != AlertLevelInfo {
+					t.Fatalf("NOTICE changed canonical severity to %s", alert.Level)
+				}
+			}
+		}
 	}
 }

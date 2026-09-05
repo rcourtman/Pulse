@@ -588,3 +588,23 @@ func TestUnraidDiskCountJSONAndIdentity(t *testing.T) {
 		t.Fatalf("unknown count became known: %s", data)
 	}
 }
+
+func TestResourceIncidentNativeSeverityJSONContract(t *testing.T) {
+	for _, native := range []string{"", "INFO", "NOTICE"} {
+		incident := ResourceIncident{Provider: "truenas", NativeID: "condition-1", Code: "provider_condition", NativeSeverity: native}
+		data, err := json.Marshal(incident)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "\"nativeSeverity\"") != (native != "") {
+			t.Fatalf("optional native severity encoding: %s", data)
+		}
+		var decoded ResourceIncident
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if decoded != incident {
+			t.Fatalf("incident evidence or identity changed: %+v", decoded)
+		}
+	}
+}

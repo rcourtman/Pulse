@@ -17,6 +17,8 @@
 
 ## Purpose
 
+TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence.
+
 Unraid host ingestion and canonical read-state reconstruction preserve the optional array disk count, distinguishing explicit zero from unknown. Storage assessment suppresses only the no-parity warning for an explicit zero-disk array; unknown counts retain the prior warning and disabled, invalid, or missing member evidence remains effective.
 
 Direct PBS backup polling correlates manifestless snapshots with current

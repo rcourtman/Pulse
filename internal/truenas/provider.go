@@ -1330,6 +1330,7 @@ func incidentFromAlert(alert Alert) (unifiedresources.ResourceIncident, bool) {
 	}
 	return unifiedresources.ResourceIncident{
 		Provider:                      "truenas",
+		NativeSeverity:                strings.ToUpper(strings.TrimSpace(alert.Level)),
 		NativeID:                      strings.TrimSpace(alert.ID),
 		Code:                          incidentCodeFromAlert(alert),
 		Severity:                      severity,

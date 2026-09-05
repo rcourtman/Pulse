@@ -21,6 +21,8 @@
 
 ## Purpose
 
+Provider incident nativeSeverity is evidence, not a storage recovery result or identity component. TrueNAS NOTICE remains actionable while INFO remains resource evidence; both retain canonical monitor risk. This distinction must not alter pool health assessment, recovery confirmation counts, or storage action authority.
+
 TrueNAS replication state `FINISHED` is successful completion evidence when a
 last-run timestamp exists, matching the provider success event. Explicit error
 text still takes precedence; a missing last-run timestamp remains unknown.
