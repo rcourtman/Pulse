@@ -21,14 +21,26 @@ PBS node-status collection must reject HTTP-success responses whose `data`
 is omitted or null (including a null response envelope). Absent status is
 unavailable telemetry, not measured zero usage: the poller retains independently
 established connectivity, marks node metrics unavailable, and must not resolve
-an active metric incident from that response. This does not add per-field
-validation of populated status objects.
+an active metric incident from that response. Populated objects must include
+non-null CPU, memory used and memory total measurements, with non-negative
+usage and a positive memory denominator. Missing fields must not become zero
+usage. Since the poller has a single node-metrics availability flag, incomplete
+CPU or memory makes the node metrics unavailable together; unrelated status
+fields are not required. Explicit zero CPU and memory usage remain valid.
+
+The upstream PBS API schema at
+https://pbs.proxmox.com/docs/api-viewer/apidoc.js (read 2026-09-05) declares CPU
+and memory used/total as numeric measurements. This validation is limited to
+measurements consumed by node alerting, not exhaustive schema enforcement.
 
 Verification: `TestClient_GetNodeStatus_MissingData` in
 `pkg/pbs/client_http_test.go` covers the absent envelopes.
 `TestPBSPartialMetricsWebhookLifecycle` in
 `internal/monitoring/monitor_pbs_webhook_test.go` exercises repeated null status
-through the real poller, alert manager, notification queue and local webhook.
+and missing memory-used measurements through the real poller, alert manager,
+notification queue and local webhook. `TestClient_GetNodeStatus_MetricCompleteness`
+pins omitted/null fields, invalid denominators, negative usage, genuine zero,
+and tolerance for unrelated extra fields.
 It requires online-but-unavailable projection, unchanged incident identity,
 no false recovery history or delivery, then one identity-preserving recovery
 after valid low-memory samples. These are local synthetic checks, not

@@ -784,6 +784,30 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 		return nil, fmt.Errorf("node status response contains no data")
 	}
 
+	// The poller has one availability flag for CPU and memory. Require both
+	// measurements before marking the snapshot available; omitted JSON numbers
+	// otherwise decode to zero and can fabricate recovery. Do not require
+	// unrelated fields (load, swap, root, etc.) or reject measured zero usage.
+	var measurements struct {
+		Data struct {
+			CPU    *float64 `json:"cpu"`
+			Memory struct {
+				Used  *int64 `json:"used"`
+				Total *int64 `json:"total"`
+			} `json:"memory"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &measurements); err != nil {
+		return nil, fmt.Errorf("failed to decode node measurements: %w", err)
+	}
+	m := measurements.Data
+	if m.CPU == nil || m.Memory.Used == nil || m.Memory.Total == nil {
+		return nil, fmt.Errorf("node status response contains incomplete CPU or memory measurements")
+	}
+	if *m.CPU < 0 || *m.Memory.Used < 0 || *m.Memory.Total <= 0 {
+		return nil, fmt.Errorf("node status response contains invalid CPU or memory measurements")
+	}
+
 	return statusResult.Data, nil
 }
 
