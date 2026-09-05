@@ -17,6 +17,7 @@ function run(failImage = '') {
 printf '%s\\n' "$*" >> "$CALL_LOG"
 if [ "$1 $2" = 'compose version' ]; then
   printf 'target=%s command=%s file=%s path=%s skip=%s\\n' "$PULSE_E2E_PULSE_CONTAINER" "$PULSE_E2E_ENTITLEMENT_WRITE_COMMAND" "$PULSE_E2E_BILLING_STATE_PATH" "$PULSE_E2E_CONTAINER_BILLING_PATH" "$PULSE_E2E_SKIP_DOCKER" >> "$CALL_LOG"
+  printf 'report=%s results=%s browser=%s\\n' "$PULSE_E2E_REPORT_DIR" "$PULSE_E2E_RESULTS_DIR" "$PLAYWRIGHT_BASE_URL" >> "$CALL_LOG"
   exit 0
 fi
 if [ "$1 $2" = 'image inspect' ]; then exit 0; fi
@@ -32,7 +33,7 @@ exit 91
         PULSE_E2E_ENTITLEMENT_WRITE_COMMAND: 'unowned-command',
         PULSE_E2E_BILLING_STATE_PATH: '/unowned/billing.json',
         PULSE_E2E_CONTAINER_BILLING_PATH: '/unowned/billing.json',
-        PULSE_E2E_SKIP_DOCKER: 'true', },
+        PLAYWRIGHT_BASE_URL: 'http://unowned.invalid', PULSE_E2E_SKIP_DOCKER: 'true', PULSE_E2E_REPORT_DIR: '/unowned/report', PULSE_E2E_RESULTS_DIR: '/unowned/results', },
       encoding: 'utf8',
     });
     const project = result.stdout.match(/Isolated integration project: (pulse-e2e-[a-f0-9]+)/)?.[1];
@@ -79,4 +80,15 @@ test('failed startup cleanup is scoped to its own project', () => {
 test('shell runner binds entitlement writes to its owned server and clears external overrides', () => {
   const result = run();
   assert.ok(result.calls.includes(`target=${result.project}-server command= file= path= skip=`));
+});
+
+test('shell runner overrides inherited artifact roots with invocation-specific paths', () => {
+  const a = run();
+  const b = run();
+  for (const result of [a, b]) {
+    assert.ok(result.calls.includes(
+      `report=${repo}/tests/integration/playwright-report/${result.project} results=${repo}/tests/integration/test-results/${result.project} browser=`,
+    ));
+  }
+  assert.notEqual(a.project, b.project);
 });

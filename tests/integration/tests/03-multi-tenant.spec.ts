@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 import {
   apiRequest,
@@ -14,8 +13,6 @@ import {
   waitForAppShell,
 } from './helpers';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 type WorkerFixtures = {
   authStorageStatePath: string;
 };
@@ -26,20 +23,17 @@ const test = base.extend<{}, WorkerFixtures>({
   },
   authStorageStatePath: [
     async ({ browser }, use, workerInfo) => {
-      const storageStatePath = path.resolve(
-        __dirname,
-        '..',
-        '..',
-        'tmp',
-        'playwright-auth',
-        `multi-tenant-${workerInfo.project.name}.json`,
-      );
-      fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
-      await createAuthenticatedStorageState(browser, storageStatePath);
+      // Unique per worker; the shell runner also isolates the output root.
+      // Never let one worker overwrite or remove another worker's credentials.
+      const authRoot = path.join(workerInfo.project.outputDir, '.auth');
+      fs.mkdirSync(authRoot, { recursive: true });
+      const authDir = fs.mkdtempSync(path.join(authRoot, 'multi-tenant-'));
+      const storageStatePath = path.join(authDir, 'state.json');
       try {
+        await createAuthenticatedStorageState(browser, storageStatePath);
         await use(storageStatePath);
       } finally {
-        fs.rmSync(storageStatePath, { force: true });
+        fs.rmSync(authDir, { recursive: true, force: true });
       }
     },
     { scope: 'worker' },

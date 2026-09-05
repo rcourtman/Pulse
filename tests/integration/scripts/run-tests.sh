@@ -39,7 +39,12 @@ export PULSE_E2E_SEED_CONTAINER="$PULSE_E2E_RUN_ID-seed"
 export PULSE_E2E_PULSE_CONTAINER="$PULSE_E2E_SERVER_CONTAINER"
 unset PULSE_E2E_ENTITLEMENT_WRITE_COMMAND PULSE_E2E_BILLING_STATE_PATH
 unset PULSE_E2E_CONTAINER_BILLING_PATH PULSE_E2E_SKIP_DOCKER
+unset PLAYWRIGHT_BASE_URL
 export PULSE_E2E_PORT=0 PULSE_E2E_AGENT_PORT=0 PULSE_E2E_MOCK_GITHUB_PORT=0
+# Reports and browser artifacts must be as isolated as the containers.
+# Override inherited paths: sharing these can erase another invocation's receipts.
+export PULSE_E2E_REPORT_DIR="$TEST_ROOT/playwright-report/$PULSE_E2E_RUN_ID"
+export PULSE_E2E_RESULTS_DIR="$TEST_ROOT/test-results/$PULSE_E2E_RUN_ID"
 echo "Isolated integration project: $PULSE_E2E_RUN_ID"
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
