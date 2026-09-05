@@ -216,7 +216,8 @@ jobs:
   backend:
     name: Backend tests (${{ matrix.shard }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Expand every required shard even for documentation-only changes. A
+    # job-level condition skips expansion and leaves the named checks pending.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -227,12 +228,18 @@ jobs:
         shard: [api, rest-0, rest-1]
 
     steps:
+      - name: Report documentation-only change
+        if: needs.changes.outputs.code != 'true'
+        run: echo "No backend code changed. Tests are not required for this shard."
+
       - name: Checkout repository
+        if: needs.changes.outputs.code == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Go
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
@@ -243,12 +250,14 @@ jobs:
       # without the ~5 minute frontend build; the real bundle is built and
       # size-gated by the frontend job, and release artifacts always build it.
       - name: Provide frontend embed stub
+        if: needs.changes.outputs.code == 'true'
         run: |
           mkdir -p internal/api/frontend-modern/dist
           [ -f internal/api/frontend-modern/dist/index.html ] || \
             printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
 
       - name: Go unit tests (shard ${{ matrix.shard }})
+        if: needs.changes.outputs.code == 'true'
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
         # internal/api alone takes ~22m under -race on a fast machine since
