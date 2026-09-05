@@ -29,6 +29,17 @@ and preservation of provider resource evidence.
 native projection, NOTICE activation without severity inflation, and confirmed
 recovery to INFO.
 
+Existing provider incidents that transition to critical severity dispatch again
+through the normal alert delivery path, preserving incident ID and start time.
+Acknowledgement and the canonical incident notification-rate budget still gate
+that dispatch; repeated critical observations and severity downgrades do not
+notify again. Confirmed provider recovery retains the same lifecycle identity.
+`TestTrueNASNativeCriticalTransition` in
+`internal/alerts/unified_incidents_test.go` pins the native TrueNAS
+WARNING → EMERGENCY → WARNING → INFO sequence, including repeated critical
+observations, acknowledgement suppression, and exhausted-budget suppression.
+This is callback-level regression proof, not external notification receipt.
+
 Own alert identity, alert specs, evaluation, persistence semantics, and
 operator-facing alert routing behavior for live runtime alerts.
 Alert-history investigations on narrow layouts render in a shared drawer
