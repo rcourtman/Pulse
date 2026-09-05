@@ -18,7 +18,7 @@ printf '%s\\n' "$*" >> "$CALL_LOG"
 if [ "$1 $2" = 'compose version' ]; then exit 0; fi
 if [ "$1 $2" = 'image inspect' ]; then exit 0; fi
 if [ "$1" = build ]; then
-  [ "$3" != "$FAIL_IMAGE" ]
+  [[ "$3" != "$FAIL_IMAGE":* ]]
   exit $?
 fi
 exit 91
@@ -27,7 +27,8 @@ exit 91
       env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, CALL_LOG: log, FAIL_IMAGE: failImage },
       encoding: 'utf8',
     });
-    return { ...result, calls: readFileSync(log, 'utf8').trim().split('\n') };
+    const project = result.stdout.match(/Isolated integration project: (pulse-e2e-[a-f0-9]+)/)?.[1];
+    return { ...result, project, calls: readFileSync(log, 'utf8').trim().split('\n') };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -38,17 +39,31 @@ test('rebuilds both test images from this checkout even when local tags exist', 
   assert.equal(result.status, 1); // Deliberately unknown suite: never starts services.
   assert.ok(result.stdout.includes('Unknown suite: invalid-test-suite'));
   assert.deepEqual(result.calls.filter(call => call.startsWith('build ')), [
-    `build -t pulse-mock-github:test ${repo}/tests/integration/mock-github-server`,
-    `build -t pulse:test --build-arg GO_BUILD_TAGS= -f ${repo}/Dockerfile ${repo}`,
+    `build -t pulse-mock-github:${result.project} ${repo}/tests/integration/mock-github-server`,
+    `build -t pulse:${result.project} --build-arg GO_BUILD_TAGS= -f ${repo}/Dockerfile ${repo}`,
   ]);
 });
 
-for (const image of ['pulse-mock-github:test', 'pulse:test']) {
+for (const image of ['pulse-mock-github', 'pulse']) {
   test(`failed ${image} build cannot fall through to a cached image`, () => {
     const result = run(image);
     assert.equal(result.status, 1);
-    assert.ok(result.calls.some(call => call.startsWith(`build -t ${image} `)));
+    assert.ok(result.calls.some(call => call.startsWith(`build -t ${image}:`)));
     assert.ok(!result.calls.some(call => call.includes(' up ')));
     assert.ok(!result.stdout.includes('Starting test environment'));
   });
 }
+
+test('independent invocations never reuse image/project identities', () => {
+  const a = run();
+  const b = run();
+  assert.match(a.project, /^pulse-e2e-[a-f0-9]+$/);
+  assert.notEqual(a.project, b.project);
+});
+
+test('failed startup cleanup is scoped to its own project', () => {
+  const result = run('not-an-image');
+  const composeCalls = result.calls.filter(call => call.startsWith('compose ') && call !== 'compose version');
+  assert.ok(composeCalls.some(call => call.endsWith('down -v')));
+  for (const call of composeCalls) assert.ok(call.includes(`-p ${result.project} `));
+});

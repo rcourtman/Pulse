@@ -26,6 +26,17 @@ echo ""
 cd "$TEST_ROOT"
 REPO_ROOT="$(cd "$TEST_ROOT/../.." && pwd)"
 
+# Unique per invocation, including simultaneous runs of the same checkout.
+# Never inherit another runner's project, image tags or fixed host ports.
+export PULSE_E2E_RUN_ID="pulse-e2e-$(node -e "process.stdout.write(require('crypto').randomBytes(16).toString('hex'))")"
+export PULSE_E2E_SERVER_IMAGE="pulse:$PULSE_E2E_RUN_ID"
+export PULSE_E2E_MOCK_IMAGE="pulse-mock-github:$PULSE_E2E_RUN_ID"
+export PULSE_E2E_SERVER_CONTAINER="$PULSE_E2E_RUN_ID-server"
+export PULSE_E2E_MOCK_CONTAINER="$PULSE_E2E_RUN_ID-mock"
+export PULSE_E2E_SEED_CONTAINER="$PULSE_E2E_RUN_ID-seed"
+export PULSE_E2E_PORT=0 PULSE_E2E_AGENT_PORT=0 PULSE_E2E_MOCK_GITHUB_PORT=0
+echo "Isolated integration project: $PULSE_E2E_RUN_ID"
+
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
 else
@@ -33,7 +44,7 @@ else
 fi
 
 compose() {
-    "${COMPOSE_CMD[@]}" -f docker-compose.test.yml "$@"
+    "${COMPOSE_CMD[@]}" -p "$PULSE_E2E_RUN_ID" -f docker-compose.test.yml "$@"
 }
 
 ensure_test_images() {
@@ -41,13 +52,23 @@ ensure_test_images() {
     # sources; Docker can reuse unchanged layers, but tag existence is not
     # evidence that the image includes the code we are qualifying.
     echo "Building test images from: $REPO_ROOT"
-    docker build -t pulse-mock-github:test "$TEST_ROOT/mock-github-server"
+    docker build -t "$PULSE_E2E_MOCK_IMAGE" "$TEST_ROOT/mock-github-server"
 
     # Test image drops the release build tag so the suite can enable mock
     # fixtures without a demo entitlement. A build failure must stop the run,
     # never fall back to a previously tagged image.
-    docker build -t pulse:test --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+    docker build -t "$PULSE_E2E_SERVER_IMAGE" --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
 }
+
+# EXIT also handles build/start/test failures; signals preserve failure status.
+cleanup() {
+    compose down -v || true
+    docker image rm "$PULSE_E2E_SERVER_IMAGE" "$PULSE_E2E_MOCK_IMAGE" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 # Function to run suite with specific mock config
 run_suite() {
@@ -74,9 +95,7 @@ run_suite() {
     else
         unset PULSE_E2E_ENTITLEMENT_PROFILE
     fi
-    local pulse_base_url="${PULSE_BASE_URL:-http://localhost:${PULSE_E2E_PORT:-7655}}"
-    pulse_base_url="${pulse_base_url%/}"
-    local health_url="${pulse_base_url}/api/health"
+    export PULSE_E2E_PORT=0 PULSE_E2E_AGENT_PORT=0 PULSE_E2E_MOCK_GITHUB_PORT=0
 
     # Start services
     echo "Starting test environment..."
@@ -86,6 +105,22 @@ run_suite() {
         compose down -v
         return 1
     fi
+
+    # Resolve Docker-allocated ports only after successful startup. A failed
+    # bind must never fall back to probing a different worktree's listener.
+    local binding
+    binding="$(compose port pulse-test 7655)" || return 1
+    [[ "$binding" =~ :([0-9]+)$ ]] || return 1
+    export PULSE_BASE_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
+    local pulse_base_url="$PULSE_BASE_URL"
+    local health_url="$pulse_base_url/api/health"
+    binding="$(compose port pulse-test 7656)" || return 1
+    [[ "$binding" =~ :([0-9]+)$ ]] || return 1
+    export PULSE_E2E_AGENT_PORT="${BASH_REMATCH[1]}"
+    export PULSE_AGENT_BASE_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
+    binding="$(compose port mock-github 8080)" || return 1
+    [[ "$binding" =~ :([0-9]+)$ ]] || return 1
+    export MOCK_GITHUB_URL="http://127.0.0.1:${BASH_REMATCH[1]}"
 
     # Wait for services
     echo "Waiting for services to be ready..."
@@ -100,7 +135,7 @@ run_suite() {
 
     # Check if the Pulse test container is actually running and reachable.
     local pulse_running
-    pulse_running="$(docker inspect -f '{{.State.Running}}' pulse-test-server 2>/dev/null || true)"
+    pulse_running="$(docker inspect -f '{{.State.Running}}' "$PULSE_E2E_SERVER_CONTAINER" 2>/dev/null || true)"
     if [ "$health_ok" -ne 1 ] || [ "$pulse_running" != "true" ]; then
         echo -e "${RED}❌ Services failed to start${NC}"
         compose ps
