@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - pulse/v6-release
+      - 'release/v*'
   pull_request:
     branches:
       - main
       - pulse/v6-release
+      - 'release/v*'
   workflow_dispatch:
 
 permissions:

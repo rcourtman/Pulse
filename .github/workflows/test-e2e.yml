@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - pulse/v6-release
+      - 'release/v*'
     paths:
       - 'frontend-modern/**'
       - 'internal/**'
@@ -16,6 +17,7 @@ on:
       - main
       - master
       - pulse/v6-release
+      - 'release/v*'
     paths:
       - 'frontend-modern/**'
       - 'internal/**'
