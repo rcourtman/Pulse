@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "4fd68c72b26f033f5b1b0fcb7d7b2b0d67e85ec8",
-  "verified_at": "2026-09-06T14:12:06.315693Z",
+  "base_sha": "5000e0409b5795f732f32882d7c6929e7eff16b1",
+  "verified_at": "2026-09-06T16:16:58.486143Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts"
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "bc3eadf8f790517b377430a42eb67e8fdfcadb53bb13b87cd971d6a9ab91d607"
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "64d0b891e7ad228e8590da859dc25e825b6164c8cf76a01983a219d6cd079b23"
   },
   "routes": [
     "/qualification (isolated real OverviewTab, not installed /alerts)"
@@ -27,9 +27,9 @@
     }
   ],
   "states": [
-    "Scripted ready and cooldown diagnoses with lastNotified render Dispatch requested; cooldown says next eligible. Missing timestamp remains Notification pending. No Notified label."
+    "First diagnosis request pending; active set expanded; newer notifications-disabled response visible; older dispatch response completes without replacing current status."
   ],
   "interactions": [
-    "Loaded real Overview in Chromium via scripts/check-alert-dispatch-copy.mjs; asserted status text ranges fit each viewport and no page errors. Inspected desktop and phone screenshots. No delivery actions invoked; no backend receipt claimed. Screenshots retained in lane outcome evidence."
+    "Ran pulse-heavy-run -- node scripts/check-alert-diagnosis-ordering.mjs in Chromium. Clicked Add alert fixture control, completed older response after current warning rendered, asserted warning retained, dispatch absent, new alert present, status text fits viewport and no page errors. Inspected desktop and phone screenshots. Synthetic API only; no delivery action or recipient receipt."
   ]
 }
