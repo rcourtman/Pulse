@@ -146,11 +146,13 @@ describe('OverviewTab delivery status line', () => {
     expect(screen.getByText('Notifications are turned off')).toBeTruthy();
   });
 
-  it('does not apply a resolved incident response to its recurrence on the same resource', async () => {
+  it.each(['success', 'failure'] as const)('does not apply a resolved incident %s to its recurrence on the same resource', async (outcome) => {
     let finishOlder!: (value: AlertDeliveryDiagnosis[]) => void;
+    let rejectOlder!: (reason: Error) => void;
     getDeliveryDiagnoses.mockReturnValueOnce(
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
         finishOlder = resolve;
+        rejectOlder = reject;
       }),
     );
     getDeliveryDiagnoses.mockResolvedValueOnce([
@@ -169,7 +171,11 @@ describe('OverviewTab delivery status line', () => {
     setAlerts({ a2: recurrence });
     await waitFor(() => expect(screen.getByText('Notifications are turned off')).toBeTruthy());
     expect(getDeliveryDiagnoses).toHaveBeenCalledTimes(2);
-    finishOlder([makeDiagnosis('a1', { lastNotified: '2026-08-26T10:15:00Z' })]);
+    if (outcome === 'success') {
+      finishOlder([makeDiagnosis('a1', { lastNotified: '2026-08-26T10:15:00Z' })]);
+    } else {
+      rejectOlder(new Error('Previous incident diagnosis request failed'));
+    }
     await Promise.resolve();
     expect(screen.getByText('High CPU on VM a2')).toBeTruthy();
     expect(screen.queryByText('High CPU on VM a1')).toBeNull();
