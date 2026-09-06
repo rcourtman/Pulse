@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,7 +17,77 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/stretchr/testify/require"
 )
+
+func TestDockerAlertTimelineUsesCanonicalHistoryIdentity(t *testing.T) {
+	dir := t.TempDir()
+	store, err := unifiedresources.NewSQLiteResourceStore(dir, "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	containerID := strings.Repeat("f", 64)
+	host := models.DockerHost{ID: "history-host", Hostname: "history-host", LastSeen: time.Now(), Containers: []models.DockerContainer{
+		{ID: containerID, Name: "worker", State: "running", Health: "unhealthy"},
+		{ID: strings.Repeat("a", 64), Name: "worker", State: "running", Health: "healthy"},
+	}}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{host}})
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	monitor := &Monitor{alertManager: manager, resourceStore: adapter}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+	manager.CheckDockerHost(host)
+	canonicalID := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAppContainer, unifiedresources.SourceDocker, host.ID+"/container/"+containerID)
+	filters := unifiedresources.ResourceChangeFilters{Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired, unifiedresources.ChangeAlertResolved}}
+	changes, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Len(t, changes, 1)
+	require.Equal(t, unifiedresources.ChangeAlertFired, changes[0].Kind)
+	require.Equal(t, canonicalID, changes[0].ResourceID)
+	var fired alerts.Alert
+	for _, alert := range manager.GetActiveAlerts() {
+		if alert.Type == "docker-container-health" {
+			fired = alert
+		}
+	}
+	require.NotEmpty(t, fired.ID)
+	// Recovery is emitted after the monitored container has left the registry.
+	// Its exact retained source binding must still select the original resource.
+	monitor.resourceStore = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	host.Containers[0].Health = "healthy"
+	manager.CheckDockerHost(host)
+	changes, err = store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Len(t, changes, 2)
+	require.Equal(t, unifiedresources.ChangeAlertResolved, changes[0].Kind)
+	require.Equal(t, canonicalID, changes[0].ResourceID)
+	monitor.recordAlertTimelineChange(&fired, unifiedresources.ChangeAlertFired, fired.StartTime, "")
+	monitor.recordAlertTimelineChange(&fired, unifiedresources.ChangeAlertResolved, *changes[0].OccurredAt, "")
+	again, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Equal(t, changes, again)
+	controlID := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAppContainer, unifiedresources.SourceDocker, host.ID+"/container/"+host.Containers[1].ID)
+	control, err := store.GetRecentChangesFiltered(controlID, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Empty(t, control)
+	require.NoError(t, store.Close())
+	restarted, err := unifiedresources.NewSQLiteResourceStore(dir, "default")
+	require.NoError(t, err)
+	defer restarted.Close()
+	afterRestart, err := restarted.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Equal(t, changes, afterRestart)
+	encoded, err := json.Marshal(afterRestart)
+	require.NoError(t, err)
+	t.Logf("DOCKER_HISTORY_LIFECYCLE %s", encoded)
+}
 
 func TestMonitor_HandleAlertFired_Extra(t *testing.T) {
 	// 1. Alert is nil

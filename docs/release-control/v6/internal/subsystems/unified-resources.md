@@ -4812,6 +4812,17 @@ recent-change slice plus facet counts it actually renders. The store now also
 owns a `resource_changes` persistence table with `RecordChange` and
 `GetRecentChanges` methods so change history is queryable by canonical ID and
 time window.
+Docker alert source references containing an exact full container ID resolve at
+`MonitorAdapter.RecordChange` through the current registry, then a retained
+history binding, then the deterministic source-specific container identity.
+Names and shortened IDs cannot establish this binding. `history_identity.go`
+owns a history-only alias index in the organization-scoped resource store.
+Legacy event rows retain their IDs, resource references and timestamps. Reads
+expand aliases and canonical predecessor eras without changing operator state,
+action requests, approvals, links or exclusions. Separate monitor, API and
+Assistant store handles must see current persisted aliases. Missing identity
+storage is an error, not evidence of empty history. Retention removes an alias
+only after neither identity has retained journal records.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.

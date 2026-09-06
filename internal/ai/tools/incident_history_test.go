@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,38 @@ import (
 )
 
 type failedIncidentHistoryStore struct{ unifiedresources.ResourceStore }
+
+func TestIncidentHistoryRetainsLegacyDockerLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	store, err := unifiedresources.NewSQLiteResourceStore(dir, "incident-test")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	container := strings.Repeat("b", 64)
+	legacy := "docker:tower/" + container
+	canonical := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAppContainer, unifiedresources.SourceDocker, "tower/container/"+container)
+	start := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	occurred := start.Add(-time.Minute)
+	fired := unifiedresources.ResourceChange{ID: "legacy-fired", ResourceID: legacy, ObservedAt: start.Add(time.Minute), OccurredAt: &occurred, Kind: unifiedresources.ChangeAlertFired, SourceType: unifiedresources.SourceHeuristic, Reason: "Container unhealthy"}
+	require.NoError(t, store.RecordChange(fired))
+	require.NoError(t, store.Close())
+	store, err = unifiedresources.NewSQLiteResourceStore(dir, "incident-test")
+	require.NoError(t, err)
+	resolved := unifiedresources.ResourceChange{ID: "canonical-resolved", ResourceID: canonical, ObservedAt: start.Add(3 * time.Minute), Kind: unifiedresources.ChangeAlertResolved, SourceType: unifiedresources.SourceHeuristic}
+	require.NoError(t, store.RecordChange(resolved))
+	exec := NewPulseToolExecutor(ExecutorConfig{ActionAuditStore: store})
+	input := map[string]interface{}{"action": "incidents", "resource_id": canonical, "since": start.Format(time.RFC3339), "limit": float64(50)}
+	result, err := exec.registry.Execute(context.Background(), exec, agentcapabilities.PulseKnowledgeToolName, input)
+	require.NoError(t, err)
+	require.False(t, result.IsError, result.Content)
+	var got struct {
+		Events []unifiedresources.ResourceChange `json:"events"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &got))
+	require.Equal(t, []unifiedresources.ResourceChange{resolved, fired}, got.Events)
+	capture, err := json.Marshal(map[string]any{"case": "migrated Docker lifecycle", "input": input, "result": result})
+	require.NoError(t, err)
+	t.Logf("INCIDENT_EVIDENCE %s", capture)
+}
 
 func (failedIncidentHistoryStore) GetRecentChanges(string, time.Time, int) ([]unifiedresources.ResourceChange, error) {
 	return nil, errors.New("history store unavailable")

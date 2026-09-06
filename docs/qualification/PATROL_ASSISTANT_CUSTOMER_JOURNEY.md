@@ -1886,3 +1886,52 @@ The provider warning stayed visible and no retry, route switch or provider
 request was made. This is captured-response rendering, not real-model diagnosis
 or server persistence qualification. The exact scoped worker hook gates delivery
 through PR #1935.
+
+
+## Shared Docker history identity, 2026-09-06
+
+The preceding incident-read correction was pushed as
+`580a246981c76b401e9007f5ac65c89355b64c6d` in PR #1935. Its live retained
+records established the identity split addressed here.
+
+The canonical fix belongs to the shared monitor/store boundary. Exact full
+Docker container references resolve through current registry identity. Retained
+bindings survive inventory removal, and deterministic source-specific identities
+allow legacy records to be found after restart. Names and abbreviated IDs are
+not sufficient evidence. A small organization-scoped history alias index joins
+readable records without rewriting event IDs, timestamps or metadata. Existing
+canonical succession machinery was deliberately not used for these aliases
+because it also moves operator state and action indexes. History matching must
+not transfer authority. The alias index follows journal retention and separate
+store connections read fresh bindings.
+
+Focused regression and race proofs passed on pulse-dev with Go1.26.8 and
+GOMAXPROCS4. Full unifiedresources, monitoring and tools packages passed in
+37.826s, 79.866s and 59.584s. They cover real alert-manager callbacks, recovery
+after inventory removal, restart, replay, same-name controls, tenant isolation,
+unchanged operator/approval records and registered Assistant tool reads. Scoped
+history lookup measured 0.261–0.275ms with one alias and 0.317–0.336ms with
+20,000 unrelated aliases, at 6,280 bytes and 94 allocations per read. These are
+worker microbenchmarks, not fleet or frontend performance qualification.
+
+The verified worker Pro binary has SHA256
+`bb6d1508a5b4d23943c37dfc42198f132c0139805dcd1891ee18aca0a9f9dd54`.
+It was installed into the local development stack and restarted healthy. Both
+canonical and legacy timeline API queries now return the same seven retained
+records for the removed storage fixture, including the original fired/resolved
+records with exact unchanged content. The complete registered-tool rendering
+matrix passed at `/patrol`, 1440x1000, 900x1000 and 390x1000. Six captured cases
+include migrated history, bounded and empty results, and unavailable/failed
+reads. Hover/focus, Enter/Space, deepest scrolling, Escape and controlled-session
+reload preserved exact inputs, outputs and completed/failed states. Pixels were
+inspected at all three widths. Source and binary hashes remained fixed. Private
+receipts are `tmp/patrol-history-identity/browser/receipt.json` and
+`live-history-proof.json`. Controlled session responses qualify rendering, not
+server persistence or model diagnosis. The cached provider refusal remained
+unchanged. No model request or infrastructure fault was made. The exact scoped
+worker hook remains the delivery gate for PR #1935.
+
+This history correction does not qualify the failed ordinary storage diagnosis,
+partial recovery claim, installed tmpfs collector, autonomous provider, approved
+and rejected action outcomes, or independent Pro environments. The unused legacy
+recorder/coordinator still needs retirement with its archives preserved.

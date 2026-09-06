@@ -4464,6 +4464,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/unifiedresources/availability_link_test.go",
+                "internal/unifiedresources/history_identity_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
                 "internal/unifiedresources/registry_merge_policy_test.go",
@@ -4494,6 +4495,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/unifiedresources/availability_link_test.go",
+                "internal/unifiedresources/history_identity_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
                 "internal/unifiedresources/registry_merge_policy_test.go",

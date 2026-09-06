@@ -1,15 +1,18 @@
 {
   "version": 1,
-  "base_sha": "6e18777d30f30b498def39d30016a697cabc4ea7",
-  "verified_at": "2026-09-06T14:26:55.462Z",
+  "base_sha": "580a246981c76b401e9007f5ac65c89355b64c6d",
+  "verified_at": "2026-09-06T15:06:56.468Z",
   "result": "passed",
   "changed_paths": [],
   "content_sha256": {},
   "backend_content_sha256": {
+    "internal/unifiedresources/history_identity.go": "3934ac49acce29b16dd671769719112208be053a8658c678f798645a6a38395d",
+    "internal/unifiedresources/monitor_adapter.go": "5b51089bac8e85e7c776956c17471599ec15add4e5e8502cd8687c4f788fcdb1",
+    "internal/unifiedresources/store.go": "018176a4762b06adf52c78128f8351ca93819cbfa10bf2242535fef3d7c59191",
     "internal/ai/tools/tools_knowledge.go": "d98ea1bab481acce5eee4988d74d364dc73c4068ca33725d843b54117cc9cc85",
     "internal/ai/tools/executor.go": "c476d6aec1f7925467f1547f0219e6c6265639a62b397649adc82a8ed87b7e4a"
   },
-  "binary_sha256": "4929aeb869db54122bc5525352d3126c0e9fa7c4847e3fdfa741500600b5e00d",
+  "binary_sha256": "bb6d1508a5b4d23943c37dfc42198f132c0139805dcd1891ee18aca0a9f9dd54",
   "rendering_content_sha256": {
     "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c",
     "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
@@ -33,13 +36,13 @@
     }
   ],
   "states": [
-    "Five captured registered-tool results: retained canonical lifecycle, bounded/truncated history, empty retained history, unavailable store, and failed store read.",
-    "Observation and optional occurrence timestamps, source metadata, empty arrays, coverage limitations and failed tool status survive rendering.",
-    "Existing provider route warning remains visible. No retry, route switch, model request or infrastructure mutation was performed."
+    "Six captured registered-tool results: migrated legacy Docker fired event plus canonical recovery, retained lifecycle, bounded history, empty history, unavailable store and failed read.",
+    "Exact event IDs, original resource references, observation/occurrence times and source metadata survive expansion. Empty coverage and failed tool states remain distinct.",
+    "Actual removed homelab container canonical and legacy timeline APIs return the same seven records, preserving both previously captured fired/resolved records exactly. Provider refusal remains enforced."
   ],
   "interactions": [
-    "Hover/focus and Enter expansion, exact input/output comparison, deepest output scroll and pixel inspection at desktop/intermediate/mobile widths, Space collapse and Escape.",
-    "Full reload, controlled session selection, reopen each result and compare exact retained input/output and completed/failed state.",
-    "Final verified Pro build installed locally, healthy restart, fixed source/binary hashes before and after. Private receipt: tmp/patrol-canonical-history/browser/receipt.json. Captured response/session fixtures qualify rendering, not real-model diagnosis or backend persistence."
+    "Hover/focus, Enter expansion, exact input/output comparison, deepest scrolling, Space collapse and Escape at /patrol, 1440x1000, 900x1000 and 390x1000. Actual pixels inspected at all three widths.",
+    "Full reload, controlled session selection, reopening all six results and exact retained input/output and completed/failed comparison.",
+    "Final verified worker Pro build installed locally and restarted healthy. Source/binary hashes fixed before and after. Private proof: tmp/patrol-history-identity/browser/receipt.json and live-history-proof.json. Captured tool/session rendering does not qualify real-model diagnosis or server persistence. No provider call or fault injection."
   ]
 }

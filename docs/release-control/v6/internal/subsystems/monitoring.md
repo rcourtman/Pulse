@@ -87,6 +87,15 @@ existing cache policy. The legacy untyped-error fallback is unchanged.
 Retaining cached inventory does not establish a successful poll or fresh
 backup evidence.
 
+Docker alert lifecycle events pass through the shared resource history identity
+writer. A full Docker source reference must reach the same canonical container
+history as inventory changes, including recovery after inventory removal and
+restart. Existing alert lifecycle event IDs remain unchanged so replay cannot
+duplicate retained events. Same-name containers and abbreviated IDs must not
+join another container's history. The real alert-manager callback path is
+covered by `TestDockerAlertTimelineUsesCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go`.
+
 Verification: `TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
 `TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError` in
 `internal/monitoring/monitor_backups_readstate_test.go` exercise actual HTTP
