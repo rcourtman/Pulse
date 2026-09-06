@@ -129,7 +129,9 @@ describe('DemoBanner', () => {
 
     sessionStorage.clear();
     await renderBanner();
-    expect(screen.getByRole('link', { name: 'Run Pulse on your own hardware' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Run Pulse on your own hardware' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
   });
 });
