@@ -21041,3 +21041,58 @@ func TestStorageEmptyCapacityRecovery(t *testing.T) {
 		})
 	}
 }
+
+func TestStorageUnknownConnectivityDoesNotRecover(t *testing.T) {
+	for _, status := range []string{"", "unknown", " UNKNOWN "} {
+		t.Run(status, func(t *testing.T) {
+			m := newTestManager(t)
+			disableTestTimeThresholds(m)
+			s := models.Storage{ID: "storage-observation", Name: "backups", Status: "unavailable"}
+			id := canonicalConnectivityStateID(s.ID)
+			for range 3 {
+				m.CheckStorage(s)
+			}
+			original := *testRequireActiveAlert(t, m, id)
+			s.Status = status
+			s.Total, s.Used, s.Free, s.Usage = 1000, 990, 10, 99
+			for range 5 {
+				m.CheckStorage(s)
+			}
+			active := testRequireActiveAlert(t, m, id)
+			if !active.StartTime.Equal(original.StartTime) || m.GetResolvedAlert(id) != nil {
+				t.Fatal("unknown connectivity changed the incident")
+			}
+			testRequireActiveAlert(t, m, canonicalMetricStateID(s.ID, "usage"))
+			s.Status = "available"
+			for range offlineRecoveryConfirmationsStorage {
+				m.CheckStorage(s)
+			}
+			if testHasActiveAlert(t, m, id) || m.GetResolvedAlert(id) == nil {
+				t.Fatal("confirmed available storage did not recover")
+			}
+		})
+	}
+}
+
+func TestStorageKnownConnectivityRecoveryCompatibility(t *testing.T) {
+	// Inactive shared storage and disabled storage are intentionally not
+	// connectivity failures; retain the existing treatment of these statuses.
+	for _, status := range []string{"available", "online", "active", "inactive", "disabled"} {
+		t.Run(status, func(t *testing.T) {
+			m := newTestManager(t)
+			s := models.Storage{ID: "storage-known", Name: "backups", Status: " OFFLINE "}
+			id := canonicalConnectivityStateID(s.ID)
+			for range 3 {
+				m.CheckStorage(s)
+			}
+			testRequireActiveAlert(t, m, id)
+			s.Status = status
+			for range offlineRecoveryConfirmationsStorage {
+				m.CheckStorage(s)
+			}
+			if testHasActiveAlert(t, m, id) || m.GetResolvedAlert(id) == nil {
+				t.Fatal("known non-failing status did not recover")
+			}
+		})
+	}
+}

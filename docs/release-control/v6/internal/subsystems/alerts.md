@@ -1390,6 +1390,16 @@ health checks, and storage offline lifecycle handling; future storage alert
 behavior should extend that resource checker owner while shared storage-health
 assessment helpers remain package-level until host and storage health paths are
 separated cleanly.
+Storage connectivity status is trimmed and case-normalised before evaluation.
+Empty or `unknown` status is absent connectivity evidence: it must not advance
+recovery or replace an existing incident's identity/start time. Capacity and
+pool-health evaluation remain independent and may still use valid observations.
+The existing non-failing treatment of available, online, active, inactive and
+disabled statuses remains unchanged; explicit connectivity-disable policy still
+clears the incident. `TestStorageUnknownConnectivityDoesNotRecover` and
+`TestStorageKnownConnectivityRecoveryCompatibility` in
+`internal/alerts/alerts_test.go` pin unknown-observation preservation, independent
+capacity activation, normalised offline activation and confirmed recovery.
 Proxmox node alert evaluation now lives in `internal/alerts/node.go`. That file
 owns node metric and temperature projection, node offline lifecycle handling,
 host-agent deduplication bookkeeping, and instance-scoped node display-name

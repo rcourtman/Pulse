@@ -73,6 +73,7 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 
 	// Check if storage is truly offline/unavailable (not just inactive from other nodes)
 	// Note: In a cluster, local storage from other nodes shows as inactive which is normal
+	connectivityStatus := strings.ToLower(strings.TrimSpace(storage.Status))
 	if thresholds.DisableConnectivity {
 		m.mu.Lock()
 		for _, resourceID := range resourceIDs {
@@ -82,12 +83,14 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 		for _, resourceID := range resourceIDs {
 			m.clearAlert(canonicalConnectivityStateID(resourceID))
 		}
-	} else if storage.Status == "offline" || storage.Status == "unavailable" {
+	} else if connectivityStatus == "offline" || connectivityStatus == "unavailable" {
 		m.checkStorageOffline(storage)
-	} else {
+	} else if connectivityStatus != "" && connectivityStatus != "unknown" {
 		// Clear any existing offline alert if storage is back online
 		m.clearStorageOfflineAlert(storage)
 	}
+	// Missing connectivity evidence must not count as a healthy observation.
+	// Capacity and pool health below remain independently observable.
 
 	// Check usage if storage has valid data (even if not currently active on this node)
 	// In clusters, storage may show as inactive on nodes where it's not currently mounted
