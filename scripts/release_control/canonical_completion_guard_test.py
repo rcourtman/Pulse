@@ -1321,6 +1321,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/types/api.ts",
                         "internal/api/action_runner_credentials_test.go",
+                        "internal/api/ai_handlers_investigation_additional_test.go",
                         "internal/api/ai_handlers_more_test.go",
                         "internal/api/ai_handlers_patrol_actions_additional_test.go",
                         "internal/api/alerting/external_probe_notifications_test.go",

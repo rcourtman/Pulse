@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,62 @@ import (
 	"testing"
 	"time"
 )
+
+func TestWaitForResourcesMatchingIncludesLaterPages(t *testing.T) {
+	var pages []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/resources" || r.URL.Query().Get("limit") != "100" {
+			t.Errorf("unexpected resource request: %s", r.URL)
+		}
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		resources := make([]Resource, 0, 100)
+		switch page {
+		case "1":
+			for i := 0; i < 100; i++ {
+				resources = append(resources, Resource{ID: fmt.Sprintf("control-%d", i), Name: fmt.Sprintf("control-%d", i)})
+			}
+		case "2":
+			resources = append(resources, Resource{ID: "storage", Name: "worker", Docker: &DockerResource{Health: "unhealthy"}})
+		default:
+			t.Errorf("unexpected page: %q", page)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": resources, "meta": map[string]int{"totalPages": 2}})
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resources, err := client.WaitForResourcesMatching(context.Background(), map[string]string{"service": "worker"}, time.Second, time.Millisecond, func(resources map[string]Resource) error {
+		if resources["service"].Docker.Health != "unhealthy" {
+			return errors.New("fault not collected")
+		}
+		return nil
+	})
+	if err != nil || resources["service"].ID != "storage" || strings.Join(pages, ",") != "1,2" {
+		t.Fatalf("resources=%v pages=%v err=%v", resources, pages, err)
+	}
+}
+
+func TestResourcesDoesNotReturnPartialInventoryWhenLaterPageFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "1" {
+			_, _ = w.Write([]byte(`{"data":[{"id":"first"}],"meta":{"totalPages":2}}`))
+			return
+		}
+		http.Error(w, "resource inventory unavailable", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resources, err := client.Resources(context.Background())
+	if err == nil || resources != nil {
+		t.Fatalf("incomplete inventory returned: resources=%v err=%v", resources, err)
+	}
+}
 
 func TestTriggerAndWaitAssociatesExactNewScopedRun(t *testing.T) {
 	var triggered atomic.Bool

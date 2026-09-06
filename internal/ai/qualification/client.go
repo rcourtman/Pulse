@@ -534,11 +534,25 @@ func validatePatrolRoute(expected string, settings AISettings, status PatrolStat
 }
 
 func (c *PulseClient) Resources(ctx context.Context) ([]Resource, error) {
-	var response struct {
-		Data []Resource `json:"data"`
+	var resources []Resource
+	for page := 1; ; page++ {
+		var response struct {
+			Data []Resource `json:"data"`
+			Meta struct {
+				TotalPages int `json:"totalPages"`
+			} `json:"meta"`
+		}
+		// The resource API caps each page at 100 regardless of the requested
+		// limit. Follow its pagination so later resources can converge too.
+		path := fmt.Sprintf("/api/resources?limit=100&page=%d", page)
+		if err := c.request(ctx, http.MethodGet, path, nil, &response); err != nil {
+			return nil, err
+		}
+		resources = append(resources, response.Data...)
+		if page >= response.Meta.TotalPages {
+			return resources, nil
+		}
 	}
-	err := c.request(ctx, http.MethodGet, "/api/resources?limit=1000", nil, &response)
-	return response.Data, err
 }
 
 func (c *PulseClient) WaitForResources(ctx context.Context, names map[string]string, timeout, poll time.Duration) (map[string]Resource, error) {

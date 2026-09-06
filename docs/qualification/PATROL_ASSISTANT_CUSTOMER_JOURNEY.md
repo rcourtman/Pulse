@@ -2159,3 +2159,99 @@ reporting agent is untouched. Any agent enrollment must use the canonical scoped
 installation flow, preserve explicit identity and revoke temporary execution
 access after qualification. Detection success does not satisfy this prerequisite
 or the remaining backup and independent-environment cases.
+
+
+## Installed agent and governed action qualification, 2026-09-06
+
+The maintainer explicitly approved a temporary update and scoped command token
+for Tower's separate development agent, followed by restoration. The installed
+agent artifact was `ae2ed8b97709ec6e71af979c293ca9d3634662767ec1b59629baf4933c90cf5d`.
+Both host and Docker modules reported running, and the command connection
+registered the same agent identity. The production agent retained PID 752388.
+The tests used Ask first with manual triggers. Scheduled Patrol ended paused in
+Watch only. No autonomous-mode qualification is claimed.
+
+The first installed storage attempt, `q-20260906-192435-f0d7eebf`, failed before
+inference. Inspection established a qualification-client pagination defect:
+`/api/resources?limit=1000` returned a maximum of 100 records from an inventory
+of 104, leaving the exact worker on page two. This was not an absence of normal
+collection. The client now follows the API pages and rejects partial results
+when a later page fails. A regression finds an unhealthy resource beyond the
+first 100, and the complete qualification package passes. Fault oracles and
+score thresholds were not weakened. The corrected runner hash is
+`a27f9ab0bf4786b670db3e8a989e974c8c43c5084d9524474ee694735d2e7df9`.
+
+| Case / run | Automated result | Reviewed outcome |
+|---|---|---|
+| Approved restart, `q-20260906-193013-12d25545` | Pass | Correct unhealthy container, exact finding/investigation/resource and plan-hash binding, explicit approval before execution, completed restart, independent healthy/running readback and lifecycle verification. Detection 8.893s, fault-to-remediation phase total 78.490s. |
+| Rejected restart, `q-20260906-193207-7095dad5` | Pass | Exact plan rejected, no restart, independent unchanged unhealthy fault until teardown. Detection 10.838s, fault-to-decision phase total 37.795s. |
+| Storage, `q-20260906-193613-556ef23d` | Pass from existing scorecard | **Fails semantic diagnosis review.** Collection converged and logs exposed ENOSPC, but the model incorrectly asserted that Tower was out of disk space and implicated its array. Only an 8 MiB container tmpfs was exhausted. |
+
+The approved action is `act_dcc3b52e5451810e49466daf9a6fccb0`, linked to finding
+`566515f71129ce73` and investigation `aae05717-c9b0-4aac-8439-ba78f46c28e9`.
+The rejected action is `act_ee0b736f0430e472e896a456ba3cb6eb`, linked to finding
+`a17940552206e1ca` and investigation `955f4f47-0b6f-404b-b513-70a1d226f111`.
+Each case passed independent teardown, second-cleanup no-op and restored
+inventory. Per-case detection estimates were $0.012123, $0.012283 and $0.014915.
+These exclude investigation calls and are not provider-account spend.
+
+Storage remains unqualified. The model had the collected tmpfs mount and its
+configured size. Its canonical-resource log call failed, the fallback host and
+container log call succeeded, and its `df -h` command required approval. It then
+promoted unrelated host/array warnings into a definite capacity diagnosis.
+The scorecard's required terms and narrow forbidden phrases missed that false
+claim. Its raw pass is retained as evidence of a qualification limitation, not
+accepted as product success. The next storage slice needs canonical, authorized
+filesystem-capacity evidence and explicit semantic review against the bounded
+fault. Do not permit arbitrary commands merely to make that case pass, add a
+benchmark-specific diagnosis rule, or treat identifier/phrase matches as proof
+of causal correctness. Backup coverage and independent Pro environments remain
+unqualified as well.
+
+Real outcome review exposed stale durable records: the finding and investigation
+could say `fix_verified` while the embedded product record still said
+`fix_queued`. Action reconciliation now refreshes that record through the same
+canonical builder used at investigation completion, preserving original model
+prose, evidence and retained rollback. Read-time hydration repairs existing
+records even when the top-level outcome already matches. Unchanged hydration
+must not republish state or repeat outcome notifications. Resolved findings keep
+their exact action-history link, and Assistant handoff preserves resolved status.
+Investigation completion replaces an earlier partial action projection with its
+final evidence. Subsequent action transitions preserve that completed evidence,
+including impact and confidence that the current finding may no longer retain.
+An intermediate proof build exposed that loss of retained impact. The regression
+now preserves it, while already absent historical fields remain unassessed.
+Final runtime and browser verification of these corrections is recorded below.
+
+After qualification, both original development binaries were restored separately
+because they differed: runtime `e5a2b60e52e35c37f68daa348c642757b56a64b40ca1d72f4db843ce69eb5db4`,
+persistent `73c224dfd750c41b2cbd883c3ce7e352071862bc6a60e59fe6ed4dd3de312bc6`.
+The original protected token was restored, temporary issued tokens were revoked
+and checked absent, temporary backups were removed after comparison, and no
+owned fault containers remained. The restored v6.2.0-rc.8 development agent
+reported fresh telemetry. Its original token lacks command scope, so its command
+connection is again absent by design. Production PID 752388 remained unchanged.
+
+Final action-history proof uses Pro Darwin arm64 binary
+`859d5d2de84cfd2264caa7dbcf5f080e3b1d06b5876df2c81dc0e00872f5e779`.
+Worker proof passes the API action reconciliation selection and investigation,
+record, rollback and early-projection completion regressions. The full API suite
+passed in 310.353s before the final evidence-preservation refinement, followed
+by the final targeted regressions. The three affected action component suites
+pass 30 tests. The complete qualification package and pagination regressions
+also pass. The exact final staged hook gates landing.
+
+Playwright exercises `/patrol` Activity/All and both exact `/actions?action=...`
+links above at 1440, 900 and 390 by 1000. Final-content checks cover resolved
+record retention, outcome agreement, safety disclosure, completed/rejected
+headers, planning-time copy, absent settled execution controls, independent
+verification, policy/evidence/delivery disclosures, keyboard toggles, Escape,
+close controls, deep-link reload, scroll fit and retained review focus. Actual
+pixels were inspected at desktop, intermediate and phone sizes. Assistant
+handoff opens the same finding with completed/rejected context and read-only
+control. Provider readiness POST was deliberately blocked during that rendering
+proof and no prompt was sent. Earlier browser attempts encountered an
+intermittent bootstrap connection screen. The complete final matrix passed
+after removing redundant immediate navigations from the proof driver, without
+claiming a bootstrap fix. Source bindings are in
+`frontend-modern/browser-verification.json`.

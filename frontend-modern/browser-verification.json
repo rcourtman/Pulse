@@ -1,29 +1,21 @@
 {
   "version": 1,
-  "base_sha": "b0b39f00dc6685ad9ed63e8a6e91b954338073e4",
-  "verified_at": "2026-09-06T18:44:39.842657Z",
+  "base_sha": "57ead19484c49d003287309d0734875405da9040",
+  "verified_at": "2026-09-06T20:11:45.553223Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/patrol.ts",
     "frontend-modern/src/components/AI/FindingsPanel.tsx",
-    "frontend-modern/src/components/Login.tsx",
-    "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
-    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
-    "frontend-modern/src/useAppRuntimeState.ts",
-    "frontend-modern/src/utils/aiFindingPresentation.ts",
-    "frontend-modern/src/utils/localStorage.ts"
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrol.ts": "3e5bec5d29d9218450c3fb5b531fd17652759c325e049bde497e3fb96544a622",
-    "frontend-modern/src/components/AI/FindingsPanel.tsx": "1063492593361f29a88109641d76fc2492027cd23b470452dfa4f437fa325700",
-    "frontend-modern/src/components/Login.tsx": "621f0b97d775aacaa521a3c72ed02db3fde5ad3eda06d55950a32107723eb44c",
-    "frontend-modern/src/components/patrol/InvestigationMessages.tsx": "4518f4755ff3d7dcdd0d8030372011e3481726db27ef695a9afc1d4ea6af3976",
-    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "32669694f6dc959c3c3684f17a4ecb4c3d9411f7fc2ae20f1192d68b1d87e52b",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "1e52d00e61fb6affb9365cee74eb6820135d1d6d8a20161d02499ab3d6084da5",
-    "frontend-modern/src/useAppRuntimeState.ts": "5a1d343d92c441e1302dab129be7256dd9a287c6a60fb0e17c6f9fa13fe20900",
-    "frontend-modern/src/utils/aiFindingPresentation.ts": "c716d8b61501acec2bfde253febd4ddce6e9dfee9eef77a3230a2512326dfd7c",
-    "frontend-modern/src/utils/localStorage.ts": "182ed45685228781fd32725db50611b1115f9ee4fb1af23aeedcf41ca707bdbc"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "f506a26757b4c0ea3adf3f77af10214bfd31578b7122d3904a9b3a7272d1e146",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "6a18d67d5d3d0a8335589bdf199c340eb4775aea3442dc094971d7f924a0dcc5",
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "2f1fd68ec333e7f9e8792d74ba8d7e6a2e95755c82b9c7121d847469a31f931b",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "49e12cfd44686bd657ddddfb167c5956ec693b6f5d45d9d43c1e3a2e858a6c7f",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "64d0b891e7ad228e8590da859dc25e825b6164c8cf76a01983a219d6cd079b23"
   },
   "backend_content_sha256": {
     "internal/agentcapabilities/transcript.go": "356c4ca201470407988ff9b2c1fb848619ed38e9d8db844e7390adce0f93ec19",
@@ -32,18 +24,22 @@
     "internal/api/chat_service_adapter.go": "6d0ab14456b1901c5020a408de95796ece1aa8d1057dd58737ea2637777d6ccb",
     "internal/ai/cost/pricing.go": "7b64bc881311ee0a7c1c8a319fcd162974f5a307ced1679e614ff20ac1ac532c",
     "internal/ai/tools/tools_query.go": "3e074b204a8c8c4f8b66eaf147c269a2e57739bfc69d03ea36ee8c47cf8b908a",
-    "internal/ai/tools/tools_propose.go": "43d720c78a010b72f53f7e4e9e1b7b2a763e7f1ac555edb921b7cdca3e82fd51"
+    "internal/ai/tools/tools_propose.go": "43d720c78a010b72f53f7e4e9e1b7b2a763e7f1ac555edb921b7cdca3e82fd51",
+    "internal/ai/patrol_findings.go": "d5eeb386f025cca338ac328b1d4ec7a2bf51150023454e2b61670f196fcf0356",
+    "internal/api/ai_handlers.go": "f8c9b24dc684346da4bddab066540fd43ca4999f5fd379c4dc34b5293f78394c",
+    "internal/api/patrol_action_reconciliation.go": "bc5da1a8050b94271dcdc88841a0ce3329e1773bd01c8746068391a71740ffa2"
   },
   "enterprise_base_sha": "3d9f4e3051d38027355a2a1f36b8c7f672a09b65",
   "enterprise_content_sha256": {
     "internal/investigation/orchestrator.go": "d56fd512dc47f8a2453559e89863da5d24dffc0a5977abb8f1ea7a82655cd9e8"
   },
-  "binary_sha256": "24de8c9ea0020067d298c489f0d99a272b5ec4b00afab7a40dff55aabb244061",
+  "binary_sha256": "859d5d2de84cfd2264caa7dbcf5f080e3b1d06b5876df2c81dc0e00872f5e779",
   "routes": [
-    "/patrol",
-    "/settings/pulse-intelligence/patrol",
-    "/settings/pulse-intelligence/provider",
-    "/"
+    "/qualification (isolated Overview component on :5199)",
+    "/patrol (Activity, All history)",
+    "/actions?action=act_dcc3b52e5451810e49466daf9a6fccb0",
+    "/actions?action=act_ee0b736f0430e472e896a456ba3cb6eb",
+    "Pulse Assistant contextual panel from resolved Patrol findings"
   ],
   "viewports": [
     {
@@ -60,15 +56,14 @@
     }
   ],
   "states": [
-    "Live successful dependency diagnosis renders sanitized headings once, with distinct summaries retained. Paused history remains interactive and narrow finding controls wrap. Resolution does not infer manual review from an attention outcome.",
-    "Live broker refusal appears once alongside original diagnosis, needs_attention and no action. Historical successful query and failed ACTION_NOT_ALLOWED/NO_AGENT results retain actual input, output and status.",
-    "Controlled GET transcript fixture retains output with absent success status without inventing completion or failure. This proves rendering only.",
-    "Selected exact Gemini 3.8 Flash route, known $0.75/$3.75 rates, readiness for Watch only/Ask first and unassessed autonomous modes survive reload. Provider card read only. Browser interception blocks automatic preflight POST, so provider health was verified separately through the live API.",
-    "Incoming unchanged demo login source rechecked at 1440/390: loading, automatic demo payload, authenticated shell, logout/reload suppression, manual re-entry and rejected-login fallback. GET demo-presentation fixture with authorized local login exchange, no runtime demo configuration mutation."
+    "Incoming merged alert delivery diagnosis ordering: hold older request, add alert to start newer request, render current notifications-disabled state, release older ready response, verify current state and both cards remain. Existing Patrol and login proof is retained in the prior committed receipt and runtime source is unchanged.",
+    "Real persisted approved/verified and rejected findings remain reviewable after resolution. Durable investigation outcome agrees with authoritative action, with original prose retained. No stale Fix Queued status. Exact action links remain available.",
+    "Completed and Rejected action headers, State when planned and Plan expiry copy, inert settled action controls, independently verified recovery and explicit unavailable rollback. Policy, evidence and delivery disclosures expand and collapse.",
+    "Assistant handoff shows the exact finding with completed/rejected action context and Chat: Read-only. Browser provider readiness POST is deliberately blocked, so its visible route error is a rendering check and does not retest the provider. No prompt is submitted."
   ],
   "interactions": [
-    "Activity, Finding options and history, All while Patrol paused. Review via hover/focus and Enter, unique aria-controls target, close returns focus, reopen, nested investigation disclosure open/closed, keyboard Enter/Space tool expansion/collapse and deep output scrolling. Actual desktop/intermediate/mobile pixels inspected after final source changes.",
-    "Patrol model settings and rates/readiness scrolled into view and reloaded at all three widths. No model setting change, action execution or approval request during browser proof.",
-    "Private receipts and interaction matrix under tmp/patrol-gemini-38/browser. Real run q-20260906-182952-6acfb739 remains failed: broker refused disconnected command agent, exact diagnosis retained and cleanup passed. No successful approval or recovery claim."
+    "scripts/check-alert-diagnosis-ordering.mjs passed at 1440, 900 and 390 by 1000. Actual pixels inspected at desktop and narrow sizes. This is scripted component evidence, not proof of installed delivery or recipient receipt. Screenshots in /tmp/pulse-alert-diagnosis-ordering/.",
+    "Final Pro binary and final frontend content exercised in Playwright at 1440, 900 and 390 by 1000. Keyboard open/review, safety disclosure, exact action navigation, direct deep-link reload, policy/evidence/delivery disclosure keyboard toggles, Escape and close-button dismissal, review focus return where retained, Assistant open/close, scrolling and page overflow checks. Desktop/intermediate/phone pixels inspected including deepest evidence and Assistant overlay.",
+    "Private artifacts: tmp/patrol-gemini-38/live-action-browser/. Final complete matrix passed after removing redundant back-to-back full-page navigations from the proof driver. Earlier proof attempts hit an intermittent bootstrap connection screen. No bootstrap fix or general availability claim is made. API writes blocked except login."
   ]
 }

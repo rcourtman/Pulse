@@ -15,6 +15,15 @@
 
 ## Purpose
 
+Action review distinguishes the recorded plan from live or executed facts. The
+shared decision packet labels its state and expiry as planning-time evidence,
+including when opened from a resolved Patrol finding. Potential blast radius
+does not claim every related resource was affected. Actual execution and
+verification remain in the recorded outcome section. The review header uses the
+shared action-state presentation, so rejected actions remain identifiable even
+without an execution receipt. The rejected-state regression and live
+completed/rejected deep-link browser proof cover these historical journeys.
+
 Docker container writable/root layer bytes describe image composition, not
 used/total filesystem capacity, and cannot populate `ResourceMetrics.Disk`.
 Optional valid block-I/O rate pointers preserve measured zero. Missing, negative

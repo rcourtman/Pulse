@@ -2070,18 +2070,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         {/* Inline Approval Section (replaces manual approval JSX) */}
         <Show
           when={
-            finding.status === 'active' &&
-            (finding.investigationOutcome === 'fix_queued' ||
-              finding.investigationOutcome === 'fix_executed' ||
-              finding.investigationOutcome === 'fix_failed' ||
-              finding.investigationOutcome === 'fix_rejected' ||
-              finding.investigationOutcome === 'fix_verified' ||
-              finding.investigationOutcome === 'fix_verification_failed' ||
-              finding.investigationOutcome === 'fix_verification_unknown')
+            finding.investigationOutcome === 'fix_queued' ||
+            finding.investigationOutcome === 'fix_executed' ||
+            finding.investigationOutcome === 'fix_failed' ||
+            finding.investigationOutcome === 'fix_rejected' ||
+            finding.investigationOutcome === 'fix_verified' ||
+            finding.investigationOutcome === 'fix_verification_failed' ||
+            finding.investigationOutcome === 'fix_verification_unknown'
           }
         >
           <ApprovalSection
             findingId={finding.id}
+            findingStatus={finding.status}
             investigationOutcome={finding.investigationOutcome}
             findingTitle={getFindingTitlePresentation(finding).label}
             resourceName={finding.resourceName}

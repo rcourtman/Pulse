@@ -25,6 +25,24 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+Action reconciliation refreshes the durable product investigation record from
+the authoritative session/action even when the finding outcome already matches.
+The same builder owns initial completion and later refresh. Completion replaces
+an early action projection with the final investigation evidence. Later action
+refresh preserves original prose, impact, confidence, evidence and rollback. Unchanged hydration is a no-op, and a
+record-only repair does not repeat outcome notifications. Resolved findings
+retain the canonical action-history link and resolved status in Assistant context.
+Live approved and rejected recovery cases pass, but storage's lexical scorecard
+pass fails semantic review because an exhausted container tmpfs was incorrectly
+attributed to host capacity. Storage and broader product qualification stay open.
+
+The live qualification client follows the canonical resource API's pagination.
+The API caps each page at 100, so a larger requested limit cannot establish a
+complete inventory. A later-page failure returns an error rather than partial
+inventory. Regression proof covers an unhealthy resource beyond the first 100
+and failure while reading a later page. This changes collection coverage, not
+fault oracles, model context policy or outcome scoring.
+
 Stored chat and product history share the result-bearing `TranscriptToolCall`
 contract. API adapters preserve observed output and the explicit success/error
 bit. Only provider-request projections remove those display fields. A failed

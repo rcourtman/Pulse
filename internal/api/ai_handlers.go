@@ -7741,6 +7741,10 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 
 // updateFindingOutcome updates the investigation outcome on a finding
 func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, findingID, outcome string) {
+	h.updateFindingInvestigationOutcome(ctx, orgID, findingID, outcome, nil)
+}
+
+func (h *AISettingsHandler) updateFindingInvestigationOutcome(ctx context.Context, orgID, findingID, outcome string, investigation *ai.InvestigationSession) {
 	// Get AI service for this org
 	svc := h.GetAIService(ctx)
 	if svc == nil {
@@ -7759,15 +7763,20 @@ func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, fin
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for finding update")
 		return
 	}
-	if existing := findingsStore.Get(findingID); existing != nil && existing.InvestigationOutcome == outcome {
+	existing := findingsStore.Get(findingID)
+	if existing == nil {
 		return
 	}
-
-	if !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
+	outcomeChanged := existing.InvestigationOutcome != outcome
+	if outcomeChanged && !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
 		log.Warn().Str("findingID", findingID).Msg("Finding not found for outcome update")
 		return
 	}
-	patrol.PublishFindingLifecycleUpdate(findingID)
+	recordChanged := investigation != nil && patrol.RefreshFindingInvestigationRecord(findingID, investigation)
+	if !outcomeChanged && !recordChanged {
+		return
+	}
+	patrol.PublishFindingLifecycleUpdate(findingID, outcomeChanged)
 
 	log.Info().Str("findingID", findingID).Str("outcome", outcome).Msg("Updated finding investigation outcome")
 }

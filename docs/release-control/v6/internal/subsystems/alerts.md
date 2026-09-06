@@ -15,6 +15,15 @@
 
 ## Purpose
 
+Overview delivery diagnoses use latest-started refresh ownership. Older bulk
+responses cannot overwrite newer card notification status, and an empty active
+alert set invalidates outstanding reads. Disposal also prevents updates. Failed
+refreshes retain the existing snapshot; this ordering repair does not add a
+freshness indicator or establish recipient receipt. Verify response overlap in
+`OverviewTab.deliverystatus.test.tsx`, empty-set invalidation in
+`useAlertOverviewState.test.tsx`, and rendered ordering at three widths using
+`scripts/check-alert-diagnosis-ordering.mjs`.
+
 Delivery-attempt and held-event reads in Destinations use latest-started
 refresh ownership. A delayed mount response must not overwrite evidence from
 configuration Retry or a queue-action refresh, including a newer unavailable

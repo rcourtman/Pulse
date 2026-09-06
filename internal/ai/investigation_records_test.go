@@ -204,3 +204,25 @@ func TestFindingsStore_UpdateInvestigationRecord(t *testing.T) {
 		t.Fatal("expected false for missing finding")
 	}
 }
+
+func TestPatrolInvestigationCompletionReplacesEarlyActionProjection(t *testing.T) {
+	store := NewFindingsStore()
+	store.Add(&Finding{ID: "finding-1", ResourceID: "vm-100", Title: "High CPU", DetectedAt: time.Now()})
+	patrol := &PatrolService{findings: store}
+	session := &InvestigationSession{ID: "investigation-1", FindingID: "finding-1", Summary: "Investigation in progress"}
+	if !patrol.RefreshFindingInvestigationRecord("finding-1", session) {
+		t.Fatal("early action projection was not recorded")
+	}
+	completed := time.Now()
+	session.Status = aicontracts.InvestigationStatusCompleted
+	session.CompletedAt = &completed
+	session.Summary = "Final diagnosis supported by the completed reads"
+	session.EvidenceIDs = []string{"final-evidence"}
+	if !patrol.storeFindingInvestigationRecord("finding-1", session, false) {
+		t.Fatal("completed investigation did not replace its early projection")
+	}
+	record := store.Get("finding-1").InvestigationRecord
+	if record.Conclusion != session.Summary || record.CompletedAt == nil || len(record.Evidence) != 1 || record.Evidence[0].ID != "final-evidence" {
+		t.Fatalf("completed evidence was lost: %#v", record)
+	}
+}

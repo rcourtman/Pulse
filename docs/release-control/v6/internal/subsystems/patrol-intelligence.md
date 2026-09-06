@@ -15,6 +15,16 @@
 
 ## Purpose
 
+Action reconciliation refreshes the durable product investigation record from
+the authoritative session/action even when the finding outcome already matches.
+The same builder owns initial completion and later refresh. Original prose,
+evidence and retained rollback survive. Unchanged hydration is a no-op, and a
+record-only repair does not repeat outcome notifications. Resolved findings
+retain the canonical action-history link and resolved status in Assistant context.
+Live approved and rejected recovery cases pass, but storage's lexical scorecard
+pass fails semantic review because an exhausted container tmpfs was incorrectly
+attributed to host capacity. Storage and broader product qualification stay open.
+
 Pausing the Patrol schedule does not disable investigation history review.
 The finding review control owns one detail target and regains keyboard focus on
 close. Investigation conclusions use sanitized Markdown, deduplicate identical
