@@ -113,10 +113,7 @@ describe('useNotificationDeliveryLog', () => {
       }
     }));
 
-  // Known defect: mount and queue-action refreshes can overlap. Keep the
-  // desired invariant executable until the governed runtime repair lands;
-  // Vitest fails these tests if the invariant starts passing unexpectedly.
-  it.fails('keeps the newest successful read when an older read fails', () =>
+  it('keeps the newest successful read when an older read fails', () =>
     createRoot(async (dispose) => {
       const older = deferred<NotificationDeliveryLog>();
       vi.mocked(NotificationsAPI.getDeliveryLog)
@@ -135,7 +132,7 @@ describe('useNotificationDeliveryLog', () => {
       }
     }));
 
-  it.fails('does not replace a newer unavailable result with an older success', () =>
+  it('does not replace a newer unavailable result with an older success', () =>
     createRoot(async (dispose) => {
       const older = deferred<NotificationDeliveryLog>();
       vi.mocked(NotificationsAPI.getDeliveryLog)
@@ -154,7 +151,7 @@ describe('useNotificationDeliveryLog', () => {
       }
     }));
 
-  it.fails('keeps refreshing true while the newest read remains pending', () =>
+  it('keeps refreshing true while the newest read remains pending', () =>
     createRoot(async (dispose) => {
       const older = deferred<NotificationDeliveryLog>();
       const newer = deferred<NotificationDeliveryLog>();
@@ -175,4 +172,69 @@ describe('useNotificationDeliveryLog', () => {
       }
     }));
 
+  it.each(['success', 'failure'])('ignores an older held-event %s after a newer read', (outcome) =>
+    createRoot(async (dispose) => {
+      const older = deferred<Awaited<ReturnType<typeof AlertsAPI.getEvents>>>();
+      const current = [
+        {
+          id: 2,
+          type: 'notification_deferred',
+          alertId: 'current',
+          occurredAt: '2026-09-06T08:00:00Z',
+        },
+      ];
+      vi.mocked(AlertsAPI.getEvents)
+        .mockReturnValueOnce(older.promise)
+        .mockResolvedValueOnce(current);
+      vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue(emptyLog);
+      const state = useNotificationDeliveryLog();
+      try {
+        await state.loadDeliveryLog();
+        await state.loadDeliveryLog();
+        if (outcome === 'success') older.resolve([]);
+        else older.reject(new Error('stale held read'));
+        await Promise.resolve();
+        expect(state.heldEvents()).toEqual(current);
+      } finally {
+        dispose();
+      }
+    }),
+  );
+
+  it.each(['success', 'failure'])(
+    'ignores pending %s after disposal and starts no new reads',
+    (outcome) =>
+      createRoot(async (dispose) => {
+        const log = deferred<NotificationDeliveryLog>();
+        const held = deferred<Awaited<ReturnType<typeof AlertsAPI.getEvents>>>();
+        vi.mocked(NotificationsAPI.getDeliveryLog).mockReturnValue(log.promise);
+        vi.mocked(AlertsAPI.getEvents).mockReturnValue(held.promise);
+        const state = useNotificationDeliveryLog();
+        const pending = state.loadDeliveryLog();
+        dispose();
+        if (outcome === 'success') {
+          log.resolve(emptyLog);
+          held.resolve([
+            {
+              id: 1,
+              type: 'notification_suppressed',
+              alertId: 'late',
+              occurredAt: '2026-09-06T08:00:00Z',
+            },
+          ]);
+        } else {
+          log.reject(new Error('late log'));
+          held.reject(new Error('late held'));
+        }
+        await pending;
+        await state.loadDeliveryLog();
+        expect(state.deliveryLog()).toBeNull();
+        expect(state.deliveryLogUnavailable()).toBe(false);
+        expect(state.heldEvents()).toEqual([]);
+        // Disposal freezes state, including loading; no abandoned completion owns it.
+        expect(state.refreshingDeliveryLog()).toBe(true);
+        expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1);
+        expect(AlertsAPI.getEvents).toHaveBeenCalledTimes(1);
+      }),
+  );
 });

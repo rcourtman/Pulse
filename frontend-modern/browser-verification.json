@@ -1,22 +1,16 @@
 {
   "version": 1,
-  "base_sha": "61607333cc9e2fe1c1712b94ce458ac45abdabd1",
-  "verified_at": "2026-09-06T03:17:28.710286Z",
+  "base_sha": "9761e5e91457a2d007542ff61074db9ddcc427e7",
+  "verified_at": "2026-09-06T09:19:36.187652Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
-    "frontend-modern/src/features/alerts/OverviewTab.tsx",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "dad60838804e575c0314398b304bda6d2fbd842cb2f693b3f33d168a4bce5dc1",
-    "frontend-modern/src/features/alerts/OverviewTab.tsx": "8f7fdc04bd0546f86152c8bb392ff3e3fb755f1f0a1c28d1ee85da3e9fe23582",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "1eadf6df30b4f1130f868b8f139561ea60fdb87e1823deeeaaf2f8fbc699a00c"
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "be919497714d749fcbe9a48a325aa82282b7afa8d6866d84eb1cc09ab52c14a6"
   },
   "routes": [
-    "/qualification (actual delivery-health and Overview components in isolated Solid Router fixtures, scripted API promises)",
-    "/patrol",
-    "/alerts"
+    "/qualification (real Destinations state hook and delivery-log card, scripted APIs; not full DestinationsTab)"
   ],
   "viewports": [
     {
@@ -24,34 +18,16 @@
       "height": 900
     },
     {
-      "width": 900,
-      "height": 900
-    },
-    {
       "width": 390,
       "height": 900
-    },
-    {
-      "width": 1440,
-      "height": 1000
-    },
-    {
-      "width": 900,
-      "height": 1000
-    },
-    {
-      "width": 390,
-      "height": 1000
     }
   ],
   "states": [
-    "Delivery ordering: 18 scripted cases at three widths. Overview refresh: 12 scripted cases across light/dark themes and three widths. Unavailable health, retained Retry/Dismiss actions, pending disabled Refresh and healthy recovery. These fixtures do not qualify installed backend delivery or recipient outcomes.",
-    "Final card pixels inspected at desktop, intermediate and narrow widths in both themes. Heading is readable and actions wrap within the card. This is a focused card check, not a full dark-theme shell audit.",
-    "Ordinary and alert-mirrored Patrol findings preserve unknown cause and failed-read evidence in the investigation transcript and linked Assistant. Scripted responses qualify presentation and context preservation, not diagnostic competence."
+    "Four cases preserve current attempt and held-event rows after stale success/failure; two cases retain disabled refresh while latest read is pending and show unavailable after latest failure. Held-event pending does not block attempt refresh."
   ],
   "interactions": [
-    "Retry and Dismiss followed by failed health read, manual Refresh while pending, healthy recovery and overlapping old/new response ordering. Geometry assertions check heading overflow and control bounds.",
-    "Selected issue, evidence expansion, keyboard Review and Explain, nested transcript expansion/collapse, Assistant streaming, preserved draft, reload, error/retry, menu Escape and outside dismissal at 1440/900/390 widths.",
-    "Private receipts: /Volumes/Development/pulse/tmp/patrol-merge-browser/final-health-ordering and final-overview-refresh, and tmp/patrol-assistant-journey/result.json. No infrastructure mutations or autonomous provider calls."
+    "Registered mount read, fixture Configuration Retry invoking real handleRetry, scripted out-of-order attempt and held-event completion. Six Chromium cases passed via pulse-heavy-run -- node scripts/check-delivery-log-ordering.mjs.",
+    "Inspected 390-error.png and 1440-pending-unavailable.png: current attempt and held rows visible on narrow layout; unavailable warning visible at desktop. Synthetic component fixture only, no backend or independent-recipient qualification.",
+    "Evidence: queue/staging/20260906T091009Z-web-product/evidence/browser.log and screenshots under /var/lib/pulse-maintainer."
   ]
 }

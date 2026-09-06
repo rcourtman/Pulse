@@ -15,6 +15,17 @@
 
 ## Purpose
 
+Delivery-attempt and held-event reads in Destinations use latest-started
+refresh ownership. A delayed mount response must not overwrite evidence from
+configuration Retry or a queue-action refresh, including a newer unavailable
+result. Attempt loading reflects only the latest attempt request; held events
+remain independently asynchronous. Scope disposal abandons both reads.
+Verification: ordinary overlap, held-event and disposal cases in
+`useNotificationDeliveryLog.test.tsx`, registered mount/Retry coverage in
+`useAlertDestinationsTabState.test.tsx`, and positive rendered-content assertions
+in `scripts/check-delivery-log-ordering.mjs`. Scripted browser evidence is not
+proof of backend delivery or receipt by an independent recipient.
+
 The shared delivery-health card wraps action groups according to available
 space, retaining readable explanation width when Review, Retry, Dismiss and
 Refresh appear together. Its heading uses the opaque semantic foreground,
