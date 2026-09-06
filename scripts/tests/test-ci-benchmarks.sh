@@ -10,6 +10,10 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 mkdir -p "${WORK_DIR}/bin" "${WORK_DIR}/candidate" "${WORK_DIR}/baseline"
 cat > "${WORK_DIR}/bin/go" <<'EOF'
 #!/usr/bin/env bash
+if [[ "$*" == version ]]; then
+  echo 'go version go1.26.7 linux/amd64'
+  exit 0
+fi
 printf '%s\t%s\n' "$PWD" "$*" >> "${FAKE_GO_LOG}"
 cat <<'RESULT'
 goos: linux
@@ -44,6 +48,37 @@ mapfile -t calls < "${WORK_DIR}/go.log"
 [[ "${calls[3]}" == "${WORK_DIR}/candidate"$'\t'* ]]
 [[ "${calls[4]}" == "${WORK_DIR}/candidate"$'\t'* ]]
 [[ "${calls[5]}" == "${WORK_DIR}/baseline"$'\t'* ]]
+
+metadata="${WORK_DIR}/candidate/bench-metadata.txt"
+grep -qFx 'samples=2' "${metadata}"
+grep -qFx 'benchtime=100ms' "${metadata}"
+grep -qFx 'candidate.commit=unavailable' "${metadata}"
+grep -qFx 'baseline.go=go version go1.26.7 linux/amd64' "${metadata}"
+[[ "$(grep -c '^sample=' "${metadata}")" == 4 ]]
+! grep -qF "${WORK_DIR}" "${metadata}"
+
+# Real Git roots retain exact identities; a repeated run replaces old metadata.
+for tree in candidate baseline; do
+  git -C "${WORK_DIR}/${tree}" init -q
+  git -C "${WORK_DIR}/${tree}" -c user.name=Test -c user.email=test@example.invalid \
+    commit -qm fixture --allow-empty
+done
+PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+  PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" \
+  PULSE_BENCH_BASELINE_DIR="${WORK_DIR}/baseline" PULSE_BENCH_SAMPLE_COUNT=1 \
+  bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
+grep -qFx "candidate.commit=$(git -C "${WORK_DIR}/candidate" rev-parse HEAD)" "${metadata}"
+grep -qFx "baseline.tree=$(git -C "${WORK_DIR}/baseline" rev-parse 'HEAD^{tree}')" "${metadata}"
+[[ "$(grep -c '^sample=' "${metadata}")" == 2 ]]
+
+# A nested archive has no identity of its own; never attribute its parent's SHA.
+mkdir -p "${WORK_DIR}/candidate/archive"
+PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+  PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate/archive" \
+  PULSE_BENCH_BASELINE_DIR='' PULSE_BENCH_SAMPLE_COUNT=1 \
+  bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
+grep -qFx 'candidate.commit=unavailable' "${WORK_DIR}/candidate/archive/bench-metadata.txt"
+! grep -q '^baseline\.' "${WORK_DIR}/candidate/archive/bench-metadata.txt"
 
 cat > "${WORK_DIR}/adequate.txt" <<'EOF'
 Example-4  100.0n ± 1%  111.0n ± 1%  +11.00% (p=0.001 n=10)

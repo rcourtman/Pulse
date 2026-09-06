@@ -22,6 +22,7 @@ class BenchmarkWorkflowContractTest(unittest.TestCase):
         self.assertNotIn("actions/cache/restore@", benchmark_job)
         self.assertIn("bench-baseline.txt", benchmark_job)
         self.assertIn("bench-comparison.txt", benchmark_job)
+        self.assertIn("bench-metadata.txt", benchmark_job)
 
 
 if __name__ == "__main__":

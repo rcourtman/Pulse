@@ -3681,6 +3681,30 @@ func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
 	}
 }
 
+func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := workflowJobBlock(t, string(content), "benchmarks")
+	start := strings.Index(job, "- name: Upload benchmark evidence")
+	if start < 0 {
+		t.Fatal("missing benchmark evidence upload")
+	}
+	upload := job[start:]
+	for _, required := range []string{
+		"if: always()", "bench-baseline.txt", "bench-results.txt",
+		"bench-comparison.txt", "bench-metadata.txt",
+	} {
+		if !strings.Contains(upload, required) {
+			t.Fatalf("benchmark upload must retain %q even on failure", required)
+		}
+	}
+	if !strings.Contains(job, "bash scripts/check-bench-regression.sh bench-comparison.txt") {
+		t.Fatal("provenance must not replace the benchmark regression gate")
+	}
+}
+
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,
