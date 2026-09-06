@@ -1,34 +1,40 @@
 {
   "version": 1,
-  "base_sha": "89c8e61463d134408caef430b580b53e154e17f4",
-  "verified_at": "2026-09-06T00:31:33.609713Z",
+  "base_sha": "a5caca0d6311f1de18a9e55e26bb4e947895b319",
+  "verified_at": "2026-09-06T11:46:12.688Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
+    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx",
+    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "1eadf6df30b4f1130f868b8f139561ea60fdb87e1823deeeaaf2f8fbc699a00c"
+    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
+    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c"
   },
   "routes": [
-    "/qualification (isolated caller/card fixture, not application routing)"
+    "/qualification/assistant-identity/ (loopback synthetic component fixture, not production routing)"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
     },
     {
       "width": 390,
-      "height": 900
+      "height": 1000
     }
   ],
   "states": [
-    "Real Chromium with current useAlertDestinationsTabState, useNotificationDeliveryHealth and AlertDeliveryHealthCard; scripted API promises and queue actions. No installed backend or provider receipt.",
-    "Older healthy/newer degraded, older degraded/newer healthy, older error/newer healthy, older healthy/newer error. Warning presence and rendered state remain owned by newer request. Desktop and narrow screenshots inspected; this is not a full-shell or accessibility audit."
+    "Real current-checkout useChat and ChatMessages; concurrent invocation identity, sibling approval retention, settled results and shared evidence after workflow row removal. No backend, provider or real actions.",
+    "Desktop approval and narrow expanded-evidence screenshots visually inspected. Transient running rows in streaming approval screenshot are not evidence of complete workflow-status correctness."
   ],
   "interactions": [
-    "pulse-heavy-run -- node scripts/check-delivery-health-ordering.mjs: 12 cases passed.",
-    "Configuration Retry overlaps pending mount health. Resolve newer then older and compare rendered main text and alert presence.",
-    "Retry retained deliveries and Dismiss retained failures each start post-action refresh while another read is pending. Older completion leaves loading true; latest healthy response clears warning. Confirmations and API responses are scripted."
+    "pulse-heavy-run -- node scripts/check-assistant-identity.mjs: all three widths pass; service workers blocked; API/external HTTP aborted and fail the check.",
+    "Independent release-parent useChat substitution fails lost invocation assertion; independent ChatMessages substitution fails with three approval cards instead of two; fixed files restored and final run passes.",
+    "Expand both retained input/output evidence rows; verify their text and absence of document overflow. 167 affected unit tests pass. Source/screenshot hashes: lane 20260906T114016Z-release-line evidence/final/receipt.json."
   ]
 }

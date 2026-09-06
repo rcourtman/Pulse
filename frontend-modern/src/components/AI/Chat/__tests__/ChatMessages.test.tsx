@@ -115,6 +115,79 @@ function setScrollMetrics(
 }
 
 describe('ChatMessages', () => {
+  it('does not mutate shared tool evidence when completed status rows are removed', () => {
+    const a = { name: 'pulse_query', input: 'client', output: 'client evidence', success: true };
+    const b = { name: 'pulse_alerts', input: 'alerts', output: 'alert evidence', success: true };
+    const pendingA = { id: 'a', name: a.name, input: a.input };
+    const pendingB = { id: 'b', name: b.name, input: b.input };
+    const [messages, setMessages] = createSignal<ChatMessage[]>([
+      makeMessage({
+        role: 'assistant',
+        toolCalls: [],
+        streamEvents: [
+          {
+            type: 'workflow_status',
+            workflowStatus: { phase: 'provider_start', message: 'Starting' },
+          },
+          { type: 'pending_tool', toolId: 'a', pendingTool: pendingA },
+          { type: 'pending_tool', toolId: 'b', pendingTool: pendingB },
+        ],
+        pendingTools: [pendingA, pendingB],
+      }),
+    ]);
+    render(() => <ChatMessages messages={messages()} {...makeHandlers()} />);
+    setMessages([
+      makeMessage({
+        role: 'assistant',
+        toolCalls: [a],
+        streamEvents: [
+          {
+            type: 'workflow_status',
+            workflowStatus: { phase: 'provider_start', message: 'Starting' },
+          },
+          { type: 'tool', toolId: 'a', tool: a },
+          { type: 'pending_tool', toolId: 'b', pendingTool: pendingB },
+        ],
+        pendingTools: [pendingB],
+      }),
+    ]);
+    setMessages([
+      makeMessage({
+        role: 'assistant',
+        toolCalls: [a, b],
+        streamEvents: [
+          {
+            type: 'workflow_status',
+            workflowStatus: { phase: 'provider_start', message: 'Starting' },
+          },
+          { type: 'tool', toolId: 'a', tool: a },
+          { type: 'tool', toolId: 'b', tool: b },
+        ],
+        pendingTools: [],
+      }),
+    ]);
+    setMessages([
+      makeMessage({
+        role: 'assistant',
+        toolCalls: [a, b],
+        streamEvents: [
+          { type: 'tool', toolId: 'a', tool: a },
+          { type: 'tool', toolId: 'b', tool: b },
+        ],
+        pendingTools: [],
+      }),
+    ]);
+    expect(a).toEqual({
+      name: 'pulse_query',
+      input: 'client',
+      output: 'client evidence',
+      success: true,
+    });
+    expect(
+      capturedMessageItemProps[0].message.streamEvents?.map((event) => event.tool?.output),
+    ).toEqual(['client evidence', 'alert evidence']);
+  });
+
   describe('empty transcript', () => {
     it('keeps the transcript blank when there are no messages or resume actions', () => {
       const { container } = render(() => <ChatMessages messages={[]} {...makeHandlers()} />);

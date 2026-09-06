@@ -1,5 +1,4 @@
 import { Component, Show, For, createEffect, createMemo, createSignal } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import { Button } from '@/components/shared/Button';
 import { MessageItem } from './MessageItem';
@@ -66,22 +65,13 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   let containerRef: HTMLDivElement | undefined;
   const [isPinnedToBottom, setIsPinnedToBottom] = createSignal(true);
 
-  // useChat hands us a fresh, immutably-rebuilt message array on every stream
-  // event (each content chunk, workflow-status change, tool update spreads a new
-  // message object). Rendering that array directly through <For>, which keys by
-  // object reference, tears down and recreates the whole MessageItem on every
-  // event — the visible flashing / rows popping in and out and the transcript
-  // jumping up and down during a turn.
-  //
-  // Reconcile the incoming array into a keyed store mirror so each message keeps
-  // a stable identity across updates (matched by id). MessageItem already reads
-  // every field through `() => props.message.x` accessors, so once it stops
-  // re-mounting, only the genuinely changed text/rows update in place. This keeps
-  // the streaming transcript stable the way OpenCode's timeline is.
-  const [mirroredMessages, setMirroredMessages] = createStore<ChatMessage[]>([]);
-  createEffect(() => {
-    setMirroredMessages(reconcile(props.messages, { key: 'id', merge: false }));
-  });
+  // Key only the message rows. Deep store reconciliation mutates objects shared
+  // by toolCalls and streamEvents when a status row is removed, corrupting the
+  // source transcript. Read each immutable message through its stable ID instead.
+  const messagesById = createMemo(
+    () => new Map(props.messages.map((message) => [message.id, message])),
+  );
+  const messageIds = createMemo(() => [...messagesById().keys()]);
 
   // Regenerate re-runs the LAST turn via session undo, so only the final
   // assistant answer qualifies, and only once it has settled with nothing
@@ -342,54 +332,58 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
         </Show>
 
         {/* Messages */}
-        <For each={mirroredMessages}>
-          {(message) => {
-            const queuedMeta = createMemo(() => queuedFollowUpMetaByMessageId().get(message.id));
+        <For each={messageIds()}>
+          {(messageId) => {
+            const queuedMeta = createMemo(() => queuedFollowUpMetaByMessageId().get(messageId));
             return (
-              <MessageItem
-                message={message}
-                onApprove={(approval) => props.onApprove(message.id, approval)}
-                onSkip={(toolId) => props.onSkip(message.id, toolId)}
-                onAnswerQuestion={(question, answers) =>
-                  props.onAnswerQuestion(message.id, question, answers)
-                }
-                onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
-                onRetry={props.onRetry}
-                onRegenerate={
-                  message.id === regenerableMessageId()
-                    ? () => props.onRegenerate?.(message.id)
-                    : undefined
-                }
-                onEditPrompt={
-                  message.id === editablePromptMessageId()
-                    ? () => props.onEditPrompt?.(message.id)
-                    : undefined
-                }
-                onChangeModel={props.onChangeModel}
-                getModelRouteLabel={props.getModelRouteLabel}
-                modelRouteAlternative={props.getModelRouteAlternative?.(message)}
-                onUseModelRoute={props.onUseModelRoute}
-                queuedPosition={queuedMeta()?.position}
-                queuedCount={queuedMeta()?.count}
-                queuedPaused={queuedMeta()?.paused}
-                queuedSteering={queuedMeta()?.steering}
-                onEditQueued={
-                  queuedMeta() && !queuedMeta()?.steering && props.onEditQueuedFollowUp
-                    ? () => {
-                        const meta = queuedMeta();
-                        if (meta) props.onEditQueuedFollowUp?.(meta.id);
-                      }
-                    : undefined
-                }
-                onCancelQueued={
-                  queuedMeta() && !queuedMeta()?.steering && props.onCancelQueuedFollowUp
-                    ? () => {
-                        const meta = queuedMeta();
-                        if (meta) props.onCancelQueuedFollowUp?.(meta.id);
-                      }
-                    : undefined
-                }
-              />
+              <Show when={messagesById().get(messageId)}>
+                {(message) => (
+                  <MessageItem
+                    message={message()}
+                    onApprove={(approval) => props.onApprove(messageId, approval)}
+                    onSkip={(toolId) => props.onSkip(messageId, toolId)}
+                    onAnswerQuestion={(question, answers) =>
+                      props.onAnswerQuestion(messageId, question, answers)
+                    }
+                    onSkipQuestion={(questionId) => props.onSkipQuestion(messageId, questionId)}
+                    onRetry={props.onRetry}
+                    onRegenerate={
+                      messageId === regenerableMessageId()
+                        ? () => props.onRegenerate?.(messageId)
+                        : undefined
+                    }
+                    onEditPrompt={
+                      messageId === editablePromptMessageId()
+                        ? () => props.onEditPrompt?.(messageId)
+                        : undefined
+                    }
+                    onChangeModel={props.onChangeModel}
+                    getModelRouteLabel={props.getModelRouteLabel}
+                    modelRouteAlternative={props.getModelRouteAlternative?.(message())}
+                    onUseModelRoute={props.onUseModelRoute}
+                    queuedPosition={queuedMeta()?.position}
+                    queuedCount={queuedMeta()?.count}
+                    queuedPaused={queuedMeta()?.paused}
+                    queuedSteering={queuedMeta()?.steering}
+                    onEditQueued={
+                      queuedMeta() && !queuedMeta()?.steering && props.onEditQueuedFollowUp
+                        ? () => {
+                            const meta = queuedMeta();
+                            if (meta) props.onEditQueuedFollowUp?.(meta.id);
+                          }
+                        : undefined
+                    }
+                    onCancelQueued={
+                      queuedMeta() && !queuedMeta()?.steering && props.onCancelQueuedFollowUp
+                        ? () => {
+                            const meta = queuedMeta();
+                            if (meta) props.onCancelQueuedFollowUp?.(meta.id);
+                          }
+                        : undefined
+                    }
+                  />
+                )}
+              </Show>
             );
           }}
         </For>
