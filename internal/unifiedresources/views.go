@@ -2115,6 +2115,14 @@ func (v PhysicalDiskView) Status() ResourceStatus {
 	return v.r.Status
 }
 
+func (v PhysicalDiskView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
+}
+
 func (v PhysicalDiskView) DevPath() string {
 	if v.r == nil || v.r.PhysicalDisk == nil {
 		return ""

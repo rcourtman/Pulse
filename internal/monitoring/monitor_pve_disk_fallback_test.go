@@ -162,6 +162,9 @@ func TestMaybePollPhysicalDisksAsync_AgentFallbackWhenDiskQueryFails(t *testing.
 			if disk.DevPath != "/dev/sda" || disk.Node != "node1" || disk.Instance != "pve1" {
 				t.Fatalf("unexpected fallback disk identity: %+v", disk)
 			}
+			if disk.ExpectedUpdateInterval != 5*time.Minute {
+				t.Fatalf("default collector cadence lost: %s", disk.ExpectedUpdateInterval)
+			}
 			if disk.Health != "PASSED" || disk.Temperature != 30 {
 				t.Fatalf("unexpected fallback disk data: %+v", disk)
 			}

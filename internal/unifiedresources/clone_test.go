@@ -155,10 +155,13 @@ func TestCloneResource_MutateSourceStatusMap(t *testing.T) {
 	original := &Resource{
 		ID: "r-1",
 		SourceStatus: map[DataSource]SourceStatus{
-			SourceProxmox: {Status: "online"},
+			SourceProxmox: {Status: "online", ExpectedUpdateIntervalSeconds: 300},
 		},
 	}
 	cloned := cloneResource(original)
+	if cloned.SourceStatus[SourceProxmox].ExpectedUpdateIntervalSeconds != 300 {
+		t.Fatal("clone lost collector cadence")
+	}
 
 	cloned.SourceStatus[SourceDocker] = SourceStatus{Status: "online"}
 	if _, exists := original.SourceStatus[SourceDocker]; exists {

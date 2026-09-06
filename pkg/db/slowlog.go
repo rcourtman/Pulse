@@ -245,6 +245,12 @@ func (t *InstrumentedTx) Prepare(query string) (*InstrumentedStmt, error) {
 	return &InstrumentedStmt{Stmt: stmt, name: t.name, query: query}, nil
 }
 
+// Stmt binds a database-level prepared statement to this transaction while
+// retaining the normal statement timing and slow-query instrumentation.
+func (t *InstrumentedTx) Stmt(stmt *InstrumentedStmt) *InstrumentedStmt {
+	return &InstrumentedStmt{Stmt: t.Tx.Stmt(stmt.Stmt), name: t.name, query: stmt.query}
+}
+
 // Commit commits the transaction.
 func (t *InstrumentedTx) Commit() error {
 	start := time.Now()

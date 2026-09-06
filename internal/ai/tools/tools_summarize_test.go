@@ -152,6 +152,9 @@ func TestSummarizeTool_ResourceReturnsHeuristicNarrative(t *testing.T) {
 	if parsed.Scope.Source != "retained_metrics" || parsed.Evidence == nil || len(parsed.Evidence.Metrics) != 0 {
 		t.Fatalf("expected empty retained evidence, got %+v", parsed)
 	}
+	if parsed.Scope.TimeSemantics == "" {
+		t.Fatal("even empty results must disclose the retained timestamp semantics")
+	}
 	for _, field := range []string{"health_status", "health_message", "observations", "recommendations"} {
 		if strings.Contains(res.Content[0].Text, `"`+field+`"`) {
 			t.Fatalf("empty evidence invented %s: %s", field, res.Content[0].Text)

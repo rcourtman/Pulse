@@ -29,10 +29,23 @@ buckets whose stored timestamp lies in the requested window participate. This
 avoids double-counting and prevents observations outside the requested range
 from suppressing evidence inside it. Reconciliation precedes display
 aggregation, which retains the existing unweighted mean and centred display
-bucket timestamp. Single and fleet queries use the same streaming aggregator.
+bucket timestamp. Single-resource charts aggregate in SQLite after reconciliation so only display
+buckets cross into Go. Fleet queries stream ordered observations into bounded
+display buckets without retaining every input point. Both preserve identical
+bucket, mean and extrema semantics, and reuse scan destinations across rows.
 
-The overlap probes use indexed series/time searches in one SQLite statement per
-bounded resource chunk. Query-plan tests exercise the runtime SQL builder,
+Each bounded resource chunk uses one read transaction. Indexed existence checks
+identify which retention tiers have any observations in that snapshot. Every
+present tier participates in the shared indexed overlap query. Presence never
+stands in for per-series coverage. The store retains at most 32 compiled
+presence-statement shapes and evaluates them again inside each read snapshot.
+It never caches tier presence, query results or timestamp windows. Less common
+shapes run uncached after the bound is reached. Preparation occurs before
+acquiring the transaction, including with a single-connection pool. The shared
+database instrumentation preserves timing for transaction-bound prepared
+statements, and database closure owns their lifetime. Empty tiers need no per-observation probe,
+and an all-raw series uses a direct range query. Fixed query dimensions need
+not be decoded again for every returned point. Query-plan tests exercise the runtime SQL builder,
 including all tier priorities and metric filters. Multi-stage rollups preserve
 recorded minima and maxima instead of taking extrema from bucket averages.
 Already discarded historical extrema cannot be reconstructed by this change.

@@ -1183,6 +1183,11 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			Int("diskCount", len(allDisks)).
 			Int("preservedCount", len(existingDisksMap)-len(polledNodes)).
 			Msg("Updating physical disks in state")
+		// Keep the observation timestamp from the last successful read, including
+		// preserved records, and attach the independent collector schedule.
+		for i := range allDisks {
+			allDisks[i].ExpectedUpdateInterval = pollingInterval
+		}
 		m.state.UpdatePhysicalDisks(inst, allDisks)
 	}(instanceName, client, nodes, nodeEffectiveStatus, modelNodes)
 }

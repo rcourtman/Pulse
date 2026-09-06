@@ -127,6 +127,7 @@ func TestIssue1595SASTopologySurvivesMergeRegistryAndReadState(t *testing.T) {
 				},
 				LastChecked: now,
 			}
+			providerDisk.ExpectedUpdateInterval = 15 * time.Minute
 			providerDisks = append(providerDisks, providerDisk)
 
 			want := providerDisk
@@ -191,6 +192,9 @@ func TestIssue1595SASTopologySurvivesMergeRegistryAndReadState(t *testing.T) {
 			t.Fatalf("disk %q metrics target = %q, want serial-stable target", want.Serial, view.MetricResourceID())
 		}
 		readBack := physicalDiskFromReadStateView(view)
+		if readBack.ExpectedUpdateInterval != want.ExpectedUpdateInterval {
+			t.Fatalf("disk cadence lost during canonical roundtrip: %s != %s", readBack.ExpectedUpdateInterval, want.ExpectedUpdateInterval)
+		}
 		assertIssue1595PhysicalDisk(t, readBack, want)
 		if readBack.Collection == nil ||
 			readBack.Collection.Serial.State != diskinventory.FieldAvailable ||

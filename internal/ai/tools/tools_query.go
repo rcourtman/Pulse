@@ -2265,6 +2265,8 @@ func canonicalQueryResourceType(resourceType string) string {
 		return "agent"
 	case "storage-pool":
 		return "storage"
+	case "physical_disk":
+		return "physical-disk"
 	default:
 		return strings.ToLower(strings.TrimSpace(resourceType))
 	}
@@ -3527,17 +3529,19 @@ func canonicalPhysicalDiskHost(resource unifiedresources.Resource) string {
 func physicalDiskSummaryFromResource(resource unifiedresources.Resource) PhysicalDiskSummary {
 	pd := resource.PhysicalDisk
 	summary := PhysicalDiskSummary{
-		ID:          resource.ID,
-		Node:        canonicalPhysicalDiskHost(resource),
-		DevPath:     "",
-		Model:       "",
-		Serial:      "",
-		WWN:         "",
-		Type:        "",
-		SizeBytes:   0,
-		Health:      "",
-		Used:        "",
-		LastChecked: resource.LastSeen,
+		ID:           resource.ID,
+		Node:         canonicalPhysicalDiskHost(resource),
+		DevPath:      "",
+		Model:        "",
+		Serial:       "",
+		WWN:          "",
+		Type:         "",
+		SizeBytes:    0,
+		Health:       "",
+		Status:       resource.Status,
+		SourceStatus: resource.SourceStatus,
+		Used:         "",
+		LastChecked:  resource.LastSeen,
 	}
 	if pd == nil {
 		return summary
@@ -3549,10 +3553,12 @@ func physicalDiskSummaryFromResource(resource unifiedresources.Resource) Physica
 	summary.Type = pd.DiskType
 	summary.SizeBytes = pd.SizeBytes
 	summary.Health = pd.Health
+	summary.Risk = pd.Risk
+	summary.SMART = pd.SMART
 	summary.Used = pd.Used
 	if pd.Wearout >= 0 {
 		wearout := pd.Wearout
-		summary.Wearout = &wearout
+		summary.LifeRemainingPercent = &wearout
 	}
 	if pd.Temperature > 0 {
 		temp := pd.Temperature
@@ -4851,6 +4857,18 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	}
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
+	}
+
+	if resourceType == "physical-disk" {
+		if e.unifiedResourceProvider == nil {
+			return NewErrorResult(fmt.Errorf("physical disk inventory is unavailable")), nil
+		}
+		for _, resource := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			if resource.ID == strings.TrimSpace(resourceID) {
+				return NewJSONResult(physicalDiskSummaryFromResource(resource)), nil
+			}
+		}
+		return NewErrorResult(fmt.Errorf("physical disk %q not found in canonical inventory", resourceID)), nil
 	}
 
 	rs, err := e.readStateForControl()

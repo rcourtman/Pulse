@@ -4,6 +4,105 @@ The customer job is: "Tell me what needs my attention, explain why, and help me
 deal with it without creating more work." Patrol owns the issue and investigation.
 Assistant explains that same issue and uses existing governed action contracts.
 
+## Active redesign plan, 2026-09-05
+
+The maintainer requested a whole-design assessment and an explicit goal to
+complete the resulting plan. The existing customer-outcomes candidate remains
+the active scope under `v6-product-lane-expansion`. This is an architecture and
+qualification effort, not further cosmetic refinement of the current surface.
+
+### Product and architecture decision
+
+Patrol owns proactive investigation of the user's infrastructure and retained
+operating intent. Assistant explains and continues that same issue and its
+existing investigation/action records. An observed signal, model hypothesis,
+proposed action, accepted plan, executed operation and independently verified
+outcome are different facts. No transition may promote one into another merely
+because a tool accepted a structurally valid record.
+
+Keep canonical resource identity, observation provenance, retained evidence,
+operator intent and existing governed action records. Keep permissions, approval,
+mutual exclusion, idempotency, explicit resource/cost limits, execution and
+independent postcondition verification deterministic. Interpretation, relevance,
+causal diagnosis, investigation choices and action judgment belong to the model.
+Every orchestration pass must identify its objective invariant. A pass whose
+purpose is to manufacture or force a diagnosis from proxy counts must be removed
+or replaced with better model context and an explicit model decision.
+
+The design review reproduced a concrete trust violation in
+`internal/ai/chat/agentic_investigation_budget.go`: accepted proposal rationale is
+called an evidence checkpoint, inserted into the final Root Cause section, and
+the completion prompt forbids downgrading it in the reviewed baseline. Acceptance establishes that a
+proposal was recorded, not that its causal claim is true. This mechanism must
+be corrected before the diagnosis/action journey can qualify. The current
+working change removes both insertion paths and the duplicated proposal prompt
+state. A full-service regression now preserves the exact uncertain conclusion in the
+stream, returned result and persisted session after evidence and proposal turns.
+The full live investigation journey remains to be qualified.
+
+### Baseline and measurement limits
+
+The recorded 2026-09-05 telemetry review in the owning coverage gap used latest
+reports from monitoring-active, multi-ping installations, excluding development
+and deployment proof. It contained 127 paid installations, 71 with Patrol enabled
+and 23 with Assistant calls. Fourteen reported verified resolutions came from one
+installation. These are the previously recorded aggregate review, not a fresh
+query made during this redesign. Paid includes all non-free tiers. Cooccurring
+usage does not establish a linked successful task. Schema 17 outcome/provider/cost
+fields had no adoption in that review, so those fields cannot establish present
+customer effectiveness or model cost.
+
+Local live proof has independently exposed lost evidence, incorrect history
+coordinates, premature compaction, unsupported causal claims and roughly
+three-minute interactive investigations. One maintainer installation is useful
+reproduction evidence, not a representative customer success rate.
+
+### Execution order and acceptance
+
+| Step | Work | Acceptance | Current state |
+|---|---|---|---|
+| 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
+| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Full affected package, concurrency and retained-query performance checks pass. Real-model interpretation failures remain tracked in step 5. |
+| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference removed in the working change. Targeted tool, loop and full-service regressions pass. Remaining orchestration audit and live qualification are open. |
+| 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
+| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
+
+Use one shared runtime and the existing qualification runner, not a second
+product intelligence engine or a new parallel lifecycle. Preserve independent
+negative controls and fault oracles. Recorded fixtures prove contracts and
+reproducibility, not live model competence. Do not tune success wording or
+scoring to make the model pass.
+
+### Diagnostic orchestration audit
+
+| Mechanism | Current implementation | Decision for implementation review |
+|---|---|---|
+| Proposal rationale inserted as Root Cause | The reviewed baseline amended the conclusion after acceptance in the agent loop and service. Both mutations are removed in the working change. | Prove uncertain prose survives accepted proposals through stream, persistence and linked Assistant display. Keep the proposal record as an attributed model decision and allow uncertainty in the diagnosis. |
+| Causal-resource validator | Removed the duplicate resource graph and name/status inference from the working capture boundary. Causal attribution is optional when unknown. | Prove capability/schema validation, parameter isolation and invocation integrity remain enforced. Dependency evidence remains available to the model through canonical queries. |
+| Flag-count turn ladder | `computeTriageMaxTurns` grants 5 + 3 turns per flag, bounded to 8–40, with a separate quick limit. | Replace quality/urgency proxies with explicit execution resource limits. More flags must not imply a better investigation budget. |
+| Unmatched-signal evaluation | `runAIAnalysisState` detects signals from tool output and triage, then starts a second model pass when they lack matching findings. | Audit for removal in favour of complete initial evidence and model-owned decisions. Preserve negative-control and missed-fault qualification rather than force reports. |
+| Missing-finding assessment sweep | A bounded continuation requests missing explicit present/resolved/uncertain verdicts for known findings. | Retain only the mechanical completeness obligation, with sufficient original evidence and no fabricated resolution or requirement to discover new issues. |
+| Investigation evidence-call floor | Completion is rejected unless at least one successful structured evidence call occurred. | Audit seed evidence and action freshness separately. A tool count does not prove grounding or quality. Preserve explicit failed/unavailable evidence. |
+| Authority and execution boundaries | Tenant identity, capability schemas, approvals, invocation IDs, parameter redaction and independent readback. | Keep and prove unchanged when diagnostic policy is simplified. These enforce objective invariants. |
+
+This is an audited change list, not a claim that the changes are already made.
+Each removal must run its focused regression and affected complete journey.
+
+### Completion and external dependencies
+
+The local implementation goal remains open until required qualification is
+performed. Ordinary Assistant requests work with the current subscription route,
+but autonomous Patrol has an explicit provider-policy refusal and remains
+blocked. Do not rephrase the refused probe, bypass the readiness boundary or
+count an interactive request as an autonomous Patrol pass. A supported provider
+path is required for that qualification. Prepare other work while resolving the
+provider dependency through supported configuration.
+
+Release publication and wider product readiness are separate. Independent
+volunteered Pro environments are still required before claiming repeatable
+customer value. Capture that rollout requirement in the owning qualification gap
+rather than presenting one homelab result as completion of it.
+
 ## Implemented interaction
 
 `Explain with Assistant` on an attention item or active alert starts an explicit
@@ -394,3 +493,223 @@ gap. These residuals remain in the outcome qualification gap. The final
 retained-canonical-coverage receipts bind the current code to Assistant
 expansion, output scrolling, answer pixels and reload at both viewports, plus
 the actual saved provider refusal and HTTP 409 gate.
+
+
+## Redesign baseline retest, 2026-09-05
+
+The unchanged performance question completed in 224 seconds with eleven visible
+tool controls after the local disk and timestamp-context changes. Playwright
+exercised `/patrol` at 1440x1000 and 390x1000, including keyboard/pointer tool
+expansion, output scrolling, Escape, session selection and reload. Initial answer
+pixels were inspected. Final conclusion pixels and the focused disk question
+remain pending, so this is not full browser qualification for the slice.
+
+The model explicitly repeated the timestamp caveat while still calling the
+returned series unbroken and inferring that the alert start almost certainly
+marked collection start. It also treated a present-time pressure read as a
+definitive resolution of the historical pressure question. These are failed
+diagnoses, not evidence that more caveat text is sufficient.
+
+The changed disk tool returned SMART `PASSED`, canonical `warning`, and remaining
+life 63, but neither SMART counters nor risk reasons. A direct canonical resource
+API read confirmed those fields are absent upstream too. The subsequent source-status read identified `proxmox.status=stale`, which
+explains a freshness warning without a hardware-risk reason. The disk tool had
+omitted that field too. Preserve the canonical source status alongside health
+and risk before qualifying this explanation. Do not fabricate a wear warning
+from 63 percent remaining.
+
+Artifacts remain private under the local
+`tmp/patrol-outcome-telemetry/homelab/diagnostic-evidence-performance` directory.
+An initial browser attempt never reached a provider because the configured SSD
+temporary directory was absent. The directory was restored before the recorded
+run. Installed Chrome was used because the expected cached Playwright browser
+was unavailable. No refused readiness probe or infrastructure mutation occurred.
+
+The qualification scorer also needs an explicit trust review: current root-cause
+grounding checks match resource names/IDs in a named Markdown section, and other
+diagnosis checks use required words. Combined with code-inserted proposal prose,
+this can reward a formatted assertion without independent diagnostic support.
+Keep the physical fault oracles and action readback checks, but do not treat
+those text checks as semantic proof of cause.
+
+### Regression work discovered during redesign
+
+PR #1920 CI exposed a retained-history performance regression, including the
+bounded chart query and shared store reads. Reconciliation must remain correct,
+but display aggregation belongs inside SQLite rather than scanning all retained
+points into Go. The working correction also reuses scan destinations. Initial paired
+worker benchmarks confirm reduced allocations but still show material runtime
+regressions. Performance correction and source-bound browser proof remain open.
+
+The resource API test selected the first canonical `agent` resource and assumed
+it was Agent-backed. A Proxmox-only node has the same canonical resource type,
+but different history storage coordinates. The test now selects the fixture's
+actual Agent identity and separately asserts the Proxmox node target.
+
+Disk warning investigation exposed another canonical gap. Proxmox physical disks
+poll every five minutes by default, but source freshness currently uses the
+shorter general Proxmox threshold. Registry merge status selection also requires
+a regression check for recovery from stale Proxmox data. Preserve source
+freshness in the tool now, and correct cadence/recovery at the owning registry
+and monitoring boundary before qualifying those warnings as useful diagnosis.
+
+### Disk live retest, 2026-09-06 local time
+
+The current local Assistant answered the disk question through Claude Opus 5
+in about three minutes. The source freshness field was visible and correctly
+identified as distinct from SMART failure. The answer still failed qualification:
+it invented a midnight polling restart from coincident timestamps, treated the
+remaining-life measurement as ambiguous, and hit three rejected disk-detail calls.
+The tool advertised `physical-disk` for get but its handler did not support it.
+
+The next working correction routes exact canonical disk get/health requests
+through the same shared projection and labels remaining life with the explicit
+`life_remaining_percent` field. The live answer is a recorded failure, not proof
+of completed diagnosis. The screenshots exercised `/patrol`, Assistant, tool
+expansions, keyboard activation, narrow wrapping, Escape and session reload at
+1440x1000 and 390x1000. Fresh browser proof is required after these later changes.
+
+### Canonical freshness correction under verification
+
+Physical disk collection now carries its independent polling interval into the
+canonical per-source freshness record. Staleness uses at least two expected
+intervals, while retaining a longer configured source threshold. A new observation
+from the highest-priority available source may refresh its resource status,
+including a Proxmox-only resource that previously kept its first warning.
+The targeted regression covers five- and fifteen-minute disk schedules, stale
+transition, identity-preserving recovery and measured hardware risk after recovery.
+The live collector exposed a further loss in the quick temperature refresh:
+`physicalDiskFromReadStateView` discarded cadence before writing disk records
+back to monitoring state. That conversion now preserves the typed source status
+schedule. Broader registry regressions and final browser proof remain required. This does not make timestamp coincidences evidence of collector restarts.
+
+The retained-query candidate also encountered a SQLite native fault during the
+full metrics package run. The same baseline package passed. This is unresolved
+until the failing context and current candidate are verified. Narrow benchmark
+and query-plan success do not close this failure.
+
+### Continued orchestration review
+
+The assessment sweep currently receives only the retained finding title, severity,
+resource and up to 500 characters of old evidence. It receives neither the main
+run's observations nor their collection times. That is insufficient context for a
+new present/resolved judgment. The completion obligation may remain mechanical,
+but any continuation must share the actual investigation context. It must not
+turn old evidence into a fresh assessment.
+
+The investigation evidence-call floor also misclassifies a failed or
+approval-blocked read as no evidence at all. Such a result establishes a limit
+on available access, while a successful tool call alone establishes no diagnostic
+quality. Remove the quality inference and forced start-repair turn. Preserve
+explicit call/turn/time limits and let an incomplete or uncertain conclusion
+record the unavailable evidence. Action authority remains independently enforced.
+
+The unmatched-signal follow-up rebuilds a reduced evidence list after the main
+model run and prohibits further investigation. Its candidate selection ranks
+health/reliability/backup/connectivity/anomaly categories and caps them at twenty.
+This duplicates interpretation outside the model and discards the main reasoning
+context. The planned replacement is the original model assessment with complete
+seed/tool evidence, measured against independent missed-fault controls.
+
+A fresh live canonical disk read after the cadence round-trip correction returned
+`online` and `expectedUpdateIntervalSeconds=300`. This verifies the actual
+collector-to-canonical-resource path. Full affected package tests and the current
+Assistant answer remain separate acceptance checks.
+
+### Current disk answer and browser evidence
+
+The 2026-09-06 00:28 BST Assistant retest completed through the configured Claude
+subscription route in 2m38s, with 12,436 reported tokens. All nine evidence calls
+completed, including the exact canonical disk detail request that failed before.
+The answer correctly interpreted 63 percent remaining life, source recency and
+the distinction between disk and node temperature evidence.
+
+The overall answer still fails qualification. It asserted that recovery exists
+because an online backup datastore has space, without reading actual backup
+coverage or restore evidence. It also offered host commands without checking
+that execution access exists. The conclusion should remain bounded to the
+observed disk state. Latency and unnecessary fleet-wide explanation remain
+product defects to address in the shared diagnostic contract.
+
+Playwright exercised `/patrol` and the Assistant drawer at 1440x1000 and
+390x1000, expanded all nine evidence calls with keyboard activation, scrolled
+long outputs, collapsed them, used Escape, reloaded and reopened the retained
+session. Root inspection covered actual disk-list/detail output pixels, retained
+summary output and the final answer through its last paragraph. The answer and
+evidence remain readable at both widths. The source-bound receipt and screenshots
+are private under `tmp/patrol-outcome-telemetry/homelab/diagnostic-evidence-disk-canonical-final`.
+This is interface and data-path proof, not a passing diagnostic outcome.
+
+### Retained-performance retest and transport correction
+
+The 00:32 BST read-only performance request completed in 3m36s with 17,677
+reported tokens. It correctly reported unavailable agent access and separated
+high memory occupancy from established pressure. It still called the retained
+slice unbroken and inferred collector startup from coincident timestamps despite
+explicitly repeating the evidence caveat. That diagnosis remains failed.
+
+This run also exposed raw serialized routing JSON in the visible conversation.
+The subscription fallback had accumulated native CLI text before the first
+declared tool call and forwarded it as Assistant content. It also retained only
+one call from a native batch. The working provider correction returns the entire
+first declared batch in order, emits no routing-turn prose, and keeps the
+structured final answer unchanged. Targeted provider tests pass. All explicit
+refusal and local-tool isolation boundaries remain. Fresh browser evidence is
+required after this runtime change.
+
+The transport retest exceeded the browser's five-minute limit and was cancelled
+when that browser closed. The saved session contains four ordered routing turns
+with 2, 5, 4 and 3 calls respectively. Their answer content is empty, so the
+protocol text leak is absent from the persisted transport result. Fourteen calls
+did not produce a final answer before cancellation. This is incomplete browser
+qualification and failed interactive latency, not a completed diagnostic run.
+The response instruction currently demands thorough investigation and suggested
+next steps even after the user's specific question can be answered. Review that
+shared product instruction before collecting another equally broad run.
+
+### Scoped response and rendering retest
+
+The 00:56 BST performance request completed in 2m42s with 13,021 reported
+tokens after the shared response prompt was scoped to the user's actual job.
+Routing JSON was absent, missing agent access remained explicit and memory
+pressure was correctly left unknown. The answer still overstated continuous
+coverage from retained timestamps, inferred history start causes, treated an
+alert on the same utilization measurement as corroboration, and mixed UTC/BST.
+This remains a failed diagnostic outcome. It does not qualify autonomous Patrol.
+
+That real answer exposed a six-column table expanding the narrow conversation.
+The shared sanitized renderer now gives tables their own keyboard-scrollable
+region. Playwright reopened the real session at 1440x1000, 900x1000 and 390x1000,
+reached the last column, verified fixed conversation width, and exercised Escape,
+reload and session reopening. Browser-only short and streaming table fixtures
+confirmed preserved focus, region identity and scroll position. Actual pixels
+were inspected. The source-bound frontend receipt is
+`frontend-modern/browser-verification.json`; private artifacts are under
+`tmp/patrol-outcome-telemetry/homelab/markdown-table-final`. These fixture results
+establish rendering behavior only. No additional model calls were made.
+
+### Final evidence-foundation proof
+
+The affected tools, chat, providers, models, unified resources, monitoring and
+resource API package suites pass on the worker. The final metrics implementation
+(`store.go` SHA256 `5ef4b22506ecc73131bcd881a5bbc72d2a45f43f393f2dccbfba52dc287b18e8`)
+passes the full metrics suite in 90.446s, the database suite in 0.131s and the
+focused concurrent read/write race proof in 19.625s. Tests cover new/deleted
+history visibility, resource isolation, bounded compiled-statement retention,
+one-connection operation and transaction-bound query instrumentation.
+
+The unchanged bounded chart benchmark measures 889.3 microseconds baseline
+versus 888.8 microseconds candidate (p=.796, n=10), with no significant slowdown.
+Final paired metrics benchmarks pass the existing regression checker. The
+single-metric downsample case reports +10.00% (p=.005, n=10), close to the
+checker's greater-than-10% threshold. Raw single-series and both multi-metric
+queries have no significant latency difference. These are bounded worker
+measurements, not a production latency guarantee. The earlier +20.34% chart
+regression is corrected by reusing compiled presence SQL while evaluating it
+inside every current read snapshot. No history or tier-presence result is cached.
+
+One earlier metrics package run terminated inside SQLite native binding code.
+Subsequent full and focused race runs passed, including the final implementation.
+The original fault has no established root cause and is not labelled harmless
+or explained by the successful reruns. Its private worker log is
+`paired-metrics-local-20260905T235637/full-metrics-final.log`.

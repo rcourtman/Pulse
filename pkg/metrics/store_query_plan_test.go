@@ -165,32 +165,66 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 }
 
 // Query, QueryAll and both batch variants share this exact runtime SQL. The
-// display step is applied by the streaming reader after tier reconciliation.
+// display step is applied in SQLite after tier reconciliation.
 func TestRetainedQueryPlansUseIndexes(t *testing.T) {
 	db := newPlanTestDB(t)
 	store := &Store{}
 	for _, window := range []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour, 30 * 24 * time.Hour} {
 		for _, filtered := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/filtered_%v", window, filtered), func(t *testing.T) {
+			for _, step := range []int64{0, 60} {
+				t.Run(fmt.Sprintf("%s/filtered_%v/step_%d", window, filtered, step), func(t *testing.T) {
+					var metrics []string
+					if filtered {
+						metrics = []string{"cpu", "memory"}
+					}
+					end := time.Unix(2000000000, 0)
+					sql, args := retainedQuerySQL("vm", []string{"vm-1", "vm-2", "vm-3"}, metrics, end.Add(-window), end, step, store.tierFallbacks(window))
+					plan := explainQueryPlan(t, db, sql, args)
+					searches := 0
+					for _, line := range strings.Split(plan, "\n") {
+						if strings.Contains(line, "SCAN m ") || strings.Contains(line, "SCAN h ") {
+							t.Fatalf("unbounded metrics read: %s", plan)
+						}
+						if strings.Contains(line, "SEARCH m ") || strings.Contains(line, "SEARCH h ") {
+							searches++
+							for _, constraint := range []string{"resource_type=?", "resource_id=?", "tier=?", "timestamp>?", "timestamp<?"} {
+								if !strings.Contains(line, constraint) {
+									t.Fatalf("retained search missing indexed %s: %s", constraint, line)
+								}
+							}
+						}
+					}
+					n := len(store.tierFallbacks(window))
+					if searches != n*(n+1)/2 {
+						t.Fatalf("expected every tier and overlap probe indexed, got %d: %s", searches, plan)
+					}
+				})
+			}
+		}
+	}
+}
+
+// A single present tier uses direct aggregation. It must retain the same
+// bounded identity/tier/time lookup as the reconciled multi-tier query.
+func TestRetainedSingleTierQueryPlansUseIndexes(t *testing.T) {
+	db := newPlanTestDB(t)
+	end := time.Unix(2000000000, 0)
+	for _, tier := range []Tier{TierRaw, TierMinute, TierHourly, TierDaily} {
+		for _, filtered := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/filtered_%v", tier, filtered), func(t *testing.T) {
 				var metrics []string
 				if filtered {
-					metrics = []string{"cpu", "memory"}
+					metrics = []string{"cpu"}
 				}
-				end := time.Unix(2000000000, 0)
-				sql, args := retainedQuerySQL("vm", []string{"vm-1", "vm-2", "vm-3"}, metrics, end.Add(-window), end, store.tierFallbacks(window))
-				plan := explainQueryPlan(t, db, sql, args)
-				searches := 0
-				for _, line := range strings.Split(plan, "\n") {
-					if strings.Contains(line, "SCAN m ") || strings.Contains(line, "SCAN h ") {
-						t.Fatalf("unbounded metrics read: %s", plan)
-					}
-					if strings.Contains(line, "SEARCH m ") || strings.Contains(line, "SEARCH h ") {
-						searches++
-					}
+				query, args := retainedQuerySQL("vm", []string{"vm-1"}, metrics, end.Add(-time.Hour), end, 60, []Tier{tier})
+				plan := explainQueryPlan(t, db, query, args)
+				if strings.Contains(plan, "SCAN m ") || !strings.Contains(plan, "SEARCH m ") {
+					t.Fatalf("single tier must use a bounded lookup: %s", plan)
 				}
-				n := len(store.tierFallbacks(window))
-				if searches != n*(n+1)/2 {
-					t.Fatalf("expected every tier and overlap probe indexed, got %d: %s", searches, plan)
+				for _, constraint := range []string{"resource_type=?", "resource_id=?", "tier=?", "timestamp>?", "timestamp<?"} {
+					if !strings.Contains(plan, constraint) {
+						t.Fatalf("missing indexed %s: %s", constraint, plan)
+					}
 				}
 			})
 		}

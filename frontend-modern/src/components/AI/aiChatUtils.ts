@@ -97,7 +97,7 @@ export const renderMarkdown = (content: unknown): string => {
     //  - 'target' and 'rel' are not in ALLOWED_ATTR because the
     //    afterSanitizeAttributes hook above sets them on every <a>; they
     //    don't need to be parsed in from the LLM-supplied HTML.
-    return DOMPurify.sanitize(rawHtml, {
+    const sanitized = DOMPurify.sanitize(rawHtml, {
       // Allow common formatting tags but block scripts, iframes, etc.
       ALLOWED_TAGS: [
         'p',
@@ -135,6 +135,21 @@ export const renderMarkdown = (content: unknown): string => {
       // Force all links to open in new tab and prevent opener attacks
       ADD_ATTR: ['target', 'rel'],
     });
+    // Add application-owned scrolling only after sanitization. Model HTML
+    // cannot supply classes or attributes that escape the message layout.
+    const template = document.createElement('template');
+    template.innerHTML = sanitized;
+    for (const table of template.content.querySelectorAll('table')) {
+      const region = document.createElement('div');
+      region.className =
+        'max-w-full overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500';
+      region.tabIndex = 0;
+      region.setAttribute('role', 'region');
+      region.setAttribute('aria-label', 'Scrollable table');
+      table.replaceWith(region);
+      region.appendChild(table);
+    }
+    return template.innerHTML;
   } catch {
     // If parsing fails, escape HTML entities as fallback
     return normalized.replace(/[&<>"']/g, (char) => {

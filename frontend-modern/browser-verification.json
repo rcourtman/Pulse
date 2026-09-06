@@ -1,26 +1,24 @@
 {
   "version": 1,
-  "base_sha": "5288b64d40642b29cd27fa0ca67080cb261d37f1",
-  "verified_at": "2026-09-05T22:04:00.286Z",
+  "base_sha": "3a189f31d44789a642b68a915d3d4a683ab81104",
+  "verified_at": "2026-09-06T00:41:42.025224Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
-    "frontend-modern/src/types/api.ts",
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/components/AI/aiChatUtils.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts": "2a46640db19fe358e9f0ab32c4819a1c30a7c91b71015104b53253296176bdd6",
-    "frontend-modern/src/types/api.ts": "16e3c1c60450eb5bb8e4f0db57f595d29cc9dbfd2e01bffee1f0529262f9f60a",
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "98ee10447e5fa0fe122122727ce1b59a29c92afbcdcf7f046f4cea9f2edc9e80"
+    "frontend-modern/src/components/AI/aiChatUtils.ts": "c65a0f95d3e32da3e8f590de1d40067b5568e5d7d5573652024541e8f8709fb8"
   },
   "routes": [
-    "/proxmox",
-    "/patrol",
-    "/settings/pulse-intelligence/patrol"
+    "/patrol"
   ],
   "viewports": [
     {
       "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 900,
       "height": 1000
     },
     {
@@ -29,13 +27,13 @@
     }
   ],
   "states": [
-    "Current managed frontend and backend, mock monitoring disabled, real homelab and read-only model investigation. No infrastructure mutation or repeated refused readiness probe.",
-    "Proxmox node overview and History, 1h/24h/7d ranges, populated utilization/network/thermal charts. API-only node does not claim an installed Agent or expose unavailable disk throughput.",
-    "Assistant pending/completed turn, thirteen tool controls and full output/answer scrolling. Saved provider refusal remains visible and actual manual execution returns HTTP 409."
+    "Assistant persisted real retained-performance answer with a six-column table. Browser-only short-table and streaming-table fixtures use the current shared renderer and DOM morph implementation.",
+    "Wide table overflow belongs to its focusable region. Conversation and surrounding prose do not scroll horizontally. All columns remain reachable.",
+    "Saved subscription provider refusal remains visible. No provider probe, model request or infrastructure mutation was made for this rendering verification."
   ],
   "interactions": [
-    "Node expansion, History tab, native range selection, hover on each chart, Overview/History switching, reload and reopen. Normal and narrow chart pixels inspected.",
-    "Assistant send and completion, keyboard Enter/pointer expansion and collapse, inner output scroll to end, answer pixels, Escape, history selection and reload.",
-    "Local Playwright receipts: retained-canonical-coverage/history-receipt.json and receipt.json. Source hashes match the final implementation. The model outcome is a bounded evidence-path pass, not diagnosis or autonomous Patrol qualification."
+    "Open Assistant, select retained session, keyboard-focus table, ArrowRight scrolling, scroll to last column, vertical message scrolling, inspect start/end pixels at desktop and narrow widths.",
+    "Append a table row through the current renderer and DOM morph. Verify region identity, keyboard focus and horizontal scroll position are preserved. Inspect short and streaming table pixels at 1440, 900 and 390 widths.",
+    "Escape, reload, reopen Assistant and retained session. Private proof: tmp/patrol-outcome-telemetry/homelab/markdown-table-final. This is renderer qualification, not a passing diagnostic outcome."
   ]
 }

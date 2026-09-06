@@ -21,6 +21,12 @@
 
 ## Purpose
 
+Canonical disk source status may carry the collector's expected update interval.
+This freshness metadata remains separate from physical-disk risk, SMART values
+and recovery/action authority. Source status cloning preserves the optional field,
+and absent cadence retains the source default. Fresh observation recovery must
+not erase a current hardware-risk assessment.
+
 Assistant physical-disk metrics use the canonical disk host projection and
 separate the disk format filter from the metrics operation selector. Missing
 SMART observations remain missing coverage, not disk failure or recovery

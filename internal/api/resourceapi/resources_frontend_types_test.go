@@ -405,7 +405,7 @@ func TestResourceListUsesCanonicalContractTypes(t *testing.T) {
 	// Agent-backed host resources should publish agent metrics targets.
 	var foundAgentHost *unified.Resource
 	for i := range resp.Data {
-		if resp.Data[i].Type == "agent" {
+		if resp.Data[i].Type == "agent" && resp.Data[i].Agent != nil && resp.Data[i].Agent.AgentID == "agent-host-1" {
 			foundAgentHost = &resp.Data[i]
 			break
 		}
@@ -436,6 +436,9 @@ func TestResourceListUsesCanonicalContractTypes(t *testing.T) {
 	}
 	if foundNode.Proxmox.NodeName != "pve1" {
 		t.Fatalf("proxmox.nodeName = %q, want pve1", foundNode.Proxmox.NodeName)
+	}
+	if foundNode.MetricsTarget == nil || foundNode.MetricsTarget.ResourceType != "node" || foundNode.MetricsTarget.ResourceID != "instance-pve1" {
+		t.Fatalf("Proxmox-only resource must use its node storage coordinates, got %+v", foundNode.MetricsTarget)
 	}
 
 	// Test 2: canonical docker-host filter only returns docker-backed runtime resources.

@@ -19,6 +19,23 @@
 
 ## Purpose
 
+Physical-disk reads in `pulse_metrics` and `pulse_query` list/get/health
+share `physicalDiskSummaryFromResource`. The projection preserves canonical
+resource status, per-source freshness, physical-disk risk reasons and optional SMART counters alongside
+the device-reported SMART health result. It never recomputes risk or collapses a
+SMART pass into an all-clear. A stale source may explain a warning without a
+hardware risk. Missing counters remain absent and observed zero
+remains present. The tool projection labels `life_remaining_percent` explicitly, rather than
+exposing the source-specific ambiguous `wearout` name, and distinguishes it from
+`smart.percentageUsed` as consumed endurance. The regression proof is
+`internal/ai/tools/physical_disk_evidence_test.go`.
+
+Retained summaries disclose that point and bucket timestamps describe returned
+history inside the requested window. Their spacing does not measure collection
+uptime or explain missing history. Collector lifecycle and retention settings
+are not part of the summary query. These are source semantics supplied to the
+model, not a harness-generated diagnosis or a claim of model qualification.
+
 The manual Patrol API consumes the service's selected-mode runtime verdict as
 an execution check. Dimension-level presentation warnings cannot authorize a
 run after a provider failure leaves Watch-only readiness unassessed. Operator
@@ -148,25 +165,19 @@ results before asserting that no peer is implicated. The Docker `services`
 operation is explicitly Swarm-only: an empty service list never proves the
 absence of ordinary Docker containers or container dependencies, and its tool
 result must direct the model to topology or search for that evidence.
-Every accepted investigation proposal carries two separately typed resource
-identities: the action target and the exact canonical causal resource
-established by collected evidence. They may be equal, but a cross-resource
-diagnosis must preserve the peer or dependency as the causal identity and the
-proposal reason must preserve its observed state and causal chain. The
-request-local proposal boundary retains a minimal canonical resource graph from
-successful structured query results (resource ID, name, state, and health-check
-targets only). When that graph uniquely resolves a claimed causal resource's
-health-check target to a different unavailable resource, a proposal that still
-names the affected resource as causal is rejected before capture and returned
-to the investigation for correction. Ambiguous names and non-structured or
-failed evidence never create a causal assertion; core must not guess among
-possible resources or retain arbitrary log text at this boundary. The
-tool-free completion turn receives that accepted record as an evidence
-checkpoint. Before persistence, core reconciles the Root Cause section against
-the checkpoint and restores the exact causal identity and recorded basis if the
-provider's final prose omits or downgrades them. This reconciliation adds no new
-model claim and grants no action authority; it prevents the narrative from
-contradicting the already accepted, evidence-bound proposal record.
+Every accepted investigation proposal preserves the canonical action target.
+An optional `causal_resource_id` records the model's attribution when supported
+by evidence. It is omitted when the cause is unknown. A recovery proposal may
+address an observed symptom without establishing its underlying cause. The
+reason carries observed evidence, expected benefit and remaining uncertainty.
+The capture boundary validates capability schemas, permissions, correlation,
+parameter isolation and invocation integrity. It does not maintain a duplicate
+resource graph or infer causality from dependency names and status vocabulary.
+The tool-free completion turn distinguishes proposal acceptance from diagnosis.
+The proposal remains an attributed model decision. Core preserves final model
+prose unchanged in the response, stream and transcript, including uncertainty
+or a correction of the earlier rationale. Neither structural validation nor
+proposal acceptance establishes a root cause or authorizes execution.
 An investigation cannot complete or submit a typed action proposal before the
 model has received at least one successful structured result from an advertised
 evidence tool. Until then, core withholds proposal authority while leaving
@@ -8011,3 +8022,37 @@ reasoning and real remediation in
 `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
 proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
 response does not establish a useful customer outcome or model qualification.
+
+### Subscription routing content boundary
+
+Subscription routing turns emit validated tool calls only. Native CLI narration
+and synthetic local errors are transport material, not Assistant answer text or
+infrastructure observations. For Claude's native-tool fallback, retain the entire
+first declared tool batch in order and discard later CLI continuations produced
+without Pulse tool results. Exact tool names, invocation identity, refusal,
+permission-denial and disabled local-tool boundaries remain enforced. Structured
+final answers retain their content unchanged.
+
+The regression uses a serialized routing envelope before a two-call native batch
+and a later synthetic continuation. It verifies empty routing prose, both
+original calls, original order and preserved final uncertainty. A completed
+real Assistant request after the transport change showed no routing envelope
+in the persisted conversation or visible answer. Its unsupported historical
+inferences remain failed diagnostic qualification.
+
+The shared Assistant response prompt is scoped to the user's resource, period
+and decision. It no longer demands general thoroughness or unsolicited next
+steps on every answer. Provenance follows the product's distinct source
+observation, model hypothesis, proposal, execution and verification records.
+This is model context, not a deterministic quality classifier. Real responses
+remain subject to factual review and latency qualification.
+
+### Readable answer tables
+
+The shared sanitized markdown renderer owns horizontal overflow for each table
+through a labelled, keyboard-focusable region. Application styling is added only
+after sanitization. Model-provided classes, styles and event handlers remain
+disallowed. Streaming DOM reconciliation preserves table region identity, focus
+and scroll position. The conversation itself must not acquire horizontal scroll
+from wide answer tables. Browser proof covers a persisted real answer and
+explicit renderer fixtures at 1440, 900 and 390 pixel widths.

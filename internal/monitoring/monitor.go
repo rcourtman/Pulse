@@ -735,7 +735,7 @@ func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) mode
 		return models.PhysicalDisk{Wearout: unifiedresources.WearoutUnreported}
 	}
 
-	return models.PhysicalDisk{
+	disk := models.PhysicalDisk{
 		ID:              view.ID(),
 		Node:            view.Node(),
 		Instance:        view.Instance(),
@@ -758,6 +758,11 @@ func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) mode
 		Collection:      diskinventory.CloneStatus(view.Collection()),
 		LastChecked:     view.LastSeen(),
 	}
+	if source, ok := view.SourceStatus(unifiedresources.SourceProxmox); ok {
+		disk.ExpectedUpdateInterval = time.Duration(source.ExpectedUpdateIntervalSeconds) * time.Second
+	}
+	return disk
+
 }
 
 func physicalDiskIOFromUnifiedMeta(in *unifiedresources.PhysicalDiskIOMeta) *models.DiskIO {

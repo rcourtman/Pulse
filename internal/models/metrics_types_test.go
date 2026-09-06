@@ -380,3 +380,16 @@ func TestPBSNodeMetricAvailabilityModelBoundary(t *testing.T) {
 		t.Fatal("wire input asserted monitoring-owned availability evidence")
 	}
 }
+
+func TestPhysicalDiskSnapshotPreservesIndependentPollingCadence(t *testing.T) {
+	state := NewState()
+	state.UpdatePhysicalDisks("pve", []PhysicalDisk{{ID: "disk", Instance: "pve", ExpectedUpdateInterval: 15 * time.Minute}})
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PhysicalDisks) != 1 || snapshot.PhysicalDisks[0].ExpectedUpdateInterval != 15*time.Minute {
+		t.Fatalf("snapshot lost cadence: %+v", snapshot.PhysicalDisks)
+	}
+	snapshot.PhysicalDisks[0].ExpectedUpdateInterval = time.Minute
+	if state.GetSnapshot().PhysicalDisks[0].ExpectedUpdateInterval != 15*time.Minute {
+		t.Fatal("snapshot mutation changed collector state")
+	}
+}
