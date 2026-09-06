@@ -1023,3 +1023,35 @@ and receipt are under `tmp/patrol-storage-docs-proof/` at the workspace root.
 The served guide SHA-256 is
 `1970ed5cd70e976d2acbeaf7d36a7b78b5dedf65355c50a19abdba8ca96c9770`.
 No model or infrastructure action is used by this browser proof.
+
+## Disk probe completion ordering, 2026-09-06
+
+Build and Test run `34011979848` on `f26668aa6ddc` reports a failure in
+`TestCollectDisksExcludesFreeBSDFdescfsBeforeUsage`: the expected root filesystem
+read did not invoke its usage probe. The shared in-flight registry published a
+result before removing the completed entry. A subsequent collection could reuse
+that completed result instead of taking a fresh measurement.
+
+A controlled regression holds the registry lock while the syscall completes.
+It fails on the preceding implementation because the caller returns while its
+completed probe remains discoverable. Retirement and completion publication now
+share one critical section. The syscall and caller waits remain outside the lock,
+and overlapping collectors still share genuinely running probes. This corrects
+the shared ordering contract instead of clearing state or retrying the test.
+
+On pulse-dev with Go 1.26.8, twenty full hostmetrics package runs pass in
+16.687s and three complete race-detector runs pass in 1.864s. These include
+excluded mounts, stalled mounts, recovery, shared results and cancellation.
+Production source SHA-256 is
+`cbf5efa6bfcc163faa061ccf7c70bb6738c4ef2f78473d7d66fa00c589f87555`.
+Regression file SHA-256 is
+`e7a3adfe7f2cbc36cd8c315ef71ec019fa34db45b75458fa0b2212e3533b09b7`.
+Both hashes match before and after proof. The raw worker log is
+`/opt/pulse-release-worker/patrol-disk-probe-completion.log`.
+
+The preceding storage slice was committed and pushed as `618700db5e` to
+PR #1928, which remains open. Its exact staged hook passed 163 tests in 127.989s with all fourteen
+file hashes unchanged. This supersedes the pending-hook statements above for that
+slice only. Current remote CI is not a completed pass. The f266 benchmark job
+also failed and its comparison remains under investigation. The overall goal,
+real-model/action qualification and provider refusal remain open and unchanged.

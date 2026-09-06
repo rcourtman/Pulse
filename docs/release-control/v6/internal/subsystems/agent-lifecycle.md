@@ -2947,6 +2947,14 @@ explicitly mapped administrator reaches the lifecycle handlers.
 1. Update this contract when agent lifecycle ownership changes. Routes added under the shared `internal/api/` extension point that are clearly outside lifecycle ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, the startup-seed dispatch in `NewAISettingsHandler`, and the cached-preflight integration into the Patrol `tools` readiness check — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem. Canonical scoped Patrol resolution on `POST /api/ai/patrol/run` and structured `patrol_assess_finding` lifecycle outcomes are likewise adjacent AI/API contracts: they may consume agent-reported identities and evidence, but they do not change agent registration, install, token, profile, command transport, update, or fleet-lifecycle authority.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
 3. Update runtime and settings tests in the same slice when lifecycle behavior changes. Shell installer lifecycle changes must keep `scripts/installtests/install_sh_test.go` covering explicit flags, persisted connection state, legacy running-process/service recovery, legacy single-dash v5 agent flag recovery, repeated disk-exclusion recovery, and secure token-file service argument rendering for update re-entry. Host metrics tests must prove excluded FreeBSD `fdescfs` mounts are filtered before filesystem usage is attempted.
+   Shared host/Docker filesystem probes must retire a completed probe and
+   publish its result under the same registry lock. A later collection must
+   not reuse a completed probe after an earlier caller has received its result.
+   Running probes remain shared across collectors, and cancellation or timeout
+   must not admit a duplicate syscall while the original is still running.
+   `TestGuardedDiskUsagePublishesAfterRetiringProbe` controls the retirement
+   lock to prove publication cannot get ahead of removal. The adjacent stuck
+   mount tests retain sharing, recovery, timeout and cancellation coverage.
 4. Keep host-agent test hooks, command-client factories, and timing overrides
    instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
    registration and update paths must not depend on package-global mutable test

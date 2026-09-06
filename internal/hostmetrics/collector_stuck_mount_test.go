@@ -318,3 +318,39 @@ func TestGuardedDiskUsage_AlreadyCancelledDoesNotStartProbe(t *testing.T) {
 		t.Fatalf("cancelled collection started %d probes, want none", got)
 	}
 }
+
+func TestGuardedDiskUsagePublishesAfterRetiringProbe(t *testing.T) {
+	original := diskUsage
+	defer func() { diskUsage = original }()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	returned := make(chan error, 1)
+	const mount = "/test/retire-before-publish"
+	diskUsage = func(_ context.Context, path string) (*godisk.UsageStat, error) {
+		close(entered)
+		<-release
+		return &godisk.UsageStat{Path: path, Total: 100}, nil
+	}
+	go func() { _, err := guardedDiskUsage(context.Background(), mount); returned <- err }()
+	<-entered
+	// Hold registry retirement until the first caller has a chance to return.
+	// Publishing before retirement lets the next read reuse a completed probe.
+	stuckDiskMounts.Lock()
+	close(release)
+	premature := false
+	select {
+	case <-returned:
+		premature = true
+	case <-time.After(50 * time.Millisecond):
+	}
+	stuckDiskMounts.Unlock()
+	if premature {
+		t.Fatal("read returned while completed probe was still available to new callers")
+	}
+	if err := <-returned; err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := loadDiskUsageCall(mount); ok {
+		t.Fatal("completed probe remains in flight registry")
+	}
+}

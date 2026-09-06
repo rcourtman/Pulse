@@ -117,10 +117,11 @@ func guardedDiskUsage(ctx context.Context, mountpoint string) (*godisk.UsageStat
 	if !loaded {
 		go func() {
 			call.usage, call.err = diskUsage(ctx, mountpoint)
-			// Publish the result before admitting a new probe.
-			close(call.done)
+			// Retire and publish together so a caller returning this result
+			// cannot leave a completed probe available to a later collection.
 			stuckDiskMounts.Lock()
 			delete(stuckDiskMounts.calls, mountpoint)
+			close(call.done)
 			stuckDiskMounts.Unlock()
 			if time.Now().After(call.deadline) {
 				log.Info().Str("mount", mountpoint).Msg("disk: stalled usage call returned, mount re-included")
