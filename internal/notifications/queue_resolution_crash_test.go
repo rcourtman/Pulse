@@ -2,6 +2,9 @@ package notifications
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"sync"
@@ -13,20 +16,29 @@ import (
 
 // Exit without Stop or database Close: graceful reopen tests cannot establish
 // that resolution rewrites and cancellations survive a process exit.
-// This is queue durability evidence, not an installed provider receipt or a
-// power-loss simulation; an interrupted provider send remains at-least-once.
+// This proves queue durability through local HTTP receipt, not installed
+// provider delivery or power-loss recovery. An interrupted provider send
+// remains at-least-once.
 func TestQueueResolutionSurvivesAbruptProcessExit(t *testing.T) {
 	const helperEnv = "PULSE_TEST_QUEUE_RESOLUTION_EXIT_DIR"
 	const exitCode = 23
+	const urlEnv = "PULSE_TEST_QUEUE_RESOLUTION_WEBHOOK_URL"
+	webhook := func(url string) WebhookConfig {
+		return WebhookConfig{ID: "restart-receipt", URL: url, Enabled: true, Service: "generic"}
+	}
 	states := []NotificationQueueStatus{QueueStatusPending, QueueStatusSending, QueueStatusFailed, QueueStatusDLQ}
 	if dir := os.Getenv(helperEnv); dir != "" {
 		q, err := NewNotificationQueue(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
+		config, err := json.Marshal(webhook(os.Getenv(urlEnv)))
+		if err != nil {
+			t.Fatal(err)
+		}
 		enqueue := func(id, kind string, members ...string) *QueuedNotification {
 			t.Helper()
-			n := &QueuedNotification{ID: id, Type: kind, Status: QueueStatusPending, Config: []byte(`{}`), MaxAttempts: 3}
+			n := &QueuedNotification{ID: id, Type: kind, Status: QueueStatusPending, Config: config, MaxAttempts: 3}
 			for _, member := range members {
 				n.Alerts = append(n.Alerts, &alerts.Alert{ID: member})
 			}
@@ -56,11 +68,38 @@ func TestQueueResolutionSurvivesAbruptProcessExit(t *testing.T) {
 		os.Exit(exitCode)
 	}
 
+	type receipt struct {
+		Event  string          `json:"event"`
+		Alerts []*alerts.Alert `json:"alerts"`
+	}
+	var receiptMu sync.Mutex
+	var receipts []receipt
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var got receipt
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode webhook receipt: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		receiptMu.Lock()
+		receipts = append(receipts, got)
+		receiptMu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	notifier := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer notifier.Stop()
+	if err := notifier.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatal(err)
+	}
+	notifier.AddWebhook(webhook(server.URL))
+
 	dir := t.TempDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestQueueResolutionSurvivesAbruptProcessExit$")
-	cmd.Env = append(os.Environ(), helperEnv+"="+dir)
+	cmd.Env = append(os.Environ(), helperEnv+"="+dir, urlEnv+"="+server.URL)
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		t.Fatalf("child timed out: %v\n%s", ctx.Err(), output)
@@ -85,7 +124,7 @@ func TestQueueResolutionSurvivesAbruptProcessExit(t *testing.T) {
 		for _, a := range n.Alerts {
 			delivered[n.ID] = append(delivered[n.ID], a.ID)
 		}
-		return nil
+		return notifier.ProcessQueuedNotification(n)
 	})
 	q.processBatch()
 	q.processBatch()
@@ -102,6 +141,23 @@ func TestQueueResolutionSurvivesAbruptProcessExit(t *testing.T) {
 			t.Fatal("restarted queue did not drain")
 		}
 		time.Sleep(time.Millisecond)
+	}
+	// All sends have finished before inspecting receipts; no sleep-based
+	// absence assertion or mock transport is used.
+	receiptMu.Lock()
+	defer receiptMu.Unlock()
+	if len(receipts) != 5 {
+		t.Fatalf("HTTP receipts = %+v, want four firing groups and one recovery", receipts)
+	}
+	counts := make(map[string]int)
+	for _, got := range receipts {
+		if len(got.Alerts) != 1 || got.Alerts[0] == nil {
+			t.Fatalf("unexpected HTTP members: %+v", got)
+		}
+		counts[got.Event+":"+got.Alerts[0].ID]++
+	}
+	if counts[":still-firing"] != 4 || counts["resolved:recovered"] != 1 {
+		t.Fatalf("HTTP event/member counts = %v", counts)
 	}
 	mu.Lock()
 	defer mu.Unlock()
