@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -202,6 +203,38 @@ describe('AlertDeliveryLogCard', () => {
     expect(screen.getByText('Held')).toBeInTheDocument();
     expect(screen.getByText('Delivery not turned on')).toBeInTheDocument();
     expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+  });
+
+  it('hides previously loaded rows during an outage and restores fresh results after recovery', () => {
+    const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>(log);
+    const [unavailable, setUnavailable] = createSignal(false);
+    render(() => (
+      <AlertDeliveryLogCard
+        log={currentLog()}
+        unavailable={unavailable()}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    expect(screen.getByText('Ops Discord')).toBeInTheDocument();
+    setUnavailable(true);
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not read the delivery log/);
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.queryByText('Delivered')).not.toBeInTheDocument();
+    expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+
+    setCurrentLog({ ...log, entries: [log.entries[1]] });
+    setUnavailable(false);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Delivered')).toBeInTheDocument();
+    expect(screen.queryByText('Ops Discord')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+
+    setCurrentLog({ ...log, entries: [] });
+    expect(screen.getByText(/No alert deliveries were attempted/)).toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 
   it('reports an unreadable log as unavailable instead of empty', () => {
