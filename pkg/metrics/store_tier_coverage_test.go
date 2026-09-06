@@ -172,51 +172,55 @@ func TestStoreRollupPreservesRetainedExtrema(t *testing.T) {
 	}
 }
 
-func TestRetainedPresenceStatementsReadCurrentSnapshot(t *testing.T) {
-	db := newPlanTestDB(t)
-	db.SetMaxOpenConns(1)
-	store := &Store{db: pdb.Wrap(db, "presence-snapshot")}
-	end := time.Unix(2000000040, 0)
-	start := end.Add(-time.Hour)
-	query := func(id string) []MetricPoint {
-		t.Helper()
-		points, err := store.Query("node", id, "cpu", start, end, 60)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return points
-	}
-	if points := query("a"); len(points) != 0 {
-		t.Fatalf("empty inventory: %+v", points)
-	}
-	if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES ('node','a','cpu','minute',?,17)`, end.Add(-time.Minute).Unix()); err != nil {
-		t.Fatal(err)
-	}
-	if points := query("a"); len(points) != 1 || points[0].Value != 17 {
-		t.Fatalf("newly present tier was hidden: %+v", points)
-	}
-	if points := query("b"); len(points) != 0 {
-		t.Fatalf("statement reused another resource's result: %+v", points)
-	}
-	if _, err := db.Exec("DELETE FROM metrics"); err != nil {
-		t.Fatal(err)
-	}
-	if points := query("a"); len(points) != 0 {
-		t.Fatalf("removed history remained present: %+v", points)
-	}
-	// Vary the parameter-count shape beyond the bound. Uncached shapes must
-	// remain functional without expanding the retained statement set.
-	for n := 1; n <= maxRetainedPresenceStatements+2; n++ {
-		ids := make([]string, n)
-		for i := range ids {
-			ids[i] = fmt.Sprintf("missing-%d", i)
-		}
-		got, err := store.QueryAllBatch("node", ids, start, end, 60)
-		if err != nil || len(got) != 0 {
-			t.Fatalf("shape %d: %+v, %v", n, got, err)
-		}
-	}
-	if len(store.presenceStatements) > maxRetainedPresenceStatements {
-		t.Fatalf("unbounded compiled SQL retention: %d", len(store.presenceStatements))
+func TestRetainedReadStatementsReadCurrentSnapshot(t *testing.T) {
+	for _, step := range []int64{0, 60} {
+		t.Run(fmt.Sprint(step), func(t *testing.T) {
+			db := newPlanTestDB(t)
+			db.SetMaxOpenConns(1)
+			store := &Store{db: pdb.Wrap(db, "presence-snapshot")}
+			end := time.Unix(2000000040, 0)
+			start := end.Add(-time.Hour)
+			query := func(id string) []MetricPoint {
+				t.Helper()
+				points, err := store.Query("node", id, "cpu", start, end, step)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return points
+			}
+			if points := query("a"); len(points) != 0 {
+				t.Fatalf("empty inventory: %+v", points)
+			}
+			if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES ('node','a','cpu','minute',?,17)`, end.Add(-time.Minute).Unix()); err != nil {
+				t.Fatal(err)
+			}
+			if points := query("a"); len(points) != 1 || points[0].Value != 17 {
+				t.Fatalf("newly present tier was hidden: %+v", points)
+			}
+			if points := query("b"); len(points) != 0 {
+				t.Fatalf("statement reused another resource's result: %+v", points)
+			}
+			if _, err := db.Exec("DELETE FROM metrics"); err != nil {
+				t.Fatal(err)
+			}
+			if points := query("a"); len(points) != 0 {
+				t.Fatalf("removed history remained present: %+v", points)
+			}
+			// Vary the parameter-count shape beyond the bound. Uncached shapes must
+			// remain functional without expanding the retained statement set.
+			for n := 1; n <= maxRetainedReadStatements+2; n++ {
+				ids := make([]string, n)
+				for i := range ids {
+					ids[i] = fmt.Sprintf("missing-%d", i)
+				}
+				got, err := store.QueryAllBatch("node", ids, start, end, step)
+				if err != nil || len(got) != 0 {
+					t.Fatalf("shape %d: %+v, %v", n, got, err)
+				}
+			}
+			if len(store.readStatements) > maxRetainedReadStatements {
+				t.Fatalf("unbounded compiled SQL retention: %d", len(store.readStatements))
+			}
+		})
 	}
 }

@@ -178,7 +178,7 @@ func TestRetainedQueryPlansUseIndexes(t *testing.T) {
 						metrics = []string{"cpu", "memory"}
 					}
 					end := time.Unix(2000000000, 0)
-					sql, args := retainedQuerySQL("vm", []string{"vm-1", "vm-2", "vm-3"}, metrics, end.Add(-window), end, step, store.tierFallbacks(window))
+					sql, args := retainedQuerySQL("vm", []string{"vm-1", "vm-2", "vm-3"}, metrics, end.Add(-window), end, step, store.tierFallbacks(window), false)
 					plan := explainQueryPlan(t, db, sql, args)
 					searches := 0
 					for _, line := range strings.Split(plan, "\n") {
@@ -216,7 +216,7 @@ func TestRetainedSingleTierQueryPlansUseIndexes(t *testing.T) {
 				if filtered {
 					metrics = []string{"cpu"}
 				}
-				query, args := retainedQuerySQL("vm", []string{"vm-1"}, metrics, end.Add(-time.Hour), end, 60, []Tier{tier})
+				query, args := retainedQuerySQL("vm", []string{"vm-1"}, metrics, end.Add(-time.Hour), end, 60, []Tier{tier}, false)
 				plan := explainQueryPlan(t, db, query, args)
 				if strings.Contains(plan, "SCAN m ") || !strings.Contains(plan, "SEARCH m ") {
 					t.Fatalf("single tier must use a bounded lookup: %s", plan)
@@ -536,4 +536,15 @@ func explainQueryPlan(t *testing.T, db *sql.DB, query string, args []any) string
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
+	db := newPlanTestDB(t)
+	end := time.Unix(2000000040, 0)
+	query, args := retainedQuerySQL("node", []string{"a", "b"}, nil, end.Add(-time.Hour), end, 0, []Tier{TierRaw, TierMinute, TierHourly}, false)
+	for _, line := range strings.Split(explainQueryPlan(t, db, query, args), "\n") {
+		if strings.Contains(strings.ToUpper(line), "TEMP B-TREE") {
+			t.Fatalf("unaggregated all-metric read sorts despite time-ordered index: %s", line)
+		}
+	}
 }

@@ -196,10 +196,10 @@ type Store struct {
 	db     *pdb.InstrumentedDB
 	config StoreConfig
 
-	// Cache compiled presence SQL only. Results always come from the current
-	// read transaction. Bound the number of parameter-count shapes retained.
-	presenceMu         sync.Mutex
-	presenceStatements map[string]*pdb.InstrumentedStmt
+	// Cache compiled read SQL only. Results always come from the current
+	// database snapshot. Bound the number of parameter-count shapes retained.
+	readMu         sync.Mutex
+	readStatements map[string]*pdb.InstrumentedStmt
 
 	// Write buffer
 	bufferMu sync.Mutex
@@ -1343,7 +1343,7 @@ func normalizeMetricTypes(metricTypes []string) []string {
 // buckets, and a coarser fallback is omitted if a preferred point overlaps it.
 // A bucket's presence does not establish continuous underlying collection.
 // All probes are scoped to the same series and requested timestamp window.
-func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier) (string, []interface{}) {
+func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries bool) (string, []interface{}) {
 	// Query dimensions fixed by the caller need not be decoded per point.
 	identityColumns := ""
 	if len(resourceIDs) != 1 {
@@ -1422,7 +1422,18 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 		ORDER BY ` + identityColumns + `bucket_ts ASC`
 		params = append([]interface{}{stepSecs, stepSecs, stepSecs}, params...)
 	} else {
-		query += " ORDER BY " + identityColumns + "timestamp ASC"
+		orderColumns := identityColumns
+		if !groupSeries && len(metricTypes) == 0 {
+			// The all-metric index orders each resource by time. Interleaved
+			// metrics still append in timestamp order within each output series,
+			// so plain reads need no extra sort by metric. Streaming display
+			// aggregation explicitly requests contiguous series instead.
+			orderColumns = ""
+			if len(resourceIDs) != 1 {
+				orderColumns = "resource_id, "
+			}
+		}
+		query += " ORDER BY " + orderColumns + "timestamp ASC"
 	}
 	return query, params
 }
@@ -1443,93 +1454,97 @@ func tierBucketSeconds(tier Tier) int64 {
 // The database owns statement closure. Once the bounded set is full, uncommon
 // parameter-count shapes run uncached. No result, tier presence or time window
 // is cached, and no eviction can close a statement another reader is binding.
-const maxRetainedPresenceStatements = 32
+const maxRetainedReadStatements = 32
 
-func (s *Store) retainedPresenceStatement(query string) (*pdb.InstrumentedStmt, error) {
-	s.presenceMu.Lock()
-	defer s.presenceMu.Unlock()
-	if stmt := s.presenceStatements[query]; stmt != nil {
+func (s *Store) retainedReadStatement(query string) (*pdb.InstrumentedStmt, error) {
+	s.readMu.Lock()
+	defer s.readMu.Unlock()
+	if stmt := s.readStatements[query]; stmt != nil {
 		return stmt, nil
 	}
-	if len(s.presenceStatements) >= maxRetainedPresenceStatements {
+	if len(s.readStatements) >= maxRetainedReadStatements {
 		return nil, nil
 	}
 	stmt, err := s.db.Prepare(query)
 	if err != nil {
 		return nil, err
 	}
-	if s.presenceStatements == nil {
-		s.presenceStatements = make(map[string]*pdb.InstrumentedStmt)
+	if s.readStatements == nil {
+		s.readStatements = make(map[string]*pdb.InstrumentedStmt)
 	}
-	s.presenceStatements[query] = stmt
+	s.readStatements[query] = stmt
 	return stmt, nil
 }
 
 func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier) (map[string]map[string][]MetricPoint, error) {
-	// Determine which tiers exist in the same read snapshot used below. An
-	// all-raw series should cost a direct range read, not a UNION and an empty
-	// overlap probe for every observation. Presence does not imply coverage:
-	// every tier with any matching observations still participates.
-	// EXISTS needs only indexed identity and time columns. Do not build or
-	// order the value projection for each presence probe.
-	idSlots := strings.TrimSuffix(strings.Repeat("?,", len(resourceIDs)), ",")
-	presenceScope := "resource_type = ? AND resource_id IN (" + idSlots + ")"
-	index := "idx_metrics_query_all"
-	if len(metricTypes) > 0 {
-		presenceScope += " AND metric_type IN (" + strings.TrimSuffix(strings.Repeat("?,", len(metricTypes)), ",") + ")"
-		index = "idx_metrics_lookup"
-	}
-	presenceScope += " AND tier = ? AND timestamp >= ? AND timestamp <= ?"
-	check := "EXISTS (SELECT 1 FROM metrics INDEXED BY " + index + " WHERE " + presenceScope + ")"
-	checks := make([]string, len(tiers))
-	checkParams := make([]interface{}, 0, len(tiers)*(len(resourceIDs)+len(metricTypes)+4))
-	present := make([]bool, len(tiers))
-	checkDestinations := make([]interface{}, len(tiers))
-	for i, tier := range tiers {
-		checks[i] = check
-		checkParams = append(checkParams, resourceType)
-		for _, id := range resourceIDs {
-			checkParams = append(checkParams, id)
+	var tx *pdb.InstrumentedTx
+	var err error
+	if stepSecs > 1 {
+		// Determine which tiers exist in the same read snapshot used below. An
+		// all-raw series should cost a direct range read, not a UNION and an empty
+		// overlap probe for every observation. Presence does not imply coverage:
+		// every tier with any matching observations still participates.
+		// EXISTS needs only indexed identity and time columns. Do not build or
+		// order the value projection for each presence probe.
+		idSlots := strings.TrimSuffix(strings.Repeat("?,", len(resourceIDs)), ",")
+		presenceScope := "resource_type = ? AND resource_id IN (" + idSlots + ")"
+		index := "idx_metrics_query_all"
+		if len(metricTypes) > 0 {
+			presenceScope += " AND metric_type IN (" + strings.TrimSuffix(strings.Repeat("?,", len(metricTypes)), ",") + ")"
+			index = "idx_metrics_lookup"
 		}
-		for _, metric := range metricTypes {
-			checkParams = append(checkParams, metric)
+		presenceScope += " AND tier = ? AND timestamp >= ? AND timestamp <= ?"
+		check := "EXISTS (SELECT 1 FROM metrics INDEXED BY " + index + " WHERE " + presenceScope + ")"
+		checks := make([]string, len(tiers))
+		checkParams := make([]interface{}, 0, len(tiers)*(len(resourceIDs)+len(metricTypes)+4))
+		present := make([]bool, len(tiers))
+		checkDestinations := make([]interface{}, len(tiers))
+		for i, tier := range tiers {
+			checks[i] = check
+			checkParams = append(checkParams, resourceType)
+			for _, id := range resourceIDs {
+				checkParams = append(checkParams, id)
+			}
+			for _, metric := range metricTypes {
+				checkParams = append(checkParams, metric)
+			}
+			checkParams = append(checkParams, string(tier), start.Unix(), end.Unix())
+			checkDestinations[i] = &present[i]
 		}
-		checkParams = append(checkParams, string(tier), start.Unix(), end.Unix())
-		checkDestinations[i] = &present[i]
-	}
-	presenceQuery := "SELECT " + strings.Join(checks, ", ")
-	statement, err := s.retainedPresenceStatement(presenceQuery)
-	if err != nil {
-		return nil, fmt.Errorf("prepare retained metrics presence: %w", err)
-	}
-	// Prepare before acquiring the transaction so a one-connection pool never
-	// waits for itself while preparing a database-level statement.
-	tx, err := s.db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, fmt.Errorf("begin retained metrics snapshot: %w", err)
-	}
-	defer tx.Rollback()
-	var presenceRow *sql.Row
-	if statement != nil {
-		bound := tx.Stmt(statement)
-		defer bound.Close()
-		presenceRow = bound.QueryRow(checkParams...)
-	} else {
-		presenceRow = tx.QueryRow(presenceQuery, checkParams...)
-	}
-	if err := presenceRow.Scan(checkDestinations...); err != nil {
-		return nil, fmt.Errorf("inspect retained metrics tiers: %w", err)
-	}
-	available := make([]Tier, 0, len(tiers))
-	for i, tier := range tiers {
-		if present[i] {
-			available = append(available, tier)
+		presenceQuery := "SELECT " + strings.Join(checks, ", ")
+		statement, err := s.retainedReadStatement(presenceQuery)
+		if err != nil {
+			return nil, fmt.Errorf("prepare retained metrics presence: %w", err)
 		}
+		// Prepare before acquiring the transaction so a one-connection pool never
+		// waits for itself while preparing a database-level statement.
+		tx, err = s.db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, fmt.Errorf("begin retained metrics snapshot: %w", err)
+		}
+		defer tx.Rollback()
+		var presenceRow *sql.Row
+		if statement != nil {
+			bound := tx.Stmt(statement)
+			defer bound.Close()
+			presenceRow = bound.QueryRow(checkParams...)
+		} else {
+			presenceRow = tx.QueryRow(presenceQuery, checkParams...)
+		}
+		if err := presenceRow.Scan(checkDestinations...); err != nil {
+			return nil, fmt.Errorf("inspect retained metrics tiers: %w", err)
+		}
+		available := make([]Tier, 0, len(tiers))
+		for i, tier := range tiers {
+			if present[i] {
+				available = append(available, tier)
+			}
+		}
+		if len(available) == 0 {
+			return make(map[string]map[string][]MetricPoint), nil
+		}
+		tiers = available
 	}
-	if len(available) == 0 {
-		return make(map[string]map[string][]MetricPoint), nil
-	}
-	tiers = available
 	// Fleet results are already ordered by series and time. Stream their
 	// display buckets to avoid SQLite's fleet-wide temporary GROUP BY tree.
 	// Single-resource charts aggregate in SQLite to bound rows crossing Go.
@@ -1538,12 +1553,28 @@ func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, me
 	if streamBuckets {
 		queryStep = 0
 	}
-	sqlQuery, params := retainedQuerySQL(resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers)
+	sqlQuery, params := retainedQuerySQL(resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets)
+
+	queryRows := func() (*sql.Rows, error) { return tx.Query(sqlQuery, params...) }
+	if tx == nil {
+		// One SQLite statement already owns a consistent read snapshot. Plain
+		// retained reads need neither a separate presence probe nor a transaction
+		// wrapper. Compile the canonical reconciliation query once per shape.
+		statement, prepareErr := s.retainedReadStatement(sqlQuery)
+		if prepareErr != nil {
+			return nil, fmt.Errorf("prepare retained metrics query: %w", prepareErr)
+		}
+		if statement != nil {
+			queryRows = func() (*sql.Rows, error) { return statement.Query(params...) }
+		} else {
+			queryRows = func() (*sql.Rows, error) { return s.db.Query(sqlQuery, params...) }
+		}
+	}
 
 	// Retry on SQLITE_BUSY
 	var rows *sql.Rows
 	for i := 0; i < 5; i++ {
-		rows, err = tx.Query(sqlQuery, params...)
+		rows, err = queryRows()
 		if err == nil {
 			break
 		}

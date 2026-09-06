@@ -62,8 +62,8 @@ reproduction evidence, not a representative customer success rate.
 | Step | Work | Acceptance | Current state |
 |---|---|---|---|
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
-| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Full affected package, concurrency and retained-query performance checks pass. Real-model interpretation failures remain tracked in step 5. |
-| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. The current slice removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. Full chat regressions pass. Detection passes and live qualification remain open. |
+| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Final exact-base performance qualification remains open after PR CI exposed regressions. Real-model interpretation failures remain tracked in step 5. |
+| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. Full chat regressions pass. Detection passes and live qualification remain open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
 | 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
 
@@ -81,7 +81,8 @@ scoring to make the model pass.
 | Causal-resource validator | Removed the duplicate resource graph and name/status inference from the working capture boundary. Causal attribution is optional when unknown. | Prove capability/schema validation, parameter isolation and invocation integrity remain enforced. Dependency evidence remains available to the model through canonical queries. |
 | Flag-count turn ladder | `computeTriageMaxTurns` grants 5 + 3 turns per flag, bounded to 8–40, with a separate quick limit. | Replace quality/urgency proxies with explicit execution resource limits. More flags must not imply a better investigation budget. |
 | Unmatched-signal evaluation | `runAIAnalysisState` detects signals from tool output and triage, then starts a second model pass when they lack matching findings. | Audit for removal in favour of complete initial evidence and model-owned decisions. Preserve negative-control and missed-fault qualification rather than force reports. |
-| Missing-finding assessment sweep | A bounded continuation requests missing explicit present/resolved/uncertain verdicts for known findings. | Retain only the mechanical completeness obligation, with sufficient original evidence and no fabricated resolution or requirement to discover new issues. |
+| Missing-finding assessment sweep | A separate session receives old finding excerpts after the main run. It lacks the original run evidence. | Remove the separate session. Keep explicit present/resolved/uncertain decisions in the original conversation and preserve incomplete status for omissions. |
+| First accepted finding ends investigation | The main loop replaces its prompt and removes evidence tools after a finding write succeeds. | Remove this interpretation of persistence as evidential sufficiency. Recording one issue must not prevent reads needed for another issue or a known finding. |
 | Investigation evidence-call floor | Removed in the current slice. Seed-only and failed-read conclusions survive without forced extra calls. | Completion is not diagnostic correctness. Preserve explicit limits, failed/unavailable evidence and independent action freshness checks. |
 | Generic wrap-up counters | Removed the 12/18-call tool-result instructions and four silent-turn cutoff. | Explicit run limits bound work. Counts and silence do not establish evidential sufficiency. A twenty-read regression preserves available tools, observations and the model conclusion. |
 | Authority and execution boundaries | Tenant identity, capability schemas, approvals, invocation IDs, parameter redaction and independent readback. | Keep and prove unchanged when diagnostic policy is simplified. These enforce objective invariants. |
@@ -746,3 +747,46 @@ comparison against the actual base 4f9de86e failed nine benchmark comparisons,
 including small single-resource retained reads. Landing is blocked while the
 exact base/candidate comparison is reproduced and corrected. Do not treat the
 previous narrower performance pass as complete CI qualification.
+
+### Exact-base retained-read correction
+
+The small retained-read path performed an extra tier-presence query and opened
+an explicit transaction even when the reconciliation was already one SQLite
+statement. Plain reads now reuse bounded compiled reconciliation statements.
+All-metric plain reads retain index time order instead of sorting by metric.
+Each output series remains chronological. Display aggregation retains its
+required series grouping and same-snapshot presence optimization. No data or
+tier-presence result is cached.
+
+The corrected `store.go` SHA256 is
+`41132f7eae5a987e72092aceb8813a20f3dc44986c849023ffa0654e5bfe58aa`.
+Ten alternating 100 ms worker samples against exact PR base 4f9de86e report:
+
+| Query | Base | Correction | Comparison |
+|---|---:|---:|---|
+| Bounded single-metric API chart | 848.6 us | 894.5 us | No significant difference, p=.436 |
+| Single series across resources | 916.98 us | 47.12 us | -94.86%, p<.001 |
+| Single query, 500-node load fixture | 18.78 ms | 51.50 us | -99.73%, p<.001 |
+| All-metric dashboard | 309.3 us | 174.3 us | -43.66%, p<.001 |
+| Batch dashboard, 10 nodes | 1.912 ms | 1.723 ms | -9.86%, p=.007 |
+| Batch dashboard, 50 nodes | 8.807 ms | 8.337 ms | -5.34%, p=.023 |
+| Batch dashboard, 100 nodes | 17.56 ms | 16.08 ms | -8.43%, p=.002 |
+| Batch dashboard, 500 nodes | 87.56 ms | 82.34 ms | No significant difference, p=.052 |
+
+These are worker measurements, not a production latency guarantee. An exact
+query-plan reproduction shows the old single-query SQL choosing the broad
+tier/time index on this worker. The corrected runtime uses the series/range
+index explicitly. This explains the large worker single-query difference but
+does not establish which plan the prior CI runner chose. No benchmark threshold
+was relaxed. The final full metrics suite passes in 87.114s, the database
+suite in 0.119s and focused concurrent read/write race proof in 19.065s. The
+remaining failed CI comparisons have no significant worker latency difference:
+API memory fallback, 163.6 versus 167.3 us (p=.315), and the fifty-guest chart
+batch, 128.0 versus 121.3 ms (p=.190). These comparisons cover the earlier failed
+cases. A fresh CI run must still qualify the final landing commit. The earlier
+unexplained native SQLite fault remains an open observation.
+
+Private worker evidence is retained under
+`/opt/pulse-release-worker/pr1920-bench-4f9-c5d2/`, with source-bound
+`full-metrics-second.log`, `full-db-second.log`, `race-metrics-second.log`,
+`second-candidate-*` and `adj-*` artifacts.
