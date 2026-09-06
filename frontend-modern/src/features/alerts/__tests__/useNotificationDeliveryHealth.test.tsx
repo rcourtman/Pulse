@@ -171,24 +171,34 @@ describe('useNotificationDeliveryHealth', () => {
   );
 
   describe.each(['dismissTerminalFailures', 'retryTerminalFailures'] as const)('%s', (action) => {
-    it('reports unavailable rather than healthy when the post-action refresh fails', () =>
+    it('keeps uncertainty after a failed post-action refresh even when older healthy evidence arrives', () =>
       createRoot(async (dispose) => {
         const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
         const onAfterQueueAction = vi.fn().mockResolvedValue(undefined);
+        let finishOld!: (health: Awaited<ReturnType<typeof NotificationsAPI.getHealth>>) => void;
         try {
           vi.mocked(NotificationsAPI.getHealth)
             .mockResolvedValueOnce({
               queue: { status: 'degraded', attentionRequired: 2 },
             } as never)
+            .mockReturnValueOnce(
+              new Promise((resolve) => {
+                finishOld = resolve;
+              }),
+            )
             .mockRejectedValueOnce(new Error('post-action connection lost'));
           vi.mocked(NotificationsAPI[action]).mockResolvedValueOnce({ affected: 2 } as never);
           const state = useNotificationDeliveryHealth({ onAfterQueueAction });
           await state.loadDeliveryHealth();
+          const oldRequest = state.loadDeliveryHealth();
 
           await state[action]();
+          expect(state.deliveryHealthUnavailable()).toBe(true);
+          finishOld(healthWith('healthy'));
+          await oldRequest;
 
           expect(NotificationsAPI[action]).toHaveBeenCalledOnce();
-          expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2);
+          expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(3);
           expect(onAfterQueueAction).toHaveBeenCalledOnce();
           expect(state.deliveryHealth()).toBeNull();
           expect(state.deliveryHealthUnavailable()).toBe(true);
