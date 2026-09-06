@@ -1,21 +1,13 @@
 {
   "version": 1,
-  "base_sha": "57ead19484c49d003287309d0734875405da9040",
-  "verified_at": "2026-09-06T20:11:45.553223Z",
+  "base_sha": "3853124a391ed451f75402f07951c0142e6b5ad8",
+  "verified_at": "2026-09-06T20:40:07.804772Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/FindingsPanel.tsx",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
-    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts"
+    "frontend-modern/src/components/DemoBanner.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/FindingsPanel.tsx": "f506a26757b4c0ea3adf3f77af10214bfd31578b7122d3904a9b3a7272d1e146",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "6a18d67d5d3d0a8335589bdf199c340eb4775aea3442dc094971d7f924a0dcc5",
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "2f1fd68ec333e7f9e8792d74ba8d7e6a2e95755c82b9c7121d847469a31f931b",
-    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "49e12cfd44686bd657ddddfb167c5956ec693b6f5d45d9d43c1e3a2e858a6c7f",
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "64d0b891e7ad228e8590da859dc25e825b6164c8cf76a01983a219d6cd079b23"
+    "frontend-modern/src/components/DemoBanner.tsx": "13fd8dea552d97f1df866438f7ba38eec01f25907dc68a0bec672e1793c3fc97"
   },
   "backend_content_sha256": {
     "internal/agentcapabilities/transcript.go": "356c4ca201470407988ff9b2c1fb848619ed38e9d8db844e7390adce0f93ec19",
@@ -27,19 +19,22 @@
     "internal/ai/tools/tools_propose.go": "43d720c78a010b72f53f7e4e9e1b7b2a763e7f1ac555edb921b7cdca3e82fd51",
     "internal/ai/patrol_findings.go": "d5eeb386f025cca338ac328b1d4ec7a2bf51150023454e2b61670f196fcf0356",
     "internal/api/ai_handlers.go": "f8c9b24dc684346da4bddab066540fd43ca4999f5fd379c4dc34b5293f78394c",
-    "internal/api/patrol_action_reconciliation.go": "bc5da1a8050b94271dcdc88841a0ce3329e1773bd01c8746068391a71740ffa2"
+    "internal/api/patrol_action_reconciliation.go": "bc5da1a8050b94271dcdc88841a0ce3329e1773bd01c8746068391a71740ffa2",
+    "internal/monitoring/monitor.go": "63c8ef4867c07c96b4cd7c4316b5b8646f11b7e9e43a5233471956f76f33d553",
+    "internal/monitoring/system_alerts.go": "53ed4f02784636363da273883415331066d8b2484ca50e6b506e69990abb149d"
   },
   "enterprise_base_sha": "3d9f4e3051d38027355a2a1f36b8c7f672a09b65",
   "enterprise_content_sha256": {
     "internal/investigation/orchestrator.go": "d56fd512dc47f8a2453559e89863da5d24dffc0a5977abb8f1ea7a82655cd9e8"
   },
-  "binary_sha256": "859d5d2de84cfd2264caa7dbcf5f080e3b1d06b5876df2c81dc0e00872f5e779",
+  "binary_sha256": "0c19f9b9265eff2214e79ab6b2e4a6b19a5645eb467c994c44af70b3d6593317",
   "routes": [
     "/qualification (isolated Overview component on :5199)",
     "/patrol (Activity, All history)",
     "/actions?action=act_dcc3b52e5451810e49466daf9a6fccb0",
     "/actions?action=act_ee0b736f0430e472e896a456ba3cb6eb",
-    "Pulse Assistant contextual panel from resolved Patrol findings"
+    "Pulse Assistant contextual panel from resolved Patrol findings",
+    "/qualification (isolated DemoBanner component on :5198)"
   ],
   "viewports": [
     {
@@ -59,11 +54,20 @@
     "Incoming merged alert delivery diagnosis ordering: hold older request, add alert to start newer request, render current notifications-disabled state, release older ready response, verify current state and both cards remain. Existing Patrol and login proof is retained in the prior committed receipt and runtime source is unchanged.",
     "Real persisted approved/verified and rejected findings remain reviewable after resolution. Durable investigation outcome agrees with authoritative action, with original prose retained. No stale Fix Queued status. Exact action links remain available.",
     "Completed and Rejected action headers, State when planned and Plan expiry copy, inert settled action controls, independently verified recovery and explicit unavailable rollback. Policy, evidence and delivery disclosures expand and collapse.",
-    "Assistant handoff shows the exact finding with completed/rejected action context and Chat: Read-only. Browser provider readiness POST is deliberately blocked, so its visible route error is a rendering check and does not retest the provider. No prompt is submitted."
+    "Assistant handoff shows the exact finding with completed/rejected action context and Chat: Read-only. Browser provider readiness POST is deliberately blocked, so its visible route error is a rendering check and does not retest the provider. No prompt is submitted.",
+    "Incoming main DemoBanner install link: visible in demo policy, absent outside demo, link hover/focus, exact external setup destination opened in a new tab with noopener/noreferrer, keyboard dismissal and reload persistence. Real backend mock mode remains off. External destination content is intercepted because only navigation is under test."
   ],
   "interactions": [
     "scripts/check-alert-diagnosis-ordering.mjs passed at 1440, 900 and 390 by 1000. Actual pixels inspected at desktop and narrow sizes. This is scripted component evidence, not proof of installed delivery or recipient receipt. Screenshots in /tmp/pulse-alert-diagnosis-ordering/.",
     "Final Pro binary and final frontend content exercised in Playwright at 1440, 900 and 390 by 1000. Keyboard open/review, safety disclosure, exact action navigation, direct deep-link reload, policy/evidence/delivery disclosure keyboard toggles, Escape and close-button dismissal, review focus return where retained, Assistant open/close, scrolling and page overflow checks. Desktop/intermediate/phone pixels inspected including deepest evidence and Assistant overlay.",
-    "Private artifacts: tmp/patrol-gemini-38/live-action-browser/. Final complete matrix passed after removing redundant back-to-back full-page navigations from the proof driver. Earlier proof attempts hit an intermittent bootstrap connection screen. No bootstrap fix or general availability claim is made. API writes blocked except login."
-  ]
+    "Private artifacts: tmp/patrol-gemini-38/live-action-browser/. Final complete matrix passed after removing redundant back-to-back full-page navigations from the proof driver. Earlier proof attempts hit an intermittent bootstrap connection screen. No bootstrap fix or general availability claim is made. API writes blocked except login.",
+    "After integrating main eef4ea21e73aedaa69380574b1fdf4d9dbdee3c8, repeated the complete real Patrol/Actions/Assistant matrix on binary 0c19f9b9265eff2214e79ab6b2e4a6b19a5645eb467c994c44af70b3d6593317. All three widths passed and pixels were reinspected. Incoming DemoBanner separately passed at the same widths using an isolated Vite cache and actual project styling. Prior frontend hashes remain byte-identical and are retained above. Merged monitoring regressions, API action tests, 37 component tests and type-check pass."
+  ],
+  "prior_frontend_content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "f506a26757b4c0ea3adf3f77af10214bfd31578b7122d3904a9b3a7272d1e146",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "6a18d67d5d3d0a8335589bdf199c340eb4775aea3442dc094971d7f924a0dcc5",
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "2f1fd68ec333e7f9e8792d74ba8d7e6a2e95755c82b9c7121d847469a31f931b",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "49e12cfd44686bd657ddddfb167c5956ec693b6f5d45d9d43c1e3a2e858a6c7f",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "64d0b891e7ad228e8590da859dc25e825b6164c8cf76a01983a219d6cd079b23"
+  }
 }

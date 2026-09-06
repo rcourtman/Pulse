@@ -57,7 +57,18 @@ func (m *Monitor) evaluateNotificationDeliveryAt(now time.Time, force bool) {
 		return
 	}
 
-	health := notificationMgr.DeliveryHealth()
+	m.projectNotificationDeliveryHealth(alertManager, notificationMgr.DeliveryHealth)
+}
+
+// projectNotificationDeliveryHealth serializes the entire read/apply operation.
+// Locking only the alert mutation lets a paused, older health read overwrite a
+// newer reconciliation (either resurrecting a dismissed warning or hiding a
+// new failure). Queue callbacks enter here after releasing the queue lock.
+func (m *Monitor) projectNotificationDeliveryHealth(alertManager *alerts.Manager, readHealth func() notifications.DeliveryHealth) {
+	m.deliveryHealthProjectionMu.Lock()
+	defer m.deliveryHealthProjectionMu.Unlock()
+
+	health := readHealth()
 	if health.Healthy {
 		alertManager.ClearSystemAlert(alerts.NotificationDeliveryAlertType)
 		return

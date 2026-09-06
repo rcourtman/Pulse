@@ -57,6 +57,17 @@ describe('DemoBanner', () => {
     expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
   });
 
+  it('links the demo back to the install steps in a new tab', async () => {
+    presentationPolicyIsDemoModeMock.mockReturnValue(true);
+
+    await renderBanner();
+
+    const link = screen.getByRole('link', { name: 'Run Pulse on your own hardware' });
+    expect(link).toHaveAttribute('href', 'https://pulserelay.pro/#setup');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('stays hidden when demo mode is disabled', async () => {
     await renderBanner();
 
