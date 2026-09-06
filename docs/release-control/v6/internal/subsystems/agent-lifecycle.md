@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Automatic PVE association identity boundary
+
+Host ingestion must not create a host-to-PVE or reciprocal PVE-to-agent link
+solely from a shared host-local network address. Uniqueness among monitored
+PVE nodes does not establish uniqueness across unrelated agent hosts.
+Automatic network evidence excludes loopback, unspecified, multicast and
+link-local IPs, and interfaces named lo or prefixed docker/br-. This changes
+association evidence only: enrollment, token binding, removal, re-enrollment
+and command authority remain unchanged. It does not migrate or repair
+persisted incorrect links.
+
+Verification: `TestApplyHostReportDoesNotLinkUnrelatedDockerBridge` in
+`internal/monitoring/monitor_host_agents_test.go` ingests repeated synthetic
+NAS reports and requires both association directions to remain absent.
+The adjacent matcher and filtering tests exercise host-local rejection and
+retained management-address evidence. These are local fixture proofs, not
+reporter confirmation of #1930 or installed lifecycle qualification.
+
 The internal Patrol request bridge carries explicit execution limits and
 capability allowlists without a diagnostic report-count budget. Finding writes
 retain their server-owned scope and cannot enter or satisfy the infrastructure
