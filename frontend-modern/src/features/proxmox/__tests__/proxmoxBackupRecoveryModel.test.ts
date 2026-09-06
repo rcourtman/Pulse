@@ -231,6 +231,43 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.coverageSummary.unprotected).toBe(1);
   });
 
+  it('does not let one successful guest hide missing coverage or a failed sibling', () => {
+    const resources = [112, 200, 201, 202].map((vmid) =>
+      workload({ id: `vm-${vmid}`, proxmox: { vmid, node: 'minipc', instance: 'homelab' } }),
+    );
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: resources,
+      pbsBackups: [pbsBackup()],
+      archives: [],
+      snapshots: [],
+      tasks: [
+        task(),
+        task({ id: 'task-201', vmid: 201, status: 'failed', error: 'storage unavailable' }),
+        // Task success alone is not canonical protection evidence.
+        task({ id: 'task-202', vmid: 202 }),
+      ],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      protectionPosturesResolved: true,
+      protectionPostures: new Map([
+        ['vm-112', protectionPosture('vm-112', 'protected')],
+        ['vm-200', protectionPosture('vm-200', 'unprotected')],
+        ['vm-201', protectionPosture('vm-201', 'attention')],
+      ]),
+    });
+
+    expect(model.coverageSummary).toMatchObject({
+      totalWorkloads: 4,
+      protected: 1,
+      unprotected: 1,
+      attention: 1,
+      unknown: 1,
+    });
+    const rows = new Map(model.coverageRows.map((row) => [row.workload.resourceId, row]));
+    expect(rows.get('vm-200')).toMatchObject({ artifacts: [], posture: 'unprotected' });
+    expect(rows.get('vm-201')?.latestTask?.error).toBe('storage unavailable');
+    expect(rows.get('vm-202')).toMatchObject({ posture: 'unknown', latestTask: { status: 'OK' } });
+  });
+
   it('distinguishes an in-flight posture read from a completed unknown evaluation', () => {
     const resource = workload({ id: 'vm-202', proxmox: { vmid: 202, node: 'delly' } });
     const model = buildProxmoxBackupRecoveryModel({
