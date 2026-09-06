@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 )
 
@@ -129,4 +130,72 @@ func TestEvaluateNotificationDeliveryThrottles(t *testing.T) {
 func TestEvaluateNotificationDeliveryIsSafeWithoutAMonitor(t *testing.T) {
 	var m *Monitor
 	m.evaluateNotificationDelivery(time.Now())
+}
+
+// Hold the older snapshot between read and apply while a newer reconciliation
+// tries to enter. Exercise both stale-clear and stale-raise failure modes
+// without a database, queue workers, or notification destinations.
+func TestProjectNotificationDeliveryHealthOrdersSnapshots(t *testing.T) {
+	healthy := notifications.ClassifyQueueHealth(map[string]int{})
+	failed := notifications.ClassifyQueueHealth(map[string]int{string(notifications.QueueStatusDLQ): 1})
+	for _, tc := range []struct {
+		name         string
+		old, current notifications.DeliveryHealth
+	}{
+		{"new_failure_survives_old_clear", healthy, failed},
+		{"dismissal_survives_old_failure", failed, healthy},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager := alerts.NewManagerWithDataDir(t.TempDir())
+			t.Cleanup(manager.Stop)
+			m := &Monitor{}
+			read := make(chan struct{})
+			release := make(chan struct{})
+			oldDone := make(chan struct{})
+			go func() {
+				defer close(oldDone)
+				m.projectNotificationDeliveryHealth(manager, func() notifications.DeliveryHealth {
+					close(read)
+					<-release
+					return tc.old
+				})
+			}()
+			<-read
+			// This assertion is independent of scheduling: the snapshot must
+			// already be protected before reading, not just when applying it.
+			if m.deliveryHealthProjectionMu.TryLock() {
+				m.deliveryHealthProjectionMu.Unlock()
+				t.Error("health read is not protected by the projection lock")
+			}
+			newRead := make(chan struct{})
+			newDone := make(chan struct{})
+			go func() {
+				defer close(newDone)
+				m.projectNotificationDeliveryHealth(manager, func() notifications.DeliveryHealth {
+					close(newRead)
+					return tc.current
+				})
+			}()
+			select {
+			case <-newRead:
+				// Ensure the newer state applies before releasing the stale
+				// snapshot when checking the unprotected implementation.
+				<-newDone
+				t.Error("new health read overtook an unfinished projection")
+			case <-time.After(25 * time.Millisecond):
+			}
+			close(release)
+			<-oldDone
+			<-newDone
+			active := false
+			for _, alert := range manager.GetActiveAlerts() {
+				if alert.Type == alerts.NotificationDeliveryAlertType {
+					active = true
+				}
+			}
+			if active == tc.current.Healthy {
+				t.Errorf("delivery warning active = %v, latest health healthy = %v", active, tc.current.Healthy)
+			}
+		})
+	}
 }

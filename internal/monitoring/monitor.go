@@ -1124,7 +1124,8 @@ type Monitor struct {
 	deadManConfigMu            sync.RWMutex
 	deadManConfig              notifications.DeadManConfig
 	deadManConfigLoadErr       error
-	lastDeliveryHealthCheck    time.Time // throttles the notification-delivery system alert evaluation; guarded by mu
+	deliveryHealthProjectionMu sync.Mutex // serializes delivery-health reads and alert projection
+	lastDeliveryHealthCheck    time.Time  // throttles the notification-delivery system alert evaluation; guarded by mu
 	configPersist              *config.ConfigPersistence
 	discoveryService           *discovery.Service                         // Background discovery service
 	activePollCount            int32                                      // Number of active polling operations
