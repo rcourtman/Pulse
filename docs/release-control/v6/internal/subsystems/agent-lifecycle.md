@@ -15,6 +15,26 @@
 
 ## Purpose
 
+### Automatic PVE association identity boundary
+
+Host ingestion must not create a host-to-PVE or reciprocal PVE-to-agent link
+solely from a shared host-local network address. Uniqueness among monitored
+PVE nodes does not establish uniqueness across unrelated agent hosts.
+Automatic network evidence excludes loopback, unspecified, multicast and
+link-local IPs, interfaces named lo or prefixed docker, and Docker-generated
+bridge names matching `br-` plus a 12-character hexadecimal network ID. Other
+bridge names remain eligible because they may carry management traffic. This
+changes association evidence only: enrollment, token binding, removal,
+re-enrollment and command authority remain unchanged. It does not migrate or
+repair persisted incorrect links.
+
+Verification: `TestApplyHostReportDoesNotLinkUnrelatedDockerBridge` in
+`internal/monitoring/monitor_host_agents_test.go` ingests repeated synthetic
+NAS reports and requires both association directions to remain absent.
+The adjacent matcher and filtering tests exercise host-local rejection and
+retained management-address evidence. These are local fixture proofs, not
+reporter confirmation of #1930 or installed lifecycle qualification.
+
 The internal Patrol request bridge carries explicit execution limits and
 capability allowlists without a diagnostic report-count budget. Finding writes
 retain their server-owned scope and cannot enter or satisfy the infrastructure
@@ -7829,3 +7849,50 @@ against interleaved Linux procfs counters.
 `internal/hostmetrics/issue1894_interleaved_collectors_test.go` independently
 pins isolated collector deltas and startup fallback. This changes telemetry
 sampling only, not report schemas, identity, enrollment or command authority.
+
+### Asymmetric bridge evidence regression coverage
+
+`TestApplyHostReportBridgeIdentity` verifies two consecutive reports through
+host ingestion and checks both host-to-node and reciprocal node-to-agent links.
+Custom management bridges, private IPv4 and ULA addresses retain association
+when names differ and the provider endpoint is DNS-based. A Docker or generated
+bridge on either side alone must not supply inferred identity: testing only
+symmetric bridges would miss removal of filtering from one inventory.
+This proof does not establish safety for arbitrarily renamed Docker bridges
+or repair persisted links, and is not reporter or installed-release validation.
+
+### Durable host/node association intent (6 September 2026)
+
+The earlier restart reproduction showed that the link API only changed memory,
+and that provider-name cleanup erased unmatched manual links. The replacement
+uses internal `NodeLinkSource` provenance in the host continuity journal:
+`manual`, `unlinked`, `automatic`, or empty (legacy/unknown). This is not a new
+API or UI surface.
+
+Link and unlink take the host lifecycle write lock and commit all affected
+journal entries while holding the state lock, before publishing visible state.
+A failed write (or unavailable store) returns an error without changing either
+direction of the link. Reassigning an occupied node writes the displaced host's
+explicit unlink in the same transaction. Identity, report ordering and removal
+metadata are preserved.
+
+Manual links are pinned to the operator-selected provider ID, including through
+unmatched reports and restart before another report. Provider identity replacement
+does not authorise redirection: intent stays dormant if that ID disappears and
+reattaches if it returns. A persisted reservation also prevents another host's
+automatic match from taking the node before its owner reconnects. Replacing a
+dormant owner explicitly persists that owner's unlink too. Explicit unlink persists and suppresses automatic node
+reassociation even when a subsequent report matches. An explicit link can select
+a replacement ID.
+
+Only known automatic associations are re-evaluated destructively against provider
+names and network evidence. Obsolete reverse links are removed with host updates.
+An unmarked persisted link is not assumed automatic: report ingestion retains it,
+so this is deliberately **not** a blanket repair of existing v6.4.1 associations.
+Legacy provider reconciliation otherwise retains its previous behaviour.
+
+`host_manual_link_regression_test.go` covers immediate restart, unlink with
+positive matching evidence, provider replacement/return, write failure and
+automatic versus unknown-provenance cleanup. State and config tests cover atomic
+replacement and preservation of lifecycle evidence. These are synthetic local
+proofs, not reporter confirmation or installed-release resolution of #1930.

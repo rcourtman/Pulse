@@ -115,6 +115,53 @@ describe('useAlertDestinationsTabState', () => {
     expect(result.deliveryNeedsAttention()).toBe(true);
   });
 
+  it('preserves Retry log evidence when the registered mount read fails late', async () => {
+    let rejectMount!: (error: Error) => void;
+    const current = {
+      entries: [],
+      windowDays: 30,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 30,
+    };
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+      queue: { status: 'healthy' },
+    } as never);
+    vi.mocked(NotificationsAPI.getDeliveryLog)
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectMount = reject;
+        }),
+      )
+      .mockResolvedValueOnce(current);
+    const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+    const onRetryLoad = vi.fn();
+    const { result, cleanup } = renderHook(() =>
+      useAlertDestinationsTabState({
+        appriseConfig,
+        setAppriseConfig,
+        configLoadError: () => 'configuration unavailable',
+        emailConfig: () => buildEmailConfig(),
+        isLoadingDestinations: () => false,
+        isRetrying: () => false,
+        onRetryLoad,
+      }),
+    );
+    try {
+      await waitFor(() => expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1));
+      result.handleRetry();
+      await waitFor(() => expect(result.deliveryLog()).toEqual(current));
+      expect(onRetryLoad).toHaveBeenCalledTimes(1);
+      rejectMount(new Error('stale mount failure'));
+      await Promise.resolve();
+      expect(result.deliveryLog()).toEqual(current);
+      expect(result.deliveryLogUnavailable()).toBe(false);
+      expect(result.refreshingDeliveryLog()).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
   beforeEach(() => {
     vi.mocked(AlertsAPI.getEvents).mockReset();
     vi.mocked(AlertsAPI.getEvents).mockResolvedValue([]);

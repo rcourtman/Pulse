@@ -28,6 +28,7 @@ type HostContinuityEntry struct {
 	DeniedTokenIDs    []string  `json:"deniedTokenIds,omitempty"`
 	AgentVersion      string    `json:"agentVersion,omitempty"`
 	Platform          string    `json:"platform,omitempty"`
+	NodeLinkSource    string    `json:"nodeLinkSource,omitempty"`
 	LinkedNodeID      string    `json:"linkedNodeId,omitempty"`
 	LinkedVMID        string    `json:"linkedVmId,omitempty"`
 	LinkedContainerID string    `json:"linkedContainerId,omitempty"`
@@ -400,4 +401,57 @@ func uniqueTrimmedStrings(values ...string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+// SetNodeLinkIntents writes all affected links as one journal transaction.
+// It preserves report watermarks, credentials and removal tombstones.
+func (s *HostContinuityStore) SetNodeLinkIntents(links []HostContinuityEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.loadErr != nil {
+		return s.loadErr
+	}
+	previous := make(map[string]HostContinuityEntry, len(s.entries))
+	for id, entry := range s.entries {
+		previous[id] = entry
+	}
+	for _, link := range links {
+		// An operator can replace an owner which has not reported since restart.
+		// Persist that owner's unlink too, so it cannot reclaim the selection.
+		if link.NodeLinkSource == "manual" && link.LinkedNodeID != "" {
+			for id, prior := range s.entries {
+				if id != link.HostID && prior.LinkedNodeID == link.LinkedNodeID && prior.RemovedAt.IsZero() {
+					prior.LinkedNodeID, prior.NodeLinkSource = "", "unlinked"
+					s.entries[id] = prior
+				}
+			}
+		}
+		entry, ok := s.entries[link.HostID]
+		if !ok {
+			entry = link
+		}
+		entry.LinkedNodeID = link.LinkedNodeID
+		entry.LinkedVMID, entry.LinkedContainerID = "", ""
+		entry.NodeLinkSource = link.NodeLinkSource
+		s.entries[link.HostID] = entry
+	}
+	if err := s.save(); err != nil {
+		s.entries = previous
+		return err
+	}
+	return nil
+}
+
+// NodeLinkReservedByOther protects an operator-selected node even before its
+// owner reconnects after restart. Removal releases the reservation.
+func (s *HostContinuityStore) NodeLinkReservedByOther(hostID, nodeID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for id, entry := range s.entries {
+		if id != hostID && entry.NodeLinkSource == "manual" &&
+			entry.LinkedNodeID == nodeID && entry.RemovedAt.IsZero() {
+			return true
+		}
+	}
+	return false
 }

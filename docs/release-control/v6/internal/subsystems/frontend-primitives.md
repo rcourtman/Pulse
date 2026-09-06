@@ -20,6 +20,18 @@
 
 ## Purpose
 
+The Destinations delivery-log state primitive assigns a generation to each
+refresh and rejects stale completions before updating rows, unavailable state
+or loading state. Held-event reads share that generation without blocking the
+attempt-log spinner. Cleanup prevents abandoned requests from updating state
+and makes subsequent calls through the disposed loader inert; it does not
+cancel transport requests. Latest-request failure remains unavailable rather
+than being concealed by an older successful response.
+Verification combines the hook's ordinary race/disposal tests, registered
+mount/Retry integration, and `scripts/check-delivery-log-ordering.mjs` Chromium
+content assertions at desktop and narrow widths. This is component-level
+presentation proof with scripted APIs, not full-tab or installed qualification.
+
 The shared delivery-health card wraps action groups according to available
 space, retaining readable explanation width when Review, Retry, Dismiss and
 Refresh appear together. Its heading uses the opaque semantic foreground,

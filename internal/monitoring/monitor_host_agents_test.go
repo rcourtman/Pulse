@@ -5685,3 +5685,154 @@ func TestApplyHostReportPreservesPoolOnlyUnraidCount(t *testing.T) {
 		t.Fatalf("pool-only host raised storage risk: %+v", assessment)
 	}
 }
+
+// Uniqueness among PVE nodes does not make host-local addresses machine identity:
+// a non-PVE host is not included in that ownership count.
+func TestFindLinkedProxmoxEntityWithHints_RejectsHostLocalNetworkIdentity(t *testing.T) {
+	for _, tc := range []struct{ name, nic, address string }{
+		{"docker", "docker0", "172.17.0.1/16"},
+		{"generated docker bridge", "br-0123456789ab", "192.0.2.1/24"},
+		{"loopback", "lo", "127.0.0.1/8"},
+		{"IPv6 loopback", "lo", "::1/128"},
+		{"link local", "eth0", "169.254.1.2/16"},
+		{"IPv6 link local", "eth0", "fe80::1/64"},
+		{"unspecified", "eth0", "0.0.0.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := &Monitor{state: models.NewState()}
+			monitor.state.UpdateNodes([]models.Node{{
+				ID: "pve-node", Name: "pve", Instance: "cluster",
+				Host:              "https://pve.example:8006",
+				NetworkInterfaces: []models.HostNetworkInterface{{Name: tc.nic, Addresses: []string{tc.address}}},
+			}})
+			node, vm, ct := monitor.findLinkedProxmoxEntityWithHints("nas", "", []agentshost.NetworkInterface{
+				{Name: tc.nic, Addresses: []string{tc.address}},
+				{Name: "eth1", Addresses: []string{"198.51.100.20/24"}},
+			})
+			if node != "" || vm != "" || ct != "" {
+				t.Fatalf("unrelated NAS linked by host-local address: node=%q vm=%q ct=%q", node, vm, ct)
+			}
+		})
+	}
+}
+
+func TestAgentLinkNetworkIdentityFiltering(t *testing.T) {
+	for _, tc := range []struct {
+		name, nic, address string
+		want               bool
+	}{
+		{"management bridge", "vmbr0", "192.0.2.10/24", true},
+		{"private management", "eth0", "172.17.0.1/16", true},
+		{"IPv6 management", "vmbr0", "2001:db8::10/64", true},
+		{"ULA management", "eth0", "fd00::10/64", true},
+		{"unnamed legacy interface", "", "192.0.2.10", true},
+		{"custom management bridge", "br-mgmt", "192.0.2.10", true},
+		{"docker", "docker0", "172.17.0.1/16", false},
+		{"generated docker", "br-0123456789ab", "192.0.2.1/24", false},
+		{"non-hex bridge", "br-0123456789ag", "192.0.2.1/24", true},
+		{"loopback", "eth0", "127.1.2.3/8", false},
+		{"IPv6 unspecified", "eth0", "::", false},
+		{"multicast", "eth0", "224.0.0.1", false},
+		{"IPv6 link local", "eth0", "fe90::1/64", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := collectReportedHostIPs("", []agentshost.NetworkInterface{{Name: tc.nic, Addresses: []string{tc.address}}})
+			node := collectNodeNetworkIPs([]unifiedresources.NetworkInterface{{Name: tc.nic, Addresses: []string{tc.address}}})
+			if (len(agent) == 1) != tc.want || (len(node) == 1) != tc.want {
+				t.Fatalf("agent=%v node=%v want accepted=%v", agent, node, tc.want)
+			}
+		})
+	}
+	if got := collectReportedHostIPs("172.17.0.1", nil); len(got) != 1 {
+		t.Fatalf("explicit private report IP must remain usable: %v", got)
+	}
+	if got := collectReportedHostIPs("::1", nil); len(got) != 0 {
+		t.Fatalf("explicit loopback cannot identify a machine: %v", got)
+	}
+}
+
+// Exercise ingestion as well as the matcher: no reciprocal PVE link may be
+// created from a bridge address shared with an unrelated host.
+func TestApplyHostReportDoesNotLinkUnrelatedDockerBridge(t *testing.T) {
+	monitor := issue1654Monitor()
+	monitor.state.UpdateNodes([]models.Node{{
+		ID: "pve-node", Name: "pve", Instance: "cluster",
+		Host: "https://pve.example:8006",
+		NetworkInterfaces: []models.HostNetworkInterface{
+			{Name: "vmbr0", Addresses: []string{"192.0.2.10/24"}},
+			{Name: "docker0", Addresses: []string{"172.17.0.1/16"}},
+		},
+	}})
+	report := issue1654Report(time.Now().UTC())
+	report.Host.Hostname = "nas.example"
+	report.Network = []agentshost.NetworkInterface{
+		{Name: "eth0", Addresses: []string{"198.51.100.20/24"}},
+		{Name: "docker0", Addresses: []string{"172.17.0.1/16"}},
+	}
+	for i := 0; i < 2; i++ {
+		report.Timestamp = report.Timestamp.Add(time.Second)
+		host, err := monitor.ApplyHostReport(report, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if host.LinkedNodeID != "" {
+			t.Fatalf("NAS linked to %q", host.LinkedNodeID)
+		}
+		nodes := monitor.state.GetSnapshot().Nodes
+		if len(nodes) != 1 || nodes[0].LinkedAgentID != "" {
+			t.Fatalf("PVE node acquired an unrelated agent link: %+v", nodes)
+		}
+	}
+}
+
+// Exercise each side independently: symmetric fixtures alone would still pass
+// if filtering accidentally disappeared from either address inventory.
+func TestApplyHostReportBridgeIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name, providerNIC, agentNIC, address string
+		wantLink                             bool
+	}{
+		{"custom management", "br-mgmt", "br-mgmt", "192.0.2.10/24", true},
+		{"private management", "vmbr0", "eth0", "172.17.0.1/16", true},
+		{"ULA management", "br-mgmt", "eth0", "fd00::10/64", true},
+		{"provider docker only", "docker0", "eth0", "172.17.0.1/16", false},
+		{"agent docker only", "vmbr0", "docker0", "172.17.0.1/16", false},
+		{"provider generated bridge only", "br-0123456789ab", "eth0", "192.0.2.10/24", false},
+		{"agent generated bridge only", "vmbr0", "br-0123456789ab", "192.0.2.10/24", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := issue1654Monitor()
+			monitor.state.UpdateNodes([]models.Node{{
+				ID: "pve-node", Name: "pve", Instance: "cluster",
+				Host: "https://pve.example:8006",
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: tc.providerNIC, Addresses: []string{tc.address}},
+				},
+			}})
+			report := issue1654Report(time.Now().UTC())
+			// Different names and a DNS endpoint force network evidence.
+			report.Host.Hostname = "agent.example"
+			report.Network = []agentshost.NetworkInterface{
+				{Name: tc.agentNIC, Addresses: []string{tc.address}},
+			}
+			for i := 0; i < 2; i++ {
+				report.Timestamp = report.Timestamp.Add(time.Second)
+				host, err := monitor.ApplyHostReport(report, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantNode, wantAgent := "", ""
+				if tc.wantLink {
+					wantNode, wantAgent = "pve-node", host.ID
+				}
+				if host.LinkedNodeID != wantNode {
+					t.Fatalf("report %d: linked node = %q, want %q", i, host.LinkedNodeID, wantNode)
+				}
+				nodes := monitor.state.GetSnapshot().Nodes
+				if len(nodes) != 1 || nodes[0].LinkedAgentID != wantAgent {
+					t.Fatalf("report %d: reciprocal link mismatch, want agent %q", i, wantAgent)
+				}
+			}
+		})
+	}
+}

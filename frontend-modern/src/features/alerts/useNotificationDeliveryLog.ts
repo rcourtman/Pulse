@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, type NotificationDeliveryLog } from '@/api/notifications';
@@ -26,7 +26,15 @@ export function useNotificationDeliveryLog() {
   const [refreshingDeliveryLog, setRefreshingDeliveryLog] = createSignal(false);
   const [heldEvents, setHeldEvents] = createSignal<AlertEvent[]>([]);
 
-  const loadHeldEvents = async () => {
+  // Both reads belong to the same refresh, but held events never block the log.
+  let latestRequest = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const ownsRequest = (request: number) => !disposed && request === latestRequest;
+
+  const loadHeldEvents = async (request: number) => {
     try {
       const since = new Date(
         Date.now() - HELD_EVENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
@@ -36,31 +44,36 @@ export function useNotificationDeliveryLog() {
         since,
         limit: HELD_EVENT_LIMIT,
       });
-      setHeldEvents(events);
+      if (ownsRequest(request)) setHeldEvents(events);
     } catch (error) {
+      if (!ownsRequest(request)) return;
       logger.error('Failed to load held alert notification events', error);
       setHeldEvents([]);
     }
   };
 
   const loadDeliveryLog = async () => {
+    if (disposed) return;
+    const request = ++latestRequest;
     setRefreshingDeliveryLog(true);
     // Held events refresh independently: they must never delay or fail the
     // primary delivery-attempt log.
-    void loadHeldEvents();
+    void loadHeldEvents(request);
     try {
       // Request the server's bounded maximum. A degraded queue can retain more
       // than the default page of 50 failures, and the evidence view should not
       // hide them behind unrelated successful attempts when space is available.
       const log = await NotificationsAPI.getDeliveryLog(DELIVERY_LOG_LIMIT);
+      if (!ownsRequest(request)) return;
       setDeliveryLog(log);
       setDeliveryLogUnavailable(false);
     } catch (error) {
+      if (!ownsRequest(request)) return;
       logger.error('Failed to load notification delivery log', error);
       setDeliveryLog(null);
       setDeliveryLogUnavailable(true);
     } finally {
-      setRefreshingDeliveryLog(false);
+      if (ownsRequest(request)) setRefreshingDeliveryLog(false);
     }
   };
 
