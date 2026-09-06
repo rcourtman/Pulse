@@ -503,7 +503,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.resolveResourceThresholds("storage", resourceID)
+			thresholds := m.effectiveAlertPolicyNoLock(alertPolicyQuery{TypeKey: "storage", ResourceID: resourceID, StorageAliases: storagePolicyAliases(alert)}).Thresholds
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
