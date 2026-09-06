@@ -188,17 +188,10 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
 	}
 
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
-
 	// Resolve target to the correct agent and routing info (with full provenance)
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
-		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host", targetHost, routing.TargetType)), nil
-		}
-		return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
+		return unavailableCommandConnection(targetHost, routing), nil
 	}
 
 	// Build command (with optional Docker wrapper)

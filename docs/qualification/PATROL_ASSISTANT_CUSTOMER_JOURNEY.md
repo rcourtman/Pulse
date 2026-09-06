@@ -1129,3 +1129,86 @@ comparisons, gates and logs copied to `tmp/patrol-named-binding-final-proof/` at
 the workspace root. This establishes the selected local performance proof,
 not a completed remote CI pass. Final staged-hook qualification and landing
 remain pending.
+
+
+### Missing diagnostic access preserves monitored identity
+
+The named-binding correction is committed as `1f41fa174d7d` and pushed to PR
+#1928 after the exact five-file staged hook passed 163 tests in 127.438s.
+This supersedes the pending-hook statement above. Remote landing remains open.
+
+The missing-access case reproduced a shared routing defect before any new
+infrastructure fault was introduced. With no connected command agents, the
+resolver returned before consulting monitoring topology. Known hosts, VMs and
+system containers consequently lost their kind, parent and required transport.
+The regression failed for all three known targets in the original source.
+
+The shared resolver now retains topology when no server or connection exists.
+A known target cannot fall through to an unrelated agent with a colliding ID.
+No-target routing still requires exactly one connected agent. The file-read,
+file-write, file-append, read-only execution and retained legacy command handlers
+return the existing NO_AGENT failure envelope, including known resource kind and
+parent node when available. The requested operation did not run. Missing access
+no longer produces a successful file-write result or unsupported installation
+advice. Absence of a connection does not establish a policy denial, missing
+installation, guest capability, fresh observation or healthy workload.
+
+This concerns diagnostic command access. Advertised Proxmox lifecycle actions
+retain their canonical hypervisor action authority and do not acquire an
+in-guest diagnostic prerequisite. Issue #1782's full body and two comments were
+read as adjacent evidence of the customer harm caused by invented prerequisites.
+Its requested reporter confirmation remains outstanding. No comment was sent.
+
+The final full tools package passes on pulse-dev with Go 1.26.8 in 59.437s.
+Targeted local regression passes on Go 1.27.1 in 0.538s. Worker source hashes are
+unchanged across the full-package proof. Private reproduction, source manifest
+and browser-result export are under `tmp/patrol-access-routing-proof/` at the
+workspace root. The export invokes actual current tool handlers with controlled
+connection fixtures. Its initial connected mock lacked a GetConnectedAgents
+expectation and failed before export. The corrected export passes in 0.513s.
+Browser fixtures prove rendering only. They do not qualify model judgment or
+real command-scope enforcement. Final browser, race and staged proofs follow.
+
+
+Final focused race proof explicitly runs all five new/missing-read tests and
+passes in 1.051s on Go 1.26.8. An earlier broader name pattern passed but omitted
+three newly named routing tests, so it is not used to claim their race coverage.
+Existing API regressions for implicit monitoring-token scope and real WebSocket
+rejection without agent-exec scope also pass in 0.122s. These preserve the access
+boundary. They are not a model-led missing-access investigation.
+
+Playwright and pixel inspection pass for known disconnected target, unknown
+target and ordinary failed-read controls at `/patrol`, 1440x1000, 900x1000 and
+390x1000. The 18 cases cover ordinary and mirrored findings, keyboard review,
+completed-but-unresolved records, readable error evidence, expanded investigation
+transcripts, collapse, linked Assistant explanation and deepest failed-tool
+input/output, Escape and context-only reopen, plus reload without resubmission.
+Nine chat requests are intercepted, with no infrastructure writes. The backend
+results are serialized from actual final-source handlers with controlled
+connection/command fixtures. Model conclusions and transport are scripted.
+The generic Patrol toolbar opens context-only Assistant, so the proof checks
+no automatic submission there rather than expecting a persisted issue session.
+One permission-control pass exhausted a five-second wait while capabilities
+were still loading. Its complete matrix passes with a twenty-second request
+wait. This does not establish a latency SLO. Final receipts/screenshots are in
+`tmp/patrol-access-browser-proof/{known-vm,unknown-target,permission-denied}/`
+at the workspace root. No frontend runtime source changed.
+
+The final routing source hashes are:
+
+- `internal/ai/tools/tools_control.go`: `f6ac2e05542657a1d859196b06c3a68288e08b436db6dabf4f691ded744dc751`
+
+- `internal/ai/tools/tools_file.go`: `c42002e1bf012024e1b38aa64738e0a8d9e0609699a49362675e01e7891d763e`
+
+- `internal/ai/tools/tools_read.go`: `643a02f70432adff75355ef3083d84ab24f43c3b811bba7730cfca2ca4fd8de7`
+
+- `internal/ai/tools/strict_resolution_test.go`: `7f88e16933c0b91b1ef7754cb7df977501fdc7278540a6ec70c1c4283e08c62d`
+
+- `internal/ai/tools/file_docker_test.go`: `6bb8f5df1291175b9f7c52dd863293bfe89a4b189ef3ed79daeaf2f8d7adb45b`
+
+
+The missing-access slice is ready for its exact staged hook. The broader goal
+remains open for real-model diagnosis and approved/rejected action outcomes.
+On head `1f41fa174d7d`, governance, all eight Core E2E shards and CodeQL pass.
+Build and Test run `34015148620` is still pending with no jobs, so omitted PR
+checks are not treated as success. PR #1928 remains open with auto-merge enabled.

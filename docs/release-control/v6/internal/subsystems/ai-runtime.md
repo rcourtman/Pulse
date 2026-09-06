@@ -8030,3 +8030,16 @@ disallowed. Streaming DOM reconciliation preserves table region identity, focus
 and scroll position. The conversation itself must not acquire horizontal scroll
 from wide answer tables. Browser proof covers a persisted real answer and
 explicit renderer fixtures at 1440, 900 and 390 pixel widths.
+
+
+### Monitoring identity without command access
+
+Command routing resolves monitored topology independently of agent connection
+availability. A missing connection must preserve the known target kind and
+parent node, cannot fall back to a different agent with a colliding name or ID,
+and cannot dispatch a command. No-target routing requires exactly one connection.
+Diagnostic reads and file mutations return the same NO_AGENT failure envelope
+when no command connection is available. Failure is distinct from an established
+permission denial. Do not infer an installation requirement or guest capability
+from this absence. Advertised hypervisor lifecycle capabilities remain governed
+by their canonical action path, independently of diagnostic command access.

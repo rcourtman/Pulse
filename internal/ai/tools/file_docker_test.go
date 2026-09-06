@@ -151,7 +151,7 @@ func TestExecuteFileReadFailureStatus(t *testing.T) {
 		result, err := executor.executeFileRead(context.Background(), "/proc/meminfo", "delly2", "")
 		require.NoError(t, err)
 		require.True(t, result.IsError, "missing agent must not count as a successful read")
-		assert.Contains(t, result.Content[0].Text, "No agent found")
+		assert.Contains(t, result.Content[0].Text, "No command connection is available")
 		agent.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
 	})
 
@@ -569,4 +569,63 @@ func TestExecuteFileEditDockerNestedRouting(t *testing.T) {
 		assert.Equal(t, "nginx", resp["container"])
 		mockAgent.AssertExpectations(t)
 	})
+}
+
+// Missing access is a failed operation, independent of whether monitoring knows
+// the target. Exercise the actual tool handlers so writes cannot report success.
+func TestCommandToolsPreserveMonitoringWhenAccessUnavailable(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "false")
+	for _, target := range []string{"known-vm", "unknown-target"} {
+		for _, noServer := range []bool{false, true} {
+			for _, operation := range []string{"file read", "file write", "file append", "read exec", "legacy command"} {
+				t.Run(fmt.Sprintf("%s/noServer=%t/%s", target, noServer, operation), func(t *testing.T) {
+					server := &mockAgentServer{}
+					config := ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{
+						VMs: []models.VM{{ID: "vm-101", VMID: 101, Name: "known-vm", Node: "known-node", Status: "running"}},
+					}}}
+					if !noServer {
+						config.AgentServer = server
+					}
+					executor := NewPulseToolExecutor(config)
+					ctx := context.Background()
+					var result CallToolResult
+					var err error
+					switch operation {
+					case "file read":
+						result, err = executor.executeFileRead(ctx, "/proc/meminfo", target, "")
+					case "file write":
+						result, err = executor.executeFileWrite(ctx, "/tmp/access-proof", "value", target, "", nil)
+					case "file append":
+						result, err = executor.executeFileAppend(ctx, "/tmp/access-proof", "value", target, "", nil)
+					case "read exec":
+						result, err = executor.executeReadExec(ctx, map[string]interface{}{"command": "uptime", "target_host": target})
+					case "legacy command":
+						result, err = executor.executeRunCommand(ctx, map[string]interface{}{"command": "uptime", "target_host": target})
+					}
+					require.NoError(t, err)
+					require.True(t, result.IsError)
+					require.Len(t, result.Content, 1)
+					var response ToolResponse
+					require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &response))
+					require.False(t, response.OK)
+					require.NotNil(t, response.Error)
+					require.Equal(t, ErrCodeNoAgent, response.Error.Code)
+					require.True(t, response.Error.Failed)
+					require.False(t, response.Error.Blocked, "an absent connection does not prove a policy denial")
+					require.Equal(t, target, response.Error.Details["target"])
+					require.Contains(t, response.Error.Message, "did not run")
+					require.NotContains(t, response.Error.Message, "Install")
+					if target == "known-vm" {
+						require.Equal(t, "vm", response.Error.Details["resource_kind"])
+						require.Equal(t, "known-node", response.Error.Details["parent_node"])
+						require.Contains(t, response.Error.Message, "Pulse monitoring knows")
+					} else {
+						require.NotContains(t, response.Error.Details, "resource_kind")
+						require.NotContains(t, response.Error.Message, "Pulse monitoring knows")
+					}
+					server.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+				})
+			}
+		}
+	}
 }

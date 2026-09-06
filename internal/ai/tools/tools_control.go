@@ -359,23 +359,10 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		}
 	}
 
-	// Execute via agent server
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
-
-	// Resolve target to the correct agent and routing info (with full provenance)
-	// If targetHost is a container/VM name, this routes to the host node agent
-	// with the correct TargetType and TargetID for pct exec / qm guest exec
+	// Resolve topology even when no command connection is available.
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
-		if targetHost != "" {
-			if routing.TargetType == "container" || routing.TargetType == "vm" {
-				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its host node; install Pulse Unified Agent on the node", targetHost, routing.TargetType)), nil
-			}
-			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
-		}
-		return NewErrorResult(fmt.Errorf("no agent available for target")), nil
+		return unavailableCommandConnection(targetHost, routing), nil
 	}
 
 	approvalTargetType, approvalTargetID, approvalTargetName := approvalTargetForCommand(targetHost, routing)
@@ -743,18 +730,14 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		Transport:  "direct",
 	}
 
-	if e.agentServer == nil {
-		return result
-	}
-
-	agents := e.agentServer.GetConnectedAgents()
-	if len(agents) == 0 {
-		return result
+	var agents []agentexec.ConnectedAgent
+	if e.agentServer != nil {
+		agents = e.agentServer.GetConnectedAgents()
 	}
 
 	if targetHost == "" {
 		// No target_host specified - require exactly one agent or fail
-		if len(agents) > 1 {
+		if len(agents) != 1 {
 			return result
 		}
 		result.AgentID = agents[0].AgentID
@@ -769,6 +752,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	loc := e.resolveResourceLocation(targetHost)
 
 	if loc.Found {
+		result.ResolvedKind = loc.ResourceType
 		// Route based on resource type
 		switch loc.ResourceType {
 		case "agent":
@@ -879,6 +863,8 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 				}
 			}
 		}
+		// A known resource must never fall through to a different hostname match.
+		return result
 	}
 
 	// STEP 2: FALLBACK — agent hostname match.
@@ -894,6 +880,31 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	}
 
 	return result
+}
+
+// unavailableCommandConnection preserves monitoring context without inferring
+// installation, permission, or guest capability from an absent connection.
+func unavailableCommandConnection(target string, routing CommandRoutingResult) CallToolResult {
+	message := "No command connection is available. Specify a target with diagnostic access."
+	details := map[string]any{"target": target}
+	if target != "" {
+		message = fmt.Sprintf("No command connection is available for %q. Check its diagnostic access and connection status.", target)
+	}
+	if routing.ResolvedKind != "" {
+		details["resource_kind"] = routing.ResolvedKind
+		message = fmt.Sprintf("Pulse monitoring knows %q, but no command connection is available for this target.", target)
+		if routing.ResolvedNode != "" {
+			details["parent_node"] = routing.ResolvedNode
+			message += fmt.Sprintf(" Check diagnostic access and connection status on its node %q.", routing.ResolvedNode)
+		} else {
+			message += " Check its diagnostic access and connection status."
+		}
+	}
+	message += " The requested operation did not run."
+	return NewToolResponseResult(ToolResponse{
+		OK:    false,
+		Error: &ToolError{Code: ErrCodeNoAgent, Message: message, Failed: true, Details: details},
+	})
 }
 
 // resolveTargetForCommand resolves a target_host to the correct agent and routing info.

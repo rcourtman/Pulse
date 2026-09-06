@@ -2135,3 +2135,69 @@ func TestExecutionIntent_TelemetryCategories(t *testing.T) {
 		})
 	}
 }
+
+func TestCommandRoutingPreservesKnownTargetWithoutConnections(t *testing.T) {
+	state := models.StateSnapshot{
+		Hosts:      []models.Host{{ID: "reported-host", Hostname: "monitored-host", CommandsEnabled: false}},
+		Nodes:      []models.Node{{ID: "node-1", Name: "known-node"}},
+		VMs:        []models.VM{{ID: "vm-101", VMID: 101, Name: "known-vm", Node: "known-node", Status: "running"}},
+		Containers: []models.Container{{ID: "lxc-102", VMID: 102, Name: "known-lxc", Node: "known-node", Status: "running"}},
+	}
+	for _, unavailable := range []string{"no server", "no connections", "unrelated connection"} {
+		t.Run(unavailable, func(t *testing.T) {
+			config := ExecutorConfig{StateProvider: &mockStateProvider{state: state}}
+			if unavailable != "no server" {
+				server := &mockAgentServer{}
+				if unavailable == "unrelated connection" {
+					server.agents = []agentexec.ConnectedAgent{{AgentID: "unrelated", Hostname: "other-host"}}
+				}
+				config.AgentServer = server
+			}
+			executor := NewPulseToolExecutor(config)
+			for _, tc := range []struct{ target, kind, transport, node, id string }{
+				{"monitored-host", "agent", "direct", "", ""},
+				{"known-node", "node", "direct", "known-node", ""},
+				{"known-vm", "vm", "qm_guest_exec", "known-node", "101"},
+				{"known-lxc", "system-container", "pct_exec", "known-node", "102"},
+			} {
+				t.Run(tc.target, func(t *testing.T) {
+					if loc := executor.resolveResourceLocation(tc.target); !loc.Found {
+						t.Fatal("fixture target is not known to monitoring")
+					}
+					got := executor.resolveTargetForCommandFull(tc.target)
+					if got.AgentID != "" {
+						t.Fatalf("unavailable connection admitted agent %q", got.AgentID)
+					}
+					if got.ResolvedKind != tc.kind || got.Transport != tc.transport || got.ResolvedNode != tc.node || got.TargetID != tc.id {
+						t.Fatalf("known target lost when command connection is absent: %+v", got)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestCommandRoutingWithoutTargetRequiresOneConnection(t *testing.T) {
+	for _, count := range []int{0, 1, 2} {
+		server := &mockAgentServer{}
+		for i := 0; i < count; i++ {
+			server.agents = append(server.agents, agentexec.ConnectedAgent{AgentID: "available", Hostname: "host"})
+		}
+		executor := NewPulseToolExecutor(ExecutorConfig{AgentServer: server})
+		got := executor.resolveTargetForCommandFull("")
+		if (got.AgentID != "") != (count == 1) {
+			t.Fatalf("%d connections selected %+v", count, got)
+		}
+	}
+}
+
+func TestCommandRoutingKnownHostDoesNotFallBackToCollidingID(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: models.StateSnapshot{Hosts: []models.Host{{ID: "reported-host", Hostname: "monitored-host"}}}},
+		AgentServer:   &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "monitored-host", Hostname: "different-host"}}},
+	})
+	got := executor.resolveTargetForCommandFull("monitored-host")
+	if got.AgentID != "" || got.ResolvedKind != "agent" {
+		t.Fatalf("known disconnected host routed through colliding agent ID: %+v", got)
+	}
+}
